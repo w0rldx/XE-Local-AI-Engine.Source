@@ -237,7 +237,7 @@ public sealed class ImageModelPartDownloadRequest
     ///     Known size of this part in bytes when the caller has one, otherwise <c>null</c>.
     /// </summary>
     /// <remarks>
-    ///     Two behaviours depend on it: the pre-flight free-disk check is a no-op without a size (so a set that does
+    ///     Two behaviors depend on it: the pre-flight free-disk check is a no-op without a size (so a set that does
     ///     not fit fails part-way through an 18 GB transfer instead of before it starts), and the aggregate set
     ///     percentage is only computed when EVERY part declares a size.
     /// </remarks>
@@ -341,7 +341,7 @@ public sealed class CancelImageModelDownloadResponse
     public required string ModelName { get; init; }
 
     /// <summary>
-    ///     <c>true</c> when a running download was signalled to stop; <c>false</c> when nothing was in flight (the
+    ///     <c>true</c> when a running download was signaled to stop; <c>false</c> when nothing was in flight (the
     ///     download had already finished, or never started). Both are success — cancelling is idempotent.
     /// </summary>
     public required bool Cancelled { get; init; }
@@ -457,7 +457,7 @@ public sealed class ImageRepositoryResponse
 {
     public required string RepoId { get; init; }
 
-    /// <summary>Access is gated — a download needs an accepted licence and a token, so a one-click install would 401.</summary>
+    /// <summary>Access is gated — a download needs an accepted license and a token, so a one-click install would 401.</summary>
     public required bool IsGated { get; init; }
 
     public required long Downloads { get; init; }

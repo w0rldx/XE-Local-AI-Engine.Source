@@ -88,10 +88,8 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     [Test]
     public void ResolveScriptsDirectory_FindsTheCommittedLockfileFromATestRun()
     {
-        // The shipped app reads the scripts from training-scripts/ beside the executable (an explicit Content Include
-        // in the Client csproj, because the repo root is outside the publish glob); a dev or test run walks up to
-        // tools/training/ instead. If this resolution breaks, the runtime install fails its own lockfile prerequisite
-        // with nothing in the diff to explain why.
+        // The shipped app reads scripts from training-scripts/ beside the executable (a Client csproj Content Include);
+        // a dev or test run walks up to tools/training/. Breaking this fails the install's lockfile prerequisite.
         var resolved = TrainingRuntimeLayout.ResolveScriptsDirectory();
 
         AssertEx.True(File.Exists(Path.Combine(resolved, TrainingRuntimeLayout.LockfileName)),

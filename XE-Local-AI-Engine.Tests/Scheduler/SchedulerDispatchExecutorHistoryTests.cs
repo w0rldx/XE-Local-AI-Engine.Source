@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Run-history recording tests for <see cref="SchedulerDispatchExecutor" />. Substitute stores
-///     let each lifecycle outcome be asserted at the executor↔store boundary — including the redaction contract (no
-///     exception message or stack trace is ever handed to the store) and fire-instance idempotency.
+///     Run-history recording tests for <see cref="SchedulerDispatchExecutor" />. Substitute stores let each lifecycle
+///     outcome be asserted at the executor↔store boundary, including redaction (no exception message or stack trace
+///     reaches the store) and fire-instance idempotency.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SchedulerDispatchExecutorHistoryTests

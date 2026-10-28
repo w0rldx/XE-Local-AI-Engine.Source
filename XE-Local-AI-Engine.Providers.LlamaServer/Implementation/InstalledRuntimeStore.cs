@@ -121,7 +121,7 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
             }
             finally
             {
-                TryDeleteFile(tempPath);
+                BestEffortFile.TryDeleteFile(tempPath);
             }
         }
         finally
@@ -136,7 +136,7 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            TryDeleteFile(_statePath);
+            BestEffortFile.TryDeleteFile(_statePath);
         }
         finally
         {
@@ -165,24 +165,5 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         }
 
         return new FileStream(path, options);
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a temp write; ignore.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a temp write; ignore.
-        }
     }
 }

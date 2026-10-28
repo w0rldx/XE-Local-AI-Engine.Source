@@ -76,7 +76,7 @@ const benchmarkPrimaryStatuses = ["Queued", "Running", "CancelRequested", "Succe
 export type BenchmarkPrimaryStatus = (typeof benchmarkPrimaryStatuses)[number];
 
 /**
- * What a repeat GROUP measures. `Throughput` is the default and the historical behaviour: temperature 0 and one fixed
+ * What a repeat GROUP measures. `Throughput` is the default and the historical behavior: temperature 0 and one fixed
  * seed, so every repeat produces the identical answer and only the machine varies. `AnswerVariance` samples at a
  * temperature and varies the seed per repeat, so the repeats differ in what they SAY — the spread then describes the
  * model, not the box, and the two must never be averaged together.
@@ -340,7 +340,7 @@ export interface BenchmarkRunDetail extends BenchmarkRunSummary {
 	/** The budget this run was frozen with, or null when the project pinned none. */
 	reasoningBudgetTokens: number | null;
 	/**
-	 * Whether the model could actually honour it. False = the run carries a budget the runtime never applied (no
+	 * Whether the model could actually honor it. False = the run carries a budget the runtime never applied (no
 	 * thinking mode), which is why the run can look as if the budget did nothing; null for a legacy row.
 	 */
 	reasoningBudgetApplicable: boolean | null;

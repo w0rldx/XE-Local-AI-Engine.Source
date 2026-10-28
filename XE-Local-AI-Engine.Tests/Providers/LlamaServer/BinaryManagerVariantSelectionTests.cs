@@ -137,13 +137,11 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task EnsureBinary_LinuxArm64CudaNoPrebuilt_Throws_NeverServesCpuArchiveAsCuda()
     {
-        // A Cuda request on Linux/arm64 (no pinned CUDA prebuilt, no managed source build) must fail loud, even
-        // when a binary is cached under the requested "cuda" variant dir — before the fix EnsureBinary resolved the CPU
-        // floor pin and returned that cached CPU archive as a LlamaBinary with Variant=Cuda, which the supervisor would
-        // then launch with GPU placement flags. The exact-resolve now throws BEFORE any cache/download lookup.
+        // A Cuda request on Linux/arm64 (no CUDA prebuilt or source build) fails loud even with a "cuda" cached binary:
+        // EnsureBinary throws BEFORE any cache lookup, never returning the CPU archive as Variant=Cuda for GPU flags.
         using var cache = new TempCacheDir();
         var cpuPin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cpu)!;
-        // Seed a CPU server under the CUDA variant dir — the exact path a pre-fix cache hit would have served as Cuda.
+        // Seed a CPU server under the CUDA variant dir — the exact path a lax cache hit would serve as Cuda.
         SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cuda", cpuPin.ServerRelativePath);
 
         using var handler = new ThrowingHandler();

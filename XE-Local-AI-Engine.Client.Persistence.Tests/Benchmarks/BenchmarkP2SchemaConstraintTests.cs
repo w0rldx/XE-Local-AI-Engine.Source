@@ -5,10 +5,8 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     The pairwise-schema invariants enforced in the DATABASE rather than only in the code that writes them: canonical
-///     pair ordering, one live comparison per slot with retries still possible, and exactly one active Bradley–Terry
-///     fit per scope. Each is a rule a careful publisher would also keep — and each is here because "the publisher was
-///     careful" is not an invariant, it is a hope.
+///     Pairwise-schema invariants enforced in the DATABASE, not only by the writer: canonical pair ordering, one live
+///     comparison per slot (retries still possible), one active Bradley–Terry fit per scope. Care is not an invariant.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class BenchmarkP2SchemaConstraintTests

@@ -18,7 +18,7 @@ import {
  * `DevWorkflowApplyReportPanel`, which renders the other half.
  *
  * Its rule is that panel's rule: never let an absence read as a pass. A refusal shows the report's own sentence
- * rather than "0 commands, 0 tests", and evidence that stops short is labelled partial rather than red.
+ * rather than "0 commands, 0 tests", and evidence that stops short is labeled partial rather than red.
  */
 export function DevWorkflowValidationReportPanel({
 	report,
@@ -115,7 +115,7 @@ export function DevWorkflowValidationReportPanel({
 			) : null}
 
 			{/* Server prose, displayed verbatim: the verdict's detail already names the command and the reason,
-			    and the raw code is shown beside it so an unrecognised one is never silently dropped. */}
+			    and the raw code is shown beside it so an unrecognized one is never silently dropped. */}
 			{report.failureCode && !partial ? (
 				<InlineErrorAlert variant="light" message={report.failureDetail} data-testid="dev-workflow-validation-failure">
 					{/* The one code that is a person's to fix, so it gets a sentence saying so above the server's hint. */}

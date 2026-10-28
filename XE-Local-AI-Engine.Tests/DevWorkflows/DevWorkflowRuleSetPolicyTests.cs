@@ -129,19 +129,19 @@ public sealed class DevWorkflowRuleSetPolicyTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "research")).Status, "an objective the session layer refused would block the node.");
         var objective = harness.Agent.Objectives.Single();
         AssertEx.Contains(objective, HouseRules, message: "the rule set survives a request longer than the whole ceiling.");
-        AssertEx.Contains(objective, DevWorkflowAgentExecutor.RequestCutMarker(request.Length), message: "the cut is visible and names the request's length.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the objective was {objective.Length} characters, past the ceiling.");
+        AssertEx.Contains(objective, DevWorkflowObjectiveComposer.RequestCutMarker(request.Length), message: "the cut is visible and names the request's length.");
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters, $"the objective was {objective.Length} characters, past the ceiling.");
     }
 
     /// <summary>A request that fits is left whole; one that does not is cut inside its cap, the marker included.</summary>
     [Test]
     public void CutRequest_KeepsAFittingRequestWholeAndCutsALongOneInsideItsCap()
     {
-        AssertEx.Equal("Add the export.", DevWorkflowAgentExecutor.CutRequest("Add the export.", cap: 15));
+        AssertEx.Equal("Add the export.", DevWorkflowObjectiveComposer.CutRequest("Add the export.", cap: 15));
 
-        var cut = DevWorkflowAgentExecutor.CutRequest(new string('r', 1000), cap: 200);
+        var cut = DevWorkflowObjectiveComposer.CutRequest(new string('r', 1000), cap: 200);
         AssertEx.Equal(expected: 200, cut.Length);
-        AssertEx.True(cut.EndsWith(DevWorkflowAgentExecutor.RequestCutMarker(1000), StringComparison.Ordinal), "the cut says it is one, and how long the whole was.");
+        AssertEx.True(cut.EndsWith(DevWorkflowObjectiveComposer.RequestCutMarker(1000), StringComparison.Ordinal), "the cut says it is one, and how long the whole was.");
     }
 
     /// <summary>A cap at or below the marker's own length is never overrun: the marker itself is cut, down to nothing at a cap of zero.</summary>
@@ -151,10 +151,10 @@ public sealed class DevWorkflowRuleSetPolicyTests
     [Arguments(40)]
     public void CutRequest_NeverOverrunsACapSmallerThanItsMarker(int cap)
     {
-        var marker = DevWorkflowAgentExecutor.RequestCutMarker(1000);
+        var marker = DevWorkflowObjectiveComposer.RequestCutMarker(1000);
         AssertEx.True(cap < marker.Length, "the case under test is a cap the marker alone would overrun.");
 
-        var cut = DevWorkflowAgentExecutor.CutRequest(new string('r', 1000), cap);
+        var cut = DevWorkflowObjectiveComposer.CutRequest(new string('r', 1000), cap);
 
         AssertEx.True(cut.Length <= cap, $"the cut was {cut.Length} characters against a cap of {cap}.");
         AssertEx.True(marker.TrimStart().StartsWith(cut, StringComparison.Ordinal), "no room for the marker is no room for the request: what is left is the marker's start.");
@@ -270,8 +270,8 @@ public sealed class DevWorkflowRuleSetPolicyTests
 
         var objective = harness.Agent.Objectives.Single();
 
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
-            $"the objective is {objective.Length} characters, past the {DevWorkflowAgentExecutor.MaxObjectiveCharacters} the work-session layer accepts.");
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
+            $"the objective is {objective.Length} characters, past the {DevWorkflowObjectiveComposer.MaxObjectiveCharacters} the work-session layer accepts.");
         AssertEx.Contains(objective, "## Policy: Alpha rules");
         AssertEx.Contains(objective, "## Policy: Bravo rules", message: "the fair share leaves room for the SECOND rule set: a long first one must not crowd it out.");
         AssertEx.Contains(objective, "ALPHA-HEAD", message: "what did fit is the head of the document, not an empty heading.");
@@ -298,8 +298,8 @@ public sealed class DevWorkflowRuleSetPolicyTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         var objective = harness.Agent.Objectives.Single();
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
-            $"the objective is {objective.Length} characters, past the {DevWorkflowAgentExecutor.MaxObjectiveCharacters} the work-session layer accepts.");
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
+            $"the objective is {objective.Length} characters, past the {DevWorkflowObjectiveComposer.MaxObjectiveCharacters} the work-session layer accepts.");
         AssertEx.Contains(objective, contract, message: "the contract is the request's other half, so it is carried whole.");
         AssertEx.Contains(objective, "ALPHA-HEAD");
         AssertEx.Contains(objective, "BRAVO-HEAD", message: "and the policy still gets a share beside it.");

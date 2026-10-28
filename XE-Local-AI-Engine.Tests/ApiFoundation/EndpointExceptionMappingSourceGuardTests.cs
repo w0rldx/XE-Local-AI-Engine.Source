@@ -7,7 +7,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 {
     private static readonly IReadOnlyDictionary<string, int> TrainingCatchAllowlist = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        // The rejection families (EvaluationRejected / TrainingExportRejected / TrainingRunRejected) are no longer
+        // The rejection families (EvaluationRejected / TrainingExportRejected / TrainingRunRejected) are not
         // here: they are in DomainValidationExceptionHandler's switch, so their endpoints catch nothing at all.
         ["BaseArtifacts/V1/CreateBaseArtifactEndpoint.cs"] = 1,
         ["Runtime/V1/RemoveTrainingRuntimeEndpoint.cs"] = 1,

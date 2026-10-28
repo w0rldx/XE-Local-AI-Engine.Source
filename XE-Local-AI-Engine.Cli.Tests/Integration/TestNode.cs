@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Cli.Api;
 using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions;
 

@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     The Fluent mappings, through a real context and a real SQLite file: the snake_case column names the rest of the
-///     schema uses, the enums stored as text, and the two mappings the store's correctness rests on — the unique
-///     <c>(instance_id, sequence)</c> index and <c>version</c> as a concurrency token.
+///     The Fluent mappings through a real context and SQLite file: snake_case column names, enums stored as text, and
+///     the two mappings the store rests on, the unique <c>(instance_id, sequence)</c> index and <c>version</c> as a
+///     concurrency token.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ExternalAppEntityConfigurationTests

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 ///     on any model path that would escape the workspace root, before it reaches <c>ReadFileAsync</c> or a non-chrooted <c>ExecuteAsync</c> command.
 ///     Canonicalizing lexically in the sandbox path namespace, it rejects control characters, the Windows extended and device prefixes, any absolute
 ///     path, and anything leaving the root after collapsing <c>.</c> and <c>..</c> — closing the <c>ExecuteAsync</c> arg-injection hole that
-///     <c>ResolveJailPath</c> and <c>EnsureNoSymlinkComponentsUnderJail</c>, the second line of defence for reads, do not.
+///     <c>ResolveJailPath</c> and <c>EnsureNoSymlinkComponentsUnderJail</c>, the second line of defense for reads, do not.
 /// </remarks>
 internal static class WorkspacePathGuard
 {

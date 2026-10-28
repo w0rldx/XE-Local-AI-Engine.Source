@@ -13,7 +13,7 @@ using System.Text.Json;
 /// </remarks>
 public static class BenchmarkExecutionSerialization
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     public static byte[] SerializeParts(IEnumerable<BenchmarkOutputPart> parts) =>
         JsonSerializer.SerializeToUtf8Bytes(parts, JsonOptions);

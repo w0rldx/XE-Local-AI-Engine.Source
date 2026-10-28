@@ -12,7 +12,7 @@ import { benchmarkFidelityFixture, benchmarkRunDetailFixture } from "@/features/
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Two runs of the same task are only worth reading side by side if the operator can see how their launches differed.
-// The alerts state the difference as a fact and never claim the runs are (or are not) comparable — that judgement is
+// The alerts state the difference as a fact and never claim the runs are (or are not) comparable — that judgment is
 // deliberately not made here. Differences that a hash equality check alone would hide are asserted field-by-field.
 
 afterEach(cleanup);

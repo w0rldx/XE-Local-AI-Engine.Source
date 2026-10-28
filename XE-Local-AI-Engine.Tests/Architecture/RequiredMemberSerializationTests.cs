@@ -37,10 +37,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class RequiredMemberSerializationTests
 {
     /// <summary>
-    ///     The product assemblies whose types can reach a JSON payload. Every assembly that declares a
-    ///     <c>required</c> member belongs here: the rule is about the member, not about where it lives, and an
-    ///     assembly outside this list is not scanned at all, so a violation in it passes in silence. The provider
-    ///     assemblies each own the wire shape of one runtime or model source and were the gap.
+    ///     The product assemblies whose types can reach a JSON payload. Every assembly that declares a <c>required</c>
+    ///     member belongs here, provider assemblies included: an assembly outside this list is not scanned, so a
+    ///     violation in it passes in silence.
     /// </summary>
     private static readonly Assembly[] ProductAssemblies =
     [

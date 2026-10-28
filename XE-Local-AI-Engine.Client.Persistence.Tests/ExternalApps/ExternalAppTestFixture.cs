@@ -8,10 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     One throwaway on-disk SQLite database per test with both encryption interceptors wired, so a round trip through
-///     a fresh context proves the encrypt/decrypt path rather than the change tracker's in-memory plaintext. Shaped on
-///     <c>IntegrationTestFixture</c>. A real file rather than an in-memory database, because several suites here read
-///     the stored bytes back with raw SQL — the only way to prove a column is sealed at rest.
+///     One throwaway on-disk SQLite database per test with both encryption interceptors, so a fresh-context round trip
+///     proves encrypt/decrypt. Shaped on <c>IntegrationTestFixture</c>; a real file, as suites read raw bytes back.
 /// </summary>
 internal sealed class ExternalAppTestFixture : IDisposable
 {

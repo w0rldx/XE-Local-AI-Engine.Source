@@ -404,7 +404,7 @@ export function useChatStreamController({
 						message = errorMessage(error);
 					}
 					const failureCategory = watchdogNotice ? clientWatchdogFailureCategory : undefined;
-					// Prefer the running reduced state (which includes any delta whose frame we just cancelled) over the
+					// Prefer the running reduced state (which includes any delta whose frame we just canceled) over the
 					// query cache so a failed turn keeps every received partial token, not the last flushed frame.
 					const currentConversation =
 						latestConversation ??
@@ -735,7 +735,7 @@ export function useChatStreamController({
 		// resumeNonce re-arms the attach when the OWNER signals a server-side turn on the same conversation (a
 		// work-session step or status push), which the conversation id alone cannot observe. A re-arm never aborts a
 		// live attach (resumeActiveTurn returns early while one owns the turn), so the owner may re-arm freely: an
-		// attach that came back empty because the turn was not registered yet is retried on the next signal (F-30).
+		// attach that came back empty because the turn was not registered yet is retried on the next signal.
 		// Each resume gets its own controller so Stop aborts only that stream, never the conversation scope.
 		const abortController = new AbortController();
 		const abortResume = () => abortController.abort();
@@ -764,7 +764,7 @@ export function useChatStreamController({
 		// before we round-trip to the server. The awaited server cancel must never gate the local stop: if it is slow or
 		// fails, the user's stop has still taken effect.
 		active?.abortController.abort();
-		// Barge-in: cancelling generation halts voice playback immediately (acceptance: stop = halt playback).
+		// Barge-in: canceling generation halts voice playback immediately (acceptance: stop = halt playback).
 		onVoiceTurnStart();
 		const currentConversation = queryClient.getQueryData<ChatConversationModel>(
 			nodeChatQueryKeys.conversation(target.conversationId),

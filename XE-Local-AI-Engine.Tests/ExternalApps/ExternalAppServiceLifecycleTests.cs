@@ -534,8 +534,8 @@ public sealed class ExternalAppServiceLifecycleTests
     }
 
     /// <summary>
-    ///     Rc.3 decision D6 holds for stored instances too. After an empty-catalog start, Start and Restart refuse with
-    ///     the restart reason, whether or not the manifest reads the bridge, and the row does not move.
+    ///     The empty-catalog gate holds for stored instances too. After an empty-catalog start, Start and Restart
+    ///     refuse with the restart reason, whether or not the manifest reads the bridge, and the row does not move.
     /// </summary>
     [Test]
     [Arguments(false)]

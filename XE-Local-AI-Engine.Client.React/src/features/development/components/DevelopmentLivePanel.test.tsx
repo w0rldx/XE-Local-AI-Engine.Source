@@ -442,7 +442,7 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 	});
 
 	it("opens a recorded prompt from the details tab as plain text", async () => {
-		// FU4-1: what the model was TOLD is reachable without knowing an artifact id. It is neither a changed file nor
+		// What the model was TOLD is reachable without knowing an artifact id. It is neither a changed file nor
 		// evidence, so it lives in details rather than widening either curated tab's kind pair.
 		const promptArtifact: DevelopmentArtifact = { ...validationArtifact, id: "artifact-prompt", kind: "Prompt" };
 		queriesMock.useDevelopmentArtifactContent.mockImplementation((_project, _task, artifactId) => ({

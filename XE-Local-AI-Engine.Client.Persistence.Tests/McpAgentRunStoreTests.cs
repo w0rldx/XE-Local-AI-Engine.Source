@@ -184,7 +184,7 @@ public sealed class McpAgentRunStoreTests : IDisposable
             "Metadata listing SQL must not select the encrypted display BLOB.");
     }
 
-    // I-D13: the dispatcher claims from the queued listing, which was newest-first and starved the oldest runs.
+    // The dispatcher claims from the queued listing, so newest-first there would starve the oldest runs.
     [Test]
     public async Task ListAsync_Queued_IsOldestFirst_WhileOtherListingsStayNewestFirst()
     {

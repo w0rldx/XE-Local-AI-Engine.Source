@@ -270,7 +270,7 @@ public sealed class EndpointConventionTests
     }
 
     /// <summary>
-    ///     The route scan's own check. Without it, a scan that stopped recognising call sites would report zero
+    ///     The route scan's own check. Without it, a scan that stopped recognizing call sites would report zero
     ///     violations forever, and the accepted forms would drift into "anything that mentions LocalApiRoutes".
     /// </summary>
     [Test]

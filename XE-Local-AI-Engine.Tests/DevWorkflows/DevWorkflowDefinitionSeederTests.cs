@@ -65,7 +65,7 @@ public sealed class DevWorkflowDefinitionSeederTests
 
     /// <summary>
     ///     The shipped research node binds the repository-research persona, and that persona is offered every repository read
-    ///     the agent lane serves from the work item's project: the knowledge-base persona it used to bind could read nothing there.
+    ///     the agent lane serves from the work item's project: a knowledge-base persona could read nothing there.
     /// </summary>
     [Test]
     public void TheShippedResearchNodeBindsAPersonaThatReadsTheRepository()

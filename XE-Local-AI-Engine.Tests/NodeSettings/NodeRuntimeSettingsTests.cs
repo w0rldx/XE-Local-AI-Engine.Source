@@ -354,7 +354,7 @@ public sealed class NodeRuntimeSettingsTests
     [Test]
     public async Task Tunables_UnsetAndUnseeded_EqualTheConstantsTheyReplaced()
     {
-        // Behaviour-unchanged proof: each getter is compared against the provider/service default it replaced, not against the
+        // Behavior-unchanged proof: each getter is compared against the provider/service default it replaced, not against the
         // StoredNodeSettings mirror, so a drifted Default* constant fails here.
         var sut = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
         var supervisor = new LlamaServerSupervisorOptions();
@@ -383,7 +383,7 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     /// <summary>
-    ///     Operator decision 3 (model-matrix 2026-10-04): minimal 1024, low 2048, medium 8192, high 24576, and an
+    ///     The shipped ladder: minimal 1024, low 2048, medium 8192, high 24576, and an
     ///     unspecified effort takes the low rung; a stored value wins per rung.
     /// </summary>
     [Test]
@@ -404,7 +404,7 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal((1024, 512, 8192, 16384, "medium"), (budgets.Minimal, budgets.Low, budgets.Medium, budgets.High, budgets.UnspecifiedEffort));
     }
 
-    /// <summary>Operator decision 4 (model-matrix F2): cap plus notice, at most 16384, by default; stored values win.</summary>
+    /// <summary>Cap plus notice, at most 16384, by default; stored values win.</summary>
     [Test]
     public async Task ChatOutputCap_DefaultsToCapAt16384AndStoredValuesWin()
     {
@@ -993,7 +993,7 @@ public sealed class NodeRuntimeSettingsTests
             },
             seeds);
 
-        // Analysis names nothing of its own, so the out-of-band Ollama override the runner also honours wins over the default.
+        // Analysis names nothing of its own, so the out-of-band Ollama override the runner also honors wins over the default.
         AssertEx.Equal("ollama-override:1b", await sut.GetPlaybookAnalysisModelNameAsync());
         AssertEx.Equal("eval-seed:3b", await sut.GetPlaybookEvalModelNameAsync());
         AssertEx.Equal("stored-extraction:8b", await sut.GetMemoryExtractionModelNameAsync());

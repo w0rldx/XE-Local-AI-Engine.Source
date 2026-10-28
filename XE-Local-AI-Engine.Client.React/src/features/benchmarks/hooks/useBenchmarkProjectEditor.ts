@@ -13,13 +13,13 @@ import type {
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkErrorCode } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
+import { useBenchmarkRubricPresets } from "@/features/benchmarks/queries/useBenchmarks";
 import {
-	useBenchmarkRubricPresets,
 	useCreateBenchmarkProject,
 	useRejudgeBenchmarkProject,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
-} from "@/features/benchmarks/queries/useBenchmarks";
+} from "@/features/benchmarks/queries/useBenchmarkProjectMutations";
 
 const emptyProject: BenchmarkProjectDraft = {
 	name: "",

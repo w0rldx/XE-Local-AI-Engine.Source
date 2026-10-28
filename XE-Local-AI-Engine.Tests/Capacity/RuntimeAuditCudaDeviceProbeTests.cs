@@ -8,12 +8,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The node's CUDA device probe: the cached llama.cpp device audit's verdict first, the driver-library check second.</summary>
 /// <remarks>
-///     The Windows tester box has nvcuda.dll (so the default probe says "present") while its driver enumerates zero CUDA devices, and the
+///     A Windows box can have nvcuda.dll (so the default probe says "present") while its driver enumerates zero CUDA devices, and the
 ///     cuBLAS whisper-server crashes on its first inference. The audit already knows that; the probe reads its cached verdict, never computes one.
 /// </remarks>
 [Category(TestCategories.Unit)]
@@ -26,7 +25,7 @@ public sealed class RuntimeAuditCudaDeviceProbeTests
     {
         using var audit = Audit(GpuVariant.Cuda, LlamaDeviceInventory.Empty(GpuVariant.Cuda));
         await audit.GetAuditAsync(forceRefresh: false, CancellationToken.None);
-        var logger = new CapturingLogger<RuntimeAuditCudaDeviceProbe>();
+        var logger = new RecordingLogger<RuntimeAuditCudaDeviceProbe>();
         var probe = new RuntimeAuditCudaDeviceProbe(audit, DriverLibraryPresent(), logger);
 
         AssertEx.False(probe.HasEnumerableCudaDevice());

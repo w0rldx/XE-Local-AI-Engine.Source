@@ -58,7 +58,7 @@ public sealed class AddBenchmarkRunAgentDefinitionMigrationTests
         var columns = await probe.ColumnsAsync("benchmark_runs");
         AssertEx.False(columns.Contains(Column), "Rolling back one migration should drop agent_definition_id.");
 
-        // SQLite rebuilds the table to drop a column, from the PRECEDING migration's model: pin the neighbours it must keep.
+        // SQLite rebuilds the table to drop a column, from the PRECEDING migration's model: pin the neighbors it must keep.
         AssertEx.True(columns.Contains("agent_version"), "Rolling back must not disturb the run's other agent column.");
         AssertEx.True(columns.Contains("cell_key"), "Rolling back must not disturb the cell identity stamp.");
     }

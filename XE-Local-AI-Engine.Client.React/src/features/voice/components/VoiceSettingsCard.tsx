@@ -17,9 +17,9 @@ import { type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButton";
-import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";
-import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
-import { type OsVoiceCatalog, useWebSpeechVoices } from "@/features/voice/WebSpeechVoiceCatalog";
+import { type OsVoiceCatalog, useWebSpeechVoices } from "@/features/voice/models/WebSpeechVoiceCatalog";
+import { useVoiceNodeSettings } from "@/features/voice/queries/useVoiceNodeSettings";
+import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/stores/VoicePreferencesStore";
 
 /** Best-effort human language name for a short IETF code (e.g. "de" → "German"), falling back to the bare code
  * when the runtime has no `Intl.DisplayNames` data for it. */

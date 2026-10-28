@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     A stdio registration is routed by its <see cref="McpTrustTier" />: <see cref="McpTrustTier.Sandboxed" />, the
 ///     default, launches the server inside the substrate through <see cref="SandboxedMcpStdioTransport" />, while
 ///     <see cref="McpTrustTier.PrivilegedHost" /> is the plain host launch, an explicit per-server operator grant. See
-///     <c>docs/security/mcp-trust-tiers.md</c>. The HTTP loopback check here is defence in depth: the CRUD service
+///     <c>docs/security/mcp-trust-tiers.md</c>. The HTTP loopback check here is defense in depth: the CRUD service
 ///     validates on register, and re-validating guarantees a non-loopback row can never reach a remote server.
 /// </remarks>
 internal sealed class McpClientFactory : IMcpClientFactory
@@ -153,7 +153,7 @@ internal sealed class McpClientFactory : IMcpClientFactory
 
         if (!IsHttpScheme(endpoint.Scheme))
         {
-            // Re-validate the scheme at connect time, defence in depth symmetric with the host check: a row reaching connect with
+            // Re-validate the scheme at connect time, defense in depth symmetric with the host check: a row reaching connect with
             // ftp or file must not be handed to HttpClientTransport, even if a direct DB write or CRUD regression let it through.
             throw new InvalidOperationException("An HTTP MCP server URL must use the http or https scheme.");
         }

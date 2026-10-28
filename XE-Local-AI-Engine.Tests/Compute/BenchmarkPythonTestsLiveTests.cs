@@ -18,20 +18,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The <c>pythonTests</c> adversarial set against the REAL jail: the real uv-provisioned interpreter, the real
-///     bwrap chain, the real gateway, the real two-process harness.
-///     <para>
-///         It exists because a gateway substitute proves the PARSER, not the BOUNDARY. A substitute returns whatever
-///         the test author decided a sandbox returns, so it can show that C# scores a marker-less result 0; it cannot
-///         show that a candidate is unable to produce a marker. Every row here reproduces one line of the
-///         "what the candidate can do" table as a real candidate in a real jail and asserts it does not score.
-///     </para>
-///     <para>
-///         Opt-in on <c>XE_COMPUTE_LIVE=1</c> and a root-owned <c>bwrap</c>, the same gate
-///         <see cref="ComputeSandboxLiveTests" /> uses, and for the same reason: the first run provisions a real venv.
-///         Once the host has the mechanism, anything else FAILS rather than skips.
-///     </para>
+///     The <c>pythonTests</c> adversarial set against the REAL jail (uv interpreter, bwrap chain, gateway, two-process
+///     harness), because a gateway substitute proves the PARSER, not the BOUNDARY: it cannot show a candidate is unable
+///     to emit a marker.
 /// </summary>
+/// <remarks>
+///     Every row reproduces one line of the "what the candidate can do" table as a real candidate in a real jail and
+///     asserts it does not score. Opt-in on <c>XE_COMPUTE_LIVE=1</c> and a root-owned <c>bwrap</c>, the same gate as
+///     <see cref="ComputeSandboxLiveTests" /> for the same reason: the first run provisions a real venv. Once the host
+///     has the mechanism, anything else FAILS rather than skips.
+/// </remarks>
 [Category(TestCategories.ExternalInfra)]
 public sealed class BenchmarkPythonTestsLiveTests : IDisposable
 {

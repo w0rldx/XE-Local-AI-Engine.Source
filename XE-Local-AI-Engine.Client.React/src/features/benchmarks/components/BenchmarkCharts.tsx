@@ -24,13 +24,13 @@ import { formatStatSummary } from "@/features/benchmarks/models/BenchmarkThrough
 
 /**
  * The categorical order, fixed and never cycled: a seventh series is left out rather than repainted as the first,
- * because two series sharing a colour is a chart that lies about identity.
+ * because two series sharing a color is a chart that lies about identity.
  *
  * Each slot names its light and dark value through CSS `light-dark()` rather than a Mantine shade token, because a
  * shade token resolves to ONE hex in both schemes. The two rows are validated independently against their own surface
- * — same hue, different step — for lightness band, chroma, colour-vision separation and contrast. The light row
+ * — same hue, different step — for lightness band, chroma, color-vision separation and contrast. The light row
  * carries a sub-3:1 contrast note on its warm and green slots, discharged by the relief this surface already has:
- * every series is named in the legend, every point is labelled in its tooltip, and the runs table above is the same
+ * every series is named in the legend, every point is labeled in its tooltip, and the runs table above is the same
  * numbers as text.
  */
 const seriesColors = [

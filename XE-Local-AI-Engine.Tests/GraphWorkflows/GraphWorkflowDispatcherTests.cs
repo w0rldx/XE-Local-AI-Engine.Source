@@ -329,7 +329,7 @@ public sealed class GraphWorkflowDispatcherTests
             runIds.Add(await harness.StartRunOfAsync(definitionId));
         }
 
-        // Every run is Pending before the first tick, which is the state the cap used to read as "three are running".
+        // Every run is Pending before the first tick, which is the state the cap must not read as "three are running".
         foreach (var runId in runIds)
         {
             _ = await harness.AdvanceUntilQuiescentAsync(runId);

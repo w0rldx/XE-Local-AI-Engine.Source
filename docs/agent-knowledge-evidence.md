@@ -609,7 +609,7 @@ AI-trends live rounds 2026-09-03/04: each listed trap voided or wasted a round. 
 2026.8 the mirrored-symlink directory alone stopped being enough (External Apps follow-ups batch 3, 2026-09-12). Observed
 `agent_execution_logs` envelope rows terminalizing about 45 minutes later. Before `75e0f7b60`, a fresh-DB start could delete
 the operator's managed CUDA build through the shared runtime record; the product now never deletes a build the record does
-not name (`LlamaCppSourceBuildService.ReconcileActiveAndBackupAsync`), so the remaining stake is isolation, not data loss.
+not name (`LlamaCppSourceBuildReconciler.ReconcileAsync`), so the remaining stake is isolation, not data loss.
 
 ### an `XDG_DATA_HOME` override for a scratch host also blinds a per-user tool-version manager
 

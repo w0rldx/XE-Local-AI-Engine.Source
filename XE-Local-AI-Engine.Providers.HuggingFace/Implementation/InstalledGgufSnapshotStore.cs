@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
@@ -215,7 +216,7 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
         var sha256 = MemberHashMemo.TryGet(absolutePath, length, lastWriteTimeUtc);
         if (sha256 is null)
         {
-            sha256 = await GgufAcquisitionSidecar.ComputeSha256Async(absolutePath, cancellationToken).ConfigureAwait(false);
+            sha256 = await FileSha256.ComputeAsync(absolutePath, cancellationToken).ConfigureAwait(false);
             MemberHashMemo.Set(absolutePath, length, lastWriteTimeUtc, sha256);
         }
 
@@ -378,7 +379,7 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
     /// </summary>
     /// <remarks>
     ///     Registry entries written before the sidecar era persist <c>Convert.ToHexString</c> (UPPERCASE) hex, while every current write
-    ///     path and <see cref="GgufAcquisitionSidecar.ComputeSha256Async" /> produce lowercase, so an ordinal compare fails every such
+    ///     path and <see cref="FileSha256.ComputeAsync" /> produce lowercase, so an ordinal compare fails every such
     ///     entry with <c>InstalledModelMemberFingerprintMismatch</c> and takes down whole catalog endpoints that verify each installed
     ///     model. Only the comparison is relaxed — the persisted fingerprint/revision inputs are untouched, so no identity changes.
     /// </remarks>

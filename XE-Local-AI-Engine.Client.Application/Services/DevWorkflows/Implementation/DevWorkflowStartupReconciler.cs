@@ -35,7 +35,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
     /// </summary>
     /// <remarks>
     ///     A refused pass writes nothing — the collapse rolls back whole — so counting it as one of the
-    ///     <see cref="RecoveryPasses" /> would spend a pass on a judgement never applied, and a refusal on the LAST
+    ///     <see cref="RecoveryPasses" /> would spend a pass on a judgment never applied, and a refusal on the LAST
     ///     one would throw the settling pass away with it, leaving the rows Queued/Running, the pair of states nothing
     ///     downstream recovers. A cap rather than an unbounded retry, because a writer that refuses every pass is one
     ///     this cannot outrace either.
@@ -182,7 +182,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             var nodeRuns = await store.ListNodeRunsAsync(group.Key, cancellationToken);
 
             // TWO counts. `spent` is what the run made and is what the trailing sweep decides on; `promised` adds the reservations a Retry recorded before the crash left, which no
-            // sum over Attempt can see (FU3-4 race B). Only ADMISSION uses `promised` — widening the sweep sends every interrupted Agent row, which costs no attempt, to a human.
+            // sum over Attempt can see. Only ADMISSION uses `promised` — widening the sweep sends every interrupted Agent row, which costs no attempt, to a human.
             var spent = nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1);
             var promised = DevWorkflowRetryPolicy.Promised(nodeRuns, await store.ListDecisionsAsync(group.Key, cancellationToken));
 
@@ -196,7 +196,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                                           .ToList();
 
             // A row already AT its own cap is no candidate for the run's budget: recovery increments the attempt of every row it admits, and this one has none left to be given —
-            // without the check a 3-of-3 row resets to Pending at 4 (FU3-4). Blocked with its OWN reason, so nobody reads it as the run-wide budget.
+            // without the check a 3-of-3 row resets to Pending at 4. Blocked with its OWN reason, so nobody reads it as the run-wide budget.
             var atCap = interruptedSandbox.Where(static nodeRun => nodeRun.Attempt >= nodeRun.MaxAttempts).ToList();
             var sandboxed = interruptedSandbox.Where(static nodeRun => nodeRun.Attempt < nodeRun.MaxAttempts).ToList();
             var admitted = Math.Min(affordable, sandboxed.Count);

@@ -42,7 +42,7 @@ public enum McpConnectionFailureReason
     /// <summary>A connected server's process or stream ended after the handshake.</summary>
     ServerExited = 11,
 
-    /// <summary>An HTTP server no longer recognises the session (HTTP 404), typically because it restarted.</summary>
+    /// <summary>An HTTP server no longer recognizes the session (HTTP 404), typically because it restarted.</summary>
     SessionLost = 12,
 
     /// <summary>The server's process exited during startup, before the MCP handshake completed.</summary>

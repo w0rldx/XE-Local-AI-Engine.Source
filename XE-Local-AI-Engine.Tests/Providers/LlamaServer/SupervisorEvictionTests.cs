@@ -218,8 +218,8 @@ public sealed class SupervisorEvictionTests
     [Test]
     public async Task TwoResidentChatModels_ConsecutiveSearches_NeverEvictEitherCompanion()
     {
-        // V-01: a 27B and a 9B chat model resident on the default cap of 3 used to leave one slot for the embedder and the reranker,
-        // so every knowledge search's embed and warm evicted the other companion and the reranker never stayed warm.
+        // A 27B and a 9B chat model resident on a cap of 3 would leave one slot for the embedder and the reranker,
+        // so every knowledge search's embed and warm would evict the other companion; neither is ever evicted.
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
         await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 3, TimeSpan.FromMinutes(15)), timeProvider: time);
@@ -613,8 +613,8 @@ public sealed class SupervisorEvictionTests
     [Test]
     public async Task IdleReap_WhenOneTeardownThrows_StillReapsTheOthers()
     {
-        // A throwing TreeKill (e.g. a Win32Exception from a plain handle) used to escape ReapIdleOnceAsync, faulting the
-        // reaper loop for the rest of the session and skipping every other idle process in that pass.
+        // A throwing TreeKill (e.g. a Win32Exception from a plain handle) escaping ReapIdleOnceAsync would fault the
+        // reaper loop for the rest of the session and skip every other idle process in that pass.
         var nextPid = 5000;
         var launcher = new FakeProcessLauncher(spec =>
         {

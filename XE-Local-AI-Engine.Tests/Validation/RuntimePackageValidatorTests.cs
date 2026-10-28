@@ -271,7 +271,7 @@ public sealed class RuntimePackageValidatorTests
     public void Validate_WhenMessageHasBlankContentButImageParts_IsValid()
     {
         // A vision (image-only) turn carries blank text — the image parts are its payload — and must NOT be rejected as
-        // blank-content. Regression guard: the validator previously flagged every whitespace-only message.
+        // blank-content. Regression guard: the validator must not flag every whitespace-only message.
         var package = RuntimePackageBuilder.Valid().Build() with
         {
             ConversationContext =

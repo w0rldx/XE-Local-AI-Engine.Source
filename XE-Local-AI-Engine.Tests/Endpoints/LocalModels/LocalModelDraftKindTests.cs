@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     A downloaded speculative-decoding drafter used to be classified <see cref="ModelKind.Chat" /> —
-///     an installed GGUF defaults to Chat, and nothing distinguished the drafter — so it sat in the chat picker as a
-///     0.4 GB twin of the 7.8 GB model it drafts for. It must classify as <see cref="ModelKind.Draft" /> (the React
-///     picker offers <c>kind === "Chat"</c> only), while the real model beside it stays Chat.
+///     A speculative-decoding drafter must classify as <see cref="ModelKind.Draft" />, not the installed-GGUF default
+///     <see cref="ModelKind.Chat" />: the picker offers <c>kind === "Chat"</c> only, so it would sit there as a 0.4 GB
+///     twin of the 7.8 GB model it drafts for, which stays Chat.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelDraftKindTests

@@ -15,19 +15,19 @@ using Microsoft.Extensions.AI;
 /// </remarks>
 public static class SamplingOptionKeys
 {
-    /// <summary>Minimum token probability relative to the most likely token (0 = disabled). Honoured by both runtimes.</summary>
+    /// <summary>Minimum token probability relative to the most likely token (0 = disabled). Honored by both runtimes.</summary>
     public const string MinP = "min_p";
 
-    /// <summary>Repetition penalty over the last <see cref="RepeatLastN" /> tokens (1.0 = disabled). Honoured by both runtimes.</summary>
+    /// <summary>Repetition penalty over the last <see cref="RepeatLastN" /> tokens (1.0 = disabled). Honored by both runtimes.</summary>
     public const string RepeatPenalty = "repeat_penalty";
 
-    /// <summary>How many trailing tokens the repetition penalty considers (0 = disabled, -1 = context size). Honoured by both runtimes.</summary>
+    /// <summary>How many trailing tokens the repetition penalty considers (0 = disabled, -1 = context size). Honored by both runtimes.</summary>
     public const string RepeatLastN = "repeat_last_n";
 
     /// <summary>Ollama's per-request context window. Deliberately NOT patched onto the llama.cpp request.</summary>
     /// <remarks>
     ///     llama-server's window is fixed by the <c>--ctx-size</c> it was launched with and a per-request <c>n_ctx</c> is
-    ///     not honoured, so on that runtime the value only drives the client-side history budget (<c>TurnPolicy</c>).
+    ///     not honored, so on that runtime the value only drives the client-side history budget (<c>TurnPolicy</c>).
     /// </remarks>
     public const string NumCtx = "num_ctx";
 }

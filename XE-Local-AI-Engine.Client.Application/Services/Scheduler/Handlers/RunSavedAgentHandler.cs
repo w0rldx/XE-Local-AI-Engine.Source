@@ -185,7 +185,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             nodeSettings.MaxMessageRequestTimeoutSeconds);
 
         // 5. Take the shared invocation slot, THEN decide capacity, then run headless. Deciding before the slot let a second fire for the same
-        //    cold model see the first fire's footprint reservation and be refused instead of queueing (F-32); the integration path uses this order.
+        //    cold model see the first fire's footprint reservation and be refused instead of queueing; the integration path uses this order.
         await RunAndSummarizeAsync(eventDispatcher, capacityService, invocationRunner, package, context, effectiveModel, missingModelRefusal, cancellationToken);
     }
 

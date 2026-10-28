@@ -22,7 +22,7 @@ using OS = TUnit.Core.Enums.OS;
 ///         proves a real daemon, asked for this exact specification, produces a container whose ports are on
 ///         loopback, whose effective mounts include the ones its image declared, whose healthcheck reaches a verdict
 ///         and whose logs come back demultiplexed. Neither half substitutes for the other: a fake cannot show a
-///         daemon honours a flag, and a daemon cannot be asked to dishonour one.
+///         daemon honors a flag, and a daemon cannot be asked to dishonour one.
 ///     </para>
 ///     <para>
 ///         <b>Opt-in.</b> Nothing runs here unless <c>XE_REQUIRE_DOCKER_TESTS=1</c>; without it every test skips
@@ -484,7 +484,7 @@ public sealed class ContainerRuntimeRealDaemonTests
     ///     The endpoints to try, each named by the PRODUCTION resolver. The second candidate exists because the
     ///     resolver deliberately stops at an existing <c>/var/run/docker.sock</c> and never falls through to a
     ///     per-user socket — correct for a product whose operator attests to one daemon, and the reason every test
-    ///     here would otherwise skip on a box that has a root-owned system socket and a rootless daemon of its own.
+    ///     here would otherwise skip on a host that has a root-owned system socket and a rootless daemon of its own.
     /// </summary>
     private static IEnumerable<ContainerRuntimeOptions> DaemonCandidates()
     {
@@ -547,8 +547,8 @@ public sealed class ContainerRuntimeRealDaemonTests
     ///     The one switch. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c> and these tests run, failing rather than skipping
     ///     when no daemon is usable; leave it unset and they skip with a reason naming the runner.
     ///     <para>
-    ///         They used to run whenever a socket happened to be present, and CI forced them on. That made Docker
-    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is now
+    ///         They never run just because a socket exists, nor does CI force them on: that would make Docker
+    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is
     ///         covered without a daemon by the fake server. What is left here is what only a real daemon can settle,
     ///         and that belongs to an opt-in pre-RC smoke rather than to the PR gate.
     ///     </para>
@@ -614,7 +614,7 @@ public sealed class ContainerRuntimeRealDaemonTests
     }
 
     /// <summary>
-    ///     One test's containers, network and host directory, all labelled with a run id so nothing this suite creates
+    ///     One test's containers, network and host directory, all labeled with a run id so nothing this suite creates
     ///     can be confused with — or clean up — anything else on a shared developer daemon.
     ///     <para>
     ///         Disposal is best effort by design: a test that already failed must not have its verdict replaced by a
@@ -848,7 +848,7 @@ public sealed class ContainerRuntimeRealDaemonTests
         ///     Create and start one container, retrying once — and only — on the daemon's port-bind collision.
         ///     <para>
         ///         Rootless Docker publishes a host port through RootlessKit, which binds it in a separate step from
-        ///         the one that chose it. On a box several checkouts share, a port free at the choice can be taken by
+        ///         the one that chose it. On a host several checkouts share, a port free at the choice can be taken by
         ///         the bind ("RootlessKit PortManager.AddPort(): … bind: address already in use"), and a suite that
         ///         creates a dozen containers meets it eventually. That is the machine, not this engine, so it is
         ///         retried once with a fresh candidate and the failed container is removed first. Every other start

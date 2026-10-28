@@ -22,7 +22,7 @@
    affordance that stops five dashed cards reading as five unrelated ones.
 
    The accent is a border-left rather than a background stripe so it survives every status class: a status only ever
-   sets `border-color`, which repaints the rail in the status's own colour and leaves the group's shape intact. */
+   sets `border-color`, which repaints the rail in the status's own color and leaves the group's shape intact. */
 
 .node-materialized {
 	border-style: dashed;

@@ -4,11 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="FtsSearch.EscapeMatchQuery" /> turns an untrusted search string into a safe FTS5 <c>MATCH</c>
-///     expression: it splits on whitespace, wraps each token in its own double-quoted literal (embedded double quotes
-///     doubled), and joins the tokens with <c>OR</c>. Per-token quoting keeps operator characters (<c>- * : ( ) ^</c>)
-///     and bare keywords (<c>OR AND NEAR</c>) as ordinary text — they can never inject query syntax or trip a parse
-///     error — while OR fusion restores multi-word BM25 recall for the RRF pipeline.
+///     <see cref="FtsSearch.EscapeMatchQuery" /> turns an untrusted string into a safe FTS5 <c>MATCH</c>: each
+///     whitespace token becomes its own double-quoted literal (quotes doubled), joined with <c>OR</c>, so operators
+///     and keywords stay plain text while OR keeps multi-word BM25 recall.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class FtsSearchEscapeMatchQueryTests

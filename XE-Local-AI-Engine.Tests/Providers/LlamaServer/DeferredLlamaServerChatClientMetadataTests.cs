@@ -11,14 +11,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="DeferredLlamaServerChatClient" /> must answer <see cref="ChatClientMetadata" /> from
-///     construction-time knowledge BEFORE its inner adapter exists. MEAI's <c>OpenTelemetryChatClient</c> snapshots
-///     that metadata in its own constructor and never refreshes it, so a null answered before first use permanently
-///     costs every span and metric emitted over a deferred client its <c>gen_ai.request.model</c> and
-///     <c>gen_ai.provider.name</c> — and the background jobs that wrap one
-///     (<c>ProviderChatClientTelemetry.WithProviderTelemetry</c> over the summarizer, memory-extraction,
-///     playbook-analysis and config-draft clients) set no <c>ChatOptions.ModelId</c> to fill the gap.
+///     <see cref="DeferredLlamaServerChatClient" /> answers <see cref="ChatClientMetadata" /> from construction-time
+///     knowledge BEFORE its inner adapter exists: MEAI's <c>OpenTelemetryChatClient</c> snapshots it at construction.
 /// </summary>
+/// <remarks>
+///     A null answer costs every span and metric over a deferred client its <c>gen_ai.request.model</c>
+///     and <c>gen_ai.provider.name</c>; jobs wrapped by <c>ProviderChatClientTelemetry.WithProviderTelemetry</c>
+///     (summarizer, memory-extraction, playbook-analysis, config-draft) set no <c>ChatOptions.ModelId</c> to fill it.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerChatClientMetadataTests
 {

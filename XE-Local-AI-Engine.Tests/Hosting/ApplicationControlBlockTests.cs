@@ -4,7 +4,7 @@ using System.Reflection;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// N-69: Smart App Control refuses an unsigned assembly with HRESULT 0x800711C7; startup must name the file, not crash.
+// Smart App Control refuses an unsigned assembly with HRESULT 0x800711C7; startup must name the file, not crash.
 [Category(TestCategories.Unit)]
 public sealed class ApplicationControlBlockTests
 {

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 /// <summary>The API layer's questions about a stored graph, answered by the parser the dispatcher routes with.</summary>
 /// <remarks>
 ///     The parsed graph itself stays internal: it is the runtime's projection, not a wire shape. What must not be
-///     duplicated is the JUDGEMENT, because a second implementation of it would drift from the one that decides.
+///     duplicated is the JUDGMENT, because a second implementation of it would drift from the one that decides.
 ///     See docs/wiki/25-dev-workflows.md ("The application service seams").
 /// </remarks>
 public static class DevWorkflowGraphContract

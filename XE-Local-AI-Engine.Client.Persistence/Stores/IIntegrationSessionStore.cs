@@ -70,7 +70,7 @@ public interface IIntegrationSessionStore
     ///     The masking rule is the shape of the return, not an <c>if</c> a route has to remember. Ownership is the
     ///     row's own <c>PrincipalId</c> column, never a key prefix: two credentials of one integrator must reach the
     ///     same sessions, so a rotation does not strand them. The CURRENT key's trigger allowlist is a second,
-    ///     separate limb applied by <c>IntegrationExternalAccess</c> — authorisation is not a persistence decision.
+    ///     separate limb applied by <c>IntegrationExternalAccess</c> — authorization is not a persistence decision.
     /// </remarks>
     Task<IntegrationSessionSnapshot?> GetForPrincipalAsync(Guid sessionId, Guid principalId, CancellationToken cancellationToken = default);
 

@@ -48,7 +48,7 @@ public sealed class DevWorkflowAttemptCostTests
 
     /// <summary>
     ///     The five that do not: a route belongs to one settle, a model name is not a quantity, names do not sum, and
-    ///     the two VRAM figures read the box at one load rather than counting what an attempt spent.
+    ///     the two VRAM figures read the host at one load rather than counting what an attempt spent.
     /// </summary>
     private static readonly string[] NonAdditiveMembers =
         ["routeJson", "servedModelName", "toolNamesJson", "vramFreeAtLoadBytes", "vramAdmittedBytes"];

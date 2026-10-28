@@ -14,7 +14,7 @@ public static class VaultKdf
 {
     public const string Algorithm = "PBKDF2-SHA512";
 
-    /// <summary>The iteration count new wraps use. Unwrap always honours the count stored in the file.</summary>
+    /// <summary>The iteration count new wraps use. Unwrap always honors the count stored in the file.</summary>
     public const int DefaultIterations = 600_000;
 
     /// <summary>The lowest stored count an unwrap accepts; a file below it is treated as tampered.</summary>

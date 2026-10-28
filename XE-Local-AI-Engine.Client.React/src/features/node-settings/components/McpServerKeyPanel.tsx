@@ -1,5 +1,7 @@
 import { Alert, Badge, Button, Card, Code, CopyButton, Group, Select, Stack, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconCopy, IconPlugConnected, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -7,9 +9,7 @@ import {
 	useGenerateMcpServerApiKey,
 	useMcpServerApiKey,
 	useRevokeMcpServerApiKey,
-} from "@/features/mcp/queries/useMcpServerApiKey";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+} from "@/features/node-settings/queries/useMcpServerApiKey";
 
 // Manages the INBOUND MCP credential: the bearer key an external MCP client (Claude Code, Claude Desktop, an IDE)
 // presents to this node's own MCP server endpoint, so it can delegate a task to the local model.

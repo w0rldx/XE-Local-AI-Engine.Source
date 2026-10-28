@@ -11,18 +11,18 @@ using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
 ///     The Whisper weight store's contract is <b>ensure</b>, not download: a file already on disk that matches the
-///     pinned catalogue is reused without touching the network.
+///     pinned catalog is reused without touching the network.
 /// </summary>
 /// <remarks>
 ///     This is the regression suite for a shared-file download defect. Every transcription model download
 ///     fetches the SHARED voice-activity-detection file as its first part, so on a node that already installed one
-///     model that file exists when the next download starts. The store called the download client unconditionally;
-///     the client re-fetched the bytes, verified them, and then refused to publish them onto the existing destination
-///     — failing the whole download before the weights the operator asked for were ever requested. The second model
-///     an operator installed could therefore never succeed.
+///     model that file exists when the next download starts. A store that calls the download client unconditionally
+///     makes the client re-fetch the bytes, verify them, and then refuse to publish them onto the existing destination
+///     — failing the whole download before the weights the operator asked for are ever requested, so the second model
+///     an operator installs could never succeed.
 ///
 ///     The real store over the real <see cref="HfDownloadClient" /> is used throughout, because those two together
-///     are what failed; only the transport is faked.
+///     are what can fail; only the transport is faked.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class HuggingFaceWhisperWeightStoreTests
@@ -75,7 +75,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     [Test]
     public async Task EnsureFile_DestinationExistsWithForeignBytes_IsReplacedByAFreshDownload()
     {
-        // Present but not what the catalogue pins — a truncated copy, an upstream re-upload, or a foreign file under
+        // Present but not what the catalog pins — a truncated copy, an upstream re-upload, or a foreign file under
         // our name. Reusing it would install bytes the runtime cannot load; leaving it would fail the commit guard
         // forever. It is replaced.
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
@@ -172,7 +172,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
             _http = new HttpClient(Handler, disposeHandler: false);
 
             // A bare 200 with no X-Linked-Etag, so the client verifies against the caller's pinned digest — which is
-            // the path the transcription catalogue actually takes.
+            // the path the transcription catalog actually takes.
             _resolveHandler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage());
             _resolveHttp = new HttpClient(_resolveHandler, disposeHandler: false);
 

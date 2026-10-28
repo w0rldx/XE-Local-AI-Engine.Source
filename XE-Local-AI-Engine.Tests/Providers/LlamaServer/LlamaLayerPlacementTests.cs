@@ -58,7 +58,7 @@ public sealed class LlamaLayerPlacementTests
     [Test]
     public void Sniffer_CudaBuildFallenBackToCpu_ReportsNoLayersOffloaded()
     {
-        // The Windows tester's CPU-fallback load: the banner still claims 41/41, but only host buffers were allocated.
+        // A CUDA build fallen back to CPU: the banner still claims 41/41, but only host buffers are allocated.
         var sniffer = new LlamaServerLayerPlacementSniffer();
         foreach (var line in new[]
                  {

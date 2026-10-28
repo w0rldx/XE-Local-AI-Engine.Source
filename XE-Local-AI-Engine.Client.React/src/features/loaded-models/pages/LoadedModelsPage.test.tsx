@@ -28,7 +28,7 @@ const { runningMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
-vi.mock("@/features/loaded-models/queries/useRunningModels", () => runningMock);
+vi.mock("@/core/loaded-models/queries/useRunningModels", () => runningMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 

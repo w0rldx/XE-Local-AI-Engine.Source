@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Refuses an implicit llama.cpp runtime download on a node whose external-access profile is Offline: the Offline card
-///     promises the runtime is not fetched automatically, and a chat send used to fetch it anyway.
+///     promises the runtime is not fetched automatically, and that includes a chat send.
 /// </summary>
 public sealed class OfflineProfileLlamaCppAcquisitionPolicy : ILlamaCppImplicitAcquisitionPolicy
 {

@@ -247,10 +247,10 @@ public sealed class HardwareProfilerTests
     }
 
     /// <summary>
-    ///     The Windows vendor probe used to be a hardcoded <c>Unknown</c> stub, so an AMD or Intel box reported
+    ///     The Windows vendor probe must not be a hardcoded <c>Unknown</c> stub, or an AMD or Intel box reports
     ///     <c>gpuVendor: "unknown"</c> on the hardware-profile card the operator actually reads — while the runtime
     ///     selector, using a different probe entirely, could be choosing the Vulkan binary for that same machine. The
-    ///     two detectors disagreeing is what this closes.
+    ///     two detectors must agree.
     /// </summary>
     [Test]
     public async Task HardwareProfiler_Windows_NonNvidia_NamesTheVendorFromTheAdapterDescription()
@@ -301,7 +301,7 @@ public sealed class HardwareProfilerTests
     public async Task HardwareProfiler_Windows_WhenPowerShellIsUnavailable_StillReadsTheVendorFromWmic()
     {
         // A locked-down box can have PowerShell constrained or removed while the wmic Feature-on-Demand is still
-        // installed. Keeping wmic as the last candidate costs nothing on a box that has neither.
+        // installed. Keeping wmic as the last candidate costs nothing on a host that has neither.
         var probe = new ScriptedProcessProbe().WithOutput("wmic", "Name\nAMD Radeon RX 7800 XT\n");
         var profiler = new HardwareProfiler(probe, WindowsEnvironment(), new HardwareProfilerOptions());
 
@@ -363,7 +363,7 @@ public sealed class HardwareProfilerTests
         AssertEx.Equal(GpuVendor.Intel, HardwareProfiler.MapAdapterVendor("Intel(R) Arc(TM) A770"));
         AssertEx.Equal(GpuVendor.Nvidia, HardwareProfiler.MapAdapterVendor("NVIDIA GeForce RTX 4080"));
 
-        // Null, not Unknown: a listing that names no modelled vendor is a source with no answer, so the caller goes on
+        // Null, not Unknown: a listing that names no modeled vendor is a source with no answer, so the caller goes on
         // to the next one instead of accepting it as the verdict.
         AssertEx.Null(HardwareProfiler.MapAdapterVendor("Microsoft Basic Display Adapter"));
         AssertEx.Null(HardwareProfiler.MapAdapterVendor(string.Empty));

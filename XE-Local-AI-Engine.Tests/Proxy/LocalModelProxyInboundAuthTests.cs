@@ -10,12 +10,12 @@ using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The authentication boundary of the inbound model proxy. Three principals meet on this node and must not
-///     impersonate each other: the node operator (JWT, drives the key-management endpoints), the MCP client (its own
-///     key, drives the MCP tool surface), and the model-proxy tool (its own key, drives the raw-model endpoints). Each
-///     is rejected on the others' surface — in particular the proxy key must not reach admin, and the operator token
-///     must not drive the raw-model proxy.
+///     The inbound model proxy's authentication boundary: the operator (JWT, key management), the MCP client (own key,
+///     MCP tools) and the model-proxy tool (own key, raw-model endpoints) must not impersonate each other.
 /// </summary>
+/// <remarks>
+///     Each is rejected on the others' surfaces: the proxy key never reaches admin, the operator token never drives
+///     the raw-model proxy.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class LocalModelProxyInboundAuthTests
 {

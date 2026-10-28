@@ -1076,8 +1076,8 @@ public sealed class DevWorkflowEndpointTests
     ///     The graph-carrying routes cap their body. Without one they inherit the host's 30 MB default, and a body that
     ///     size is bound and walked by the runtime's own parser before the node cap could refuse it.
     ///     <para>
-    ///         The BODY is asserted, not just the status: this exit declares ASP.NET's ProblemDetails and used to send
-    ///         FastEndpoints' errors[] instead, which a status-only assertion cannot tell apart.
+    ///         The BODY is asserted, not just the status: this exit declares ASP.NET's ProblemDetails, not
+    ///         FastEndpoints' errors[], which a status-only assertion cannot tell apart.
     ///     </para>
     /// </summary>
     [Test]

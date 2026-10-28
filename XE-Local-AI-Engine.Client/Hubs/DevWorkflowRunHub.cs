@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     Operator-only live notifications for one development workflow run.
 /// </summary>
 /// <remarks>
-///     Modelled on <see cref="WorkSessionHub" /> and explicitly NOT on a buffered per-run subscription hub: run events
+///     Modeled on <see cref="WorkSessionHub" /> and explicitly NOT on a buffered per-run subscription hub: run events
 ///     are persisted append-only with a monotonic sequence and the persisted log IS the replay authority. Nor does a
 ///     disconnect cancel anything — a workflow run is durable and outlives both the browser tab and the engine, which
 ///     is the property this module exists to prove.

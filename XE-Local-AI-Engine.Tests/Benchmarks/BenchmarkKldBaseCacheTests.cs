@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The base-logit cache holds tens of gigabytes per base model, so its four dangerous moments each get a test: a
-///     second writer, a killed writer, a full disk, and an eviction pass that must not delete a file a queued
-///     measurement is about to read.
+///     The base-logit cache holds tens of gigabytes per model, so each of its four dangerous moments gets a test: a
+///     second writer, a killed writer, a full disk, and an eviction that must not delete a file a queued measurement
+///     is about to read.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkKldBaseCacheTests : IDisposable
@@ -85,7 +85,7 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
         File.WriteAllText(temp, "half a file");
 
         // The writer dies here — the executor's finally sweeps the temp and never calls Publish.
-        BenchmarkKldBaseCache.DeleteBestEffort(temp);
+        BestEffortFile.TryDeleteFile(temp);
 
         AssertEx.Null(cache.TryResolveExisting(key), "A killed base phase must leave nothing that resolves as a measurement.");
         AssertEx.Empty(Directory.EnumerateFiles(cache.Root, "*.logits"));

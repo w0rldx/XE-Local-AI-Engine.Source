@@ -113,7 +113,7 @@ describe("usePaneLayoutMode", () => {
 		expect(mode()).toBe("wide");
 	});
 
-	// 972 = 320 list + 240 centre floor + 380 side floor + two 16px gaps, derived in PaneLayoutTracks so the
+	// 972 = 320 list + 240 center floor + 380 side floor + two 16px gaps, derived in PaneLayoutTracks so the
 	// threshold and the tracks cannot drift apart.
 	it("switches at the three-column minimum of 972px", () => {
 		setViewportWidth(2000);
@@ -127,7 +127,7 @@ describe("usePaneLayoutMode", () => {
 		expect(mode()).toBe("wide");
 	});
 
-	// A page whose centre pane needs more than the shared 240px floor (the work-session chat) raises the threshold by
+	// A page whose center pane needs more than the shared 240px floor (the work-session chat) raises the threshold by
 	// the difference: 320 + 440 + 380 + 32 = 1172.
 	it("switches at the raised minimum when the page asks for a wider centre pane", () => {
 		setViewportWidth(2000);

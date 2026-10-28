@@ -15,7 +15,7 @@ public sealed class SetAppUpdateChannelRequestValidator : Validator<SetAppUpdate
     {
         RuleFor(static request => request.Channel)
             .NotEmpty()
-            .Must(StoredNodeSettings.IsValidUpdateChannel)
+            .Must(StoredNodeSettingsValidation.IsValidUpdateChannel)
             .WithMessage("Update channel must be stable, preview or development.");
     }
 }

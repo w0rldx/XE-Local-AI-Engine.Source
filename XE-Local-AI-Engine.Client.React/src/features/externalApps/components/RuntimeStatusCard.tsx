@@ -48,7 +48,7 @@ export function RuntimeStatusCard({ runtime, isLoading, "data-testid": testId }:
 	const observedDaemonId = runtime?.observedDaemon?.daemonId ?? undefined;
 	const missingCapabilities = missingCapabilityNames(runtime, t);
 	// Containers carrying this owner label but ANOTHER install id. The node never touches them, so the count
-	// is information the operator has to act on, and a card that swallows it says XE owns every labelled container on
+	// is information the operator has to act on, and a card that swallows it says XE owns every labeled container on
 	// the machine. It is read from the REFRESH response first: `GET external-apps/runtime` is a pure read that
 	// reports 0 on purpose, because the count is the reconciler's observation and a cached one would claim a foreign
 	// container is there when it is not. So the number appears once the operator has pressed Check again.

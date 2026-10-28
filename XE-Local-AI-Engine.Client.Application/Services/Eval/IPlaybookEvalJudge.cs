@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     The <em>assertion</em> path runs in plain code with no model call, while the <em>judge</em> path uses the
 ///     case's rubric and the SUPPLIED node-local chat client: the service owns the per-run client and passes it in,
 ///     so the judge never resolves a shared or cloud one. A case with neither an assertion nor a rubric is invalid
-///     and scores as a fail — defence in depth, since the CRUD service rejects such a case on create.
+///     and scores as a fail — defense in depth, since the CRUD service rejects such a case on create.
 /// </remarks>
 public interface IPlaybookEvalJudge
 {

@@ -169,7 +169,7 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
         // request count is proof of single-flight rather than of the calls happening to run one after another. Only the
         // request count is asserted: a caller that arrives after _lastAttemptUtc is stamped but before the in-flight
         // fetch returns is served the current (still bundled) snapshot by the documented best-effort TTL peek, and
-        // that is the intended behaviour — never a second fetch.
+        // that is the intended behavior — never a second fetch.
         var handler = new GatedStubHandler(RemoteJson);
         var provider = BuildProvider(handler, RemoteUrl, out _);
 
@@ -536,7 +536,7 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
         _ = await provider.GetCatalogAsync(CancellationToken.None);
         AssertEx.Equal(expected: 1, handler.CallCount);
 
-        // ...but recovery must not wait a whole RefreshTtl either, which is what the outer TTL peek used to impose.
+        // ...but recovery must not wait a whole RefreshTtl either, which an outer TTL peek would impose.
         timeProvider.Advance(ExternalAppCatalogOptions.DefaultFailureRetryInterval + TimeSpan.FromSeconds(seconds: 1));
         handler.Reconfigure(HttpStatusCode.OK, RemoteJson);
         var recovered = await provider.GetCatalogAsync(CancellationToken.None);
@@ -555,7 +555,7 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     public async Task RefreshAsync_WhenTheBodyStreamThrowsIoException_DegradesInsteadOfPropagating()
     {
         // With ResponseHeadersRead the body is still on the wire here, so a connection that dies mid-read surfaces as
-        // IOException, not HttpRequestException — and used to escape the refresh instead of falling back.
+        // IOException, not HttpRequestException — and must fall back instead of escaping the refresh.
         var handler = new CountingStubHandler(HttpStatusCode.OK, body: null)
         {
             FailBodyRead = true

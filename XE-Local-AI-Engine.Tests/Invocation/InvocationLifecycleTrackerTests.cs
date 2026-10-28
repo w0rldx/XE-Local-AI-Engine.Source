@@ -10,17 +10,14 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The lifecycle rules that are cheap to state and expensive to get wrong, exercised on the tracker alone rather
-///     than through a whole invocation turn: the PRIORITY ORDER of cancellation attribution (a deliberate cancel
-///     recorded by its requester beats the caller token, which beats the turn's own watchdog, which beats "nobody of
-///     ours fired"), per-invocation isolation of deadlines, parks and cancels, and the drain fence that stops a new LOCAL turn from
-///     slipping in behind the snapshot while a remote assignment is still admitted.
-///     <para>
-///         The origin cases matter because getting them wrong is not visible in a normal test: the classification is
-///         deliberately derived from synchronized state at mapping time rather than from a token callback, and a
-///         regression there reads as an occasional wrong failure category rather than as a failure.
-///     </para>
+///     Lifecycle rules on the tracker alone: cancel attribution priority (requester, caller token, watchdog, "none of
+///     ours"), per-invocation isolation, and the drain fence that keeps a new LOCAL
+///     turn out while a remote assignment is admitted.
 /// </summary>
+/// <remarks>
+///     The origin classification is derived from synchronized state at mapping time rather than from a token callback,
+///     so a regression there reads as an occasional wrong failure category rather than as a failure.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class InvocationLifecycleTrackerTests
 {
@@ -254,8 +251,8 @@ public sealed class InvocationLifecycleTrackerTests
     [Test]
     public async Task SetInvocationDeadline_ParkThenRelease_DoesNotExtendTheTurnBeyondItsRemainingBudget()
     {
-        // A tool-heavy turn parks once per approval. Each release used to re-arm the FULL InvocationTimeout, so a turn
-        // with many approvals ran far past its budget; the model must get back only what it had when the park began.
+        // A tool-heavy turn parks once per approval. Re-arming the FULL InvocationTimeout per release would let a turn
+        // with many approvals run far past its budget; the model must get back only what it had when the park began.
         var time = new ManualTimeProvider();
         var tracker = CreateTracker(time);
         var invocationId = Guid.NewGuid();

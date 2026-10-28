@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
-/// <summary>Projects the model catalogue and its download statuses onto the wire DTOs.</summary>
+/// <summary>Projects the model catalog and its download statuses onto the wire DTOs.</summary>
 internal static class TranscriptionModelMapper
 {
     public static TranscriptionModelListResponse ToResponse(this TranscriptionModelCatalogView view)

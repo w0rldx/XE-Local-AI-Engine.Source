@@ -250,7 +250,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     public async Task RunPython_CannotSeeWhatAnEarlierCallWrote()
     {
         // The advertised contract is that a call leaves nothing behind. ONE provider and ONE gateway across both calls
-        // is the point: that is the shape a real turn has, and the shape that used to reattach to the same jail and the
+        // is the point: that is the shape a real turn has, and the one that must not reattach to the same jail and the
         // same scratch directory, handing the second script the first one's files.
         RequireIsolationCapableHost();
         using var provider = CreateHostProvider();
@@ -322,7 +322,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     public async Task RunPython_CannotReachTheNetwork()
     {
         // The empty network namespace is bwrap's own --unshare-net under the isolated mode, not the separate
-        // unshare(1) mechanism this test used to gate on — so the gate is the boundary's, like every other test here.
+        // unshare(1) mechanism — so the gate is the boundary's, like every other test here.
         RequireIsolationCapableHost();
         using var provider = CreateHostProvider();
         var gateway = CreateGateway(provider);
@@ -351,7 +351,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     {
         // site-packages is imported by every later call, so a script that can drop a module there turns one approval
         // into code that runs on all the following ones. The chmod is the point of this version: the venv's cleared
-        // write bits are defence in depth, and the script OWNS those inodes — before the mount boundary existed, a
+        // write bits are defense in depth, and the script OWNS those inodes — before the mount boundary existed, a
         // deliberate os.chmod restored them and the write went through. Under a read-only bind the ownership is
         // irrelevant: the chmod itself fails, and so does the write, with EROFS rather than EPERM.
         RequireIsolationCapableHost();
@@ -684,7 +684,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     /// <summary>
     ///     A provider that advertises every containment flag EXCEPT the filesystem boundary, and records whether the
     ///     gateway tried to create a sandbox anyway. It exists here rather than only in the unit suite because the
-    ///     refusal is the tool's central fail-closed behaviour and is worth asserting beside the live proof that the
+    ///     refusal is the tool's central fail-closed behavior and is worth asserting beside the live proof that the
     ///     boundary works when it is present.
     /// </summary>
     private sealed class UnisolatedSandboxProvider : IAgentSandboxRuntimeProvider

@@ -33,7 +33,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     <para>
 ///         <b>Opt-in, and they SKIP rather than pass.</b> Gated on <c>XE_COMPUTE_LIVE=1</c> and on the host actually
 ///         being able to isolate, for the reason <c>SandboxIsolationLiveTests</c> states: a containment test that goes
-///         green on a box which contains nothing reports a guarantee nothing exercised.
+///         green on a host which contains nothing reports a guarantee nothing exercised.
 ///     </para>
 /// </summary>
 [Category(TestCategories.ExternalInfra)]

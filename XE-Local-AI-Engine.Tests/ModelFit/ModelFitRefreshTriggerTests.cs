@@ -9,11 +9,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ModelFitRefreshTrigger" /> tests: the template-guarded facade rejects a non-existent job and a
-///     job of any other template (throwing <see cref="ScheduledJobValidationException" /> WITHOUT calling
-///     <c>TriggerNowAsync</c>), and delegates exactly once to <c>TriggerNowAsync</c> for a valid
-///     <c>model-recommendation-check</c> job. The facade depends only on the scheduler service — it has no utility-runner
-///     dependency and cannot execute llmfit.
+///     <see cref="ModelFitRefreshTrigger" /> tests: the facade rejects a missing job or one of another template
+///     (throwing <see cref="ScheduledJobValidationException" /> without calling <c>TriggerNowAsync</c>) and delegates
+///     once for a valid <c>model-recommendation-check</c> job. It depends only on the scheduler and cannot run llmfit.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelFitRefreshTriggerTests

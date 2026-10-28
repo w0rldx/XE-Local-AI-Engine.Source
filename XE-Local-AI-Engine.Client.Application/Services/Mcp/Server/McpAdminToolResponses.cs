@@ -57,7 +57,7 @@ public sealed class McpRuntimeStatusResponse
 
     /// <summary>
     ///     The operator-supplied llama-server override's backend when one is active (cpu, cuda, vulkan), else null. An active override is the
-    ///     runtime every launch uses, so a missing installed tag does not mean "acquire one" (I-D8).
+    ///     runtime every launch uses, so a missing installed tag does not mean "acquire one".
     /// </summary>
     public required string? OverrideVariant { get; init; }
 

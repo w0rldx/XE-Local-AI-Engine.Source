@@ -257,7 +257,7 @@ public sealed class SupervisorSpawnArgsTests
     [Test]
     public async Task EnsureRunning_ExpertOffloadPlacement_IsReportedWithTheWindowEvenThoughEveryLayerCountsAsOffloaded()
     {
-        // llama.cpp prints "offloaded 41/41 layers to GPU" for a --cpu-moe launch that keeps 20.7 GB of experts in RAM (model-matrix round, 2026-10-04).
+        // llama.cpp prints "offloaded 41/41 layers to GPU" for a --cpu-moe launch that keeps 20.7 GB of experts in RAM.
         var launcher = new FakeProcessLauncher
         {
             StartupLines = ["load_tensors: offloaded 41/41 layers to GPU"]
@@ -538,7 +538,7 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(spec.Arguments.Contains("--metrics"), "The CPU variant must not emit --metrics.");
         AssertEx.False(spec.Arguments.Contains("-ctk"), "The CPU variant keeps f16 KV — no -ctk.");
 
-        // The CPU variant DOES get a deterministic -c (previously it emitted none → full-train-ctx KV in RAM).
+        // The CPU variant DOES get a deterministic -c (without one → full-train-ctx KV in RAM).
         var ctxIndex = IndexOf(spec.Arguments, "-c");
         AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
 
@@ -619,13 +619,13 @@ public sealed class SupervisorSpawnArgsTests
     [Arguments(ModelRole.Decision, "ggml-org/Laya-GGUF:Q8_0")]
     public async Task EnsureRunning_PooledRole_PinsPhysicalBatchToTheContext(ModelRole role, string modelName)
     {
-        // REGRESSION (capture run 2026-08-01): a pooled embedding/rerank forward pass is non-causal, so llama-server
+        // REGRESSION: a pooled embedding/rerank forward pass is non-causal, so llama-server
         // REJECTS — never splits — any single input longer than n_ubatch, with
         // `500 "input (N tokens) is too large to process. increase the physical batch size (current batch size: 512)"`.
-        // llama.cpp defaults n_ubatch to 512, so the real usable input was 512 tokens, NOT the -c we ask for (2048) and
+        // llama.cpp defaults n_ubatch to 512, so the real usable input is 512 tokens, NOT the -c we ask for (2048) and
         // not the window the model advertises. The knowledge-base chunker sizes chunks against the model's CONTEXT
-        // window, so ordinary 2000-char markdown chunks (~520-680 real tokens) blew straight past the silent ceiling and
-        // EVERY knowledge-base document failed to index on a default node. Measured against
+        // window, so ordinary 2000-char markdown chunks (~520-680 real tokens) blow straight past the silent ceiling and
+        // EVERY knowledge-base document fails to index without the pin. Measured against
         // nomic-embed-text-v1.5.Q4_K_M: 11 of 12 consecutive real markdown chunks rejected at the default, 0 of 12 with
         // these flags. Pinning -b/-ub to the context is what makes the advertised window actually usable.
         var launcher = new FakeProcessLauncher();

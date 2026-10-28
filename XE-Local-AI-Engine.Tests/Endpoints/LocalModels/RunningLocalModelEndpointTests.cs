@@ -209,8 +209,8 @@ public sealed class RunningLocalModelEndpointTests
     public async Task UnloadModel_WhenTheModelIsLlamaServerResident_EjectsEveryRoleGracefully()
     {
         // The other half of the same defect: an unreachable Ollama daemon is the desktop default, and posting
-        // keep_alive=0 to an absent 11434 is a connection refused that used to surface as a 500 — so a GGUF model could
-        // never be ejected at all, and edited launch arguments needed a full host restart to take effect.
+        // keep_alive=0 to an absent 11434 is a connection refused that must not surface as a 500 — or a GGUF model can
+        // never be ejected at all, and edited launch arguments need a full host restart to take effect.
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns<Task>(_ => throw new HttpRequestException("Connection refused"));

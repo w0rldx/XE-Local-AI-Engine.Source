@@ -290,7 +290,7 @@ public sealed class VaultUnlockHostTests : IDisposable
     [Test]
     public async Task Shell_IsNoCache_WithAContentETag_NotTheMtimeXorLengthOne()
     {
-        // Release-shaped web root: the ZIP's 1980 DOS-epoch mtime, which made every build's shell ETag collide (N-57).
+        // Release-shaped web root: the ZIP's 1980 DOS-epoch mtime, which would make every build's shell ETag collide.
         var webRoot = Directory.CreateDirectory(Path.Combine(_dataDirectory, "wwwroot")).FullName;
         var shell = Path.Combine(webRoot, "index.html");
         await File.WriteAllTextAsync(shell, "<script src=\"/assets/index-AAAAAAAA.js\"></script>");

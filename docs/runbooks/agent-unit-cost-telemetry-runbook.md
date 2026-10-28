@@ -30,7 +30,7 @@ node rows alone under-reports a fail-fail-success node by two attempts. The two 
 whole rule.
 
 **The retry arm is NOT SQL.** `dev_workflow_run_events.detail_json` is encrypted at rest
-(`NodeEncryptionSaveChangesInterceptor.cs:716-719`), so `json_extract` over it returns ciphertext. Read it through
+(registered in `NodeEncryptedColumns`), so `json_extract` over it returns ciphertext. Read it through
 the existing events endpoint, which returns the decrypted `DetailJson`
 (`ListDevWorkflowRunEventsEndpoint`, DTO `DevWorkflowContracts.cs`) — no new endpoint, no
 new column.

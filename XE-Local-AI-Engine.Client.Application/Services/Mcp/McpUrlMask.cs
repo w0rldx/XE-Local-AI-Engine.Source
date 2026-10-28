@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
 ///     Masks the parts of an HTTP MCP server URL that can carry a credential (userinfo and every query value) on the
-///     way out of the node, and recognises the masked form an update sends back.
+///     way out of the node, and recognizes the masked form an update sends back.
 /// </summary>
 /// <remarks>
 ///     New registrations cannot carry userinfo, but rows written before headers existed may hold <c>?token=...</c>,

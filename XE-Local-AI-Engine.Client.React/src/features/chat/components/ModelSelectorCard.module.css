@@ -26,7 +26,7 @@
 
 .compact-trigger-narrow {
 	/* Below the theme's `sm` (COMPACT_CONTROLS_BREAKPOINT — the component drops the second line and the chevron
-	   there): narrow enough to leave the neighbouring action icons and the send button on one row, wide enough that
+	   there): narrow enough to leave the neighboring action icons and the send button on one row, wide enough that
 	   the model name is still readable rather than a two-character stub. */
 	width: clamp(5.5rem, 34vw, 9rem);
 	min-width: 5.5rem;

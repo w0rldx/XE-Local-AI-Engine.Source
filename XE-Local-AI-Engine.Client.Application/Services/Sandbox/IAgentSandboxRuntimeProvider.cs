@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 /// </summary>
 /// <remarks>
 ///     Registered as a factory resolving <see cref="SandboxWorkloads.AgentHome" /> through <c>SandboxProviderSelector</c>, so a consumer
-///     gets the least-privileged backend that honours that declaration; the bare <see cref="ISandboxRuntimeProvider" /> is deliberately NOT
+///     gets the least-privileged backend that honors that declaration; the bare <see cref="ISandboxRuntimeProvider" /> is deliberately NOT
 ///     in DI. A container backend is unreachable: the declaration names <c>HostToolchain</c>, which none supplies, and
 ///     <c>DockerSandboxRuntimeProvider</c> does not implement this interface either. A provider serving both this role and the Development
 ///     role resolves as the SAME DI singleton — load-bearing, since Coder attaches to AgentHome's sandbox by key.

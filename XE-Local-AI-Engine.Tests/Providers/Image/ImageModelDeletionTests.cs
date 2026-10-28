@@ -10,13 +10,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins that a delete which could not remove the weights does not report success.
-///     <para>
-///         The failure mode this guards against is the worst outcome available: the registry entry is dropped while the
-///         multi-gigabyte weights stay on disk, so the model disappears from the UI with no remaining way to retry the
-///         delete or reclaim the space. The realistic trigger is the running <c>sd-server</c> still holding the file it
-///         is serving (a sharing violation on Windows).
-///     </para>
 /// </summary>
+/// <remarks>
+///     Otherwise the registry entry drops while the multi-gigabyte weights stay on disk, and the model leaves the UI
+///     with no way to retry the delete or reclaim the space. The realistic trigger is a running <c>sd-server</c> still
+///     holding the file it serves (a sharing violation on Windows).
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ImageModelDeletionTests
 {

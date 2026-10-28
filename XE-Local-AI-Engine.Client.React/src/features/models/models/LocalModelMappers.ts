@@ -28,7 +28,7 @@ function localModelOrigin(value: LocalModelWire["origin"]): LocalModelOrigin | n
  * external endpoints.
  *
  * The list endpoint appends external registrations so the chat picker can offer them, but they are not files in the
- * model store: there is nothing to delete, reset a kind override on, or count as installed, and per D10 they are
+ * model store: there is nothing to delete, reset a kind override on, or count as installed, and they are
  * managed only from the External providers page. Every install/lifecycle surface reading this list filters through
  * here so a Delete or Reset action can never be offered against a remote endpoint.
  */

@@ -31,7 +31,7 @@ public sealed class IntegrationInvocationServiceTests
         AssertEx.Equal(expected: 1, harness.Executions.CreatedSessions.Count);
         AssertEx.True(harness.Queue.Reader.TryRead(out var queued) && queued == executionId, "The admitted execution must reach the coordinator's queue.");
 
-        // ADR 0008 R4-1's order: the durable rows come first, the owned conversation and the seed afterwards, at the id the
+        // ADR 0008's order: the durable rows come first, the owned conversation and the seed afterwards, at the id the
         // session row already recorded.
         Received.InOrder(() =>
         {
@@ -211,7 +211,7 @@ public sealed class IntegrationInvocationServiceTests
     [Test]
     public async Task Accept_WithTheSameRequestIdAndABodyDifferingOnlyInWhitespace_Is409()
     {
-        // Byte-exactness is the design, not a bug: there is no canonicalisation anywhere, so a retry must resend the
+        // Byte-exactness is the design, not a bug: there is no canonicalization anywhere, so a retry must resend the
         // identical bytes. The API doc says so.
         var harness = new IntegrationInvokeHarness();
         var trigger = harness.SeedTrigger("sensor-feed");

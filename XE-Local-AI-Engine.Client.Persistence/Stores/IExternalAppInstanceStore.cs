@@ -32,7 +32,7 @@ public sealed record ExternalAppInstanceSnapshot(
     long Version,
     string? BridgeToken = null)
 {
-#pragma warning disable CA1822, S2325, S1172, IDE0060 // The compiler recognises only this printer shape; see remarks.
+#pragma warning disable CA1822, S2325, S1172, IDE0060 // The compiler recognizes only this printer shape; see remarks.
     /// <summary>
     ///     Suppresses the record's generated <c>ToString()</c>, so formatting a snapshot can never print a secret.
     /// </summary>
@@ -40,7 +40,7 @@ public sealed record ExternalAppInstanceSnapshot(
     ///     <c>VariablesJson</c> carries the user's own credentials in the clear and <c>BridgeToken</c> IS a credential,
     ///     so the default printer would put an application's admin password — or its bridge access — into any log line
     ///     that formats a snapshot; <c>ExternalAppEncryptionTests</c> asserts a known secret cannot appear. The
-    ///     signature must be private and non-virtual: on a sealed record whose base is object the compiler recognises
+    ///     signature must be private and non-virtual: on a sealed record whose base is object the compiler recognizes
     ///     only that shape as the printer, so the four analyzers are silenced rather than obeyed.
     /// </remarks>
     private bool PrintMembers(StringBuilder builder)

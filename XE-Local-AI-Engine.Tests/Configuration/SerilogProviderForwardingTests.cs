@@ -13,18 +13,16 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// Regression guard for the OTLP log-export path.
-//
-// ConfigureServices.AddServices registers Serilog. Serilog's writeToProviders parameter defaults to FALSE, which makes
-// Serilog the terminus of the logging pipeline: events reach Serilog's own sinks and no other registered
-// ILoggerProvider. The OpenTelemetry logger provider (ServiceDefaults/Extensions.cs ConfigureOpenTelemetry) is one of
-// those, so with the default every ILogger call dead-ends before the OTLP log exporter — the Aspire dashboard shows
-// zero structured logs while traces and metrics still arrive, because those bypass ILoggerFactory entirely.
-//
-// This asserts the observable consequence (a second provider receives events) rather than the flag itself, so it keeps
-// holding if the registration is restructured.
-//
-// AddServices mutates the process-global FastEndpoints serializer options outside the host factory's startup lock.
+/// <summary>
+///     Guards OTLP log export: Serilog's <c>writeToProviders</c> defaults to FALSE, ending the pipeline at Serilog's
+///     own sinks, so the OpenTelemetry logger provider would never see an ILogger call and the Aspire dashboard would
+///     show no structured logs.
+/// </summary>
+/// <remarks>
+///     The test asserts the observable consequence (a second provider receives events) rather than the flag, so it
+///     holds if the registration is restructured. It is not parallel because <c>AddServices</c> mutates the
+///     process-global FastEndpoints serializer options outside the host factory's startup lock.
+/// </remarks>
 [NotInParallel]
 [Category(TestCategories.Integration)]
 public sealed class SerilogProviderForwardingTests : IDisposable

@@ -148,11 +148,8 @@ public sealed class IntegrationTriggerEndpointTests
     [Test]
     public async Task Create_CallerManagedWithAWriteToolAgent_Returns201()
     {
-        // ADR 0008 R6-1: a caller-managed trigger used to be limited to agents whose every resolved tool is ReadLocal,
-        // because the session persisted no tool history. It persists and replays it now, so nothing about the target
-        // agent's tools is judged at save time and the policy is a plain round-trip through the route. The predicate's
-        // WITHDRAWAL is pinned by IntegrationTriggerServiceTests, which can put a real WriteExecute offer in front of
-        // it; this host resolves an agent with no allowed tool names to an empty offer, so it cannot.
+        // ADR 0008: a caller-managed trigger is not limited to ReadLocal-only agents (the session persists and replays
+        // its tool history), so nothing about the agent's tools is judged at save and the policy just round-trips.
         using var client = Factory.CreateClient();
         var agentId = await IntegrationEndpointPayloads.SeedAgentAsync(Factory, "caller-managed-write-agent");
 
@@ -162,6 +159,8 @@ public sealed class IntegrationTriggerEndpointTests
             IntegrationEndpointPayloads.TriggersRoute,
             IntegrationEndpointPayloads.TriggerBody("caller-managed-write", agentId, sessionPolicy: "CallerManaged"));
 
+        // The predicate's WITHDRAWAL is pinned by IntegrationTriggerServiceTests with a real WriteExecute offer; this
+        // host resolves an agent with no allowed tool names to an empty offer, so it cannot.
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<IntegrationTriggerBody>(IntegrationEndpointPayloads.Json));
         AssertEx.Equal("CallerManaged", view.SessionPolicy);

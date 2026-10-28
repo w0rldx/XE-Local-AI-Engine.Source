@@ -10,14 +10,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>A Windows-CUDA acquisition publishes its variant dir only once the cudart companion DLLs are inside it.</summary>
 /// <remarks>
-///     The defect this pins: the build was moved into place first and cudart flattened in afterwards, so a device probe in
-///     that window ran a CUDA build that could load no CUDA backend, got an empty GPU list and cached it for the whole
+///     The hazard this pins: moving the build into place first and flattening cudart in afterwards lets a device probe in
+///     that window run a CUDA build that can load no CUDA backend, get an empty GPU list and cache it for the whole
 ///     session. The HTTP fake records, at the moment the cudart archive is requested, whether the variant dir is
 ///     already visible. All HTTP is faked — no network.
 /// </remarks>
@@ -219,7 +218,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll", "ggml-cuda.dll"]);
         var before = Snapshot(fixture.VariantDir);
         var registry = new RuntimeAcquisitionStatusRegistry(new NullRuntimeAcquisitionEventPublisher(), NullLogger<RuntimeAcquisitionStatusRegistry>.Instance, TimeProvider.System);
-        var logger = new CapturingLogger<LlamaCppBinaryManager>();
+        var logger = new RecordingLogger<LlamaCppBinaryManager>();
         var manager = fixture.PinnedManager(registry, logger);
 
         var served = await manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None);
@@ -320,7 +319,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         using var fixture = new Fixture(cache.Path, cudartServed: true, Tag);
         var serverDir = await fixture.WritePublishedServerAsync(["cudart64_12.dll"]);
         var before = Snapshot(fixture.VariantDir);
-        var logger = new CapturingLogger<LlamaCppBinaryManager>();
+        var logger = new RecordingLogger<LlamaCppBinaryManager>();
 
         var served = await fixture.PinnedManager(logger: logger).EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None);
 
@@ -372,7 +371,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
 
         var failure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => fixture.PinnedManager(registry).EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
 
-        // The tester's log line must settle the question: which family is missing, and what the archive did deliver.
+        // The log line must settle the question: which family is missing, and what the archive did deliver.
         AssertEx.Contains(failure.Message, $"no {family} next to the server", StringComparison.Ordinal);
         AssertEx.Contains(failure.Message, "cudart64_12.dll", StringComparison.Ordinal);
         AssertEx.False(Directory.Exists(fixture.VariantDir), "An incomplete companion set must leave no variant dir behind.");
@@ -419,7 +418,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     [Test]
     public async Task PublishStagedVariant_WhenTheMoveInIsDeniedTwice_RetriesOnScheduleAndPublishesTheStagedTree()
     {
-        // The Windows tester case: an antivirus handle on fresh files denies the rename for a moment, then lets go.
+        // The Windows case: an antivirus handle on fresh files denies the rename for a moment, then lets go.
         using var cache = new TempDir();
         var variantDir = Path.Combine(cache.Path, "llama.cpp", Tag, "cuda");
         var stagingDir = await StageOverExistingVariantAsync(variantDir);

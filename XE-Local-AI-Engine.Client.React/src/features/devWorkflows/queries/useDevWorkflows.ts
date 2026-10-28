@@ -186,7 +186,7 @@ export function useDevelopmentProjectOptions(options: FeedOptions = {}) {
 	});
 }
 
-/** The run payload: status, node-runs and the pinned graph in one call. Backs the whole centre pane. */
+/** The run payload: status, node-runs and the pinned graph in one call. Backs the whole center pane. */
 export function useDevWorkflowRun(runId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
 		...getDevWorkflowRunOptions({ path: { runId: runId ?? "" } }),
@@ -217,7 +217,7 @@ export function useDevWorkflowNodeRun(runId: string | undefined, nodeRunId: stri
  * for one window's width therefore returns that whole window and can skip nothing.
  *
  * `anchor: "oldest"` is the other end: the cursor is 0 and paging runs FORWARD off the server's `hasMore` probe, which
- * is the original behaviour and is what an operator reading a run from its beginning wants.
+ * is the original behavior and is what an operator reading a run from its beginning wants.
  *
  * Built on the generated `listDevWorkflowRunEventsInfiniteOptions`. The page param is the whole `{ query }` object, not
  * a bare cursor, because the tail page also differs in `limit`; it overrides the key's query. The key still carries
@@ -359,7 +359,7 @@ export function useDevWorkflowDefinitionMutations() {
 }
 
 /**
- * The rule-set catalogue. A global resource scoped by `{ projectIds, nodeTypes }` rather than owned by any one
+ * The rule-set catalog. A global resource scoped by `{ projectIds, nodeTypes }` rather than owned by any one
  * run, which is why it is managed from the LIST page and not from a work item. Summaries only — the body is up to
  * 4096 characters of policy prose and is read one rule set at a time.
  */
@@ -379,7 +379,7 @@ export function useDevWorkflowRuleSet(ruleSetId: string | undefined) {
 }
 
 /**
- * Create / update / delete, all three refreshing the catalogue. An update also drops the single-rule-set cache entry:
+ * Create / update / delete, all three refreshing the catalog. An update also drops the single-rule-set cache entry:
  * the editor reopens on the row it just wrote, and a stale `version` there would earn a 409 on the very next save.
  *
  * Nothing here touches a RUN's cache. `appliedRuleSets` is the resolution a node run persisted at materialization

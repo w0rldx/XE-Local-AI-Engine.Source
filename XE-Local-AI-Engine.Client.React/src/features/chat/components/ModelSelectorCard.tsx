@@ -277,7 +277,7 @@ export function ModelSelectorCard({
 										/>
 										<CloudModelSection
 											items={azureCloudOptions}
-											title={t("pages.chat.modelSelector.cloudGroupAzure", "Cloud (Azure Foundry)")}
+											title={t("pages.chat.modelSelector.cloudGroupAzure", "Cloud (Azure AI Foundry)")}
 											egressCue={t("pages.chat.modelSelector.cloudEgressCueAzure", "Sent to Azure")}
 											icon={<IconBrandAzure size={12} color="var(--mantine-color-dimmed)" />}
 											selectedModel={selectedModel}

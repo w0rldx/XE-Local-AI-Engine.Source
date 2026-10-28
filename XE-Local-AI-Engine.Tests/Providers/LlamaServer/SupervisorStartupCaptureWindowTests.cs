@@ -27,8 +27,8 @@ public sealed class SupervisorStartupCaptureWindowTests
         "0.27.495.305 E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 2343750.00 MiB on device 0: cudaMalloc failed: out of memory";
 
     // The sibling line llama.cpp raises when the buffer the backend refused was the KV cache. It is an allocation
-    // failure like any other; the classifier used to read it as a KV/flash-attention compatibility problem, which
-    // disabled the down-tier for the exhaustion shape a memory-tight box hits most often.
+    // failure like any other; the classifier must not read it as a KV/flash-attention compatibility problem, which
+    // would disable the down-tier for the exhaustion shape a memory-tight box hits most often.
     private const string KvCacheAllocationFailureLine =
         "0.27.495.410 E llama_kv_cache: failed to allocate buffer for kv cache";
 

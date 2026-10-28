@@ -1,6 +1,6 @@
 // Domain vocabulary for the work-session surface. The generated client types every enum as a bare `string` (they
 // cross the wire as names), so these unions are the client-side narrowing — and the place a status typo fails to
-// compile instead of silently falling through a colour map.
+// compile instead of silently falling through a color map.
 
 import type {
 	XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse as WorkSessionArtifactResponse,

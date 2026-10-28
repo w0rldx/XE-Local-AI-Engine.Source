@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using Harness = IntegrationCoordinatorHarness;
 
 /// <summary>
-///     The coordinator's <c>Graph</c> target branch (ADR 0008, amendment 2026-10-15): the run it starts, the events it maps,
+///     The coordinator's <c>Graph</c> target branch (ADR 0008): the run it starts, the events it maps,
 ///     the terminal it writes, and the cancel it forwards. Driven through <c>ProcessOneAsync</c> over a scripted run.
 /// </summary>
 [Category(TestCategories.Unit)]

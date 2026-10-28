@@ -65,15 +65,13 @@ public sealed class CloudCredentialStoreTests : IDisposable
     }
 
     /// <summary>
-    ///     The save now creates the file 0600 in the same syscall that creates it, instead of writing at the process
-    ///     umask (0644 on a default box) and narrowing afterwards. <c>UnixCreateMode</c> applies only on create, so the
-    ///     narrowing pass still has to run for a file an older build already left behind at 0644 — this pins that the
-    ///     rewrite did not drop it.
-    ///     <para>
-    ///         The window this fix closes is a race and is therefore not directly observable from a test; what is
-    ///         asserted here is the end state on both the create and the overwrite path.
-    ///     </para>
+    ///     The save creates the file 0600 in the same syscall that creates it, never at the process umask, and still
+    ///     narrows a file an older build left at 0644; both the create and the overwrite path end at 0600.
     /// </summary>
+    /// <remarks>
+    ///     <c>UnixCreateMode</c> applies only on create, which is why the narrowing pass stays. The umask window is a
+    ///     race and not observable from a test, so the end state is what is asserted.
+    /// </remarks>
     [Test]
     [ExcludeOn(OS.Windows)]
     [UnsupportedOSPlatform("windows")]

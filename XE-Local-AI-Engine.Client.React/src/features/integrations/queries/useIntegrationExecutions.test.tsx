@@ -306,7 +306,7 @@ describe("useIntegrationExecutions", () => {
 		});
 	});
 
-	// The regression F-24 named: an execution with more events than one page holds lost its tail, and events ascend,
+	// Regression: an execution with more events than one page holds lost its tail, and events ascend,
 	// so the row lost first was the terminal one.
 	it("pages the event list on the watermark until a short page and returns every event in order", async () => {
 		const requests = pagedEventsRoute(600);

@@ -15,7 +15,7 @@ using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
 ///     GGUF store: disk guard, quant resolution, resume, disk-full survival, hash verification, cancel,
-///     progress reporting, and gated/token behaviour. All HTTP is faked — no network, no real DriveInfo.
+///     progress reporting, and gated/token behavior. All HTTP is faked — no network, no real DriveInfo.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufStoreTests
@@ -326,9 +326,8 @@ public sealed class GgufStoreTests
     [Test]
     public async Task Download_WhenBodyStallsMidCopy_ReadIdleTimeoutSurfacesTransientFailureAndRetryResumes()
     {
-        // ResponseHeadersRead means the HttpClient timeout covers only the headers; a CDN that stalls mid-body
-        // must be bounded by the read-idle timeout, surfaced as a TRANSIENT failure so the existing retry/resume path
-        // completes the download rather than hanging forever.
+        // ResponseHeadersRead bounds only the headers by the HttpClient timeout, so a CDN stalling mid-body hits the
+        // read-idle timeout as a TRANSIENT failure and complete through the retry/resume path rather than hang forever.
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = new HuggingFaceOptions
         {
@@ -1116,7 +1115,7 @@ public sealed class GgufStoreTests
         }
     }
 
-    // A read stream that trips the supplied CancellationTokenSource partway through, then honours the token.
+    // A read stream that trips the supplied CancellationTokenSource partway through, then honors the token.
     private sealed class CancelTriggeringStream : Stream
     {
         private readonly byte[] _bytes;

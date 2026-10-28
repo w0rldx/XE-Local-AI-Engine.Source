@@ -8,22 +8,21 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     One whole run of the reference graph, through every node kind: <c>Start</c>, an
-///     <c>Agent</c> turn under a response schema, a <c>Condition</c> routing on the JSON that turn parsed, the two
-///     branches it chooses between, a <c>Join</c> and an <c>End</c>.
-///     <para>
-///         The invocation runner is the only fake. The grammar itself is NOT proven here and cannot be — llama.cpp
-///         compiles a response schema to GBNF server-side and no in-process double stands in for that, which is why
-///         that evidence needs a real llama-server.
-///     </para>
+///     One whole run of the reference graph, through every node kind: <c>Start</c>, an <c>Agent</c> turn under a
+///     response schema, a <c>Condition</c> routing on the JSON that turn parsed, its two branches, a <c>Join</c> and
+///     an <c>End</c>.
 /// </summary>
+/// <remarks>
+///     The invocation runner is the only fake. The grammar itself is NOT proven here and cannot be: llama.cpp compiles
+///     a response schema to GBNF server-side and no in-process double can stand in, so that needs a real llama-server.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class GraphWorkflowEndToEndTests
 {
     private const string AnalyzeInstructions = "Judge whether this needs review.";
 
     /// <summary>
-    ///     The agent's answer routes the run: <c>requiresReview</c> true takes the labelled <c>yes</c> edge, the
+    ///     The agent's answer routes the run: <c>requiresReview</c> true takes the labeled <c>yes</c> edge, the
     ///     <c>no</c> branch is skipped with a reason naming why, the join proceeds on the branch that arrived, and the
     ///     End node's own output becomes the run's result.
     /// </summary>

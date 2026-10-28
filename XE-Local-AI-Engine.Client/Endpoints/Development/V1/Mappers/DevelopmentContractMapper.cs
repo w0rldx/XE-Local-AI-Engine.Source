@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
@@ -338,76 +337,10 @@ internal static class DevelopmentContractMapper
                    ?? "the supervised process sandbox did not advertise a filesystem boundary on this host";
         }
 
-        // The container provider no longer reaches here: it advertises the boundary, so this projection reports no
+        // The container provider never reaches here: it advertises the boundary, so this projection reports no
         // reason for it. The generic arm stays for a backend added later that advertises neither.
         return string.Equals(providerName, FakeSandboxRuntimeProvider.Name, StringComparison.Ordinal)
             ? "the deterministic in-memory provider has no mount namespace and never will"
             : $"the '{providerName}' sandbox provider does not advertise a filesystem boundary";
-    }
-}
-
-/// <summary>Projects the container-runtime preflight onto its wire contract.</summary>
-internal static class DevelopmentContainerRuntimeMapper
-{
-    public static DevelopmentContainerRuntimeResponse ToResponse(this DockerDaemonPreflight preflight)
-    {
-        ArgumentNullException.ThrowIfNull(preflight);
-
-        return new DevelopmentContainerRuntimeResponse
-        {
-            Ready = preflight.Ready,
-            Status = ToStatusCode(preflight.Status),
-            Message = preflight.Message,
-            RequiresOperatorConfirmation = preflight.RequiresOperatorConfirmation,
-            Endpoint = preflight.Endpoint?.Display,
-            EndpointSource = preflight.Endpoint is null ? null : ToSourceCode(preflight.Endpoint.Source),
-            ObservedDaemon = preflight.ObservedDaemon is null
-                ? null
-                : new DevelopmentContainerDaemonResponse
-                {
-                    DaemonId = preflight.ObservedDaemon.DaemonId,
-                    ServerVersion = preflight.ObservedDaemon.ServerVersion,
-                    Endpoint = preflight.ObservedDaemon.Endpoint.Display,
-                    ConfirmedAtUtc = null
-                },
-            PinnedDaemon = preflight.PinnedDaemon is null
-                ? null
-                : new DevelopmentContainerDaemonResponse
-                {
-                    DaemonId = preflight.PinnedDaemon.DaemonId,
-                    ServerVersion = preflight.PinnedDaemon.ServerVersion,
-                    Endpoint = preflight.PinnedDaemon.Endpoint,
-                    ConfirmedAtUtc = preflight.PinnedDaemon.ConfirmedAtUtc
-                }
-        };
-    }
-
-    // Mapped explicitly rather than by ToString(): these codes are a wire contract the React app branches on, and
-    // renaming an enum member should not silently change what a client sees.
-    private static string ToStatusCode(DockerDaemonPreflightStatus status)
-    {
-        return status switch
-        {
-            DockerDaemonPreflightStatus.Ready => "ready",
-            DockerDaemonPreflightStatus.DaemonUnreachable => "daemon_unreachable",
-            DockerDaemonPreflightStatus.PermissionDenied => "permission_denied",
-            DockerDaemonPreflightStatus.ApiVersionTooOld => "api_version_too_old",
-            DockerDaemonPreflightStatus.DaemonIdentityChanged => "daemon_changed",
-            DockerDaemonPreflightStatus.NotConfigured => "not_configured",
-            _ => "probe_failed"
-        };
-    }
-
-    private static string ToSourceCode(DockerDaemonEndpointSource source)
-    {
-        return source switch
-        {
-            DockerDaemonEndpointSource.Configuration => "configuration",
-            DockerDaemonEndpointSource.DockerHostEnvironmentVariable => "docker_host",
-            DockerDaemonEndpointSource.DefaultUnixSocket => "default_socket",
-            DockerDaemonEndpointSource.UserRuntimeUnixSocket => "user_socket",
-            DockerDaemonEndpointSource.WindowsNamedPipe => "windows_pipe",
-            _ => "unknown"
-        };
     }
 }

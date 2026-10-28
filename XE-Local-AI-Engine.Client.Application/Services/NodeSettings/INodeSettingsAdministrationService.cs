@@ -143,7 +143,7 @@ public static class NodeSettingsAgenticPatchValidation
         ArgumentNullException.ThrowIfNull(patch);
 
         // Shape only, and only for a supplied non-blank value: blank clears to the seed, as on the REST save.
-        if (!string.IsNullOrWhiteSpace(patch.DefaultModelName) && !StoredNodeSettings.IsPlausibleModelName(patch.DefaultModelName))
+        if (!string.IsNullOrWhiteSpace(patch.DefaultModelName) && !StoredNodeSettingsValidation.IsPlausibleModelName(patch.DefaultModelName))
         {
             return Reject(NodeSettingsField.DefaultModelName, StoredNodeSettings.ImplausibleDefaultModelNameMessage);
         }
@@ -163,7 +163,7 @@ public static class NodeSettingsAgenticPatchValidation
             return Reject(NodeSettingsField.AutoEffortFastModelName, StoredNodeSettings.ImplausibleModelNameMessage);
         }
 
-        if (!string.IsNullOrWhiteSpace(patch.HuggingFaceDefaultQuant) && !StoredNodeSettings.IsKnownQuant(patch.HuggingFaceDefaultQuant))
+        if (!string.IsNullOrWhiteSpace(patch.HuggingFaceDefaultQuant) && !StoredNodeSettingsValidation.IsKnownQuant(patch.HuggingFaceDefaultQuant))
         {
             return Reject(NodeSettingsField.HuggingFaceDefaultQuant, StoredNodeSettings.UnknownHuggingFaceDefaultQuantMessage);
         }
@@ -206,7 +206,7 @@ public static class NodeSettingsAgenticPatchValidation
         }
 
         if (!string.IsNullOrWhiteSpace(patch.SpeculativeMode)
-            && !StoredNodeSettings.IsValidSpeculativeMode(patch.SpeculativeMode))
+            && !StoredNodeSettingsValidation.IsValidSpeculativeMode(patch.SpeculativeMode))
         {
             return Reject(NodeSettingsField.SpeculativeMode, "Unknown speculative decoding mode.");
         }
@@ -218,7 +218,7 @@ public static class NodeSettingsAgenticPatchValidation
         }
 
         if (!string.IsNullOrWhiteSpace(patch.KvCacheType)
-            && !StoredNodeSettings.IsValidKvCacheType(patch.KvCacheType))
+            && !StoredNodeSettingsValidation.IsValidKvCacheType(patch.KvCacheType))
         {
             return Reject(NodeSettingsField.KvCacheType, "Unknown KV cache type.");
         }
@@ -237,7 +237,7 @@ public static class NodeSettingsAgenticPatchValidation
 
     // Blank is not implausible: it clears the field, as on the REST save.
     private static bool IsImplausibleModelName(string? name) =>
-        !string.IsNullOrWhiteSpace(name) && !StoredNodeSettings.IsPlausibleModelName(name);
+        !string.IsNullOrWhiteSpace(name) && !StoredNodeSettingsValidation.IsPlausibleModelName(name);
 
     private static IReadOnlyList<NodeSettingsValidationError> Reject(NodeSettingsField field, string message) =>
     [

@@ -8,12 +8,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     Unit tests for the startup <see cref="StaleProcessReaper" /> the llama-server, sd-server and whisper-server
-///     providers share: it must reap a previous-run orphan whose binary lives under the provider's own cache root, leave
-///     any unrelated server of the same name (e.g. Ollama's <c>llama-server</c>) untouched, and never throw out of
-///     <c>StartAsync</c>. All matching logic is exercised through an in-memory scanner fake — no real processes and no
-///     real file I/O (the path filter is pure string normalization).
+///     Tests the startup <see cref="StaleProcessReaper" /> shared by llama-server, sd-server and whisper-server: it
+///     reaps a previous-run orphan under the provider's own cache root, spares an unrelated same-name server (e.g.
+///     Ollama's) and never throws from <c>StartAsync</c>.
 /// </summary>
+/// <remarks>Matching runs through an in-memory scanner fake: no real processes, no file I/O.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class StaleProcessReaperTests
 {

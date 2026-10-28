@@ -438,7 +438,7 @@ public sealed class ProviderCallBudgetChatClientTests
     }
 
     /// <summary>
-    ///     Model-matrix F4/C1: once the re-prompt turns thinking off, every later round of the turn runs without it; the
+    ///     Once the re-prompt turns thinking off, every later round of the turn runs without it; the
     ///     next turn, with its own budget, is back on the turn's effort.
     /// </summary>
     [Test]
@@ -513,7 +513,7 @@ public sealed class ProviderCallBudgetChatClientTests
     }
 
     /// <summary>
-    ///     Model-matrix F2: the node's default chat cap is half the window, and reserving it would have halved what the
+    ///     The node's default chat cap is half the window, so it is not reserved: reserving it would halve what the
     ///     input may use. An explicit per-request limit is still reserved in full.
     /// </summary>
     /// <remarks>

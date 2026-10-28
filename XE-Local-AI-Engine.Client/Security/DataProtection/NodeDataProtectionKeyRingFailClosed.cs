@@ -32,7 +32,7 @@ public static class NodeDataProtectionKeyRingFailClosed
     ///     Replaces the registered <see cref="IDefaultKeyResolver" /> with the decorated one.
     /// </summary>
     /// <remarks>
-    ///     Skipped — leaving the framework's pre-existing behaviour in place — if Data Protection ever stops
+    ///     Skipped — leaving the framework's pre-existing behavior in place — if Data Protection ever stops
     ///     registering the resolver by implementation type, since there would then be no inner instance to construct.
     ///     A fail-closed change on a startup path must never be able to brick a correct install, and this is the guard
     ///     that keeps that true.

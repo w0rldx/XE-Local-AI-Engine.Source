@@ -15,6 +15,7 @@ using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -483,7 +484,6 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
         services.RemoveAll<ITokenStore>();
         services.AddSingleton<ITokenStore>(_ => MockTokenStore.Unpaired());
-
 
         if (!RunLocalIntegration)
         {

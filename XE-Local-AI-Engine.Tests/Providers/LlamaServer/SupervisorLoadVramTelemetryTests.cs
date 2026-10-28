@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The load observation carries the two VRAM figures the capacity gate already knew — the free-VRAM reading it took
-///     under its decision gate and the GPU bytes it reserved — and carries neither when the spawn had no admission to
-///     read them from. Nothing here probes the device: an unadmitted spawn reports nulls rather than a measurement.
+///     The load observation carries the two VRAM figures the capacity gate already knew (free VRAM read under its
+///     decision gate, GPU bytes reserved), and neither for an unadmitted spawn. Nothing here probes the device.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SupervisorLoadVramTelemetryTests

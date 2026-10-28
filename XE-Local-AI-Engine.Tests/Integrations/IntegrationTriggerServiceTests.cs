@@ -17,9 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Trigger CRUD, and the two checks a FluentValidation rule cannot make: the target agent has to exist, and it has
-///     to be a single agent rather than an orchestrator. The session policy is no longer one of them —
-///     ADR 0008 R6-1 withdrew the caller-managed read-only-tools rule once the session began persisting and replaying
-///     its tool history.
+///     to be a single agent rather than an orchestrator. The session policy is not one of them: a
+///     caller-managed session persists and replays its tool history, so ADR 0008 sets no read-only-tools rule for
+///     it.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class IntegrationTriggerServiceTests
@@ -129,10 +129,10 @@ public sealed class IntegrationTriggerServiceTests
     [Arguments(ToolCategory.Unknown)]
     public async Task CreateAsync_CallerManagedAgainstAnyToolCategory_IsSaved(ToolCategory category)
     {
-        // ADR 0008 R6-1. Every one of these categories used to be a 400 for a caller-managed trigger, because the
-        // session persisted no tool history and a continued run could not tell an action it had performed from prose
-        // describing one. It persists and replays the calls and their results now, so the offer is arranged here only
-        // to show that it decides nothing: the save reads the agent's existence and kind, never its tools.
+        // ADR 0008. No category is a 400 for a caller-managed trigger: the session persists and replays the calls and
+        // their results, so a continued run can tell an action it performed from prose describing one. The offer is
+        // arranged here only to show that it decides nothing: the save reads the agent's existence and kind, never its
+        // tools.
         var harness = new Harness();
         var agentId = harness.SeedAgent(category);
 
@@ -223,7 +223,7 @@ public sealed class IntegrationTriggerServiceTests
     [Test]
     public async Task UpdateAsync_SwitchingToCallerManagedAgainstAWriteAgent_IsSaved()
     {
-        // The update half of ADR 0008 R6-1: switching a live trigger onto a caller-managed session is an ordinary edit now.
+        // The update half of the ADR 0008 rule: switching a live trigger onto a caller-managed session is an ordinary edit.
         var harness = new Harness();
         var agentId = harness.SeedAgent(ToolCategory.WriteExecute);
         var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", agentId))).Trigger);
@@ -376,8 +376,8 @@ public sealed class IntegrationTriggerServiceTests
         public INodeRuntimeSettings RuntimeSettings { get; }
 
         /// <summary>
-        ///     The resolver the service NO LONGER injects. It is kept so a suite can still arrange an offer and assert
-        ///     the save never reads it, which is what ADR 0008 R6-1 withdrew.
+        ///     A resolver the service does NOT inject. It lets a suite arrange an offer and assert the save never reads
+        ///     it, as ADR 0008 requires.
         /// </summary>
 
         public IAgentDefinitionResolver AgentResolver { get; }

@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class ExternalAppPurgeCoverageTests
 {
     /// <summary>
-    ///     No <c>external_app_*</c> table may declare <c>conversation_id</c> or <c>message_id</c>. A chat purge deletes
-    ///     every table keyed by those columns, so one such column would put an installed application's row — and with it
-    ///     the only record of what is running on the machine — inside the blast radius of deleting a conversation.
+    ///     No <c>external_app_*</c> table may declare <c>conversation_id</c> or <c>message_id</c>: a chat purge deletes
+    ///     every table keyed by them, putting an installed app's row, the only record of what runs, in its blast radius.
     /// </summary>
     [Test]
     public async Task NoExternalAppTable_IsKeyedByAConversationOrMessage()

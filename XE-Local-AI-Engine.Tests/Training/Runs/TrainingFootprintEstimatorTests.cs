@@ -113,9 +113,8 @@ public sealed class TrainingFootprintEstimatorTests
     {
         var estimate = TrainingFootprintEstimator.Estimate(8_000_000_000, Llama8B, Options(sequenceLength: 2048, batchSize: 2));
 
-        // Published unsloth reference points put an 8B QLoRA run near 6 GB. The estimate carries headroom on top, so
-        // it should sit above that and comfortably inside a single card — drifting outside either bound would mean
-        // the formula has become useless in one direction or the other.
+        // Published unsloth reference points put an 8B QLoRA run near 6 GB; with headroom the estimate sits above that
+        // yet inside a single card, and drifting outside either bound means the formula has become useless.
         AssertEx.True(estimate.GpuBytes >= 6 * OneGigabyte, $"The estimate {estimate.GpuBytes} is below the published 8B reference point.");
         AssertEx.True(estimate.GpuBytes <= 16 * OneGigabyte, $"The estimate {estimate.GpuBytes} is implausibly large for an 8B QLoRA run.");
     }

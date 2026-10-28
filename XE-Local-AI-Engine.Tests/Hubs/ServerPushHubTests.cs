@@ -11,17 +11,17 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     End-to-end coverage for the three server-push-only hubs — <see cref="KnowledgeBaseHub" />,
-///     <see cref="GgufDownloadHub" /> and <see cref="RuntimeAcquisitionHub" />. They expose no client-callable methods,
-///     so what has to be proven is the surface around them: the negotiate is operator-gated (each hub leaks the shape of
-///     local state — which documents exist, which models are being fetched), and the hub-backed publisher that replaces
-///     the no-op default actually reaches a connected client under the agreed event name and payload.
+///     End-to-end coverage for the server-push-only hubs <see cref="KnowledgeBaseHub" />,
+///     <see cref="GgufDownloadHub" /> and <see cref="RuntimeAcquisitionHub" />: the negotiate is operator-gated, and
+///     the hub-backed publisher reaches a connected client under the agreed event name and payload.
 /// </summary>
+/// <remarks>They expose no client-callable methods; each leaks the shape of local state (documents, fetches).</remarks>
 [Category(TestCategories.Integration)]
 public sealed class ServerPushHubTests
 {

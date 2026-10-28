@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddBenchmarkRunLaunchReceipts</c> adds what a benchmark run intended to launch with and what it actually
-///     launched. Every column is nullable on purpose: runs frozen before launch evidence existed keep reading, and
-///     the receipt/environment blocks stay NULL until a spawn records them.
+///     <c>AddBenchmarkRunLaunchReceipts</c> adds what a benchmark run intended to launch with and what it launched.
+///     Every column is nullable: older runs keep reading, and the receipt/environment blocks stay NULL until a spawn
+///     records them.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests

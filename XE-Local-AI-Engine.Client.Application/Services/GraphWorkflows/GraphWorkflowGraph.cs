@@ -652,7 +652,7 @@ internal sealed class GraphWorkflowGraph
 
     /// <summary>
     ///     A <c>Start</c> node's intent aliases: absent, or 1 to 32 trimmed strings of 1 to 120 characters, distinct once
-    ///     normalised the way <see cref="GraphWorkflowIntentService.Normalize" /> matches them.
+    ///     normalized the way <see cref="GraphWorkflowIntentService.Normalize" /> matches them.
     /// </summary>
     private static IReadOnlyList<string> ParseAliases(JsonElement config, string nodeKey)
     {
@@ -1520,7 +1520,7 @@ internal sealed class GraphWorkflowGraph
     }
 
     /// <summary>
-    ///     Depth-first colouring: white unvisited, grey on the current path, black finished. A grey hit is the cycle.
+    ///     Depth-first coloring: white unvisited, gray on the current path, black finished. A gray hit is the cycle.
     /// </summary>
     /// <remarks>
     ///     Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than one stack

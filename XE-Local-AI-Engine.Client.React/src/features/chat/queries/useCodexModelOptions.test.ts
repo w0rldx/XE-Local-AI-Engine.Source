@@ -61,7 +61,7 @@ describe("toAzureFoundryModelOption — Azure deployment shape", () => {
 	// The backend's Azure mapper sets IsReasoningCapable = false, but this factory used to hard-code `true`. That gave
 	// every Azure deployment the "Reasoning" pill and — because isCloud is true — the full six-level Codex effort menu,
 	// none of which the pipeline reads: InvocationAgentFactory only writes the reasoning side channel inside
-	// `if (definition.SupportsThinking)`. The picker must not advertise a control the runtime cannot honour.
+	// `if (definition.SupportsThinking)`. The picker must not advertise a control the runtime cannot honor.
 	it("does not advertise reasoning by default, because the backend reports Azure deployments as not reasoning-capable", () => {
 		const option = toAzureFoundryModelOption("gpt-4o");
 

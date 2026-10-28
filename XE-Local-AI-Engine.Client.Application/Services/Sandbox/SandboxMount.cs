@@ -15,7 +15,7 @@ public sealed record SandboxMount
 
     /// <summary>The absolute in-sandbox path the caller would like this to appear at, expressed POSIX-style.</summary>
     /// <remarks>
-    ///     A provider that cannot honour it (the process jail) reports what it did instead; one that can (the container) uses it verbatim
+    ///     A provider that cannot honor it (the process jail) reports what it did instead; one that can (the container) uses it verbatim
     ///     after validating it against every other mount target.
     /// </remarks>
     public required string SandboxPath { get; init; }

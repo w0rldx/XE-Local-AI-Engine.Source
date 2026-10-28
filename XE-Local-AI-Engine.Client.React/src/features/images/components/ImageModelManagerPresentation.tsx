@@ -132,8 +132,8 @@ function DownloadStatusPanels({ t, downloads }: Pick<ImageModelManagerPresentati
 				</Stack>
 			) : null}
 			{/* A raw Alert, not InlineErrorAlert: this banner is dismissible, and the close contract
-			    (withCloseButton + closeButtonLabel + onClose) is behaviour the shared error banner
-			    deliberately does not own — it owns colour, icon and layout only. */}
+			    (withCloseButton + closeButtonLabel + onClose) is behavior the shared error banner
+			    deliberately does not own — it owns color, icon and layout only. */}
 			{Object.entries(downloads.errors).map(([modelName, reason]) => (
 				<Alert
 					key={modelName}

@@ -466,7 +466,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             // and writes nothing else, so with these removed a run would sit Pending forever and the run view would
             // assert against a graph that never moved. The reconciler goes back first for the same reason production
             // registers it first — hosted services start in order, and the dispatcher must not admit a node run the
-            // restart judgement has not seen yet (on this fresh-database fixture it finds nothing to judge).
+            // restart judgment has not seen yet (on this fresh-database fixture it finds nothing to judge).
             services.AddHostedService<GraphWorkflowStartupReconciler>();
             services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<GraphWorkflowDispatcher>());
 
@@ -560,23 +560,16 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<IDevelopmentReviewerModel>();
             services.AddSingleton<IDevelopmentReviewerModel, DevelopmentE2EReviewerModel>();
 
-            // There is deliberately NO IOptions<DevelopmentOptions> override here any more, and re-adding one would be
-            // a regression rather than a fix.
+            // There is deliberately NO IOptions<DevelopmentOptions> override here, and adding one would be a
+            // regression rather than a fix.
             //
-            // This suite used to register a closed-generic IOptions<DevelopmentOptions> narrowing
-            // DevelopmentOptions.ValidationCommandIds to [git_diff_check], because DevelopmentWorkflowE2ETests drives
-            // a synthetic temp git repository holding a README and nothing else, and the global production default
-            // (git_diff_check + dotnet restore/build/test against a hardcoded XE-Local-AI-Engine.slnx) could never
-            // succeed there. That override existed to work around a global default that assumed one specific
-            // repository.
+            // DevelopmentWorkflowE2ETests drives a synthetic temp git repository holding a README and nothing else.
+            // The validation command list lives on the project's own command profile, so there is no global default
+            // to narrow: the README fixture has no .NET build system, so profile detection resolves it to the
+            // code-owned "generic-git" profile whose validation list is exactly [git_diff_check], reached honestly
+            // and recorded on every artifact the gate produces instead of being hidden in test DI.
             //
-            // The validation command list now lives on the project's own command profile, so there is no global
-            // default left to narrow. The README fixture has no .NET build system, so profile detection resolves it to
-            // the code-owned "generic-git" profile whose validation list is exactly [git_diff_check] — the same
-            // coverage this override used to force, now reached honestly and recorded on every artifact the gate
-            // produces instead of being hidden in test DI.
-            //
-            // The original warning still stands in its new form: do NOT "fix" a red Development E2E by weakening a
+            // Do NOT "fix" a red Development E2E by weakening a
             // shared profile in DevelopmentCommandProfileCatalog. This test owns the UI state machine (register ->
             // create -> code -> validate -> review -> hash-bound apply); the content of the gate is owned by
             // DevelopmentValidationReviewAndApplyTests, which drives DevelopmentValidationRunner against a real

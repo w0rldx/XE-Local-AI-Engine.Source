@@ -147,7 +147,7 @@ export function DevWorkflowHumanGatePanel({
 				description: t(
 					"pages.devWorkflows.gate.abandonConfirmBody",
 					// The runtime lands an abandoned node run at Failed, not Cancelled — so the copy must not promise it
-					// will read as cancelled afterwards.
+					// will read as canceled afterwards.
 					"The node is recorded as failed and no further attempt is made. If nothing else can run without it, the run ends too.",
 				),
 				confirmationText: t("pages.devWorkflows.decision.Abandon", "Abandon"),
@@ -218,7 +218,7 @@ export function DevWorkflowHumanGatePanel({
 					message={
 						<Stack gap={4}>
 							<Text size="sm">
-								{/* Not narrowed client-side, so an unrecognised class from a newer server reads as a plain
+								{/* Not narrowed client-side, so an unrecognized class from a newer server reads as a plain
 								    sentence rather than as a raw PascalCase token. */}
 								{t(
 									`pages.devWorkflows.failureClass.${nodeRun.failureClass}`,

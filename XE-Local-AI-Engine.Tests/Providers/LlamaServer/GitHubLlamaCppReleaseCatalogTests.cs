@@ -15,11 +15,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class GitHubLlamaCppReleaseCatalogTests
 {
-    // Symbolic, NOT a literal. AssetName() below derives the expected asset name from LlamaCppReleasePins, so a
-    // hardcoded tag here silently desynchronizes from the pin table the moment the pin is bumped: the scripted release
-    // then advertises one tag while the resolver templates another, every ResolveAsset_* case returns a null asset, and
-    // 8 tests fail for a reason that has nothing to do with what they test. That is exactly what the b9692 -> b10201
-    // bump did on 2026-07-31. Keep this bound to the constant.
+    // Symbolic, NOT a literal: AssetName() derives the expected asset name from LlamaCppReleasePins, so a hardcoded tag
+    // desynchronizes on the next pin bump and every ResolveAsset_* case fails on a null asset for an unrelated reason.
     private const string Tag = LlamaCppReleasePins.PinnedTag;
 
     [Test]

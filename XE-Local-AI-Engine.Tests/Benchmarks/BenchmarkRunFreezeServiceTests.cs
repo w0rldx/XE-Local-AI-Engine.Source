@@ -147,8 +147,8 @@ public sealed class BenchmarkRunFreezeServiceTests
     [Test]
     public async Task Start_WithASharedScope_ProbesTheBinaryOnceAndVerifiesEachModelOnce()
     {
-        // What a batch actually pays for: every cell used to run its own llama-server capability probe and its own
-        // full re-verification of the same model files, serially, before the endpoint answered.
+        // What a batch actually pays for: unshared, every cell runs its own llama-server capability probe and its own
+        // full re-verification of the same model files, serially, before the endpoint answers.
         var harness = new FreezeHarness();
         await using var scope = new BenchmarkFreezeScope();
 
@@ -215,10 +215,10 @@ public sealed class BenchmarkRunFreezeServiceTests
     [Test]
     public async Task Start_WhenTheModelCannotBeVerified_IsAnEligibilityRefusalRatherThanAnUnhandledFailure()
     {
-        // Verification moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry
-        // entry now LISTS happily and only fails here. Unmapped, InstalledGgufSnapshotException is in neither the
-        // endpoint's handled-exception filter nor its KeyNotFoundException clause: it escaped as a 500, and inside a
-        // batch it killed every cell after it instead of rejecting one.
+        // Verification runs on freeze, not on the catalog listing, so a model whose files no longer match its registry
+        // entry LISTS happily and only fails here. Unmapped, InstalledGgufSnapshotException is in neither the
+        // endpoint's handled-exception filter nor its KeyNotFoundException clause: it surfaces as a 500, and inside a
+        // batch it kills every cell after it instead of rejecting one.
         var harness = new FreezeHarness(unverifiableModel: true);
 
         var exception = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(async () => await harness.StartAsync());
@@ -910,7 +910,7 @@ public sealed class BenchmarkRunFreezeServiceTests
             // freeze writing on a path that should only read.
             store.GetOrCreateItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
             // ONE store call per freeze, however many repeats: the group is inserted atomically, so a mid-group
-            // conflict can no longer leave orphan runs queued behind an exception the caller reads as "nothing started".
+            // conflict cannot leave orphan runs queued behind an exception the caller reads as "nothing started".
             store.StartRunsAsync(Arg.Do<IReadOnlyList<BenchmarkStartRunCommand>>(batch =>
                      {
                          StoreCalls++;

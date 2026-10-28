@@ -167,7 +167,7 @@ public sealed class LocalModelResponse
     /// </summary>
     /// <remarks>
     ///     Distinguishes the two shapes <see cref="IsReasoningCapable" /> alone conflates for an externally served
-    ///     model: an endpoint honouring <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets
+    ///     model: an endpoint honoring <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets
     ///     the binary control, since offering levels it ignores is a menu whose entries do nothing.
     ///     <see langword="null" /> means "not declared", which is every non-external entry: a local model's graded
     ///     control follows its Ollama <c>thinking</c> capability and a cloud provider's its own, neither of which this field may change.

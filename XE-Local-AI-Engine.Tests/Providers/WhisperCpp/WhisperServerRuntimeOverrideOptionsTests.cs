@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The bring-your-own override is built from the process environment and nothing else. These cases pin the three
-///     decisions that channel makes: unset means inactive, an unrecognised backend token fails fast at startup rather
-///     than silently defaulting, and the recognised tokens parse case-insensitively.
+///     The bring-your-own override comes from the process environment alone: unset means inactive, an unrecognised
+///     backend token fails fast at startup instead of silently defaulting, and recognized tokens parse
+///     case-insensitively.
 /// </summary>
 /// <remarks>
 ///     Both variables are process-global, so every case carries the keyed <c>[NotInParallel]</c> for its variable and

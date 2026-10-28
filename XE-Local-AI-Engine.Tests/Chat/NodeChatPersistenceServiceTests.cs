@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -1787,7 +1786,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal(first.MessageId, loaded.Messages[1].MessageId);
     }
 
-    /// <summary>R1-09: a conversation whose only reply failed previews the user's message, while the status stays the reply's.</summary>
+    /// <summary>A conversation whose only reply failed previews the user's message, while the status stays the reply's.</summary>
     [Test]
     public async Task ListConversationsAsync_WhenTheOnlyReplyFailed_PreviewsTheUserMessage()
     {
@@ -2318,7 +2317,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         // Reproduce the state a failed/interrupted reclamation leaves behind: rows already encrypted (so no candidates
         // remain to re-trigger cleanup), plaintext residue still on disk, and the durable "reclamation pending" marker
-        // set from the previous run. A restart must honour the marker and retry the reclamation to completion.
+        // set from the previous run. A restart must honor the marker and retry the reclamation to completion.
         const string fileName = "backfill-reclaim-retry.sqlite";
         const string legacyText = "zzq-reclaim-retry-marker-4460";
         await using var provider = await BuildProviderAsync(fileName);
@@ -2350,7 +2349,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         // Restart: no candidates remain, but the marker forces the reclamation to be retried. The marker is cleared only
         // if the checkpoint/VACUUM pass actually ran — so a cleared marker is the deterministic proof the retry fired
-        // (the pre-fix behaviour skipped reclamation entirely when no candidates remained, leaving the marker set).
+        // (the pre-fix behavior skipped reclamation entirely when no candidates remained, leaving the marker set).
         await backfill.RunOnceAsync(CancellationToken.None);
 
         AssertEx.False(await IsReclamationMarkerSetRawAsync(provider), "A successful retry must clear the reclamation-pending marker.");
@@ -2449,7 +2448,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
             // Capture the service's logs so the test can prove the failure was specifically a busy/incomplete checkpoint
             // (RunOnceAsync swallows migration AND cleanup errors, so marker-set alone would not distinguish them).
-            var capturingLogger = new CapturingLogger<NodeChatContentEncryptionBackfillService>();
+            var capturingLogger = new RecordingLogger<NodeChatContentEncryptionBackfillService>();
             using var failingBackfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(), capturingLogger);
 
             await using (await OpenBlockingReaderAsync(databasePath))

@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 /// </summary>
 /// <remarks>
 ///     Each test takes a host of its own, because web access is a node setting a test may flip. Two seams are replaced:
-///     the node settings and the fetch service's HTTP transport, so no request leaves the box. The gate, the executor,
+///     the node settings and the fetch service's HTTP transport, so no request leaves the host. The gate, the executor,
 ///     the fetch service's allow-list and SSRF checks, the store and the dispatcher are the real ones.
 /// </remarks>
 [Category(TestCategories.Integration)]

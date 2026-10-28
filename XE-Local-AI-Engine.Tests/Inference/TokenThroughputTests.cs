@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The one tokens-per-second derivation four measurement paths now share. The guards are the point: the copies this
-///     replaced each carried their own, and a rate reported as infinity — or as zero — for a duration nobody measured
-///     is worse than an empty column, because it ranks.
+///     The one tokens-per-second derivation four measurement paths share. The guards are the point: a rate reported as
+///     infinity or zero for an unmeasured duration is worse than an empty column, because it ranks.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TokenThroughputTests

@@ -1,3 +1,5 @@
+import { isRecord } from "@/core/models/JsonRecord";
+
 /**
  * The body of an apply Tool node's `<nodeKey>-apply.json` artifact.
  *
@@ -42,10 +44,6 @@ export interface DevWorkflowApplyReportBody {
  */
 export function isDevWorkflowApplyLanded(outcome: string): boolean {
 	return outcome === "applied" || outcome === "already-applied";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 /**

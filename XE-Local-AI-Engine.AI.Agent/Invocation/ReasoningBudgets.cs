@@ -4,8 +4,8 @@ namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 ///     The llama.cpp thinking budget in tokens per reasoning-effort level, plus the level a turn with no effort gets.
 /// </summary>
 /// <remarks>
-///     Node settings with these shipped defaults (operator decision, model-matrix 2026-10-04): a flat 8192 for an
-///     unspecified effort let a 0.8B reason for minutes over a five-word greeting. <c>xhigh</c> takes the
+///     Node settings with these shipped defaults: a flat 8192 for an
+///     unspecified effort lets a 0.8B reason for minutes over a five-word greeting. <c>xhigh</c> takes the
 ///     <see cref="High" /> rung. See docs/wiki/04-agent-mode.md ("The reasoning-effort matrix and the thinking budget").
 /// </remarks>
 public sealed record ReasoningBudgets

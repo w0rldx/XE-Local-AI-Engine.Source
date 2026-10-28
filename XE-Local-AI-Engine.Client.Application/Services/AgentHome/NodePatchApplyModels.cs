@@ -13,7 +13,7 @@ public sealed record NodePatchApplyRequest
     /// <summary>
     ///     The SHA-256 (lowercase hex) a preview reported for the bytes it validated. When present, the apply refuses
     ///     a patch that hashes differently, so the operator approves the diff they were shown. Omitted, re-validation
-    ///     is the whole defence.
+    ///     is the whole defense.
     /// </summary>
     public string? ExpectedPatchSha256 { get; init; }
 }

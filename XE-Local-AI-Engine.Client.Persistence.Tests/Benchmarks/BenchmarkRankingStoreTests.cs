@@ -423,8 +423,8 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     [Test]
     public async Task ListAllRuns_ReturnsEveryRunWithTheSameRankingThePagedReadGives()
     {
-        // The export used to page, which recomputed the whole-project ranking per page to produce the same answer each
-        // time. Ranking once is only safe while the one-call read is INDISTINGUISHABLE from the paged one.
+        // The export reads in one call, because paging recomputes the whole-project ranking per page for the same
+        // answer. Ranking once is only safe while the one-call read is INDISTINGUISHABLE from the paged one.
         await using var context = await CreateDatabaseAsync("rank-list-all.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var project = await store.CreateProjectAsync(NewProject());

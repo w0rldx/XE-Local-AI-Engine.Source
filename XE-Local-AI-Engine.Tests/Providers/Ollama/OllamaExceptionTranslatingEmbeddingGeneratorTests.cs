@@ -9,10 +9,9 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The embedding decorator is the boundary that keeps OllamaSharp inside the provider project: the two transport
-///     failures the SDK raises must reach the application layer as <see cref="OllamaUnavailableException" />
-///     with the original cause preserved, while every other exception — and the success path — passes through
-///     untouched, so the translation cannot mask a genuine caller error.
+///     The embedding decorator keeps OllamaSharp inside the provider project: the SDK's two transport failures reach
+///     the application layer as <see cref="OllamaUnavailableException" /> with the cause preserved, while every other
+///     exception, and success, passes through untouched.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class OllamaExceptionTranslatingEmbeddingGeneratorTests

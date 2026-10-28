@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>What an integration trigger invokes (ADR 0008 Decision §2, amended 2026-10-15).</summary>
+/// <summary>What an integration trigger invokes (ADR 0008 Decision §2).</summary>
 public enum IntegrationTargetKind
 {
     /// <summary>A saved agent definition, run headless through the scheduler's <c>run-agent</c> shape.</summary>
@@ -35,7 +35,7 @@ public enum IntegrationInputKinds
     /// <summary>A plain text block.</summary>
     Text = 1,
 
-    /// <summary>A labelled JSON document, framed as untrusted content before it reaches the model.</summary>
+    /// <summary>A labeled JSON document, framed as untrusted content before it reaches the model.</summary>
     Json = 2
 }
 
@@ -50,8 +50,8 @@ public enum IntegrationSessionStatus
 }
 
 /// <summary>
-///     Lifecycle of an <c>integration_executions</c> row. The legal moves are exactly these and nothing else (ADR 0008
-///     R3-2); <see cref="Running" /> is never re-entered, and there is no move out
+///     Lifecycle of an <c>integration_executions</c> row. The legal moves are exactly these and nothing else (ADR 0008);
+///     <see cref="Running" /> is never re-entered, and there is no move out
 ///     of a terminal status.
 /// </summary>
 /// <remarks>

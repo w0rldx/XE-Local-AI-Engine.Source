@@ -324,8 +324,8 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
 
     /// <summary>A boundary no command can get (a writable runtime bind turned group-writable) stops the task as runner_not_installed.</summary>
     /// <remarks>
-    ///     Every validation command keeps its launch-failure evidence; the workspace invariant probes used to fail through the same
-    ///     boundary and throw before any evidence was kept.
+    ///     Every validation command keeps its launch-failure evidence; the workspace invariant probes fail through the same
+    ///     boundary and must not throw before any evidence is kept.
     /// </remarks>
     [Test]
     [Category(TestCategories.ExternalInfra)]
@@ -616,7 +616,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
 
             // The workspace invariant probes run after EVERY catalog command: HEAD must equal the recorded base commit,
             // and symbolic-ref must fail (a detached HEAD has no branch). Answering both correctly is what keeps these
-            // tests failing for the reason they assert rather than for a fixture artefact.
+            // tests failing for the reason they assert rather than for a fixture artifact.
             var detachedProbe = request.Arguments.Contains("symbolic-ref", StringComparer.Ordinal);
             return Task.FromResult(new SandboxCommandResult
             {

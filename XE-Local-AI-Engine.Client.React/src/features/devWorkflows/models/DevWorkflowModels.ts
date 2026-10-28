@@ -1,11 +1,11 @@
 // Domain vocabulary for the Development Workflows surface. The generated client types every enum as a bare `string`
 // (they cross the wire as enum NAMES), so these unions are the client-side narrowing — and the place a status typo
-// fails to compile instead of falling silently through a colour map. Same shape as `WorkSessionModels.ts`.
+// fails to compile instead of falling silently through a color map. Same shape as `WorkSessionModels.ts`.
 //
 // Two narrowing shapes, deliberately:
 //   `to*`  — a render must pick SOMETHING, so an unknown value falls back to the state with no controls.
 //   `as*`  — an unknown value has no honest substitute (a decision kind, an artifact kind), so it reads as
-//            `undefined` and the caller displays the raw token instead of mislabelling it.
+//            `undefined` and the caller displays the raw token instead of mislabeling it.
 
 import type { TFunction } from "i18next";
 
@@ -100,8 +100,8 @@ export type DevWorkflowArtifactKind = (typeof devWorkflowArtifactKinds)[number];
 
 /**
  * The detail page's tab selection, carried in ONE `?tab=` search param across two Tabs components (ruled):
- * `graph`/`nodes` select the CENTRE pane, `artifacts`/`events` the side pane. Each component derives its own value with
- * its own default — `graph` for the centre, `artifacts` for the side — so an absent or foreign-pane value simply reads
+ * `graph`/`nodes` select the CENTER pane, `artifacts`/`events` the side pane. Each component derives its own value with
+ * its own default — `graph` for the center, `artifacts` for the side — so an absent or foreign-pane value simply reads
  * as that pane's default rather than blanking it. One param, because a URL that carries two tab states for a surface
  * that shows both at once is two params nobody would ever set independently.
  */
@@ -144,7 +144,7 @@ export function toDevWorkflowWorkItemStatus(value: string | undefined | null): D
 }
 
 /**
- * `undefined`, not a fallback: a decision kind drives a BUTTON. An unrecognised token rendered as `Approve` would
+ * `undefined`, not a fallback: a decision kind drives a BUTTON. An unrecognized token rendered as `Approve` would
  * offer an operator a control that means something else, so it is dropped and the raw token is displayed instead.
  */
 export function asDevWorkflowDecisionKind(value: string | undefined | null): DevWorkflowDecisionKind | undefined {
@@ -159,7 +159,7 @@ export function toDevWorkflowDecisionKinds(values: readonly string[] | undefined
 	});
 }
 
-/** `undefined` for an unknown kind: the badge shows the raw token rather than mislabelling it as a `Report`. */
+/** `undefined` for an unknown kind: the badge shows the raw token rather than mislabeling it as a `Report`. */
 export function asDevWorkflowArtifactKind(value: string | undefined | null): DevWorkflowArtifactKind | undefined {
 	return asMember(devWorkflowArtifactKinds, value);
 }

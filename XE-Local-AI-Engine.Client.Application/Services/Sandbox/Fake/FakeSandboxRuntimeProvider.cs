@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 /// </summary>
 /// <remarks>
 ///     It needs no Docker and no network: a virtual filesystem backs copy and read, command results are scripted, and a "blocking" command
-///     lets cancellation and kill be exercised honestly. Every timestamp comes from the injected <see cref="TimeProvider" />, so behaviour
+///     lets cancellation and kill be exercised honestly. Every timestamp comes from the injected <see cref="TimeProvider" />, so behavior
 ///     is reproducible.
 /// </remarks>
 // Serves BOTH per-feature roles, so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
@@ -51,7 +51,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
     public string ProviderName => Name;
 
     // SupportsTrustedHostWorkspace is advertised because callers binding an engine-managed workspace need unit coverage a refused flag
-    // would push onto a real daemon. Honoured the only way an in-memory sandbox can: accepted at create, preserved across attach.
+    // would push onto a real daemon. Honored the only way an in-memory sandbox can: accepted at create, preserved across attach.
     public SandboxProviderCapabilities Capabilities =>
         SandboxProviderCapabilities.SupportsCopyInto
         | SandboxProviderCapabilities.SupportsCopyOut
@@ -475,7 +475,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
     }
 
     /// <summary>
-    ///     Mirrors <c>ProcessSandboxRuntimeProvider</c>'s identity map, the behaviour a caller written against the fake has to keep when
+    ///     Mirrors <c>ProcessSandboxRuntimeProvider</c>'s identity map, the behavior a caller written against the fake has to keep when
     ///     it meets the process provider.
     /// </summary>
     /// <remarks>

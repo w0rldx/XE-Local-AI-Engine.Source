@@ -13,10 +13,10 @@ using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Golden harvest orchestration unit tests (deterministic, no model/DB). The harvest service scans thumbs-up sources
-///     via a faked <see cref="IGoldenHarvestSourceStore" />, dedups against already-harvested source ids, builds the
-///     seeded rubric + camelCase input turns, and stages each fresh candidate through
-///     <see cref="IGoldenConversationService.CreateHarvestedAsync" />. Counts split across created / duplicate / skipped.
+///     Golden harvest orchestration (deterministic, no model/DB): scans thumbs-up sources via a faked
+///     <see cref="IGoldenHarvestSourceStore" />, dedups by source id, builds the seeded rubric + camelCase turns, and
+///     stages each through <see cref="IGoldenConversationService.CreateHarvestedAsync" />; counts: created /
+///     duplicate / skipped.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GoldenHarvestServiceTests

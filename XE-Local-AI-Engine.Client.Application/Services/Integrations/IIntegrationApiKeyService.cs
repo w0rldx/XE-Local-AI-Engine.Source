@@ -38,7 +38,7 @@ public sealed class GeneratedIntegrationApiKey
 
 /// <summary>
 ///     Trusted metadata from a successful validation. <see cref="PrincipalId" /> comes FIRST because it is the
-///     identity every ownership, uniqueness and fingerprint decision keys on (ADR 0008 R4-6);
+///     identity every ownership, uniqueness and fingerprint decision keys on (ADR 0008);
 ///     <see cref="KeyPrefix" /> only names which credential was used and carries no authority.
 /// </summary>
 public sealed class IntegrationApiKeyValidation

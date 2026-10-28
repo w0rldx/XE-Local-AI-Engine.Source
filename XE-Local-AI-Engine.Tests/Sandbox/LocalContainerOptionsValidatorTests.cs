@@ -52,10 +52,9 @@ public sealed class LocalContainerOptionsValidatorTests
     }
 
     /// <summary>
-    ///     The toolchain ceilings are FLOORED rather than merely required to be positive, and that distinction is the
-    ///     point: on Linux they become <c>MemoryMax</c> with swap denied and <c>TasksMax</c> counting threads, so a
-    ///     positive-but-tiny value does not slow a build, it OOM-kills it or fails its first fork on every attempt. A
-    ///     ceiling nothing can meet reads as protection and is not, so it is rejected at startup.
+    ///     Toolchain ceilings are FLOORED, not merely positive: on Linux they become <c>MemoryMax</c> (swap denied) and
+    ///     <c>TasksMax</c> (counting threads), so a tiny value OOM-kills a build or fails its first fork. Startup
+    ///     rejects such a ceiling.
     /// </summary>
     [Test]
     [Arguments(SandboxToolchainLimits.MinimumMemoryMb - 1, null, "MemoryMb")]

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { toast } from "@/core/ui/notifications/Toast";
-import { captureSnapshot } from "@/features/diagnostics/BuildSnapshot";
+import { captureSnapshot } from "@/features/diagnostics/models/BuildSnapshot";
 
 /**
  * Shared "report a problem" flow: captures a manual diagnostics snapshot, toasts the outcome,

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription;
 /// <summary>The accepted-download identity returned by <see cref="IWhisperModelDownloadCoordinator.Start" />.</summary>
 public sealed class WhisperModelDownloadTicket
 {
-    /// <summary>The catalogue id the download is keyed by; poll its status by this.</summary>
+    /// <summary>The catalog id the download is keyed by; poll its status by this.</summary>
     public required string ModelId { get; init; }
 
     /// <summary><c>true</c> when an existing download was rejoined instead of started.</summary>
@@ -27,7 +27,7 @@ public enum WhisperModelDownloadPhase
 }
 
 /// <summary>
-///     A sanitized snapshot of one coordinated download. Carries the catalogue id, the phase, byte counts and a
+///     A sanitized snapshot of one coordinated download. Carries the catalog id, the phase, byte counts and a
 ///     sanitized reason — never an absolute path, a URL, or a token.
 /// </summary>
 public sealed record WhisperModelDownloadStatus
@@ -51,7 +51,7 @@ public sealed record WhisperModelDownloadStatus
 
 /// <summary>
 ///     Coordinates operator-driven Whisper weight downloads. The transfer runs detached and outlives the request that
-///     started it, and the coordinator keeps the latest sanitized status per catalogue id for the UI to poll.
+///     started it, and the coordinator keeps the latest sanitized status per catalog id for the UI to poll.
 /// </summary>
 /// <remarks>
 ///     The point of the type is that every download ends in an OBSERVABLE terminal phase. A detached transfer that
@@ -65,7 +65,7 @@ public interface IWhisperModelDownloadCoordinator
     ///     download is registered. A download already in flight for the same id is rejoined rather than duplicated, so
     ///     a double submit cannot start two transfers.
     /// </summary>
-    /// <exception cref="ArgumentException">The id is not in the catalogue.</exception>
+    /// <exception cref="ArgumentException">The id is not in the catalog.</exception>
     WhisperModelDownloadTicket Start(string modelId);
 
     /// <summary>The latest sanitized status for <paramref name="modelId" />, or <see langword="null" /> when unknown.</summary>
@@ -75,7 +75,7 @@ public interface IWhisperModelDownloadCoordinator
     IReadOnlyList<WhisperModelDownloadStatus> ListStatuses();
 
     /// <summary>
-    ///     Requests cancellation of an in-flight download. Returns <see langword="true" /> when one was signalled and
+    ///     Requests cancellation of an in-flight download. Returns <see langword="true" /> when one was signaled and
     ///     <see langword="false" /> when nothing was in flight — cancelling a finished download is not an error.
     /// </summary>
     bool Cancel(string modelId);

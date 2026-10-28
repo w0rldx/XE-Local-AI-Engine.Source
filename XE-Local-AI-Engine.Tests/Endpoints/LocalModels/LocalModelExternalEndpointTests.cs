@@ -18,9 +18,9 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     How the existing local-model routes behave once an <c>ext:</c> id can reach them: the list carries the
-///     connection metadata, the details route answers from the declarations, selection is validated against the
-///     registry, and the delete route refuses with a 409 instead of a 500.
+///     How the local-model routes behave once an <c>ext:</c> id reaches them: the list carries connection metadata,
+///     details answer from the declarations, selection is validated against the registry, and delete refuses with
+///     409, not 500.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class LocalModelExternalEndpointTests

@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     <see cref="Kind" /> is the <c>conversations.kind</c> discriminator and defaults to <c>chat</c>, so every
-///     ordinary caller keeps its behaviour. <see cref="ConversationId" /> lets the integration accept path commit its
+///     ordinary caller keeps its behavior. <see cref="ConversationId" /> lets the integration accept path commit its
 ///     durable rows first and create the owned conversation afterwards, at the id the session row already carries;
-///     <c>null</c> keeps the mint-your-own behaviour. The column is the primary key, so a colliding id is a
+///     <c>null</c> keeps the mint-your-own behavior. The column is the primary key, so a colliding id is a
 ///     <c>SqliteException</c> and a caller bug, exactly as on the mint path.
 /// </remarks>
 public sealed record NodeChatCreateConversationRequest

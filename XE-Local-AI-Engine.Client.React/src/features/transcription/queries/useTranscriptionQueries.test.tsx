@@ -240,7 +240,7 @@ describe("useUpdateTranscriptSegment", () => {
 	});
 
 	// Regression: the detail query is `staleTime: 0`, so a refetch can be in flight when the save lands. Its response
-	// carries the pre-edit text and used to overwrite the patch; it is cancelled before the patch is written.
+	// carries the pre-edit text and used to overwrite the patch; it is canceled before the patch is written.
 	it("keeps the patched row when a refetch holding the old text is still in flight", async () => {
 		const row = (seq: number, text: string) => ({
 			id: `33333333-0000-4000-8000-00000000000${seq}`,
@@ -285,7 +285,7 @@ describe("useUpdateTranscriptSegment", () => {
 		await act(async () => {
 			await result.current.update.mutateAsync({ seq: 1, text: "second" });
 		});
-		// Settles once the refetch is over either way: cancelled by the save, or landed with its stale text.
+		// Settles once the refetch is over either way: canceled by the save, or landed with its stale text.
 		await act(async () => {
 			releaseRefetch();
 			await refetched;

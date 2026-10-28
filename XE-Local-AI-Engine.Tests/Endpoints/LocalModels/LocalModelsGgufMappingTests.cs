@@ -63,7 +63,7 @@ public sealed class LocalModelsGgufMappingTests
         AssertEx.Equal(enforceable, response[0].ReasoningBudgetEnforceable);
     }
 
-    /// <summary>R1-07: an embedding or reranker GGUF generates no text, so its row carries no COMPLETION chip; a chat row keeps it.</summary>
+    /// <summary>An embedding or reranker GGUF generates no text, so its row carries no COMPLETION chip; a chat row keeps it.</summary>
     [Test]
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:F16", "Embedding", "")]
     [Arguments("gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M", "Reranker", "")]

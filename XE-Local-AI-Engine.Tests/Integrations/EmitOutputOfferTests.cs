@@ -82,7 +82,7 @@ public sealed class EmitOutputOfferTests
     public async Task WithNoNodePolicy_TheUnionedToolKeepsRequiresApprovalFalse()
     {
         // The identity case, so the compose cannot regress the default path: with no policy configured nothing about
-        // today's behaviour changes.
+        // today's behavior changes.
         using var harness = new Harness();
 
         await harness.Coordinator.ProcessOneAsync(harness.SeedAccepted(), CancellationToken.None);

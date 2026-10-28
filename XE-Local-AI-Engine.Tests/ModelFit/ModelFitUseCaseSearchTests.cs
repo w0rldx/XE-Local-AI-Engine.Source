@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ModelFitUseCaseSearch" /> tests: a use-case maps to the Hugging Face search terms that actually surface
-///     reputable GGUF models (the literal use-case word under-matches the Hub's substring search). Known use-cases map to
-///     curated terms (case-insensitively); an unknown use-case falls back to its verbatim text; null/blank falls back to
-///     <c>instruct</c>. The list is never empty.
+///     <see cref="ModelFitUseCaseSearch" /> tests: a use case maps to Hub search terms that surface good GGUF
+///     models (the literal word under-matches). Known use cases map to curated terms (any case), unknown ones
+///     to their own text, null/blank to <c>instruct</c>; the list is never empty.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelFitUseCaseSearchTests

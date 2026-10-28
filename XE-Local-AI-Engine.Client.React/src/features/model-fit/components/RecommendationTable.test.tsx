@@ -229,7 +229,7 @@ describe("RecommendationTable", () => {
 		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-recommendation-row-2")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-recommendation-row-3")).toBeTruthy();
-		// The catalog-only row is labelled and carries no Download button.
+		// The catalog-only row is labeled and carries no Download button.
 		expect(screen.getByText("Catalog only")).toBeTruthy();
 		expect(screen.queryByTestId("model-fit-download-button-3")).toBeNull();
 	});
@@ -418,7 +418,7 @@ describe("RecommendationTable", () => {
 	});
 
 	it("withholds the KV-per-token line when the figure has no quant label", () => {
-		// Half a fact is worse than none: an unlabelled KV byte count is ambiguous by a factor of two.
+		// Half a fact is worse than none: an unlabeled KV byte count is ambiguous by a factor of two.
 		const unlabelled = makeRecommendation({ rank: 1, kvBytesPerToken: 640, kvBytesPerTokenQuant: null });
 
 		renderTable(<RecommendationTable recommendations={[unlabelled]} />);

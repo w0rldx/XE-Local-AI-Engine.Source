@@ -7,7 +7,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -21,7 +20,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new FakeChatClient(callId, "approve-job");
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
         await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
@@ -29,7 +28,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
+        AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
                                                             && message.Contains("approve-job", StringComparison.Ordinal));
     }
 
@@ -46,7 +45,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var budget = ProviderCallBudget.Current!;
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new FakeChatClient(callId, "definitely_not_offered");
-        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new RecordingLogger<ToolInvocationObservabilityChatClient>());
         var options = new ChatOptions
         {
             Tools = [AIFunctionFactory.Create(static () => "ok", "approve-job")]
@@ -69,7 +68,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var budget = ProviderCallBudget.Current!;
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new FakeChatClient(callId, "approve-job");
-        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new RecordingLogger<ToolInvocationObservabilityChatClient>());
         var options = new ChatOptions
         {
             Tools = [AIFunctionFactory.Create(static () => "ok", "approve-job")]
@@ -89,7 +88,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var callId = $"call-{Guid.NewGuid():N}";
         const string secretArgumentValue = "super-secret-file-contents";
         using var innerClient = new FakeChatClient(callId, "approve-job", secretArgumentValue);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
         await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
@@ -97,8 +96,8 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        AssertEx.True(logger.Messages.Count > 0, "Expected at least one log message.");
-        AssertEx.True(logger.Messages.TrueForAll(message => !message.Contains(secretArgumentValue, StringComparison.Ordinal)),
+        AssertEx.True(logger.Entries.Count > 0, "Expected at least one log message.");
+        AssertEx.True(logger.Entries.Select(static entry => entry.Message).All(message => !message.Contains(secretArgumentValue, StringComparison.Ordinal)),
             "Raw tool argument value leaked into a log message.");
     }
 
@@ -108,7 +107,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var callId = $"call-{Guid.NewGuid():N}";
         const string argumentValue = "some-arg-value";
         using var innerClient = new FakeChatClient(callId, "approve-job", argumentValue);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
         await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
@@ -122,7 +121,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         });
         var expectedHashPrefix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedArguments)))[..12];
 
-        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("ArgsLength=", StringComparison.Ordinal)
+        AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("ArgsLength=", StringComparison.Ordinal)
                                                             && message.Contains($"ArgsHash={expectedHashPrefix}", StringComparison.Ordinal));
     }
 
@@ -132,7 +131,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var callId = $"call-{Guid.NewGuid():N}";
         const string argumentValue = "some-arg-value";
         using var innerClient = new FakeChatClient(callId, "approve-job", argumentValue);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
         await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
@@ -145,7 +144,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             ["decision"] = argumentValue
         });
         var expectedByteCount = Encoding.UTF8.GetByteCount(serializedArguments);
-        AssertEx.ContainsSingle(logger.Messages, message => message.Contains($"ArgsLength={expectedByteCount}", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains($"ArgsLength={expectedByteCount}", StringComparison.Ordinal));
     }
 
     [Test]
@@ -156,7 +155,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var cyclic = new List<object?>();
         cyclic.Add(cyclic);
         using var innerClient = new FakeChatClient(callId, "approve-job", cyclic);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
         var updateCount = 0;
@@ -167,7 +166,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         }
 
         AssertEx.True(updateCount > 0, "the response stream must still flow through when summarizing fails");
-        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("ArgsLength=-1", StringComparison.Ordinal)
+        AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("ArgsLength=-1", StringComparison.Ordinal)
                                                             && message.Contains("ArgsHash=unserializable", StringComparison.Ordinal));
     }
 
@@ -176,7 +175,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new FakeChatClient(callId, "approve-job");
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
         // The production ActivitySource is process-static and TUnit runs tests in parallel, so this listener sees EVERY
         // test's spans on other threads too — a ConcurrentQueue is required, a plain List corrupts under concurrent Add
@@ -219,7 +218,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new RepeatingFunctionCallChatClient(callId, "approve-job", updateCount: 4);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
         // Filter by this test's unique CallId: the production ActivitySource is static, so a parallel test's spans
         // would otherwise be captured here too. A ConcurrentQueue is required (not a plain List): other tests' spans
@@ -249,7 +248,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         }
 
         // Four streamed updates carry one logical call under a single CallId: exactly one log line and one span.
-        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
+        AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
                                                             && message.Contains(callId, StringComparison.Ordinal));
         AssertEx.ContainsSingle(stoppedActivities,
             activity => string.Equals(activity.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal)
@@ -261,7 +260,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
         // The production ActivitySource is process-static and TUnit runs tests in parallel, so this listener sees EVERY
         // test's spans. Capture ONLY this test's completion span (filtered by our unique CallId) into a thread-safe
@@ -306,7 +305,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: null, exception: new InvalidOperationException("boom"));
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
         // Capture only this test's completion span (unique CallId) into a thread-safe queue — see the success test.
         var completed = new ConcurrentQueue<string?>();
@@ -341,7 +340,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         AssertEx.ContainsSingle(completed, outcome => string.Equals(outcome, "error", StringComparison.Ordinal));
         // The raw result telemetry must never leak the exception message.
-        AssertEx.True(logger.Messages.TrueForAll(message => !message.Contains("boom", StringComparison.Ordinal)),
+        AssertEx.True(logger.Entries.Select(static entry => entry.Message).All(message => !message.Contains("boom", StringComparison.Ordinal)),
             "The tool result span/log must never carry the raw exception content.");
     }
 
@@ -354,7 +353,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new CallThenResultChatClient(callId, "mcp__srv__slow", result, exception: null);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
         await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
@@ -362,7 +361,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunToolCompleted", StringComparison.Ordinal)
+        AssertEx.ContainsSingle(logger.Entries.Select(static entry => entry.Message), message => message.Contains("AgentRunToolCompleted", StringComparison.Ordinal)
                                                             && message.Contains($"Outcome={expectedOutcome} ", StringComparison.Ordinal));
     }
 
@@ -371,7 +370,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
-        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        var logger = new RecordingLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
         ProviderCallEfficiencySnapshot snapshot;
 
@@ -404,7 +403,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         var callId = $"call-{Guid.NewGuid():N}";
         const string secretResult = "super-secret-tool-result";
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", secretResult, exception: null);
-        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new RecordingLogger<ToolInvocationObservabilityChatClient>());
         // Capture only this test's spans (unique CallId) into a thread-safe queue: the production ActivitySource is
         // process-static and sibling tests stop spans concurrently on other threads.
         var payloads = new ConcurrentQueue<(string OperationName, string? Arguments, string? Result)>();
@@ -464,7 +463,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
-        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new RecordingLogger<ToolInvocationObservabilityChatClient>());
         // Capture only this test's spans (unique CallId) into a thread-safe queue: the production ActivitySource is
         // process-static and sibling tests stop spans concurrently on other threads.
         var operations = new ConcurrentQueue<(string OperationName, string? GenAiOperationName)>();
@@ -667,35 +666,6 @@ public sealed class ToolInvocationObservabilityChatClientTests
         public void Dispose()
         {
             GC.SuppressFinalize(this);
-        }
-    }
-
-    private sealed class ListLogger<T> : ILogger<T>
-    {
-        public List<string> Messages { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-        {
-            return NoopDisposable.Instance;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            Messages.Add(formatter(state, exception));
-        }
-    }
-
-    private sealed class NoopDisposable : IDisposable
-    {
-        public static NoopDisposable Instance { get; } = new();
-
-        public void Dispose()
-        {
         }
     }
 }

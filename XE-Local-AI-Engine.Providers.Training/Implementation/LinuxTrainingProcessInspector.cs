@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// <summary>Reads trainer-process identity out of <c>/proc</c> and signals process groups.</summary>
 /// <remarks>
 ///     The receipt-validation half of the <c>SandboxOrphanReaper</c> model: identity is proven from several
-///     independent fields before anything is signalled, never from an executable-path match alone the way
+///     independent fields before anything is signaled, never from an executable-path match alone the way
 ///     the shared <c>StaleProcessReaper</c> does it.
 /// </remarks>
 internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessInspector
@@ -98,7 +98,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
 
     /// <summary>
     ///     SIGTERM <paramref name="target" />, wait for <paramref name="identityPid" /> to vanish, then SIGKILL. Each signal is sent
-    ///     only while that pid still carries <paramref name="expectedStartTicks" />, so a recycled pid is never signalled.
+    ///     only while that pid still carries <paramref name="expectedStartTicks" />, so a recycled pid is never signaled.
     /// </summary>
     private async Task TerminateAsync(int target, int identityPid, long expectedStartTicks, CancellationToken cancellationToken)
     {
@@ -211,7 +211,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
                        .FirstOrDefault();
     }
 
-    // pid_t getpgrp(void); — the calling process's group, which a trainer must never be signalled through.
+    // pid_t getpgrp(void); — the calling process's group, which a trainer must never be signaled through.
     [LibraryImport("libc", EntryPoint = "getpgrp")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static partial int GetProcessGroup();

@@ -149,7 +149,7 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
     public void BuildPrimaryPackage_ForAnOptedOutAgent_StillRunsUnderTheRelevanceFilter()
     {
         // The companion to the test above: because the flag never reaches the frozen payload, a benchmark generation
-        // never honours it. Pinned so the omission stays deliberate rather than becoming a silent divergence between a
+        // never honors it. Pinned so the omission stays deliberate rather than becoming a silent divergence between a
         // freshly frozen run and the same run replayed from storage.
         var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
         var input = Input();

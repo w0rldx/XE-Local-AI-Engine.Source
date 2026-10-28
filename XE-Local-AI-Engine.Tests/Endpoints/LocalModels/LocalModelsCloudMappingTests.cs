@@ -26,7 +26,7 @@ public sealed class LocalModelsCloudMappingTests
         AssertEx.True(cloud.All(static m => m.Provider == LocalModelProviders.CodexOAuth),
             "every cloud entry must be tagged provider=CodexOAuth");
         AssertEx.True(cloud.All(static m => m.IsReasoningCapable), "Codex models reason by default");
-        // Tool calling is now enabled for ALL Codex ids; the mapped tag tracks the V0 flag, which is now true.
+        // Tool calling is enabled for ALL Codex ids; the mapped tag tracks the V0 flag, which is true.
         AssertEx.True(CodexProviderCapabilities.V0.SupportsToolCalling, "the Codex matrix must advertise tool calling");
         AssertEx.True(cloud.All(static m => m.IsToolCapable == CodexProviderCapabilities.V0.SupportsToolCalling));
         AssertEx.True(cloud.Any(static m => m.ModelName == "gpt-5.6-sol"), "the catalog must include gpt-5.6-sol");

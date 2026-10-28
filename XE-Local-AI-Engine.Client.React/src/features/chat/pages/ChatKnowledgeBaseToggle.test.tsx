@@ -112,7 +112,7 @@ async function sendAndReadFlag(): Promise<boolean | undefined> {
 	return adapter.sendMessage.mock.calls[0]?.[0].useKnowledgeBase;
 }
 
-// F-17: the flag the SendMessage frame carries must be the state the toggle shows, never its inverse.
+// The flag the SendMessage frame carries must be the state the toggle shows, never its inverse.
 describe("Chat knowledge-base toggle and the send payload", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

@@ -7,10 +7,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Both migration chains apply cleanly from an empty database, and every migration the assembly declares is actually
-///     recorded as applied. The per-migration suites each assert one migration's schema; this one asserts that no
-///     migration in either chain is silently skipped or left pending — the failure mode a first launch on a fresh box
-///     hits and nothing else here would catch.
+///     Both migration chains apply cleanly from an empty database and record every declared migration as applied, so
+///     none is silently skipped or left pending, the failure a first launch on a fresh box would hit.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class MigrationChainTests

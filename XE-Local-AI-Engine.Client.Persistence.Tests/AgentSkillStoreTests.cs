@@ -634,7 +634,7 @@ public sealed class AgentSkillStoreTests : IDisposable
             AssertEx.Equal(expected: 1_700_000_000_000L, reloaded.ImportedAtUtc ?? 0);
             AssertEx.Equal(new string(c: 'a', count: 64), reloaded.ContentSha256);
 
-            // An operator edit through the ordinary form sends the Local default and no provenance. Honouring that would
+            // An operator edit through the ordinary form sends the Local default and no provenance. Honoring that would
             // launder third-party content into trusted content and strip the untrusted-content fence, so provenance is
             // promote-only and absent fields leave the stored values alone.
             clock.Advance(10);

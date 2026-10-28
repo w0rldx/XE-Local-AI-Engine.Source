@@ -25,6 +25,8 @@
   <ItemGroup>
     <Compile Remove="Knowledge/RetrievalEval/LiveCorpus/**"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\FakeNodeSettingsStore.cs" Link="Testing\FakeNodeSettingsStore.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Categories\TestCategories.cs" Link="Categories\TestCategories.cs"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -33,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="XE_Local_AI_Engine.Client.Persistence.Tests.Categories"/>
+    <Using Include="XE_Local_AI_Engine.Client.Testing.Categories"/>
     <Using Include="XE_Local_AI_Engine.Client.Testing.Fakes"/>
   </ItemGroup>
 

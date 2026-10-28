@@ -162,10 +162,8 @@ public sealed class StructuredAgentRunnerTests
     [Arguments("ext:cloud-box/qwen3")]
     public async Task ExternalTeacher_IsRejected_WhateverItsDeclaredLocality(string teacherModel)
     {
-        // The cloud refusal above does NOT cover a declared-LOCAL external model: the capability resolver reports it
-        // node-local, which is right for the tool gates and wrong here. Training needs a runtime the node OWNS — an
-        // endpoint it neither launched nor versioned can change model or sampling mid-run, leaving a dataset whose
-        // provenance claims a determinism it never had.
+        // The cloud refusal does NOT cover a declared-LOCAL external model: node-local is right for tool gates, but
+        // training needs a runtime the node OWNS, as a foreign endpoint can change model or sampling mid-run.
         var capabilities = Substitute.For<IModelCapabilityResolver>();
         _ = capabilities.ResolveAsync(teacherModel, Arg.Any<CancellationToken>())
                         .Returns(new ModelCapabilitySnapshot(false, true, false));

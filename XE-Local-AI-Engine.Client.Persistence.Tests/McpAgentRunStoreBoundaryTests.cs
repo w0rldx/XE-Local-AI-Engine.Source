@@ -31,9 +31,8 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             McpAgentRunStore.TombstoneReservationBytesV1);
     }
 
-    // The only test here that needs isolation: it opens MaxNonterminalRuns + 8 concurrent SQLite connections against
-    // one file and asserts an exact accepted/rejected split, so module-wide write contention can push it into
-    // SQLITE_BUSY. The other 15 tests are single-connection and run under their own GUID temp directory.
+    // Only this test needs isolation: MaxNonterminalRuns + 8 concurrent SQLite connections on one file with an exact
+    // accepted/rejected split, which module-wide write contention can push into SQLITE_BUSY.
     [Test]
     [NotInParallel]
     public async Task AdmitAsync_ConcurrentDistinctRequests_NeverExceedsNonterminalCapacity()

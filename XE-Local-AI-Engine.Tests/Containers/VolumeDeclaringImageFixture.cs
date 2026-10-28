@@ -9,10 +9,10 @@ using Docker.DotNet.Models;
 /// <summary>
 ///     An image whose own Dockerfile declares a <c>VOLUME</c>, built in the daemon and removed again.
 ///     <para>
-///         It used to be a pinned <c>redis</c> digest, which made a 16 MB registry pull a hard dependency of the
+///         It is not a pinned <c>redis</c> digest, which would make a 16 MB registry pull a hard dependency of the
 ///         suite for the sake of two lines of Dockerfile. Building it from the BusyBox base the suite already
 ///         needs costs no network at all, and the resulting anonymous mount is the same one: the daemon
-///         materialises a volume for every <c>VOLUME</c> instruction regardless of where the image came from.
+///         materializes a volume for every <c>VOLUME</c> instruction regardless of where the image came from.
 ///     </para>
 ///     <para>
 ///         The reference is <b>computed every run, never hardcoded</b>. A local build's <c>RepoDigests</c> entry

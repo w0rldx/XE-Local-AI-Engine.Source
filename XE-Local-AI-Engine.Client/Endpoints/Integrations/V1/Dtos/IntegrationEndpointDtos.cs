@@ -372,7 +372,7 @@ public sealed class ListIntegrationSessionsRequest
 /// </summary>
 /// <remarks>
 ///     That order is part of the contract: a client must render it rather than re-sort it, because a page is a window
-///     onto a larger set and a locally sorted page would be labelled "latest" while missing later rows.
+///     onto a larger set and a locally sorted page would be labeled "latest" while missing later rows.
 /// </remarks>
 public sealed class ListIntegrationSessionsResponse
 {

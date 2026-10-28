@@ -5,9 +5,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The group key is the BASE model. It used to be the model content fingerprint, which is the exact opposite of
-///     what an operator comparing quants needs: two quants of one model have different content by definition, so every
-///     quant became its own group and "which quant of this model is best" could never be asked.
+///     The group key is the BASE model, not the content fingerprint: two quants of one model always differ in content,
+///     so keying on it would make every quant its own group and "which quant of this model is best" unaskable.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkModelGroupKeyTests

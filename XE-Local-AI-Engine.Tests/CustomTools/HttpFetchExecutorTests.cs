@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     HTTP fetch request assembly. A custom fetch tool cannot be exercised end-to-end against a local test server (the
-///     SSRF guard denies loopback by design), so these assert <see cref="HttpFetchExecutor.BuildRequest" /> directly:
-///     {param} placeholders in a header value are substituted, and a fixed header is passed through unchanged.
+///     The SSRF guard denies loopback by design, so a custom fetch tool cannot run end-to-end against a local test
+///     server; these assert <see cref="HttpFetchExecutor.BuildRequest" /> directly: {param} placeholders in a header
+///     value are substituted and a fixed header passes through unchanged.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class HttpFetchExecutorTests

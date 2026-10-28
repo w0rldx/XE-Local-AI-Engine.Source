@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 /// </summary>
 /// <remarks>
 ///     It persists NO conversation and no seed: the gate returns a DECISION, and the accept path performs every write in
-///     ADR 0008 R4-1's order. There is no create path here, no compensating delete and no orphan sweep — nothing exists
+///     ADR 0008's order. There is no create path here, no compensating delete and no orphan sweep — nothing exists
 ///     before a durable execution row, so an orphan conversation cannot. A <c>public sealed class</c> with no interface,
 ///     registered and injected as itself, because the endpoints that consume it live in another assembly; only the
 ///     invocation gate stays <c>internal</c>, its single caller being the accept path in this assembly.
@@ -67,7 +67,7 @@ public sealed class IntegrationSessionService
     /// </summary>
     /// <remarks>
     ///     The caller holds the per-session gate around this call AND the accept transaction that follows it, so the busy
-    ///     read below is inside the same critical section as the write it authorises. <c>PerInvocation</c> takes a new
+    ///     read below is inside the same critical section as the write it authorizes. <c>PerInvocation</c> takes a new
     ///     session per invocation and answers a named one with the masked 404 — such a trigger has no addressable
     ///     sessions, and "unknown" is the answer an unknown id gets; <c>CallerManaged</c> takes a new session that stays
     ///     Active after the run, or joins the named one through the gate below.
@@ -165,7 +165,7 @@ public sealed class IntegrationSessionService
     }
 
     /// <summary>
-    ///     The integrator's own read, whose ENTIRE authorisation decision is the shared helper: principal ownership AND
+    ///     The integrator's own read, whose ENTIRE authorization decision is the shared helper: principal ownership AND
     ///     the current key's trigger allowlist.
     /// </summary>
     /// <remarks>

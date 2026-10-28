@@ -144,7 +144,7 @@ describe("RuntimeStatusCard", () => {
 	});
 
 	// The node NEVER removes a container carrying another install id, so the count has to be visible or an
-	// operator reads a clean Installed list as "XE owns every labelled container on this machine".
+	// operator reads a clean Installed list as "XE owns every labeled container on this machine".
 	it("reports containers left behind by another XE installation", () => {
 		renderCard(<RuntimeStatusCard runtime={externalAppRuntime({ foreignInstallContainers: 2 })} isLoading={false} />);
 

@@ -8,11 +8,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Multi-part (split) GGUF handling: llama.cpp's <c>-00001-of-00002.gguf</c> split convention must collapse into
-///     ONE candidate per logical model+quant (name = first split, size = sum of all splits, header read from the
-///     first split only) rather than surface each split as an independent, individually-unloadable file. Live defect
-///     (2026-07-10): Qwen/Qwen2.5-Coder-14B-Instruct-GGUF ships Q4_K_M as two splits (8.0GB + 0.99GB); treating them
-///     as independent files let the advisor pick the 0.99GB second split alone and estimate a 14B model at ~1.8GB.
+///     Split GGUF handling: llama.cpp's <c>-00001-of-00002.gguf</c> parts collapse into ONE candidate per model+quant
+///     (name = first split, size = sum, header from the first), so the advisor never picks a lone second split
+///     and underestimates the model.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufDiscoveryShardTests

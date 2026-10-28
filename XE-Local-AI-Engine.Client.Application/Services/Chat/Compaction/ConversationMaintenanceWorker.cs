@@ -158,7 +158,7 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
 
         var estimator = services.GetRequiredService<ITokenEstimator>();
         var projected = ConversationStepContextBound.Project(conversation, estimator, job.ModelName);
-        // The node setting is a percent (30..95); the arithmetic wants the fraction the options class used to carry.
+        // The node setting is a percent (30..95); the arithmetic wants a fraction.
         var autoCompactFraction = await runtimeSettings.GetCompactionAutoCompactPercentAsync(cancellationToken) / 100d;
         var threshold = TokenEstimatorCalibrationStore.ApplyObservedCorrection((int)(usableTokens * autoCompactFraction),
             estimator.ResolveObservedCorrection(job.ModelName));

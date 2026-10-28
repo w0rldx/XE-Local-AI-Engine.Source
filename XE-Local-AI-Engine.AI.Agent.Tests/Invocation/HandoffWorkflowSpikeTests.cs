@@ -30,7 +30,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 ///     <para>
 ///         The KEYED constraint only stops these 30 s-bounded streaming drains from competing with each other for the
-///         test host; the keyless form would serialise the whole assembly for no benefit.
+///         test host; the keyless form would serialize the whole assembly for no benefit.
 ///     </para>
 /// </remarks>
 [NotInParallel(nameof(HandoffWorkflowSpikeTests))]
@@ -506,13 +506,12 @@ public sealed class HandoffWorkflowSpikeTests
     /// <summary>
     ///     Accumulates <paramref name="text" /> only when the emitting executor IS the specialist agent.
     ///     <para>
-    ///         The original probe asserted <c>ExecutorId == specialist.Id</c>. That equality no longer holds under MAF
-    ///         1.13.0 (still true at the pin), which is part of the same shape change that broke the drain loop: the
-    ///         handoff builder now names its executors after the agent's sanitized INSTRUCTIONS with the agent id
-    ///         appended, e.g.
+    ///         <c>ExecutorId == specialist.Id</c> does not hold under MAF 1.13.0 and later, the pin included: in the
+    ///         same shape change the drain loop handles, the handoff builder names its executors after the agent's
+    ///         sanitized INSTRUCTIONS with the agent id appended, e.g.
     ///         <c>You_are_the_SPECIALIST_agent_Answer_the_user_s_question_directly_923ee58cc43c…</c> for an agent whose
-    ///         <c>Id</c> is <c>923ee58cc43c…</c>. Matching on the id suffix restores the attribution check the equality
-    ///         used to give while staying honest about the executor-id format the framework actually produces.
+    ///         <c>Id</c> is <c>923ee58cc43c…</c>. Matching on the id suffix keeps the attribution check while staying
+    ///         honest about the executor-id format the framework actually produces.
     ///     </para>
     /// </summary>
     private static void AppendIfSpecialist(StringBuilder sb, string? executorId, string specialistId, string? text)

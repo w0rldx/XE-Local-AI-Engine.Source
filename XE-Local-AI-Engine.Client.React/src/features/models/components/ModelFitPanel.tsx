@@ -52,7 +52,7 @@ function findRecommendationForModel(
 	);
 }
 
-// One labelled metric cell in the fit grid.
+// One labeled metric cell in the fit grid.
 function FitMetric({ label, children }: { label: string; children: ReactNode }) {
 	return (
 		<Stack gap={2}>

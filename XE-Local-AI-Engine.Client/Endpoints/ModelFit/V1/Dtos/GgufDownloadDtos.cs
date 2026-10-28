@@ -172,7 +172,7 @@ public sealed class CancelGgufDownloadRequest
 
 /// <summary>
 ///     Response for <c>POST model-fit/download/cancel</c>. <see cref="Cancelled" /> is <c>true</c> when a cancellable
-///     in-flight download was found and signalled; <c>false</c> when none existed (already finished / never started).
+///     in-flight download was found and signaled; <c>false</c> when none existed (already finished / never started).
 /// </summary>
 public sealed class CancelGgufDownloadResponse
 {

@@ -21,7 +21,7 @@ internal static class AgentHomeRunContractMapper
 
     /// <summary>The capped text read, renamed onto the wire.</summary>
     /// <remarks>
-    ///     Deliberately NOT sanitised: this is the one AgentHome contract whose payload is the run's own bytes, and
+    ///     Deliberately NOT sanitized: this is the one AgentHome contract whose payload is the run's own bytes, and
     ///     rewriting them would hand the operator a document that is not what the run wrote. What keeps it honest is
     ///     where it is rendered — a read-only Monaco surface with its default unicode highlighting on, which flags
     ///     invisible, ambiguous and control characters in place.

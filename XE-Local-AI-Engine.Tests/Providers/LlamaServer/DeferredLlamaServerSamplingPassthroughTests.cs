@@ -7,14 +7,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The developer-gated per-send sampling overrides must actually reach llama.cpp. The MEAI OpenAI adapter maps only
-///     Temperature/TopP/penalties/MaxOutputTokens/Seed/StopSequences — <see cref="ChatOptions.TopK" /> has no OpenAI
-///     counterpart and unrecognised <see cref="ChatOptions.AdditionalProperties" /> are dropped — so
-///     <see cref="DeferredLlamaServerChatClient.ApplySamplingPassthrough" /> patches the four missing knobs onto the body
-///     via <c>ChatCompletionOptions.Patch</c>. These tests run the REAL MEAI OpenAI pipeline over a request-capturing
-///     transport (<see cref="LlamaGrammarToolOffer.CaptureWireBodyAsync(ChatOptions, CancellationToken)" />) and grade the serialized bytes, not a
-///     reimplementation of the adapter.
+///     The developer-gated per-send sampling overrides must reach llama.cpp. The MEAI OpenAI adapter drops
+///     <see cref="ChatOptions.TopK" /> and unrecognised <see cref="ChatOptions.AdditionalProperties" />, so
+///     <see cref="DeferredLlamaServerChatClient.ApplySamplingPassthrough" /> patches the four missing knobs onto the body.
 /// </summary>
+/// <remarks>
+///     Runs the REAL MEAI pipeline over <see cref="LlamaGrammarToolOffer.CaptureWireBodyAsync(ChatOptions, CancellationToken)" />
+///     and grades the serialized request bytes, not a reimplementation of the adapter.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerSamplingPassthroughTests
 {

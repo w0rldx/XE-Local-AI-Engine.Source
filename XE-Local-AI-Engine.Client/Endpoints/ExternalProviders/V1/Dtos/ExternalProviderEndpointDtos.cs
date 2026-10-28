@@ -166,7 +166,7 @@ public sealed record ExternalProviderModelResponse
     /// <summary>Whether the model produces a reasoning channel.</summary>
     public required bool? SupportsReasoning { get; init; }
 
-    /// <summary>Whether the endpoint honours a top-level <c>reasoning_effort</c> body field.</summary>
+    /// <summary>Whether the endpoint honors a top-level <c>reasoning_effort</c> body field.</summary>
     public required bool? SupportsReasoningEffort { get; init; }
 
     /// <summary>The effort applied when the turn selects none, in the canonical lowercase vocabulary.</summary>

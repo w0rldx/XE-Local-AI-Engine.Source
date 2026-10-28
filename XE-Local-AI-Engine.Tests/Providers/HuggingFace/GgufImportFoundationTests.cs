@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
@@ -244,7 +245,7 @@ public sealed class GgufImportFoundationTests
         AssertEx.True((ValidatedGgufImportSource.WindowsOpenFlags & ValidatedGgufImportSource.WindowsSequentialScan) != 0);
     }
 
-    // Both load at the pinned llama.cpp (model-matrix round, 2026-10-04); an architecture the pin was never seen loading stays out of the list.
+    // Both load at the pinned llama.cpp; an architecture the pin was never seen loading stays out of the list.
     [Test]
     [Arguments("granite")]
     [Arguments("lfm2moe")]
@@ -809,7 +810,7 @@ public sealed class GgufImportFoundationTests
         using var paths = new ImportPaths();
         var weightPath = Path.Combine(paths.ModelsDirectory, "demo-Q4_K_M.gguf");
         await File.WriteAllBytesAsync(weightPath, [1, 2, 3, 4]);
-        var hash = await GgufAcquisitionSidecar.ComputeSha256Async(weightPath, CancellationToken.None);
+        var hash = await FileSha256.ComputeAsync(weightPath, CancellationToken.None);
         var fingerprint = GgufMemberFingerprint.Compute(hash, sizeBytes: 4);
         var modelFingerprint = GgufModelContentFingerprint.ComputeV1([
             new GgufModelContentMember
@@ -951,7 +952,7 @@ public sealed class GgufImportFoundationTests
         Directory.CreateDirectory(nestedDirectory);
         var weightPath = Path.Combine(nestedDirectory, "demo-Q4_K_M.gguf");
         await File.WriteAllBytesAsync(weightPath, [1, 2, 3, 4]);
-        var hash = await GgufAcquisitionSidecar.ComputeSha256Async(weightPath, CancellationToken.None);
+        var hash = await FileSha256.ComputeAsync(weightPath, CancellationToken.None);
         const string modelName = "Nested/Demo:Q4_K_M";
         const string relativePath = "nested/demo-Q4_K_M.gguf";
         var modelFingerprint = GgufModelContentFingerprint.ComputeV1([

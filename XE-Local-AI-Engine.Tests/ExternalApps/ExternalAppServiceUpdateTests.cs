@@ -63,7 +63,7 @@ public sealed class ExternalAppServiceUpdateTests
     }
 
     /// <summary>
-    ///     Rc.3 decision D6: after an empty-catalog start a refresh that offers a newer version must not restart the
+    ///     The empty-catalog gate: after an empty-catalog start a refresh that offers a newer version must not restart the
     ///     instance into it. The preview says why and the update refuses with the same reason, before anything stops.
     /// </summary>
     [Test]
@@ -482,7 +482,7 @@ public sealed class ExternalAppServiceUpdateTests
     }
 
     /// <summary>
-    ///     The list the Apps page reads. It carries the same sanitised projection <c>GetAsync</c> returns, one per row,
+    ///     The list the Apps page reads. It carries the same sanitized projection <c>GetAsync</c> returns, one per row,
     ///     so a card renders its manifest and its ports without a read per instance.
     /// </summary>
     [Test]

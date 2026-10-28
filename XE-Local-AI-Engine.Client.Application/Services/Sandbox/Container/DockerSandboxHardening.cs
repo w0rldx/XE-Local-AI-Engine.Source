@@ -126,7 +126,7 @@ internal static class DockerSandboxHardening
             SecurityOptions = [NoNewPrivileges, DockerSeccompProfile.SecurityOption],
             ReadOnlyRootFilesystem = true,
             // Two tmpfs mounts for two reasons: scratch is the writable area the sandbox contract offers a caller, while the temp mount
-            // exists because the toolchain's shared-memory path is a compile-time constant honouring no environment variable.
+            // exists because the toolchain's shared-memory path is a compile-time constant honoring no environment variable.
             TemporaryFilesystems = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [options.ScratchMountTarget] = BuildTmpfsOptions(scratchBytes),
@@ -227,7 +227,7 @@ internal static class DockerSandboxHardening
 
     private static void VerifySecurityOptions(DockerContainerSettings observed, List<string> violations)
     {
-        // Matched by prefix: the daemon normalises this option's rendering between versions, and an exact match would turn a cosmetic
+        // Matched by prefix: the daemon normalizes this option's rendering between versions, and an exact match would turn a cosmetic
         // daemon change into a spurious fail-closed rejection.
         var present = observed.SecurityOptions.Any(option =>
             option.StartsWith("no-new-privileges", StringComparison.OrdinalIgnoreCase)
@@ -250,7 +250,7 @@ internal static class DockerSandboxHardening
 
     /// <summary>
     ///     Renders the observed security options for an operator. The seccomp profile is ~9 KB of JSON, so it is
-    ///     summarised rather than printed: a violation message nobody can read is a violation message nobody acts on.
+    ///     summarized rather than printed: a violation message nobody can read is a violation message nobody acts on.
     /// </summary>
     private static string Describe(IReadOnlyList<string> securityOptions)
     {
@@ -319,8 +319,8 @@ internal static class DockerSandboxHardening
             violations.Add("read-only root filesystem: not applied.");
         }
 
-        // Every requested tmpfs, not a named one. The set is engine-owned and has grown once already; a check pinned to
-        // the scratch target would have silently stopped covering the mount that was added beside it.
+        // Every requested tmpfs, not a named one. The set is engine-owned and can grow; a check pinned to
+        // the scratch target would silently stop covering a mount added beside it.
         foreach (var (target, _) in requested.TemporaryFilesystems)
         {
             if (!observed.TemporaryFilesystems.TryGetValue(target, out var appliedOptions))

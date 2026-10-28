@@ -183,7 +183,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         await service.DidNotReceive().StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>V-02: a body missing a required member names the member, never the request DTO's CLR type.</summary>
+    /// <summary>A body missing a required member names the member, never the request DTO's CLR type.</summary>
     [Test]
     public async Task StartEndpoint_WhenARequiredMemberIsMissing_NamesTheMemberNotTheClrType()
     {
@@ -210,9 +210,9 @@ public sealed class LlamaCppSourceBuildTransportTests
     [RunOn(OS.Linux)]
     public async Task StartEndpoint_OfficialSource_HandsTheServiceAnUnnormalizedRequestAndStarts()
     {
-        // Regression: the endpoint used to normalize the request before calling the service, which normalizes again.
-        // The second pass saw the repository the FIRST pass had selected and rejected it as a client override, so every
-        // official-source build answered 409 {"reason":"prerequisites","message":"The official source repository is
+        // Regression: the endpoint must not normalize the request before calling the service, which normalizes again.
+        // A second pass sees the repository the FIRST pass selected and rejects it as a client override, so every
+        // official-source build would answer 409 {"reason":"prerequisites","message":"The official source repository is
         // selected by the server."}. Assert the endpoint forwards the raw request and that real normalization succeeds.
         var service = Substitute.For<ILlamaCppSourceBuildService>();
         service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())

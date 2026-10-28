@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HttpClient _tokenizeClient;

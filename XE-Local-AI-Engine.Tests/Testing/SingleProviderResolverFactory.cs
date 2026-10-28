@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Wraps a single <see cref="ILocalModelProvider" /> in the real <see cref="LocalModelProviderResolver" /> for unit
-///     tests of consumers that were re-pointed from a bare provider to the resolver. The supplied provider
-///     is the only registered provider AND the default, and the per-model map is empty, so every model routes to it and
-///     any other provider name fails to resolve (the unregistered-provider degrade path). No Ollama / network.
+///     Wraps one <see cref="ILocalModelProvider" /> in the real <see cref="LocalModelProviderResolver" /> for consumer
+///     unit tests: it is the only registered provider AND the default with an empty per-model map, so every model
+///     routes to it and any other provider name fails to resolve. No Ollama, no network.
 /// </summary>
 internal static class SingleProviderResolverFactory
 {

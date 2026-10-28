@@ -21,7 +21,7 @@ public interface INodePatchApplyService
     Task<NodePatchApplyPreview> PreviewAsync(NodePatchApplyRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Re-runs the full preview validation and dry-run check (TOCTOU defence) and applies only when every alias
+    ///     Re-runs the full preview validation and dry-run check (TOCTOU defense) and applies only when every alias
     ///     checks clean; a failed re-check mutates nothing. <see cref="NodePatchApplyRequest.ExpectedPatchSha256" />
     ///     binds the approval to the diff that was shown. Applies are serialized node-wide.
     /// </summary>

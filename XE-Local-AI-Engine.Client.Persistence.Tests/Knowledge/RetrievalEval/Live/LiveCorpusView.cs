@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval.Live;
 
-/// <summary>Report grouping of one labelled query.</summary>
+/// <summary>Report grouping of one labeled query.</summary>
 internal sealed class LiveQueryLabel
 {
     public required string Category { get; init; }
@@ -13,8 +13,8 @@ internal sealed class LiveQueryLabel
 }
 
 /// <summary>
-///     The one seam between the live eval and the labelled corpus loader (<see cref="RetrievalEvalLiveCorpus" />): the
-///     documents to ingest, the labelled queries, and each query's category and language for the per-group report.
+///     The one seam between the live eval and the labeled corpus loader (<see cref="RetrievalEvalLiveCorpus" />): the
+///     documents to ingest, the labeled queries, and each query's category and language for the per-group report.
 /// </summary>
 internal sealed class LiveCorpusView
 {

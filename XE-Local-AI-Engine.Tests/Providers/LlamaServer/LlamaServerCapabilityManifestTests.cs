@@ -9,9 +9,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Locks the runtime-capability gate to the resolved executable rather than a remembered llama.cpp tag. A successful
-///     <c>--version</c>/<c>--help</c> probe is cached for an unchanged file identity, a changed binary invalidates it,
-///     failures remain retryable, mandatory launch flags fail closed, and unsupported optional tuning is omitted.
+///     Locks the capability gate to the resolved executable: a probe is cached per file identity, a changed binary
+///     invalidates it, failures stay retryable, mandatory flags fail closed, and unsupported optional tuning is omitted.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerCapabilityManifestTests

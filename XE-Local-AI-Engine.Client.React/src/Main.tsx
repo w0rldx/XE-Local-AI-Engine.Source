@@ -11,7 +11,7 @@ import ReactDOM from "react-dom/client";
 import { App } from "@/App";
 import { installCollectors, rootErrorHandlers } from "@/core/diagnostics/Diagnostics";
 import { installPreloadErrorReload } from "@/core/integrations/vite/PreloadErrorReload";
-import { installAutoCapture } from "@/features/diagnostics/BuildSnapshot";
+import { installAutoCapture } from "@/features/diagnostics/models/BuildSnapshot";
 
 import { renderWhenI18nReady } from "./BootI18n";
 import { i18nReady } from "./i18n";
@@ -45,7 +45,7 @@ if (rootElement && !rootElement.innerHTML) {
 		i18nReady,
 		<StrictMode>
 			<LazyMotion features={domAnimation}>
-				{/* "user" honours the OS `prefers-reduced-motion` setting: transform and layout animations
+				{/* "user" honors the OS `prefers-reduced-motion` setting: transform and layout animations
 				    (the sidebar collapse, the mobile drawer, the content-area reflow) snap to their end
 				    state, while opacity still crossfades, so nothing becomes invisible. */}
 				<MotionConfig reducedMotion="user">

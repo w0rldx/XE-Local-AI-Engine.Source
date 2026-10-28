@@ -69,7 +69,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 {
     /// <summary>
     ///     Why a task with no rounds left was stood down and — being persisted as the task's reason, then read back to
-    ///     recognise that stand-down — the sentinel for it.
+    ///     recognize that stand-down — the sentinel for it.
     /// </summary>
     /// <remarks>
     ///     It says "rounds" rather than "review rounds" because the budget does not count review entries alone: a
@@ -328,7 +328,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         DevelopmentTrustPolicy.EnsureCurrent(project, _timeProvider);
 
         // Here rather than only in the runners, which resolve it after the attempt row is Running and the request has
-        // returned: a profile the catalog no longer honours is answered to the caller, with what to do about it.
+        // returned: a profile the catalog no longer honors is answered to the caller, with what to do about it.
         _ = DevelopmentCommandProfileCatalog.ResolveStored(project.CommandProfileJson);
         _ = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken);
 

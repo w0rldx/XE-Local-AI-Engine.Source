@@ -4,16 +4,14 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the loaded-models page (<c>/loaded-models</c>). The page lists the llama.cpp running
-///     models the process supervisor reports; the page has no Ollama in-memory section, and this suite pins that it
-///     stays gone. No llama-server runs in this host, and the running-models
-///     endpoint is defined to degrade to an OK-empty list rather than error, so the panel's empty state is the
-///     deterministic expectation.
-///     <para>
-///         SERIAL: the empty-panel assertion is a node-wide empty state, and the panel also surfaces an in-flight GGUF
-///         download as a running entry, so a pooled sibling could populate it mid-assertion.
-///     </para>
+///     Browser-driven E2E for <c>/loaded-models</c>: the llama.cpp models the process supervisor reports, with no
+///     Ollama section. No llama-server runs here and the endpoint degrades to an OK-empty list, so the empty panel
+///     is expected.
 /// </summary>
+/// <remarks>
+///     SERIAL: the empty-panel assertion is a node-wide empty state, and the panel also surfaces an in-flight GGUF
+///     download as a running entry, so a pooled sibling could populate it mid-assertion.
+/// </remarks>
 [Category("Page")]
 public sealed class LoadedModelsPageE2ETests : XESerialE2ETestBase
 {

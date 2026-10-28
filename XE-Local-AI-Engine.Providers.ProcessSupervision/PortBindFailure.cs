@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
-///     Recognises a child runtime's report that it could not bind the local port it was given: the loser of a
+///     Recognizes a child runtime's report that it could not bind the local port it was given: the loser of a
 ///     probe-then-bind race, which the next attempt fixes by allocating another port.
 /// </summary>
 /// <remarks>

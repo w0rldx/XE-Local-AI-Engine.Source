@@ -36,7 +36,7 @@ public sealed class SetAppUpdateChannelEndpoint : Endpoint<SetAppUpdateChannelRe
 
         if (!AppUpdateChannelNames.TryParse(req.Channel, out var channel))
         {
-            // Unreachable: the validator rejects anything outside the three literals before this runs. Defence in
+            // Unreachable: the validator rejects anything outside the three literals before this runs. Defense in
             // depth, because a silently defaulted channel would move the node to Stable without saying so.
             AddError("Update channel must be stable, preview or development.");
             await Send.ErrorsAsync(cancellation: ct);

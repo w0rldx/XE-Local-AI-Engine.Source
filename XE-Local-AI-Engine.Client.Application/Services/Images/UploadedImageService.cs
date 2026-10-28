@@ -94,7 +94,7 @@ public sealed class UploadedImageService
                 throw new ImageUploadRejectedException("The image header could not be read.");
             }
 
-            // sd-server decodes 3- or 4-channel input as RGB(A); a 4-component JPEG is CMYK and would come out as garbage colours.
+            // sd-server decodes 3- or 4-channel input as RGB(A); a 4-component JPEG is CMYK and would come out as garbage colors.
             if (components == 4)
             {
                 throw new ImageUploadRejectedException("CMYK JPEG images are not supported. Save the image as RGB and upload it again.");

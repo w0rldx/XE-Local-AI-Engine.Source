@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     scratch its run never got to delete.
 /// </summary>
 /// <remarks>
-///     Every recorded field is validated before anything is signalled — pid alive, process-group id, executable realpath,
+///     Every recorded field is validated before anything is signaled — pid alive, process-group id, executable realpath,
 ///     <c>/proc</c> start time, and the run token in the child's own environment — because any mismatch means a recycled pid.
 ///     That is the <c>SandboxOrphanReaper</c> model; <c>StaleProcessReaper</c>'s kill-by-executable-root model would reap
 ///     any Python this node runs, since the trainer's executable is the shared venv interpreter. The scratch sweep is age-gated
@@ -85,7 +85,7 @@ public sealed class TrainingRunStartupReaper : IHostedService
         var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
 
         // Every receipt, unpaged: a live trainer whose run sits behind a page of newer runs is exactly the one that
-        // must not be missed. Recovery no longer touches the column, so the read order against it does not matter.
+        // must not be missed. Recovery does not touch the column, so the read order against it does not matter.
         foreach (var entry in await store.ListLaunchReceiptsAsync(cancellationToken))
         {
             await ReapOneAsync(store, entry, cancellationToken);

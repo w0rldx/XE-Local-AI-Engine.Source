@@ -125,7 +125,7 @@ public sealed class RouteCoexistenceTests
         using var response = await client.SendAsync(request);
 
         // 404, not the 200 HTML shell: {*path:nonfile} still selects the SPA fallback, but the middleware after
-        // UseRouting recognises it by its marker on a path under the API prefix and detaches it, so no endpoint is
+        // UseRouting recognizes it by its marker on a path under the API prefix and detaches it, so no endpoint is
         // selected and the request ends in the pipeline's bare 404. Same pair as the dotted-asset case above.
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
@@ -147,7 +147,7 @@ public sealed class RouteCoexistenceTests
 
         // Detaching the SPA fallback leaves routing with no endpoint selected, which is precisely the case the
         // existing FallbackPolicy answers with a challenge — so an anonymous caller learns nothing about which API
-        // paths exist. The shell's own AllowAnonymous is what used to hand it a 200 instead.
+        // paths exist. The shell's own AllowAnonymous would hand it a 200 instead.
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
                 "text/html",

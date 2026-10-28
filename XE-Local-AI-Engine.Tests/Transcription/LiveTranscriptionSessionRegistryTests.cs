@@ -2276,7 +2276,7 @@ public sealed class LiveTranscriptionSessionRegistryTests
 }
 
 /// <summary>
-///     A transcriber that parks every call on a gate the test opens, and honours the cancellation token while it
+///     A transcriber that parks every call on a gate the test opens, and honors the cancellation token while it
 ///     waits — which is what makes "ending a session does not wait behind inference" an assertion rather than a hope.
 /// </summary>
 internal sealed class GatedWhisperTranscriber : IWhisperTranscriber
@@ -2407,38 +2407,6 @@ internal sealed class RecordingAudioProducer : ILiveAudioProducer
         {
             // Deliberately not linked to the caller's token: the registry's own bound is what has to release it.
             await _release.Task;
-        }
-    }
-}
-
-/// <summary>Captures formatted log messages so a test can wait on a code path that has no other observable effect.</summary>
-internal sealed class RecordingLogger<T> : ILogger<T>
-{
-    private readonly List<(LogLevel Level, string Message)> _messages = [];
-
-    public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull =>
-        null;
-
-    public bool IsEnabled(LogLevel logLevel) =>
-        true;
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-    {
-        ArgumentNullException.ThrowIfNull(formatter);
-
-        lock (_messages)
-        {
-            _messages.Add((logLevel, formatter(state, exception)));
-        }
-    }
-
-    /// <summary>How many messages contain <paramref name="fragment" />, at <paramref name="level" /> when one is given.</summary>
-    public int CountContaining(string fragment, LogLevel? level = null)
-    {
-        lock (_messages)
-        {
-            return _messages.Count(entry => (level is null || entry.Level == level) && entry.Message.Contains(fragment, StringComparison.Ordinal));
         }
     }
 }

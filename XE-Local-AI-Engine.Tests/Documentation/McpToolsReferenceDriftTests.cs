@@ -41,7 +41,7 @@ public sealed partial class McpToolsReferenceDriftTests
         AssertEx.Empty(wrongScopes, $"Documented MCP tool scopes are wrong: {string.Join("; ", wrongScopes)}");
     }
 
-    // I-D10: no tool declared annotations, so clients could not tell a read from a delete. Every tool now states all four hints.
+    // Without annotations a client cannot tell a read from a delete, so every tool states all four hints.
     [Test]
     public void EveryInboundTool_DeclaresReadOnlyDestructiveIdempotentAndOpenWorldHints()
     {

@@ -10,8 +10,8 @@ public sealed class TrainingLaunchReceipt
     public required int Pid { get; init; }
 
     /// <summary>
-    ///     Its process-group id, read from <c>/proc</c>. Signalled as a group only when it equals <see cref="Pid" />; any other
-    ///     value (the host's group before <c>setsid</c> ran, or 0 when unreadable) means the pid alone is signalled.
+    ///     Its process-group id, read from <c>/proc</c>. Signaled as a group only when it equals <see cref="Pid" />; any other
+    ///     value (the host's group before <c>setsid</c> ran, or 0 when unreadable) means the pid alone is signaled.
     /// </summary>
     public required int Pgid { get; init; }
 

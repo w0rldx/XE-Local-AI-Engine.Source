@@ -29,7 +29,7 @@ export function ImageUploadButton() {
 	};
 
 	return (
-		// The Button IS the labelled control; FileButton's own input is display:none and only opens the OS picker.
+		// The Button IS the labeled control; FileButton's own input is display:none and only opens the OS picker.
 		<FileButton
 			onChange={handleFile}
 			resetRef={resetRef}

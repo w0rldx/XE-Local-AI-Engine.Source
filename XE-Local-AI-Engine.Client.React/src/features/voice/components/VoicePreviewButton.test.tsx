@@ -6,14 +6,14 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButton";
-import type { VoiceRuntimeContextValue } from "@/features/voice/VoiceRuntimeContext";
+import type { VoiceRuntimeContextValue } from "@/features/voice/hooks/VoiceRuntimeContext";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // Controllable runtime context (component reads it via useVoiceRuntime).
 let mockContext: VoiceRuntimeContextValue;
 const previewVoice = vi.fn(() => Promise.resolve());
 
-vi.mock("@/features/voice/VoiceRuntimeContext", () => ({
+vi.mock("@/features/voice/hooks/VoiceRuntimeContext", () => ({
 	useVoiceRuntime: (): VoiceRuntimeContextValue => mockContext,
 }));
 

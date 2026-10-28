@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The image fit annotation exists so a user is not offered an 18 GB one-click install their box cannot run. Three
-///     behaviours carry that promise and each has a specific way of going wrong: only the diffusion part is charged
+///     behaviors carry that promise and each has a specific way of going wrong: only the diffusion part is charged
 ///     against VRAM (the runtime pins the text encoder and VAE to CPU, so charging the whole set would reject models
 ///     that run fine), the whole set is charged in CPU mode, and an unmeasured budget reports <c>Unknown</c> rather
 ///     than degrading to a comfortable-sounding "Fits".
@@ -85,7 +85,7 @@ public sealed class ImageModelFitEstimatorTests
     public void Estimate_WhenAGpuIsPresentButItsVramWasNeverMeasured_ReportsUnknown()
     {
         // HardwareProfiler measures VRAM through nvidia-smi only, so every AMD/Intel box lands here. Unknown must NOT
-        // degrade to Fits: the alternative is promising a 13 GB install will run on a box nobody probed.
+        // degrade to Fits: the alternative is promising a 13 GB install will run on a host nobody probed.
         var profile = new HardwareProfile
         {
             TotalRamBytes = 64 * Gb,

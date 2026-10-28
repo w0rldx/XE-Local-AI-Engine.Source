@@ -4,8 +4,8 @@ using System.Linq.Expressions;
 using FluentValidation;
 
 /// <summary>
-///     A missing version field binds to 0, which no stored row ever has (every versioned row starts at 1), so a
-///     versioned write used to answer a misleading 409 VersionConflict. It is a 400 naming the field instead.
+///     A missing version field binds to 0, which no stored row ever has (every versioned row starts at 1), so
+///     without this rule a versioned write answers a misleading 409 VersionConflict. It is a 400 naming the field instead.
 /// </summary>
 /// <remarks>
 ///     The names differ on purpose: <c>expectedVersion</c> is the version of the row the call writes;

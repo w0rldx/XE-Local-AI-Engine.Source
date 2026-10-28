@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     Cloud-provider factory contract for the Codex OAuth transport, parallel to

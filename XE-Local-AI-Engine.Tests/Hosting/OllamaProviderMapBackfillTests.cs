@@ -15,10 +15,9 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The one-time FRR-2 upgrade backfill: every installed Ollama model that has no <c>model_provider_map</c> row is
-///     mapped to <c>ollama</c> so it does not silently re-route to llama.cpp under the flipped default. Already-mapped
-///     models are left untouched (no clobbering an operator override), and a failure to list the installed models
-///     (Ollama absent/unreachable) is a no-op rather than a startup crash.
+///     The one-time upgrade backfill maps each installed Ollama model lacking a <c>model_provider_map</c> row to
+///     <c>ollama</c>, so it cannot re-route to llama.cpp under the flipped default; mapped models are untouched and an
+///     unreachable Ollama is a no-op.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class OllamaProviderMapBackfillTests

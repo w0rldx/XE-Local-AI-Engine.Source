@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins the Microsoft.Agents.AI Agent Skills contract this node depends on. These assertions are about MAF's
-///     behaviour, not ours: they exist because the skills feature was built and live-verified against 1.8.0, the pin
-///     has moved several times since, and nothing in the suite would have noticed a behavioural default changing
+///     behavior, not ours: they exist because the skills feature was built and live-verified against 1.8.0, the pin
+///     has moved several times since, and nothing in the suite would have noticed a behavioral default changing
 ///     underneath it.
 ///     A failure here is not a bug in this repo — it is notice that a package bump changed a security-relevant default
 ///     and that the call sites in <c>InvocationAgentFactory</c> and <c>SubAgentSpawnService</c> must be re-reasoned.
@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class AgentSkillsProviderContractTests
 {
-    // Both provider call sites construct with default options, so these three defaults ARE our runtime behaviour:
+    // Both provider call sites construct with default options, so these three defaults ARE our runtime behavior:
     // every skill tool arrives approval-gated. That is the correct fail-closed direction, and the reason the
     // sub-agent path has to waive the two read tools explicitly (a spawned child has no approval route).
     [Test]

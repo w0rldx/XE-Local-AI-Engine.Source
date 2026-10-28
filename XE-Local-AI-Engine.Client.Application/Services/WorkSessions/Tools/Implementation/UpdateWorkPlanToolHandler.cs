@@ -193,7 +193,7 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
         if (parsed == WorkPlanTaskOperation.Add)
         {
             // Derived, never random: the id lands inside the idempotency key, so a random one adds a retried task twice.
-            // The WHOLE batch's digest, or a repeated add re-mints its id and the store rolls back its neighbours.
+            // The WHOLE batch's digest, or a repeated add re-mints its id and the store rolls back its neighbors.
             taskId = WorkSessionOperationId.For(session.Id, session.StepCount, string.Create(CultureInfo.InvariantCulture, $"add:{index}:{batchDigest}"));
         }
         else if (!TryParseId(operation.TaskId, out taskId))

@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the durable MCP agent-run startup gate. Unlike the other startup services in this host, this one
-///     is deliberately <b>fail-fast</b>: dispatch may not begin against an unrepaired ledger, so a recovery failure has
-///     to escape <c>StartAsync</c> and take the host down rather than being logged and swallowed.
+///     The durable MCP agent-run startup gate. Unlike the host's other startup services it is <b>fail-fast</b>:
+///     dispatch may not begin against an unrepaired ledger, so a recovery failure escapes <c>StartAsync</c> and takes
+///     the host down.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunRecoveryServiceTests

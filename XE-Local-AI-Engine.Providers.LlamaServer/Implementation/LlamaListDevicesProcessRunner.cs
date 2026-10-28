@@ -21,7 +21,7 @@ internal static class LlamaListDevicesProcessRunner
     /// </summary>
     /// <remarks>
     ///     llama.cpp writes the device table to one pipe and its backend banner to the other. Genuine caller
-    ///     cancellation (<paramref name="ct" />) is honoured and rethrown; a timeout is not, degrading to null.
+    ///     cancellation (<paramref name="ct" />) is honored and rethrown; a timeout is not, degrading to null.
     /// </remarks>
     internal static async Task<string?> RunAsync(string executablePath, TimeSpan timeout, ILogger logger, CancellationToken ct)
     {

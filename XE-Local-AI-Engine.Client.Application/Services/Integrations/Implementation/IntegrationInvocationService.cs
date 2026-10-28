@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>Default <see cref="IIntegrationInvocationService" />. The step order is ADR 0008 R4-1's and the comments name why each step sits where it does.</summary>
+/// <summary>Default <see cref="IIntegrationInvocationService" />. The step order is ADR 0008's and the comments name why each step sits where it does.</summary>
 internal sealed class IntegrationInvocationService : IIntegrationInvocationService
 {
     private const string TriggerNotFoundMessage = "No such trigger.";

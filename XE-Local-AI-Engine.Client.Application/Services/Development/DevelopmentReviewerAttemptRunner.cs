@@ -27,7 +27,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
 
     private const string GenericChangeRequest = "The independent reviewer requested changes.";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly IDevelopmentCloudAttemptContextService _cloudContext;
@@ -395,7 +395,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     /// <summary>Puts the gate's structured test counts in front of the reviewer.</summary>
     /// <remarks>
     ///     "Validation passed" alone does not let a reviewer tell a change covered by twenty executed tests from one
-    ///     covered by two, and coverage of the change is exactly the judgement the review round exists to make.
+    ///     covered by two, and coverage of the change is exactly the judgment the review round exists to make.
     /// </remarks>
     private static string DescribeTestResults(DevelopmentValidationReport validation)
     {

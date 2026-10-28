@@ -116,7 +116,7 @@ public sealed class UiModeBackfillTests
         AssertEx.Equal(StoredNodeSettings.UiModeAdvanced, store.Current.UiMode);
     }
 
-    // Driven against the REAL NodeSettingsStore over a hand-corrupted file, because the behaviour under test is the
+    // Driven against the REAL NodeSettingsStore over a hand-corrupted file, because the behavior under test is the
     // difference between the tolerant and the strict read and a double is readable by definition.
     [Test]
     public async Task NodeWhoseSettingsFileIsUnreadable_WritesNothing_AndWarnsOnce()

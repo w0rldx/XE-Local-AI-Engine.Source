@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>R7-03: which exclusive GPU job a model load names, over the real gate.</summary>
+/// <summary>Which exclusive GPU job a model load names, over the real gate.</summary>
 [Category(TestCategories.Unit)]
 public sealed class GpuWorkHolderNoticeTests
 {

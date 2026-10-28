@@ -24,7 +24,7 @@ internal sealed class TrainingDatasetSampleConfiguration : IEntityTypeConfigurat
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
 
-        // Samples belong to their dataset, so the declared behaviour is cascade and the node connection enforces it. The store still deletes samples first, in the
+        // Samples belong to their dataset, so the declared behavior is cascade and the node connection enforces it. The store still deletes samples first, in the
         // same transaction, so the dataset teardown reads as one unit alongside the work items, which carry Restrict and would otherwise block the delete.
         builder.HasOne<TrainingDataset>()
                .WithMany()

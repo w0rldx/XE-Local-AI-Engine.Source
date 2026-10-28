@@ -89,7 +89,7 @@ public sealed class AddRunEnvelopeExecutionParentMigrationTests : IDisposable
         AssertEx.False(columns.Contains(KindColumn), "Rolling back one migration should drop parent_execution_kind.");
         AssertEx.False(columns.Contains(IdColumn), "Rolling back one migration should drop parent_execution_id.");
 
-        // SQLite rebuilds the table to drop a column, from the PRECEDING migration's model: pin the neighbours it must keep.
+        // SQLite rebuilds the table to drop a column, from the PRECEDING migration's model: pin the neighbors it must keep.
         AssertEx.True(columns.Contains("model_readiness_ms"), "Rolling back must not disturb the envelope columns that preceded it.");
         AssertEx.True(columns.Contains("dispatched_tier"), "Rolling back must not disturb the envelope columns that preceded it.");
     }

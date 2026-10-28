@@ -22,12 +22,12 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 /// <summary>
 ///     The External Apps module against a REAL container assembled by the production module extension, rather than
 ///     by a hand-rolled service collection.
-///     <para>
-///         It exists because nothing else would catch a mis-wired module. Every other suite in this directory
-///         constructs the service, the gates and the two hosted services by hand, so a registration that was never
-///         added — or added as the wrong lifetime — would pass all of them and fail only on a running node.
-///     </para>
 /// </summary>
+/// <remarks>
+///     It exists because nothing else would catch a mis-wired module. Every other suite in this directory constructs
+///     the service, the gates and the two hosted services by hand, so a registration that was never added, or added
+///     with the wrong lifetime, would pass all of them and fail only on a running node.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class ExternalAppsModuleRegistrationTests
 {

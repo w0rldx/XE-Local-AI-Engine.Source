@@ -7,10 +7,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the registry-fingerprint verification against the hex-case skew between eras: entries written before the
-///     sidecar era persisted UPPERCASE SHA-256 hex, while every current writer (and the freshly computed member hash)
-///     is lowercase. An ordinal compare rejected every such entry, which failed whole catalog endpoints that verify
-///     each installed model.
+///     Pins registry-fingerprint verification across hex case: entries from before the sidecar era hold UPPERCASE
+///     SHA-256 hex while current writers and the computed member hash are lowercase; an ordinal compare fails whole
+///     catalog endpoints.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class InstalledGgufSnapshotStoreTests

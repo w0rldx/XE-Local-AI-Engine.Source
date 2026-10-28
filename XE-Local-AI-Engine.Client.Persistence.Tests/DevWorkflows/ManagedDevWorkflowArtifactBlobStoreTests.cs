@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 /// <summary>
-///     The facade is seven lines of delegation over a primitive that is already tested, so the only thing that can be
-///     wrong is the four constants it passes: the folder, the leaf, the AAD column and the cap. A round trip on disk is
-///     what catches all four.
+///     The facade is seven lines of delegation over a tested primitive, so only its four constants can be wrong: the
+///     folder, the leaf, the AAD column and the cap. A round trip on disk catches all four.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ManagedDevWorkflowArtifactBlobStoreTests : IDisposable

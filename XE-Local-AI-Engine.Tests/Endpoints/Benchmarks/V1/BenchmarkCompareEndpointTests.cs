@@ -185,7 +185,7 @@ public sealed class BenchmarkCompareEndpointTests
         AssertEx.Equal(6d, delta.GetProperty("ciHigh").GetDouble());
     }
 
-    /// <summary>The whole refusal body, not just its status, because the rules behind it no longer live here.</summary>
+    /// <summary>The whole refusal body, not just its status, because the rules behind it live elsewhere.</summary>
     /// <remarks>
     ///     They answer as a <c>BenchmarkValidationException</c>, the pipe every other benchmark refusal uses, so
     ///     <c>code</c> and <c>detail</c> are as much of the contract as the 400 is.

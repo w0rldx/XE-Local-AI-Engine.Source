@@ -38,7 +38,7 @@ export function DevWorkflowNodeCostSection({ nodeRun }: { nodeRun: DevWorkflowNo
 	const ranFor =
 		nodeRun.startedAtUtc != null && nodeRun.completedAtUtc != null ? nodeRun.completedAtUtc - nodeRun.startedAtUtc : null;
 	// The envelope measures a WHOLE agent turn, tool loop included, so the remainder is time outside the turns —
-	// queueing after the node started, the settle itself — and is deliberately not labelled as tool time.
+	// queueing after the node started, the settle itself — and is deliberately not labeled as tool time.
 	const turnMs = nodeRun.agentTurnMs ?? null;
 	// How much of those turns was the local runtime launching and loading rather than generating. Null means no turn
 	// went through the warmer at all (cloud-served, or a pre-column row) — unmeasured. Non-null is measured warmer

@@ -142,14 +142,14 @@ internal static class SkillFrontmatterReader
                 return string.Empty;
             }
 
-            // Every other block-valued key we care about is a string sequence (`allowed-tools`), which normalises to
+            // Every other block-valued key we care about is a string sequence (`allowed-tools`), which normalizes to
             // the space-delimited form the specification and MAF both consume.
             return string.Join(' ', block.Select(static line => line.Trim())
                                          .Where(static line => line.StartsWith("- ", StringComparison.Ordinal) || line == "-")
                                          .Select(static line => Unquote(line[1..].Trim())));
         }
 
-        // Flow sequence: allowed-tools: [Read, Write] — also normalised to the space-delimited form.
+        // Flow sequence: allowed-tools: [Read, Write] — also normalized to the space-delimited form.
         if (raw.Length >= 2 && raw[0] == '[' && raw[^1] == ']')
         {
             return string.Join(' ', raw[1..^1].Split(',').Select(static item => Unquote(item.Trim())).Where(static item => item.Length > 0));

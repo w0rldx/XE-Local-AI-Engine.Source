@@ -91,9 +91,9 @@ public sealed class McpServerApiKeyServiceTests
     [Test]
     public async Task GetAsync_ReturnsMetadataOnly_AndCannotRecoverTheKey()
     {
-        // The inverse of the retrieval contract this surface used to have. The key is shown exactly once, at
+        // The key is never retrievable after the fact. It is shown exactly once, at
         // generation; afterwards only non-secret metadata is retrievable and a lost key can only be replaced.
-        // `McpServerApiKeyView` having no key member is the primary enforcement — this pins the behaviour that
+        // `McpServerApiKeyView` having no key member is the primary enforcement — this pins the behavior that
         // nothing retrievable can stand in for the key either.
         var service = CreateService(out _);
         var generated = await service.GenerateAsync();
@@ -267,7 +267,7 @@ public sealed class McpServerApiKeyServiceTests
 
     /// <summary>
     ///     In-memory stand-in for the EF store. Mirrors the real singleton-upsert semantics (a set REPLACES, and resets
-    ///     the timestamps) so the replacement/revocation behaviour under test is the behaviour that actually ships.
+    ///     the timestamps) so the replacement/revocation behavior under test is the behavior that actually ships.
     /// </summary>
     private sealed class InMemoryMcpServerApiKeyStore : IMcpServerApiKeyStore
     {

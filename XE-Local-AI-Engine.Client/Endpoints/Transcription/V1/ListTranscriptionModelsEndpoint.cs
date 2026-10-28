@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
-///     Lists the whisper weight catalogue with what this node knows about each row: whether it is installed, any
+///     Lists the whisper weight catalog with what this node knows about each row: whether it is installed, any
 ///     download in flight, and which ids are selected and recommended. Operator-gated; no absolute path is surfaced.
 /// </summary>
 public sealed class ListTranscriptionModelsEndpoint : EndpointWithoutRequest<TranscriptionModelListResponse>

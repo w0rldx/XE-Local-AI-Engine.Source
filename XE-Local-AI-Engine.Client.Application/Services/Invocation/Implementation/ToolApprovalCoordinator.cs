@@ -148,7 +148,7 @@ public sealed class ToolApprovalCoordinator
     ///     Reuses the pending-tool-call approval completion (resolved by <see cref="ResolveApprovalResult" />) and the
     ///     pending-tool-call age as the wait timeout; the result feeds the runner's threadless resume. Two guards run
     ///     before anything is registered or broadcast and their ORDER is security-critical: the unattended check is
-    ///     unconditional and FIRST, so no pre-authorisation populating the memo can satisfy an approval in a run with no
+    ///     unconditional and FIRST, so no pre-authorization populating the memo can satisfy an approval in a run with no
     ///     human in it. It covers every approval-required tool, not only skills — docs/wiki/04-agent-mode.md §4.6.
     /// </remarks>
     public async Task<bool> RequestToolApprovalAsync(RuntimePackage package,

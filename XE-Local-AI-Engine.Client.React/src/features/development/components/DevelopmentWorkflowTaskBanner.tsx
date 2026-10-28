@@ -16,7 +16,7 @@ export interface DevelopmentWorkflowTaskBannerProps {
 }
 
 /**
- * Says that a workflow drove this task, and where the decision that lets its patch land actually lives (Y3).
+ * Says that a workflow drove this task, and where the decision that lets its patch land actually lives.
  *
  * This matters because Dev Mode's own apply gate is still on the page. While the run is LIVE its approval is a
  * HumanGate node upstream of the integration node and the apply is the workflow's to perform — so an operator looking

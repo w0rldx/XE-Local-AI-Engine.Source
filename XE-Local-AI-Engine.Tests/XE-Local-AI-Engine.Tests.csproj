@@ -48,7 +48,7 @@
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
     <Using Include="XE_Local_AI_Engine.Client.Testing.Fakes"/>
-    <Using Include="XE_Local_AI_Engine.Tests.Categories"/>
+    <Using Include="XE_Local_AI_Engine.Client.Testing.Categories"/>
   </ItemGroup>
 
   <ItemGroup>

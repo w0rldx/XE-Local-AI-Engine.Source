@@ -4,16 +4,16 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The sandbox-path mapping, which is the same mapping <c>ProcessSandboxRuntimeProvider.ResolveJailPath</c>
-///     applies and must stay that way.
-///     <para>
-///         Callers address files identically whichever provider is in force — Development Mode's
-///         <c>DevelopmentWorkspaceSecurity.Confine</c> hands out <c>"/"</c> for the workspace root and
-///         <c>"/relative/path"</c> for a file — so the sandbox root is the workspace, not the container's <c>/</c>.
-///         The first case below is the one that was actually broken: an unmapped <c>"/"</c> reaches the wire as the
-///         container root, and every command runs somewhere with no repository in it.
-///     </para>
+///     The sandbox-path mapping, which must stay the mapping <c>ProcessSandboxRuntimeProvider.ResolveJailPath</c>
+///     applies.
 /// </summary>
+/// <remarks>
+///     Callers address files identically under either provider (Development Mode's
+///     <c>DevelopmentWorkspaceSecurity.Confine</c> hands out <c>"/"</c> for the workspace root and
+///     <c>"/relative/path"</c> for a file), so the sandbox root is the workspace, not the container's <c>/</c>. The
+///     first case pins that an unmapped <c>"/"</c> would reach the wire as the container root and run every command
+///     where no repository exists.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class DockerSandboxPathsTests
 {

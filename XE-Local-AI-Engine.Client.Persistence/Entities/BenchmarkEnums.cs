@@ -52,7 +52,7 @@ public enum BenchmarkRepeatMode
 {
     /// <summary>
     ///     Cold-launch throughput jitter: temperature 0 and one fixed seed, so every repeat produces the SAME answer
-    ///     and what varies is only what the machine did. The historical behaviour and the default.
+    ///     and what varies is only what the machine did. The historical behavior and the default.
     /// </summary>
     Throughput,
 

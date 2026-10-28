@@ -161,7 +161,7 @@ public sealed class FilePlacementConventionTests
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
-    /// <summary>A family file is exempt from one-type-per-file because it holds data; behaviour gets its own file.</summary>
+    /// <summary>A family file is exempt from one-type-per-file because it holds data; behavior gets its own file.</summary>
     /// <remarks>
     ///     A class or struct in a multi-type family file may not declare a non-private, non-override method. Records,
     ///     enums, interfaces, delegates, constants-only classes and framework plumbing that only overrides
@@ -286,7 +286,7 @@ public sealed class FilePlacementConventionTests
 
     /// <summary>The guard's own check: every shape the scanner must read, and every lookalike it must not.</summary>
     /// <remarks>
-    ///     A scanner that counts a nested type, or one that stops recognising a construct, reports an allowlist
+    ///     A scanner that counts a nested type, or one that stops recognizing a construct, reports an allowlist
     ///     nobody is holding. The non-vacuity floor on the walk is asserted here for the same reason.
     /// </remarks>
     [Test]
@@ -847,7 +847,7 @@ public sealed class FilePlacementConventionTests
                 case '{':
                     var end = SkipBalanced(body, index, '{', '}');
 
-                    // A nested class or struct is judged by the same rule, or it would carry behaviour past it.
+                    // A nested class or struct is judged by the same rule, or it would carry behavior past it.
                     if (TopLevelTypes(head + body[index..end]) is [var nested])
                     {
                         methods.AddRange(DeclaredMethods(nested).Select(method => $"{nested.Name}.{method}"));

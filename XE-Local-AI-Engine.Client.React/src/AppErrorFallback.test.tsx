@@ -14,9 +14,9 @@ const fixtures = vi.hoisted(() => ({
 	exportSupportBundle: vi.fn((..._args: unknown[]) => Promise.resolve()),
 }));
 
-vi.mock("@/features/diagnostics/UseSnapshots", () => ({ useSnapshots: () => ({ data: fixtures.snapshots }) }));
+vi.mock("@/features/diagnostics/queries/useSnapshots", () => ({ useSnapshots: () => ({ data: fixtures.snapshots }) }));
 vi.mock("@/features/diagnostics/queries/useNodeInfo", () => ({ useNodeInfo: () => ({ data: fixtures.nodeInfo }) }));
-vi.mock("@/features/diagnostics/SupportBundle", () => ({
+vi.mock("@/features/diagnostics/api/SupportBundle", () => ({
 	exportSupportBundle: (...args: unknown[]) => fixtures.exportSupportBundle(...args),
 }));
 

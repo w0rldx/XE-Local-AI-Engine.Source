@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 /// <remarks>
 ///     The optional sibling write models a concurrent whole-file writer landing between a caller's load and its write;
-///     it is applied inside <see cref="UpdateAsync" /> just before the caller's mutation. Only the locking is modelled:
+///     it is applied inside <see cref="UpdateAsync" /> just before the caller's mutation. Only the locking is modeled:
 ///     the real store's <c>Normalize</c> clamping and null-mutation guard are not, so a test that depends on either
 ///     uses the real <c>NodeSettingsStore</c>.
 /// </remarks>

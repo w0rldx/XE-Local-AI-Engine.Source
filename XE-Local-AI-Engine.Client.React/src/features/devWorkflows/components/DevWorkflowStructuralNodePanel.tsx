@@ -215,7 +215,7 @@ function DependencyRow({
  * machine reads a dead edge as `Admission.Skip` and the dispatcher writes the row `Skipped`, so on any settled gate the
  * branch not taken is a Skipped row, not a Pending one. Treating "not Pending" as taken therefore badged BOTH branches
  * of every decided gate — a lie on the one surface an operator reads to find out which way a run went. `Cancelled`
- * joins them: a run cancelled before a branch ran is not a branch the gate chose.
+ * joins them: a run canceled before a branch ran is not a branch the gate chose.
  */
 const untakenBranchStatuses: readonly DevWorkflowNodeStatus[] = ["Pending", "Skipped", "Cancelled"];
 

@@ -233,7 +233,7 @@ internal static class ModelFitMapper
 
     /// <summary>
     ///     Projects a resolved <see cref="LlamaBinary" /> to its wire DTO. <paramref name="recommendedTag" /> is the
-    ///     effective recommended tag (the editable node setting), threaded in from the endpoint — the mapper no longer
+    ///     effective recommended tag (the editable node setting), threaded in from the endpoint — the mapper never
     ///     reads the compiled-in <c>LlamaCppReleasePins.PinnedTag</c> constant for the recommended value.
     /// </summary>
     public static LlamaCppVersionResponse ToResponse(this LlamaCppRuntimeBinaryView binary, string recommendedTag)

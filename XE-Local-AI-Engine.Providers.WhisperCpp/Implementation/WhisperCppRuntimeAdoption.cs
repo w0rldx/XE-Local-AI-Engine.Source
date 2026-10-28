@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -130,9 +130,9 @@ internal sealed class WhisperCppRuntimeAdoption
         var failed = Path.Combine(backendRoot, $".failed-{descriptor.ResolvedCommit}-{descriptor.BuildId:N}");
         CreateOwnerOnlyDirectory(RuntimeRoot);
         CreateOwnerOnlyDirectory(backendRoot);
-        TryDeleteDirectory(staging);
-        TryDeleteDirectory(backup);
-        TryDeleteDirectory(failed);
+        BestEffortFile.TryDeleteDirectory(staging);
+        BestEffortFile.TryDeleteDirectory(backup);
+        BestEffortFile.TryDeleteDirectory(failed);
         Directory.Move(buildDir, staging);
         try
         {
@@ -141,7 +141,7 @@ internal sealed class WhisperCppRuntimeAdoption
             PrepareStagingTree(staging);
             var stagedServer = Path.GetFullPath(Path.Combine(staging, relativeServer));
             ValidateAdoptedServer(staging, stagedServer);
-            var digest = await ComputeSha256Async(stagedServer, ct).ConfigureAwait(false);
+            var digest = await FileSha256.ComputeAsync(stagedServer, ct).ConfigureAwait(false);
             var finalServer = Path.GetFullPath(Path.Combine(destination, relativeServer));
             var state = new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
                 descriptor.Backend,
@@ -206,7 +206,7 @@ internal sealed class WhisperCppRuntimeAdoption
         }
         catch
         {
-            TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(staging);
             throw;
         }
     }
@@ -255,7 +255,7 @@ internal sealed class WhisperCppRuntimeAdoption
     {
         foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
         {
-            // FileSystemInfo.LinkTarget reports the entry's own link, whatever the target's kind, so this recognises a
+            // FileSystemInfo.LinkTarget reports the entry's own link, whatever the target's kind, so this recognizes a
             // directory link without following it.
             var linkTarget = new FileInfo(entry).LinkTarget;
             if (linkTarget is not null)
@@ -446,7 +446,7 @@ internal sealed class WhisperCppRuntimeAdoption
                 return false;
             }
 
-            var actualSha = await ComputeSha256Async(serverPath, ct).ConfigureAwait(false);
+            var actualSha = await FileSha256.ComputeAsync(serverPath, ct).ConfigureAwait(false);
             return string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception exception) when (exception is IOException
@@ -542,12 +542,6 @@ internal sealed class WhisperCppRuntimeAdoption
         return installRoot;
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-    }
-
     private static string BackendSlug(WhisperBackend backend)
     {
         return backend switch
@@ -562,21 +556,6 @@ internal sealed class WhisperCppRuntimeAdoption
         return string.Equals(Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar),
             Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; the caller reports the primary operation.
-        }
     }
 
     private static void DeleteDirectoryStrict(string path)

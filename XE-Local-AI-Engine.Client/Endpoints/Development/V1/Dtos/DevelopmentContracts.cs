@@ -257,7 +257,7 @@ public sealed record SandboxIsolationSummaryResponse
     /// <summary>Why this role has no CPU / memory / process-count ceiling, or null when it has one.</summary>
     /// <remarks>
     ///     The same two sentences as the filesystem reason, and the same operator action behind them: the role does
-    ///     not REQUEST ceilings (whether it should is an operator decision, not a bug), or it requests them and the
+    ///     not REQUEST ceilings (whether it should is the operator's choice, not a bug), or it requests them and the
     ///     host cannot impose them.
     /// </remarks>
     public required string? ResourceLimitsUnavailableReason { get; init; }

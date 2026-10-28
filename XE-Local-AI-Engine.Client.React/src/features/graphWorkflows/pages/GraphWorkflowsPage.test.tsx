@@ -326,7 +326,7 @@ describe("GraphWorkflowsPage", () => {
 		expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(true);
 	});
 
-	// Live round, HIGH: clicking a card with unsaved edits opened "Discard unsaved changes?", because selecting a node
+	// Clicking a card with unsaved edits opened "Discard unsaved changes?", because selecting a node
 	// writes `nodeKey` through the router and the guard blocked every transition. Configuring the node you just added
 	// must not cost you the graph.
 	it("lets a dirty editor select a node without treating it as leaving the editor", async () => {

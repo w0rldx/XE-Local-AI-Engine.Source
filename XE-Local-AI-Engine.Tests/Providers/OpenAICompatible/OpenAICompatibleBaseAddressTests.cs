@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The normalized base address is the value the connect probe, the chat transport and the outbound endpoint guard
-///     all share. If normalization were not a fixed point — or admitted a shape the guard cannot pin — the guard would
-///     either reject legitimate traffic or admit a destination the operator never reviewed.
+///     The connect probe, chat transport and outbound endpoint guard share the normalized base address. Unless it is a
+///     fixed point admitting only shapes the guard can pin, the guard rejects legitimate traffic or admits an
+///     unreviewed destination.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class OpenAICompatibleBaseAddressTests

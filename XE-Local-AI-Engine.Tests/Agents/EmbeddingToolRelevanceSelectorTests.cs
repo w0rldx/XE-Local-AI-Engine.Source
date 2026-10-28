@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The node's embedding-backed tool-relevance selector. Two properties carry the design. First, it is a strict
-///     OPTIMISATION over the lexical selector: every failure shape — no model configured, a dead runtime, a partial
+///     OPTIMIZATION over the lexical selector: every failure shape — no model configured, a dead runtime, a partial
 ///     response, an unregistered provider, and above all its own timeout — degrades to the lexical selection rather
 ///     than throwing, because this one runs inside the send, in front of the first token. Second, nothing it logs
 ///     carries a tool name, a description or the user's query.

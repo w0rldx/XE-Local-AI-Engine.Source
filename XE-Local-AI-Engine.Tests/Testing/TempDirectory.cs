@@ -8,8 +8,8 @@ internal sealed class TempDirectory : IDisposable
 {
     /// <param name="prefix">Leading name segment, so a stray directory says which test left it.</param>
     /// <param name="root">
-    ///     Where to create it. Defaults to the OS temp root; a test that needs the directory to sit somewhere
-    ///     specific — under the user profile, say, to exercise home-path scrubbing — passes its own.
+    ///     Where to create it; defaults to the OS temp root. A test needing a specific spot (under the user profile,
+    ///     say, for home-path scrubbing) passes its own.
     /// </param>
     public TempDirectory(string prefix = "xe-test", string? root = null)
     {

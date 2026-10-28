@@ -19,11 +19,11 @@ export interface TranscriptionModelRowProps {
 }
 
 /**
- * One whisper catalogue row: what it costs on disk, whether this node has it, and the one action that row offers.
+ * One whisper catalog row: what it costs on disk, whether this node has it, and the one action that row offers.
  *
  * A row is in exactly one state, so it renders exactly one action. `installed` is the disk fact and the download
  * phase is the transfer fact, and they are read in that order: a row whose weights are on disk is installed even if
- * the last transfer for it was cancelled, because a stale "cancelled" beside a usable model would tell the operator
+ * the last transfer for it was canceled, because a stale "cancelled" beside a usable model would tell the operator
  * to fetch something they already have.
  */
 export function TranscriptionModelRow({

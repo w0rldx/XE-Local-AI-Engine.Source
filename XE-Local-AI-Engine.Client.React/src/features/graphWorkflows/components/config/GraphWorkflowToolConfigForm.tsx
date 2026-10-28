@@ -15,7 +15,7 @@ import type {
 	GraphWorkflowCanvasNodeData,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowToolResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { webFetchToolName } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+import { webFetchToolName } from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
 
 type ToolNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "Tool" }>;
 

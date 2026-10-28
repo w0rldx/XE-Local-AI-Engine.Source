@@ -32,7 +32,7 @@ public sealed class DevWorkflowServiceRegistrationTests
         }).Build();
         _ = builder.AddNodeDevWorkflows(configuration, new NodeStartupSettings());
 
-        // The kill switch gates behaviour, not the container: a disabled node has to answer legibly rather than 500 out
+        // The kill switch gates behavior, not the container: a disabled node has to answer legibly rather than 500 out
         // of an empty container.
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevWorkflowStore)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevWorkflowArtifactBlobStore)));
@@ -78,7 +78,7 @@ public sealed class DevWorkflowServiceRegistrationTests
     ///     The service layer's kind guard is a deny-list on <c>Development</c>, which is the whole reason a workflow
     ///     node can own a session without widening anything. Pinned by source rather than by constructing the service:
     ///     it is an internal type with eleven dependencies, and the invariant is the shape of one condition, not the
-    ///     behaviour of the graph behind it. The store-layer half is exercised for real in DevWorkflowReconcileTests.
+    ///     behavior of the graph behind it. The store-layer half is exercised for real in DevWorkflowReconcileTests.
     /// </summary>
     [Test]
     public void WorkSessionService_RejectsOnlyTheReservedDevelopmentKind()

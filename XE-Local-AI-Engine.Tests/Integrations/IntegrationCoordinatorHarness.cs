@@ -33,7 +33,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The coordinator under test with every collaborator around it: a real <see cref="LocalChatRuntimePackageBuilder" />
-///     and a real event buffer, NSubstitute for the rest, and the node's single invocation permit modelled as an actual
+///     and a real event buffer, NSubstitute for the rest, and the node's single invocation permit modeled as an actual
 ///     <see cref="SemaphoreSlim" /> because who waits on it and when is the whole of the queue-age contract.
 ///     <para>
 ///         Shared by the coordinator suite and the streaming suite: both drive one real run, and a second copy of this
@@ -57,7 +57,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     private readonly TrackingAsyncDisposable _lease;
 
     /// <summary>
-    ///     The node's single invocation permit, modelled for real rather than faked away: the queueing behaviour is
+    ///     The node's single invocation permit, modeled for real rather than faked away: the queueing behavior is
     ///     entirely about who
     ///     waits on it and when, and a lease every caller gets instantly cannot show that.
     /// </summary>

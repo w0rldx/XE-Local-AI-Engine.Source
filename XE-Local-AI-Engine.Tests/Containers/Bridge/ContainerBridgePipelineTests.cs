@@ -149,7 +149,7 @@ public sealed class ContainerBridgePipelineTests
 #pragma warning restore S5332
 
             // Loopback IS this fixture's bridge address: the listener really is bound there, so the branch predicate
-            // (which matches the whole local endpoint, not the port alone) recognises these connections.
+            // (which matches the whole local endpoint, not the port alone) recognizes these connections.
             var endpoint = new ResolvedContainerBridgeEndpoint(IPAddress.Loopback, port, $"127.0.0.1:{port}");
 
             // The production call. Loopback is already in the shipped AllowedHosts, so this changes nothing here —

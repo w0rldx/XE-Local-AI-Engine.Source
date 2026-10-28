@@ -9,9 +9,8 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The three Operator-gated session endpoints. They are deliberately NOT principal-scoped — an operator reading
-///     their own node is not acting as an integrator — so an unknown id is a plain 404 rather than the external
-///     family's masked one, and every row is reachable.
+///     The three Operator-gated session endpoints. They are deliberately NOT principal-scoped (an operator reading
+///     their own node is not an integrator), so an unknown id is a plain 404, not the masked one, and every row shows.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class IntegrationSessionEndpointTests

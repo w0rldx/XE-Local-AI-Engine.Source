@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -59,7 +59,7 @@ public sealed partial class LlamaCppBinaryManager
             EnsureManagedPathChainSecure(serverPath);
 
             // Recorded-SHA256 recompare: a swapped binary (same path, different bytes) is rejected.
-            if (!await HashMatchesAsync(serverPath, installed.Sha256, ct).ConfigureAwait(false))
+            if (!await FileSha256.MatchesAsync(serverPath, installed.Sha256, ct).ConfigureAwait(false))
             {
                 await DiscardManagedSourceRecordIfAllowedAsync(discardInvalidRecord, ct).ConfigureAwait(false);
                 return null;
@@ -186,7 +186,7 @@ public sealed partial class LlamaCppBinaryManager
                 throw new LlamaRuntimeException($"The source-built llama-server exposes no {variant} device; the requested backend was not built correctly.");
             }
 
-            var sha256 = await ComputeFileSha256Async(serverPath, ct).ConfigureAwait(false);
+            var sha256 = await FileSha256.ComputeAsync(serverPath, ct).ConfigureAwait(false);
 
             var state = new InstalledRuntimeState(tag,
                 Asset: variant switch
@@ -480,14 +480,6 @@ public sealed partial class LlamaCppBinaryManager
                 }
             }
         }
-    }
-
-    /// <summary>Computes the lowercase-hex SHA256 of a file (the local digest recorded for a source build).</summary>
-    private static async Task<string> ComputeFileSha256Async(string filePath, CancellationToken ct)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        return Convert.ToHexStringLower(hash);
     }
 
     [GeneratedRegex(@"^\s*(?:CUDA|Vulkan)[0-9]+:",

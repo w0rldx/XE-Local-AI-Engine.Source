@@ -220,7 +220,7 @@ internal sealed partial class EmitOutputToolHandler : IClientLocalToolHandler
         if (!recorded)
         {
             // The store's in-transaction reserve refused. Unreachable through the pre-check on a healthy node; this is
-            // the defence-in-depth half, and it publishes nothing.
+            // the defense-in-depth half, and it publishes nothing.
             _buffer.Abandon(execution.Id, sequence);
             return AggregateCapRefusal(execution.OutputBytes);
         }

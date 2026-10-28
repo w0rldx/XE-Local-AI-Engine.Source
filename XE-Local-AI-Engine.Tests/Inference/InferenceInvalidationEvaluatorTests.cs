@@ -141,10 +141,8 @@ public sealed class InferenceInvalidationEvaluatorTests
     [Test]
     public async Task KvCacheTypeChangedSinceFreeze_IsStale()
     {
-        // D13, end to end through the REAL fingerprint provider: the node's selected KV-cache type is part of a frozen
-        // profile's identity, so changing it drifts axis (b) and the profile must be reported stale even though the
-        // build, the hardware and the free VRAM all still match. The same wiring at the unchanged type must NOT be
-        // stale — otherwise this test would pass on any drift at all.
+        // Via the REAL fingerprint provider: the selected KV-cache type is part of a frozen profile's identity, so a
+        // change drifts axis (b) and is stale with all else matching; the unchanged type must NOT be stale (control).
         var modelPath = Path.GetTempFileName();
         var binaryDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(binaryDirectory);

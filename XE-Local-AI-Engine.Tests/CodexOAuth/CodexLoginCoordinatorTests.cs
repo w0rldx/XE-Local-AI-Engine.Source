@@ -43,9 +43,8 @@ public sealed class CodexLoginCoordinatorTests
     [Test]
     public async Task Start_WhenLoginCompletes_InvokesOnLoginSucceeded()
     {
-        // A sign-in must invalidate the active-cloud selection snapshot so the next send routes to Codex
-        // immediately. The coordinator fires onLoginSucceeded on the success transition; the host wires it to
-        // IActiveCloudChatClientFactory.InvalidateSelectionCache().
+        // A sign-in invalidates the active-cloud selection snapshot so the next send routes to Codex at once: the host
+        // wires onLoginSucceeded to IActiveCloudChatClientFactory.InvalidateSelectionCache().
         var authService = new FakeAuthService();
         var invalidations = 0;
         using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService),

@@ -24,7 +24,7 @@ export interface DevWorkflowRunSummaryPanelProps {
 	readonly cost?: DevWorkflowRunCostResponse;
 	/** Empty while a run is live: the server allows one live run per work item and the start is refused with a 409 anyway. */
 	readonly startableDefinitions: readonly DevWorkflowDefinitionSummaryResponse[];
-	/** Lifted, because the centre pane previews the picked template while the work item has nothing to show yet. */
+	/** Lifted, because the center pane previews the picked template while the work item has nothing to show yet. */
 	readonly selectedDefinitionId: string | null;
 	readonly onSelectDefinition: (definitionId: string | null) => void;
 	readonly isStarting: boolean;

@@ -54,7 +54,7 @@ public static class CanvasWorkflowImport
     private const int MaxKeyLength = 64;
 
     /// <summary>Read with the Web defaults the canvas blob was written under: camelCase members, case-insensitive.</summary>
-    private static readonly JsonSerializerOptions CanvasSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions CanvasSerializerOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     Stages every saved canvas before migrations, or reads retained recovery data after an interrupted import.

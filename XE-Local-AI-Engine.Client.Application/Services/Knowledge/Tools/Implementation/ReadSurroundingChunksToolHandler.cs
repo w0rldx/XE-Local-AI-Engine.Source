@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </remarks>
 internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly INodeRuntimeSettings _runtimeSettings;

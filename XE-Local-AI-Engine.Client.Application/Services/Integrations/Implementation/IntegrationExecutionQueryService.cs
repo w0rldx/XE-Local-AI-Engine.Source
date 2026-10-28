@@ -145,14 +145,14 @@ public sealed class IntegrationExecutionQueryService
         }
         finally
         {
-            // Step 3 runs on EVERY path, throws included. A queued row that was never signalled sits in its lease wait
-            // until MaxQueueAgeSeconds, because the durable marker is only honoured at the post-lease re-check.
+            // Step 3 runs on EVERY path, throws included. A queued row that was never signaled sits in its lease wait
+            // until MaxQueueAgeSeconds, because the durable marker is only honored at the post-lease re-check.
             _ = _cancellations.Signal(executionId);
         }
     }
 
     /// <summary>
-    ///     <see langword="true" /> when this cancel won the terminal compare-and-swap and owns the artefacts, and
+    ///     <see langword="true" /> when this cancel won the terminal compare-and-swap and owns the artifacts, and
     ///     <see langword="false" /> when it did not — which the caller resolves against the row itself, because a loss
     ///     to a terminal row and a loss to a live one are different answers.
     /// </summary>

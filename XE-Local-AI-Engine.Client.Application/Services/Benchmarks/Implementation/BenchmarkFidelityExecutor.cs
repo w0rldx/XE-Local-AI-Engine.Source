@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -18,7 +19,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     Deliberately parallel to <see cref="BenchmarkJudgeExecutor" />, with two differences that are not incidental.
 ///     There is no llama-server and therefore no readiness probe, so no launch receipt: what is stored instead is a
-///     REDUCED, explicitly-labelled evidence block, because presenting it as a full receipt would be exactly the
+///     REDUCED, explicitly-labeled evidence block, because presenting it as a full receipt would be exactly the
 ///     drift a display-only axis must not introduce. And the perplexity window is pinned to 512 while the run's
 ///     placement is replayed — the placement is what differs between compared runs, the window is what makes them comparable.
 /// </remarks>
@@ -344,7 +345,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
         finally
         {
-            BenchmarkKldBaseCache.DeleteBestEffort(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
         }
 
         _ = _cache.Trim(await _runtimeSettings.GetBenchmarkKldCacheMaxBytesAsync(token), await _store.ListLiveFidelityDigestsAsync(token));
@@ -483,7 +484,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     }
 
     /// <summary>
-    ///     A REDUCED evidence block, and labelled as one. llama-perplexity has no readiness probe, so there is no
+    ///     A REDUCED evidence block, and labeled as one. llama-perplexity has no readiness probe, so there is no
     ///     launch receipt to be had; storing this under the receipt's own shape would let a UI present partial
     ///     evidence as complete evidence.
     /// </summary>

@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -383,7 +382,7 @@ public sealed class PooledRoleLaunchAdmissionTests
             Admission = new PooledRoleLaunchAdmission(provider.GetRequiredService<IServiceScopeFactory>(), Time, Logger);
         }
 
-        public CapturingLogger<PooledRoleLaunchAdmission> Logger { get; } = new();
+        public RecordingLogger<PooledRoleLaunchAdmission> Logger { get; } = new();
 
         public PooledRoleLaunchAdmission Admission { get; }
 

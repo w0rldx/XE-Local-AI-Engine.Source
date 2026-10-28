@@ -15,10 +15,10 @@ import { IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AssistDraft } from "@/core/assist/models/AssistModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { AssistActions } from "@/features/assist/components/AssistActions";
-import type { AssistDraft } from "@/features/assist/models/AssistModels";
 import { ImageSourceThumbnail } from "@/features/images/components/ImageSourceThumbnail";
 import {
 	clearImageFormOverrides,

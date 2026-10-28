@@ -265,7 +265,7 @@ public sealed class CustomToolCatalogTests
         ReadCounter storeResolutions,
         INodeRuntimeSettings settings)
     {
-        // A REAL scope factory over a substituted store, the seam the neighbouring store-backed tests use. The catalog
+        // A REAL scope factory over a substituted store, the seam the neighboring store-backed tests use. The catalog
         // resolves ICustomToolStore exactly once per scope it opens, so the scoped factory delegate counts the scopes.
         var services = new ServiceCollection();
         services.AddScoped(_ =>

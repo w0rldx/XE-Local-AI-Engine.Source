@@ -9,13 +9,13 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Regression guard for the raw SQL run by <c>NodeChatTitleEncryptionBackfillService</c>. EF's
-///     <c>SqlQueryRaw</c> wraps the supplied SQL in <c>SELECT ... FROM (&lt;rawsql&gt;) AS x</c>, so a trailing
-///     <c>;</c> in the query text produces <c>SQLite Error 1: near ";": syntax error</c> at startup. These tests
-///     execute the exact query strings against a real SQLite context so a malformed-SQL regression fails here
-///     instead of silently failing the backfill at boot. The service swallows exceptions by design, so the query
-///     text is exercised directly.
+///     Runs the exact raw SQL of <c>NodeChatTitleEncryptionBackfillService</c> against a real SQLite context: the
+///     service swallows exceptions by design, so a malformed query would otherwise fail the backfill silently at boot.
 /// </summary>
+/// <remarks>
+///     EF's <c>SqlQueryRaw</c> wraps the supplied SQL in <c>SELECT ... FROM (&lt;rawsql&gt;) AS x</c>, so a trailing
+///     <c>;</c> in the query text produces <c>SQLite Error 1: near ";": syntax error</c> at startup.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 {

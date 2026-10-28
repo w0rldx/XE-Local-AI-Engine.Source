@@ -39,7 +39,7 @@ public abstract class XEE2ETestBase : PageTest
 
     /// <summary>
     ///     Whether a browser this harness launches runs headless. Shared rather than re-read, because a suite that
-    ///     launches its OWN browser (<see cref="XEFakeAudioE2ETestBase" />) must honour <c>HEADED</c> the same way
+    ///     launches its OWN browser (<see cref="XEFakeAudioE2ETestBase" />) must honor <c>HEADED</c> the same way
     ///     the harness's shared browser does, and two copies of an environment-variable rule drift.
     /// </summary>
     private protected static bool LaunchHeadless => !string.Equals(Environment.GetEnvironmentVariable("HEADED"), "true", StringComparison.OrdinalIgnoreCase);

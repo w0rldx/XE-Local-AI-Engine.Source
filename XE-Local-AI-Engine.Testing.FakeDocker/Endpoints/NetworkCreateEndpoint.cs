@@ -4,9 +4,8 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 
 /// <summary>
-///     <c>POST /networks/create</c>. A name that is already taken is a <c>409 Conflict</c> and nothing more — the
-///     daemon does not say whose network it is, which is exactly why the production client answers the conflict with
-///     an inspect and an ownership check rather than by reusing whatever holds the name.
+///     <c>POST /networks/create</c>. A taken name is a bare <c>409 Conflict</c>: the daemon does not say whose network
+///     it is, so the production client answers with an inspect and ownership check instead of reusing it.
 /// </summary>
 internal static class NetworkCreateEndpoint
 {

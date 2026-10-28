@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="RecommendationJsonParser" /> tests: the Context column must reflect the model's advertised
-///     maximum window (<c>context_length</c>), not llmfit's <c>effective_context_length</c> memory-estimation cap (which
-///     defaults to 8192 and previously masked every model's real context). The parser falls back to
-///     <c>effective_context_length</c> only when <c>context_length</c> is absent.
+///     <see cref="RecommendationJsonParser" /> tests: the Context column reflects the advertised <c>context_length</c>,
+///     not llmfit's <c>effective_context_length</c> estimation cap (default 8192, masking every real context), which is
+///     only the fallback when <c>context_length</c> is absent.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class RecommendationJsonParserTests

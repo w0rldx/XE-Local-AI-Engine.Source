@@ -39,8 +39,8 @@ public sealed class LayerDependencyTests
     // (Client.Application) assemblies share the same "XE_Local_AI_Engine.Client"
     // root namespace, so that single prefix covers both. Persistence lives under
     // the distinct "...Client.Persistence" sub-namespace.
-    // Non-vacuity floors for the two build-file scans below, set under the counts measured on 2026-09-16 (6
-    // repository .props/.targets files, 20 production projects; 22 once Providers.Python joined on 2026-09-27, 23 with Providers.ProcessSupervision) so a
+    // Non-vacuity floors for the two build-file scans below, set under the counts measured when set (6
+    // repository .props/.targets files, 23 production projects) so a
     // planned addition or removal is not brittle.
     // A floor equal to its measurement is not rounded down: deleting one .props file would turn a real regression
     // into a red herring about the floor.
@@ -129,9 +129,9 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 // The composition layer joins the shared wire layer so the rules it stores and the rules the transport
                 // enforces are ONE code: the encrypted external-provider store normalizes a saved base URL with the same
-                // OpenAICompatibleBaseAddress the outbound guard pins against (2026-08-27), validates header names with
+                // OpenAICompatibleBaseAddress the outbound guard pins against, validates header names with
                 // CustomHeaderRules, and the connect-time probe runs through the same ExternalEndpointGuardHandler and
-                // CustomRequestHeadersHandler as chat and health (2026-10-09). A private copy of any of them in the
+                // CustomRequestHeadersHandler as chat and health. A private copy of any of them in the
                 // application layer is precisely how the stored value and the enforced value would come to disagree. Note the ordering trap below: this
                 // name is a PREFIX of nothing, but "…Providers.OpenAICompat" IS a prefix of this one.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
@@ -156,7 +156,7 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.ServiceDefaults"] = ["XE-Local-AI-Engine.AI.Contracts"],
             ["XE-Local-AI-Engine.Providers.Abstractions"] = [],
             ["XE-Local-AI-Engine.Providers.Capabilities"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            // DELIBERATE, reviewed leaf edge (2026-10-21): Codex and the external provider share ONE stateless Responses
+            // DELIBERATE, reviewed leaf edge: Codex and the external provider share ONE stateless Responses
             // options builder in OpenAICompatible.Core. Still a leaf, so Codex reaches no sibling provider.
             ["XE-Local-AI-Engine.Providers.CodexOAuth"] =
             [
@@ -164,7 +164,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
             ],
             ["XE-Local-AI-Engine.Providers.HuggingFace"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            // DELIBERATE, reviewed second edge (2026-08-27): both OpenAI-compatible providers build on the shared wire
+            // DELIBERATE, reviewed second edge: both OpenAI-compatible providers build on the shared wire
             // layer instead of each carrying a private copy of the client construction and the request-body patch
             // discipline — a duplicated copy is how the two would drift into sending different bodies for the same
             // intent. OpenAICompatible.Core is a LEAF with no project references of its own, so this widens the graph
@@ -183,7 +183,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
             ],
             ["XE-Local-AI-Engine.Providers.OpenAICompatible.Core"] = [],
-            // DELIBERATE, reviewed leaf (2026-09-27): the one copy of child-process containment four providers used to carry.
+            // DELIBERATE, reviewed leaf: the one copy of child-process containment that four providers share.
             // It references Providers.Abstractions only and no provider, so its consumers still reach no sibling PROVIDER.
             ["XE-Local-AI-Engine.Providers.ProcessSupervision"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             // The shared uv/Python machinery: a LEAF below every provider, but unlike the reference-free
@@ -198,7 +198,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.Abstractions",
                 "XE-Local-AI-Engine.Providers.ProcessSupervision"
             ],
-            // DELIBERATE, reviewed sibling edge (2026-09-27): Training installs through the uv pipeline it shares with
+            // DELIBERATE, reviewed sibling edge: Training installs through the uv pipeline it shares with
             // the compute tool, and Providers.Python references no provider, so no provider reaches a sibling PROVIDER.
             ["XE-Local-AI-Engine.Providers.Training"] =
             [
@@ -1054,7 +1054,7 @@ public sealed class LayerDependencyTests
     /// Non-vacuity floor for the dependency rules: proves the scan still sees a real, populated assembly. A marker
     /// type that starts resolving to a different or near-empty assembly would otherwise let
     /// <see cref="AssertNoDependency"/> pass over an empty type set and report green for the wrong reason. Floors are
-    /// set below the counts measured on 2026-09-16 so a planned addition or deletion does not make them brittle.
+    /// set below the counts measured when set so a planned addition or deletion does not make them brittle.
     /// </summary>
     private static void AssertTypesScanned(Assembly assembly, string sourceNamespace, int floor)
     {

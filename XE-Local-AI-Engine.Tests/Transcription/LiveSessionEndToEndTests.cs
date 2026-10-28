@@ -16,15 +16,14 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The slice's gate: one live session driven the way a browser drives it, over the WIRED host.
-///     <para>
-///         Only <see cref="IWhisperTranscriber" /> and the <see cref="IWhisperServerSupervisor" /> the start warms
-///         it through are substituted, because a local whisper daemon is the one thing a test cannot have. The
-///         registry, the segmenter, the hub, the store and the column encryption are all real —
-///         which is the point: every other live test in this slice hands the registry a
-///         <see cref="LiveSessionOptions" /> itself, and that is precisely how a missing start path stays invisible.
-///     </para>
+///     The end-to-end gate: one live session driven the way a browser drives it, over the WIRED host.
 /// </summary>
+/// <remarks>
+///     Only <see cref="IWhisperTranscriber" /> and the <see cref="IWhisperServerSupervisor" /> the start warms it
+///     through are substituted, because a test cannot have a local whisper daemon. Registry, segmenter, hub, store
+///     and column encryption are real: every other live test hands the registry a <see cref="LiveSessionOptions" />
+///     itself, which is exactly how a missing start path stays invisible.
+/// </remarks>
 [NotInParallel(LiveSessionKey)]
 [Category(TestCategories.Integration)]
 public sealed class LiveSessionEndToEndTests

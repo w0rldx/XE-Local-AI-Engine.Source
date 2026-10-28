@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 
-/* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs the registered handler and releases the shared lease; the rule only recognises teardown of a connection created inline in the effect. */
+/* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs the registered handler and releases the shared lease; the rule only recognizes teardown of a connection created inline in the effect. */
 
 // Server-pushed "the resident set changed" tick: a llama.cpp model warmed, evicted or ejected, or an image /
 // transcription process started or stopped. The tick carries no rows; each subscribing query invalidates itself and

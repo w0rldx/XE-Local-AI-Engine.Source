@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 /// </summary>
 public sealed record WhisperServerEndpoint
 {
-    /// <summary>The catalogue id of the model currently loaded.</summary>
+    /// <summary>The catalog id of the model currently loaded.</summary>
     public required string ModelId { get; init; }
 
     /// <summary>

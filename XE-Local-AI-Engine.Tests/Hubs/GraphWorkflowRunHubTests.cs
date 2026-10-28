@@ -370,7 +370,7 @@ public sealed class GraphWorkflowRunHubTests
     }
 
     /// <summary>
-    ///     A store that actually PAGES: it honours the watermark and the limit it is called with, which is what a test
+    ///     A store that actually PAGES: it honors the watermark and the limit it is called with, which is what a test
     ///     about resuming from a cursor needs — one that answers the same rows whatever it is asked cannot see a gap.
     /// </summary>
     private static IGraphWorkflowStore PagingStore(IReadOnlyList<GraphWorkflowRunEventSnapshot> all)

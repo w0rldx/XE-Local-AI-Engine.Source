@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the RepairAndUniqueMessageSequence migration: a legacy database carrying duplicate
-///     (conversation_id, sequence) rows from the pre-lock race is deterministically renumbered before the unique index
-///     is created, and the index then enforces uniqueness. Also asserts the migration is a no-op on a clean database.
+///     Verifies the RepairAndUniqueMessageSequence migration: a legacy database's duplicate (conversation_id, sequence)
+///     rows are deterministically renumbered before the unique index enforces uniqueness; on a clean database it is a
+///     no-op.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class NodeChatSequenceMigrationTests : IDisposable

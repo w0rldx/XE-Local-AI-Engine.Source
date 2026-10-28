@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Host-side access to the bytes behind a container's workspace bind mount, under the same guards
@@ -14,7 +15,7 @@ using Microsoft.Win32.SafeHandles;
 ///     filesystem — measured: <c>400 container rootfs is marked read-only</c> regardless of destination — and the hardening contract makes
 ///     that root non-negotiable. The bind mount is the same bytes on both sides. The guards are not decoration: a command inside can plant
 ///     a symlink in the workspace and the host resolves it, so every component is probed before the write, the parent chain is re-probed
-///     after it is materialised, and on Linux the create is an <c>O_NOFOLLOW</c> <c>open(2)</c>.
+///     after it is materialized, and on Linux the create is an <c>O_NOFOLLOW</c> <c>open(2)</c>.
 /// </remarks>
 internal static class DockerWorkspaceHostFiles
 {
@@ -57,7 +58,7 @@ internal static class DockerWorkspaceHostFiles
         var parent = Path.GetDirectoryName(destination);
         if (parent is not null)
         {
-            // Validate the existing prefix BEFORE Directory.CreateDirectory, which follows an intermediate symlink and could materialise
+            // Validate the existing prefix BEFORE Directory.CreateDirectory, which follows an intermediate symlink and could materialize
             // directories outside the workspace before the later rejection. The second pass covers new components and a concurrent swap.
             EnsureNoSymlinkComponents(canonicalRoot, parent, sandboxPath);
             Directory.CreateDirectory(parent);
@@ -101,7 +102,7 @@ internal static class DockerWorkspaceHostFiles
         var current = canonicalPath;
         while (!string.Equals(current, canonicalRoot, StringComparison.Ordinal))
         {
-            if (!DockerSandboxPaths.IsUnderHostRoot(canonicalRoot, current))
+            if (!PathContainment.IsRootOrUnderCanonical(current, canonicalRoot))
             {
                 throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' escapes the workspace mount and is rejected.");
             }

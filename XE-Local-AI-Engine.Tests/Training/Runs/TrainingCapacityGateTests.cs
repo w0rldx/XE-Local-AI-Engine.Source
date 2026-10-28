@@ -9,12 +9,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Training admission goes straight onto the pending-footprint ledger, never through
-///     <c>ICapacityService</c>/<c>CapacityRequest</c>: that record is
-///     <c>(ModelName, ModelRole, RequiredContextTokens)</c> and a run has none of the three, so every field would be
-///     faked and the down-tier loop behind it would try to admit a smaller model that does not exist. The ledger is
-///     also the part that matters — it is the process-wide byte budget every concurrent spawn decision reads.
+///     Training admission goes straight onto the pending-footprint ledger, the process-wide byte budget every
+///     concurrent spawn decision reads, never through <c>ICapacityService</c>/<c>CapacityRequest</c>.
 /// </summary>
+/// <remarks>
+///     That record is <c>(ModelName, ModelRole, RequiredContextTokens)</c> and a run has none of the three, so every
+///     field would be faked and the down-tier loop would try to admit a smaller model that does not exist.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class TrainingCapacityGateTests
 {

@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -137,6 +137,174 @@ public sealed partial class LlamaServerProcessSupervisor
         bool profilingOwned = false,
         ModelResidencyIntent intent = ModelResidencyIntent.Interactive)
     {
+        var inputs = await PrepareLaunchInputsAsync(key, resolveArgs, applyLaunchPolicy, admission, benchmarkPolicy, ct).ConfigureAwait(false);
+        var variant = inputs.Variant;
+
+        // Serializes the spawn-through-readiness window of GPU-backed loads process-wide; CPU loads bypass. Acquired HERE, immediately before the cap decision that
+        // may evict, and spanning BOTH plan attempts below. On the GPU load-admission gate, see wiki 03, section Spawn attempt sequencing.
+        using var admissionTicket = variant == GpuVariant.Cpu
+            ? null
+            : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
+
+        // The central launch policy fills in the deterministic context, the GPU KV-quant + flash-attention optimization and the CPU thread policy. Replay profiling
+        // bypasses it, the frozen args BEING the experiment; explore applies it, or the fit helper reports its automatic non-replayable defaults, as seen on b9692.
+        var planSet = await BuildLaunchPlanCandidatesAsync(key,
+                variant,
+                inputs.Resolved,
+                applyLaunchPolicy,
+                inputs.Admitted?.Allocation,
+                ct)
+            .ConfigureAwait(false);
+        var planCandidates = planSet.Candidates;
+
+        Exception? optimizedFailure = null;
+        for (var attempt = 0; attempt < planCandidates.Count; attempt++)
+        {
+            var candidate = planCandidates[attempt];
+            var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
+            var port = await _reaper.AdmitAndAllocatePortAsync(key.Role, intent, ct).ConfigureAwait(false);
+
+            IProcessTreeHandle? handle = null;
+            long? readinessStartedTimestamp = null;
+            var readinessRecorded = false;
+            var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
+
+            // Latches llama.cpp's layer-placement banner out of the streamed startup output. Deliberately NOT read off automaticCapture: that buffer is bounded and
+            // at the verbosity the banner requires it is printed around line 155, outside any small window.
+            var placementSniffer = variant == GpuVariant.Cpu ? null : new LlamaServerLayerPlacementSniffer();
+
+            // Flipped once this child is serving, to detach the automatic startup capture below. It stays false for the whole load, and forever on a spawn that
+            // never reaches readiness, so the placement banner and every failure message still reach the sniffer and the startup buffer.
+            var servingWindow = new LlamaServerDiagnosticVerbosityWindow();
+            try
+            {
+                var capabilityDecision = ApplyCapabilityGate(ComposeAttemptSpec(key,
+                        inputs,
+                        candidate,
+                        port,
+                        ensureMetrics,
+                        startupCapture,
+                        fitParamsCapture,
+                        benchmarkPolicy,
+                        automaticCapture,
+                        placementSniffer,
+                        servingWindow),
+                    inputs.CapabilityManifest,
+                    ensureMetrics);
+                var spec = capabilityDecision.Spec;
+
+                var fittedArgsForSuccessfulAttempt = fitParamsCapture is not null && candidate.Resolved.ExploreMode && variant != GpuVariant.Cpu
+                    ? await RunFitParamsAsync(spec, ct).ConfigureAwait(false)
+                    : null;
+
+                readinessStartedTimestamp = _timeProvider.GetTimestamp();
+                handle = _launcher.Launch(spec);
+
+                // Receipted from here on, so a host killed mid-load leaves a record the next start can reap by; every teardown below disposes the handle,
+                // which removes it. A receipt that cannot be written leaves the raw handle, never a failed spawn.
+                handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{key.ModelName}/{key.Role} port {port}", ct).ConfigureAwait(false);
+                _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
+                    key.ModelName, key.Role, handle.ProcessId, port, LlamaServerLaunchArgumentComposer.DescribeLaunchPlan(candidate.Plan));
+
+                await WaitForReadyOrExitAsync(handle, spec.BaseAddress, inputs.ReadinessTimeout, ct).ConfigureAwait(false);
+                var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
+                _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
+                    key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, inputs.ReadinessTimeout.TotalSeconds);
+
+                var running = await RegisterReadyProcessAsync(key,
+                        inputs,
+                        candidate,
+                        spec,
+                        port,
+                        handle,
+                        readinessDuration,
+                        placementSniffer,
+                        servingWindow,
+                        fittedArgsForSuccessfulAttempt,
+                        fitParamsCapture,
+                        capabilityDecision.OmittedOptions,
+                        benchmarkPolicy,
+                        profilingOwned,
+                        ct)
+                    .ConfigureAwait(false);
+
+                // RegisterReadyProcessAsync published the Ready observation as its last step; latch it, which is what keeps the catch paths from recording a second one.
+                readinessRecorded = true;
+                return running;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
+                await TearDownFailedAttemptAsync(handle, port).ConfigureAwait(false);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Failed);
+                // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
+                // admission gate, since the reserved-port set backs the cap count) before deciding whether to fall back.
+                await TearDownFailedAttemptAsync(handle, port).ConfigureAwait(false);
+
+                ThrowIfPortWasTaken(key, port, automaticCapture, ex);
+
+                if (ShouldRetryWithSafeCandidate(ex, key, variant, canFallBack: !isSafeRetry && attempt + 1 < planCandidates.Count))
+                {
+                    optimizedFailure = ex;
+                    continue;
+                }
+
+                // A capability rejection is known before process launch, so no further candidate can change the outcome.
+                if (ex.Data.Contains(CapabilityIncompatibleMarker))
+                {
+                    throw;
+                }
+
+                if (await TryDownTierAfterOutOfMemoryAsync(key, variant, candidate, automaticCapture, planSet, ct).ConfigureAwait(false) is { } downTieredSet)
+                {
+                    planSet = downTieredSet;
+                    continue;
+                }
+
+                // Any other failure propagates, including the readiness-timeout marker the restart loop keys on.
+                throw;
+            }
+
+            void RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome outcome)
+            {
+                if (readinessRecorded || readinessStartedTimestamp is not { } started)
+                {
+                    return;
+                }
+
+                _ = RecordLoadTelemetry(key,
+                    variant,
+                    inputs.CapabilityManifest.Version ?? inputs.Binary.Version,
+                    inputs.CapabilityManifest.ExecutableSha256,
+                    _timeProvider.GetElapsedTime(started),
+                    outcome,
+                    variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
+                    candidate.AttemptKind,
+                    inputs.Speculative,
+                    inputs.Admitted);
+                readinessRecorded = true;
+            }
+        }
+
+        // Unreachable: the loop returns on success or throws on the final candidate; the fallback keeps the analyzer happy.
+        throw optimizedFailure ?? new InvalidOperationException("llama-server spawn produced no launch attempt.");
+    }
+
+    /// <summary>
+    ///     Everything a spawn resolves before the admission gate: model files, readiness deadline, speculative
+    ///     settings, the launched binary and its manifest, launch args and operator flags.
+    /// </summary>
+    private async Task<SpawnLaunchInputs> PrepareLaunchInputsAsync(ProcessKey key,
+        Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
+        bool applyLaunchPolicy,
+        ProcessLaunchAdmission? admission,
+        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy,
+        CancellationToken ct)
+    {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(modelFilePath))
         {
@@ -171,10 +339,59 @@ public sealed partial class LlamaServerProcessSupervisor
         // retry it before it can finish (a measured hang). A missing or unreadable size (0) falls back to the base timeout.
         var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath) + adapterSizeBytes);
 
-        // A chat-role EXTERNAL-DRAFT speculative mode must find its draft GGUF before launch, or llama-server dies cryptically: a deterministic misconfiguration,
-        // so non-retryable like the model-not-installed guard above. The operator names an installed chat model; an explicit SpeculativeDraftModelPath wins.
         var launchTuning = LlamaServerLaunchArgumentComposer.ResolveChatLaunchTuning(benchmarkPolicy, _options);
-        var speculative = launchTuning.Speculative;
+        var speculative = await ResolveSpeculativeAsync(key, launchTuning.Speculative, ct).ConfigureAwait(false);
+
+        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        if (admission is not null)
+        {
+            await EnsureAdmissionStillMatchesAsync(key, variant, admission, modelFilePath, ct).ConfigureAwait(false);
+        }
+
+        var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+
+        // Follow the binary actually launched: the manager can serve a DIFFERENT variant than was selected, and everything below keys off this one. The admission
+        // identity check above stays on the SELECTED variant. On following the served binary, see wiki 03, section Spawn attempt sequencing, startup capture and one-shot fallbacks.
+        variant = binary.Variant;
+        var capabilityManifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
+        if (!capabilityManifest.ProbeSucceeded)
+        {
+            throw NonRetryable("The selected llama.cpp runtime could not report its supported server options. Reinstall or rebuild the runtime and try again.");
+        }
+
+        // Resolve the launch args (frozen-profile replay, explore-mode auto-fit or operator-supplied profiling args) BEFORE the admission gate, so a slow profile
+        // read never stalls admission for other keys. A ticket whose variant the override moved off carries NOTHING that applies here, so drop it. See wiki 03.
+        var admitted = admission?.Variant == variant ? admission : null;
+        var resolved = admitted?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
+
+        // Per-model operator flags, resolved alongside the profile args and BEFORE the admission gate, and ONLY on the normal serving path so a benchmark or
+        // profiling spawn stays a pure measurement. Never throws. See wiki 03, "Spawn attempt sequencing…" (operator extra launch arguments) for what is stripped.
+        var extraLaunchArgs = applyLaunchPolicy
+            ? await _extraArgumentsResolver.ResolveAsync(key.ModelName, key.Role, ct).ConfigureAwait(false)
+            : [];
+
+        return new SpawnLaunchInputs(modelFilePath,
+            adapterFilePath,
+            projectorFilePath,
+            readinessTimeout,
+            launchTuning,
+            speculative,
+            variant,
+            binary,
+            capabilityManifest,
+            admitted,
+            resolved,
+            extraLaunchArgs);
+    }
+
+    /// <summary>
+    ///     Settles the speculative-decoding settings a chat launch uses: an external-draft mode must find its draft
+    ///     GGUF, and a main-model-heads mode drops a configured draft path.
+    /// </summary>
+    private async Task<SpeculativeDecodingSettings> ResolveSpeculativeAsync(ProcessKey key, SpeculativeDecodingSettings speculative, CancellationToken ct)
+    {
+        // A chat-role EXTERNAL-DRAFT speculative mode must find its draft GGUF before launch, or llama-server dies cryptically: a deterministic misconfiguration,
+        // so non-retryable like the model-not-installed guard. The operator names an installed chat model; an explicit SpeculativeDraftModelPath wins.
         if (key.Role == ModelRole.Chat && speculative.RequiresExternalDraftModel)
         {
             var draftModelPath = speculative.DraftModelPath;
@@ -207,428 +424,421 @@ public sealed partial class LlamaServerProcessSupervisor
                 speculative.NormalizedMode);
         }
 
-        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
-        if (admission is not null)
-        {
-            if (variant != admission.Variant)
-            {
-                throw NonRetryable("The admitted local model launch no longer matches the selected runtime.");
-            }
+        return speculative;
+    }
 
-            var facts = await _modelStore.ResolveModelFootprintFactsAsync(key.ModelName, ct).ConfigureAwait(false);
-            var contentIdentity = facts?.ContentIdentity ?? $"{key.ModelName}:{facts?.FileSizeBytes ?? TryGetFileSizeBytes(modelFilePath)}";
-            if (!string.Equals(contentIdentity, admission.Allocation.ContentIdentity, StringComparison.Ordinal))
+    /// <summary>
+    ///     Refuses, non-retryably, an admission ticket issued for a different runtime variant or a different installed
+    ///     model file than the one about to launch.
+    /// </summary>
+    private async Task EnsureAdmissionStillMatchesAsync(ProcessKey key,
+        GpuVariant selectedVariant,
+        ProcessLaunchAdmission admission,
+        string modelFilePath,
+        CancellationToken ct)
+    {
+        if (selectedVariant != admission.Variant)
+        {
+            throw NonRetryable("The admitted local model launch no longer matches the selected runtime.");
+        }
+
+        var facts = await _modelStore.ResolveModelFootprintFactsAsync(key.ModelName, ct).ConfigureAwait(false);
+        var contentIdentity = facts?.ContentIdentity ?? $"{key.ModelName}:{facts?.FileSizeBytes ?? TryGetFileSizeBytes(modelFilePath)}";
+        if (!string.Equals(contentIdentity, admission.Allocation.ContentIdentity, StringComparison.Ordinal))
+        {
+            throw NonRetryable("The admitted local model launch no longer matches the installed model.");
+        }
+    }
+
+    /// <summary>
+    ///     Builds one candidate's launch spec: the composed arguments, the operator's extra flags, the diagnostic
+    ///     metrics and verbosity fill-ins, and the startup-output sink.
+    /// </summary>
+    private static LlamaServerLaunchSpec ComposeAttemptSpec(ProcessKey key,
+        SpawnLaunchInputs inputs,
+        LlamaServerLaunchCandidate candidate,
+        int port,
+        bool ensureMetrics,
+        Action<string>? startupCapture,
+        Action<string>? fitParamsCapture,
+        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy,
+        LlamaServerBoundedStartupCapture? automaticCapture,
+        LlamaServerLayerPlacementSniffer? placementSniffer,
+        LlamaServerDiagnosticVerbosityWindow servingWindow)
+    {
+        var variant = inputs.Variant;
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key, inputs.Binary.ServerExecutablePath, inputs.ModelFilePath, port, variant, candidate.Resolved,
+            inputs.LaunchTuning.ChatCacheReuse,
+            inputs.Speculative,
+            candidate.Plan,
+            inputs.LaunchTuning.ChatCacheRamMiB,
+            inputs.ProjectorFilePath,
+            inputs.AdapterFilePath,
+            // The id clients route by, so a relayed response names the model rather than its absolute host path. Same capability gate as the
+            // transient launcher; a runtime without --alias keeps serving under the path.
+            inputs.CapabilityManifest.SupportsOption(LlamaServerManagedFlags.Alias) ? key.ModelName : null);
+
+        // Appended LAST so the operator's flags win over the bundled tuning defaults (llama.cpp is last-wins for scalar flags), but BEFORE the diagnostic
+        // metrics/verbosity fill-ins below, so those checks see an operator-supplied flag of the same name and do not duplicate it.
+        if (inputs.ExtraLaunchArgs.Count > 0)
+        {
+            spec = spec with
             {
-                throw NonRetryable("The admitted local model launch no longer matches the installed model.");
+                Arguments = [.. spec.Arguments, .. inputs.ExtraLaunchArgs]
+            };
+        }
+
+        // Benchmark spawns need /metrics on ANY variant. Both GPU modes emit it themselves, so this now only
+        // fills in the CPU case — and guards against a future spec shape that omits it.
+        if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
+        {
+            spec = spec with
+            {
+                Arguments = [.. spec.Arguments, "--metrics"]
+            };
+        }
+
+        // Raise log verbosity just enough to make llama.cpp print how many layers actually landed on the GPU. EVERY GPU spawn pays this, deliberately; the
+        // explore path is skipped (already at maximum) and a benchmark spawn is the exception among profiling spawns. Why: wiki 03, "Spawn attempt sequencing…".
+        if ((fitParamsCapture is null || benchmarkPolicy is not null)
+            && placementSniffer is not null
+            && variant != GpuVariant.Cpu
+            && !LlamaServerLaunchArgumentComposer.HasVerbosityArgument(spec.Arguments))
+        {
+            spec = spec with
+            {
+                Arguments = [.. spec.Arguments, "-lv", PlacementProbeLogVerbosity]
+            };
+        }
+
+        // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
+        if (startupCapture is not null || automaticCapture is not null || placementSniffer is not null)
+        {
+            // The sink is wired for the process's LIFETIME, but the two automatic buffers behind it are startup-only and detach at readiness; the operator
+            // profiling sink is NOT detached, since that output was explicitly requested. On why, see wiki 03, section Spawn attempt sequencing, under startup capture.
+            var isServing = servingWindow.IsServing;
+            spec = spec with
+            {
+                StartupCapture = line =>
+                {
+                    startupCapture?.Invoke(line);
+                    if (isServing())
+                    {
+                        return;
+                    }
+
+                    automaticCapture?.Add(line);
+                    placementSniffer?.Add(line);
+                }
+            };
+        }
+
+        if (fitParamsCapture is not null
+            && candidate.Resolved.ExploreMode
+            && variant != GpuVariant.Cpu
+            && !spec.Arguments.Contains("-v", StringComparer.Ordinal)
+            && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
+        {
+            // The fit helper (observed on b9692) leaves the layer count at its automatic sentinel when the initial placement already fits. Verbose tensor-load
+            // output is the authoritative proof that automatic placement offloaded every layer; the fit parser uses it to normalize replay to explicit all-layers.
+            spec = spec with
+            {
+                Arguments = [.. spec.Arguments, "-v"]
+            };
+        }
+
+        return spec;
+    }
+
+    /// <summary>
+    ///     Gates a composed spec on the runtime's capability manifest: an incompatible spec fails before launch, and
+    ///     omitted optional options are logged.
+    /// </summary>
+    private LlamaServerCapabilityDecision ApplyCapabilityGate(LlamaServerLaunchSpec spec, LlamaServerCapabilityManifest capabilityManifest, bool ensureMetrics)
+    {
+        var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, capabilityManifest, ensureMetrics);
+        if (!capabilityDecision.IsCompatible)
+        {
+            throw CapabilityIncompatible(capabilityDecision.SanitizedError!, capabilityDecision.CanTrySafeFallback);
+        }
+
+        if (capabilityDecision.OmittedOptions.Count > 0)
+        {
+            _logger.LogWarning("The selected llama-server runtime lacks optional capabilities {Options}; those launch optimizations were omitted.",
+                string.Join(", ", capabilityDecision.OmittedOptions));
+        }
+
+        return capabilityDecision;
+    }
+
+    /// <summary>
+    ///     Runs the sibling <c>llama-fit-params</c> helper for an explore spawn; <see langword="null" /> when it is
+    ///     missing or failed, in which case the live spawn stays auto-fit and no placement profile is drafted.
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> RunFitParamsAsync(LlamaServerLaunchSpec spec, CancellationToken ct)
+    {
+        var fitResult = await _fitParamsRunner.RunAsync(spec, ct).ConfigureAwait(false);
+        if (fitResult.Status == LlamaFitParamsRunStatus.Succeeded)
+        {
+            return fitResult.StandardOutput;
+        }
+
+        if (fitResult.Status == LlamaFitParamsRunStatus.MissingCapability)
+        {
+            _logger.LogWarning(
+                "The resolved llama.cpp runtime does not expose the sibling llama-fit-params capability; the live explore spawn will remain auto-fit, but no placement profile will be drafted.");
+        }
+        else
+        {
+            _logger.LogWarning("llama-fit-params acquisition failed ({Reason}); the live explore spawn will remain auto-fit, but no placement profile will be drafted.",
+                fitResult.FailureReason ?? "unknown failure");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Post-readiness bookkeeping for a ready child: placement, startup-capture detach, fit output, effective
+    ///     context and registration, then, last, the Ready load observation.
+    /// </summary>
+    /// <remarks>
+    ///     Any throw before the final publish leaves the caller's catch paths to tree-kill the child and record the
+    ///     failed outcome exactly once.
+    /// </remarks>
+    private async Task<RunningProcess> RegisterReadyProcessAsync(ProcessKey key,
+        SpawnLaunchInputs inputs,
+        LlamaServerLaunchCandidate candidate,
+        LlamaServerLaunchSpec spec,
+        int port,
+        IProcessTreeHandle handle,
+        TimeSpan readinessDuration,
+        LlamaServerLayerPlacementSniffer? placementSniffer,
+        LlamaServerDiagnosticVerbosityWindow servingWindow,
+        IReadOnlyList<string>? fittedArgsForSuccessfulAttempt,
+        Action<string>? fitParamsCapture,
+        IReadOnlyList<string> omittedOptions,
+        LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy,
+        bool profilingOwned,
+        CancellationToken ct)
+    {
+        var variant = inputs.Variant;
+        var expertsOffloaded = PinsExpertsToCpu(spec.Arguments);
+        var placement = RecordObservedLayerPlacement(key, variant, placementSniffer, expertsOffloaded);
+
+        // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness bookkeeping can still throw and tree-kill the child, and
+        // the caller latches its readiness flag only after this method returns, so a catch path records the failed outcome exactly once. Why: wiki 03, "Spawn attempt sequencing…".
+        var loadObservation = BuildLoadObservation(key,
+            variant,
+            inputs.CapabilityManifest.Version ?? inputs.Binary.Version,
+            inputs.CapabilityManifest.ExecutableSha256,
+            readinessDuration,
+            LlamaServerReadinessOutcome.Ready,
+            placement.Outcome,
+            candidate.AttemptKind,
+            inputs.Speculative,
+            inputs.Admitted);
+
+        // The load window is over and the banner has been read: detach the automatic startup capture
+        // (same latch as the StartupCapture wiring in ComposeAttemptSpec). Deliberately after RecordObservedLayerPlacement, and never reached on a spawn that failed to be ready.
+        servingWindow.MarkServing();
+
+        // Publish helper output only for the candidate that actually reached readiness. If the optimized
+        // production policy failed and the safe plan retried, output from the failed candidate must not be frozen.
+        if (fittedArgsForSuccessfulAttempt is not null)
+        {
+            foreach (var line in fittedArgsForSuccessfulAttempt)
+            {
+                fitParamsCapture!(line);
             }
         }
 
-        var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+        // Read the effective per-slot context the server actually loaded (best-effort) so both app-side
+        // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
+        var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
 
-        // Follow the binary actually launched: the manager can serve a DIFFERENT variant than was selected, and everything below keys off this one. The admission
-        // identity check above stays on the SELECTED variant. On following the served binary, see wiki 03, section Spawn attempt sequencing, startup capture and one-shot fallbacks.
-        variant = binary.Variant;
-        var capabilityManifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
-        if (!capabilityManifest.ProbeSucceeded)
-        {
-            throw NonRetryable("The selected llama.cpp runtime could not report its supported server options. Reinstall or rebuild the runtime and try again.");
-        }
-
-        // Resolve the launch args (frozen-profile replay, explore-mode auto-fit or operator-supplied profiling args) BEFORE the admission gate, so a slow profile
-        // read never stalls admission for other keys. A ticket whose variant the override moved off carries NOTHING that applies here, so drop it. See wiki 03.
-        var admitted = admission?.Variant == variant ? admission : null;
-        var resolved = admitted?.ResolvedArguments ?? await resolveArgs(variant, ct).ConfigureAwait(false);
-
-        // Per-model operator flags, resolved alongside the profile args and BEFORE the admission gate, and ONLY on the normal serving path so a benchmark or
-        // profiling spawn stays a pure measurement. Never throws. See wiki 03, "Spawn attempt sequencing…" (operator extra launch arguments) for what is stripped.
-        var extraLaunchArgs = applyLaunchPolicy
-            ? await _extraArgumentsResolver.ResolveAsync(key.ModelName, key.Role, ct).ConfigureAwait(false)
-            : [];
-
-        // Serializes the spawn-through-readiness window of GPU-backed loads process-wide; CPU loads bypass. Acquired HERE, immediately before the cap decision that
-        // may evict, and spanning BOTH plan attempts below. On the GPU load-admission gate, see wiki 03, section Spawn attempt sequencing.
-        using var admissionTicket = variant == GpuVariant.Cpu
+        // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is genuinely serving. The projection is read
+        // back out of the FINAL argv, not recomputed. On why, and why assembly is non-throwing, see wiki 03, section Spawn attempt sequencing, under the benchmark launch receipt.
+        var launchReceipt = benchmarkPolicy is null
             ? null
-            : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
-
-        // The central launch policy fills in the deterministic context, the GPU KV-quant + flash-attention optimization and the CPU thread policy. Replay profiling
-        // bypasses it, the frozen args BEING the experiment; explore applies it, or the fit helper reports its automatic non-replayable defaults, as seen on b9692.
-        var planSet = await BuildLaunchPlanCandidatesAsync(key,
-                variant,
-                resolved,
-                applyLaunchPolicy,
-                admitted?.Allocation,
-                ct)
-            .ConfigureAwait(false);
-        var planCandidates = planSet.Candidates;
-
-        Exception? optimizedFailure = null;
-        for (var attempt = 0; attempt < planCandidates.Count; attempt++)
-        {
-            var candidate = planCandidates[attempt];
-            var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
-            var port = await _reaper.AdmitAndAllocatePortAsync(key.Role, intent, ct).ConfigureAwait(false);
-
-            IProcessTreeHandle? handle = null;
-            long? readinessStartedTimestamp = null;
-            var readinessRecorded = false;
-            var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
-
-            // Latches llama.cpp's layer-placement banner out of the streamed startup output. Deliberately NOT read off automaticCapture: that buffer is bounded and
-            // at the verbosity the banner requires it is printed around line 155, outside any small window.
-            var placementSniffer = variant == GpuVariant.Cpu ? null : new LlamaServerLayerPlacementSniffer();
-
-            // Flipped once this child is serving, to detach the automatic startup capture below. It stays false for the whole load, and forever on a spawn that
-            // never reaches readiness, so the placement banner and every failure message still reach the sniffer and the startup buffer.
-            var servingWindow = new LlamaServerDiagnosticVerbosityWindow();
-            try
-            {
-                var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
-                    launchTuning.ChatCacheReuse,
-                    speculative,
+            : await BuildBenchmarkLaunchReceiptAsync(variant,
+                inputs.CapabilityManifest.Version ?? inputs.Binary.Version,
+                inputs.CapabilityManifest.ExecutableSha256,
+                LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
+                ?? LlamaServerLaunchProjection.From(variant,
+                    candidate.Resolved,
                     candidate.Plan,
-                    launchTuning.ChatCacheRamMiB,
-                    projectorFilePath,
-                    adapterFilePath,
-                    // The id clients route by, so a relayed response names the model rather than its absolute host path. Same capability gate as the
-                    // transient launcher; a runtime without --alias keeps serving under the path.
-                    capabilityManifest.SupportsOption(LlamaServerManagedFlags.Alias) ? key.ModelName : null);
+                    key.Role,
+                    inputs.LaunchTuning.ChatCacheReuse,
+                    inputs.LaunchTuning.ChatCacheRamMiB),
+                new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(inputs.AdapterFilePath),
+                    !string.IsNullOrWhiteSpace(inputs.ProjectorFilePath),
+                    !string.IsNullOrWhiteSpace(inputs.Speculative.DraftModelPath)),
+                placement,
+                effectiveContext,
+                benchmarkPolicy,
+                handle.ProcessId,
+                omittedOptions).ConfigureAwait(false);
 
-                // Appended LAST so the operator's flags win over the bundled tuning defaults (llama.cpp is last-wins for scalar flags), but BEFORE the diagnostic
-                // metrics/verbosity fill-ins below, so those checks see an operator-supplied flag of the same name and do not duplicate it.
-                if (extraLaunchArgs.Count > 0)
-                {
-                    spec = spec with
-                    {
-                        Arguments = [.. spec.Arguments, .. extraLaunchArgs]
-                    };
-                }
+        var endpoint = new LlamaServerEndpoint
+        {
+            ModelName = key.ModelName,
+            Role = key.Role,
+            BaseAddress = spec.BaseAddress
+        };
+        var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
+        {
+            EffectiveContextTokens = effectiveContext,
+            ExpertsOffloaded = expertsOffloaded,
+            SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
+            LoadObservation = loadObservation,
+            LaunchReceipt = launchReceipt,
+            IsProfilingOwned = profilingOwned,
+            AwaitingFirstLease = true,
 
-                // Benchmark spawns need /metrics on ANY variant. Both GPU modes emit it themselves, so this now only
-                // fills in the CPU case — and guards against a future spec shape that omits it.
-                if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
-                {
-                    spec = spec with
-                    {
-                        Arguments = [.. spec.Arguments, "--metrics"]
-                    };
-                }
+            // The spawn's in-flight record is still registered here; it carries the mark past a transient caller that cancelled its wait.
+            IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient
+        };
+        _processes[key] = running;
+        _residencyNotifier.NotifyChanged();
+        _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
 
-                // Raise log verbosity just enough to make llama.cpp print how many layers actually landed on the GPU. EVERY GPU spawn pays this, deliberately; the
-                // explore path is skipped (already at maximum) and a benchmark spawn is the exception among profiling spawns. Why: wiki 03, "Spawn attempt sequencing…".
-                if ((fitParamsCapture is null || benchmarkPolicy is not null)
-                    && placementSniffer is not null
-                    && variant != GpuVariant.Cpu
-                    && !LlamaServerLaunchArgumentComposer.HasVerbosityArgument(spec.Arguments))
-                {
-                    spec = spec with
-                    {
-                        Arguments = [.. spec.Arguments, "-lv", PlacementProbeLogVerbosity]
-                    };
-                }
-
-                // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
-                if (startupCapture is not null || automaticCapture is not null || placementSniffer is not null)
-                {
-                    // The sink is wired for the process's LIFETIME, but the two automatic buffers behind it are startup-only and detach at readiness; the operator
-                    // profiling sink is NOT detached, since that output was explicitly requested. On why, see wiki 03, section Spawn attempt sequencing, under startup capture.
-                    var isServing = servingWindow.IsServing;
-                    spec = spec with
-                    {
-                        StartupCapture = line =>
-                        {
-                            startupCapture?.Invoke(line);
-                            if (isServing())
-                            {
-                                return;
-                            }
-
-                            automaticCapture?.Add(line);
-                            placementSniffer?.Add(line);
-                        }
-                    };
-                }
-
-                if (fitParamsCapture is not null
-                    && candidate.Resolved.ExploreMode
-                    && variant != GpuVariant.Cpu
-                    && !spec.Arguments.Contains("-v", StringComparer.Ordinal)
-                    && !spec.Arguments.Contains("--verbose", StringComparer.Ordinal))
-                {
-                    // The fit helper (observed on b9692) leaves the layer count at its automatic sentinel when the initial placement already fits. Verbose tensor-load
-                    // output is the authoritative proof that automatic placement offloaded every layer; the fit parser uses it to normalize replay to explicit all-layers.
-                    spec = spec with
-                    {
-                        Arguments = [.. spec.Arguments, "-v"]
-                    };
-                }
-
-                var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, capabilityManifest, ensureMetrics);
-                if (!capabilityDecision.IsCompatible)
-                {
-                    throw CapabilityIncompatible(capabilityDecision.SanitizedError!, capabilityDecision.CanTrySafeFallback);
-                }
-
-                spec = capabilityDecision.Spec;
-                if (capabilityDecision.OmittedOptions.Count > 0)
-                {
-                    _logger.LogWarning("The selected llama-server runtime lacks optional capabilities {Options}; those launch optimizations were omitted.",
-                        string.Join(", ", capabilityDecision.OmittedOptions));
-                }
-
-                IReadOnlyList<string>? fittedArgsForSuccessfulAttempt = null;
-                if (fitParamsCapture is not null && candidate.Resolved.ExploreMode && variant != GpuVariant.Cpu)
-                {
-                    var fitResult = await _fitParamsRunner.RunAsync(spec, ct).ConfigureAwait(false);
-                    if (fitResult.Status == LlamaFitParamsRunStatus.Succeeded)
-                    {
-                        fittedArgsForSuccessfulAttempt = fitResult.StandardOutput;
-                    }
-                    else if (fitResult.Status == LlamaFitParamsRunStatus.MissingCapability)
-                    {
-                        _logger.LogWarning(
-                            "The resolved llama.cpp runtime does not expose the sibling llama-fit-params capability; the live explore spawn will remain auto-fit, but no placement profile will be drafted.");
-                    }
-                    else
-                    {
-                        _logger.LogWarning("llama-fit-params acquisition failed ({Reason}); the live explore spawn will remain auto-fit, but no placement profile will be drafted.",
-                            fitResult.FailureReason ?? "unknown failure");
-                    }
-                }
-
-                readinessStartedTimestamp = _timeProvider.GetTimestamp();
-                handle = _launcher.Launch(spec);
-
-                // Receipted from here on, so a host killed mid-load leaves a record the next start can reap by; every teardown below disposes the handle,
-                // which removes it. A receipt that cannot be written leaves the raw handle, never a failed spawn.
-                handle = await _spawnReceipts.TrackAsync(handle, spec.ExecutablePath, $"{key.ModelName}/{key.Role} port {port}", ct).ConfigureAwait(false);
-                _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
-                    key.ModelName, key.Role, handle.ProcessId, port, LlamaServerLaunchArgumentComposer.DescribeLaunchPlan(candidate.Plan));
-
-                await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
-                var readinessDuration = _timeProvider.GetElapsedTime(readinessStartedTimestamp.Value);
-                _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
-                    key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, readinessTimeout.TotalSeconds);
-
-                var expertsOffloaded = PinsExpertsToCpu(spec.Arguments);
-                var placement = RecordObservedLayerPlacement(key, variant, placementSniffer, expertsOffloaded);
-
-                // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness bookkeeping can still throw and tree-kill the child, and
-                // readinessRecorded stays false until the publish so a catch path records the failed outcome exactly once. Why: wiki 03, "Spawn attempt sequencing…".
-                var loadObservation = BuildLoadObservation(key,
-                    variant,
-                    capabilityManifest.Version ?? binary.Version,
-                    capabilityManifest.ExecutableSha256,
-                    readinessDuration,
-                    LlamaServerReadinessOutcome.Ready,
-                    placement.Outcome,
-                    candidate.AttemptKind,
-                    speculative,
-                    admitted);
-
-                // The load window is over and the banner has been read: detach the automatic startup capture
-                // (same latch as the StartupCapture wiring above). Deliberately after RecordObservedLayerPlacement, and never reached on a spawn that failed to be ready.
-                servingWindow.MarkServing();
-
-                // Publish helper output only for the candidate that actually reached readiness. If the optimized
-                // production policy failed and the safe plan retried, output from the failed candidate must not be frozen.
-                if (fittedArgsForSuccessfulAttempt is not null)
-                {
-                    foreach (var line in fittedArgsForSuccessfulAttempt)
-                    {
-                        fitParamsCapture!(line);
-                    }
-                }
-
-                // Read the effective per-slot context the server actually loaded (best-effort) so both app-side
-                // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
-                var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
-
-                // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is genuinely serving. The projection is read
-                // back out of the FINAL argv, not recomputed. On why, and why assembly is non-throwing, see wiki 03, section Spawn attempt sequencing, under the benchmark launch receipt.
-                var launchReceipt = benchmarkPolicy is null
-                    ? null
-                    : await BuildBenchmarkLaunchReceiptAsync(variant,
-                        capabilityManifest.Version ?? binary.Version,
-                        capabilityManifest.ExecutableSha256,
-                        LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
-                        ?? LlamaServerLaunchProjection.From(variant,
-                            candidate.Resolved,
-                            candidate.Plan,
-                            key.Role,
-                            launchTuning.ChatCacheReuse,
-                            launchTuning.ChatCacheRamMiB),
-                        new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(adapterFilePath),
-                            !string.IsNullOrWhiteSpace(projectorFilePath),
-                            !string.IsNullOrWhiteSpace(speculative.DraftModelPath)),
-                        placement,
-                        effectiveContext,
-                        benchmarkPolicy,
-                        handle.ProcessId,
-                        capabilityDecision.OmittedOptions).ConfigureAwait(false);
-
-                var endpoint = new LlamaServerEndpoint
-                {
-                    ModelName = key.ModelName,
-                    Role = key.Role,
-                    BaseAddress = spec.BaseAddress
-                };
-                var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
-                {
-                    EffectiveContextTokens = effectiveContext,
-                    ExpertsOffloaded = expertsOffloaded,
-                    SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
-                    LoadObservation = loadObservation,
-                    LaunchReceipt = launchReceipt,
-                    IsProfilingOwned = profilingOwned,
-                    AwaitingFirstLease = true,
-
-                    // The spawn's in-flight record is still registered here; it carries the mark past a transient caller that cancelled its wait.
-                    IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient
-                };
-                _processes[key] = running;
-                _residencyNotifier.NotifyChanged();
-                _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
-
-                if (isSafeRetry)
-                {
-                    // The safe config reached readiness where the optimized (KV-quant + flash-attention) one could not, so the optimized config is the culprit for
-                    // THIS backend; record it, keyed on the node's CURRENT KV selection. On why, see wiki 03, section Spawn attempt sequencing, under the safe-retry verdict.
-                    if (candidate.Plan is { CpuMoe: true })
-                    {
-                        // An expert-offload spawn is the most VRAM-marginal launch on the host, so a one-shot success without KV quantization proves nothing about KV
-                        // (placement or transient pressure could have failed the primary), and recording it would disable the optimized config for EVERY model here.
-                        _logger.LogInformation(
-                            "Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
-                            key.ModelName,
-                            key.Role,
-                            variant);
-                    }
-                    else if (candidate.Plan is { } safeRetryPlan)
-                    {
-                        // Deliberately after the _processes registration above, and safe there because the policy absorbs a verdict it cannot persist (see
-                        // ILlamaServerLaunchPolicy): the endpoint is already reachable, so throwing here would tree-kill a process another caller holds.
-                        await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, safeRetryPlan.KvCacheType, ct).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        // Unreachable today: every SafeRetry candidate is built from a plan. An empty key would be
-                        // unmatchable by every read, silently discarding the verdict, so say so instead.
-                        _logger.LogWarning("Safe-retry readiness for model {ModelName} role {Role} carried no launch plan; the optimized-config failure was not recorded.",
-                            key.ModelName,
-                            key.Role);
-                    }
-                }
-
-                // Every post-readiness step survived, so this spawn really did produce a serving process: raise the
-                // Ready observation now and latch it, which is what keeps the catch paths from recording a second one.
-                PublishLoadObservation(loadObservation);
-                readinessRecorded = true;
-                return running;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Cancelled);
-                handle?.TreeKill();
-                handle?.Dispose();
-                await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome.Failed);
-                // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
-                // admission gate, since the reserved-port set backs the cap count) before deciding whether to fall back.
-                handle?.TreeKill();
-                handle?.Dispose();
-                await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
-
-                // The probe-then-bind port race (another node or service took the port in between) is neither the model's fault nor
-                // the optimized config's: throw a RETRYABLE error so the restart loop re-allocates, and the probe skips the taken port.
-                if (automaticCapture is not null && automaticCapture.Snapshot().Any(PortBindFailure.IsReportedIn))
-                {
-                    _logger.LogWarning("llama-server for model {ModelName} role {Role} could not bind port {Port}, which another process took; retrying on another port.",
-                        key.ModelName, key.Role, port);
-                    throw new LlamaRuntimeException("The local model runtime could not bind its local port because another process took it.", ex);
-                }
-
-                // A capability rejection is known before process launch, so retrying an optimized or safe candidate cannot change the outcome. Other non-retryable
-                // errors can still come from the optimized child exiting during load, so the paid-for one-shot safe KV/FA fallback is preserved for that case.
-                if (ex.Data.Contains(CapabilityIncompatibleMarker))
-                {
-                    if (ex.Data.Contains(CapabilitySafeFallbackMarker)
-                        && !isSafeRetry
-                        && attempt + 1 < planCandidates.Count)
-                    {
-                        optimizedFailure = ex;
-                        _logger.LogWarning(
-                            "The selected llama-server runtime does not support the optimized KV-cache/Flash Attention vector for model {ModelName} role {Role}; using the explicit safe candidate.",
-                            key.ModelName,
-                            key.Role);
-                        continue;
-                    }
-
-                    throw;
-                }
-
-                // The OPTIMIZED attempt failed and a safe candidate remains: remember the error and retry ONCE with the safe (KV/FA off) config. Any other failure —
-                // the safe attempt, or a spawn with no fallback candidate — propagates, including the readiness-timeout marker the restart loop keys on.
-                if (!isSafeRetry && attempt + 1 < planCandidates.Count)
-                {
-                    optimizedFailure = ex;
-                    _logger.LogWarning(ex,
-                        "llama-server optimized launch (KV-cache quant + flash attention) failed for model {ModelName} role {Role} on backend {Variant}; retrying once with the safe config.",
-                        key.ModelName, key.Role, variant);
-                    continue;
-                }
-
-                if (automaticCapture is not null
-                    && LlamaStartupFailureClassifier.Classify(automaticCapture.Snapshot()) == LlamaStartupFailureKind.OutOfMemory
-                    && planSet.Allocation is not null
-                    && _allocationResolver.TryDownTierAfterOutOfMemory(planSet.Allocation, out var downTiered))
-                {
-                    planSet = planSet with
-                    {
-                        Allocation = downTiered
-                    };
-                    var downTierPlan = await _launchPolicy.ResolveAsync(key.Role, variant, candidate.Resolved, downTiered, ct).ConfigureAwait(false);
-                    planCandidates.Add(candidate with
-                    {
-                        Plan = candidate.Plan is { UseKvCacheQuantization: false }
-                            ? downTierPlan.WithoutKvCacheQuantization()
-                            : downTierPlan
-                    });
-                    _logger.LogWarning("llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
-                        downTiered.ProcessContextTokens);
-                    continue;
-                }
-
-                throw;
-            }
-
-            void RecordIncompleteReadinessAttempt(LlamaServerReadinessOutcome outcome)
-            {
-                if (readinessRecorded || readinessStartedTimestamp is not { } started)
-                {
-                    return;
-                }
-
-                _ = RecordLoadTelemetry(key,
-                    variant,
-                    capabilityManifest.Version ?? binary.Version,
-                    capabilityManifest.ExecutableSha256,
-                    _timeProvider.GetElapsedTime(started),
-                    outcome,
-                    variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
-                    candidate.AttemptKind,
-                    speculative,
-                    admitted);
-                readinessRecorded = true;
-            }
+        if (candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry)
+        {
+            await RecordSafeRetryVerdictAsync(key, variant, candidate, ct).ConfigureAwait(false);
         }
 
-        // Unreachable: the loop returns on success or throws on the final candidate; the fallback keeps the analyzer happy.
-        throw optimizedFailure ?? new InvalidOperationException("llama-server spawn produced no launch attempt.");
+        // Every post-readiness step survived, so this spawn really did produce a serving process: raise the Ready observation now.
+        PublishLoadObservation(loadObservation);
+        return running;
+    }
+
+    /// <summary>
+    ///     The safe config reached readiness where the optimized (KV-quant + flash-attention) one could not, so the
+    ///     optimized config is the culprit for THIS backend; records it, keyed on the node's CURRENT KV selection.
+    /// </summary>
+    /// <remarks>
+    ///     Runs after the <c>_processes</c> registration, and is safe there because the policy absorbs a verdict it
+    ///     cannot persist (see <see cref="ILlamaServerLaunchPolicy" />). On why, see wiki 03, section Spawn attempt
+    ///     sequencing, under the safe-retry verdict.
+    /// </remarks>
+    private async Task RecordSafeRetryVerdictAsync(ProcessKey key, GpuVariant variant, LlamaServerLaunchCandidate candidate, CancellationToken ct)
+    {
+        if (candidate.Plan is { CpuMoe: true })
+        {
+            // An expert-offload spawn is the most VRAM-marginal launch on the host, so a one-shot success without KV quantization proves nothing about KV
+            // (placement or transient pressure could have failed the primary), and recording it would disable the optimized config for EVERY model here.
+            _logger.LogInformation(
+                "Safe-retry readiness for expert-offload model {ModelName} role {Role} is inconclusive about the optimized KV config; nothing recorded for backend {Variant}.",
+                key.ModelName,
+                key.Role,
+                variant);
+        }
+        else if (candidate.Plan is { } safeRetryPlan)
+        {
+            // The endpoint is already reachable, so throwing here would tree-kill a process another caller holds.
+            await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, safeRetryPlan.KvCacheType, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            // Unreachable today: every SafeRetry candidate is built from a plan. An empty key would be
+            // unmatchable by every read, silently discarding the verdict, so say so instead.
+            _logger.LogWarning("Safe-retry readiness for model {ModelName} role {Role} carried no launch plan; the optimized-config failure was not recorded.",
+                key.ModelName,
+                key.Role);
+        }
+    }
+
+    /// <summary>Tree-kills and disposes a failed attempt's child, if it started, and frees its reserved port.</summary>
+    private async Task TearDownFailedAttemptAsync(IProcessTreeHandle? handle, int port)
+    {
+        handle?.TreeKill();
+        handle?.Dispose();
+        await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Throws a RETRYABLE error when another process took the probed port before the child bound it, so the restart
+    ///     loop re-allocates and the probe skips that port.
+    /// </summary>
+    private void ThrowIfPortWasTaken(ProcessKey key, int port, LlamaServerBoundedStartupCapture? automaticCapture, Exception failure)
+    {
+        // The probe-then-bind race is neither the model's fault nor the optimized config's.
+        if (automaticCapture is not null && automaticCapture.Snapshot().Any(PortBindFailure.IsReportedIn))
+        {
+            _logger.LogWarning("llama-server for model {ModelName} role {Role} could not bind port {Port}, which another process took; retrying on another port.",
+                key.ModelName, key.Role, port);
+            throw new LlamaRuntimeException("The local model runtime could not bind its local port because another process took it.", failure);
+        }
+    }
+
+    /// <summary>
+    ///     Whether a failed OPTIMIZED attempt falls back ONCE to the remaining safe (KV/FA off) candidate.
+    /// </summary>
+    /// <remarks>
+    ///     A capability rejection falls back only when the gate said a safe candidate can satisfy it. Other failures,
+    ///     including non-retryable ones from the optimized child exiting during load, keep the paid-for one-shot safe
+    ///     fallback. The safe attempt itself, or a spawn with no fallback candidate, never falls back.
+    /// </remarks>
+    private bool ShouldRetryWithSafeCandidate(Exception failure, ProcessKey key, GpuVariant variant, bool canFallBack)
+    {
+        if (!canFallBack)
+        {
+            return false;
+        }
+
+        if (failure.Data.Contains(CapabilityIncompatibleMarker))
+        {
+            if (!failure.Data.Contains(CapabilitySafeFallbackMarker))
+            {
+                return false;
+            }
+
+            _logger.LogWarning(
+                "The selected llama-server runtime does not support the optimized KV-cache/Flash Attention vector for model {ModelName} role {Role}; using the explicit safe candidate.",
+                key.ModelName,
+                key.Role);
+            return true;
+        }
+
+        _logger.LogWarning(failure,
+            "llama-server optimized launch (KV-cache quant + flash attention) failed for model {ModelName} role {Role} on backend {Variant}; retrying once with the safe config.",
+            key.ModelName, key.Role, variant);
+        return true;
+    }
+
+    /// <summary>
+    ///     After a classified startup OOM, appends a candidate at the next lower context tier and returns the plan set
+    ///     carrying it; <see langword="null" /> when the failure was no OOM or no tier is left.
+    /// </summary>
+    private async Task<LlamaServerLaunchPlanSet?> TryDownTierAfterOutOfMemoryAsync(ProcessKey key,
+        GpuVariant variant,
+        LlamaServerLaunchCandidate candidate,
+        LlamaServerBoundedStartupCapture? automaticCapture,
+        LlamaServerLaunchPlanSet planSet,
+        CancellationToken ct)
+    {
+        if (automaticCapture is null
+            || LlamaStartupFailureClassifier.Classify(automaticCapture.Snapshot()) != LlamaStartupFailureKind.OutOfMemory
+            || planSet.Allocation is null
+            || !_allocationResolver.TryDownTierAfterOutOfMemory(planSet.Allocation, out var downTiered))
+        {
+            return null;
+        }
+
+        var downTieredSet = planSet with
+        {
+            Allocation = downTiered
+        };
+        var downTierPlan = await _launchPolicy.ResolveAsync(key.Role, variant, candidate.Resolved, downTiered, ct).ConfigureAwait(false);
+        planSet.Candidates.Add(candidate with
+        {
+            Plan = candidate.Plan is { UseKvCacheQuantization: false }
+                ? downTierPlan.WithoutKvCacheQuantization()
+                : downTierPlan
+        });
+        _logger.LogWarning("llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
+            downTiered.ProcessContextTokens);
+        return downTieredSet;
     }
 
     private Task<LlamaServerLaunchPlanSet> BuildLaunchPlanCandidatesAsync(ProcessKey key,
@@ -774,8 +984,7 @@ public sealed partial class LlamaServerProcessSupervisor
 
             // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it would turn recorded evidence into a
             // failure. Matches BenchmarkFidelityExecutor.TryHashFileAsync, and means the catch below never absorbs a cancellation it did not ask for.
-            await using var stream = File.OpenRead(imagePath);
-            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None).ConfigureAwait(false));
+            return await FileSha256.ComputeAsync(imagePath, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception)
         {
@@ -953,4 +1162,20 @@ public sealed partial class LlamaServerProcessSupervisor
             // Expected: this task was cancelled because the other side of the race won.
         }
     }
+
+    /// <summary>
+    ///     What a spawn resolved before the admission gate and every launch attempt reads.
+    /// </summary>
+    private readonly record struct SpawnLaunchInputs(string ModelFilePath,
+        string? AdapterFilePath,
+        string? ProjectorFilePath,
+        TimeSpan ReadinessTimeout,
+        LlamaServerChatLaunchTuning LaunchTuning,
+        SpeculativeDecodingSettings Speculative,
+        GpuVariant Variant,
+        LlamaBinary Binary,
+        LlamaServerCapabilityManifest CapabilityManifest,
+        ProcessLaunchAdmission? Admitted,
+        ResolvedLaunchArguments Resolved,
+        IReadOnlyList<string> ExtraLaunchArgs);
 }

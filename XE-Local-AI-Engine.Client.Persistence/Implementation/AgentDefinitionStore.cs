@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed class AgentDefinitionStore : IAgentDefinitionStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly NodeChatDbContext _dbContext;
     private readonly TimeProvider _timeProvider;

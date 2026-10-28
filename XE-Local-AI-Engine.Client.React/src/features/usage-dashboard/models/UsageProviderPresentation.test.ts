@@ -8,7 +8,7 @@ import {
 } from "@/features/usage-dashboard/models/UsageProviderPresentation";
 
 // The usage components pass i18next's own `t`. Here it is stood in for by the fallback-returning shape the call sites
-// use — `t(key, fallback)` — so these assertions are about the formatting, not about the translation catalogue.
+// use — `t(key, fallback)` — so these assertions are about the formatting, not about the translation catalog.
 const t = ((_key: string, fallback: string) => fallback) as unknown as TFunction;
 
 describe("externalUsageConnectionId", () => {

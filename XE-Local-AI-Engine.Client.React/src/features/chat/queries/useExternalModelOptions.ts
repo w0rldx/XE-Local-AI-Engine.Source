@@ -2,7 +2,7 @@
 //
 // They arrive on the same unified GET /api/local/v1/models response as everything else, tagged with the `external`
 // provider plus the connection they belong to and its declared Local/Cloud trust. They are deliberately kept out of
-// the LOCAL option list (see ChatModelOptions' D10 containment): a model served over HTTP by another process is never
+// the LOCAL option list (see ChatModelOptions' containment): a model served over HTTP by another process is never
 // a speculative draft model and never the synthetic local default, so it reaches the picker through its own
 // per-connection sections instead.
 //

@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 public sealed class MathematicianAgentSeeder : IHostedService
 {
     // The instructions ARE the feature: a model that merely HAS a calculator still asserts unverified arithmetic.
-    // What changes the behaviour is being told a claim is unfinished until executed, and what to do on a disagreement.
+    // What changes the behavior is being told a claim is unfinished until executed, and what to do on a disagreement.
     private const string Instructions =
         """
         You are a mathematician working with a sandboxed Python interpreter (numpy, scipy, sympy).

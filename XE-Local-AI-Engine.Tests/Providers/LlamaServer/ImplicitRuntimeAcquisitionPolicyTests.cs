@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     R1-01: on an Offline node with no runtime, a launch must not download one; it fails with a reason the chat bubble
+///     On an Offline node with no runtime, a launch must not download one; it fails with a reason the chat bubble
 ///     shows. An explicit operator install still downloads, and an installed runtime is still served. All HTTP is faked.
 /// </summary>
 [Category(TestCategories.Unit)]

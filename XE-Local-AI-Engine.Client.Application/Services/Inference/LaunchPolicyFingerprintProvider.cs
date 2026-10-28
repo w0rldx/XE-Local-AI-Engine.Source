@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -37,7 +38,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
     private const int StableCaptureAttempts = 3;
     private const string RuntimeDefaultMode = "llama-runtime-default";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly LlamaServerLaunchPolicyOptions _launchPolicyOptions;
@@ -385,7 +386,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         if (!speculative.RequiresExternalDraftModel)
         {
             // No second GGUF to identify: ngram-* self-speculates and draft-mtp drafts from heads in the main model.
-            // draft-mtp does still honour --spec-draft-n-max, so that knob stays part of the launch identity for it.
+            // draft-mtp does still honor --spec-draft-n-max, so that knob stays part of the launch identity for it.
             var draftMaxTokens = speculative.DraftMaxTokens > 0 ? speculative.DraftMaxTokens : (int?)null;
             object identity = speculative.ModeClass is SpeculativeModeClass.MainModelHeads
                 ? new
@@ -512,7 +513,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         {
             var entry = await _modelRegistry.FindAsync(modelName, ct);
             if (entry is not null
-                && PathsEqual(entry.LocalPath, file.FullName)
+                && PathContainment.PathsEqual(entry.LocalPath, file.FullName)
                 && entry.SizeBytes == file.Length
                 && TryNormalizeSha256(entry.Sha256, out var registrySha256))
             {
@@ -550,13 +551,6 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
             ContentIdentity = RuntimeBundleIdentityCalculator.BuildValidationIdentity(file, validationGuard, authoritySha256: null),
             GuardSha256 = validationGuard
         };
-    }
-
-    private static bool PathsEqual(string left, string right)
-    {
-        return string.Equals(Path.GetFullPath(left),
-            Path.GetFullPath(right),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     private static bool TryNormalizeSha256(string? value, out string normalized)

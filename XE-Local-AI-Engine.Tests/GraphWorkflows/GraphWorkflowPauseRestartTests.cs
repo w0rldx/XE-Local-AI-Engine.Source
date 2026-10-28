@@ -9,17 +9,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     What a restart and a cancel do to a run parked on a person.
-///     <para>
-///         A pause adds no restart MECHANISM: the set startup recovery judges is exactly <c>Queued ∪ Running</c>, so a
-///         waiting row is already untouched. These tests exist to fail loudly if that set is ever widened — a durable
-///         human wait collapsed by a reboot is an answered gate silently un-answering itself.
-///     </para>
-///     <para>
-///         Keyed <c>[NotInParallel]</c> for the same reason <c>GraphWorkflowRestartTests</c> is: startup recovery
-///         sweeps every in-flight node run in the DATABASE, which on this class's shared host is every sibling test's
-///         staging as well.
-///     </para>
 /// </summary>
+/// <remarks>
+///     A pause adds no restart MECHANISM: startup recovery judges exactly <c>Queued ∪ Running</c>, so a waiting row is
+///     untouched; these tests fail loudly if that set widens, since a reboot would silently un-answer a human gate.
+///     Keyed <c>[NotInParallel]</c> like <c>GraphWorkflowRestartTests</c>: startup recovery sweeps every in-flight node
+///     run in the DATABASE, which on this class's shared host includes every sibling test's staging.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class GraphWorkflowPauseRestartTests
 {

@@ -559,7 +559,7 @@ public sealed class ExternalAppCatalogValidatorTests
     [Test]
     public void Validate_WhenTwoFilesTargetTheSameContainerPath_ReportsS11()
     {
-        // Both entries materialise at install; the one written last silently wins, so the installed file would depend
+        // Both entries materialize at install; the one written last silently wins, so the installed file would depend
         // on array order rather than on anything the author declared.
         var result = MutateValid(document =>
         {
@@ -608,7 +608,7 @@ public sealed class ExternalAppCatalogValidatorTests
     [Test]
     public void Validate_WhenTwoFilesShareASource_ReportsS11()
     {
-        // The installer materialises every entry at {instanceDir}/files/{service}/{source}: two entries sharing a
+        // The installer materializes every entry at {instanceDir}/files/{service}/{source}: two entries sharing a
         // source collide on one host file, so the second containerPath silently receives the first entry's body.
         var result = MutateValid(document =>
         {
@@ -856,7 +856,7 @@ public sealed class ExternalAppCatalogValidatorTests
     [Arguments("files/sidecar", "must not contain 'files/sidecar/settings.yml'")]
     public void Validate_WhenTwoFileSourcesNest_ReportsS11(string source, string expected)
     {
-        // Both entries are regular files materialised under {instanceDir}/files/{service}/: 'a' and 'a/b' cannot both
+        // Both entries are regular files materialized under {instanceDir}/files/{service}/: 'a' and 'a/b' cannot both
         // exist, so the second write either fails or turns the first file into a directory. Equality alone let the
         // pair through in either order.
         var result = MutateValid(document =>
@@ -1016,7 +1016,7 @@ public sealed class ExternalAppCatalogValidatorTests
     /// <summary>
     ///     Restores <c>manifestSha256</c> after a mutation so every rule test asserts its own rule rather than also
     ///     tripping the fingerprint rule. The value comes from the production fingerprint over the mutated manifest,
-    ///     so the helper cannot mask a canonicalisation defect — the two dedicated A21 tests bypass it.
+    ///     so the helper cannot mask a canonicalization defect — the two dedicated A21 tests bypass it.
     /// </summary>
     private static void Refingerprint(JsonObject document)
     {

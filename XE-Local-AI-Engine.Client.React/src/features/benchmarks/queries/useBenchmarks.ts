@@ -1,64 +1,29 @@
-import { type Query, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type Query, useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type {
-	ListBenchmarkRunsResponse,
-	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
-	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem as StartBenchmarkRunBatchItem,
-	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
-} from "@/core/api/generated";
+import type { ListBenchmarkRunsResponse } from "@/core/api/generated";
 import {
-	cancelBenchmarkRun,
-	clearBenchmarkFidelityCache,
-	clearBenchmarkRunScore,
-	compareBenchmarkCells,
-	createBenchmarkProject,
-	createBenchmarkTaskItem,
-	deleteBenchmarkProject,
-	deleteBenchmarkRun,
-	deleteBenchmarkTaskItem,
 	getBenchmarkKldDiskEstimate,
 	getBenchmarkPairwiseEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
-	getBenchmarkRunArtifact,
-	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkProjects,
 	listBenchmarkReviews,
-	listBenchmarkTaskItems,
 	listEligibleBenchmarkModels,
-	rejudgeBenchmarkProject,
-	rejudgeBenchmarkRun,
-	reorderBenchmarkTaskItems,
-	scoreBenchmarkRun,
-	startBenchmarkRun,
-	startBenchmarkRunBatch,
-	startBenchmarkRunFidelity,
-	submitBenchmarkRunReview,
-	updateBenchmarkJudgePolicy,
-	updateBenchmarkProject,
-	updateBenchmarkProjectFidelity,
-	updateBenchmarkTaskItem,
 } from "@/core/api/generated";
 import {
-	compareBenchmarkCellsQueryKey,
 	getBenchmarkKldDiskEstimateQueryKey,
 	getBenchmarkPairwiseEstimateQueryKey,
 	getBenchmarkProjectQueryKey,
 	getBenchmarkRubricPresetsQueryKey,
 	getBenchmarkRunQueryKey,
-	listBenchmarkCellsQueryKey,
 	listBenchmarkComparisonsQueryKey,
 	listBenchmarkProjectsQueryKey,
 	listBenchmarkReviewsQueryKey,
 	listBenchmarkRunsInfiniteOptions,
-	listBenchmarkTaskItemsQueryKey,
 	listEligibleBenchmarkModelsQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { fileNameFromContentDisposition, saveBlob } from "@/core/api/utils/DownloadBlob";
-import type { BenchmarkCell, BenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
-import { toBenchmarkCell, toBenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
 import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
 import {
 	toBenchmarkComparisonList,
@@ -74,26 +39,17 @@ import {
 import type {
 	BenchmarkComparisonList,
 	BenchmarkEligibleModel,
-	BenchmarkKvCacheType,
 	BenchmarkPairwiseEstimate,
 	BenchmarkProjectDetail,
-	BenchmarkProjectDraft,
-	BenchmarkProjectFidelityDraft,
 	BenchmarkProjectSummary,
 	BenchmarkRankCohort,
-	BenchmarkRepeatMode,
 	BenchmarkReviewQueue,
 	BenchmarkReviewQueueState,
-	BenchmarkReviewSubmission,
 	BenchmarkRubric,
-	BenchmarkRunArtifact,
 	BenchmarkRunDetail,
-	BenchmarkRunRef,
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkReviewPageSize, isJudgeActive, toBenchmarkReviewQueue } from "@/features/benchmarks/models/BenchmarkModels";
-import type { BenchmarkTaskItem, BenchmarkTaskItemDraft } from "@/features/benchmarks/models/BenchmarkTaskItems";
-import { pruneVerifierOverrides, toBenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
 // Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY (the same imperative
 // pattern as useLoadedModels / the chat adapter) rather than
@@ -102,8 +58,7 @@ import { pruneVerifierOverrides, toBenchmarkTaskItem } from "@/features/benchmar
 // paged runs feed is the exception: it uses the generated `listBenchmarkRunsInfiniteOptions` and maps in `select`.
 //
 // Cache keys are the generated `*QueryKey` ones, so a partial key `[{ _id, path }]` matches every variant of one
-// endpoint. `projectScope` matches every query addressed to one project, whatever its endpoint.
-const projectScope = (projectId: string) => [{ tags: ["Benchmarks"], path: { projectId } }] as const;
+// endpoint.
 
 const activeRunPollIntervalMs = 2_000;
 /** The largest page the node serves: `ListBenchmarkRunsEndpoint` answers 400 above it, so this is a ceiling, not a taste. */
@@ -384,401 +339,6 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 	});
 }
 
-// A run's DETAIL query polls only while that run is active, so a change made elsewhere (a project-wide judge change
-// or re-judge) can never be picked up by an open detail pane on its own: its cached copy says the run is finished, so
-// nothing schedules another read. Every mutation therefore names the runs it touched.
-//
-// Everything else is the project list plus every project-addressed query of every project: details, runs, cells,
-// items (a freeze adds cells, an item edit unranks the answers to the old question), estimates and comparisons — and
-// the review inbox, which spans projects and changes with a judging, a policy change or a review alike.
-const isProjectQuery = (query: Query): boolean => {
-	const key = query.queryKey[0] as { _id?: string; tags?: readonly string[]; path?: { projectId?: string } } | undefined;
-	return (
-		key?.tags?.includes("Benchmarks") === true &&
-		(key._id === "listBenchmarkProjects" || key._id === "listBenchmarkReviews" || key.path?.projectId !== undefined)
-	);
-};
-
-function useBenchmarkInvalidation() {
-	const queryClient = useQueryClient();
-	return async (...runIds: readonly string[]): Promise<void> => {
-		await queryClient.invalidateQueries({ predicate: isProjectQuery });
-		await Promise.all(
-			runIds.map((runId) => queryClient.invalidateQueries({ queryKey: getBenchmarkRunQueryKey({ path: { runId } }) })),
-		);
-	};
-}
-
-// A null rubric/referenceAnswer is "the node decides" (default rubric, no reference answer): the member is omitted
-// rather than sent as null, so an unset field can never be mistaken for a deliberate blanking.
-const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
-	name: draft.name,
-	coreTask: draft.coreTask,
-	contextTokens: draft.contextTokens,
-	// Omitted rather than sent as null when unset: an absent budget means context-limited, which the node validates
-	// against the context window.
-	...(draft.maxOutputTokens === null ? {} : { maxOutputTokens: draft.maxOutputTokens }),
-	...(draft.reasoningBudgetTokens === null ? {} : { reasoningBudgetTokens: draft.reasoningBudgetTokens }),
-	...(draft.invocationTimeoutSeconds === null ? {} : { invocationTimeoutSeconds: draft.invocationTimeoutSeconds }),
-	agentDefinitionId: draft.agentDefinitionId,
-	judgeEnabled: draft.judgeEnabled,
-	// `judgeMode` is deliberately NOT here: the project write does not carry it, only `PUT .../judge` does. That is
-	// also the only path where the mode matters — pairwise needs runs to compare, and a project with runs is frozen,
-	// which is exactly when the judge-policy route is the one used.
-	judgeModelName: draft.judgeModelName,
-	judgeContextTokens: draft.judgeContextTokens,
-	...(draft.rubric === null ? {} : { rubric: draft.rubric }),
-	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
-	fidelityEnabled: draft.fidelityEnabled,
-	fidelityKldEnabled: draft.fidelityKldEnabled,
-	// Omitted rather than null when unset, exactly as the token budgets above: absent means "the node's default", and
-	// the node clamps what it accepts. `fidelityKldBaseFingerprint` is deliberately NOT sent — the node resolves it
-	// from the base model, and a caller-supplied one could make two incomparable figures compare equal.
-	...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
-	fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
-	requiresReview: draft.requiresReview,
-});
-
-export function useCreateBenchmarkProject() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async (draft: BenchmarkProjectDraft) => {
-			const { data } = await createBenchmarkProject({ body: projectMutationBody(draft) });
-			return toBenchmarkProjectDetail(data);
-		},
-		onSuccess: () => invalidate(),
-	});
-}
-
-export function useUpdateBenchmarkProject() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			expectedVersion,
-			draft,
-		}: {
-			projectId: string;
-			expectedVersion: number;
-			draft: BenchmarkProjectDraft;
-		}) => {
-			const { data } = await updateBenchmarkProject({
-				path: { projectId },
-				body: { ...projectMutationBody(draft), expectedVersion },
-			});
-			return toBenchmarkProjectDetail(data);
-		},
-		onSuccess: () => invalidate(),
-	});
-}
-
-/**
- * Deletes a project with everything under it: its runs and all their results, transcripts and judge verdicts, then its
- * task items, its pairwise fits and its judge-policy history.
- *
- * The node refuses with 409 `ActiveRun` — having deleted nothing — while any of the project's runs is still queued,
- * generating, judging or being compared. Finished runs are deleted with the project; a live one blocks the whole call,
- * so this can never race the run queue. Nothing outside the benchmarks tables points at a project.
- *
- * The invalidation is deliberately `exact`, unlike every other mutation here: the shared {@link useBenchmarkInvalidation}
- * re-reads every project-addressed query, and for a project that no longer exists that is a
- * guaranteed 404 refetch of its own detail while the page still has it selected. Only the LIST is re-read; the page
- * controller then sees the project leave it and selects another one on its own. The deleted project's own entries are
- * dropped from the cache afterwards, once the refreshed list has already moved the selection off it.
- */
-export function useDeleteBenchmarkProject() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: async ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) => {
-			await deleteBenchmarkProject({ path: { projectId }, body: { expectedVersion } });
-		},
-		onSuccess: async (_, { projectId }) => {
-			await queryClient.invalidateQueries({ queryKey: listBenchmarkProjectsQueryKey(), exact: true });
-			// Scope removal: the project's detail, runs, task items, cells, comparisons and estimates all carry its id
-			// in `path`. `inactive` only, because the page may not have re-rendered off the deleted project yet and
-			// removing a query that still has an observer makes it refetch — a guaranteed 404 for a project that is
-			// gone. What is still mounted becomes inactive on that re-render and is collected with the rest.
-			queryClient.removeQueries({ queryKey: projectScope(projectId), type: "inactive" });
-		},
-	});
-}
-
-/** What a judge change did: the refreshed project plus the runs it enqueued for re-judging. */
-export interface BenchmarkJudgeChange {
-	project: BenchmarkProjectDetail;
-	enqueuedRunIds: readonly string[];
-	enqueuedRunCount: number;
-}
-
-/**
- * The judge policy of a project, editable even while the project is frozen (its task/agent/context are not). A change
- * that would re-score existing runs is refused with 409 `RejudgeRequired` until `confirmRejudge` is set — the caller
- * asks the operator and resends.
- */
-export function useUpdateBenchmarkJudgePolicy() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			expectedVersion,
-			policy,
-			confirmRejudge,
-		}: {
-			projectId: string;
-			expectedVersion: number;
-			/** null disables judging; existing attempts and revisions stay as history. */
-			policy: JudgePolicyDraft | null;
-			confirmRejudge: boolean;
-		}) => {
-			const { data } = await updateBenchmarkJudgePolicy({
-				path: { projectId },
-				body: { policy, expectedVersion, confirmRejudge },
-			});
-			const enqueuedRunIds = data.enqueuedRunIds ?? [];
-			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
-		},
-		onSuccess: (change) => invalidate(...change.enqueuedRunIds),
-	});
-}
-
-/** What a fidelity change did: the refreshed project plus the runs it queued a measurement for. */
-export interface BenchmarkFidelityChange {
-	project: BenchmarkProjectDetail;
-	enqueuedCount: number;
-}
-
-/**
- * The fidelity settings on their OWN route, with their own CAS. That is what lets them change on a frozen project:
- * the ordinary project write is refused once runs exist, and fidelity is exactly the setting an operator wants to
- * revisit after seeing some.
- *
- * `measureExisting` is opt-in because enabling fidelity should not silently spend GPU on a project's whole history.
- * Pressing it twice queues nothing the second time — runs with an attempt already are skipped by the node.
- */
-export function useUpdateBenchmarkProjectFidelity() {
-	const invalidate = useBenchmarkInvalidation();
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			expectedVersion,
-			draft,
-			measureExisting,
-		}: {
-			projectId: string;
-			expectedVersion: number;
-			draft: BenchmarkProjectFidelityDraft;
-			measureExisting: boolean;
-		}): Promise<BenchmarkFidelityChange> => {
-			const { data } = await updateBenchmarkProjectFidelity({
-				path: { projectId },
-				body: {
-					expectedVersion,
-					fidelityEnabled: draft.fidelityEnabled,
-					fidelityKldEnabled: draft.fidelityKldEnabled,
-					// Omitted rather than null when unset, so an absent value means the node's default.
-					...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
-					fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
-					measureExisting,
-				},
-			});
-			return { project: toBenchmarkProjectDetail(data.project), enqueuedCount: data.enqueuedCount ?? 0 };
-		},
-		// The refreshed runs carry their measurement as `queued`, which is what puts the list back on the two-second poll.
-		// The response counts the runs it enqueued but does not name them, so an OPEN detail pane — whose own query stopped
-		// polling when the run went terminal — is reached by invalidating the run details as a family. Only when something
-		// was actually enqueued: a save that measured nothing must not sweep every open pane.
-		onSuccess: async (change) => {
-			await invalidate();
-			if (change.enqueuedCount > 0) {
-				await queryClient.invalidateQueries({ queryKey: [{ _id: "getBenchmarkRun" }] });
-			}
-		},
-	});
-}
-
-export function useRejudgeBenchmarkProject() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) => {
-			const { data } = await rejudgeBenchmarkProject({ path: { projectId }, body: { expectedVersion } });
-			const enqueuedRunIds = data.enqueuedRunIds ?? [];
-			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
-		},
-		onSuccess: (change) => invalidate(...change.enqueuedRunIds),
-	});
-}
-
-export function useStartBenchmarkRun() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			modelName,
-			expectedProjectVersion,
-			kvCacheType,
-			agentDefinitionId,
-			repeatMode,
-			answerVarianceTemperature,
-		}: {
-			projectId: string;
-			modelName: string;
-			expectedProjectVersion: number;
-			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
-			kvCacheType: BenchmarkKvCacheType | null;
-			/** An agent variant to run instead of the project's agent; omitted = the project's agent. */
-			agentDefinitionId?: string;
-			repeatMode: BenchmarkRepeatMode;
-			/** null = the node's default (0.7). Never sent in throughput mode, which the node samples at 0. */
-			answerVarianceTemperature: number | null;
-		}) => {
-			const body: StartBenchmarkRunRequest = {
-				modelName,
-				expectedProjectVersion,
-				...(kvCacheType === null ? {} : { kvCacheType }),
-				...(agentDefinitionId === undefined ? {} : { agentDefinitionId }),
-				repeatMode,
-				...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
-			};
-			const { data } = await startBenchmarkRun({ path: { projectId }, body });
-			return toBenchmarkRunDetail(data);
-		},
-		onSuccess: (run) => invalidate(run.id),
-	});
-}
-
-/** One matrix cell the node refused, in the same `code` vocabulary a single-run failure uses. */
-export interface BenchmarkBatchRejection {
-	modelName: string;
-	kvCacheType: string | null;
-	/** The variant the refused cell asked for; null = the project's own agent. */
-	agentDefinitionId: string | null;
-	code: string;
-	message: string;
-}
-
-/** What a batch launch did: the cells that started, and the ones that did not with the reason. */
-export interface BenchmarkBatchLaunch {
-	startedRunIds: string[];
-	rejected: BenchmarkBatchRejection[];
-}
-
-/**
- * Launches a whole model × KV-type matrix in one request. Deliberately NOT all-or-nothing — the node reports each cell
- * separately, so an ineligible model comes back as one rejection in a 200 rather than as a failure of the batch. Only a
- * stale project version or a vanished project fails the whole call.
- */
-export function useStartBenchmarkRunBatch() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			expectedProjectVersion,
-			items,
-			repeatCount,
-			warmup,
-			repeatMode,
-			answerVarianceTemperature,
-		}: {
-			projectId: string;
-			expectedProjectVersion: number;
-			items: StartBenchmarkRunBatchItem[];
-			repeatCount: number;
-			warmup: boolean;
-			repeatMode: BenchmarkRepeatMode;
-			answerVarianceTemperature: number | null;
-		}): Promise<BenchmarkBatchLaunch & { projectId: string }> => {
-			const { data } = await startBenchmarkRunBatch({
-				path: { projectId },
-				body: {
-					expectedProjectVersion,
-					items,
-					repeatCount,
-					warmup,
-					repeatMode,
-					...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
-				},
-			});
-			return {
-				projectId,
-				startedRunIds: (data.started ?? []).flatMap((item) => item.runIds ?? []),
-				rejected: (data.rejected ?? []).map((item) => ({
-					modelName: item.modelName,
-					kvCacheType: item.kvCacheType ?? null,
-					agentDefinitionId: item.agentDefinitionId ?? null,
-					code: item.code,
-					message: item.message,
-				})),
-			};
-		},
-		onSuccess: (result) => invalidate(...result.startedRunIds),
-	});
-}
-
-export function useCancelBenchmarkRun() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({ run, target }: { run: BenchmarkRunRef; target: "Primary" | "Judge" }) => {
-			const { data } = await cancelBenchmarkRun({ path: { runId: run.id }, body: { target, expectedVersion: run.version } });
-			return toBenchmarkRunDetail(data);
-		},
-		onSuccess: (run) => invalidate(run.id),
-	});
-}
-
-export function useScoreBenchmarkRun() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({ run, score }: { run: BenchmarkRunRef; score: number }) => {
-			const { data } = await scoreBenchmarkRun({ path: { runId: run.id }, body: { score, expectedVersion: run.version } });
-			return toBenchmarkRunDetail(data);
-		},
-		onSuccess: (run) => invalidate(run.id),
-	});
-}
-
-/** Drops the operator override so the run falls back to its judge score (or to unscored). */
-export function useClearBenchmarkRunScore() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async (run: BenchmarkRunRef) => {
-			const { data } = await clearBenchmarkRunScore({ path: { runId: run.id }, body: { expectedVersion: run.version } });
-			return toBenchmarkRunDetail(data);
-		},
-		onSuccess: (run) => invalidate(run.id),
-	});
-}
-
-export function useRejudgeBenchmarkRun() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({ run, force }: { run: BenchmarkRunRef; force: boolean }) => {
-			const { data } = await rejudgeBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version, force } });
-			return toBenchmarkRunDetail(data);
-		},
-		onSuccess: (run) => invalidate(run.id),
-	});
-}
-
-/**
- * A reviewer's decision on one scoring run of a review project; the latest one wins. The node refuses with 409
- * `NotReviewable` while the judging has not succeeded under the current policy, and with `VersionConflict` when the run
- * moved since it was read.
- */
-export function useSubmitBenchmarkRunReview() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({ run, review }: { run: BenchmarkRunRef; review: BenchmarkReviewSubmission }) => {
-			const { data } = await submitBenchmarkRunReview({
-				path: { runId: run.id },
-				body: { ...review, expectedVersion: run.version },
-			});
-			return toBenchmarkRunDetail(data);
-		},
-		onSuccess: (run) => invalidate(run.id),
-	});
-}
-
 /**
  * One page of the review inbox. No poll: nothing pushes review state, and every benchmark mutation already invalidates
  * the inbox; a judging that lands in the background shows up on the next read (the inbox's own refresh button).
@@ -799,232 +359,27 @@ export function useBenchmarkReviews(
 	});
 }
 
-/**
- * Downloads one verifier artifact. The bytes are the model's own code output, so they are saved as a text file and
- * never rendered: the `blob` override keeps them out of the DOM exactly as the project export does.
- */
-export function useBenchmarkRunArtifact() {
-	return useMutation({
-		mutationFn: async ({ runId, artifact }: { runId: string; artifact: Pick<BenchmarkRunArtifact, "id" | "kind"> }) => {
-			const response = await getBenchmarkRunArtifact({ path: { runId, artifactId: artifact.id }, responseType: "blob" });
-			saveBlob(
-				// The blob override changes the body axios returns, not the generated response type.
-				response.data as unknown as Blob,
-				fileNameFromContentDisposition(response.headers["content-disposition"]) ?? `${artifact.kind}-${artifact.id}.txt`,
-			);
-		},
-	});
-}
+// A run's DETAIL query polls only while that run is active, so a change made elsewhere (a project-wide judge change
+// or re-judge) can never be picked up by an open detail pane on its own: its cached copy says the run is finished, so
+// nothing schedules another read. Every mutation therefore names the runs it touched.
+//
+// Everything else is the project list plus every project-addressed query of every project: details, runs, cells,
+// items (a freeze adds cells, an item edit unranks the answers to the old question), estimates and comparisons — and
+// the review inbox, which spans projects and changes with a judging, a policy change or a review alike.
+const isProjectQuery = (query: Query): boolean => {
+	const key = query.queryKey[0] as { _id?: string; tags?: readonly string[]; path?: { projectId?: string } } | undefined;
+	return (
+		key?.tags?.includes("Benchmarks") === true &&
+		(key._id === "listBenchmarkProjects" || key._id === "listBenchmarkReviews" || key.path?.projectId !== undefined)
+	);
+};
 
-/**
- * Re-measures one run's quant fidelity. The node inserts a NEW immutable attempt rather than overwriting: the previous
- * numbers survive a failed re-measure, which is why this is safe to offer as a plain menu action.
- */
-export function useStartBenchmarkRunFidelity() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async (run: BenchmarkRunRef) => {
-			await startBenchmarkRunFidelity({ path: { runId: run.id } });
-		},
-		onSuccess: (_, run) => invalidate(run.id),
-	});
-}
-
-/**
- * Drops this project's cached base logits. Nothing measured is lost — the cache is a derived file, and the runs keep
- * the numbers that were computed from it — but the next KLD measurement pays the full base pass again.
- */
-export function useClearBenchmarkFidelityCache() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async (projectId: string) => {
-			await clearBenchmarkFidelityCache({ path: { projectId } });
-		},
-		onSuccess: () => invalidate(),
-	});
-}
-
-export function useDeleteBenchmarkRun() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async (run: BenchmarkRunRef) => {
-			await deleteBenchmarkRun({ path: { runId: run.id }, body: { expectedVersion: run.version } });
-		},
-		onSuccess: (_, run) => invalidate(run.id),
-	});
-}
-
-// Task-item writes change the item-set hash; invalidate runs/cells and warn the operator before mutation.
-
-/** One project's task items, in index order, with the set hash the node currently computes over them. */
-export interface BenchmarkTaskItemList {
-	items: BenchmarkTaskItem[];
-	/** Null until the first item write. A run stamped with a different one is excluded as `item-set-revised`. */
-	taskItemSetHash: string | null;
-	/** The version an item CREATE must be made against — adding an item changes what a freeze would produce. */
-	projectVersion: number;
-}
-
-export function useBenchmarkTaskItems(projectId: string | null) {
-	return useQuery<BenchmarkTaskItemList>({
-		queryKey: listBenchmarkTaskItemsQueryKey({ path: { projectId: projectId ?? "" } }),
-		enabled: Boolean(projectId),
-		queryFn: async ({ signal }) => {
-			const { data } = await listBenchmarkTaskItems({ path: { projectId: projectId as string }, signal });
-			return {
-				items: (data.items ?? []).map(toBenchmarkTaskItem).sort((left, right) => left.index - right.index),
-				taskItemSetHash: data.taskItemSetHash ?? null,
-				projectVersion: data.projectVersion ?? 0,
-			};
-		},
-	});
-}
-
-// The generator members are omitted rather than sent as null when unset, exactly as the project body does it: an
-// absent blob is "this item has none", and a present empty one is a blob the node has to parse and refuse.
-const taskItemMutationBody = (draft: BenchmarkTaskItemDraft) => ({
-	prompt: draft.prompt,
-	kind: draft.kind,
-	countsTowardScore: draft.countsTowardScore,
-	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
-	...(pruneVerifierOverrides(draft.verifierConfig) === null
-		? {}
-		: { verifierConfig: pruneVerifierOverrides(draft.verifierConfig) }),
-	...(draft.generatorConfig === null ? {} : { generatorConfig: draft.generatorConfig }),
-});
-
-export function useCreateBenchmarkTaskItem() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			expectedProjectVersion,
-			draft,
-		}: {
-			projectId: string;
-			expectedProjectVersion: number;
-			draft: BenchmarkTaskItemDraft;
-		}) => {
-			const { data } = await createBenchmarkTaskItem({
-				path: { projectId },
-				body: { ...taskItemMutationBody(draft), expectedProjectVersion },
-			});
-			return toBenchmarkTaskItem(data);
-		},
-		onSuccess: () => invalidate(),
-	});
-}
-
-export function useUpdateBenchmarkTaskItem() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({
-			projectId,
-			item,
-			draft,
-		}: {
-			projectId: string;
-			/** The ITEM's version, not the project's — an edit is a write to one item. */
-			item: Pick<BenchmarkTaskItem, "id" | "version">;
-			draft: BenchmarkTaskItemDraft;
-		}) => {
-			const { data } = await updateBenchmarkTaskItem({
-				path: { projectId, itemId: item.id },
-				body: { ...taskItemMutationBody(draft), expectedVersion: item.version },
-			});
-			return toBenchmarkTaskItem(data);
-		},
-		onSuccess: () => invalidate(),
-	});
-}
-
-export function useDeleteBenchmarkTaskItem() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: ({ projectId, item }: { projectId: string; item: Pick<BenchmarkTaskItem, "id" | "version"> }) =>
-			deleteBenchmarkTaskItem({
-				path: { projectId, itemId: item.id },
-				body: { expectedVersion: item.version },
-			}),
-		onSuccess: () => invalidate(),
-	});
-}
-
-/**
- * The whole new order at once. Naming every current id IS the concurrency check — an item added or deleted while the
- * operator was dragging makes the two sets disagree and the node refuses — so there is no version token to send.
- */
-export function useReorderBenchmarkTaskItems() {
-	const invalidate = useBenchmarkInvalidation();
-	return useMutation({
-		mutationFn: async ({ projectId, itemIds }: { projectId: string; itemIds: readonly string[] }) => {
-			const { data } = await reorderBenchmarkTaskItems({ path: { projectId }, body: { itemIds: [...itemIds] } });
-			return (data.items ?? []).map(toBenchmarkTaskItem).sort((left, right) => left.index - right.index);
-		},
-		onSuccess: () => invalidate(),
-	});
-}
-
-/** The ranked cell table: one row per (model, KV, repeat group), each holding its per-item answers. */
-export interface BenchmarkCellList {
-	cells: BenchmarkCell[];
-	cohort: BenchmarkRankCohort;
-	/** How many leaf items count toward the score right now. A cell holding fewer is why a reader sees `item-incomplete`. */
-	scorableItemCount: number;
-}
-
-/**
- * Read only while the project actually has more than one item: a single-item project's cell table is its runs table
- * with extra indirection, and the runs query already polls that.
- */
-export function useBenchmarkCells(projectId: string | null, enabled: boolean) {
-	return useQuery<BenchmarkCellList>({
-		queryKey: listBenchmarkCellsQueryKey({ path: { projectId: projectId ?? "" } }),
-		enabled: enabled && Boolean(projectId),
-		queryFn: async ({ signal }) => {
-			const { data } = await listBenchmarkCells({ path: { projectId: projectId as string }, signal });
-			return {
-				cells: (data.cells ?? []).map(toBenchmarkCell),
-				cohort: toBenchmarkRankCohort(data.rankCohort),
-				scorableItemCount: data.scorableItemCount ?? 0,
-			};
-		},
-	});
-}
-
-/** Two to six cells side by side, plus every paired difference between them. */
-export interface BenchmarkCellComparison extends BenchmarkCellList {
-	/**
-	 * One entry per unordered pair that shares at least three rankably-answered items. A REQUESTED pair with no entry
-	 * means exactly that — too few shared items — and never a delta of zero.
-	 */
-	pairedDeltas: BenchmarkPairedDelta[];
-}
-
-/**
- * The paired-difference read. Enabled only for a real selection of two or more: the node refuses fewer, and asking it
- * anyway would turn an empty picker into an error the operator has to dismiss.
- */
-export function useBenchmarkCellComparison(projectId: string | null, cellKeys: readonly string[]) {
-	return useQuery<BenchmarkCellComparison>({
-		// Keyed on the SORTED selection, so picking the same cells in another order reads the same entry.
-		queryKey: compareBenchmarkCellsQueryKey({
-			path: { projectId: projectId ?? "" },
-			query: { cellKeys: [...cellKeys].sort() },
-		}),
-		enabled: Boolean(projectId) && cellKeys.length >= 2,
-		queryFn: async ({ signal }) => {
-			const { data } = await compareBenchmarkCells({
-				path: { projectId: projectId as string },
-				query: { cellKeys: [...cellKeys] },
-				signal,
-			});
-			return {
-				cells: (data.cells ?? []).map(toBenchmarkCell),
-				cohort: toBenchmarkRankCohort(data.rankCohort),
-				scorableItemCount: data.scorableItemCount ?? 0,
-				pairedDeltas: (data.pairedDeltas ?? []).map(toBenchmarkPairedDelta),
-			};
-		},
-	});
+export function useBenchmarkInvalidation() {
+	const queryClient = useQueryClient();
+	return async (...runIds: readonly string[]): Promise<void> => {
+		await queryClient.invalidateQueries({ predicate: isProjectQuery });
+		await Promise.all(
+			runIds.map((runId) => queryClient.invalidateQueries({ queryKey: getBenchmarkRunQueryKey({ path: { runId } }) })),
+		);
+	};
 }

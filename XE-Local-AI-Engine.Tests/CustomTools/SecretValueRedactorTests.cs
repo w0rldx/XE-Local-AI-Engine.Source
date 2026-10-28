@@ -22,8 +22,8 @@ public sealed class SecretValueRedactorTests
     [Test]
     public async Task WithParts_AddsTheValueOfAnAssignmentStyleArgument()
     {
-        // Codex review 2026-09-30: "--api-key=secretvalue" registered only the whole argument, so a diagnostic echoing the
-        // parsed value alone survived every scrub.
+        // Registering only the whole "--api-key=secretvalue" argument would let a diagnostic echoing the
+        // parsed value alone survive every scrub.
         var parts = SecretValueRedactor.WithParts(["--api-key=secretvalue", "Bearer tok-abcdef0123", "PATH=/usr/bin:/bin"], minLength: 8).ToList();
 
         AssertEx.Contains(parts, "secretvalue");
@@ -58,7 +58,7 @@ public sealed class SecretValueRedactorTests
         await Task.CompletedTask;
     }
 
-    // ForCommand: the credential shapes that must stay redacted, one test each, then the flag names that are exempt (tester round 6).
+    // ForCommand: the credential shapes that must stay redacted, one test each, then the flag names that are exempt.
     // The stderr tail uses a minimum secret length of 8.
     private static string RedactForCommand(string[] arguments, string text) =>
         new SecretValueRedactor(SecretValueRedactor.ForCommand([], arguments, minLength: 8)).Redact(text);

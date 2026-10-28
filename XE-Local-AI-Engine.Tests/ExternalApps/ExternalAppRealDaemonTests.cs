@@ -37,7 +37,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///         The fake-based suites prove the state machine, the refusals and the writes. Only this one proves that a
 ///         real daemon, asked for what the planner produces, gives back two containers on one network with exactly
 ///         one loopback-published port that a socket in this process can actually connect to, a bind mount the
-///         application can write, a materialised asset it can read, and that stop, reset and uninstall leave the
+///         application can write, a materialized asset it can read, and that stop, reset and uninstall leave the
 ///         daemon with nothing of ours on it.
 ///     </para>
 ///     <para>
@@ -166,7 +166,7 @@ public sealed class ExternalAppRealDaemonTests
         AssertEx.Equal(expected: 512L, inspection.PidsLimit);
         AssertEx.Equal(expected: 0, inspection.DeviceCount, "No GPU device request may ever reach the daemon.");
 
-        // The effective mounts, not the requested ones: the writable volume and the read-only materialised asset.
+        // The effective mounts, not the requested ones: the writable volume and the read-only materialized asset.
         AssertEx.Contains(inspection.Mounts, mount => mount.Destination == "/data" && !mount.ReadOnly);
         AssertEx.Contains(inspection.Mounts, mount => mount.Destination == "/srv/index.html" && mount.ReadOnly);
 
@@ -258,7 +258,7 @@ public sealed class ExternalAppRealDaemonTests
     ///     The endpoints to try, each named by the PRODUCTION resolver. The second exists because that resolver
     ///     deliberately stops at an existing <c>/var/run/docker.sock</c> and never falls through to a per-user
     ///     socket — correct for a product whose operator attests to one daemon, and the reason every test here would
-    ///     otherwise skip on a box with a root-owned system socket and a rootless daemon of its own.
+    ///     otherwise skip on a host with a root-owned system socket and a rootless daemon of its own.
     /// </summary>
     private static IEnumerable<ContainerRuntimeOptions> DaemonCandidates()
     {
@@ -359,8 +359,8 @@ public sealed class ExternalAppRealDaemonTests
     ///     The one switch. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c> and these tests run, failing rather than skipping
     ///     when no daemon is usable; leave it unset and they skip with a reason naming the runner.
     ///     <para>
-    ///         They used to run whenever a socket happened to be present, and CI forced them on. That made Docker
-    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is now
+    ///         They do not run merely because a socket is present, nor does CI force them on: that would make Docker
+    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is
     ///         covered without a daemon by the fake server. What is left here is what only a real daemon can settle,
     ///         and that belongs to an opt-in pre-RC smoke rather than to the PR gate.
     ///     </para>
@@ -389,7 +389,7 @@ public sealed class ExternalAppRealDaemonTests
 
     /// <summary>
     ///     One test's node: a temp data directory, a real SQLite instance store, the real resolver over the real
-    ///     runtime factory, and the real service. Everything is labelled with an install id derived from that temp
+    ///     runtime factory, and the real service. Everything is labeled with an install id derived from that temp
     ///     directory, so nothing this class creates can be confused with — or clean up — anything else on a shared
     ///     developer daemon.
     /// </summary>
@@ -750,7 +750,7 @@ public sealed class ExternalAppRealDaemonTests
         }
 
         /// <summary>
-        ///     Two busybox containers: one serving the materialised asset over the published loopback port, one sleeping
+        ///     Two busybox containers: one serving the materialized asset over the published loopback port, one sleeping
         ///     so the dependency edge is real. Both roles run the same pinned digest, so the pull is seconds and CI's
         ///     pre-pull step already covers it.
         /// </summary>

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
-///     Default <see cref="IIntegrationTriggerService" />. Modelled on the scheduler's definition management: shape
+///     Default <see cref="IIntegrationTriggerService" />. Modeled on the scheduler's definition management: shape
 ///     validation lives in the endpoint's FluentValidation rules, and only the two checks that need the database live
 ///     here.
 /// </summary>

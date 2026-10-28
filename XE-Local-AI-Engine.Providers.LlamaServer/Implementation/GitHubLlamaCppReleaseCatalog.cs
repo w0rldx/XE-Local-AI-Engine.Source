@@ -26,7 +26,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     private const string ApiBase = "https://api.github.com";
     private const string UserAgent = "XE-Local-AI-Engine-runtime-updater";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly ConcurrentDictionary<string, CachedRelease> _cache = new(StringComparer.Ordinal);
     private readonly HttpClient _httpClient;

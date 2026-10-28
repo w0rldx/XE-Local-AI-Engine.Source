@@ -181,9 +181,8 @@ public sealed class ExternalProviderProbeEndpointTests
     [Test]
     public async Task Probe_ThroughTheRealRegisteredService_ReachesTheEndpointAndReportsAVerdict()
     {
-        // The only test that constructs the REAL probe service out of the container, so a broken registration surfaces
-        // here rather than the first time an operator presses "Test connection". Port 9 (discard) is closed on a
-        // loopback interface, so the connect is refused immediately and the verdict is the unreachable one.
+        // The only test that builds the REAL probe service from the container, so a broken registration surfaces here.
+        // Port 9 (discard) is closed on loopback, so the connect is refused at once and the verdict is unreachable.
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
 

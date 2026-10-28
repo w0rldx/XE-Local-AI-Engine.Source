@@ -40,7 +40,7 @@ public sealed class WorkSessionServiceRegistrationTests
         }).Build();
         _ = builder.AddNodeWorkSessions(configuration);
 
-        // The kill switch gates behaviour, not the container: the REST surface and the hub are mapped unconditionally,
+        // The kill switch gates behavior, not the container: the REST surface and the hub are mapped unconditionally,
         // so an empty container would answer 500 where a disabled node has to answer legibly.
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IAgentWorkSessionStore)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IWorkSessionArtifactBlobStore)));
@@ -69,9 +69,8 @@ public sealed class WorkSessionServiceRegistrationTests
     [Test]
     public void CompositionRoot_InvokesTheModuleAfterChat()
     {
-        // Hosted services start in registration order, so the chat restart recovery has to terminalize rows orphaned by
-        // a crash before this reconciler collapses those sessions to Interrupted. The invariant is a property of the
-        // composition root's call order, which is why it is read from the source rather than from a container.
+        // Hosted services start in registration order, so chat restart recovery terminalizes crash-orphaned rows before
+        // this reconciler marks those sessions Interrupted; that order is read from the composition root's source.
         var source = File.ReadAllText(CompositionRootPath());
         var chatIndex = source.IndexOf("AddNodeChat(configuration)", StringComparison.Ordinal);
         var workSessionIndex = source.IndexOf("AddNodeWorkSessions(configuration)", StringComparison.Ordinal);

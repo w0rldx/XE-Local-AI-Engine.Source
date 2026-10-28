@@ -1,6 +1,6 @@
 // Domain vocabulary for the External Apps surface. The generated client types every enum as a bare `string` (they
 // cross the wire as enum NAMES), so these unions are the client-side narrowing — and the place a status typo fails to
-// compile instead of falling silently through a colour map. Same shape as `DevWorkflowModels.ts`.
+// compile instead of falling silently through a color map. Same shape as `DevWorkflowModels.ts`.
 //
 // One narrowing shape here, deliberately: a render must pick SOMETHING, so an unknown token falls back to the state
 // with no controls rather than putting a raw identifier in front of an operator.

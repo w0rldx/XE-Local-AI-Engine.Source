@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         Comments are stripped first through the shared <see cref="SourceCommentStripper" />, the same helper
 ///         <c>ContainerBridgeLayeringArchitectureTests</c> uses, and for the same reason: a doc comment naming
 ///         <c>ExecuteAsync</c> to say why an application container must not call it documents the rule rather than
-///         breaking it. String literals stay visible — the stripper recognises a comment delimiter only in code, so
+///         breaking it. String literals stay visible — the stripper recognizes a comment delimiter only in code, so
 ///         a <c>//</c> inside a URL can never erase the reference that follows it on the line.
 ///     </para>
 /// </summary>
@@ -70,7 +70,7 @@ public sealed class ExternalAppsRuntimeIsolationArchitectureTests
     {
         var guarded = GuardedDirectory();
 
-        // The directory exists today (the External Apps feature landed 2026-09-11), so this branch is defensive:
+        // The directory exists today, so this branch is defensive:
         // if it is ever removed or renamed, the guard must report Skipped. Completing with an empty offender list
         // would be indistinguishable in a pass/fail summary from a real scan that found nothing.
         if (!Directory.Exists(guarded))

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
+import type { AgentDefinition } from "@/core/agents/models/AgentDefinitionModels";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
 
 vi.mock("react-i18next", () => ({
@@ -46,7 +46,7 @@ const { hooksMock, playbookHooksMock, confirmMock } = vi.hoisted(() => ({
 	confirmMock: vi.fn(),
 }));
 
-vi.mock("@/features/agents/queries/useAgentDefinitions", () => hooksMock);
+vi.mock("@/core/agents/queries/useAgentDefinitions", () => hooksMock);
 vi.mock("@/features/agents/queries/usePlaybookActions", () => playbookHooksMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
@@ -83,7 +83,7 @@ vi.mock("@/features/skills/queries/useSkills", () => ({
 	useSkills: () => ({ data: [], isLoading: false, error: null }),
 }));
 
-vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+vi.mock("@/core/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: () => ({ data: [], isLoading: false, error: null }),
 }));
 

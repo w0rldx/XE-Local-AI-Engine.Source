@@ -73,7 +73,7 @@ export function GraphWorkflowDefinitionMetaDialog({
 	// replace; anything else is the operator's typing and is left alone.
 	const [prefilled, setPrefilled] = useState({ name: "", description: "" });
 
-	// Reseeded on every OPEN, so a cancelled edit does not survive into the next one and a "Save as" opened over a
+	// Reseeded on every OPEN, so a canceled edit does not survive into the next one and a "Save as" opened over a
 	// renamed definition starts from the name it has now.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: seeding is keyed on the open transition, not on `initial`.
 	useEffect(() => {

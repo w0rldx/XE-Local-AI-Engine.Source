@@ -11,18 +11,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The local-default chat model resolver enumerates the installed GGUF (llama.cpp) models, excludes GGUFs whose
-///     PERSISTED effective kind (OverrideKind ?? DetectedKind) is Embedding (no Ollama probe on this path), and applies
-///     the pick order: the persisted node default iff it is an installed GGUF chat model, else the
-///     most-recently-modified installed GGUF chat model (tie-break by name). Returns null when no chat model is
-///     installed.
-///     Production behaviour under test:
-///     - A GGUF with NO persisted row (Unknown/absent) is eligible.
-///     - A GGUF with DetectedKind=Embedding (and no override) is excluded.
-///     - A GGUF with OverrideKind=Embedding overrides a Chat detected kind and is excluded.
-///     - A GGUF with OverrideKind=Chat overrides an Embedding detected kind and is eligible.
-///     - A model resident in a llama.cpp Chat-role process outranks all of the above, if it is an installed chat model.
+///     The local-default chat model resolver picks among installed GGUF (llama.cpp) chat models: the persisted node
+///     default iff it is one, else the most-recently-modified (tie-break by name); null when none is installed.
 /// </summary>
+/// <remarks>
+///     A model resident in a llama.cpp Chat-role process outranks both, if it is an installed chat model.
+///     Eligibility reads the PERSISTED effective kind (OverrideKind ?? DetectedKind), with no Ollama probe: a GGUF
+///     with no persisted row is eligible, DetectedKind=Embedding without override or OverrideKind=Embedding is
+///     excluded, and OverrideKind=Chat makes an Embedding detected kind eligible.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class LocalDefaultChatModelResolverTests
 {
@@ -252,7 +249,7 @@ public sealed class LocalDefaultChatModelResolverTests
     [Test]
     public async Task ResolveAsync_WhenAChatModelIsResident_PrefersItOverThePersistedDefault()
     {
-        // The tester's case: a big chat model is loaded, the node default is a different small one. Reusing the loaded
+        // A big chat model is loaded and the node default is a different small one. Reusing the loaded
         // one avoids a second process the capacity gate would refuse.
         LocalModelDescriptor[] installed =
         [

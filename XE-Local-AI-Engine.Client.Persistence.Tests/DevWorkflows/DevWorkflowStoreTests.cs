@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class DevWorkflowStoreTests
 {
-    /// <summary>T-1: the run's counter is the one watermark, and it never repeats or skips across child tables.</summary>
+    /// <summary>The run's counter is the one watermark, and it never repeats or skips across child tables.</summary>
     [Test]
     public async Task Sequence_IsStrictlyIncreasingAndGapFreeAcrossEveryChildTable()
     {
@@ -64,7 +64,7 @@ public sealed class DevWorkflowStoreTests
         }
     }
 
-    /// <summary>T-2: a stale expected version loses; the Any sentinel never does.</summary>
+    /// <summary>A stale expected version loses; the Any sentinel never does.</summary>
     [Test]
     public async Task ExpectedVersion_RejectsAStaleWriterAndTheAnySentinelAlwaysWins()
     {
@@ -98,7 +98,7 @@ public sealed class DevWorkflowStoreTests
         AssertEx.True(withSentinel.Version > moved.Version, "The sentinel write must still bump the version it did not check.");
     }
 
-    /// <summary>T-3, sequential half: a replayed operation returns the recorded result and appends nothing.</summary>
+    /// <summary>Idempotency, sequential half: a replayed operation returns the recorded result and appends nothing.</summary>
     [Test]
     public async Task OperationId_ReplayReturnsTheRecordedResultWithoutAppending()
     {
@@ -131,7 +131,7 @@ public sealed class DevWorkflowStoreTests
     }
 
     /// <summary>
-    ///     T-3, concurrent half: two writers on separate connections submitting the same operation id both receive the
+    ///     Idempotency, concurrent half: two writers on separate connections submitting the same operation id both receive the
     ///     one recorded result, and neither gets an exception. That is the contract an idempotency key exists to give —
     ///     a run is written by the dispatcher AND by human HTTP actions that can genuinely arrive together, unlike a
     ///     work session, which one supervisor drives.
@@ -177,7 +177,7 @@ public sealed class DevWorkflowStoreTests
         AssertEx.Equal(expected: 1, events.Count(item => item.OperationId == operationId), "Exactly one event may carry the operation id.");
     }
 
-    /// <summary>T-13: the partial unique index, not a check-then-insert, is what makes one live run per work item true.</summary>
+    /// <summary>The partial unique index, not a check-then-insert, is what makes one live run per work item true.</summary>
     [Test]
     public async Task StartRun_RejectsASecondLiveRunAndAdmitsOneAfterTheFirstTerminates()
     {
@@ -433,7 +433,7 @@ public sealed class DevWorkflowStoreTests
     }
 
     /// <summary>
-    ///     T5: a re-attempt empties every cost column, exactly as it empties the timestamps and the failure fields. The
+    ///     A re-attempt empties every cost column, exactly as it empties the timestamps and the failure fields. The
     ///     columns describe one attempt, so carrying them forward would make the next attempt report the previous one's
     ///     spend — the earlier attempt's numbers live on its <c>node.retry.scheduled</c> event instead.
     /// </summary>
@@ -613,10 +613,10 @@ public sealed class DevWorkflowStoreTests
     }
 
     /// <summary>
-    ///     FU3-4 race A, at the level that decides it. A human <c>Retry</c> and an automatic re-attempt spend the same
-    ///     run-wide budget, and the automatic path used to check it on a read taken before its own write — so a Retry
-    ///     recorded in that window spent the last slot and the re-attempt committed anyway. The budget now rides on the
-    ///     transition command and is admitted inside its transaction, which is the only count that can refuse it.
+    ///     The Retry race, at the level that decides it. A human <c>Retry</c> and an automatic re-attempt spend the same
+    ///     run-wide budget; checked on a read taken before the re-attempt's own write, a Retry recorded in that window
+    ///     spends the last slot and the re-attempt commits anyway. The budget rides on the transition command and is
+    ///     admitted inside its transaction, which is the only count that can refuse it.
     /// </summary>
     [Test]
     public async Task TransitionNodeRun_WithABudgetTheRunHasAlreadyPromised_IsRefusedInsideItsOwnTransaction()

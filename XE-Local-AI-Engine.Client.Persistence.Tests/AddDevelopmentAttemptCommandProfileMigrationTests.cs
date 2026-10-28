@@ -3,10 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddDevelopmentAttemptCommandProfile</c> adds the immutable per-attempt snapshot of the command profile the
-///     attempt ran under. Deliberately plaintext TEXT and deliberately nullable-and-unbackfilled (a null means "predates
-///     this column", which readers resolve against the project's profile) — the migration's own comment says so, and
-///     this test pins the shape so a later "fix" to an encrypted BLOB fails loudly.
+///     <c>AddDevelopmentAttemptCommandProfile</c> adds the per-attempt command-profile snapshot as plaintext TEXT,
+///     nullable and unbackfilled (null means "predates this column"; readers use the project's profile), pinned so
+///     an encrypted-BLOB "fix" fails.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddDevelopmentAttemptCommandProfileMigrationTests

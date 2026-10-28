@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     operation pinned: routed into the profiling-owned exclusion added by <c>30a514d00</c> they park on a semaphore
 ///     their own frame holds, which is a self-deadlock, not a wait. That exclusion still applies to every caller from
 ///     another flow — <c>SupervisorProfilingTests</c> pins that half on its own, and it is re-asserted here while the
-///     body is reusing the pinned process, so both behaviours are proven together in one run.
+///     body is reusing the pinned process, so both behaviors are proven together in one run.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SupervisorProfilingReentrancyTests
@@ -161,7 +161,7 @@ public sealed class SupervisorProfilingReentrancyTests
         var reused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // real-timer: the same deadlock detector as the first test. The barrier is signalled from a finally, so a
+        // real-timer: the same deadlock detector as the first test. The barrier is signaled from a finally, so a
         // regression that makes the re-entrant ensure fail still lets this test run to a red instead of stranding it.
         using var deadlock = new CancellationTokenSource();
         int? pinnedProcessId = null;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 // The status-honesty regression tests live here, because the table is the execution view and it is where a
-// dishonest status would first be seen. Two of them guard behaviour an earlier design had backwards:
+// dishonest status would first be seen. Two of them guard behavior an earlier design had backwards:
 // a `Queued` node must not animate (it is waiting for a slot another node holds), and `Blocked` must read as
 // needs-intervention rather than as a passive dependency wait — rendered the old way, a run that had stopped
 // dead would have looked like a run quietly making progress.

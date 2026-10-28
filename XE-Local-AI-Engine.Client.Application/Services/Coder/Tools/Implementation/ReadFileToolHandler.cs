@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 internal sealed class ReadFileToolHandler : IClientLocalToolHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ICoderWorkspaceReader _reader;

@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Reciprocal Rank Fusion merges the lexical and semantic arms: a chunk's fused score is the sum over every list it
-///     appears in of <c>1 / (k + rank)</c> with <c>k = 60</c> (1-based rank). The result is the union of every chunk id,
-///     ordered by descending fused score with a deterministic tiebreak on the chunk id.
+///     Reciprocal Rank Fusion merges the lexical and semantic arms: a chunk scores the sum of <c>1 / (k + rank)</c> over
+///     every list it appears in (<c>k = 60</c>, 1-based rank). The result is the union of chunk ids by descending score,
+///     ties broken by chunk id.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ReciprocalRankFusionTests

@@ -195,9 +195,8 @@ public sealed class LlamaServerLaunchPolicyTests
     [Test]
     public async Task GpuReplay_KvCacheTypeSetting_IsNotApplied()
     {
-        // The policy never overrides a replay's KV: a frozen profile pins its own -ctk/-ctv verbatim. Under D13 that
-        // stays true AND is now unreachable in the superseded case — changing the knob stales the profile through the
-        // launch-policy fingerprint first, so a replay carrying a KV type the operator has since abandoned never runs.
+        // The policy never overrides a replay's KV: a frozen profile pins its own -ctk/-ctv verbatim. Changing the knob
+        // stales the profile through the launch-policy fingerprint, so a replay with an abandoned KV type never runs.
         var policy = NewPolicy(new LlamaServerLaunchPolicyOptions
         {
             KvCacheType = LlamaServerKvCacheTypes.Q4_0
@@ -247,7 +246,7 @@ public sealed class LlamaServerLaunchPolicyTests
     [Test]
     public async Task CpuAndReplayBranches_NeverCarryCpuMoe()
     {
-        // Neither branch can honour the flag: a CPU build has no experts to move off a GPU, and a replay pins its own
+        // Neither branch can honor the flag: a CPU build has no experts to move off a GPU, and a replay pins its own
         // -ot verbatim, so --cpu-moe and -ot can never coexist.
         var policy = NewPolicy(new LlamaServerLaunchPolicyOptions());
 

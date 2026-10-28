@@ -657,7 +657,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         }
         finally
         {
-            TryDeleteDirectory(WorkRoot);
+            BestEffortFile.TryDeleteDirectory(WorkRoot);
         }
     }
 
@@ -850,7 +850,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
         if (File.Exists(MarkerPath) || Directory.Exists(WorkRoot))
         {
-            TryDeleteDirectory(WorkRoot);
+            BestEffortFile.TryDeleteDirectory(WorkRoot);
             lock (_stateLock)
             {
                 _phase = WhisperCppSourceBuildPhase.Failed;
@@ -874,7 +874,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
     private void PrepareWorkTree()
     {
-        TryDeleteDirectory(WorkRoot);
+        BestEffortFile.TryDeleteDirectory(WorkRoot);
         WhisperCppRuntimeAdoption.CreateOwnerOnlyDirectory(BuildRoot);
         WhisperCppRuntimeAdoption.CreateOwnerOnlyDirectory(WorkRoot);
     }
@@ -943,21 +943,6 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     private static IReadOnlyList<string> GitArguments(params string[] arguments)
     {
         return [.. GitHardeningArguments, .. arguments];
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; the caller reports the primary operation.
-        }
     }
 
     [GeneratedRegex(@"\((?:RUNPATH|RPATH)\)[^\[]*\[(?<value>[^\]]*)\]", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]

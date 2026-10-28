@@ -12,10 +12,10 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>R4-06: an agent with a skill must reach llama-server with exactly one, leading system message.</summary>
+/// <summary>An agent with a skill must reach llama-server with exactly one, leading system message.</summary>
 /// <remarks>
 ///     The skills provider's listing (sent by the OpenAI adapter from <c>ChatOptions.Instructions</c>) plus the seed
-///     system prompt made two, and Qwen3.5's template raises "System message must be at the beginning" on the second.
+///     system prompt make two, and Qwen3.5's template raises "System message must be at the beginning" on the second.
 ///     Driven through the real agent, skills provider, production chat pipeline and llama-server wire adapter.
 /// </remarks>
 [Category(TestCategories.Unit)]

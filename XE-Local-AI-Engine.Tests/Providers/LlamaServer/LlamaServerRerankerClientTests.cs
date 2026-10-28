@@ -7,7 +7,6 @@ using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -70,12 +69,12 @@ public sealed class LlamaServerRerankerClientTests
     [Test]
     public async Task RerankAsync_WhenNoRerankerIsRunning_DegradesColdWithoutSpawning()
     {
-        // A cold reranker used to be spawned inside the search, charging a model load (up to minutes) to a 500 ms budget.
+        // A cold reranker is never spawned inside the search, which would charge a model load (up to minutes) to a 500 ms budget.
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.TryAcquireInferenceLease(ModelName, ModelRole.Reranker).Returns(LlamaServerLeaseAcquisition.NotRunning);
         using var handler = new CapturingHandler(_ => JsonOk("""{"results":[]}"""));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var logger = new RecordingLogger<LlamaServerRerankerClient>();
         var client = new LlamaServerRerankerClient(supervisor, http, logger);
 
         var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
@@ -156,7 +155,7 @@ public sealed class LlamaServerRerankerClientTests
     {
         using var handler = new CapturingHandler(_ => JsonOk("""{"results":[]}"""), TimeSpan.FromSeconds(30));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var logger = new RecordingLogger<LlamaServerRerankerClient>();
         var client = new LlamaServerRerankerClient(ReadySupervisor(), http, logger, requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
@@ -171,7 +170,7 @@ public sealed class LlamaServerRerankerClientTests
     {
         using var handler = new CapturingHandler(_ => throw new HttpRequestException("Connection refused."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var logger = new RecordingLogger<LlamaServerRerankerClient>();
         var client = new LlamaServerRerankerClient(ReadySupervisor(), http, logger);
 
         var scores = await client.RerankAsync(ModelName, "the query", ["a", "b"], CancellationToken.None);
@@ -229,7 +228,7 @@ public sealed class LlamaServerRerankerClientTests
         var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.ProfilingOwned);
         using var handler = new CapturingHandler(_ => JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}"""));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var logger = new RecordingLogger<LlamaServerRerankerClient>();
         var client = new LlamaServerRerankerClient(supervisor, http, logger);
 
         var scores = await client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
@@ -261,7 +260,7 @@ public sealed class LlamaServerRerankerClientTests
         var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease, RerankEndpoint()));
         using var handler = new GatedHandler(_ => JsonOk("""{"results":[{"index":0,"relevance_score":0.5}]}"""));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var logger = new RecordingLogger<LlamaServerRerankerClient>();
         var client = new LlamaServerRerankerClient(supervisor, http, logger);
 
         var first = client.RerankAsync(ModelName, "the query", ["a"], CancellationToken.None);
@@ -314,7 +313,7 @@ public sealed class LlamaServerRerankerClientTests
         var supervisor = LeasingSupervisor(LlamaServerLeaseAcquisition.Granted(lease, RerankEndpoint()));
         using var handler = new GatedHandler(_ => throw new HttpRequestException("Connection reset."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var logger = new CapturingLogger<LlamaServerRerankerClient>();
+        var logger = new RecordingLogger<LlamaServerRerankerClient>();
         var client = new LlamaServerRerankerClient(supervisor, http, logger);
         using var callerCts = new CancellationTokenSource();
 

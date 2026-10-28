@@ -37,7 +37,7 @@ internal sealed class DefaultPlaybookEvalJudge : IPlaybookEvalJudge
                                              - "reason" is a short justification.
                                              """;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly ILogger<DefaultPlaybookEvalJudge> _logger;
 

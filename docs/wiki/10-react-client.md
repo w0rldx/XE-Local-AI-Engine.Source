@@ -95,7 +95,7 @@ i18n is initialized as a side-effect import (`src/i18n.ts`) and `dayjs` is exten
 
 Two trees carry essentially all the code:
 
-- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`, incl. `core/api/signalr`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), frontend diagnostics collection + redaction (`core/diagnostics`), the shared UI library (`core/ui`), the shared date and duration formatters (`core/formatting`), the browser audio capture shared by transcription and the command page's dictation (`core/audio/capture` — the microphone source, the PCM graph and the downsampler worklet), and the browser voice runtime (`core/runtime` — `TtsProvider`, `VoiceRuntime`, and `CapabilityDetector`, consumed by `features/voice`, all backed by Web Speech rather than a bundled model or worker).
+- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`, incl. `core/api/signalr`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), frontend diagnostics collection + redaction (`core/diagnostics`), the shared UI library (`core/ui`), the shared date and duration formatters (`core/formatting`), the browser audio capture shared by transcription and the command page's dictation (`core/audio/capture` — the microphone source, the PCM graph and the downsampler worklet), and the chat sampling options shared across features (`core/runtime`). Data shared by several features lives in core too: the tool catalog (`core/tools`), the model downloads (`core/model-downloads`), the agent definitions (`core/agents`), the running and loaded models (`core/loaded-models`) and the assist models (`core/assist`).
 - **`src/features/`** — one folder per product area, each self-contained with `pages/`, `components/`, `queries/` (TanStack Query hooks), `models/` (DTO ↔ view mappers + Zod), and optionally `stores/` and `hooks/`.
 
 Three smaller siblings exist and are worth knowing before you put something in the wrong place: `src/capabilities/` (the central `nodeRoutePaths` + `nodeCapabilities` declaration), `src/routes/` + the generated `routeTree.gen.ts` (TanStack Router file routes — thin, one `createFileRoute` per page), and `src/locales/` (the bundled `en`/`de` JSON). Chat is the landing page: `/` redirects to `/chat`, which also shows the first-run model download. The navigation menu data and logo marks live in `src/core/layout/`, the language menu data in `src/core/locales/models/`, and the theme provider and per-browser accent store in `src/core/theme/` (colour scheme is Mantine-native; users change scheme and accent in the node-settings "This browser" card, per browser and never stored on the node).
@@ -204,7 +204,7 @@ mirrors the server's two couplings so the refusal lands on the field: developmen
 fires only when `useEffectiveToolCapableModels` reports the effective list empty, because the server falls back from an
 empty stored list to the appsettings seed.
 
-**Chat holds the Thinking budgets card** (`NodeSettingsReasoningBudgetsCard` in `components/NodeSettingsTunableCards.tsx`):
+**Chat holds the Thinking budgets card** (`NodeSettingsReasoningBudgetsCard` in `components/NodeSettingsAgentCards.tsx`):
 the llama.cpp thinking budget per reasoning effort and the effort whose budget a turn with none gets. All five are read
 per turn, so none is restart-gated; the effort choices are `defaultReasoningEffortSelectValues`, which leaves out
 `none` because it sends no budget. Semantics: [Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the
@@ -271,7 +271,7 @@ with the toggle off — a validation error naming a field in a section the opera
 advanced section, both force it into the visible list.
 
 The former appsettings knobs (see `08-data-and-persistence.md`) sit in small cards from
-`components/NodeSettingsTunableCards.tsx`: **chat** holds Agent limits (tool pipeline, cumulative input budget, retries,
+`components/NodeSettingsTunableCards.tsx`, `NodeSettingsAgentCards.tsx` and `NodeSettingsKnowledgeCards.tsx`: **chat** holds Agent limits (tool pipeline, cumulative input budget, retries,
 spawn caps) and Context & compaction; **knowledge** holds Retrieval and knowledge tools and the Learning models pickers;
 **privacy** holds Cloud models and local data, apart from the external-access presets; **usage** holds Retention and
 storage; **runtime** adds the image process cap and text-encoder switch to the Process pool card; **workspaces** holds
@@ -286,7 +286,7 @@ once at startup carries the restart badge; the restart list names the backend co
 Two stores, strictly separated:
 
 1. **Server state → TanStack Query.** Every REST read/write is a query/mutation hook under a feature's `queries/` folder (e.g. `features/agents/queries/usePlaybookActions.ts`, `features/skills/queries/useSkills.ts`). The `QueryClient` is provided by `core/integrations/tanstack-query/Provider.tsx`. Server data is **not** mirrored into Zustand.
-2. **UI/session state → Zustand.** `find src -name "*Store.ts*"` is the inventory (a labelled snapshot: **24** files on 2026-08-17, **23** of them Zustand stores) — e.g. `core/auth/stores/NodeAuthStore.tsx` (access token + actions), `core/theme/stores/ThemeStore.tsx` (the optional accent colour), `core/layout/stores/SidebarStore.tsx` + `DesktopNavigationBarStore.tsx`, `core/locales/stores/UserLanguageStore.tsx`, `core/dev-tools/stores/DeveloperModeStore.ts`, and `core/ui/components/TablePagination/useTablePaginationStore.ts`. The one exception, `features/diagnostics/SnapshotStore.ts`, is **not** Zustand — it is the IndexedDB snapshot store and imports no state library. Don't include it when reasoning about the Zustand surface.
+2. **UI/session state → Zustand.** `find src -name "*Store.ts*"` is the inventory (a labelled snapshot: **24** files on 2026-08-17, **23** of them Zustand stores) — e.g. `core/auth/stores/NodeAuthStore.tsx` (access token + actions), `core/theme/stores/ThemeStore.tsx` (the optional accent colour), `core/layout/stores/SidebarStore.tsx` + `DesktopNavigationBarStore.tsx`, `core/locales/stores/UserLanguageStore.tsx`, `core/dev-tools/stores/DeveloperModeStore.ts`, and `core/ui/components/TablePagination/useTablePaginationStore.ts`. The one exception, `features/diagnostics/stores/SnapshotStore.ts`, is **not** Zustand — it is the IndexedDB snapshot store and imports no state library. Don't include it when reasoning about the Zustand surface.
 
 Stores use the plain `create<T>()` factory with an `actions` sub-object (see `NodeAuthStore.tsx`). Components subscribe with field selectors (`useNodeAuthStore((s) => s.accessToken)`); `useShallow` is not currently in use, so object/array selectors must be hand-shaped to avoid re-render churn — a maintainer adding a multi-field selector should prefer separate selectors or introduce `useShallow` at that point.
 
@@ -447,7 +447,7 @@ reconnect). Four things differ and must not be copied from that hook:
 - **`config/dependency-baseline.json` gained seven `no-cross-feature` fingerprints.** The "keep cross-feature reuse in
   `core/`" rule below is real, and this feature is the recorded exception: the centre pane *is* the chat page, so
   `workSessions/*` importing `chat/pages/Chat.tsx`, `chat/models/ChatModels.ts`, `chat/components/AgentSelectorCard.tsx`,
-  `chat/queries/NodeChatQueryKeys.ts` and `agents/queries/useAgentDefinitions.ts` is the design, not drift. Hoisting
+  `chat/queries/NodeChatQueryKeys.ts` is the design, not drift. Hoisting
   `Chat` into `core/` to satisfy the rule would be a far worse trade.
 - **`config/bundle-budget.json` `applicationJavaScriptBytes` rose 4 192 000 → 4 252 000.** Measured: 4 145 967 bytes
   without the feature, 4 204 890 with it. The old budget had ~46 kB of headroom and this feature consumed all of it.

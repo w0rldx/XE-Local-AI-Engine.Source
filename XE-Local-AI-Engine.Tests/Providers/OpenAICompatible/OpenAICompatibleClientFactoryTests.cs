@@ -9,10 +9,9 @@ using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The shared factory's auth branch decides what a remote server sees. These tests assert the FINAL wire headers
-///     through the real assembled System.ClientModel pipeline (the agent-knowledge §4 pattern) rather than inspecting
-///     options, because the SDK's own placeholder-credential policy runs inside that pipeline and is exactly what a
-///     naive "no credential" implementation would silently lose to.
+///     The shared factory's auth branch decides what a remote server sees. Tests assert the FINAL wire headers from the
+///     real System.ClientModel pipeline, where the SDK's placeholder-credential policy silently defeats a naive "no
+///     credential" path.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class OpenAICompatibleClientFactoryTests

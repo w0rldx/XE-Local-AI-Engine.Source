@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentDefinition } from "@/core/agents/models/AgentDefinitionModels";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import type { AgentDefinitionFormHandle } from "@/features/agents/components/AgentDefinitionForm";
-import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
 
 /**

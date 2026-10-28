@@ -64,7 +64,7 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     Branch A's uninstall arm. Resuming a destructive action the user already authorised is not a new
+    ///     Branch A's uninstall arm. Resuming a destructive action the user already authorized is not a new
     ///     destructive decision — and it is the only transient status the pass completes rather than settles.
     /// </summary>
     [Test]
@@ -412,7 +412,7 @@ public sealed class ExternalAppStartupReconcilerTests
     /// <summary>
     ///     "No row claims it" is decided against the list the pass opened with, and an install admitted a
     ///     moment later is not in it — its row exists, its gate is held and its containers are being created. Branch
-    ///     C used to read that as an orphan and remove the containers out from under the live install.
+    ///     C must not read that as an orphan and remove the containers out from under the live install.
     /// </summary>
     [Test]
     public async Task Reconcile_WhenAnInstallIsInFlightOnAnUnclaimedInstance_KeepsItsContainers()
@@ -443,7 +443,7 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     One row's judgement, not the pass. A container removed between the list and the inspect would otherwise
+    ///     One row's judgment, not the pass. A container removed between the list and the inspect would otherwise
     ///     abort the loop, skip every later row and the orphan sweep, and reach the operator's refresh as a 500.
     /// </summary>
     [Test]
@@ -817,9 +817,8 @@ public sealed class ExternalAppStartupReconcilerTests
     }
 
     /// <summary>
-    ///     The ordering the registration used to get for free: the pass ran inside its own <c>StartAsync</c>, so
-    ///     the observer could not judge a row it was still judging. The pass no longer blocks readiness, so a tick
-    ///     that finds it unfinished skips instead.
+    ///     The observer must not judge a row the pass is still judging. The pass does not block readiness, so a
+    ///     tick that finds it unfinished skips.
     /// </summary>
     [Test]
     public async Task Observer_WhileTheBootPassIsStillRunning_SkipsItsTick()

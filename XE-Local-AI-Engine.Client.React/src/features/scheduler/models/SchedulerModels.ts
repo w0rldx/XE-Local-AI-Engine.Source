@@ -33,7 +33,7 @@ export type ScheduledRunTrigger = "Schedule" | "Manual" | "Agent" | "System";
 // Who created the job definition.
 export type ScheduledJobCreator = "User" | "Agent" | "System";
 
-// True while a run can still be cancelled (it has not reached a terminal status).
+// True while a run can still be canceled (it has not reached a terminal status).
 export function isActiveRunStatus(status: ScheduledRunStatus): boolean {
 	return status === "Queued" || status === "Running";
 }

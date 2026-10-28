@@ -14,7 +14,7 @@ import {
 
 /**
  * The whisper runtime at a glance: process state, the effective model, VAD and the managed build, with an eject —
- * and, below it, the weight catalogue that is the only way to get a model onto this node in the first place.
+ * and, below it, the weight catalog that is the only way to get a model onto this node in the first place.
  *
  * `backend`, `binarySource` and `binaryVersion` are null until a daemon has actually spawned, so a null renders as
  * "not started" — reading one as "not installed" would tell an operator to reinstall a runtime that is fine.

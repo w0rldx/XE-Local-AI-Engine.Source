@@ -4,11 +4,9 @@ using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The shared embedding cache behind playbook-retrieval ranking, semantic memory dedup and knowledge-search query
-///     embeddings. These assert the three properties the three hand-rolled caches it replaced did not have: eviction is
-///     driven by the BYTE budget and picks the least-recently-USED victim (not the oldest inserted), entries expire on
-///     their TTL, and concurrent callers missing on the same key share one computation instead of each paying a
-///     round-trip to the single-slot embedding server.
+///     The embedding cache behind playbook ranking, memory dedup and knowledge search: eviction is by BYTE budget,
+///     least-recently-USED first, entries expire on TTL, and concurrent misses on a key share one round-trip to the
+///     single-slot embedder.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ByteBudgetedCacheTests

@@ -90,7 +90,7 @@ public sealed class ExternalAppFailureTranslatorTests
     }
 
     /// <summary>
-    ///     The port discrimination is a re-probe rather than a message match: deterministic, and true of the box
+    ///     The port discrimination is a re-probe rather than a message match: deterministic, and true of the host
     ///     rather than of whatever text the daemon happened to produce.
     /// </summary>
     [Test]

@@ -3,7 +3,7 @@
 // rrweb 2.0.1 DOES export `Replayer`, so we lazy-`import("rrweb")` it (keeping the library code-split
 // out of the main bundle) and replay the snapshot's packed segment on demand. Events were packed by
 // the rrweb recorder's `packRrwebEvent` ("v1" zlib format), so we unpack them with `unpackRrwebEvent` before
-// handing them to the Replayer. If the Replayer cannot be initialised, we fall back to a "segment
+// handing them to the Replayer. If the Replayer cannot be initialized, we fall back to a "segment
 // present" note so the captured data is still acknowledged. Rendered text is masked at capture
 // so the replay shows layout and interactions only — never conversation content.
 

@@ -112,7 +112,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         }
 
         // Baseline = the agent's current resolved prompt (Instructions + Enabled actions). Candidate = baseline + the
-        // Suggested action's behaviour. The gate measures the marginal effect of promoting THIS action.
+        // Suggested action's behavior. The gate measures the marginal effect of promoting THIS action.
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(agentId, cancellationToken);
 
         // Mirror the store's enabled-action ordering: a promoted action is re-ordered by that same key, so the
@@ -199,7 +199,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
             return new PlaybookEvalCaseResult(goldenCase.Id, InvalidInputScoredBy, BaselinePass: false, CandidatePass: false, Regressed: false);
         }
 
-        // Both arms run at the SAME configured effort (null by default, which is the pre-existing behaviour): the gate
+        // Both arms run at the SAME configured effort (null by default, which is the pre-existing behavior): the gate
         // measures the injected prompt, so an effort difference between the two would confound it.
         var baselineText = await _evalAgentRunner.RunAsync(chatClient, baselinePrompt, turns, _options.ReasoningEffort, cancellationToken);
         var candidateText = await _evalAgentRunner.RunAsync(chatClient, candidatePrompt, turns, _options.ReasoningEffort, cancellationToken);

@@ -133,7 +133,7 @@ public sealed class PlaybookMonitorServiceTests
         var enabledAtUtc = 100L;
         var monitorStore = Substitute.For<IPlaybookMonitorStore>();
         var actionStore = Substitute.For<IPlaybookActionStore>();
-        // A whitespace scope must normalise to null so the store uses the overall (agent-level) cohort, not a facet keyed
+        // A whitespace scope must normalize to null so the store uses the overall (agent-level) cohort, not a facet keyed
         // on an empty tool name.
         var action = EnabledAction(agentId, enabledAtUtc, "   ");
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())

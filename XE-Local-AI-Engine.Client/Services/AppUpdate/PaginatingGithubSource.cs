@@ -30,7 +30,7 @@ public sealed class PaginatingGithubSource : GithubSource
     /// </summary>
     internal const int MaxReleasesPerIndex = 3;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly string _releaseIndexName;
     private IFileDownloader? _downloader;

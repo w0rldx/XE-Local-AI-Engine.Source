@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// <remarks>
 ///     The <c>draft-</c> name prefix spans two classes and is NOT a capability test: every allowed mode is mapped to a
 ///     class explicitly in <see cref="SpeculativeDecodingSettings" />, so adding a mode forces that choice rather than
-///     inheriting behaviour from its name.
+///     inheriting behavior from its name.
 /// </remarks>
 public enum SpeculativeModeClass
 {

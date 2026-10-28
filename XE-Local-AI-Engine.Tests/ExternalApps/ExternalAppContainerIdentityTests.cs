@@ -83,9 +83,8 @@ public sealed class ExternalAppContainerIdentityTests
     }
 
     /// <summary>
-    ///     The Windows/macOS row of the table. On those hosts the engine is a native process whose account names
-    ///     nothing inside a Linux container, so the reader answers the conventional first non-root Linux account; on
-    ///     Linux it answers the engine's own effective id, which is what a rootful daemon maps straight through.
+    ///     The Windows/macOS row: there the engine's account names nothing inside a Linux container, so the reader
+    ///     answers the first non-root Linux account; on Linux it answers the engine's own effective id.
     /// </summary>
     [Test]
     [ExcludeOn(OS.Linux)]

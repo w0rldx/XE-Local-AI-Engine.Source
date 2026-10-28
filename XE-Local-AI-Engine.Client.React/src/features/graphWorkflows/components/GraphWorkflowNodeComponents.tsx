@@ -48,8 +48,8 @@ const nodeKindIcons: Record<GraphWorkflowNodeKind, typeof IconRobot> = {
 };
 
 /**
- * The run view sets `data.runState`; the editor never does. A local colour map rather than a shared badge component —
- * the run view's own badge file belongs to another lane and a card needs nothing more than a colour and a label.
+ * The run view sets `data.runState`; the editor never does. A local color map rather than a shared badge component —
+ * the run view's own badge file belongs to another lane and a card needs nothing more than a color and a label.
  */
 const nodeStatusColors: Record<GraphWorkflowNodeRunStatus, string> = {
 	Pending: "gray",

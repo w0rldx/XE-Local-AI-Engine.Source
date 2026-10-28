@@ -109,7 +109,7 @@ Several redactors enforce "secrets never surface":
 |---|---|---|
 | `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.Logging.cs` (`ConfigureRequestLogging`) |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
-| `McpServerConnectionManager.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpServerConnectionManager.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
+| `McpFailureDescriber.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpFailureDescriber.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpFailureDescriber.cs` |
 | `InvocationFailureClassifier.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationFailureClassifier.RedactAgentRuntimeMessage` (private) in `Services/Invocation/Implementation/InvocationFailureClassifier.cs` |
 | `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
 
@@ -118,14 +118,14 @@ The request-logging enricher is the canonical example. It replaces the raw query
 ```csharp
 // Program.Logging.cs, ConfigureRequestLogging (EnrichDiagnosticContext)
 var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
-var path = RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value);
+var path = LogValueSanitizer.Sanitize(httpContext.Request.Path.Value);
 diagnosticContext.Set("RequestPathWithRedactedQuery", $"{path}{redactedQuery}");
 diagnosticContext.Set("QueryString", redactedQuery);
 ```
 
 The marker used across redactors is the literal `[REDACTED]` (and `[REDACTED:…]`-style markers in the secret scanner). The scanner's "bare high-entropy" regex is deliberately written so the `[`/`]` of an existing marker stays outside the match — a second pass never re-redacts an already-redacted span (`MemoryProposalSecretScanner.cs`).
 
-**Maintainer rule:** any new field that can carry a credential, host path, command, or URL toward the browser, logs, or a saved transcript must pass through (or extend) a redactor. When in doubt, clamp to a generic reason like `McpServerConnectionManager.SafeMessage` does.
+**Maintainer rule:** any new field that can carry a credential, host path, command, or URL toward the browser, logs, or a saved transcript must pass through (or extend) a redactor. When in doubt, clamp to a generic reason like `McpFailureDescriber.SafeMessage` does.
 
 ### 2.3 Secret files and secret columns: one protector per purpose, 0600 at create, quarantine on failure
 
@@ -560,8 +560,8 @@ Guards a contributor must not weaken:
 - **Fail-closed capability contract.** Do not soften `CreateOrAttachAsync`'s rejection of unenforceable network/resource guarantees into a silent no-op; a caller must never believe it received isolation the provider does not implement. Equally, do not advertise a capability the startup probe did not measure as active — both halves must keep reading the same `SandboxContainment`.
 - **The user-bus environment strip is load-bearing, not tidiness.** A network namespace does **not** confine UNIX sockets. `systemd-run --user` needs `XDG_RUNTIME_DIR` to reach the per-user systemd bus, and a sandboxed child that inherited it could start a unit **outside** its own scope and namespace — escaping both the resource ceiling and the egress denial. Verified live before the fix. Those variables are injected for the launch **wrapper only** and stripped by an `env -u` layer immediately before the sandboxed executable is exec'd; never let them reach the child.
 
-- **Path confinement.** `ResolveJailPath` and `IsUnderJailRoot` reject any path that escapes the jail root before any file op happens.
-- **Symlink-escape guard.** `EnsureNoSymlinkComponentsUnderJail` walks from the resolved leaf upward to the jail root and throws `UnauthorizedAccessException` on the *first* symlink component — defeating a "plant-a-symlink-after-resolve" swap (`ProcessSandboxRuntimeProvider.cs`).
+- **Path confinement.** `SandboxJailPathGuard.ResolveJailPath` rejects any path that escapes the jail root before any file op happens; its containment test is the shared `PathContainment.IsRootOrUnderCanonical`.
+- **Symlink-escape guard.** `EnsureNoSymlinkComponentsUnderJail` walks from the resolved leaf upward to the jail root and throws `UnauthorizedAccessException` on the *first* symlink component — defeating a "plant-a-symlink-after-resolve" swap (`SandboxJailPathGuard.cs`).
 - **O_NOFOLLOW file I/O.** Host file reads/writes use a libc `open()` `DllImport` with `O_NOFOLLOW` (plus `O_CLOEXEC`), because a managed `(FileOptions)` cast for `O_NOFOLLOW` throws. The kernel fails with `ELOOP` if the leaf is a symlink, closing the check-then-open (TOCTOU) race a managed `lstat`+open would leave. See `OpenNoFollow`, `ReadJailFileBytesNoFollowAsync`, `WriteJailFileNoFollowAsync` in `ProcessSandboxRuntimeProvider.cs`. A historical finding: plain `git apply` did *not* reject a `--binary` literal patch, so byte-level guards are not optional.
 - **Byte caps + growth check.** `ReadHostFileUnderGuard` enforces a per-file byte cap and blocks (returns `null`) if the file *grew* after sizing — a swap-after-walk signal — rather than silently truncating.
 - **Tree-kill teardown.** Killing a sandbox `TreeKill`s the process tree (`process.Kill(true)`) and best-effort deletes the jail dir, so a sandbox kill terminates every running command.

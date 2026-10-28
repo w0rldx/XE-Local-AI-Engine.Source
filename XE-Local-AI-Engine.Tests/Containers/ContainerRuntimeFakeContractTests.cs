@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     </para>
 ///     <para>
 ///         The refusals the fake makes on the REQUEST — a non-loopback host IP, an unpinned image, a blank user, a
-///         duplicated port, an unfiltered list — are no longer asserted here. They are the contract both
+///         duplicated port, an unfiltered list — are not asserted here. They are the contract both
 ///         implementations owe, so they live once in <see cref="ContainerRuntimeContractTests" />, which runs them
 ///         against the fake and the production client alike; a copy here would be the pinning that let two drifts
 ///         through.
@@ -310,7 +310,7 @@ public sealed class ContainerRuntimeFakeContractTests
 
         var state = (await client.InspectAsync(containerId)).State;
 
-        // The difference between "the application crashed" and "the box ran out of memory", which is what a
+        // The difference between "the application crashed" and "the host ran out of memory", which is what a
         // reconciler branches on and what it would otherwise have to guess.
         AssertEx.False(state.Running);
         AssertEx.Equal(expected: 137L, state.ExitCode);

@@ -16,9 +16,9 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 public sealed class NodeChatEndpointTests
 {
     /// <summary>
-    ///     One host for the tests that run on the default configuration. Each of them creates its own conversation and
-    ///     asserts only against that conversation's id (never a total row count), so they cannot see each other's rows.
-    ///     The message-size-cap test keeps its own host because it overrides <c>Security:MaxMessageSizeKb</c>.
+    ///     One host for the default-configuration tests. Each asserts only against its own conversation's id (never a
+    ///     total row count), so they are isolated; the message-size-cap test keeps its own host as it overrides
+    ///     <c>Security:MaxMessageSizeKb</c>.
     /// </summary>
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }

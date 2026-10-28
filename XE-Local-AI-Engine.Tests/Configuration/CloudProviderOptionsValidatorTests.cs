@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Branch coverage for the cloud-provider startup validation. The Azure conditions only fire when the provider is
-///     AzureFoundry, so each one is asserted both ways: it rejects a half-configured Azure deployment, and it stays
-///     silent when the node is local-only — otherwise a default (provider-none) install would fail to start.
+///     The cloud-provider startup validation's Azure conditions fire only for AzureFoundry, so each is asserted both
+///     ways: it rejects a half-configured Azure deployment yet stays silent on a local-only node, so a default install
+///     still starts.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CloudProviderOptionsValidatorTests

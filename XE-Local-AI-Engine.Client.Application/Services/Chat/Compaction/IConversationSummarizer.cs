@@ -27,7 +27,7 @@ public sealed class ConversationSummarizerInput
 
     /// <summary>
     ///     Whether <see cref="ModelName" /> advertises graded thinking, as resolved by
-    ///     <c>IModelCapabilityResolver</c>. False — the safe default, matching that resolver's own miss behaviour — means
+    ///     <c>IModelCapabilityResolver</c>. False — the safe default, matching that resolver's own miss behavior — means
     ///     the fold sends no thinking fields at all.
     /// </summary>
     public bool SupportsThinking { get; init; }

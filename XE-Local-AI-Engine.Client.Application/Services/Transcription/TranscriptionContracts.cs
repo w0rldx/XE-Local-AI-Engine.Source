@@ -82,7 +82,7 @@ public enum TranscribeFileOutcome
 ///     The outcome of one batch transcription, as data rather than as an exception.
 /// </summary>
 /// <remarks>
-///     An unsupported container and a cancellation are expected answers, not faults: modelling them as a result lets
+///     An unsupported container and a cancellation are expected answers, not faults: modeling them as a result lets
 ///     the endpoint map every outcome in one switch instead of catching exceptions for things that are not errors.
 /// </remarks>
 public sealed record TranscribeFileResult

@@ -128,7 +128,7 @@ public sealed class BenchmarkProjectServiceTests
     {
         var context = new ServiceContext();
 
-        // A budget at or above the window can never be honoured — it would behave exactly like no budget, which is a
+        // A budget at or above the window can never be honored — it would behave exactly like no budget, which is a
         // silently different measurement rather than an error the operator can see.
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             context.Service.CreateAsync(new BenchmarkProjectDraft

@@ -8,7 +8,8 @@ import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { BenchmarkProjectDetail, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
-import { isRunActive, useDeleteBenchmarkProject } from "@/features/benchmarks/queries/useBenchmarks";
+import { isRunActive } from "@/features/benchmarks/queries/useBenchmarks";
+import { useDeleteBenchmarkProject } from "@/features/benchmarks/queries/useBenchmarkProjectMutations";
 
 interface BenchmarkProjectDeleteButtonProps {
 	project: BenchmarkProjectDetail;

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -448,7 +449,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         }
 
         if (!exactOwner && entries.Any(entry => string.Equals(entry.ModelName, commitReceipt.RegistryEntry.ModelName, StringComparison.OrdinalIgnoreCase)
-                                                || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath)))
+                                                || PathContainment.PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath)))
         {
             throw IntegrityFailure("The committed download is now owned by a different registry entry.");
         }
@@ -693,7 +694,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
     private static async Task<string> VerifyStagedAsync(string path, long expectedSize, string expectedSha, CancellationToken cancellationToken)
     {
         var info = new FileInfo(path);
-        var hash = await GgufAcquisitionSidecar.ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
+        var hash = await FileSha256.ComputeAsync(path, cancellationToken).ConfigureAwait(false);
         if (info.Length != expectedSize || !string.Equals(hash, NormalizeSha256(expectedSha), StringComparison.Ordinal))
         {
             throw IntegrityFailure("The downloaded artifact did not match its resolved metadata.");
@@ -713,9 +714,6 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 "The model download destination already exists.");
         }
     }
-
-    private static bool PathsEqual(string left, string right) =>
-        string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Acquisition metadata requires canonical lowercase SHA-256 values.")]

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 ///     acknowledged.
 /// </summary>
 /// <remarks>
-///     Writes the materialised preview payload verbatim — the source is never re-parsed or re-fetched, so what lands
+///     Writes the materialized preview payload verbatim — the source is never re-parsed or re-fetched, so what lands
 ///     is what was reviewed even if the repository changed in between.
 ///     Without <c>acknowledged: true</c> the import service refuses before it even looks the token up, so an
 ///     unacknowledged call cannot consume a preview either. Imported skills land disabled with Imported provenance;

@@ -125,8 +125,8 @@ public sealed class WhisperInstalledRuntimeStore : IWhisperInstalledRuntimeStore
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            TryDelete(_statePath);
-            TryDelete(_desiredPath);
+            BestEffortFile.TryDeleteFile(_statePath);
+            BestEffortFile.TryDeleteFile(_desiredPath);
         }
         finally
         {
@@ -283,7 +283,7 @@ public sealed class WhisperInstalledRuntimeStore : IWhisperInstalledRuntimeStore
         }
         finally
         {
-            TryDelete(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
         }
     }
 
@@ -309,18 +309,6 @@ public sealed class WhisperInstalledRuntimeStore : IWhisperInstalledRuntimeStore
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort temp cleanup; never mask the real failure.
         }
     }
 

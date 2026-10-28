@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// <summary>
 ///     A handle to one launched runtime child (<c>llama-server</c>, <c>sd-server</c>, <c>whisper-server</c>). Disposing
 ///     the handle tree-kills the process and releases all OS resources (Job Object handle on Windows; the process group
-///     is signalled on Linux).
+///     is signaled on Linux).
 /// </summary>
 /// <remarks>
 ///     The seam each provider's launcher returns and its supervisor holds; unit tests fake it so the supervisors run

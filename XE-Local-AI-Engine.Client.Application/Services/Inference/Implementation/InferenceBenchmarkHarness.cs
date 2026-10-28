@@ -27,7 +27,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private const string IncrementalPressureFailureReason =
         "Benchmark invalid: VRAM divergence grew materially during measurement. Close other GPU workloads and retry.";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IInferenceChatClientFactory _chatClientFactory;
     private readonly ILogger<InferenceBenchmarkHarness> _logger;
@@ -699,7 +699,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
     private static double? DeriveCacheHitRate(LlamaServerGenerationTimings? timings)
     {
-        // Defence in depth if the timing reader's nonnegative validation changes.
+        // Defense in depth if the timing reader's nonnegative validation changes.
         if (timings?.CachedPromptTokens is not { } cached
             || timings.PromptTokens is not { } evaluated
             || cached < 0

@@ -244,7 +244,7 @@ public sealed partial class InvocationRunner
             var outputTokens = ToNullableInt(usage.OutputTokenCount);
             var reasoningTokens = ToNullableInt(usage.ReasoningTokenCount);
             // Reasoning is NOT a third bucket: ReasoningTokenCount is counted INSIDE OutputTokenCount and both
-            // provider paths honour that. A provider-supplied total wins; with neither count reported it stays null.
+            // provider paths honor that. A provider-supplied total wins; with neither count reported it stays null.
             var totalTokens = ToNullableInt(usage.TotalTokenCount)
                               ?? SumIfAny(inputTokens, outputTokens);
 

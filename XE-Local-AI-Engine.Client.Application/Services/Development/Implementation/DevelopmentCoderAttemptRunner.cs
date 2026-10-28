@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRunner
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentArtifactBlobStore _blobStore;
     private readonly IDevelopmentCloudAttemptContextService _cloudContext;

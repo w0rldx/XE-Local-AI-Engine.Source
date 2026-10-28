@@ -8,13 +8,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Handler-level behavior for <c>run_python</c>: the JSON envelope is the handler's own responsibility, everything
 ///     the request then has to satisfy is the gateway's, and cancellation propagates as cancellation.
-///     <para>
-///         The kill-switch and the request validation used to be asserted here. They now live in
-///         <see cref="IComputeToolGateway.ExecuteDetailedAsync" /> and are asserted in
-///         <see cref="ComputeToolGatewayTests" /> — deliberately, because a check this handler owned was a check no
-///         other caller of the gateway got.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The kill-switch and request validation live in <see cref="IComputeToolGateway.ExecuteDetailedAsync" /> and are
+///     asserted in <see cref="ComputeToolGatewayTests" />, deliberately: a check this handler owned would be a check no
+///     other caller of the gateway got.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class RunPythonToolHandlerTests
 {

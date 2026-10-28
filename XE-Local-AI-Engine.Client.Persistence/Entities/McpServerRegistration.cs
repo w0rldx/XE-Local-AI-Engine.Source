@@ -67,7 +67,7 @@ internal sealed record class McpServerRegistration
     /// <remarks>
     ///     Existing rows migrate to <see cref="McpTrustTier.Sandboxed" /> — see
     ///     <c>docs/security/mcp-trust-tiers.md</c> for why that is the column default rather than the tier that would
-    ///     have preserved the old behaviour silently.
+    ///     have preserved the old behavior silently.
     /// </remarks>
     public int TrustTier { get; set; }
 

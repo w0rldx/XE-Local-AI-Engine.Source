@@ -35,7 +35,7 @@ const toastConfigByType: Record<ToastType, ToastConfig> = {
 
 // Last-ditch guard against a toast with nothing in it. A caller that derives its message from a server failure can
 // legitimately end up with "" — ApiError resolves its message to an empty string when the response carried no detail,
-// title or domain message — and Mantine happily renders the coloured card, the icon and the dismiss button around no
+// title or domain message — and Mantine happily renders the colored card, the icon and the dismiss button around no
 // text at all. A signal that says nothing is worse than the generic sentence, so substitute it. A toast that carries a
 // title is left alone: the title already says something, and a body appended under it would be noise.
 function resolveMessage(type: ToastType, message: string, title?: string): string {

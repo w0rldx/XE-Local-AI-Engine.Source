@@ -296,7 +296,7 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
 
     /// <summary>
     ///     Deletes the starter <c>start → end</c> edge. The edge is selected at its path MIDPOINT: a bezier's
-    ///     bounding-box centre is not on the path, so the obvious click misses it and lands on the pane.
+    ///     bounding-box center is not on the path, so the obvious click misses it and lands on the pane.
     /// </summary>
     private async Task RemoveStarterEdgeAsync()
     {

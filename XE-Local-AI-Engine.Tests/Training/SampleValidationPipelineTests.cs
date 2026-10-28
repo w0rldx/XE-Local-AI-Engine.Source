@@ -112,7 +112,7 @@ public sealed class SampleValidationPipelineTests
         AssertEx.Equal(TrainingSampleLabel.Bad, outcome.Label);
         AssertEx.Contains(outcome.Validation.Layers, layer => layer.Layer == "tool-name" && !layer.Passed);
 
-        // R7-07: the stored sample used to drop the call the reason names, so a reviewer saw a Bad label with no call.
+        // The stored sample keeps the call the reason names, so a reviewer never sees a Bad label with no call.
         var call = AssertEx.NotNull(outcome.Content).Parts.Single(part => part.Kind == "tool");
         AssertEx.Equal("delete_everything", call.ToolName);
         AssertEx.True(call.IsError == true, "An unresolvable call is stored as a failed call.");
@@ -153,9 +153,8 @@ public sealed class SampleValidationPipelineTests
         AssertEx.True(outcome.Accepted);
         AssertEx.Equal(expected: 1, TrainingSampleParts.ToolCalls(AssertEx.NotNull(outcome.Content).Parts).Count);
 
-        // The rule the pipeline enforces over what it built. TeacherSampleRecordV1 carries ONE toolName, so a second
-        // call can only appear if that record shape is later widened — and this is what makes that a visible rejection
-        // rather than a sample the scorer grades by its first call.
+        // TeacherSampleRecordV1 carries ONE toolName, so a second call appears only if that shape is widened; this rule
+        // makes that a visible rejection rather than a sample the scorer grades by its first call.
         AssertEx.True(TrainingSampleParts.IsMultiCall([
                 new TrainingSamplePartV1("user", 0, "do both"),
                 new TrainingSamplePartV1("tool", 1, ToolName: "read_file", Arguments: "{}"),

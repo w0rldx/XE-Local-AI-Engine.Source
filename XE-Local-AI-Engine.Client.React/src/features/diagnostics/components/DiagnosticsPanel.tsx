@@ -31,14 +31,19 @@ import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/Responsive
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
+import { exportSupportBundle } from "@/features/diagnostics/api/SupportBundle";
 import { NodeBackupsCard } from "@/features/diagnostics/components/NodeBackupsCard";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { SnapshotDetail } from "@/features/diagnostics/components/SnapshotDetail";
-import { buildIssueUrl } from "@/features/diagnostics/IssueUrl";
+import { buildIssueUrl } from "@/features/diagnostics/models/IssueUrl";
 import { useLogLevel, useSetLogLevel } from "@/features/diagnostics/queries/useLogLevel";
 import { useNodeInfo } from "@/features/diagnostics/queries/useNodeInfo";
-import { exportSupportBundle } from "@/features/diagnostics/SupportBundle";
-import { useClearSnapshots, useDeleteSnapshot, useImportSnapshot, useSnapshots } from "@/features/diagnostics/UseSnapshots";
+import {
+	useClearSnapshots,
+	useDeleteSnapshot,
+	useImportSnapshot,
+	useSnapshots,
+} from "@/features/diagnostics/queries/useSnapshots";
 
 function errorMessage(snapshot: Snapshot): string {
 	return snapshot.error?.message ?? "—";
@@ -128,7 +133,7 @@ export function DiagnosticsPanel() {
 								</Button>
 							</Tooltip>
 						)}
-						{/* The Button below IS the labelled control; FileButton's own input is display:none and only opens the
+						{/* The Button below IS the labeled control; FileButton's own input is display:none and only opens the
 						    OS picker. Marked hidden so it is not reported as an unnamed form control. */}
 						<FileButton onChange={handleImport} accept="application/zip,.zip" inputProps={{ "aria-hidden": true, tabIndex: -1 }}>
 							{(props) => (

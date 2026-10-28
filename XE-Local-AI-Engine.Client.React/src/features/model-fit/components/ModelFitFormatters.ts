@@ -5,7 +5,7 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 // Badge color for a recommendation fit level. The advisor emits a run-mode fit level of "GPU" (the model fits the
 // VRAM budget and runs GPU-accelerated) or "CPU" (estimated against the RAM budget). GPU is the desirable outcome
-// (teal); CPU is surfaced separately by the dedicated CPU-mode badge, so anything else falls back to grey.
+// (teal); CPU is surfaced separately by the dedicated CPU-mode badge, so anything else falls back to gray.
 export function fitLevelColor(fitLevel: string | null): string {
 	switch (fitLevel) {
 		case "GPU":

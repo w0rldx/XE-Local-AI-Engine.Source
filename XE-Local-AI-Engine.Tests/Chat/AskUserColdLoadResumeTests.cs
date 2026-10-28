@@ -16,17 +16,13 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///     The COLD-LOAD re-attach chain for a turn parked on an <c>ask_user</c> question, exercised across the real
 ///     <see cref="WorkerEventDispatcher" /> and the real <see cref="InvocationResumeRegistry" /> rather than either in
 ///     isolation.
-///     <para>
-///         This closes a genuine coverage seam. <c>InvocationRunnerTests</c> proves the runner parks and resumes, but
-///         against a SUBSTITUTED dispatcher, so nothing there ever records a pending question on an
-///         <see cref="InvocationState" />. <c>InvocationResumeRegistryTests</c> proves the replay, but from a
-///         HAND-BUILT state, so nothing there proves the dispatcher would ever produce such a state. The defect this
-///         guards against lives precisely in the join: a reloaded browser holds no invocation id, so it must find the
-///         live run by CONVERSATION id, and the prompt it needs is transient live state that is deliberately never
-///         written into the conversation's persisted parts. Break any link and a reload silently strands the turn until
-///         it times out — which is the failure a live reload previously reproduced.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <c>InvocationRunnerTests</c> parks and resumes against a SUBSTITUTED dispatcher and
+///     <c>InvocationResumeRegistryTests</c> replays a HAND-BUILT state, so neither proves the join: a reloaded browser
+///     holds no invocation id and must find the live run by CONVERSATION id, and its prompt is transient live state
+///     never written to the persisted parts. Break any link and a reload strands the turn until it times out.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class AskUserColdLoadResumeTests
 {

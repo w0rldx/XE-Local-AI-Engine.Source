@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     A KL-divergence figure reaches a reader only while the digest it was measured under is the one the project's
-///     current settings recompute. The API WITHHOLDS the numbers rather than sending them flagged: a number a reader
-///     can still see is a number they will still compare, and one measured over a different corpus, chunk count or
-///     base model means something different from the one beside it.
+///     A KL-divergence figure shows only while its digest is what the current settings recompute. The API WITHHOLDS
+///     stale numbers instead of flagging: a visible number gets compared, and one from another corpus, chunk count
+///     or base model differs.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkFidelityDisplayGateTests

@@ -64,7 +64,7 @@ public sealed class ReasoningEffortDispatcherTests
     [Test]
     public async Task Dispatch_WhenModelIsBinaryAndTierIsFast_CarriesNoOutputBudgetAndNeverConsultsTheTrustResolver()
     {
-        // No tier caps the output any more, so the binary branch is a pure ladder mapping: it needs no locality lookup
+        // No tier caps the output, so the binary branch is a pure ladder mapping: it needs no locality lookup
         // and hands the send nothing to change.
         var trustResolver = CreateTrustResolver(ModelTrustLocality.Local);
         var decision = await DispatchAsync(Request("hi", supportsThinking: false), trustResolver);
@@ -205,7 +205,7 @@ public sealed class ReasoningEffortDispatcherTests
         AssertEx.Equal(ReasoningTier.Normal, leading.Tier, "the phrase is inside a longer word and must not score");
         AssertEx.Equal(ReasoningTier.Normal, trailing.Tier, "the phrase is inside a longer word and must not score");
 
-        // The control: the same phrase, same text, standing as its own word still fires — so the fix cannot pass by
+        // The control: the same phrase, same text, standing as its own word still fires — so the check cannot pass by
         // simply never matching anything.
         var standalone = await DispatchAsync(Request($"carefully{Tail}", conversationDepth: 12));
 
@@ -422,7 +422,7 @@ public sealed class ReasoningEffortDispatcherTests
         // Enforcement point 2 of the node-locality gate. A model can be uninstalled, or an external connection
         // re-declared, between the save that validated the setting and this turn — so the pair is checked again here.
         // An external server is a process the node does not own: sending this turn there is egress the upstream gate
-        // never authorised.
+        // never authorized.
         // Even an external connection the operator DECLARED local resolves node-local on trust alone, which is why the
         // provider is the second half of the pair: no llama.cpp process backs it, so neither the capacity gate nor the
         // liveness probe could reason about it.
@@ -517,7 +517,7 @@ public sealed class ReasoningEffortDispatcherTests
     [Arguments(true, false, ReasoningDispatchReasons.ModelPinned)]
     public async Task Fast_WhenAllowAutoModelSwapIsFalse_NeverSwaps(bool userPicked, bool agentPinned, string expectedReason)
     {
-        // Both shapes the provenance covers — an explicit user pick and an honoured agent pin — arrive here as the
+        // Both shapes the provenance covers — an explicit user pick and an honored agent pin — arrive here as the
         // same single false flag, because the runtime package keeps the EFFECTIVE model and not how it was chosen.
         // The gate must refuse before any node-side lookup, so a configured fast model changes nothing.
         AssertEx.True(userPicked || agentPinned, "each argument set is one of the two pinned shapes");

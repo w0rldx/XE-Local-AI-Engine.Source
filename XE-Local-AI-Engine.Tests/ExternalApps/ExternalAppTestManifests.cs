@@ -5,10 +5,9 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>
-///     Hand-built manifests for the runtime tests. Deliberately not the seed catalog: these suites need a manifest
-///     shaped around the one rule under test — two services declaring the same storage name, a token naming a service
-///     with no port, an asset whose recorded hash is wrong — and the seed cannot be bent into those shapes without
-///     recomputing its fingerprint every time.
+///     Hand-built manifests for runtime tests, not the seed catalog: each is shaped around one rule (duplicate
+///     storage names, a token naming a portless service, a wrong asset hash) the seed cannot take without a new
+///     fingerprint.
 /// </summary>
 internal static class ExternalAppTestManifests
 {

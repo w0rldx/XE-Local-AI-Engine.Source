@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 
 /// <summary>Runs the agent loop for a single golden-conversation evaluation turn.</summary>
 /// <remarks>
-///     The eval gate measures the effect of an injected <em>system prompt</em>, not tool behaviour, so the loop runs
+///     The eval gate measures the effect of an injected <em>system prompt</em>, not tool behavior, so the loop runs
 ///     with an empty tool set — no real side effects, no approval pauses — and threadless, with no persisted session
 ///     state.
 /// </remarks>

@@ -61,7 +61,7 @@ function fieldList(rows: readonly BenchmarkEvidenceDiffRow[]): string {
 /**
  * Launch, throughput and fidelity evidence of the selected runs side by side, one column each. Differences are
  * reported as facts and never interpreted: the copy says *what* differs, never whether the runs may be ranked against
- * each other; this surface does not make that judgement.
+ * each other; this surface does not make that judgment.
  *
  * Two runs is the ordinary case and stays a two-column table. The cap on how many columns may be asked for lives with
  * the caller: "how many fit on the page" is a page decision, "what differs across them" is this one.

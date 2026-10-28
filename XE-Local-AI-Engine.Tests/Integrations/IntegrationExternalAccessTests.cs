@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="IntegrationExternalAccess" />: the one authorisation rule every external row-addressing route goes
+///     <see cref="IntegrationExternalAccess" />: the one authorization rule every external row-addressing route goes
 ///     through. The load-bearing property is that the five ways a caller can fail it are INDISTINGUISHABLE, and that a
 ///     key's trigger allowlist still binds after the invocation — a narrow key must not be able to read or cancel its
 ///     own principal's executions under a trigger it is explicitly excluded from.

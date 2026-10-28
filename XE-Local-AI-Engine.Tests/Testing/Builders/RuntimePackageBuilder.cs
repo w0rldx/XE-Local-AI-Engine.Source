@@ -168,15 +168,8 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
-    // ClientLocal by default because that is the only location a node ever offers: every production offer builder
-    // (LocalToolOfferProvider, McpExecutionBindingResolver) sets it, and ApiSide only ever arrived from the removed
-    // Central Platform envelope — BuildInvocationTools now refuses it outright.
-    //
-    // <paramref name="requiresApproval" /> is load-bearing for any turn that PARKS on an approval: the runner's
-    // `approvalPossible` predicate is "RequiresApproval OR a non-ClientLocal location", and it decides whether the
-    // segment's streamed updates are retained for the fold-and-resume. An offer of ClientLocal tools that all carry
-    // RequiresApproval=false can never wrap one, so the runner retains nothing — which is correct, and is why an
-    // approval test must offer an approval-requiring tool rather than leaning on the offer's location.
+    // ClientLocal by default: every production offer builder (LocalToolOfferProvider, McpExecutionBindingResolver)
+    // sets it, and BuildInvocationTools refuses ApiSide outright.
     public RuntimePackageBuilder WithAllowedTool(string name,
         ToolLocation location = ToolLocation.ClientLocal,
         string? parameterSchema = null,
@@ -190,6 +183,8 @@ public sealed class RuntimePackageBuilder
             Name = name,
             Location = location,
             ParameterSchema = parameterSchema,
+            // The runner retains a segment's updates for fold-and-resume only if RequiresApproval or a non-ClientLocal
+            // location holds, so a test that PARKS on approval must offer an approval-requiring tool.
             RequiresApproval = requiresApproval
         });
 

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useChatAgentSelection } from "@/features/chat/hooks/useChatAgentSelection";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
-vi.mock("@/features/agents/queries/useAgentDefinitions", () => ({
+vi.mock("@/core/agents/queries/useAgentDefinitions", () => ({
 	useAgentDefinitions: () => ({
 		data: [
 			{ id: "bound-agent", name: "r4-web", description: "", kind: "Single", modelProfile: null, playbookEnabled: false },
@@ -20,7 +20,7 @@ describe("useChatAgentSelection", () => {
 		useNodeChatPreferencesStore.setState({ agentModeEnabled: false, selectedAgentId: "" });
 	});
 
-	// R4-04: the server runs a send without an agent pick as the conversation's bound agent, so the control shows it.
+	// The server runs a send without an agent pick as the conversation's bound agent, so the control shows it.
 	it("shows the conversation's bound agent when the composer picks none", () => {
 		useNodeChatPreferencesStore.setState({ agentModeEnabled: false, selectedAgentId: "" });
 

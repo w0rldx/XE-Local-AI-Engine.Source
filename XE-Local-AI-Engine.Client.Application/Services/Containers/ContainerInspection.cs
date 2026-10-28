@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Containers;
 /// </remarks>
 public enum ContainerHealthState
 {
-    /// <summary>No healthcheck is declared, or the daemon reported a state this engine does not recognise.</summary>
+    /// <summary>No healthcheck is declared, or the daemon reported a state this engine does not recognize.</summary>
     None = 0,
 
     /// <summary>The healthcheck is inside its start period or has not yet succeeded.</summary>
@@ -84,7 +84,7 @@ public sealed record ContainerMountView
     public required bool ReadOnly { get; init; }
 }
 
-/// <summary>One row of a labelled container listing: enough to answer "is it still running, and if not why", in one call.</summary>
+/// <summary>One row of a labeled container listing: enough to answer "is it still running, and if not why", in one call.</summary>
 /// <remarks>
 ///     The bare id list the Development Mode client returns is NOT an alternative: it cannot distinguish a running
 ///     container from an exited one, so an observer built on it would report a crashed application as healthy.

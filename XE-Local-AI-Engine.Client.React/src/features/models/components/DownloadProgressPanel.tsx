@@ -2,10 +2,10 @@ import { Button, Card, Group, Loader, Progress, Stack, Text, Title } from "@mant
 import { IconCloudDownload, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { useDownloadRateEstimates } from "@/core/model-downloads/hooks/useDownloadRateEstimates";
+import { formatDownloadEta, humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
+import type { GgufDownloadStatus } from "@/core/model-downloads/queries/useGgufDownload";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
-import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
-import type { GgufDownloadStatus } from "@/features/models/queries/useGgufDownload";
 
 interface DownloadProgressPanelProps {
 	// Model names of in-flight GGUF downloads to surface.
@@ -23,7 +23,7 @@ interface DownloadProgressPanelProps {
 // error row with the sanitized backend message. Rendered only when there is at least one in-flight entry.
 export function DownloadProgressPanel({ inFlight, downloadStatuses, onCancel, cancellingModelName }: DownloadProgressPanelProps) {
 	const { t } = useTranslation();
-	// UX-11: FE-derived speed + ETA per model from successive status pushes (no timestamps ride the wire).
+	// FE-derived speed + ETA per model from successive status pushes (no timestamps ride the wire).
 	const rateEstimates = useDownloadRateEstimates(downloadStatuses);
 
 	if (inFlight.length === 0) {

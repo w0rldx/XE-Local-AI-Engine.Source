@@ -70,7 +70,7 @@ public sealed record DevWorkflowRoute(
 internal static class DevWorkflowStateMachine
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>The schema's own bound on the RUN's <c>terminal_reason</c> (<c>DevWorkflowRunConfiguration</c>).</summary>
     private const int MaxTerminalReason = 512;

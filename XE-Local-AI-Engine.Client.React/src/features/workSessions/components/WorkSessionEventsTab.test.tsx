@@ -125,13 +125,13 @@ describe("WorkSessionEventsTab", () => {
 
 	it("formats the token magnitude in the active locale", async () => {
 		// Regression for a hardcoded toFixed(1): a German reader writes 18,2k, not 18.2k. The separator comes from
-		// Intl on the active language and the "k" from the catalogue, so neither is baked into the component.
+		// Intl on the active language and the "k" from the catalog, so neither is baked into the component.
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
 		renderTab([event("e10", { detailJson: consumption() })]);
 
 		expect(screen.getByTestId("work-session-event-consumption-e10").textContent).toBe(
-			"7/10 Provider-Aufrufe · 3 Tool-Aufrufe · ~18,2k geschätzte Eingabe-Tokens",
+			"7/10 Anbieter-Aufrufe · 3 Tool-Aufrufe · ~18,2k geschätzte Eingabe-Tokens",
 		);
 	});
 

@@ -11,13 +11,13 @@ public enum WhisperModelTier
 }
 
 /// <summary>
-///     One row of the static Whisper weight catalogue: its id, its Hugging Face location, the exact byte size and
+///     One row of the static Whisper weight catalog: its id, its Hugging Face location, the exact byte size and
 ///     SHA256 the download must match, its tier, and the approximate resident footprint the recommendation sizes
 ///     against.
 /// </summary>
 public sealed class WhisperModelEntry
 {
-    /// <summary>Stable catalogue id, also the directory name the weight is stored under.</summary>
+    /// <summary>Stable catalog id, also the directory name the weight is stored under.</summary>
     public required string Id { get; init; }
 
     /// <summary>Hugging Face repository the file lives in.</summary>
@@ -46,7 +46,7 @@ public sealed class WhisperModelEntry
 }
 
 /// <summary>
-///     The static Whisper weight catalogue plus the Silero VAD file every launch needs.
+///     The static Whisper weight catalog plus the Silero VAD file every launch needs.
 /// </summary>
 /// <remarks>
 ///     A table, not a service: no network call decides what this node may install, so an offline node still shows the full list and a
@@ -73,7 +73,7 @@ public static class WhisperModelCatalog
     /// <summary>Lowercase hex SHA256 of <see cref="VadFileName" />.</summary>
     public const string VadSha256 = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987";
 
-    /// <summary>The catalogue id used when nothing has been selected and no recommendation is available.</summary>
+    /// <summary>The catalog id used when nothing has been selected and no recommendation is available.</summary>
     public const string DefaultModelId = "base";
 
     private const long Megabyte = 1024L * 1024L;
@@ -178,7 +178,7 @@ public static class WhisperModelCatalog
         }
     ];
 
-    /// <summary>Finds a catalogue row by id, or <see langword="null" /> when the id is unknown.</summary>
+    /// <summary>Finds a catalog row by id, or <see langword="null" /> when the id is unknown.</summary>
     public static WhisperModelEntry? Find(string? modelId)
     {
         if (string.IsNullOrWhiteSpace(modelId))

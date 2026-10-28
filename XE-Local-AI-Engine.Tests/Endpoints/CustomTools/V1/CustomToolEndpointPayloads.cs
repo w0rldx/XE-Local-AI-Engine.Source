@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Wire payloads and helpers shared by the six custom-tool endpoint suites. The request bodies are anonymous objects
-///     rather than the <c>CustomToolDefinition</c> record on purpose: these tests assert the HTTP contract the React
-///     client and the generated SDK actually send, so a rename on the DTO surfaces as a failing request here.
+///     Wire payloads and helpers shared by the custom-tool endpoint suites. Bodies are anonymous objects, not the
+///     <c>CustomToolDefinition</c> record, so the tests pin the HTTP contract the React client and SDK send and a DTO
+///     rename fails here.
 /// </summary>
 internal static class CustomToolEndpointPayloads
 {

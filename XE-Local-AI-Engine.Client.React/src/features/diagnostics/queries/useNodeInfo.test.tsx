@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse } from "@/core/api/generated";
-import { buildIssueUrl } from "@/features/diagnostics/IssueUrl";
+import { buildIssueUrl } from "@/features/diagnostics/models/IssueUrl";
 import { useNodeInfo } from "@/features/diagnostics/queries/useNodeInfo";
 import { jsonRoute } from "@/test/msw/Handlers";
 import { setupMswServer } from "@/test/UseMswServer";

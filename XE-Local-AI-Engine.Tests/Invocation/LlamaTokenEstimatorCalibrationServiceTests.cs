@@ -668,9 +668,8 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
                 : TokenEstimatorCalibrationStore.DefaultCharsPerToken;
         }
 
-        // The /tokenize channel this fixture exercises is independent of the observed-usage channel: this service never
-        // writes one and never reads the other, which is precisely what keeps a provider failure here from disturbing a
-        // correction real rounds have already earned.
+        // This fixture's /tokenize channel is independent of observed usage, which the service never writes or reads,
+        // so a provider failure here cannot disturb a correction real rounds have already earned.
         public void RecordObservedUsage(string modelName, long estimatedTokens, long observedInputTokens)
         {
             throw new NotSupportedException("The llama.cpp /tokenize calibration service must not write observed-usage samples.");

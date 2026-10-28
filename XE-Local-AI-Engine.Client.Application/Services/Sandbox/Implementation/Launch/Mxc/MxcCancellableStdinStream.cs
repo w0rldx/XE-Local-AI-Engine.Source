@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
 using Microsoft.Mxc.Sdk.V1;
 
-/// <summary>Write-only view of an MXC child's stdin whose async writes honour their token; disposing it sends EOF.</summary>
+/// <summary>Write-only view of an MXC child's stdin whose async writes honor their token; disposing it sends EOF.</summary>
 /// <remarks>
 ///     The SDK's stdin Write is synchronous and ignores the token, so a child that stops reading would outlast every cancel. The write
 ///     runs on the thread pool; cancellation stops the wait and kills the child, whose closed pipe ends the abandoned write. A stalled

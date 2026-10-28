@@ -46,10 +46,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
             "Migration should create the playbook_actions table.");
 
         var actionColumns = await GetPlaybookActionColumnsAsync(connection);
-        // A full MigrateAsync() also applies the later AddPlaybookActionAnalysisColumns migration (analysis columns
-        // source_feedback_ids, confidence), AddPlaybookEvalAndGoldenConversations (eval_result),
-        // AddPlaybookActionEnabledAtUtc (enabled_at_utc) and AddAdaptiveAgentMemory (memory_scope) — hence they are
-        // part of the expected set here.
+        // A full MigrateAsync() also applies the later migrations, so their columns are part of the expected set.
         AssertEx.True(actionColumns.SetEquals(new[]
         {
             "id",
@@ -63,6 +60,8 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
             "version",
             "created_at_utc",
             "updated_at_utc",
+            // In order: AddPlaybookActionAnalysisColumns (two), AddPlaybookEvalAndGoldenConversations,
+            // AddPlaybookActionEnabledAtUtc and AddAdaptiveAgentMemory.
             "source_feedback_ids",
             "confidence",
             "eval_result",

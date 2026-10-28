@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     Unit coverage for the self-contained desktop bootstrap (SEC-1 + SEC-2): given neither the operator-secret env var
+///     Unit coverage for the self-contained desktop bootstrap: given neither the operator-secret env var
 ///     nor a connection string, it must populate both from a per-user data directory, persist a deterministic key, and be
 ///     idempotent — while leaving an already-supplied value untouched (the off-flag byte-behavior invariant). All tests
 ///     redirect the data directory into a temp folder via the injected folder resolver, so the real %LOCALAPPDATA% is

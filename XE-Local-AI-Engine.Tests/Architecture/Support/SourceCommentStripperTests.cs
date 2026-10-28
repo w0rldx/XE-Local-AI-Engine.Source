@@ -58,7 +58,7 @@ public sealed class SourceCommentStripperTests
         ("comment inside an interpolation hole", """var text = $"{Inner(/* ForbiddenReference() */)}"; KeepMe();"""),
         // @ and raw literals cannot co-occur, so the @ decides the form. Reading the leading quote RUN first makes
         // this a raw literal whose closing run never arrives: the rest of the file becomes string content, the
-        // comment below is never recognised, and the guard reports prose as a real reference.
+        // comment below is never recognized, and the guard reports prose as a real reference.
         ("comment after a verbatim string whose content opens with an escaped quote",
             """"var url = @"""quoted"" text"; KeepMe(); // ForbiddenReference()""""),
         // A lone apostrophe in text that is not code opens a char literal that never closes. It must end at the

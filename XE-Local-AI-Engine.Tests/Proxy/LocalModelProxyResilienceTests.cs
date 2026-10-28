@@ -37,7 +37,7 @@ public sealed class LocalModelProxyResilienceTests
     [Test]
     public void ForwardingClient_UnderAspireDefaults_CarriesNoResilienceHandler()
     {
-        // Structural rather than timed, because the half that cannot be proved cheaply by behaviour is the attempt
+        // Structural rather than timed, because the half that cannot be proved cheaply by behavior is the attempt
         // timeout: showing it does NOT fire means outlasting it, and a generation legitimately outlasts it by minutes.
         using var provider = BuildProvider().Provider;
 
@@ -90,10 +90,10 @@ public sealed class LocalModelProxyResilienceTests
         }
     }
 
-    private static (ServiceProvider Provider, AttemptCountingHandler Upstream) BuildProvider()
+    private static (ServiceProvider Provider, UnavailableHttpMessageHandler Upstream) BuildProvider()
     {
         var services = new ServiceCollection();
-        var handler = new AttemptCountingHandler();
+        var handler = new UnavailableHttpMessageHandler();
 
         // Mirror ServiceDefaults' Aspire branch: a global standard handler on every client, registered BEFORE the
         // production registration so the latter's RemoveAllResilienceHandlers strips it, exactly as in production.
@@ -113,20 +113,5 @@ public sealed class LocalModelProxyResilienceTests
         });
 
         return (services.BuildServiceProvider(), handler);
-    }
-
-    /// <summary>Stands in for a llama-server child that answers every attempt with a retryable failure, and counts them.</summary>
-    private sealed class AttemptCountingHandler : HttpMessageHandler
-    {
-        private int _attempts;
-
-        public int Attempts => Volatile.Read(ref _attempts);
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            _ = Interlocked.Increment(ref _attempts);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        }
     }
 }

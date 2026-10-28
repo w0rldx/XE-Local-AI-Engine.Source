@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The outbound guard is what makes the operator's reviewed base URL the ONLY destination a connection can reach.
-///     Its locality declaration — which unlocks workspace tools, the knowledge base and <c>run_python</c> — is granted
-///     against that one address, so anything that could move the destination has to be refused rather than trusted.
+///     The guard makes the operator's reviewed base URL the ONLY reachable destination: the locality grant (unlocking
+///     workspace tools, the knowledge base and <c>run_python</c>) covers that address alone, so whatever could move it
+///     is refused.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalEndpointGuardHandlerTests

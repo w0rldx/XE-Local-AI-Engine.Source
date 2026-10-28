@@ -4,15 +4,14 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
 ///     Builds the exact command-line keys the fake sandbox provider uses to look up scripted output
-///     (<c>executable + " " + string.Join(" ", arguments)</c>), for the commands the patch export issues. The
-///     aliases are part of the key, because the export scopes its staging and both diffs to the copied folders'
-///     pathspecs — a key built without them no longer matches. Deriving the keys from
-///     <see cref="AgentHomeGit" /> keeps the test in lockstep with the
-///     production command shape — if the hardened git flags change, both move together. It must use the SAME
-///     helper the export uses (<see cref="AgentHomeGit.WorkspaceArguments" />, which adds the workspace's
-///     byte-stability pins on top of the shared hardened set), or the fake stops matching and the scripted
-///     output silently falls through to the default.
+///     (<c>executable + " " + string.Join(" ", arguments)</c>) for the commands the patch export issues.
 /// </summary>
+/// <remarks>
+///     Keys include the aliases, because the export scopes its staging and both diffs to the copied folders' pathspecs.
+///     They derive from <see cref="AgentHomeGit.WorkspaceArguments" />, the SAME helper the export uses (byte-stability
+///     pins on top of the shared hardened set), so a flag change moves both; any other helper makes the fake stop
+///     matching and the scripted output silently falls through to the default.
+/// </remarks>
 internal static class GitDiffCommandKeys
 {
     public static string StageAll(params string[] aliases)

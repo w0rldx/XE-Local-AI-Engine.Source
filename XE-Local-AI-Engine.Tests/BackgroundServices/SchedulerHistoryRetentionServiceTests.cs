@@ -13,10 +13,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Unit tests for the scheduler-history retention sweeper. Its cadence is expressed in whole minutes, so the loop is
-///     driven by <see cref="ManualTimeProvider" /> rather than by wall-clock waiting; the assertions cover the three
-///     things that can silently go wrong — sweeping while the scheduler is disabled, computing the cutoff in the wrong
-///     unit (run rows stamp <c>CreatedAtUtc</c> in unix <b>milliseconds</b>), and a failed sweep killing the loop.
+///     The scheduler-history retention sweeper on <see cref="ManualTimeProvider" /> (whole-minute cadence). Pinned: no
+///     sweep while the scheduler is disabled, a cutoff in the right unit (run rows stamp <c>CreatedAtUtc</c> in unix
+///     <b>milliseconds</b>), and a failed sweep never kills the loop.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SchedulerHistoryRetentionServiceTests

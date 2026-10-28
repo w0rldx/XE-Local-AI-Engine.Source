@@ -90,7 +90,7 @@ public sealed class DevWorkflowRetryPolicyTests
     }
 
     /// <summary>
-    ///     FU2-3: the state right after an operator retried a node AT the cap its definition declared — the graph
+    ///     The state right after an operator retried a node AT the cap its definition declared — the graph
     ///     allows <c>implement</c> three attempts, they retried it on attempt 2, and the widening left the row at
     ///     attempt 3 of 4 with their reason on the inputs. A retryable failure on the attempt they bought re-attempts
     ///     rather than blocking, and ONLY because the check reads the widened cap: at the declared 3 the same row
@@ -137,8 +137,8 @@ public sealed class DevWorkflowRetryPolicyTests
     }
 
     /// <summary>
-    ///     FU3-4 race A. The automatic path checks the budget on the tick's own snapshot and then commits on a separate
-    ///     call, so a human <c>Retry</c> that commits in between spends the slot it was counting on. The budget now
+    ///     Race A. The automatic path checks the budget on the tick's own snapshot and then commits on a separate
+    ///     call, so a human <c>Retry</c> that commits in between spends the slot it was counting on. The budget
     ///     travels ON the command and the store re-admits it under its writer lock, which turns that lost race into a
     ///     <c>DevWorkflowInvalidTransitionException</c> — and the policy has to answer it with the same block the
     ///     pre-check would have written, not by throwing at the dispatcher.

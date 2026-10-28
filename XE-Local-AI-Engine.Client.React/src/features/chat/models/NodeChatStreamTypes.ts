@@ -169,7 +169,7 @@ export interface NodeChatStreamEventDto {
 	questions?: string | null;
 	// Whether the node can actually REMEMBER an "approve for this session" decision for THIS request. Present on the
 	// `approval-requested` event only, and absent when the backend could not resolve it (the reconnect replay). The
-	// runner answers from the same memo-key resolution that would honour the decision, so it sees the per-call
+	// runner answers from the same memo-key resolution that would honor the decision, so it sees the per-call
 	// narrowings the tool catalog cannot — `ToolCallCard` prefers it and falls back to the catalog flag when absent.
 	sessionScopeEligible?: boolean | null;
 	// The web result review preview: present on an `approval-requested` event for `web_fetch`/`web_search` only, and on

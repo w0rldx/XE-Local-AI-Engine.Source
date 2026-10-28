@@ -31,7 +31,7 @@ public sealed class SandboxRequirementsSelectionTests
 {
     /// <summary>
     ///     Minimal-satisfying, not most-capable-wins. With nothing constraining the candidate set, the least privileged
-    ///     backend that can honour the declaration wins — the deterministic fake, which executes nothing at all. This
+    ///     backend that can honor the declaration wins — the deterministic fake, which executes nothing at all. This
     ///     is also the old "an unset provider means the fake" rule, now a consequence of the ranking rather than a
     ///     special case of its own.
     /// </summary>
@@ -52,8 +52,8 @@ public sealed class SandboxRequirementsSelectionTests
     }
 
     /// <summary>
-    ///     The guarantee that used to be an absent <c>implements</c> clause. An operator can point the agent key
-    ///     straight at the container backend and still not get one: AgentHome declares
+    ///     The guarantee the resolution holds rather than an absent <c>implements</c> clause. An operator can point
+    ///     the agent key straight at the container backend and still not get one: AgentHome declares
     ///     <see cref="SandboxToolchainSource.HostToolchain" />, no container backend supplies that, and there is no
     ///     downgrade path — the resolution refuses instead.
     /// </summary>
@@ -255,7 +255,7 @@ public sealed class SandboxRequirementsSelectionTests
 
     /// <summary>
     ///     The disk ceiling may only TIGHTEN the operator's node-wide number, so a backend that ignores it is no worse
-    ///     off than one that honours it. Rejecting a candidate over it would refuse a sandbox for asking to be smaller.
+    ///     off than one that honors it. Rejecting a candidate over it would refuse a sandbox for asking to be smaller.
     /// </summary>
     [Test]
     public void FindUnmetAxis_IgnoresTheDiskCeiling()

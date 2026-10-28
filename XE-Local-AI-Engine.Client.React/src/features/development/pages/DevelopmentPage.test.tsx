@@ -286,7 +286,7 @@ describe("DevelopmentPage", () => {
 		);
 	});
 
-	// X8 — the two-file search-param addition that lets a workflow's DevTask node land on the project it drove.
+	// The search params that let a workflow's DevTask node land on the project it drove.
 	it("seeds the initial project selection from the deep link's search params", async () => {
 		hooksMock.useDevelopmentProjects.mockReturnValue({
 			data: [

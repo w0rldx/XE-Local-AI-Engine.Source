@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Migration coverage for <c>AddGoldenConversationHarvestProvenance</c>: adds the <c>source</c> /
-///     <c>source_message_id</c> / <c>source_conversation_id</c> columns to <c>golden_conversations</c>. Existing rows
-///     default <c>source = 0</c> (Manual) with null provenance ids; rollback drops the three columns. Mirrors
-///     <see cref="NodeChatOriginMigrationTests" /> (historical-row insert + up/down assertions over raw columns).
+///     <c>AddGoldenConversationHarvestProvenance</c> adds <c>source</c>, <c>source_message_id</c> and
+///     <c>source_conversation_id</c>: existing rows default to <c>source = 0</c> (Manual) with null ids, and
+///     rollback drops all three. Mirrors <see cref="NodeChatOriginMigrationTests" />.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisposable

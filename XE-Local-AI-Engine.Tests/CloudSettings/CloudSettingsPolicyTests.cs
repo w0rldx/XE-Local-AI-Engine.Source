@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The save policy owns every custom-header and host-suffix rule instead of inlining them in the endpoint.
-///     It must see the PREVIOUSLY STORED headers: a blank secret header is legal only when a stored secret of the same
-///     name will merge into it, and messages must never carry a header value.
+///     The save policy owns every custom-header and host-suffix rule. It sees the PREVIOUSLY STORED headers: a blank
+///     secret header is legal only when a stored secret of the same name merges into it, and messages never carry a
+///     header value.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CloudSettingsPolicyTests

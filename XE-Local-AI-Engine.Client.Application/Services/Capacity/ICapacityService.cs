@@ -67,7 +67,7 @@ public sealed record CapacityRequest
 
     /// <summary>Whether a chat model that does not fit at its tier may be admitted at a smaller context window.</summary>
     /// <remarks>
-    ///     <see langword="true" /> keeps every existing caller's behaviour. The supervisor's own chat admission asks first with
+    ///     <see langword="true" /> keeps every existing caller's behavior. The supervisor's own chat admission asks first with
     ///     <see langword="false" />, so unloading an idle model is tried before the window shrinks.
     /// </remarks>
     public bool AllowAdmissionDownTier { get; init; } = true;

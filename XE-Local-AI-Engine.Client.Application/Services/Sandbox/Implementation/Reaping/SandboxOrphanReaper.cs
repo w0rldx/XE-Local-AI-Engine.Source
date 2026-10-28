@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 /// <remarks>
 ///     A hard host kill skips <c>Dispose</c> and <c>KillAsync</c>, leaving the child process group running and its jail on disk. Three
-///     independent gates apply, because signalling a group is irreversible and a marker is untrusted input after a crash. OWNER LIVENESS:
-///     a marker whose owning worker pid is alive is skipped entirely. PID REUSE: the group is signalled only while the leader's start time
+///     independent gates apply, because signaling a group is irreversible and a marker is untrusted input after a crash. OWNER LIVENESS:
+///     a marker whose owning worker pid is alive is skipped entirely. PID REUSE: the group is signaled only while the leader's start time
 ///     still matches what launch recorded. PATH OWNERSHIP: <see cref="PathContainment.IsUnderRoot" /> gates deletion on <see cref="SandboxPaths.ContainerRoot" />, and one
 ///     flagged <see cref="SandboxProcessMarker.PreserveJail" /> never at all. The sweep is best-effort and cannot block startup.
 /// </remarks>
@@ -21,9 +21,9 @@ public sealed class SandboxOrphanReaper : IHostedService
     ///     How long an engine-owned scope that NO marker claims must have been active before the sweep will signal it.
     /// </summary>
     /// <remarks>
-    ///     Defence in depth behind the pre-registered marker, for the case it cannot cover: a worker whose marker store is unwritable
+    ///     Defense in depth behind the pre-registered marker, for the case it cannot cover: a worker whose marker store is unwritable
     ///     launches isolated commands indistinguishable on disk from a previous run's leftovers. A scope that young more likely belongs to
-    ///     a worker starting alongside this one, and the mistakes are not symmetric — signalling a live command destroys work
+    ///     a worker starting alongside this one, and the mistakes are not symmetric — signaling a live command destroys work
     ///     irrecoverably, while skipping a genuine orphan leaves it to its own <c>RuntimeMaxSec</c>.
     /// </remarks>
     private static readonly TimeSpan UnreferencedScopeGrace = TimeSpan.FromSeconds(30);
@@ -45,7 +45,7 @@ public sealed class SandboxOrphanReaper : IHostedService
     }
 
     // The scope killer, container root and owner liveness are injectable so the sweep's DECISIONS are tested without a systemd user
-    // manager or a dead engine; signalling a cgroup and deleting a folder are irreversible, so they are asserted.
+    // manager or a dead engine; signaling a cgroup and deleting a folder are irreversible, so they are asserted.
     internal SandboxOrphanReaper(ISandboxMarkerStore markerStore,
         ISandboxProcessGroupKiller killer,
         ILogger<SandboxOrphanReaper> logger,
@@ -166,7 +166,7 @@ public sealed class SandboxOrphanReaper : IHostedService
     ///     gone.
     /// </summary>
     /// <remarks>
-    ///     Only <c>Dispose</c> removes a session root, which a killed engine never runs, and Windows writes no markers (N-64). A root with no
+    ///     Only <c>Dispose</c> removes a session root, which a killed engine never runs, and Windows writes no markers. A root with no
     ///     owner record, one holding a live marker's jail, the markers folder and links are always left.
     /// </remarks>
     private int SweepDeadSessionRoots(string containerRoot, IReadOnlyList<string> liveJailPaths)

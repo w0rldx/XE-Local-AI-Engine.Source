@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// <summary>One Whisper weight file to fetch: where it lives upstream, where it goes, and what it must hash to.</summary>
 /// <remarks>
 ///     The caller supplies the expected size and digest because they come from the transcription provider's own
-///     pinned catalogue, not from a repository listing. Nothing here trusts what the repository reports about itself.
+///     pinned catalog, not from a repository listing. Nothing here trusts what the repository reports about itself.
 /// </remarks>
 public sealed record WhisperWeightFileRequest
 {

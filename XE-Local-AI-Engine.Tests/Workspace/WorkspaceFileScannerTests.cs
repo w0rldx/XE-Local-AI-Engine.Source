@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The two workspace surveys, exercised directly rather than through a sandbox.
 ///     <para>
-///         These tests exist because the previous implementation shelled out to <c>find</c> and <c>grep</c> with
-///         POSIX-only argument vectors and every test covering it skipped off Linux — so the code path a Windows tester
-///         would run had no coverage anywhere, on any machine. The scanner is one implementation on every platform, so
-///         a green run here IS the Windows evidence; nothing below is OS-conditional except the two symlink guards,
+///         The scanner is one implementation on every platform, with no <c>find</c> or <c>grep</c> shell-out whose
+///         POSIX-only argument vectors would force every test covering it to skip off Linux. So a green run here IS
+///         the Windows evidence; nothing below is OS-conditional except the two symlink guards,
 ///         which need the privilege to plant a link in the first place.
 ///     </para>
 /// </summary>
@@ -85,7 +84,7 @@ public sealed class WorkspaceFileScannerTests : IDisposable
     ///     The suppression rule has to PRUNE, not post-filter. A managed workspace is a standalone clone whose
     ///     <c>.git</c> alone holds far more entries than the listing budget allows, so a post-filter spends the whole
     ///     budget on entries it is about to discard and answers with nothing while the workspace is full of actionable
-    ///     files. The suppressed tree is named so it sorts FIRST, which is exactly the ordering that used to lose.
+    ///     files. The suppressed tree is named so it sorts FIRST, which is exactly the ordering a post-filter loses on.
     /// </summary>
     [Test]
     public void ListFiles_PrunesASuppressedTreeRatherThanSpendingTheBudgetOnIt()

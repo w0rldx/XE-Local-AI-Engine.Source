@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -214,7 +213,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         {
             var serverPath = Path.Combine(buildPath, OperatingSystem.IsWindows() ? "whisper-server.exe" : "whisper-server");
             EnsureManagedPathSecure(serverPath);
-            if (!await HashMatchesAsync(serverPath, expectedSha, ct).ConfigureAwait(false))
+            if (!await FileSha256.MatchesAsync(serverPath, expectedSha, ct).ConfigureAwait(false))
             {
                 await TombstoneAsync(state, "The managed runtime binary failed integrity verification.", ct).ConfigureAwait(false);
                 return null;
@@ -402,7 +401,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         {
             await DownloadToFileAsync(url, tempArchive, ct).ConfigureAwait(false);
 
-            if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
+            if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
                 return new WhisperRuntimeException("The whisper.cpp runtime download failed integrity verification.");
             }
@@ -420,7 +419,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         }
         finally
         {
-            TryDeleteFile(tempArchive);
+            BestEffortFile.TryDeleteFile(tempArchive);
         }
     }
 
@@ -451,17 +450,9 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         }
         catch
         {
-            TryDeleteFile(destination);
+            BestEffortFile.TryDeleteFile(destination);
             throw;
         }
-    }
-
-    private static async Task<bool> HashMatchesAsync(string filePath, string expectedSha256, CancellationToken ct)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        var actual = Convert.ToHexStringLower(hash);
-        return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -534,21 +525,6 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             throw new WhisperRuntimeException("The acquired whisper.cpp runtime could not be made executable.", exception);
-        }
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a temp download; never mask the original failure.
         }
     }
 

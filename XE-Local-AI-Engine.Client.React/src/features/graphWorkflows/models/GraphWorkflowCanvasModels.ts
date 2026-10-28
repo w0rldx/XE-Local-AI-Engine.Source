@@ -6,7 +6,7 @@
 //
 // Three JSON-shaped fields (`defaultInput`, `responseJsonSchema`, `argumentsJson`) and every edge condition `value` are
 // held on the canvas as STRINGS, not parsed objects. A half-typed JSON object is not representable as an object, and
-// re-serialising on every keystroke destroys the operator's formatting. They are parsed once, at `canvasToGraph` time,
+// re-serializing on every keystroke destroys the operator's formatting. They are parsed once, at `canvasToGraph` time,
 // and a parse failure becomes a `GraphWorkflowGraphIssue` rather than a thrown render.
 //
 // `React Flow node id === node key` and `edge.id === edge.key`. One identifier addresses the card, the edge endpoint,
@@ -782,7 +782,7 @@ export function canvasToGraph(
 // Authoring helpers
 // ---------------------------------------------------------------------------------------------------------------
 
-/** A fresh node's data, with the defaults the plan fixes — including F-1's `maxAttempts` (3 for Agent and Tool, else 1). */
+/** A fresh node's data, with its defaults — including `maxAttempts` (3 for Agent and Tool, else 1). */
 export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): GraphWorkflowCanvasNodeData {
 	const base = { key, label: "", joinPolicy: "All" as const, maxAttempts: graphWorkflowDefaultMaxAttempts(kind) };
 	switch (kind) {
@@ -947,7 +947,7 @@ function successorsThroughPauses(pause: string, pauseKeys: ReadonlySet<string>, 
  *     `conditionMultipleDefaults` rule and the server's own parser refuse;
  *   - a Y whose `joinPolicy` is `Any` is skipped. `Any` fires on ONE satisfied branch, so an unconditional content
  *     edge stays satisfied when every approval is rejected and Y would run past the Pause it was waiting on. The
- *     policy is read off the NODE whatever its kind: `Admission` honours it on an `End` or an `Agent` too, and
+ *     policy is read off the NODE whatever its kind: `Admission` honors it on an `End` or an `Agent` too, and
  *     reading it off `Join` alone is the documented trap.
  * A self-loop is never drawn, which is the one guard left over from the importer.
  *
@@ -1114,7 +1114,7 @@ function normalizedGraph(graph: GraphWorkflowGraph | undefined, ignorePositions 
 			condition: edge.condition
 				? {
 						path: edge.condition.path ?? null,
-						// Normalised, so a stored lowercase `eq` and the canonical `Eq` are the same branch.
+						// Normalized, so a stored lowercase `eq` and the canonical `Eq` are the same branch.
 						op: normalizeGraphWorkflowConditionOperator(edge.condition.op) ?? edge.condition.op ?? "",
 						value: canonicalize(edge.condition.value ?? null),
 					}

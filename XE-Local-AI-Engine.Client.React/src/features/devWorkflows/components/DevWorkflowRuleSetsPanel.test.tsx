@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The rule-set catalogue is the one surface in this feature that WRITES policy, so what it owes is the write contract:
+// The rule-set catalog is the one surface in this feature that WRITES policy, so what it owes is the write contract:
 // the PUT carries the version the edit was made from, a 409 is reported as "changed elsewhere" rather than as a save to
 // retry, and a delete asks first.
 

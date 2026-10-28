@@ -35,7 +35,7 @@ internal sealed partial class ExternalAppService
     internal const string CatalogEmptyDetail =
         "The catalog lists no application now, so External Apps are off. Stopping and uninstalling stay available.";
 
-    /// <summary>Rc.3 decision D6 for every verb that would start an application: why it may not, or <see langword="null" />.</summary>
+    /// <summary>The empty-catalog startup rule for every verb that would start an application: why it may not, or <see langword="null" />.</summary>
     /// <remarks>
     ///     <c>RestartRequired</c> after an empty-catalog start, whatever the catalog holds now, because only a restart
     ///     opens the bridge. Otherwise <c>CatalogEmpty</c> while the catalog the provider serves now lists nothing,
@@ -120,7 +120,7 @@ internal sealed partial class ExternalAppService
         }
 
         // 7: the instance gate FIRST, so a reconcile or an observer tick skips this row for as long as the install
-        // runs; the application lock wraps only the one-per-application read and the insert it authorises.
+        // runs; the application lock wraps only the one-per-application read and the insert it authorizes.
         var instanceId = Guid.NewGuid();
         IDisposable? lease = null;
         try
@@ -197,7 +197,7 @@ internal sealed partial class ExternalAppService
         using var applicationLease = await _gate.TryEnterAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId))
                                      ?? throw new ExternalAppOperationInFlightException("Another install of this application is already being admitted.");
 
-        // D6 is authoritative HERE, under the lock and ahead of the one-per-application read: the admission read let
+        // The empty-catalog rule is authoritative HERE, under the lock and ahead of the one-per-application read: the admission read let
         // AlreadyInstalled through, and an uninstall finishing since then must not turn that into an install.
         if (await RequireCatalogPolicyAsync(services, cancellationToken) == ExternalAppBlockedReason.RestartRequired)
         {
@@ -336,7 +336,7 @@ internal sealed partial class ExternalAppService
         var resources = await _resourceGate.EvaluateAsync(manifest, _layout.Root, cancellationToken);
 
         // An empty catalog at startup kept the bridge closed, and only a restart opens it, so a refresh that has since
-        // added this application must not admit an install the startup state no longer matches (rc.3 decision D6).
+        // added this application must not admit an install the startup state does not match.
         var awaitingRestart = existing.Count == 0 && policy == ExternalAppBlockedReason.RestartRequired;
 
         return new InstallAdmission

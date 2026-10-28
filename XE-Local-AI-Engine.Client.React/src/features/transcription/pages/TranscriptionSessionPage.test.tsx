@@ -264,7 +264,7 @@ describe("TranscriptionSessionPage", () => {
 		expect(screen.queryByTestId("transcript-segment-edit-1") !== null).toBe(editable);
 	});
 
-	// A3: a pending start polls the runtime and says what it is waiting on, here the model load.
+	// A pending start polls the runtime and says what it is waiting on, here the model load.
 	it("names what a pending live start is waiting on from the runtime status", async () => {
 		liveCapture.state = "starting";
 		server.use(
@@ -293,7 +293,7 @@ describe("TranscriptionSessionPage", () => {
 		expect((await screen.findByText("Loading the model…")).dataset["testid"]).toBe("transcription-capture-start-status");
 	});
 
-	// B2: the node's catch-up report reaches the controls through the live transcript.
+	// The node's catch-up report reaches the controls through the live transcript.
 	it("shows how far behind a running capture is from the live transcript", async () => {
 		liveCapture.state = "capturing";
 		server.use(
@@ -348,7 +348,7 @@ describe("TranscriptionSessionPage", () => {
 		await waitFor(() => expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("00:47"));
 	});
 
-	// M3: two sessions created on two different microphones must each capture from their own. The device is never
+	// Two sessions created on two different microphones must each capture from their own. The device is never
 	// sent to the node, so the store is the only record — and reading a global slot here meant the session created
 	// second silently decided what the session created first captured from.
 	it("captures from the microphone this session was created on", async () => {
@@ -438,7 +438,7 @@ describe("TranscriptionSessionPage", () => {
 		expect(liveCapture.start).not.toHaveBeenCalled();
 	});
 
-	// N-35: the pid store is per browser, so a second client opening a RUNNING application capture has no entry. The
+	// The pid store is per browser, so a second client opening a RUNNING application capture has no entry. The
 	// capture lives on the node and needs nothing from this browser: no error, no Start, just the live transcript.
 	it("watches a running application capture from a browser that never remembered its process", async () => {
 		server.use(
@@ -479,7 +479,7 @@ describe("TranscriptionSessionPage", () => {
 		expect(screen.getByTestId("transcription-capture-start")).toBeDefined();
 	});
 
-	// N-36: the session page had no way back to the list.
+	// The session page links back to the list.
 	it("goes back to the transcription list", async () => {
 		server.use(jsonRoute("get", `transcription/sessions/${sessionId}`, detail()));
 		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);

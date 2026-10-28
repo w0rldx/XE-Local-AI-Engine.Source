@@ -41,7 +41,7 @@ function noticeIcon(noticeKind: string) {
 		case "OrchestrationDegraded":
 			return IconUsersGroup;
 		// Its own glyph, not ToolDisabled's: a tool that was turned OFF and a tool that was merely held back but
-		// stays callable are opposite outcomes, and sharing an icon reads the optimisation as a degradation.
+		// stays callable are opposite outcomes, and sharing an icon reads the optimization as a degradation.
 		case "ToolsFiltered":
 			return IconFilter;
 		case "EffortDispatched":

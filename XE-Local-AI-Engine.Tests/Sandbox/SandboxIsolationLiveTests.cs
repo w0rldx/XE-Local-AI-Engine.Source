@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         <b>Opt-in, and they SKIP rather than pass.</b> Each one spawns real processes and creates real systemd user
 ///         scopes, so they are gated on <c>XE_COMPUTE_LIVE=1</c> and on the host actually being able to isolate. A
-///         containment test that goes green on a box which contains nothing reports a guarantee that nothing
+///         containment test that goes green on a host which contains nothing reports a guarantee that nothing
 ///         exercised — worse than no test at all.
 ///     </para>
 /// </summary>

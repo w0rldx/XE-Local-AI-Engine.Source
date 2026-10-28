@@ -113,7 +113,7 @@ describe("ChatNoticeRow", () => {
 		await i18next.changeLanguage("de");
 		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "AgentUnavailable", text, detail: "agent-id" })} />);
 		expect(
-			screen.getByText("Der Agent dieser Unterhaltung existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet."),
+			screen.getByText("Der Agent dieses Chats existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet."),
 		).toBeTruthy();
 	});
 
@@ -142,7 +142,7 @@ describe("ChatNoticeRow", () => {
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("QueuedBehindParkedTurn");
 		expect(
 			screen.getByText(
-				"Diese Nachricht wartet auf eine Freigabe oder eine Frage in einer anderen Unterhaltung. Beantworte sie dort, um fortzufahren.",
+				"Diese Nachricht wartet auf eine Freigabe oder eine Frage in einem anderen Chat. Beantworten Sie sie dort, um fortzufahren.",
 			),
 		).toBeTruthy();
 	});
@@ -219,7 +219,7 @@ describe("ChatNoticeRow", () => {
 
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ToolsFiltered");
 		expect(screen.getByText(serverText)).toBeTruthy();
-		// Its own glyph: sharing ToolDisabled's would render an optimisation and a degradation identically.
+		// Its own glyph: sharing ToolDisabled's would render an optimization and a degradation identically.
 		expect(container.querySelector(".tabler-icon-filter")).toBeTruthy();
 		expect(container.querySelector(".tabler-icon-tools-off")).toBeNull();
 	});
@@ -389,7 +389,7 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("never prints a bare id as the detail line", () => {
-		// V-03: queued-behind and agent-fallback notices carried a conversation or agent id that rendered verbatim.
+		// Queued-behind and agent-fallback notices carried a conversation or agent id that rendered verbatim.
 		renderWithProviders(
 			<ChatNoticeRow
 				part={noticePart({

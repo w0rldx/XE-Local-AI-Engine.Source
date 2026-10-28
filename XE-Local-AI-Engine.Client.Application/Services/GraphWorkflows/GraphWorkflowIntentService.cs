@@ -149,7 +149,7 @@ public sealed class GraphWorkflowIntentService
             : await StartMatchAsync(routed, request, origin, GraphWorkflowIntentMatch.Router, cancellationToken);
     }
 
-    /// <summary>Every definition open to <c>Intent</c> except the router, with its name and aliases normalised.</summary>
+    /// <summary>Every definition open to <c>Intent</c> except the router, with its name and aliases normalized.</summary>
     /// <remarks>Only those: a stale alias on a definition the operator never opened to intents must not route to it.</remarks>
     private async Task<List<IntentCandidate>> LoadCandidatesAsync(IReadOnlyList<GraphWorkflowDefinitionSummary> summaries,
         Guid? routerId,

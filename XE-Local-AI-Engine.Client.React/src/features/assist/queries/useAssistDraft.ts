@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { draftAgentDefinition, draftImagePrompt, draftSkill } from "@/core/api/generated";
-import type { AssistDraft, AssistMode, AssistSurface } from "@/features/assist/models/AssistModels";
+import type { AssistDraft, AssistMode, AssistSurface } from "@/core/assist/models/AssistModels";
 
 // Variables for one draft attempt. `signal` rides straight into the generated SDK call (which forwards it to axios),
 // so aborting the caller's AbortController cancels the in-flight request — that is the dialog's Cancel button.

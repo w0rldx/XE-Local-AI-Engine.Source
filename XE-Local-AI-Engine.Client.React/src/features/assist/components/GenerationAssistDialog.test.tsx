@@ -43,13 +43,13 @@ vi.mock("@/core/ui/components/CodeEditor/CodeDiffViewer", () => ({
 	),
 }));
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import type {
 	XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse,
 	XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest,
 } from "@/core/api/generated";
-import { ApiError } from "@/core/api/errors/ApiError";
+import type { AssistDraft, AssistMode, AssistSurface, GenerationMetadata } from "@/core/assist/models/AssistModels";
 import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
-import type { AssistDraft, AssistMode, AssistSurface, GenerationMetadata } from "@/features/assist/models/AssistModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const models: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse[] = [

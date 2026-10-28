@@ -555,7 +555,7 @@ public sealed class BenchmarkEndpointTests
     {
         // The scope is what makes a matrix affordable: one llama-server capability probe for the request instead of
         // one per cell, and one verification per distinct model instead of one per cell. A per-cell scope would be
-        // the old behaviour wearing a new type.
+        // per-cell probing wearing a new type.
         await using var context = CreateContext();
         var scopes = new List<BenchmarkFreezeScope?>();
         context.RunFreeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(),
@@ -884,7 +884,7 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
 
-        // A blank name used to reach the freeze and come back as an ArgumentException — a 500 for one operator typo in
+        // A blank name must not reach the freeze and come back as an ArgumentException — a 500 for one operator typo in
         // one cell. It is the same per-cell verdict an ineligible model gets, and the rest of the matrix still starts.
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
@@ -1008,9 +1008,9 @@ public sealed class BenchmarkEndpointTests
     [Test]
     public async Task StartRun_WhenTheModelCannotBeVerifiedAtFreeze_IsUnprocessableRatherThanAFailure()
     {
-        // Verification moved OFF the catalog listing onto freeze, so a model whose files no longer match its registry
-        // entry now lists happily and fails only here. The freeze service maps that store failure to an eligibility
-        // refusal, which is the 422 this route declares; unmapped it escaped as a 500, and inside a batch it killed
+        // Verification runs at freeze, not on the catalog listing, so a model whose files no longer match its registry
+        // entry lists happily and fails only here. The freeze service maps that store failure to an eligibility
+        // refusal, which is the 422 this route declares; unmapped it would escape as a 500, and inside a batch kill
         // every cell after it instead of rejecting one.
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest
@@ -1228,7 +1228,7 @@ public sealed class BenchmarkEndpointTests
     }
 
     /// <summary>
-    ///     The project delete now takes the project's finished runs with it, so its refusal is no longer "this project
+    ///     The project delete takes the project's finished runs with it, so its refusal is not "this project
     ///     has runs" but "one of them is still going". Both halves of that contract are pinned here: the expected
     ///     version reaches the store unchanged, and the 409 carries the run-oriented code and sentence.
     /// </summary>
@@ -1301,9 +1301,9 @@ public sealed class BenchmarkEndpointTests
     [Test]
     public async Task GetProject_WithAJudgePolicyStoredUnderAnOlderPromptVersion_StillReadsAndFlagsIt()
     {
-        // The read path must tolerate a stored version this build no longer judges under. When it did not, the project
-        // detail 500'd, the whole header disappeared from the UI ("Select a benchmark project"), and the re-save that
-        // heals the revision became unreachable.
+        // The read path must tolerate a stored version this build no longer judges under. Otherwise the project
+        // detail 500s, the whole header disappears from the UI ("Select a benchmark project"), and the re-save that
+        // heals the revision becomes unreachable.
         await using var context = CreateContext();
         ArrangeOutdatedJudgePolicy(context);
         using var client = context.Factory.CreateClient();
@@ -1364,7 +1364,7 @@ public sealed class BenchmarkEndpointTests
     {
         // The five persisted columns plus two derived reads: the chunk count that actually runs when the operator
         // left it at the default, and the comparability digest a stored KLD figure is gated against. The digest is
-        // taken from the ONE builder every other display gate reads; a second expression here is the bug that lets
+        // taken from the ONE builder every other display gate reads; a second expression here would let
         // numbers measured against different corpora compare as equal.
         await using var context = CreateContext();
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, fidelity: true));

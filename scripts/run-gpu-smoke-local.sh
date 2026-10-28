@@ -709,7 +709,7 @@ gpu_sampler_peaks() {
 # Sourcing guard for scripts/tests/gpu-smoke.test.sh: define the functions above, run nothing.
 # `return` succeeds when sourced and fails when executed, so the `exit` is the executed-directly
 # path rather than dead code.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317  # the exit runs only when executed, not sourced
 if [[ -n "${XE_GPU_SMOKE_LIB_ONLY:-}" ]]; then
   return 0 2>/dev/null || exit 0
 fi
@@ -793,7 +793,7 @@ CLIENT_DEBUG_ROOT="${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.Client/bin/Debug
 ASPIRE_APPHOST="${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}"
 
 # Invoked indirectly by the EXIT trap immediately below.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # invoked by the EXIT trap below
 cleanup() {
   local status=$?
   trap - EXIT

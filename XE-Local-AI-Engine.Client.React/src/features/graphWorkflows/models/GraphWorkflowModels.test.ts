@@ -84,7 +84,7 @@ describe("readGraphWorkflowDecisionModelOutput", () => {
 
 describe("graph-workflow vocabularies", () => {
 	// The member LISTS are the contract with the server: they cross the wire as C# enum names, so a member silently
-	// dropped here becomes an unlabelled fallback in front of an operator rather than a compile error.
+	// dropped here becomes an unlabeled fallback in front of an operator rather than a compile error.
 	it("carries exactly the members the v1 wire uses", () => {
 		expect(graphWorkflowNodeKinds).toEqual([
 			"Start",

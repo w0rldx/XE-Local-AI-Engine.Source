@@ -6,11 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     A ready-made <see cref="IServiceScopeFactory" /> for <c>LocalToolOfferProvider</c> tests. Its scopes resolve an
-///     always-empty <see cref="ICustomToolCatalog" />, so the provider's synchronous offer paths (which the vast majority
-///     of these tests exercise) construct without a custom-tool dependency, and the async paths — if a test calls one —
-///     simply see no custom tools. Backed by a real service provider so the scope lifecycle behaves exactly as production.
+///     A ready-made <see cref="IServiceScopeFactory" /> for <c>LocalToolOfferProvider</c> tests whose scopes resolve an
+///     always-empty <see cref="ICustomToolCatalog" />: synchronous offer paths construct without a custom-tool
+///     dependency, and async paths see no custom tools.
 /// </summary>
+/// <remarks>Backed by a real service provider, so the scope lifecycle behaves exactly as in production.</remarks>
 internal static class NullCustomToolScopeFactory
 {
     public static IServiceScopeFactory Instance { get; } =

@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
@@ -42,7 +41,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
             ValidateScopes = true
         });
 
-        Dispatcher = new ConversationMaintenanceDispatcher(accessor, new CapturingLogger<ConversationMaintenanceDispatcher>());
+        Dispatcher = new ConversationMaintenanceDispatcher(accessor, new RecordingLogger<ConversationMaintenanceDispatcher>());
         Worker = new ConversationMaintenanceWorker(_provider.GetRequiredService<IServiceScopeFactory>(), Dispatcher, accessor, timeProvider ?? TimeProvider.System, Logger);
     }
 
@@ -54,7 +53,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
 
     public ConversationMaintenanceWorker Worker { get; }
 
-    public CapturingLogger<ConversationMaintenanceWorker> Logger { get; } = new();
+    public RecordingLogger<ConversationMaintenanceWorker> Logger { get; } = new();
 
     /// <summary>Every compaction the worker asked for, with the scoped service instance that served it.</summary>
     public ConcurrentQueue<(Guid ConversationId, string? RequestedModel, RecordingCompactionService Instance)> Compactions { get; } = new();

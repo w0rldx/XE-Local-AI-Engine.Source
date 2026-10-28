@@ -106,7 +106,7 @@ internal sealed record class AgentDefinition
     ///     (structural).
     /// </summary>
     /// <remarks>
-    ///     Default <c>true</c>, so opting into <see cref="PlaybookEnabled" /> preserves the learn-from-runs behaviour.
+    ///     Default <c>true</c>, so opting into <see cref="PlaybookEnabled" /> preserves the learn-from-runs behavior.
     ///     When <c>false</c> the agent is RETRIEVAL-ONLY: it still injects its existing enabled memory (gated on
     ///     <see cref="PlaybookEnabled" />) but its runs never trigger the extraction round-trip. Non-config-affecting
     ///     (exactly like <see cref="PlaybookEnabled" />): it gates extraction only and must NOT enter the runtime

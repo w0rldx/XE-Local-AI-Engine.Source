@@ -129,9 +129,9 @@ public sealed class IntegrationContinuationTests
     [Test]
     public async Task WhenTheAgentGainsANonReadLocalToolAfterTheTriggerWasSaved_TheRunProceeds()
     {
-        // ADR 0008 R6-1, at RUN time. ADR 0008 R4-9(a) used to terminalize this row with `session-policy` before the
-        // runner was ever reached, because a caller-managed session persisted no tool history. It persists and replays
-        // it now, so a write-capable agent is an ordinary caller-managed target and the run happens.
+        // ADR 0008, at RUN time: the row is not terminalized with `session-policy` before the runner is reached,
+        // because a caller-managed session persists and replays its tool history, so a write-capable agent is an
+        // ordinary caller-managed target and the run happens.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
         harness.OfferedTools =
@@ -278,7 +278,7 @@ public sealed class IntegrationContinuationTests
     [Test]
     public async Task AWriteExecuteToolsCallAndResultAreReplayedLikeAnyOther()
     {
-        // The category-blind half of ADR 0008 R6-1. The replayed exchange is what lets turn 2 know the artifact was
+        // The category-blind half of ADR 0008. The replayed exchange is what lets turn 2 know the artifact was
         // ALREADY saved; without it the model reads only its own prose about having saved one and can save it twice.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
@@ -305,7 +305,7 @@ public sealed class IntegrationContinuationTests
     public async Task APerInvocationContinuationReplaysNoToolHistory()
     {
         // The gate: only a caller-managed session asks for tool history. A per-invocation run starts fresh, and chat's
-        // behaviour is unchanged for the same reason.
+        // behavior is unchanged for the same reason.
         using var harness = new Harness();
         harness.AddHistory("assistant", "there are two files", [Harness.CompletedToolPart("call-1", "list_files", args: null, "a.txt")]);
 

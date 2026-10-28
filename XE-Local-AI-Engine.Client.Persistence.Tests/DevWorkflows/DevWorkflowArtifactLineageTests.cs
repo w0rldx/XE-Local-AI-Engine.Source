@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class DevWorkflowArtifactLineageTests
 {
     /// <summary>
-    ///     T-9: two appends from the same (run, node key, name) version one lineage rather than replacing — the exact
+    ///     Two appends from the same (run, node key, name) version one lineage rather than replacing — the exact
     ///     semantic the work-session artifact table does not have, which is why this is a separate table.
     /// </summary>
     [Test]
@@ -44,7 +44,7 @@ public sealed class DevWorkflowArtifactLineageTests
     }
 
     /// <summary>
-    ///     T-16: the regression guard. Materialized siblings share a template, so they emit artifacts under the same
+    ///     The sibling guard. Materialized siblings share a template, so they emit artifacts under the same
     ///     logical name — and under a (run, name) lineage key sibling #2's patch would read back as version 2 of
     ///     sibling #1's, superseding work it has nothing to do with. Including the node key is what prevents that.
     /// </summary>
@@ -95,7 +95,7 @@ public sealed class DevWorkflowArtifactLineageTests
         AssertEx.True(artifacts.All(artifact => artifact.IsLatest));
     }
 
-    /// <summary>T-9, propagation half: marking flags exactly the consumers of the superseded version, and nothing else.</summary>
+    /// <summary>Lineage, propagation half: marking flags exactly the consumers of the superseded version, and nothing else.</summary>
     [Test]
     public async Task MarkDependentsStale_FlagsOnlyWhatConsumedTheSupersededVersion()
     {

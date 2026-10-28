@@ -3,13 +3,13 @@ import { IconAlertTriangle, IconCheck, IconCloudDownload } from "@tabler/icons-r
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	catalogEntryRepoCount,
 	type ImageModelCatalogEntryView,
 	type ImageModelFitVerdict,
 } from "@/features/images/models/ImageModels";
-import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 interface ImageModelCatalogPanelProps {
 	entries: readonly ImageModelCatalogEntryView[];
@@ -22,7 +22,7 @@ interface ImageModelCatalogPanelProps {
 	onInstall: (entry: ImageModelCatalogEntryView) => void;
 }
 
-// Mantine colour per fit verdict. Unknown is deliberately grey rather than green: the backend reports it when this
+// Mantine color per fit verdict. Unknown is deliberately gray rather than green: the backend reports it when this
 // box's memory budget could not be measured at all, and a green badge there would be a promise nobody checked.
 const fitColors: Record<ImageModelFitVerdict, string> = {
 	Fits: "green",

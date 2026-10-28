@@ -51,7 +51,7 @@ function installJsdomEnvironmentMocks(): void {
 // evaluation of ChatInputArea's whole graph (Mantine, @tabler/icons-react, react-i18next, the selector cards,
 // the sampling dialog, the voice controls) against the 5s `testTimeout`. It measures ~1.8s on an idle box for
 // the first test in this file versus ~0.1s for the rest, and on a loaded packaging box running all 209 files
-// with coverage it intermittently blew past 5s — a timeout that said nothing about the behaviour under test.
+// with coverage it intermittently blew past 5s — a timeout that said nothing about the behavior under test.
 // A static import moves that cost to collection time, which no test timeout applies to.
 //
 // Hydration-from-storage is covered where it belongs, in NodeSettings.sampling.test.tsx.

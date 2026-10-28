@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     An integration session owns its conversation, so a conversation purge must take the session, its executions and
-///     their events with it. <c>ConversationFootprintPurgeCoverageTests</c> is the drift guard for the table list; this
-///     is the behavioural half.
+///     An integration session owns its conversation, so a conversation purge takes the session, its executions and
+///     their events. <c>ConversationFootprintPurgeCoverageTests</c> guards the table list; this is the behavioral half.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class IntegrationConversationPurgeTests

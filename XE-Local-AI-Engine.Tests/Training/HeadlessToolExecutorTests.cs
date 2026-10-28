@@ -117,9 +117,8 @@ public sealed class HeadlessToolExecutorTests
             _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                              .Returns<IReadOnlyList<AllowedToolDto>>([offer]);
 
-            // The SAME tool as the model-agnostic catalog entry the shared invocation seam reads, so the real
-            // execution leg resolves what the offer above promised. The seam is the real one, not a substitute:
-            // delegating to it is what is under test, and mocking it would assert nothing about the delegation.
+            // The SAME tool as the catalog entry the shared invocation seam reads, so execution resolves what the
+            // offer promised. The seam is real: delegating to it is under test, and a mock would assert nothing.
             _ = offerProvider.GetKnownToolsAsync(Arg.Any<CancellationToken>())
                              .Returns<IReadOnlyList<LocalToolCatalogEntry>>([
                                  new LocalToolCatalogEntry

@@ -36,7 +36,7 @@ public sealed class TranscriptionModelDownloadStatusResponse
     public string? SanitizedError { get; init; }
 }
 
-/// <summary>One catalogue row as this node sees it.</summary>
+/// <summary>One catalog row as this node sees it.</summary>
 public sealed class TranscriptionModelResponse
 {
     public required string Id { get; init; }
@@ -59,7 +59,7 @@ public sealed class TranscriptionModelResponse
     public TranscriptionModelDownloadStatusResponse? Download { get; init; }
 }
 
-/// <summary>The catalogue plus the selected and recommended ids.</summary>
+/// <summary>The catalog plus the selected and recommended ids.</summary>
 public sealed class TranscriptionModelListResponse
 {
     public required IReadOnlyList<TranscriptionModelResponse> Models { get; init; }
@@ -94,7 +94,7 @@ public sealed class TranscriptionModelDownloadResponse
 public sealed class SelectTranscriptionModelRequest
 {
     /// <summary>
-    ///     The catalogue id to select. <see langword="null" /> or blank CLEARS the override, so the node falls back
+    ///     The catalog id to select. <see langword="null" /> or blank CLEARS the override, so the node falls back
     ///     to the hardware recommendation — that is a valid request, not a missing field.
     /// </summary>
     public string? ModelId { get; init; }

@@ -176,9 +176,9 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         }
 
         var conversationDirectory = ConversationDirectory(conversationId);
-        DeleteFileIfExists(BytesPath(conversationDirectory, fileId, extension));
-        DeleteFileIfExists(MarkdownPath(conversationDirectory, fileId));
-        DeleteFileIfExists(LegacyMarkdownPath(conversationDirectory, fileId));
+        BestEffortFile.TryDeleteFile(BytesPath(conversationDirectory, fileId, extension));
+        BestEffortFile.TryDeleteFile(MarkdownPath(conversationDirectory, fileId));
+        BestEffortFile.TryDeleteFile(LegacyMarkdownPath(conversationDirectory, fileId));
         return true;
     }
 
@@ -256,7 +256,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         catch
         {
             // Never leave a half-built plaintext directory behind on failure.
-            TryDeleteDirectory(stagingDirectory);
+            BestEffortFile.TryDeleteDirectory(stagingDirectory);
             throw;
         }
     }
@@ -301,41 +301,6 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
     private string DecryptMarkdown(Guid conversationId, Guid fileId, byte[] encrypted)
     {
         return Encoding.UTF8.GetString(_blobProtector.Decrypt(conversationId, fileId, UploadedFileBlobProtector.FileMarkdownColumn, encrypted));
-    }
-
-    private static void DeleteFileIfExists(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup; a transient IO error leaves an orphan blob that the conversation teardown also covers.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; a permission error leaves an orphan blob that the conversation teardown also covers.
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            Directory.Delete(path, recursive: true);
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of the transient staging directory.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of the transient staging directory.
-        }
     }
 
     private static string BuildStagedFileName(ConversationUploadedFileInfo file, HashSet<string> usedNames)

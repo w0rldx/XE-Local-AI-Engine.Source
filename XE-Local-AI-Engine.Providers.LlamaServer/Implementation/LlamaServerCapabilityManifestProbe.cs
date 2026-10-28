@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Resolves and caches the actual option surface of a selected llama-server executable.</summary>
@@ -47,7 +47,7 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
         try
         {
             snapshot = ReadIdentitySnapshot(binary.ServerExecutablePath);
-            var executableSha256 = await ComputeSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false);
+            var executableSha256 = await FileSha256.ComputeAsync(binary.ServerExecutablePath, ct).ConfigureAwait(false);
             var key = new CapabilityCacheKey
             {
                 Variant = binary.Variant,
@@ -64,7 +64,7 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
                 // A waiter may have observed the old file immediately before a replacement, so re-read identity after acquiring the key gate and fail this attempt
                 // if it changed. A later caller probes the new identity; never recurse while holding the old identity's single-flight gate.
                 var currentSnapshot = ReadIdentitySnapshot(binary.ServerExecutablePath);
-                var currentSha256 = await ComputeSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false);
+                var currentSha256 = await FileSha256.ComputeAsync(binary.ServerExecutablePath, ct).ConfigureAwait(false);
                 if (snapshot != currentSnapshot || !string.Equals(executableSha256, currentSha256, StringComparison.Ordinal))
                 {
                     _logger.LogWarning("The selected llama-server runtime changed while waiting for its capability probe; the attempt was discarded.");
@@ -85,7 +85,7 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
                 }
 
                 var verifiedSnapshot = ReadIdentitySnapshot(binary.ServerExecutablePath);
-                var verifiedSha256 = await ComputeSha256Async(binary.ServerExecutablePath, ct).ConfigureAwait(false);
+                var verifiedSha256 = await FileSha256.ComputeAsync(binary.ServerExecutablePath, ct).ConfigureAwait(false);
                 if (snapshot != verifiedSnapshot || !string.Equals(executableSha256, verifiedSha256, StringComparison.Ordinal))
                 {
                     _logger.LogWarning("The selected llama-server runtime changed while its capabilities were being probed; the result was discarded.");
@@ -178,14 +178,6 @@ internal sealed class LlamaServerCapabilityManifestProbe : ILlamaServerCapabilit
                 LastWriteUtc = DateTimeOffset.UnixEpoch
             };
         }
-    }
-
-    private static async Task<string> ComputeSha256Async(string executablePath, CancellationToken ct)
-    {
-        await using var stream = new FileStream(executablePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-            bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var digest = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        return Convert.ToHexStringLower(digest);
     }
 
     private static string FirstNonEmptyLine(string output)

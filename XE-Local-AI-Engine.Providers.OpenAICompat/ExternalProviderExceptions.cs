@@ -37,7 +37,7 @@ public sealed class ExternalProviderOperationNotSupportedException : InvalidOper
 /// <remarks>
 ///     This is the FAIL-CLOSED terminal of the external routing path. An unresolvable external id must never fall back
 ///     to "some other connection" or to a default endpoint: the operator's locality declaration is what decides whether
-///     the prompt may leave the node at all, and without a resolved registration there is no such declaration to honour.
+///     the prompt may leave the node at all, and without a resolved registration there is no such declaration to honor.
 ///     The message is deliberately sanitized — it names no base URL, key, or connection internals.
 /// </remarks>
 public sealed class ExternalProviderModelUnavailableException : InvalidOperationException

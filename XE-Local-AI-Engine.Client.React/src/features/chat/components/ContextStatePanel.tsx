@@ -15,7 +15,7 @@ interface ContextStateButtonProps {
 	disabled?: boolean;
 }
 
-// Read-only window onto what compaction distilled from the active conversation (plan decision D4: no edit controls).
+// Read-only window onto what compaction distilled from the active conversation, with no edit controls.
 // Sits beside CompactButton and reads the selected conversation from the same store, so it needs no prop threading.
 export function ContextStateButton({ disabled = false }: ContextStateButtonProps) {
 	const { t } = useTranslation();

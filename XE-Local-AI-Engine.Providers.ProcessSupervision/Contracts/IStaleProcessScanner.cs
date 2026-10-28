@@ -38,7 +38,7 @@ public interface IStaleProcessScanner
 
     /// <summary>
     ///     SIGKILLs <paramref name="pid" /> (its whole group when it leads one) ONLY while it still carries
-    ///     <paramref name="expectedStartTicks" />, re-read immediately before the signal so a recycled pid is never signalled.
+    ///     <paramref name="expectedStartTicks" />, re-read immediately before the signal so a recycled pid is never signaled.
     ///     Returns whether the signal was sent. Never throws.
     /// </summary>
     bool KillIfSameProcess(int pid, long expectedStartTicks);

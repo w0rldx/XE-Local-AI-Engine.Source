@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The kill switch. External apps ship OFF, and off means the whole family answers 404 — ahead of authentication,
 ///     so it cannot be probed by status code, and ahead of the service, so a refused request touches no collaborator.
-///     The routes stay DISCOVERED either way: what changes is behaviour, never the published surface
+///     The routes stay DISCOVERED either way: what changes is behavior, never the published surface
 ///     (<c>OpenApiDocumentTests.LocalOpenApiDocument_DescribesExternalAppSurface_WhenTheFeatureIsDisabled</c>).
 /// </summary>
 [Category(TestCategories.Integration)]

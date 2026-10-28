@@ -62,7 +62,7 @@ internal sealed class McpAgenticToolAdapter : IMcpAgenticToolAdapter
         }
 
         // FunctionInvokingChatClient detects approval with GetService<ApprovalRequiredAIFunction>(), which DelegatingAIFunction forwards to the
-        // wrapped function: without this override the auto-approved call still became an approval request nobody answers (I-D12).
+        // wrapped function: without this override the auto-approved call would still become an approval request nobody answers.
         public override object? GetService(Type serviceType, object? serviceKey = null)
         {
             return serviceType == typeof(ApprovalRequiredAIFunction) ? null : base.GetService(serviceType, serviceKey);

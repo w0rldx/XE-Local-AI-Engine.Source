@@ -2,10 +2,10 @@ import { Stack, Textarea, TextInput } from "@mantine/core";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentDefinitionFormValues } from "@/core/agents/models/AgentDefinitionModels";
+import type { AssistDraft } from "@/core/assist/models/AssistModels";
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
-import type { AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import { AssistActions } from "@/features/assist/components/AssistActions";
-import type { AssistDraft } from "@/features/assist/models/AssistModels";
 
 interface AgentDefinitionBasicFieldsProps {
 	values: AgentDefinitionFormValues;

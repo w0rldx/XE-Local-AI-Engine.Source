@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Testing.FakeDocker;
 
 /// <summary>
 ///     The daemon identity a <see cref="FakeDockerServer" /> answers <c>GET /version</c> and <c>GET /info</c> with.
-///     <para>
-///         Only the fields the production client actually reads are here. Everything else the Engine API reports is
-///         omitted rather than defaulted, because a knob nothing consumes is a knob that can drift from the real
-///         daemon without any test noticing.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Only the fields the production client actually reads are here. Everything else the Engine API reports is
+///     omitted rather than defaulted, because a knob nothing consumes is a knob that can drift from the real
+///     daemon without any test noticing.
+/// </remarks>
 public sealed record FakeDockerOptions
 {
     /// <summary>

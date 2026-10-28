@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The one relation neither section's data annotations can see: a park has to expire before the node expires the
-///     pending tool call it is parked on. The boundary is asserted from both sides, so a "raise the park budget" edit
-///     cannot pass by landing exactly on the tool-call age.
+///     The one relation neither section's data annotations can see: a park must expire before the node expires the
+///     pending tool call it is parked on. Both sides of the boundary are asserted, so a park budget equal to the
+///     tool-call age fails.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WorkSessionOptionsValidatorTests

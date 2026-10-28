@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 FrameworkDependentVelopackBootstrap.Run(args);
 ProcessCrashHooks.Register();
 
-// Once, before any child exists: children inherit the error mode, so one that fails to initialise exits instead of hanging on a dialog.
+// Once, before any child exists: children inherit the error mode, so one that fails to initialize exits instead of hanging on a dialog.
 if (OperatingSystem.IsWindows())
 {
     WindowsErrorMode.SuppressHardErrorDialogs();

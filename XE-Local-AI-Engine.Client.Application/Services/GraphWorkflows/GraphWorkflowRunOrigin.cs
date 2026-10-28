@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// <summary>Who starts a run, recorded on the run and checked against the definition's accepted sources.</summary>
 /// <remarks>
 ///     <see cref="PrincipalId" /> and <see cref="KeyPrefix" /> are audit metadata for a run an integration key started; they
-///     never authorise anything (ADR 0021). The two shared instances cover the callers that carry no principal.
+///     never authorize anything (ADR 0021). The two shared instances cover the callers that carry no principal.
 /// </remarks>
 public sealed class GraphWorkflowRunOrigin
 {

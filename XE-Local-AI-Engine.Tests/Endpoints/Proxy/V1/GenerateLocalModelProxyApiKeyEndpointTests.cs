@@ -6,14 +6,13 @@ using XE_Local_AI_Engine.Client.Endpoints.Proxy.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <c>POST proxy/key</c>: operator-gated, and the ONLY place the plaintext credential ever appears. The suite pins
-///     the show-once contract — the mint returns the key, every subsequent read returns only the digest's prefix, and a
-///     regenerate rotates rather than re-reveals.
-///     <para>
-///         Serialized: the node stores exactly ONE proxy credential, so two of these tests running concurrently against
-///         the shared host would rotate each other's key out from under them.
-///     </para>
+///     <c>POST proxy/key</c>: operator-gated, and the ONLY place the plaintext credential appears. Pins show-once: the
+///     mint returns the key, later reads return only the digest's prefix, and a regenerate rotates, never re-reveals.
 /// </summary>
+/// <remarks>
+///     Serialized: the node stores exactly ONE proxy credential, so two of these tests running concurrently against
+///     the shared host would rotate each other's key out from under them.
+/// </remarks>
 [NotInParallel("LocalModelProxyApiKeyGenerate")]
 [Category(TestCategories.Integration)]
 public sealed class GenerateLocalModelProxyApiKeyEndpointTests

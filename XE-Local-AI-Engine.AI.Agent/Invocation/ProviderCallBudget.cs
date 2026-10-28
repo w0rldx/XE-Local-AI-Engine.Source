@@ -320,7 +320,7 @@ public sealed class ProviderCallBudget
 
     /// <summary>Turns thinking off for every later provider round of this turn; the next turn's budget starts with it on.</summary>
     /// <remarks>
-    ///     The tool-call re-prompt (model-matrix F4): after a call landed in the reasoning, the 9B kept writing calls there
+    ///     The tool-call re-prompt: after a call landed in the reasoning, the 9B kept writing calls there
     ///     while thinking, and never with it off. Held here because only the provider-round hop sees each round of a segment.
     /// </remarks>
     internal void TurnThinkingOff() =>

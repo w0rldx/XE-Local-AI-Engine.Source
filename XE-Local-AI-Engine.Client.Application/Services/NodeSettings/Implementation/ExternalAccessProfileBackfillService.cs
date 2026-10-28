@@ -81,7 +81,7 @@ public sealed class ExternalAccessProfileBackfillService : IHostedService
         {
             if (stored.ExternalAccessProfile is null)
             {
-                // A switch without a profile: an operator's opt-out, or a hand-edited profile the store normalised away.
+                // A switch without a profile: an operator's opt-out, or a hand-edited profile the store normalized away.
                 // Backfilling would flip those switches back on, so the node stays undecided until someone answers.
                 logger.LogWarning("Skipping the external-access profile backfill: this node carries external-access "
                                   + "switches but no recognised profile, so the profile stays undecided and its switches are kept as "

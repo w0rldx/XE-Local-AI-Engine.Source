@@ -3,7 +3,7 @@
 //
 // The one thing this panel exists to make visible is INHERITANCE: an edge with no path of its own resolves
 // the path of its source `Condition` node, so an edge that looks pathless still validates. Showing the inherited path
-// greyed out, with the node it came from, is what stops that reading as a bug.
+// grayed out, with the node it came from, is what stops that reading as a bug.
 
 import { Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
@@ -21,7 +21,8 @@ import {
 	graphWorkflowConditionOperators,
 	normalizeGraphWorkflowConditionOperator,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { edgeConditionSchema, type GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+import { edgeConditionSchema } from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
+import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 

@@ -411,7 +411,7 @@ public sealed class SchedulerEndpointTests
     [Test]
     public async Task CreateJob_WhenStartTimeIsOutOfRange_ReturnsBadRequestRatherThanAServerError()
     {
-        // Nanoseconds sent where Unix milliseconds belong used to reach DateTimeOffset and surface as a 500.
+        // Nanoseconds sent where Unix milliseconds belong must not reach DateTimeOffset and surface as a 500.
         var payload = await PostJobExpectingBadRequestAsync(new
         {
             templateId = "run-benchmark-batch",

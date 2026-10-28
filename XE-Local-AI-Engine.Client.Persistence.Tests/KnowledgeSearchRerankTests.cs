@@ -13,13 +13,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the rerank stage:
-///     when a reranker model is configured the fused candidate pool is rescored and reordered before the top-limit cut;
-///     when it is disabled or the reranker degrades (returns <see langword="null" />) the Reciprocal-Rank-Fusion order is
-///     kept unchanged. The embedding arm is intentionally degraded (no provider), so the fused order is the lexical
-///     (FTS) order — which the reranker then reorders. Reranking scores the BASE chunk content and is bounded to the
-///     candidate pool.
+///     The real <see cref="KnowledgeSearchService" /> rerank stage: a configured reranker reorders the fused pool
+///     before the top-limit cut; disabled or degraded (<see langword="null" />), the RRF order is kept.
 /// </summary>
+/// <remarks>
+///     The embedding arm is degraded (no provider), so the fused order is the lexical (FTS) order the reranker
+///     reorders. Reranking scores the BASE chunk content and is bounded to the candidate pool.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeSearchRerankTests : IDisposable
 {

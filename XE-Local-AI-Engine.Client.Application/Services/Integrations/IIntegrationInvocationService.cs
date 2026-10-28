@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
-///     The accept path: resolve the trigger by name, authorise the key against it, dedup, admit under a hard bound, and
+///     The accept path: resolve the trigger by name, authorize the key against it, dedup, admit under a hard bound, and
 ///     enqueue for the coordinator.
 /// </summary>
 /// <remarks>

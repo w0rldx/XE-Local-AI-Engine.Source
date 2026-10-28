@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     R4-03: a turn parked on an approval or a question gives the node's one invocation slot back, so a send in another
+///     A turn parked on an approval or a question gives the node's one invocation slot back, so a send in another
 ///     conversation runs at once, and the parked turn takes the slot again when it resumes. Driven through the real
 ///     <see cref="WorkerEventDispatcher" /> slot and a real <see cref="HumanPark" />.
 /// </summary>

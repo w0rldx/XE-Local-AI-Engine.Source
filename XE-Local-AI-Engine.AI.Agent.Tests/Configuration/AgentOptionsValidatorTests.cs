@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.AI.Agent.Configuration.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Branch coverage for the three agent-configuration validators that had none. Each is registered with
-///     <c>ValidateOnStart</c>, so every branch here is the difference between a misconfiguration that stops the host at
-///     boot and one that surfaces much later as an agent that will not construct.
+///     Branch coverage for the three agent-configuration validators. Each is registered with <c>ValidateOnStart</c>,
+///     so every branch here decides between a misconfiguration that stops the host at boot and an agent that later
+///     will not construct.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AgentOptionsValidatorTests

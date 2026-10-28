@@ -380,32 +380,3 @@ internal static class DesktopLaunch
         return true;
     }
 }
-
-internal enum LaunchMode
-{
-    Headless,
-    Desktop,
-    McpOnly
-}
-
-internal static class LaunchModeExtensions
-{
-    internal static bool IsLocalMode(this LaunchMode mode) =>
-        mode is LaunchMode.Desktop or LaunchMode.McpOnly;
-}
-
-internal sealed class SetupCommand
-{
-    public required string Email { get; init; }
-
-    public required string Password { get; init; }
-
-    public required bool PasswordFromEnvironment { get; init; }
-}
-
-internal enum KnowledgeDowngradeCommand
-{
-    None,
-    Preflight,
-    Export
-}

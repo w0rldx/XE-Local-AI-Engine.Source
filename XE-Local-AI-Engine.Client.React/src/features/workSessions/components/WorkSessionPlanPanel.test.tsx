@@ -228,7 +228,7 @@ describe("WorkSessionPlanPanel", () => {
 	});
 });
 
-// An unanswered approval is cancelled by the supervisor after MaxParkedSeconds: it checkpoints and lands Paused,
+// An unanswered approval is canceled by the supervisor after MaxParkedSeconds: it checkpoints and lands Paused,
 // which is the DESIGNED mitigation for a parked step holding the node's single invocation slot — so the panel must
 // render it as an ordinary paused session, with no error styling anywhere.
 describe("WorkSessionPlanPanel after an unanswered approval times out", () => {

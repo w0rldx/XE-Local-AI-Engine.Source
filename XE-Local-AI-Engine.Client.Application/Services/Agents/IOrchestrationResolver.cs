@@ -141,7 +141,7 @@ public sealed class ResolvedOrchestration
     /// <remarks>
     ///     The seed is ONE shared list broadcast to every participant, which per-participant tool stripping cannot
     ///     redact, so the caller gates node-local data on this aggregate, not on the orchestrator's own locality. A
-    ///     cloud participant whose connection grants local data no longer taints the seed. A grant never changes a
+    ///     cloud participant whose connection grants local data does not taint the seed. A grant never changes a
     ///     participant's locality, which still gates its own tool offer.
     /// </remarks>
     public required bool AnyParticipantNeedsCloudDataSwitch { get; init; }

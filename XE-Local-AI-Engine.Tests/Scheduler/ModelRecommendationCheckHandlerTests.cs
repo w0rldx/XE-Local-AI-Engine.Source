@@ -14,10 +14,9 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ModelRecommendationCheckHandler" /> tests: parameter validation rejects an invalid
-///     operation / use case / limit (throwing <see cref="ScheduledJobValidationException" />) WITHOUT invoking the
-///     refresh service, a non-success refresh throws so the dispatcher records a Failed run, an OCE propagates
-///     untouched, and a happy run reaches the refresh service exactly once. The descriptor wiring is also asserted.
+///     <see cref="ModelRecommendationCheckHandler" /> tests: an invalid operation, use case or limit throws
+///     <see cref="ScheduledJobValidationException" /> WITHOUT calling the refresh service, a failed refresh throws so
+///     the run records Failed, an OCE propagates, a happy run refreshes exactly once; descriptor wiring is asserted.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelRecommendationCheckHandlerTests

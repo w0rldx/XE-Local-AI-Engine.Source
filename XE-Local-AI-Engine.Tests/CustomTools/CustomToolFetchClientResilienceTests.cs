@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     Mirrors <c>LocalModelProxyResilienceTests</c>: the container must have the standard handler installed, as Aspire's
 ///     service defaults do, or the assertions pass whether or not <c>RemoveAllResilienceHandlers</c> was ever called.
-///     Found live on 2026-10-15: one action attempt against a 500 reached its target four times.
+///     Without that, one action attempt against a 500 reaches its target four times.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class CustomToolFetchClientResilienceTests

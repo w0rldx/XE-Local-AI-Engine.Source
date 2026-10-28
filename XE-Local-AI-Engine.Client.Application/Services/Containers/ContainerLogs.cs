@@ -49,7 +49,7 @@ public sealed record ContainerLogSnapshot
     public required string Text { get; init; }
 
     /// <summary>
-    ///     Whether bytes were discarded to honour the request's ceiling. Reported rather than inferred: a caller that
+    ///     Whether bytes were discarded to honor the request's ceiling. Reported rather than inferred: a caller that
     ///     had to guess from the length would show a truncated log as a complete one.
     /// </summary>
     public required bool Truncated { get; init; }

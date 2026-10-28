@@ -37,7 +37,7 @@ internal sealed class IntegrationSseWriter : IDisposable
 
     private static readonly byte[] KeepaliveFrame = Encoding.UTF8.GetBytes(": keepalive\n\n");
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IIntegrationExecutionEventBuffer _buffer;
 

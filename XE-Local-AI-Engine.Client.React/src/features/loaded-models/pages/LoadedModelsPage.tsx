@@ -2,13 +2,13 @@ import { IconServer } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
+import { useEjectRunningModel, useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { RunningModelsPanel } from "@/features/loaded-models/components/RunningModelsPanel";
-import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
-import { useEjectRunningModel, useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
 
 export function LoadedModelsPage() {
 	const { t } = useTranslation();

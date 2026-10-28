@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the four invariants the supervisor's runtime gate depends on: shared holders run concurrently, an
-///     exclusive holder excludes them in both directions, a pending exclusive acquire is not starved by later shared
-///     acquires, and an abandoned (cancelled) exclusive acquire leaves the gate usable.
+///     Pins the supervisor runtime gate: shared holders run concurrently, an exclusive holder excludes them both ways,
+///     a pending exclusive is not starved by later shared acquires, and a cancelled exclusive acquire leaves it usable.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AsyncSharedExclusiveGateTests

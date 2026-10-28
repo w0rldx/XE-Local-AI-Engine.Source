@@ -20,20 +20,24 @@ import { NodeSettingsUiModeCard } from "@/features/node-settings/components/Node
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
 import {
 	NodeSettingsAgentRunLimitsCard,
-	NodeSettingsCloudAccessCard,
-	NodeSettingsContainerRuntimeCard,
 	NodeSettingsContextCompactionCard,
-	NodeSettingsDownloadLimitsCard,
-	NodeSettingsKnowledgeRetrievalCard,
-	NodeSettingsKnowledgeSearchCard,
 	NodeSettingsOutputCapCard,
 	NodeSettingsReasoningBudgetsCard,
-	NodeSettingsRetentionCard,
 	NodeSettingsToolLimitsCard,
+} from "@/features/node-settings/components/NodeSettingsAgentCards";
+import {
+	NodeSettingsCloudAccessCard,
+	NodeSettingsContainerRuntimeCard,
+	NodeSettingsDownloadLimitsCard,
+	NodeSettingsRetentionCard,
 	NodeSettingsTranscriptionCard,
 	NodeSettingsWebFetchLimitsCard,
 	NodeSettingsWorkspaceLimitsCard,
 } from "@/features/node-settings/components/NodeSettingsTunableCards";
+import {
+	NodeSettingsKnowledgeRetrievalCard,
+	NodeSettingsKnowledgeSearchCard,
+} from "@/features/node-settings/components/NodeSettingsKnowledgeCards";
 import { NodeSettingsWebAccessCard } from "@/features/node-settings/components/NodeSettingsWebAccessCard";
 import type {
 	ExternalAccessPreset,

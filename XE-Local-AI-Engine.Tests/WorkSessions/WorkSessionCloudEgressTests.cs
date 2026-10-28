@@ -11,14 +11,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Repointing a session at a cloud model.
-///     <para>
-///         The knowledge-base cloud gate is per turn and acts on the OFFER: it withholds the local-data tools from a
-///         cloud model. It says nothing about text a local model has already extracted. Without the check under test,
-///         researching on a local model, pausing, repointing at a cloud agent and resuming would hand the whole findings
-///         corpus to a third-party provider inside the next step's state block.
-///     </para>
+///     Repointing a session at a cloud model. The knowledge-base cloud gate acts per turn on the OFFER, withholding
+///     local-data tools from a cloud model, but says nothing about text a local model has already extracted.
 /// </summary>
+/// <remarks>
+///     Without the check under test, researching locally, pausing, repointing at a cloud agent and resuming would hand
+///     the whole findings corpus to a third-party provider inside the next step's state block.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class WorkSessionCloudEgressTests
 {

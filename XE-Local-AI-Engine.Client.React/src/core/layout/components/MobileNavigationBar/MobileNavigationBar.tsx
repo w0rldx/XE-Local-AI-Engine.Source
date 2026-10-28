@@ -1,22 +1,20 @@
 import "./MobileNavigationBar.css";
 
 import { ActionIcon, Divider, Drawer, Text } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
 import { IconBug, IconInfoCircle, IconLogout, IconX } from "@tabler/icons-react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
-import { LogoCombined } from "@/core/layout/components/Logo/LogoCombined";
 import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
+import { LogoCombined } from "@/core/layout/components/Logo/LogoCombined";
 import type { IMobileNavigationBarProperties } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar.types";
 import { MobileNavigationLanguageMenu } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu";
 import { MobileNavigationMenu } from "@/core/layout/components/MobileNavigationMenu/MobileNavigationMenu";
 import { MobileNavigationThemeMenu } from "@/core/layout/components/MobileNavigationThemeMenu/MobileNavigationThemeMenu";
 import { SidebarMenu } from "@/core/layout/components/Sidebar/SidebarMenu";
 import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuItem";
+import { useUiMode } from "@/core/layout/hooks/useUiMode";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
-import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 import type { INavigationLink } from "@/core/layout/models/NavigationMenuData";
 import {
 	filterNavigationLinksByDisabledCapabilities,
@@ -25,28 +23,17 @@ import {
 	navigationLinks,
 	useServerDisabledNavigationCapabilities,
 } from "@/core/layout/models/NavigationMenuData";
-import { useReportProblem } from "@/features/diagnostics/hooks/useReportProblem";
-import { useUiMode } from "@/core/layout/hooks/useUiMode";
+import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 
-// Same lazy pattern as AboutDialogButton: the dialog bundle only loads on first open.
-const AboutDialog = lazy(async () => {
-	const module = await import("@/features/about/components/AboutDialog/AboutDialog");
-	return { default: module.AboutDialog };
-});
-
-export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNavigationBarProperties) {
+export function MobileNavigationBar({ drawerOpen, setDrawerOpen, drawerActions }: IMobileNavigationBarProperties) {
 	const { width } = useWindowDimensions();
 	const { t } = useTranslation();
-	const navigate = useNavigate();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
 	const { logout, logoutPending } = useNodeLogout();
-	const [aboutOpened, { open: openAbout, close: closeAbout }] = useDisclosure(false);
 	// Same two-gate composition as the desktop rail: capability first (baked into `navigationLinks`), mode second.
 	const uiMode = useUiMode();
 	const serverDisabled = useServerDisabledNavigationCapabilities();
-	const { report, pending: reportPending } = useReportProblem(() => {
-		navigate({ to: "/diagnostics" }).catch(() => undefined);
-	});
+	const { reportProblem: report, reportProblemPending: reportPending, openAbout } = drawerActions;
 
 	const menuItemStyle: MenuItemStyles = {
 		root: {
@@ -100,116 +87,107 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 	};
 
 	return (
-		<>
-			<Drawer
-				position="left"
-				opened={drawerOpen}
-				onClose={() => setDrawerOpen(false)}
-				withCloseButton={false}
-				withOverlay={true}
-				overlayProps={{ backgroundOpacity: 0.5, blur: 0 }}
-				className="flex flex-col h-full"
-				styles={{
-					content: {
-						width: width < 420 ? "100%" : "min(400px, 100vw)",
-					},
-				}}
-			>
-				<div className="flex flex-row justify-between items-center pt-3 pb-1 pl-7 pr-2 h-15">
-					<div className="h-12 pt-2">
-						<LogoCombined />
-					</div>
-					<ActionIcon onClick={() => setDrawerOpen(false)} variant="subtle" aria-label={t("common.close")}>
-						<IconX size={24} />
-					</ActionIcon>
+		<Drawer
+			position="left"
+			opened={drawerOpen}
+			onClose={() => setDrawerOpen(false)}
+			withCloseButton={false}
+			withOverlay={true}
+			overlayProps={{ backgroundOpacity: 0.5, blur: 0 }}
+			className="flex flex-col h-full"
+			styles={{
+				content: {
+					width: width < 420 ? "100%" : "min(400px, 100vw)",
+				},
+			}}
+		>
+			<div className="flex flex-row justify-between items-center pt-3 pb-1 pl-7 pr-2 h-15">
+				<div className="h-12 pt-2">
+					<LogoCombined />
 				</div>
-				<div className="flex flex-col gap-1 h-full pt-3">
-					<Divider />
+				<ActionIcon onClick={() => setDrawerOpen(false)} variant="subtle" aria-label={t("common.close")}>
+					<IconX size={24} />
+				</ActionIcon>
+			</div>
+			<div className="flex flex-col gap-1 h-full pt-3">
+				<Divider />
 
-					{/* Regular Navigation Menus */}
-					{viewableNavigationMenus(
-						filterNavigationLinksByUiMode(filterNavigationLinksByDisabledCapabilities(navigationLinks, serverDisabled), uiMode),
-					).map((menu) => (
-						<MobileNavigationMenu
-							key={menu.menuId}
-							menuItemStyle={menuItemStyle}
-							setDrawerOpen={setDrawerOpen}
-							menuItem={menu.menuItem}
-							drawerTitle={menu.drawerTitle}
-							links={menu.links}
-							width={width}
-						/>
-					))}
+				{/* Regular Navigation Menus */}
+				{viewableNavigationMenus(
+					filterNavigationLinksByUiMode(filterNavigationLinksByDisabledCapabilities(navigationLinks, serverDisabled), uiMode),
+				).map((menu) => (
+					<MobileNavigationMenu
+						key={menu.menuId}
+						menuItemStyle={menuItemStyle}
+						setDrawerOpen={setDrawerOpen}
+						menuItem={menu.menuItem}
+						drawerTitle={menu.drawerTitle}
+						links={menu.links}
+						width={width}
+					/>
+				))}
 
-					<div className="flex-grow" />
+				<div className="flex-grow" />
 
-					<MobileNavigationThemeMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+				<MobileNavigationThemeMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
 
-					<MobileNavigationLanguageMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+				<MobileNavigationLanguageMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
 
-					{/* Report problem + About + Logout live in the desktop HeaderBar; on mobile the drawer is the
+				{/* Report problem + About + Logout live in the desktop HeaderBar; on mobile the drawer is the
 				    only chrome, so it must offer them too. */}
-					<SidebarMenu menuItemStyles={menuItemStyle}>
-						<div className="h-17 flex items-center justify-center">
-							<SidebarMenuItem
-								icon={<IconBug />}
-								disabled={reportPending}
-								onClick={() => {
-									setDrawerOpen(false);
-									report().catch(() => undefined);
-								}}
-								isMobile={true}
-							>
-								<Text size="sm" fw={500} lh="1.5">
-									{t("diagnostics.reportProblem")}
-								</Text>
-							</SidebarMenuItem>
-						</div>
-					</SidebarMenu>
+				<SidebarMenu menuItemStyles={menuItemStyle}>
+					<div className="h-17 flex items-center justify-center">
+						<SidebarMenuItem
+							icon={<IconBug />}
+							disabled={reportPending}
+							onClick={() => {
+								setDrawerOpen(false);
+								report().catch(() => undefined);
+							}}
+							isMobile={true}
+						>
+							<Text size="sm" fw={500} lh="1.5">
+								{t("diagnostics.reportProblem")}
+							</Text>
+						</SidebarMenuItem>
+					</div>
+				</SidebarMenu>
 
-					<SidebarMenu menuItemStyles={menuItemStyle}>
-						<div className="h-17 flex items-center justify-center">
-							<SidebarMenuItem
-								icon={<IconInfoCircle />}
-								onClick={() => {
-									setDrawerOpen(false);
-									openAbout();
-								}}
-								isMobile={true}
-							>
-								<Text size="sm" fw={500} lh="1.5">
-									{t("pages.about.title", "About")}
-								</Text>
-							</SidebarMenuItem>
-						</div>
-					</SidebarMenu>
+				<SidebarMenu menuItemStyles={menuItemStyle}>
+					<div className="h-17 flex items-center justify-center">
+						<SidebarMenuItem
+							icon={<IconInfoCircle />}
+							onClick={() => {
+								setDrawerOpen(false);
+								openAbout();
+							}}
+							isMobile={true}
+						>
+							<Text size="sm" fw={500} lh="1.5">
+								{t("pages.about.title", "About")}
+							</Text>
+						</SidebarMenuItem>
+					</div>
+				</SidebarMenu>
 
-					<SidebarMenu menuItemStyles={menuItemStyle}>
-						<div className="h-17 flex items-center justify-center">
-							<SidebarMenuItem
-								icon={<IconLogout />}
-								disabled={logoutPending}
-								onClick={() => {
-									setDrawerOpen(false);
-									logout().catch(() => undefined);
-								}}
-								isMobile={true}
-							>
-								<Text size="sm" fw={500} lh="1.5">
-									{t("components.headerBar.logout")}
-								</Text>
-							</SidebarMenuItem>
-						</div>
-					</SidebarMenu>
-				</div>
-			</Drawer>
-
-			{/* Rendered outside the Drawer so the dialog survives the drawer closing when About is opened. */}
-			{aboutOpened ? (
-				<Suspense fallback={null}>
-					<AboutDialog opened={aboutOpened} onClose={closeAbout} />
-				</Suspense>
-			) : null}
-		</>
+				<SidebarMenu menuItemStyles={menuItemStyle}>
+					<div className="h-17 flex items-center justify-center">
+						<SidebarMenuItem
+							icon={<IconLogout />}
+							disabled={logoutPending}
+							onClick={() => {
+								setDrawerOpen(false);
+								logout().catch(() => undefined);
+							}}
+							isMobile={true}
+						>
+							<Text size="sm" fw={500} lh="1.5">
+								{t("components.headerBar.logout")}
+							</Text>
+						</SidebarMenuItem>
+					</div>
+				</SidebarMenu>
+			</div>
+		</Drawer>
 	);
 }

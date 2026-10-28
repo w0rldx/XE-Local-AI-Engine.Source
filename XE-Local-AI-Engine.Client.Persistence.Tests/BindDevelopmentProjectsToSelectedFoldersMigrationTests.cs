@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>BindDevelopmentProjectsToSelectedFolders</c> ties a development project to the folder the operator explicitly
-///     granted. The RESTRICT foreign key is the point: a granted folder cannot be deleted out from under a project that
-///     is still bound to it, so the workspace root can never silently become unauthorized.
+///     <c>BindDevelopmentProjectsToSelectedFolders</c> ties a development project to its explicitly granted folder. The
+///     RESTRICT foreign key is the point: a bound folder cannot be deleted, so the workspace root never silently
+///     becomes unauthorized.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class BindDevelopmentProjectsToSelectedFoldersMigrationTests

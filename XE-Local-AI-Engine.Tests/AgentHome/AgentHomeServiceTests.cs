@@ -537,7 +537,7 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     The tester's case: a model naming the <c>attachments</c> alias, which no stored folder carries, gets the staged
+    ///     A model naming the <c>attachments</c> alias, which no stored folder carries, gets the staged
     ///     conversation folder copied exactly once instead of a "no selected folder is registered" rejection.
     /// </summary>
     [Test]
@@ -1188,7 +1188,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
     /// <summary>
     ///     A goal executor that blocks inside the run until the test releases it, so a lifecycle test can hold the
-    ///     owner-node lease for exactly as long as it needs without a sleep. Entry is signalled, not polled for.
+    ///     owner-node lease for exactly as long as it needs without a sleep. Entry is signaled, not polled for.
     /// </summary>
     private sealed class GateableGoalExecutor
     {
@@ -1365,7 +1365,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
     /// <summary>
     ///     The fake, with the two capability flags this file's posture tests need under the test's control. Wrapping
-    ///     rather than reimplementing keeps every other behaviour the production fake's.
+    ///     rather than reimplementing keeps every other behavior the production fake's.
     /// </summary>
     private sealed class CapabilityOverridingProvider : IAgentSandboxRuntimeProvider
     {
@@ -1389,7 +1389,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         public string ProviderName => _inner.ProviderName;
 
-        // Advertising the boundary is enough for the profile tests: each refuses before a create, so the fake never has to honour it.
+        // Advertising the boundary is enough for the profile tests: each refuses before a create, so the fake never has to honor it.
         public SandboxProviderCapabilities Capabilities =>
             (_inner.Capabilities
              | (_canDenyEgress ? SandboxProviderCapabilities.SupportsNetworkPolicy : SandboxProviderCapabilities.None)

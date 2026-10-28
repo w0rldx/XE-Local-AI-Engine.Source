@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     A REAL <see cref="LocalToolOfferProvider" /> for the suites that must prove what the offer does and does not
-///     carry. Shared by the offer suite and the coordinator harness so both judge the same projections — a substitute
-///     could be told to omit <c>emit_output</c> and would prove nothing about the class that actually omits it.
+///     A REAL <see cref="LocalToolOfferProvider" /> shared by the offer suite and the coordinator harness so both judge
+///     the same projections: a substitute could be told to omit <c>emit_output</c> and would prove nothing about the
+///     class that omits it.
 /// </summary>
 internal static class IntegrationToolOfferFactory
 {

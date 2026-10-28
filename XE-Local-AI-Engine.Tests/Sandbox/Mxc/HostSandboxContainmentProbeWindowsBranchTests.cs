@@ -7,7 +7,6 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -43,8 +42,8 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
     [Test]
     public async Task TheProbeLine_NamesMxcsSixUiFacts_AndTheOsVersion()
     {
-        // N-46: the facts the boundary decision reads were invisible; the log line is their only record (no contract carries them).
-        var logger = new CapturingLogger<HostSandboxContainmentProbe>();
+        // The log line is the only record of the facts the boundary decision reads (no contract carries them).
+        var logger = new RecordingLogger<HostSandboxContainmentProbe>();
         _ = Measure(Runtime(Probe(IsolationTier.AppContainerDacl, canBlockDesktopSwitching: false)), logger);
 
         AssertEx.Contains(logger.AllText,
@@ -71,7 +70,7 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
     [Test]
     public async Task TheProbeLine_SaysNotReported_WhenMxcNeverReachedTheUiFacts()
     {
-        var logger = new CapturingLogger<HostSandboxContainmentProbe>();
+        var logger = new RecordingLogger<HostSandboxContainmentProbe>();
 
         _ = Measure(mxcRuntime: null, logger);
 

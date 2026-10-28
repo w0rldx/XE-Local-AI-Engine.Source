@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The one place a bridge token becomes an identity. Driven through the REAL store over real SQLite and the real
-///     encrypted column, because what is being asserted is that a token minted at install can be read back out of an
-///     AEAD-sealed row and matched — a substituted store would prove none of that.
+///     The one place a bridge token becomes an identity, driven through the REAL store over real SQLite and the
+///     encrypted column: a token minted at install must read back out of an AEAD-sealed row and match.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ExternalAppBridgeTokenVerifierTests

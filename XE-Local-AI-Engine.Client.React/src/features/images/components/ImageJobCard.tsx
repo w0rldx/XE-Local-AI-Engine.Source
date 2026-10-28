@@ -113,7 +113,7 @@ interface ImageJobCardProps {
 	onEdit?: (source: ImageEditSource) => void;
 }
 
-// One image job row: queued → generating → succeeded/failed/cancelled, with the live generation timeline (phase, step
+// One image job row: queued → generating → succeeded/failed/canceled, with the live generation timeline (phase, step
 // bar, estimate) underneath while the job runs. A cancellable job (queued or generating) shows a Cancel button; a
 // succeeded job shows its decrypted PNG. Delete sits beside them and is disabled until the job is terminal — the
 // node refuses an active job, and the button says so rather than letting the operator find out through a toast.

@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddModelProviderMapRevision</c> stamps every existing mapping row as <c>legacy</c> via a NOT NULL column with
-///     a literal default. The default is the whole point: without it the migration cannot add a required column to a
-///     populated table, and every pre-existing mapping would lose its revision identity.
+///     <c>AddModelProviderMapRevision</c> stamps existing mapping rows <c>legacy</c> via a NOT NULL column with a
+///     literal default, without which the required column cannot be added to a populated table.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddModelProviderMapRevisionMigrationTests

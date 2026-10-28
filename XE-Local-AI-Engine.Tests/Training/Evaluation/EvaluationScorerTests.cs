@@ -201,7 +201,7 @@ public sealed class EvaluationScorerTests
         AssertEx.Equal(TrainingSampleParts.MultiCallUnsupportedReason, rejection.Reason!);
         AssertEx.Equal(EvaluationScorer.Deterministic, rejection.ScoredBy);
 
-        // The silent behaviour it replaces: the expectation would have been the FIRST call, with the second dropped.
+        // The silent behavior it replaces: the expectation would have been the FIRST call, with the second dropped.
         AssertEx.Equal("get_weather", EvaluationScorer.ReadExpectation(content, [Snapshot()]).ToolName!);
     }
 

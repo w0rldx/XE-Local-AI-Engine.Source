@@ -5,13 +5,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.BackgroundServices;
+using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -71,7 +70,7 @@ public sealed class AppUpdateServiceTests
         const string sensitive = "Velopack metadata at /home/private with token=secret";
         var factory = NewFactory();
         factory.Create(Arg.Any<AppUpdateFeed>()).Returns(_ => throw new InvalidOperationException(sensitive));
-        var logger = new CapturingLogger<AppUpdateService>();
+        var logger = new RecordingLogger<AppUpdateService>();
         var state = new AppUpdateState();
 
         using var service = CreateService(factory, isDesktop: true, logger: logger, state: state);
@@ -203,7 +202,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task CheckForUpdates_WhenManagerReportsMalformedFeed_RecordsFailedAndLogsSafeReason()
     {
-        var logger = new CapturingLogger<AppUpdateService>();
+        var logger = new RecordingLogger<AppUpdateService>();
         var manager = ManagerReturning(new VelopackCheckResult
         {
             Outcome = VelopackCheckOutcome.Failed,
@@ -226,7 +225,7 @@ public sealed class AppUpdateServiceTests
         manager.CurrentVersion.Returns("0.1.0");
         manager.CheckForUpdateAsync(Arg.Any<CancellationToken>())
                .Returns<Task<VelopackCheckResult>>(_ => throw new FormatException(sensitive));
-        var logger = new CapturingLogger<AppUpdateService>();
+        var logger = new RecordingLogger<AppUpdateService>();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger);
 
         var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
@@ -364,7 +363,7 @@ public sealed class AppUpdateServiceTests
         var manager = NewManager();
         manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                .Returns<Task<bool>>(_ => throw new InvalidOperationException(sensitive));
-        var logger = new CapturingLogger<AppUpdateService>();
+        var logger = new RecordingLogger<AppUpdateService>();
         var state = AvailableUpdateState();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger, state: state);
 

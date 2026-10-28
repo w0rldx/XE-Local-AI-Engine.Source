@@ -52,8 +52,8 @@ internal static class DevelopmentAttemptFailureCodes
 /// <remarks>
 ///     The message is authored here, never assembled from model output or an absolute host path, which is what lets
 ///     the attempt runners surface it directly instead of replacing it with a generic sentence. Anything the engine
-///     did <em>not</em> author still falls through to the generic reason; the sanitization rule is unchanged and
-///     simply no longer applied to messages that were already safe.
+///     did <em>not</em> author still falls through to the generic reason; the sanitization rule still applies to
+///     that; only a message the engine authored, which is already safe, skips it.
 /// </remarks>
 internal sealed class DevelopmentAttemptEvidenceException : InvalidOperationException
 {

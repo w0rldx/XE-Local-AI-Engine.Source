@@ -180,7 +180,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         if (!rerankDecision.ShouldRerank && !string.IsNullOrWhiteSpace(rerankerModelName))
         {
             // A skipped rerank still warms, so the next ambiguous query finds the reranker resident; the warm's reuse path
-            // also refreshes its idle timestamp, so the reaper no longer evicts it between skipped queries (wiki 15, "Pre-warm").
+            // also refreshes its idle timestamp, so the reaper does not evict it between skipped queries (wiki 15, "Pre-warm").
             _prewarmer?.RequestWarm();
         }
 

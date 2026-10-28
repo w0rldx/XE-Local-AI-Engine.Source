@@ -22,7 +22,7 @@ internal sealed class DevelopmentAttempt
     /// </summary>
     /// <remarks>
     ///     Null on attempts created before this column existed. A null means "no attempt-level snapshot", and the
-    ///     readers fall back to the project's current profile, which is exactly the pre-existing behaviour.
+    ///     readers fall back to the project's current profile, which is exactly the pre-existing behavior.
     /// </remarks>
     public string? CommandProfileJson { get; set; }
 

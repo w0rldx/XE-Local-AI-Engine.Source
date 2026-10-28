@@ -4,9 +4,8 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 
 /// <summary>
-///     <c>GET /version</c>. Only the four fields <c>DockerDaemonIdentity</c> is built from are emitted. The property
-///     names are Docker's own and are what <c>VersionResponse</c> binds to — note <c>ApiVersion</c> and
-///     <c>MinAPIVersion</c> capitalise differently, which is the daemon's inconsistency and not a typo here.
+///     <c>GET /version</c>. Only the four fields <c>DockerDaemonIdentity</c> uses, under Docker's own names that
+///     <c>VersionResponse</c> binds to: <c>ApiVersion</c> and <c>MinAPIVersion</c> differ in case on the daemon too.
 /// </summary>
 internal static class VersionEndpoint
 {

@@ -236,7 +236,7 @@ internal sealed class SandboxLifecycleRegistry
                 $"The read-only tree '{shadowed}' lies under a mount point the isolated sandbox owns ({string.Join(", ", SandboxIsolatedChain.ReservedMountPoints)}); it would be shadowed by the sandbox's own mounts rather than visible inside it."));
         }
 
-        // None means no egress: honoured where the host can create an empty network namespace, rejected fail-closed where it cannot
+        // None means no egress: honored where the host can create an empty network namespace, rejected fail-closed where it cannot
         // rather than silently sharing the host network. Under isolation the denial is bwrap's own --unshare-net, probe-controlled.
         var denyEgress = request.NetworkPolicy == SandboxNetworkPolicy.None;
         if (denyEgress && !wantsIsolation && !containment.SupportsNetworkIsolation)
@@ -245,7 +245,7 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot deny network egress on this host ({containment.NetworkIsolationUnavailableReason ?? "no mechanism is available"}), so NetworkPolicy.None cannot be honored. Use NetworkPolicy.Unrestricted to accept a shared host network, or an OS-isolated provider."));
         }
 
-        // Resource limits are honoured where a transient systemd user scope can impose them and rejected fail-closed where it cannot:
+        // Resource limits are honored where a transient systemd user scope can impose them and rejected fail-closed where it cannot:
         // running without the ceiling the caller asked for is exactly the silent downgrade this contract exists to prevent.
         var limits = request.ResourceLimits;
         var wantsLimits = limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue);
@@ -418,7 +418,7 @@ internal sealed class SandboxLifecycleRegistry
     ///     host path is reachable under its own name and nothing is mounted anywhere.
     /// </summary>
     /// <remarks>
-    ///     The requested <see cref="SandboxMount.SandboxPath" /> is DISCARDED rather than honoured and the handle reports the host path,
+    ///     The requested <see cref="SandboxMount.SandboxPath" /> is DISCARDED rather than honored and the handle reports the host path,
     ///     which is the honest answer: a caller putting the requested path into a child's environment would name a directory this provider
     ///     never created. It deliberately confines nothing — the mount list describes what the sandbox can reach, already the whole host
     ///     filesystem here, and narrowing it would change the preserved-workspace contract under callers that never asked.
@@ -567,7 +567,7 @@ internal sealed class SandboxLifecycleRegistry
             // process so a sandbox kill terminates every running command immediately.
             inFlight.RequestCancel();
             // For an isolated command a tree-kill alone is not enough — its processes live in a PID namespace this one cannot see — so the
-            // scope's cgroup is signalled FIRST. Synchronous: the jail is deleted below, and deleting it mid-write half-removes it.
+            // scope's cgroup is signaled FIRST. Synchronous: the jail is deleted below, and deleting it mid-write half-removes it.
             if (inFlight.ScopeUnitName is { } unitName)
             {
 #pragma warning disable MA0045 // forced sync: the jail directory is deleted below, see the comment above

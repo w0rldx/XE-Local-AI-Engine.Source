@@ -9,9 +9,8 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     Covers the v2 multi-model / managed-identity config surface of <see cref="CloudCredentialStore" />: the
-///     legacy-v1 → v2 migration (must NOT delete a liftable file), the v2 round-trip, and
-///     <c>ValidateConfig</c> (API key required only for the ApiKey auth mode, ≥1 model, Azure host
-///     allowlist, HTTPS).
+///     legacy-v1 → v2 migration (must NOT delete a liftable file), the v2 round-trip, and <c>ValidateConfig</c> (API
+///     key only for ApiKey auth, ≥1 model, Azure host allowlist, HTTPS).
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AzureFoundryConfigStoreTests : IDisposable
@@ -30,7 +29,7 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
     [Test]
     public async Task LoadConfigAsync_WhenLegacyV1Payload_LiftsToOneModelConnection_AndDoesNotDeleteFile()
     {
-        // A tester's pre-existing flat single-deployment blob must be lifted, not silently dropped or deleted.
+        // A pre-existing flat single-deployment blob must be lifted, not silently dropped or deleted.
         Directory.CreateDirectory(_contentRootPath);
         var legacy = JsonSerializer.SerializeToUtf8Bytes(new
             {

@@ -95,9 +95,8 @@ public sealed class OllamaModelInfoReaderTests
     [Test]
     public void TryGetContextLength_WhenModelInfoIsNull_ReturnsFalseInsteadOfThrowing()
     {
-        // The deleted OllamaModelInfoParser threw ArgumentNullException here. ShowModelDetailsAsync passes
-        // response.Info?.ExtraInfo straight through, so a daemon that reports no model-info block must answer
-        // "no context length" rather than fault the details call.
+        // ShowModelDetailsAsync passes response.Info?.ExtraInfo straight through, so a daemon reporting no model-info
+        // block must answer "no context length" rather than fault the details call.
         var result = OllamaModelInfoReader.TryGetContextLength((IDictionary<string, JsonElement>?)null, out var contextLength);
 
         AssertEx.False(result);

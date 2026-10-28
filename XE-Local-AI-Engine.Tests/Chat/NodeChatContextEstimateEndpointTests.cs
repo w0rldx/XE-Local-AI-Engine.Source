@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Endpoint contract for the pre-send context estimate: Operator-gated, the content-free window shape labelled
+///     Endpoint contract for the pre-send context estimate: Operator-gated, the content-free window shape labeled
 ///     <c>PreSendEstimate</c>, 404 for a model the node does not know and 400 for an unparsable agent id.
 /// </summary>
 /// <remarks>Everything downstream of the faked model facts is the real send-path composition.</remarks>

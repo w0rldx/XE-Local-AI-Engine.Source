@@ -310,7 +310,7 @@ public sealed class ChatInvocationStatePumpTests
     }
 
     /// <summary>
-    ///     F9: a Stop trips the run token, so the pump terminalizes Cancelled from its catch. The persist cadence lags the
+    ///     A Stop trips the run token, so the pump terminalizes Cancelled from its catch. The persist cadence lags the
     ///     emit cadence, so that terminal must carry what was SENT, not what was last written.
     /// </summary>
     [Test]
@@ -410,7 +410,7 @@ public sealed class ChatInvocationStatePumpTests
     }
 
     // Collects everything the pump emits, in order. The pump only ever writes to its sink, so the read side and the
-    // budget behaviour (bounding, reconcile, detach) are out of scope here — they belong to the sink's own tests.
+    // budget behavior (bounding, reconcile, detach) are out of scope here — they belong to the sink's own tests.
     private sealed class CollectingSink : IChatStreamEventSink
     {
         public List<ChatStreamEvent> Events { get; } = [];

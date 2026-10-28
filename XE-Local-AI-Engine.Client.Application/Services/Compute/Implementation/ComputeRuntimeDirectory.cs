@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
-using System.Security.Cryptography;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -108,7 +107,7 @@ internal sealed class ComputeRuntimeDirectory
 
     public async Task<ManagedPythonEnvironmentIdentity> ComputeExpectedIdentityAsync(CancellationToken cancellationToken)
     {
-        return BuildIdentity(await ComputeFileShaAsync(LockfilePath, cancellationToken));
+        return BuildIdentity(await FileSha256.ComputeAsync(LockfilePath, cancellationToken));
     }
 
     /// <summary>The identity the shipped lockfile asks for, or null when it cannot be read.</summary>
@@ -241,7 +240,7 @@ internal sealed class ComputeRuntimeDirectory
     public static void TryDeleteTree(string path)
     {
         SetTreeWritable(path, writable: true);
-        TryDeleteDirectory(path);
+        BestEffortFile.TryDeleteDirectory(path);
     }
 
     private async Task WriteInstalledStateAsync(InstalledState state)
@@ -256,7 +255,7 @@ internal sealed class ComputeRuntimeDirectory
     /// </summary>
     /// <remarks>
     ///     Scripts reach the interpreter through <c>sys.executable</c>, and a writable <c>site-packages</c> lets one call drop a module
-    ///     every later approved call imports — a single approval turned into persistent code execution. <b>This is defence in depth and no
+    ///     every later approved call imports — a single approval turned into persistent code execution. <b>This is defense in depth and no
     ///     longer the boundary:</b> the boundary is the read-only bind mount under
     ///     <see cref="XE_Local_AI_Engine.Client.Services.Sandbox.SandboxIsolationMode.Filesystem" />, where an <c>os.chmod</c> and a write
     ///     both answer <c>EROFS</c>. The mode bits still cover OUTSIDE that namespace: the engine's own processes, an operator's shell.
@@ -300,21 +299,6 @@ internal sealed class ComputeRuntimeDirectory
         }
 
         Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-    }
-
-    public static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort sweep of the provision scratch directory.
-        }
     }
 
     /// <summary>
@@ -372,12 +356,6 @@ internal sealed class ComputeRuntimeDirectory
             Rid = ManagedPythonPins.Current.Rid,
             UvVersion = ManagedPythonPins.UvVersion
         };
-    }
-
-    private static async Task<string> ComputeFileShaAsync(string path, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
     /// <summary>The persisted record: the identity plus the store the venv links into.</summary>

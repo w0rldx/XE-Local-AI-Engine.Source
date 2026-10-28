@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Covers both interceptor directions for <c>training_runs</c>. A column registered for encryption but not for
-///     decryption (or the reverse) round-trips as garbage rather than failing loudly, so all six encrypted columns are
-///     asserted here as ciphertext at rest AND plaintext after a fresh read.
+///     Both interceptor directions for <c>training_runs</c>. A column registered one way only round-trips as garbage
+///     instead of failing, so all six encrypted columns are checked as ciphertext at rest AND plaintext on re-read.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TrainingRunEncryptionTests : IDisposable

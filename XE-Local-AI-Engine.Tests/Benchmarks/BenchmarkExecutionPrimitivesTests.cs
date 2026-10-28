@@ -237,9 +237,8 @@ public sealed class BenchmarkExecutionPrimitivesTests
         AssertEx.True(buffer.Replay(third, afterSequence: 0, runVersion: 1).ResetRequired);
         AssertEx.True(buffer.Replay(second, afterSequence: 0, runVersion: 1).ResetRequired);
 
-        // The dropped one is answered as unknown. The hub does NOT read that as "nothing happened": it compares the
-        // run's persisted LastStreamSequence against this LatestSequence and resets on the difference, which is the
-        // same answer by another route.
+        // The dropped one is answered as unknown, which the hub does NOT read as "nothing happened": it compares the
+        // run's persisted LastStreamSequence with this LatestSequence and resets on the difference, the same answer.
         var forgotten = buffer.Replay(first, afterSequence: 0, runVersion: 1);
         AssertEx.False(forgotten.ResetRequired);
         AssertEx.Equal(expected: 0L, forgotten.LatestSequence, "An unknown run reports no sequence, which is what the hub's persisted-sequence check needs.");

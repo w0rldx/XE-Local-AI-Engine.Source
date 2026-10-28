@@ -56,7 +56,7 @@ public sealed class ChatStreamEventMapperTests
     [Test]
     public void ToolCallEvent_DeniedCompletion_CarriesIsDeniedAndStoresADeniedPart()
     {
-        // N-90: the live event and the stored part both say denied, so the card reads the same before and after a reload.
+        // The live event and the stored part both say denied, so the card reads the same before and after a reload.
         var payload = NewPayload("call-3", "run_python", ToolCallLifecyclePhase.Completed, result: "Tool call invocation was rejected.") with
         {
             IsDenied = true

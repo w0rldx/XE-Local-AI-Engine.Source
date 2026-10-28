@@ -187,7 +187,7 @@ describe("TranscriptionPage", () => {
 		});
 	});
 
-	// M3: the device is never sent to the node, so this store is the only record of which microphone a session was
+	// The device is never sent to the node, so this store is the only record of which microphone a session was
 	// configured for — and it has to be keyed by the session, not by the operator. A single global slot let the
 	// session created second decide what the session created first captured from.
 	it("remembers the microphone against the session it created, not globally", async () => {

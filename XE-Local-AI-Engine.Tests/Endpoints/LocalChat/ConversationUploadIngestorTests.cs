@@ -8,11 +8,11 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the gate/extract/persist orchestration extracted out of the conversation upload endpoint: an
-///     accepted image skips text extraction and is stored with the CANONICAL media type for its extension (never the
-///     client-supplied Content-Type), a non-image keeps the extract-then-persist path and the client type (with the
-///     octet-stream fallback), and a full admission gate rejects before any bytes are buffered.
+///     The conversation upload gate/extract/persist orchestration: an accepted image skips text extraction and is
+///     stored with the CANONICAL media type for its extension, never the client-supplied Content-Type.
 /// </summary>
+/// <remarks>A non-image keeps extract-then-persist and the client type (or octet-stream); a full admission
+///     gate rejects before any bytes are buffered.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class ConversationUploadIngestorTests
 {

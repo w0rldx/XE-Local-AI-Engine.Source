@@ -349,10 +349,10 @@ public sealed class GeneratedImageStoreTests : IDisposable
 
         var services = new ServiceCollection();
         services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        // The node enforces foreign keys, so this fixture must too — it used to pin `Foreign Keys=False` on the belief
-        // that the node ran without enforcement, which made it the one fixture here testing a database production never
-        // has. The delete test below stays meaningful under the real posture because the cascade cannot produce the
-        // storage paths `DeleteAsync` returns, and those paths are the whole point of the explicit ordered delete.
+        // The node enforces foreign keys, so this fixture must too — pinning `Foreign Keys=False` would make it the one
+        // fixture here testing a database production never has. The delete test below stays meaningful under the real
+        // posture because the cascade cannot produce the storage paths `DeleteAsync` returns, and those paths are the
+        // whole point of the explicit ordered delete.
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath};Foreign Keys=True"));
         services.AddScoped<IGeneratedImageRowStore, GeneratedImageRowStore>();
 

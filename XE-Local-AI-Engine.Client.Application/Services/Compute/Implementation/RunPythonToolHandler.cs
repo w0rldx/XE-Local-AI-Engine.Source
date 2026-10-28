@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 /// </remarks>
 internal sealed class RunPythonToolHandler : IClientLocalToolHandler, IClientLocalToolPreflight
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IComputeToolGateway _gateway;
 

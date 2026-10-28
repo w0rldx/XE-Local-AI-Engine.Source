@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Asymmetric embedding models distinguish a stored passage from a search query by an instruction prefix. The prefixer
-///     prepends <c>search_document: </c> for ingestion and <c>search_query: </c> for retrieval. These tests pin each
-///     prefix, confirm the two intents never bleed into one another, and confirm a single call applies the prefix once.
+///     Asymmetric embedding models tell a passage from a query by an instruction prefix: <c>search_document: </c> for
+///     ingestion, <c>search_query: </c> for retrieval. These pin each prefix, that the intents never bleed, and that
+///     one call prefixes once.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeEmbeddingPrefixerTests

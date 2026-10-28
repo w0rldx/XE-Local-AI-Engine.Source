@@ -1,5 +1,5 @@
 /* The RUN view's cards only. The editor's cards are Lane D1's `GraphWorkflowNodes.module.css`: nothing here can be
-   dragged, connected or deleted, so these styles carry no affordance the read-only canvas cannot honour. */
+   dragged, connected or deleted, so these styles carry no affordance the read-only canvas cannot honor. */
 
 .node {
 	min-width: 170px;

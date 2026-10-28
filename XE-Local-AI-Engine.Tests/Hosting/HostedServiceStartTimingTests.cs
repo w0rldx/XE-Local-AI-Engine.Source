@@ -18,7 +18,7 @@ public sealed class HostedServiceStartTimingTests
     public async Task Install_KeepsTheStartOrder_AndLogsTheSlowServiceAndASummaryBeforeApplicationStarted()
     {
         var time = new AdvanceableTimeProvider();
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<HostedServiceStartTiming>();
         var order = new List<string>();
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
         _ = builder.Services.AddSingleton<TimeProvider>(time);
@@ -32,7 +32,7 @@ public sealed class HostedServiceStartTimingTests
 
         using var host = builder.Build();
         string[]? linesAtStarted = null;
-        _ = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => linesAtStarted = logger.Lines);
+        _ = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => linesAtStarted = [.. logger.Entries.Select(static entry => entry.Message)]);
         await host.StartAsync();
         await host.StopAsync();
 
@@ -92,36 +92,5 @@ public sealed class HostedServiceStartTimingTests
 
         public Task StopAsync(CancellationToken cancellationToken) =>
             Task.CompletedTask;
-    }
-
-    private sealed class CapturingLogger : ILogger<HostedServiceStartTiming>
-    {
-        private readonly Lock _gate = new();
-        private readonly List<string> _lines = [];
-
-        public string[] Lines
-        {
-            get
-            {
-                lock (_gate)
-                {
-                    return [.. _lines];
-                }
-            }
-        }
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
-            null;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            lock (_gate)
-            {
-                _lines.Add(formatter(state, exception));
-            }
-        }
     }
 }

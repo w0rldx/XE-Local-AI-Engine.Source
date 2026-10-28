@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed partial class BenchmarkStore
 {
     private const int MaxReviewPageSize = 200;
-    private static readonly JsonSerializerOptions ReviewSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ReviewSerializerOptions = JsonSerializerOptions.Web;
 
     public async Task<BenchmarkRunRecord> SubmitReviewAsync(BenchmarkReviewCommand command, CancellationToken cancellationToken = default)
     {

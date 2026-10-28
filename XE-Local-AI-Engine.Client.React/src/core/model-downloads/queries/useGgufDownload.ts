@@ -1,0 +1,203 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+
+import {
+	browseGgufRepositoriesOptions,
+	cancelGgufDownloadMutation,
+	getGgufDownloadsQueryKey,
+	getHardwareProfileOptions,
+	getModelCatalogInfoOptions,
+	inspectGgufRepositoryOptions,
+	startGgufDownloadMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
+import { toGgufRepository, toGgufRepositoryDetail, toGgufTestedModel } from "@/core/model-downloads/models/GgufMappers";
+import { sortTestedModelsByFit } from "@/core/model-downloads/models/GgufModels";
+import { useActiveGgufAcquisitions } from "@/core/model-downloads/queries/useGgufAcquisitions";
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
+
+// Server state for the Hugging Face GGUF browse + download flow on the Model Management page. Reads use the generated
+// hey-api `*Options()` (which wire the shared axios instance + TanStack Query AbortSignal automatically) and a
+// TanStack `select` that maps the optional-field generated response into the stricter domain view-model.
+// Mutations adapt the domain variables to the generated `{ body }` envelope and invalidate the caches they affect.
+
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
+const ggufQueryIds = {
+	browse: "browseGgufRepositories",
+	inspect: "inspectGgufRepository",
+	// A started/canceled download changes the llama.cpp running-models list (it surfaces the in-flight download), so
+	// the download mutations invalidate that list even though it now renders on the Loaded Models page — TanStack
+	// query keys are global, so the cross-page cache refetch still works.
+	runningModels: "listRunningModels",
+} as const;
+
+/** Builds the partial generated-query-key filter that matches every cached variant of one GGUF endpoint. */
+function ggufInvalidationKey(operationId: string): readonly [{ _id: string }] {
+	return [{ _id: operationId }];
+}
+
+function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId: string): Promise<void> {
+	return queryClient.invalidateQueries({ queryKey: ggufInvalidationKey(operationId) });
+}
+
+// GGUF repository browse search. enabled gates the query so it only fires once the operator has entered a search term
+// (an empty browse is not run). The query string scopes the cache key so each search caches independently.
+export function useBrowseGgufRepositories(query: string, enabled: boolean) {
+	const trimmed = query.trim();
+	return useQuery({
+		...browseGgufRepositoriesOptions({ query: { query: trimmed } }),
+		select: (data) => (data.items ?? []).map(toGgufRepository),
+		enabled: enabled && trimmed.length > 0,
+	});
+}
+
+// The curated catalog's tested models, offered on the browse panel before any search. Reads the catalog-info endpoint
+// (sharing its cache key with the advisor's catalog card); enabled gates it on the modelFit capability.
+// The endpoint only peeks the device audit that the hardware-profile read computes, so on a first landing it can answer
+// Unknown before the shell's profile read settles. Observing that query under the shell's exact key (no extra request)
+// refetches the catalog once the profile is newer and a verdict is still Unknown; the refetched catalog is then newer,
+// so this cannot loop.
+export function useTestedCatalogModels(enabled: boolean) {
+	const catalog = useQuery({
+		...getModelCatalogInfoOptions(),
+		select: (data) => sortTestedModelsByFit((data.testedModels ?? []).map(toGgufTestedModel)),
+		enabled,
+	});
+	const profileUpdatedAt = useQuery({
+		...getHardwareProfileOptions({ query: { refresh: false } }),
+		enabled,
+		refetchOnMount: false,
+	}).dataUpdatedAt;
+	const { data, dataUpdatedAt, refetch } = catalog;
+	const hasUnknownVerdict = data?.some((model) => model.fitVerdict === "Unknown") ?? false;
+
+	useEffect(() => {
+		if (hasUnknownVerdict && profileUpdatedAt > 0 && dataUpdatedAt < profileUpdatedAt) {
+			refetch().catch(() => undefined);
+		}
+	}, [hasUnknownVerdict, profileUpdatedAt, dataUpdatedAt, refetch]);
+
+	return catalog;
+}
+
+// Per-repo GGUF file inspection backing the quant picker. enabled gates the query so it only fires when a repo is
+// selected (the download dialog is open). The repo id scopes the cache key so each repo's quant list caches
+// independently. A discovery failure returns a 200 empty file list (handled by the dialog as "no files").
+export function useInspectGgufRepository(repoId: string, enabled: boolean) {
+	const trimmed = repoId.trim();
+	return useQuery({
+		...inspectGgufRepositoryOptions({ query: { repoId: trimmed } }),
+		select: toGgufRepositoryDetail,
+		enabled: enabled && trimmed.length > 0,
+	});
+}
+
+// Variables for starting a GGUF download. fileName / quant / revision are optional — when omitted the backend picks
+// the default quant (Q4_K_M) GGUF file from the repo.
+export interface StartGgufDownloadVariables {
+	repoId: string;
+	fileName?: string;
+	quant?: string;
+	revision?: string;
+	// Whether to also download the repo's `mmproj*.gguf` vision projector. Left undefined for a repo that ships none:
+	// JSON.stringify drops an undefined value, so the field is absent from the wire body and the server default (true)
+	// applies. A model installed WITH a projector is refused as a benchmark judge, hence the weights-only choice.
+	includeProjector?: boolean;
+}
+
+// Starts a resumable GGUF download via the Hugging Face GGUF model store. On success the running-models list may
+// change as the download begins, so invalidate it. Returns the wire response so the caller can read
+// `alreadyInFlight` / the resolved `modelName`.
+export function useStartGgufDownload() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (variables: StartGgufDownloadVariables) => {
+			const options = startGgufDownloadMutation();
+			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
+		},
+		// Invalidate the downloads list so the active-downloads poll refetches immediately and re-arms its interval — the
+		// poll stops once nothing is Running, so a download started from idle would otherwise never be picked up until a
+		// remount (the "Downloading… forever" bug). Also refresh the running-models list the in-flight download surfaces in.
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, ggufQueryIds.runningModels),
+				queryClient.invalidateQueries({ queryKey: getGgufDownloadsQueryKey() }),
+			]),
+	});
+}
+
+// Cancels an in-flight GGUF download by model name. Invalidates the running-models list so the canceled entry clears.
+export function useCancelGgufDownload() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (modelName: string) => {
+			const options = cancelGgufDownloadMutation();
+			return await options.mutationFn?.({ body: { modelName } }, undefined as never);
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, ggufQueryIds.runningModels),
+				queryClient.invalidateQueries({ queryKey: getGgufDownloadsQueryKey() }),
+			]),
+	});
+}
+
+function isActiveDownloadPhase(phase: GgufAcquisitionStatus["phase"]): boolean {
+	return phase === "Queued" || phase === "Validating" || phase === "Downloading" || phase === "Committing";
+}
+
+// Domain view-model for a single active GGUF download, derived from the backend DTO.
+export type GgufDownloadStatus = GgufAcquisitionStatus & {
+	readonly operationKind: "Download";
+	readonly sanitizedError: string | null | undefined;
+};
+
+// Live GGUF download progress. Does ONE initial fetch of GET model-fit/gguf/downloads to hydrate on mount (no polling),
+// then opens the GgufDownloadHub SignalR connection and merges each pushed status into a local map — replacing the old
+// per-second poll. Reconciles GgufBrowseStore so:
+//   – downloads started before a navigation refresh rehydrate into the store (via the one-shot hydrate + a re-fetch the
+//     start/cancel mutations trigger by invalidating the list key);
+//   – models no longer Running are removed from the store.
+// Returns a map of modelName → GgufDownloadStatus for all non-idle entries known (hydrate ∪ live pushes).
+//
+// `enabled` (default true) gates BOTH the hydrate query and the hub. Pass `false` to suppress them pre-auth — the
+// GgufDownloadPoller uses this to avoid a 401 before login (mirrors useTourState / useSchedulerHub auth-gating).
+export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean } = {}): ReadonlyMap<string, GgufDownloadStatus> {
+	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
+	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+	const acquisitions = useActiveGgufAcquisitions({ enabled });
+	const statuses = useMemo(() => {
+		const downloads = new Map<string, GgufDownloadStatus>();
+		for (const status of acquisitions.values()) {
+			// A retry after a cancel is a second operation for the same model; the retained Cancelled one must not hide it.
+			const current = downloads.get(status.modelName);
+			if (current !== undefined && isActiveDownloadPhase(current.phase) && !isActiveDownloadPhase(status.phase)) {
+				continue;
+			}
+			if (status.operationKind === "Download") {
+				downloads.set(status.modelName, {
+					...status,
+					operationKind: "Download",
+					sanitizedError: status.sanitizedMessage,
+				});
+			}
+		}
+		return downloads;
+	}, [acquisitions]);
+
+	// Reconcile the store with the live map: Running → markInFlight (show progress), terminal → removeInFlight (clear).
+	// The installed-models refetch on completion lives in useActiveGgufAcquisitions.
+	useEffect(() => {
+		for (const status of statuses.values()) {
+			if (isActiveDownloadPhase(status.phase)) {
+				markInFlight(status.modelName);
+				continue;
+			}
+			removeInFlight(status.modelName);
+		}
+	}, [statuses, markInFlight, removeInFlight]);
+
+	return statuses;
+}

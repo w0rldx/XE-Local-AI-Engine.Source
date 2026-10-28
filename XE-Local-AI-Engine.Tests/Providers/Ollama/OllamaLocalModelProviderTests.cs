@@ -143,7 +143,7 @@ public sealed class OllamaLocalModelProviderTests
         // "Ollama unreachable" catch expects — not leak out as a raw OperationCanceledException from the default transport.
         var connectTimeout = new TaskCanceledException("connect timed out", new TimeoutException());
 #pragma warning disable CA2000 // Ownership transfers to the factory, disposed at the end of the test.
-        var handler = new OllamaConnectFailureHandler(new ThrowingHandler(connectTimeout));
+        var handler = new OllamaConnectFailureHandler(new ThrowingHttpMessageHandler(connectTimeout));
         var httpClient = new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = new Uri("http://127.0.0.1:11434")
@@ -247,21 +247,6 @@ public sealed class OllamaLocalModelProviderTests
         {
             Provider.Dispose();
             _factory.Dispose();
-        }
-    }
-
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        private readonly Exception _exception;
-
-        public ThrowingHandler(Exception exception)
-        {
-            _exception = exception;
-        }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            return Task.FromException<HttpResponseMessage>(_exception);
         }
     }
 

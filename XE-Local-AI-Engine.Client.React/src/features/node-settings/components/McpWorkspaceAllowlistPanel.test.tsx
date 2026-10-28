@@ -34,7 +34,7 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
-vi.mock("@/features/mcp/queries/useMcpWorkspaces", () => ({
+vi.mock("@/features/node-settings/queries/useMcpWorkspaces", () => ({
 	useMcpWorkspaces: () => hooksMock.query,
 	useCreateMcpWorkspace: () => hooksMock.create,
 	useDeleteMcpWorkspace: () => hooksMock.remove,

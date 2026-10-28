@@ -16,7 +16,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listAgentTemplatesQueryKey: templatesKeyMock,
 }));
 
-import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/features/agents/queries/useAgentDefinitions";
+import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
 import { useAgentTemplates, useImportAgentTemplates } from "@/features/agents/queries/useAgentTemplates";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The sweep pump is a slow safety sweep behind a wake: every path the sweep alone used to notice raises
+///     The sweep pump is a slow safety sweep behind a wake: every path the sweep would otherwise notice alone raises
 ///     <see cref="GraphWorkflowSweepWake" />, so none of them waits for the interval.
 /// </summary>
 /// <remarks>
@@ -154,7 +154,7 @@ public sealed class GraphWorkflowSweepWakeTests
             "the run held behind the cap never started once the first one parked.");
     }
 
-    /// <summary>A run nothing signalled — its command's signal went to the recorder — is still found by the interval sweep.</summary>
+    /// <summary>A run nothing signaled — its command's signal went to the recorder — is still found by the interval sweep.</summary>
     [Test]
     public async Task AnUnsignalledRun_IsStillRecoveredByTheIntervalSweep()
     {

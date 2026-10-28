@@ -43,9 +43,8 @@ public sealed class EmbeddingSmokeTests
                         }
                     };
 
-                    // Embeddings are provider-routed now — there is no standalone DI IEmbeddingGenerator.
-                    // Resolve the embedding generator through ILocalModelProviderResolver exactly as the production
-                    // retrieval path does: pick the embedding model's provider (ollama here) and create its generator.
+                    // Embeddings are provider-routed: resolve the generator via ILocalModelProviderResolver exactly as
+                    // production retrieval does, via the embedding model's provider (ollama here).
                     var resolver = factory.Services.GetRequiredService<ILocalModelProviderResolver>();
                     var embeddingProvider = await resolver.ResolveProviderForModelAsync(EmbeddingModel, CancellationToken.None);
                     using var generator = embeddingProvider.CreateEmbeddingGenerator(new LocalModelSelection

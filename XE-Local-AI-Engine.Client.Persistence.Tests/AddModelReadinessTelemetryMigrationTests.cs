@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddModelReadinessTelemetry</c> migration: it adds the nullable <c>model_readiness_ms</c> column
-///     to BOTH <c>agent_execution_logs</c> (the per-turn run envelope) and <c>dev_workflow_node_runs</c> (the node-run
-///     rollup) on an upgrade and on a fresh migrate-to-head, drops both on rollback without disturbing the columns that
-///     preceded them, and leaves no model/snapshot drift.
+///     <c>AddModelReadinessTelemetry</c> adds nullable <c>model_readiness_ms</c> to BOTH <c>agent_execution_logs</c>
+///     and <c>dev_workflow_node_runs</c> on upgrade and fresh migrate, drops both on rollback without disturbing the
+///     earlier columns, and leaves no snapshot drift.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
@@ -96,7 +95,7 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
         AssertEx.False(nodeRunColumns.Contains(ReadinessColumn), "Rolling back one migration should drop the readiness column from dev_workflow_node_runs.");
 
         // SQLite rebuilds a table to drop a column, so a rollback rebuilds from the PRECEDING migration's model — which
-        // is exactly how a sibling slice's columns get silently lost. Pin the neighbours this migration sits beside.
+        // is exactly how a sibling slice's columns get silently lost. Pin the neighbors this migration sits beside.
         AssertEx.True(envelopeColumns.Contains("dispatched_tier"), "Rolling back the readiness migration must not disturb the envelope columns that preceded it.");
         AssertEx.True(envelopeColumns.Contains("tool_schema_tokens"), "Rolling back the readiness migration must not disturb the envelope columns that preceded it.");
         AssertEx.True(nodeRunColumns.Contains("agent_turn_ms"), "Rolling back the readiness migration must not disturb the node-run columns that preceded it.");

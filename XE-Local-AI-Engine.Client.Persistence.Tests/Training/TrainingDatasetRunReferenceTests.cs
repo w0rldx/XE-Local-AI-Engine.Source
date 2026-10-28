@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     A run freezes its own copy of a dataset, but its freeze record still names the dataset it came from. Deleting
-///     that dataset would leave the lineage pointing at nothing, so the delete is refused for as long as any run
-///     references it — including a finished one, because the lineage question outlives the run.
+///     A run freezes its own copy of a dataset, but its freeze record names the source. Deleting that dataset would
+///     orphan the lineage, so it is refused while any run references it, even a finished one.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TrainingDatasetRunReferenceTests : IDisposable

@@ -28,8 +28,8 @@ public sealed class SandboxIsolatedChainTests
     [Test]
     public async Task Render_NeverAsksBwrapToDieWithItsParent()
     {
-        // PR_SET_PDEATHSIG fires when the forking THREAD exits; a .NET thread-pool worker retiring idle SIGKILLed live
-        // sandboxed MCP servers after 40-180 s (live round 2026-09-30). The scope and the startup reaper own the lifetime.
+        // PR_SET_PDEATHSIG fires when the forking THREAD exits; a .NET thread-pool worker retiring idle SIGKILLs live
+        // sandboxed MCP servers after 40-180 s. The scope and the startup reaper own the lifetime.
         var chain = SandboxIsolatedChain.Render(UsrMergedInputs(), "/usr/bin/python3", ["-I", "-"]);
 
         AssertEx.False(chain.Contains("--die-with-parent"), "bwrap must not carry --die-with-parent");
@@ -150,7 +150,7 @@ public sealed class SandboxIsolatedChainTests
     public async Task Render_CarriesTheCallersOwnEnvironment_AfterTheFixedAllowList()
     {
         // The chain is --clearenv plus an allow-list, so a caller's SandboxCommandRequest.Environment — which the
-        // non-isolated path honours — would silently stop arriving the moment a sandbox opted into isolation. Emitting
+        // non-isolated path honors — would silently stop arriving the moment a sandbox opted into isolation. Emitting
         // it LAST also means a caller that genuinely needs a different HOME gets one rather than being overridden.
         var inputs = UsrMergedInputs() with
         {

@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint contract test for the per-conversation temporary-chat (<c>memory_excluded</c>) override added by the
-///     adaptive-memory feature. The PATCH toggle rides the existing conversation-mutation surface (Operator-gated like
-///     rename/pin/archive) and round-trips through the read path.
+///     Endpoint contract for the per-conversation temporary-chat (<c>memory_excluded</c>) override: the PATCH toggle
+///     rides the existing conversation-mutation surface (Operator-gated like rename/pin/archive) and round-trips
+///     through the read path.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class NodeChatMemoryExcludedEndpointTests

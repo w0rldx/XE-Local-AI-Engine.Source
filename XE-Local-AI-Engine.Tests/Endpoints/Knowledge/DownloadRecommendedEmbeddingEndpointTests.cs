@@ -14,9 +14,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint tests for the one-click recommended-embedding download — the fix for a fresh node being unable to index
-///     ANY knowledge-base document until an embedding GGUF was found and fetched by hand. Mirrors
-///     <see cref="DownloadRecommendedRerankerEndpointTests" />, plus the one behaviour that deliberately differs: an
+///     Endpoint tests for the one-click recommended-embedding download — without it a fresh node cannot index
+///     ANY knowledge-base document until an embedding GGUF is found and fetched by hand. Mirrors
+///     <see cref="DownloadRecommendedRerankerEndpointTests" />, plus the one behavior that deliberately differs: an
 ///     already-installed NON-recommended embedding model is also a no-op, because that is the model
 ///     <c>EmbeddingModelResolver</c> would pick anyway.
 /// </summary>

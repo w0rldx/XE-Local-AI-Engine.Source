@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 public static class BenchmarkPairwiseFitScores
 {
     /// <summary>Same options the fitter wrote the blob with, so a member name cannot bind on one side only.</summary>
-    private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ScoreOptions = JsonSerializerOptions.Web;
 
     /// <summary>The fit's per-run entries in stored order; empty when there is no fit or its blob is unreadable.</summary>
     public static IReadOnlyList<BenchmarkPairwiseScoreEntry> Read(BenchmarkPairwiseFitRecord? fit, ILogger logger) =>

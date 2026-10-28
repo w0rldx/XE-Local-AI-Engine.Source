@@ -220,7 +220,6 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 throw;
             }
 
-
             if (apply is null || apply.ExitCode != 0)
             {
                 // A clean --check passed for every alias above, so a non-zero apply here is a rare race. Report the
@@ -379,7 +378,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         {
             // Every exit path, cancellation included: the `finally` covers the OperationCanceledException that
             // propagates out of the write or out of the runner, so a cancelled apply leaves no copy behind.
-            TryDeleteFile(tempPatch);
+            BestEffortFile.TryDeleteFile(tempPatch);
         }
     }
 
@@ -690,7 +689,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     /// <summary>
     ///     Decodes the patch bytes as <see cref="File.ReadAllTextAsync(string, CancellationToken)" /> would: UTF-8,
-    ///     BOM honoured. Invalid sequences become replacement characters, so a malformed patch is rejected by the
+    ///     BOM honored. Invalid sequences become replacement characters, so a malformed patch is rejected by the
     ///     guards instead of throwing.
     /// </summary>
     private static string DecodePatch(byte[] patchBytes)
@@ -723,25 +722,6 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         redacted = redacted.Replace(resolvedRoot, "<folder>", StringComparison.Ordinal);
         redacted = TempPatchFilenameRegex().Replace(redacted, "<patch>");
         return redacted.Trim();
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort temp cleanup.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort temp cleanup.
-        }
     }
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]*$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]

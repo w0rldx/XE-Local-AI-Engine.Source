@@ -12,16 +12,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Seeder behavior against the real wired DI graph + encrypted SQLite: the first boot seeds exactly one
-///     "Mathematician" row naming <c>run_python</c> with its approval left ON, and a second boot is a no-op (idempotent
-///     by slug). The tool-name assertion is the load-bearing one — <c>run_python</c> is profile-opt-in only, so a seed
-///     that stopped naming it would leave the compute tool unreachable with nothing else failing.
-///     <para>
-///         The <c>Compute:Enabled</c> gate is covered in both directions: a disabled node seeds nothing (shipped
-///         config is disabled, and the persona's only tool is refused there), and a row seeded while compute was on
-///         SURVIVES a later start with it off — the seeder is additive-only and must never delete.
-///     </para>
+///     Seeder behavior against the real DI graph + encrypted SQLite: the first boot seeds one "Mathematician" row
+///     naming <c>run_python</c> with approval left ON, and a second boot is a no-op (idempotent by slug).
 /// </summary>
+/// <remarks>
+///     The tool-name assertion is load-bearing: <c>run_python</c> is profile-opt-in only, so a seed that stopped naming
+///     it leaves the compute tool unreachable with nothing else failing. <c>Compute:Enabled</c> is covered both ways: a
+///     disabled node (the shipped config) seeds nothing, and a row seeded while compute was on SURVIVES a later start
+///     with it off, because the seeder is additive-only and must never delete.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class MathematicianAgentSeederTests
 {

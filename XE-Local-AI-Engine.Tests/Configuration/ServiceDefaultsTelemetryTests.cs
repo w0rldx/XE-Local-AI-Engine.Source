@@ -9,13 +9,8 @@ using OpenTelemetry.Metrics;
 using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// Composition contract for AddServiceDefaults (ServiceDefaults/Extensions.cs):
-//  - OpenTelemetry instrumentation is registered in EVERY hosting mode (not only under Aspire).
-//  - The OTLP exporter is registered whenever OTEL_EXPORTER_OTLP_ENDPOINT is configured, regardless of ASPIRE_ENABLED
-//    — so a desktop/RC build with the standard variable set now exports.
-//  - Aspire-specific service discovery (and the global HTTP resilience/discovery defaults, which live in the same
-//    conditional block) stays gated on ASPIRE_ENABLED.
-// The four tests below cover ASPIRE_ENABLED {off,on} x OTLP endpoint {unset,set}.
+// Composition contract for AddServiceDefaults: OpenTelemetry instrumentation in EVERY hosting mode, the OTLP exporter
+// whenever OTEL_EXPORTER_OTLP_ENDPOINT is set, service discovery only under ASPIRE_ENABLED.
 [Category(TestCategories.Unit)]
 public sealed class ServiceDefaultsTelemetryTests
 {

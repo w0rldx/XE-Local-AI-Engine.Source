@@ -269,7 +269,7 @@ describe("DevWorkflowsPage", () => {
 	});
 
 	it("opens the definition editor on the Templates tab", async () => {
-		// The tab-value narrowing collapsed every value it did not recognise to `runs`, so this shelf could be clicked
+		// The tab-value narrowing collapsed every value it did not recognize to `runs`, so this shelf could be clicked
 		// and never opened — the whole definition editor was unreachable in the app while its own tests passed.
 		server.use(
 			jsonRoute("get", "development-workflows/work-items", { items: [] }),

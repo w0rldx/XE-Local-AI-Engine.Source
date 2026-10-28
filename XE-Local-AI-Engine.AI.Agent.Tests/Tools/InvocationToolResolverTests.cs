@@ -461,7 +461,7 @@ public sealed class InvocationToolResolverTests
         /// <summary>How many batch round trips the resolver made — one per resolution, or zero when nothing is custom.</summary>
         public int BatchCallCount { get; private set; }
 
-        /// <summary>The names the last batch call carried, so a test can prove they all travelled in one call.</summary>
+        /// <summary>The names the last batch call carried, so a test can prove they all traveled in one call.</summary>
         public IReadOnlyList<string> LastRequestedNames { get; private set; } = [];
 
         public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)

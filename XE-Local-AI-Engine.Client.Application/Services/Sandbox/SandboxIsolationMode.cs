@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
 ///     How strongly a sandbox is separated from the host filesystem. Provider-neutral, and DEFAULT-OFF: an existing
-///     caller that names nothing keeps exactly the behaviour it had before the isolated mode existed.
+///     caller that names nothing keeps exactly the behavior it had before the isolated mode existed.
 /// </summary>
 public enum SandboxIsolationMode
 {

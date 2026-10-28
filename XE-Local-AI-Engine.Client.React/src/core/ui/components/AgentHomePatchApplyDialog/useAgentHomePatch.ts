@@ -4,7 +4,7 @@ import { applyAgentHomePatchMutation, previewAgentHomePatchMutation } from "@/co
 
 // Both routes are POSTs — the preview runs `git apply --check` against the host folders, which is a command rather
 // than a read — so both arrive from the generated client as mutations rather than query options. The dialog fires the
-// preview once on open and again whenever the operator asks for a re-read, which is the behaviour a query-on-open
+// preview once on open and again whenever the operator asks for a re-read, which is the behavior a query-on-open
 // would have given and the only part of it that matters here.
 
 /** The non-mutating dry run: the per-file plan, the rejections, and the hash an apply has to echo back. */

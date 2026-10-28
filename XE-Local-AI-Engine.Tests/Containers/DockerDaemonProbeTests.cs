@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The shared daemon probe, tested as what it is: a producer of status and evidence with no operator prose in it.
 ///     <para>
-///         Development Mode's own behaviour is asserted, unchanged, by <c>DockerDaemonPreflightServiceTests</c>, which
+///         Development Mode's own behavior is asserted, unchanged, by <c>DockerDaemonPreflightServiceTests</c>, which
 ///         this refactor must leave untouched. What is asserted here is the half that is now shared — resolution,
 ///         probe classification, the API and seccomp gates, and the trust-on-first-use pin — plus the two properties
 ///         the extraction exists to buy: each consumer supplies its own client, and each refusal is distinguishable
@@ -248,8 +248,8 @@ public sealed class DockerDaemonProbeTests
     [Test]
     public async Task AFirstUseConfirmationNamingAnotherDaemon_PinsNothing()
     {
-        // With no pin, a confirmation used to pin whichever daemon answered for any non-blank id: the id the operator
-        // was shown was never compared with the daemon that was approved.
+        // With no pin, a confirmation must not pin whichever daemon answers for any non-blank id: the id the operator
+        // was shown is compared with the daemon being approved.
         var (client, store) = Doubles();
 
         var outcome = await RunAsync(client, store, confirmingDaemonId: "daemon-bogus");

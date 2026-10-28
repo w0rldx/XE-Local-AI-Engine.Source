@@ -47,7 +47,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         // Kestrel's own 30 MB default would otherwise refuse (or, below it, pre-empt) the configured cap with an unreadable answer.
         Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartUploadLimits.EnvelopeBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
-        // Form auto-binding is off, so nothing infers the media type from the DTO any more. Declare it explicitly —
+        // Form auto-binding is off, so nothing infers the media type from the DTO. Declare it explicitly —
         // the same line PreviewSkillImportEndpoint carries, for the same reason.
         Description(builder => builder
                                .Accepts<UploadTranscriptionAudioRequest>("multipart/form-data")

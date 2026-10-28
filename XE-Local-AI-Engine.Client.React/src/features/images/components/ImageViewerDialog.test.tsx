@@ -20,7 +20,7 @@ vi.mock("@/features/images/hooks/useImageObjectUrl", () => ({
 	useImageObjectUrl: () => objectUrlResult,
 }));
 
-// No i18next instance is initialised under vitest, so the real useTranslation returns the default string with the
+// No i18next instance is initialized under vitest, so the real useTranslation returns the default string with the
 // {{placeholders}} intact. This interpolating stub (same shape as McpServerToolsPanel's) lets the metadata assertions
 // check the actual values rather than the template.
 vi.mock("react-i18next", () => ({

@@ -1,10 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Discovers the repository root from the test output directory by walking up until the solution file
-///     (<c>XE-Local-AI-Engine.slnx</c>) is found, and resolves project-relative paths beneath it. The repository is
-///     standalone — project directories live directly under the root, replacing the old monorepo-era
-///     <c>Apps/XE-Local-AI-Engine/...</c> layout assumptions.
+///     Finds the repository root by walking up from the test output directory to the solution file
+///     (<c>XE-Local-AI-Engine.slnx</c>) and resolves project-relative paths beneath it. Project directories live
+///     directly under the root.
 /// </summary>
 internal static class RepositoryPaths
 {

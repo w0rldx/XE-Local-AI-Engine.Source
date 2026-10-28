@@ -87,8 +87,8 @@ public sealed class ToolCapableModelRegistrarTests
     [Test]
     public async Task Backfill_AddsEveryInstalledToolCapableModel_AndLeavesTheRestAlone()
     {
-        // Without the backfill the fix would only apply to FUTURE downloads, leaving every already-installed model
-        // silently tool-less — which is exactly the state the capture run found.
+        // Without the backfill the registration would only apply to FUTURE downloads, leaving every already-installed
+        // model silently tool-less.
         var store = NewSettingsStore(existing: ["qwen3:8b"]);
         var registrar = NewRegistrar(store,
             Descriptor(ToolCapableGguf, isToolCapable: true),

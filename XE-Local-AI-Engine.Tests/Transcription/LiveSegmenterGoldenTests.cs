@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     <para>
 ///         <b>Read this before you touch the segmenter.</b> The fixture was recorded by driving this same segmenter,
-///         so its window list is a function of the segmenter's own behaviour. Any change to the tick loop, the window
+///         so its window list is a function of the segmenter's own behavior. Any change to the tick loop, the window
 ///         bounds, the commit rule or the force-commit rule invalidates it, and the replay fails loudly rather than
 ///         quietly adapting.
 ///     </para>

@@ -45,7 +45,7 @@ internal static class DevelopmentWorkspaceGitConfig
         var gitDirectory = Path.Combine(workspacePath, ".git");
         if (!Directory.Exists(gitDirectory))
         {
-            // Either the workspace is not materialised yet, or its .git is a linked worktree's pointer FILE, whose
+            // Either the workspace is not materialized yet, or its .git is a linked worktree's pointer FILE, whose
             // repository-local config lives elsewhere. The standalone-clone assertion rejects that second case.
             return;
         }
@@ -151,7 +151,7 @@ internal static class DevelopmentWorkspaceGitConfig
         }
 
         // Section and key names are case-insensitive in Git config; a SUBSECTION name is case-SENSITIVE, so it is
-        // carried through exactly as written rather than normalised.
+        // carried through exactly as written rather than normalized.
         section = header[..quote].Trim();
         subsection = header[(quote + 1)..].TrimEnd().TrimEnd('"');
     }
@@ -169,7 +169,7 @@ internal static class DevelopmentWorkspaceGitConfig
         }
 
         // Every extension EXCEPT worktreeConfig — see the class remarks: that one names a second config file this
-        // rewrite does not sanitise, and the file is removed instead.
+        // rewrite does not sanitize, and the file is removed instead.
         return string.Equals(section, ExtensionsSection, StringComparison.OrdinalIgnoreCase)
                && !string.Equals(key, "worktreeConfig", StringComparison.OrdinalIgnoreCase)
             ? ExtensionsSection

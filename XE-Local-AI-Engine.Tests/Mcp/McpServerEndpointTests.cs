@@ -129,7 +129,7 @@ public sealed class McpServerEndpointTests
     public async Task ListServers_MasksEveryEnvironmentValue_AndCarriesTheTrustTier()
     {
         // Encryption at rest only helps against someone holding the FILE. Returning the plaintext to anything holding
-        // a session made the column's AEAD decorative, so the response carries the keys and a fixed placeholder.
+        // a session would make the column's AEAD decorative, so the response carries the keys and a fixed placeholder.
         var service = Substitute.For<IMcpServerService>();
         var record = CreateRecord("Filesystem", enabled: true) with
         {
@@ -161,7 +161,7 @@ public sealed class McpServerEndpointTests
     [Test]
     public async Task ListServers_MasksHeaderValuesAndUrlQueryValues_AndCarriesTheSessionScope()
     {
-        // O-D6 (e1): a ?token= URL came back unmasked and was shown in cleartext; header values are credentials too.
+        // A ?token= URL comes back masked, never in cleartext; header values are credentials too.
         var service = Substitute.For<IMcpServerService>();
         var record = CreateRecord("Tickets", enabled: true) with
         {

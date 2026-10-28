@@ -347,8 +347,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     A second apply of a landed run used to reach git, fail on "already exists", and log a rejection that
-    ///     rewrote the run's recorded state to rejected while the patch sat on disk.
+    ///     A second apply of a landed run must not reach git, fail on "already exists", and log a rejection that
+    ///     rewrites the run's recorded state to rejected while the patch sits on disk.
     /// </summary>
     [Test]
     public async Task ApplyApprovedAsync_OnARunAlreadyApplied_RefusesAndKeepsTheAppliedState()
@@ -604,14 +604,14 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     [Test]
     public async Task ApplyApprovedAsync_WithSymlinkEscapingRoot_Rejects()
     {
-        // FIX 1 + EscapesViaReparsePoint coverage: a symlinked intermediate directory inside the host root that
+        // EscapesViaReparsePoint coverage: a symlinked intermediate directory inside the host root that
         // points outside it must be rejected before git touches any file.
 
         // This is a SECURITY guard, so a host that cannot plant the link must SKIP and say so — never return
-        // early. This test used to swallow the creation failure and return, which reported it as a PASS having
-        // asserted nothing; on a stock Windows box, where symlinks need Developer Mode or elevation, that is
-        // exactly what happened, so the one escape this test exists to catch went unproven on the shipping
-        // platform in silence. The swallow also matched only IOException, missing the UnauthorizedAccessException
+        // early. Swallowing the creation failure and returning would report a PASS having asserted
+        // nothing; on a stock Windows box, where symlinks need Developer Mode or elevation, that is the
+        // common case, so the one escape this test exists to catch would go unproven on the shipping
+        // platform in silence. Catching only IOException would also miss the UnauthorizedAccessException
         // that Windows raises the rest of the time.
         SymlinkSupport.EnsureSupported();
 
@@ -742,7 +742,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     [Test]
     public async Task PreviewAndApply_WithTraversingModeOnlyBlock_RejectsWithoutTouchingHost()
     {
-        // FIX N-1: a synthetic mode-only block (no unified-diff body lines) whose header path contains ".."
+        // A synthetic mode-only block (no unified-diff body lines) whose header path contains ".."
         // must be rejected by our own guard before git ever runs. The block is hand-crafted because the patch-export
         // baseline uses core.filemode false so real git never emits mode-change blocks.
         var harness = NewHarness();
@@ -771,7 +771,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     [Test]
     public async Task PreviewAsync_WithCleanModeOnlyBlock_IsNotRejectedForPathGuardReasons()
     {
-        // FIX N-1 positive case: a synthetic mode-only block whose header path is within the alias root must
+        // Positive case: a synthetic mode-only block whose header path is within the alias root must
         // pass the alias + traversal guard (TargetRelativePaths is populated with the header-derived path).
         var harness = NewHarness();
         var hostRoot = harness.AddFolder("repo-01");
@@ -1344,7 +1344,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         "diff --git a/repo-01/vendor b/repo-01/vendor\ndeleted file mode 160000\nindex 1111111..0000000\n--- a/repo-01/vendor\n+++ /dev/null\n@@ -1 +0,0 @@\n-Subproject commit 1111111111111111111111111111111111111111\n")]
     [Arguments("mode-only", "diff --git a/repo-01/vendor b/repo-01/vendor\nold mode 100644\nnew mode 160000\n")]
     // The everyday one: an existing submodule bumped to a new commit. No mode line at all — the mode is stated on
-    // the index header because it did not change — so this used to read as an ordinary modified file in the preview.
+    // the index header because it did not change — so it can pass for an ordinary modified file in the preview.
     [Arguments("pointer bump",
         "diff --git a/repo-01/vendor b/repo-01/vendor\nindex 1111111..2222222 160000\n--- a/repo-01/vendor\n+++ b/repo-01/vendor\n@@ -1 +1 @@\n-Subproject commit 1111111111111111111111111111111111111111\n+Subproject commit 2222222222222222222222222222222222222222\n")]
     public async Task PreviewAndApply_WithAGitlinkBlock_RejectWithoutTouchingHost(string shape, string patch)

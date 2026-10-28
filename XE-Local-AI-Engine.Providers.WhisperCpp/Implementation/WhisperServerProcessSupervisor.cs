@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///     <b>Reduced to ONE daemon on purpose:</b> the image supervisor this ports is keyed by model with a loaded cap and LRU eviction, but
 ///     a node has one selected transcription model and the server serializes every request on a single mutex, so a second daemon could
 ///     never serve anyone faster. The cap, the LRU and the per-model gate dictionary are not ported; the rest is kept one for one.
-///     <b>GPU loads are serialized process-wide:</b> a spawn and an in-place model switch both initialise GPU weights, so both hold the
+///     <b>GPU loads are serialized process-wide:</b> a spawn and an in-place model switch both initialize GPU weights, so both hold the
 ///     shared admission gate through readiness, failure, timeout and exit. A CPU backend bypasses it.
 /// </remarks>
 internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor, IAsyncDisposable
@@ -566,8 +566,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     /// <remarks>
     ///     Exclusive: the same compare-and-swap latch an eviction uses, so the switch succeeds only when no transcription is in flight
     ///     and, once latched, no new lease can attach — a refused latch is a busy failure rather than switching the model out from under
-    ///     an in-flight request. Admission-gated on a GPU backend throughout, because an in-place load initialises GPU weights exactly as
-    ///     a spawn does. A failed load can kill the server outright, the daemon exiting when a model fails to initialise after freeing the
+    ///     an in-flight request. Admission-gated on a GPU backend throughout, because an in-place load initializes GPU weights exactly as
+    ///     a spawn does. A failed load can kill the server outright, the daemon exiting when a model fails to initialize after freeing the
     ///     previous one, so any non-2xx, health timeout or exit returns null and the caller respawns.
     /// </remarks>
     private async Task<WhisperServerEndpoint?> TryLoadModelAsync(RunningServer running, string modelId, CancellationToken ct)

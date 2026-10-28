@@ -54,7 +54,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                 throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already started a different run.");
             }
 
-            // Signalled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
+            // Signaled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
             // the run it is asking about may still be waiting for its first tick.
             return await SignalAndComposeAsync(replayed.Id, cancellationToken);
         }
@@ -276,7 +276,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         };
     }
 
-    /// <summary>A lifecycle command: legal from where the run stands, keyed by its operation id, signalled on commit.</summary>
+    /// <summary>A lifecycle command: legal from where the run stands, keyed by its operation id, signaled on commit.</summary>
     /// <remarks>
     ///     Written against the <c>Any</c> version sentinel deliberately: an operator's intent must win over a status
     ///     move the dispatcher decided a moment earlier, the version check existing to stop the reverse.

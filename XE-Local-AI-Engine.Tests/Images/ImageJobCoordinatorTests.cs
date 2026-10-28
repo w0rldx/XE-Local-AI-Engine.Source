@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behavioural tests for the image-job coordinator: queued persistence, serialize-to-one-running, both cancel modes,
+///     Behavioral tests for the image-job coordinator: queued persistence, serialize-to-one-running, both cancel modes,
 ///     the persist-before-succeed ordering, and the hub's late-subscriber replay.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -67,7 +67,7 @@ public sealed class ImageJobCoordinatorTests
     [Test]
     public async Task RunJob_WithIdleLlamaServerResidents_EjectsEveryRoleGracefullyBeforeGenerating()
     {
-        // Tester round 5: an idle 27B chat model held the VRAM sd-server needed to load its weights inside the job.
+        // An idle 27B chat model can hold the VRAM sd-server needs to load its weights inside the job.
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         supervisor.ListRunningProcesses().Returns([Resident("chat-27b", ModelRole.Chat), Resident("embedder", ModelRole.Embedding)]);
         using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
@@ -735,7 +735,7 @@ public sealed class ImageJobCoordinatorTests
     }
 
     // producedSize models a runtime that returns an image whose size differs from the request (stable-diffusion.cpp
-    // rounds up to a multiple of 64); null echoes the request, the pre-existing behaviour.
+    // rounds up to a multiple of 64); null echoes the request, the pre-existing behavior.
     private sealed class FakeImageRuntime : IImageRuntime
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);

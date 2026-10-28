@@ -192,7 +192,7 @@ describe("graph workflow read hooks", () => {
 		const tools = renderHook(() => useGraphWorkflowTools(), { wrapper });
 
 		await waitFor(() => expect(definitions.result.current.data?.definitions).toHaveLength(1));
-		// Already D6-filtered server-side; the hook must hand the list on untouched rather than re-deriving eligibility.
+		// Already filtered server-side; the hook must hand the list on untouched rather than re-deriving eligibility.
 		await waitFor(() => expect(tools.result.current.data?.tools).toHaveLength(8));
 	});
 
@@ -278,7 +278,7 @@ describe("graph workflow read hooks", () => {
 			{ value: "qwen3", cloudProvider: undefined },
 			{ value: "ext:hosted/big", cloudProvider: "Hosted" },
 			{ value: "gpt-5.5", cloudProvider: "Codex" },
-			{ value: "my-deploy", cloudProvider: "Azure Foundry" },
+			{ value: "my-deploy", cloudProvider: "Azure AI Foundry" },
 		]);
 	});
 

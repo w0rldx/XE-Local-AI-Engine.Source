@@ -188,7 +188,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy, OverrideActiveMessage);
         }
 
-        if (!StoredNodeSettings.IsValidRecommendedLlamaCppTag(tag))
+        if (!StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag(tag))
         {
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.InvalidRequest,
                 "Tag must be a llama.cpp release tag in the form b<number>.");

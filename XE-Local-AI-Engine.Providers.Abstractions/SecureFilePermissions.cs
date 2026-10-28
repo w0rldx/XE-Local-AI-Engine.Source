@@ -11,7 +11,7 @@ using System.Security.Principal;
 /// </summary>
 /// <remarks>
 ///     Every token, credential and MSAL-cache store on the node hardens through this one implementation — the rule is
-///     the last line of defence for a protected blob, so a copy that drifts is a silent downgrade on whichever store
+///     the last line of defense for a protected blob, so a copy that drifts is a silent downgrade on whichever store
 ///     holds the stale copy.
 /// </remarks>
 public static class SecureFilePermissions
@@ -81,7 +81,7 @@ public static class SecureFilePermissions
         }
         catch
         {
-            DeleteBestEffort(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
             throw;
         }
     }
@@ -107,25 +107,6 @@ public static class SecureFilePermissions
         var quarantinePath = string.Concat(path, ".unreadable-", stamp);
         File.Move(path, quarantinePath, overwrite: false);
         return quarantinePath;
-    }
-
-    /// <summary>
-    ///     A leftover temp sibling is litter, never a correctness problem, and must not mask the exception being propagated.
-    /// </summary>
-    private static void DeleteBestEffort(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup; an orphan .tmp sibling stays behind.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; an orphan .tmp sibling stays behind.
-        }
     }
 
     [SupportedOSPlatform("windows")]

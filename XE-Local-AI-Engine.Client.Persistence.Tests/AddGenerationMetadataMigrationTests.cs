@@ -51,9 +51,8 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
                 "Migration should add generation_metadata_json to agent_skills.");
         }
 
-        // Null, not an empty blob: a row that predates AI drafting has no provenance, and an empty payload would read as
-        // "drafted, details unknown". This context has no materialization interceptor, so the legacy placeholder blobs
-        // in the other encrypted columns are read verbatim rather than failing authenticated decryption.
+        // Null, not an empty blob: a pre-drafting row has no provenance, and an empty payload reads "drafted, details
+        // unknown". No materialization interceptor here, so legacy placeholder blobs read verbatim instead of failing.
         await using var readContext = CreateContext(databasePath);
         AssertEx.Null((await readContext.AgentDefinitions.SingleAsync()).GenerationMetadataJson,
             "A pre-existing definition should load with no generation metadata.");

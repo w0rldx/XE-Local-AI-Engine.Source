@@ -57,7 +57,7 @@ public sealed class UntrustedContentFramingTests
     [Test]
     public void WrapDocument_WhenLaterAttachmentReplaysAnEarlierClosingMarker_FenceStaysIntact()
     {
-        // Reviewer residual: the per-conversation marker is model-visible and reused across a conversation's attachments.
+        // The per-conversation marker is model-visible and reused across a conversation's attachments.
         // A previously exposed closing marker embedded verbatim inside a LATER attachment (same conversation) must NOT
         // close the later fence. Because the nonce is content-bound, the later attachment's real marker differs from the
         // replayed one, so the forged marker stays INSIDE the fence.

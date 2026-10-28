@@ -6,11 +6,10 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the marker split the Development endpoints' constructor injection depends on: the FastEndpoints
-///     registration filter drops every <see cref="IDevelopmentEndpoint" /> when Development Mode is off, because their
-///     services are not registered then and FastEndpoints activates every endpoint at startup. The capability endpoint
-///     must stay out of the marker so it can keep reporting the disabled state.
+///     Pins the marker split: the FastEndpoints registration filter drops every <see cref="IDevelopmentEndpoint" />
+///     when Development Mode is off, while the capability endpoint stays unmarked so it can report the disabled state.
 /// </summary>
+/// <remarks>Their services are not registered then, and FastEndpoints activates every endpoint at startup.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class DevelopmentEndpointRegistrationTests
 {

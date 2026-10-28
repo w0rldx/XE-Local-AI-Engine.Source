@@ -10,8 +10,8 @@ import {
 	setMcpServerEnabledMutation,
 	updateMcpServerMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { toolCatalogQueryKeys } from "@/core/tools/queries/ToolCatalogQueryKeys";
 import { toMcpServerRegistration, toMcpServerToolsView } from "@/features/mcp/models/McpServerMappers";
-import { toolCatalogQueryKeys } from "@/features/tools/queries/ToolCatalogQueryKeys";
 
 // Server state for the MCP-server management surface. Reads use the generated hey-api `*Options()` (which wire the
 // shared axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the

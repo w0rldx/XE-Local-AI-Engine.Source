@@ -50,7 +50,7 @@ public sealed class CatalogRecommendationCandidate
 
     public required bool IsInstalled { get; init; }
 
-    /// <summary>The repository needs an accepted licence (and a token) to download, so its header may not have been read.</summary>
+    /// <summary>The repository needs an accepted license (and a token) to download, so its header may not have been read.</summary>
     public bool IsGated { get; init; }
 
     public KvQuantAdvisory? KvQuantAdvisory { get; init; }

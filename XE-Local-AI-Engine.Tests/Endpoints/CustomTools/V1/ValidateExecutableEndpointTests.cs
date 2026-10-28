@@ -57,7 +57,7 @@ public sealed class ValidateExecutableEndpointTests
                 path = "/usr/bin/list-things"
             });
 
-        // The desktop filter still leaves the POST unregistered, but 405 is no longer what an ANONYMOUS caller
+        // The desktop filter still leaves the POST unregistered, but 405 is not what an ANONYMOUS caller
         // sees: routing selects no endpoint for this verb, and the FallbackPolicy answers that case with a
         // challenge before routing's 405 is ever produced. The operator-token sibling above still gets the 405,
         // which is what keeps this pair proving the desktop gate rather than only the authorization one.

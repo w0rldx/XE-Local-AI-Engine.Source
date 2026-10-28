@@ -8,20 +8,15 @@ using XE_Local_AI_Engine.Testing.FakeDocker;
 using XE_Local_AI_Engine.Tests.ContainerSandbox;
 
 /// <summary>
-///     A real <see cref="IContainerRuntime" /> — the production wire client, not a double — pointed at a
-///     <see cref="FakeDockerServer" /> of its own.
-///     <para>
-///         Construction goes through <c>DockerContainerRuntimeFactory</c> and <c>DockerDaemonEndpointResolver</c>,
-///         the same path the real-daemon suite uses, with nothing but the endpoint changed. That is what makes these
-///         tests evidence about the production client: a shortcut that built the client differently would be
-///         evidence about the shortcut.
-///     </para>
-///     <para>
-///         One server per box and one box per test. The alternative — a shared daemon with a reset — would carry a
-///         container from one test into the next one's label filter, and a Kestrel start on a loopback port costs
-///         less than that class of flake.
-///     </para>
+///     A real <see cref="IContainerRuntime" /> (the production wire client, not a double) pointed at a
+///     <see cref="FakeDockerServer" /> of its own, built through <c>DockerContainerRuntimeFactory</c> and
+///     <c>DockerDaemonEndpointResolver</c> exactly as the real-daemon suite builds it, with only the endpoint changed.
 /// </summary>
+/// <remarks>
+///     That makes these tests evidence about the production client, not about a shortcut. One server per box and one
+///     box per test: a shared daemon with a reset would carry a container from one test into the next one's label
+///     filter, and a Kestrel start on a loopback port costs less than that class of flake.
+/// </remarks>
 internal sealed class FakeDockerRuntimeBox : IAsyncDisposable
 {
     private FakeDockerRuntimeBox(FakeDockerServer docker, IContainerRuntime runtime)

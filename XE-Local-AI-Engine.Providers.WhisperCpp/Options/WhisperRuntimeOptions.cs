@@ -33,7 +33,7 @@ public sealed class WhisperRuntimeOptions
     ///     Budget for the whole readiness POLL LOOP after a spawn or an in-place model load.
     /// </summary>
     /// <remarks>
-    ///     Flat, not scaled by model size: the largest catalogue row is 1.6 GB and the spike measured port-ready at
+    ///     Flat, not scaled by model size: the largest catalog row is 1.6 GB and the spike measured port-ready at
     ///     0.46 s for <c>base</c> on this machine, so the image runtime's size-scaling (written for an 18 GB file-set) buys
     ///     nothing here.
     ///     <c>simplified: flat 2-minute readiness budget; scale it if a real cold-cache load on a spinning disk ever times out.</c>
@@ -46,7 +46,7 @@ public sealed class WhisperRuntimeOptions
     /// </summary>
     public TimeSpan HealthProbeTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
-    /// <summary>Budget for ONE in-place model load. The largest catalogue row is 1.6 GB.</summary>
+    /// <summary>Budget for ONE in-place model load. The largest catalog row is 1.6 GB.</summary>
     public TimeSpan ModelLoadTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>Budget for ONE transcription request. A long file on a CPU backend legitimately takes minutes.</summary>
@@ -82,13 +82,13 @@ public sealed class WhisperRuntimeOptions
     public string? VadModelPath { get; set; }
 
     /// <summary>
-    ///     Absolute path to the node's whisper models directory — the root the catalogue's relative
+    ///     Absolute path to the node's whisper models directory — the root the catalog's relative
     ///     <c>{modelId}/{fileName}</c> path is resolved against.
     /// </summary>
     /// <remarks>
     ///     <see langword="null" /> until the application layer seeds it, in which case the supervisor reports the model
     ///     as not installed rather than guessing a location. Seeded alongside <see cref="VadModelPath" /> and for the
-    ///     same reason: the catalogue is a static table inside this provider, but where the weights live is decided by
+    ///     same reason: the catalog is a static table inside this provider, but where the weights live is decided by
     ///     the node data directory, which only the application layer can resolve.
     /// </remarks>
     public string? ModelsDirectory { get; set; }

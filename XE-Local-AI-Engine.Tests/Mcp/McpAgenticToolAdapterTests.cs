@@ -58,8 +58,8 @@ public sealed class McpAgenticToolAdapterTests
         AssertEx.Equal(0, invoked);
     }
 
-    // I-D12: MEAI's FunctionInvokingChatClient detects approval with GetService<ApprovalRequiredAIFunction>(), which a plain
-    // DelegatingAIFunction forwards to its inner function — so the wrapper alone still turned the call into an unanswered approval request.
+    // MEAI's FunctionInvokingChatClient detects approval with GetService<ApprovalRequiredAIFunction>(), which a plain
+    // DelegatingAIFunction forwards to its inner function — so the wrapper alone would turn the call into an unanswered approval request.
     [Test]
     public async Task FunctionInvocation_RunsAdaptedTool_InsteadOfRequestingApproval()
     {

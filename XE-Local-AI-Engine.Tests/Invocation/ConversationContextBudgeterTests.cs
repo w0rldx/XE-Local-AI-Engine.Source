@@ -491,7 +491,7 @@ public sealed class ConversationContextBudgeterTests
     public void Budget_FoldsSystemPromptAndToolOverheadIntoCapacity_TrimsWhatHistoryAloneWouldNot()
     {
         // The system prompt is prepended AFTER this history and tool schemas never appear in the message list,
-        // yet both count against the launched window. A history that fits when measured alone must now trim once the
+        // yet both count against the launched window. A history that fits when measured alone must still trim once the
         // fixed overhead is folded in — otherwise the outer budget passes an actually-over-window round through.
         // Four 10-char turns (70 total); keep-count 2 protects turns 2 and 3, leaving turns 0 and 1 (40) droppable.
         var messages = new List<ChatMessage>
@@ -689,7 +689,7 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_WhenTheHistoryCarriesADifferentSystemMessage_StillCountsTheSystemPromptAsOverhead()
     {
-        // Only the prompt itself is recognised: a summary or other System message in the history is history, not the prompt.
+        // Only the prompt itself is recognized: a summary or other System message in the history is history, not the prompt.
         var sut = CreateSut(CharCountEstimator());
 
         var result = sut.Budget([System("a compaction summary"), User("hello")], contextTokenCapacity: 1000, reservedOutputTokens: 0, systemPrompt: new string('s', 20));
@@ -725,9 +725,9 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_WhenTheEstimateSitsJustUnderTheWindow_StillTrims()
     {
-        // The safety margin's whole point: an estimate at 0.9x the window used to pass as "fitting", and because the
-        // char heuristic under-counts by roughly a tenth, the provider then rejected the round outright rather than the
-        // budgeter trimming it. Budgeting against 85% turns that back into a trim.
+        // The safety margin's whole point: an estimate at 0.9x the window cannot pass as "fitting": the char heuristic
+        // under-counts by roughly a tenth, so the provider would reject the round outright rather than the budgeter
+        // trimming it. Budgeting against 85% makes it a trim.
         var messages = new List<ChatMessage>
         {
             User("turn one"),
@@ -781,7 +781,7 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_WhenStrippingProtectedReasoningIsDisabled_KeepsItAndFlagsOverflow()
     {
-        // The pass is opt-in, so with it off this is exactly today's behaviour: the protected window is irreducible, the
+        // The pass is opt-in, so with it off this is exactly today's behavior: the protected window is irreducible, the
         // overflow is flagged, and the runner's hard stop fails the turn.
         var messages = new List<ChatMessage>
         {
@@ -978,7 +978,7 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_EveryRewrite_PreservesMessageIdentity()
     {
-        // Every rewrite used to reconstruct a message from role + contents, silently dropping the id, author name,
+        // No rewrite rebuilds a message from role + contents, which would silently drop the id, author name,
         // provider raw representation and additional properties. All three rewriting passes are covered here — Pass 1's
         // historical excerpt, Pass 4's reasoning strip, Pass 5's protected excerpt.
         var raw = new object();
@@ -1063,7 +1063,7 @@ public sealed class ConversationContextBudgeterTests
     }
 
     // The last two defaults track the SHIPPED defaults deliberately, so a test that says nothing about them is a test
-    // about production behaviour. A test that wants a pass off says so explicitly.
+    // about production behavior. A test that wants a pass off says so explicitly.
     [Test]
     public void Budget_WithNoObservedCorrection_MeasuresAgainstTheSafetyMarginAlone()
     {

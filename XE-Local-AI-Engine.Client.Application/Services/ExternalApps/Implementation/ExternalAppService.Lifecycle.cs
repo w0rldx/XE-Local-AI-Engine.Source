@@ -155,7 +155,7 @@ internal sealed partial class ExternalAppService
             var admitted = AdmittedStatusFor(kind, row.Status)
                            ?? throw new ExternalAppInvalidTransitionException($"{kind} is not available while the application is {row.Status}.");
 
-            // D6 first: after an empty-catalog start the bridge's absence is the restart's to fix, so the operator is told that rather than BridgeUnavailable.
+            // The empty-catalog rule first: after an empty-catalog start the bridge's absence is the restart's to fix, so the operator is told that rather than BridgeUnavailable.
             // Reset counts as a start: it rebuilds and starts the application again. Stop and Uninstall stay admitted so what runs can be cleared.
             if (kind is ExternalAppOperationKind.Start or ExternalAppOperationKind.Restart or ExternalAppOperationKind.Reset
                 && await CatalogPolicyAsync(services, cancellationToken) is { } refused)

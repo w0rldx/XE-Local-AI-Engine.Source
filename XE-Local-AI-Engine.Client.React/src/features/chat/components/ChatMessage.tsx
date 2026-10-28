@@ -42,7 +42,7 @@ interface ChatMessageProps {
 	// The conversation belongs to a work session. Scopes the step-cap notice below so the same text in an ordinary
 	// chat still renders as the red failure it is there.
 	isWorkSessionConversation?: boolean;
-	// Advanced UI mode (decision D2): show the turn's time to first token, decode rate and cached prompt tokens.
+	// Advanced UI mode only: show the turn's time to first token, decode rate and cached prompt tokens.
 	showTurnThroughput?: boolean;
 }
 

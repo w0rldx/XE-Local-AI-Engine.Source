@@ -29,7 +29,7 @@ public interface IGgufDownloadCoordinator
 
     /// <summary>
     ///     Requests cancellation of the in-flight download for <paramref name="modelName" />. Returns <c>true</c> when a
-    ///     cancellable download was found and signalled; <c>false</c> when no in-flight download exists for that model
+    ///     cancellable download was found and signaled; <c>false</c> when no in-flight download exists for that model
     ///     name (already finished, never started). Idempotent.
     /// </summary>
     bool Cancel(string modelName);

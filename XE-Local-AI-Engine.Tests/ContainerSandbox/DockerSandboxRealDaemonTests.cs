@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         The unit suite proves the provider <em>refuses</em> a container whose settings did not take. Only this
 ///         suite proves the settings take at all — that a real Docker Engine, asked for this exact specification,
 ///         produces a container that is genuinely non-root, capability-stripped, read-only-rooted and network-isolated.
-///         Neither half substitutes for the other: fakes cannot show a daemon honours a flag, and a real daemon cannot
+///         Neither half substitutes for the other: fakes cannot show a daemon honors a flag, and a real daemon cannot
 ///         be made to dishonour one on request.
 ///     </para>
 ///     <para>
@@ -251,7 +251,7 @@ public sealed class DockerSandboxRealDaemonTests
         // A Docker exec is one bidirectional connection. `tee` reads and writes at the same time, so a client that
         // sent the whole payload before draining output would fill the daemon's buffer, the daemon would stop
         // accepting the payload, and both sides would wait on each other until the timeout. Development Mode's patch
-        // ceiling is 8 MB; two here is comfortably past where a serialised implementation stops working.
+        // ceiling is 8 MB; two here is comfortably past where a serialized implementation stops working.
         var options = await RequireDaemonAsync();
         await using var fixture = await ContainerFixture.CreateAsync(options);
         var payload = new string('p', count: 2 * 1024 * 1024);
@@ -434,7 +434,7 @@ public sealed class DockerSandboxRealDaemonTests
         Justification = "The undisposed provider models the crash this test exists to recover from; its container is removed in the finally block.")]
     public async Task RealDaemon_StartupSweep_CollectsAContainerAPreviousRunLeaked()
     {
-        // The restart, modelled literally: a second provider over the SAME node data directory is what the next
+        // The restart, modeled literally: a second provider over the SAME node data directory is what the next
         // process start is, and its registry is empty for the same reason — the first one's died with it. Against a
         // real daemon rather than the fake because the property under test is the daemon-side label filter, which the
         // fake can only imitate.
@@ -495,7 +495,7 @@ public sealed class DockerSandboxRealDaemonTests
         }
         finally
         {
-            // Belt and braces: if the sweep did not remove it, this test must not leave a container on the box.
+            // Belt and braces: if the sweep did not remove it, this test must not leave a container on the host.
             await client.RemoveContainerAsync(leaked);
         }
     }
@@ -561,7 +561,7 @@ public sealed class DockerSandboxRealDaemonTests
         {
             // No counterpart exists for this host: unlike the rootless/rootful identity PAIR, there is no rootful
             // half of this assertion to run instead. The phrase is the one scripts/run-docker-smoke-local.sh
-            // recognises, so a rootful box reports this as an assertion it cannot make rather than as a failure.
+            // recognizes, so a rootful box reports this as an assertion it cannot make rather than as a failure.
             throw new SkipTestException("SKIPPED — this daemon is not rootless, so an in-container uid maps straight through and there is no "
                                         + "mis-mapping to reproduce. The inverted-identity case is only reachable against a rootless daemon, "
                                         + "and no counterpart exists for this host.");
@@ -772,7 +772,7 @@ public sealed class DockerSandboxRealDaemonTests
     ///         <c>/var/run/docker.sock</c> and never falls through to the per-user socket: a node must not silently
     ///         migrate between daemons, because which daemon is in use is precisely what the operator attests to. On a
     ///         box that has a root-owned system socket this user cannot open <em>and</em> a rootless daemon of their
-    ///         own, that correct product behaviour left every test in this class skipped. Production is right to stop
+    ///         own, that correct product behavior left every test in this class skipped. Production is right to stop
     ///         and ask the operator; a test may keep looking — through the same resolver, by naming the socket in
     ///         <c>DaemonEndpoint</c>, its highest-priority input. The fixtures then reach the same daemon because they
     ///         re-resolve from the options returned here.
@@ -858,8 +858,8 @@ public sealed class DockerSandboxRealDaemonTests
     ///     The one switch. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c> and these tests run, failing rather than skipping
     ///     when no daemon is usable; leave it unset and they skip with a reason naming the runner.
     ///     <para>
-    ///         They used to run whenever a socket happened to be present, and CI forced them on. That made Docker
-    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is now
+    ///         They never run just because a socket exists, nor does CI force them on: that would make Docker
+    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is
     ///         covered without a daemon by the fake server. What is left here is what only a real daemon can settle,
     ///         and that belongs to an opt-in pre-RC smoke rather than to the PR gate.
     ///     </para>

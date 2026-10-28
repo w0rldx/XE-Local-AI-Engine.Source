@@ -10,7 +10,7 @@ internal static class TranscriptionMapper
 {
     // The same web-cased options the service serialized the config with. Default JsonSerializerOptions against a
     // web-cased document deserializes into a zeroed record without complaining, so the two must not drift.
-    private static readonly JsonSerializerOptions ConfigJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ConfigJsonOptions = JsonSerializerOptions.Web;
 
     public static TranscriptionSessionSummaryResponse ToResponse(this TranscriptionSessionSummaryView view)
     {

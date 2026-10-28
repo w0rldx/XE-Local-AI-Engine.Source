@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the one refusal a REAL connection takes on a capped route. Kestrel enforces the body cap while it reads,
-///     inside model binding, so the endpoint's own Content-Length exit never runs and its throw is what reaches the
-///     pipeline. Unmapped, that throw was a 500 on every route that declares a 413.
+///     Pins the refusal a REAL connection takes on a capped route: Kestrel enforces the cap inside model binding, so
+///     the endpoint's Content-Length exit never runs and the throw reaches the pipeline, which must map it to the
+///     declared 413.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class RequestBodyTooLargeExceptionHandlerTests

@@ -8,7 +8,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     The parts of the two workspace surveys that only a real Windows filesystem can express.
 ///     <para>
 ///         <see cref="WorkspaceFileScannerTests" /> is deliberately OS-agnostic — the scanner is one implementation
-///         everywhere, so a green Linux run IS the Windows evidence for its behaviour. The exception is its two
+///         everywhere, so a green Linux run IS the Windows evidence for its behavior. The exception is its two
 ///         security guards, which have to plant a link to prove anything, and on a stock Windows 11 box those tests
 ///         cannot run at all: creating a symbolic link needs Developer Mode or elevation. Measured on the Windows 11
 ///         machine this file was written on (Developer Mode off, unelevated), the full backend suite reported
@@ -146,10 +146,10 @@ public sealed class WorkspaceFileScannerWindowsTests : IDisposable
     ///     without trying — that prefix alone is over 70 characters before the repository's own paths start.
     ///     <para>
     ///         <b>What this does and does not prove.</b> It proves the scanner itself introduces no path-length ceiling
-    ///         of its own. It cannot prove behaviour on a host with <c>HKLM\SYSTEM\CurrentControlSet\Control\FileSystem
-    ///         \LongPathsEnabled = 0</c>, because that is a machine-wide setting: the box this was written on has it set
-    ///         to <b>1</b>, where a 399-character path was created, written, read and enumerated without error. A tester
-    ///         on a box with it disabled is still the only way to answer the other half.
+    ///         of its own. It cannot prove behavior on a host with <c>HKLM\SYSTEM\CurrentControlSet\Control\FileSystem
+    ///         \LongPathsEnabled = 0</c>, because that is a machine-wide setting: the host this was verified on has it set
+    ///         to <b>1</b>, where a 399-character path was created, written, read and enumerated without error. A run
+    ///         on a host with it disabled is still the only way to answer the other half.
     ///     </para>
     /// </summary>
     [Test]

@@ -586,7 +586,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
     private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash, string Status);
 
-    // How a chunk's source file is labelled for retrieval: the coarse kind ("code", "log", "markup", "structured",
+    // How a chunk's source file is labeled for retrieval: the coarse kind ("code", "log", "markup", "structured",
     // "text") plus the concrete language when the extension names one.
     private readonly record struct ContentClassification(string ContentKind, string? Language);
 }

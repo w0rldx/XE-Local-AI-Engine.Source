@@ -265,7 +265,7 @@ printf 'XE_LOCAL_AI_ENGINE_INSTALL=1\n' >"$rollback_dir/.xe-local-ai-engine-inst
 printf 'preserve\n' >"$rollback_dir/sentinel.txt"
 printf 'v1.0.0\n' >"$rollback_dir/xe-install-version.txt"
 # $1/$2 intentionally belong to the child bash -c positional arguments.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # $1/$2 belong to the child bash -c
 assert_status 1 env XE_INSTALLER_LIBRARY_ONLY=1 XE_TEST_FAIL_INSTALL_SWAP=1 \
   INSTALL_DIR="$rollback_dir" RESOLVED_VERSION=v2.0.0 \
   bash -c 'source "$1"; replace_install_from_artifact "$2" replacement.AppImage' \

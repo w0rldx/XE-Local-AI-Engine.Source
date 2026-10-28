@@ -12,14 +12,14 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Adaptive agent memory endpoint contract tests:
-///     <list type="bullet">
-///         <item>the playbook list endpoint surfaces <c>memoryScope</c>/<c>source</c> and filters on <c>?scope=</c>;</item>
-///         <item>governance still gates an <c>Extracted</c>/<c>Suggested</c> candidate (no Enabled without eval-gate + approval);</item>
-///         <item>the execution-logs diagnostics endpoint returns paged metadata, Operator-gated, with no message content;</item>
-///         <item>the agent create/update contract carries <c>defaultTemporaryChat</c> round-trip.</item>
-///     </list>
+///     Adaptive agent memory endpoint contracts: playbook scope/source listing, candidate governance, execution-log
+///     diagnostics and the agent's <c>defaultTemporaryChat</c> round-trip.
 /// </summary>
+/// <remarks>
+///     The playbook list surfaces <c>memoryScope</c>/<c>source</c> and filters on <c>?scope=</c>. An
+///     <c>Extracted</c>/<c>Suggested</c> candidate is never Enabled without eval-gate + approval. Execution logs are
+///     paged metadata, Operator-gated, with no message content.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AdaptiveMemoryEndpointTests
 {
@@ -346,7 +346,7 @@ public sealed class AdaptiveMemoryEndpointTests
         var service = serviceProvider.GetRequiredService<IPlaybookActionService>();
         var current = AssertEx.NotNull(await service.GetByIdAsync(actionId));
 
-        // The eval gate recomputes the fingerprint over the current behaviour-affecting context, so a fabricated passing
+        // The eval gate recomputes the fingerprint over the current behavior-affecting context, so a fabricated passing
         // eval must carry a matching fingerprint (computed from the SAME services/model the gate reads) to be promotable.
         var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId));
         var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId);

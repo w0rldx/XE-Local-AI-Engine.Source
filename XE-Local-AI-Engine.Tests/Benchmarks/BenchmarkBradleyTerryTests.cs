@@ -105,9 +105,8 @@ public sealed class BenchmarkBradleyTerryTests
     [Test]
     public void Bootstrap_ResamplesUnorderedPairs_AndNeverSplitsASwapPair()
     {
-        // One pair, one verdict each way: the position swap cancelled out. Because the resampling unit is the PAIR,
-        // every replicate redraws that 1-1 split whole and the interval collapses onto 50. Resampling individual
-        // verdicts would draw 2-0 replicates and report a wide interval — the position bias back in the CI.
+        // One pair, one verdict each way cancels the swap out. Resampling whole PAIRS redraws that 1-1 split, so the
+        // interval collapses onto 50; resampling verdicts draws 2-0 replicates: the position bias back in the CI.
         var fit = BenchmarkBradleyTerry.Fit([
             new BenchmarkPairwiseVerdict
             {

@@ -46,8 +46,8 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_RedactsArgumentsAndTheBareTokenOfABearerValue_ButNeverThePath()
     {
-        // Review 2026-09-30: only env values were redacted, a "Bearer <token>" value never matched the token printed alone,
-        // and redacting PATH would blank the jail search path a missing-command hint quotes.
+        // Arguments are redacted as well as env values, and so is the bare token of a "Bearer <token>" value printed alone;
+        // PATH never is, since redacting it would blank the jail search path a missing-command hint quotes.
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
             ExecutionId = "run",
@@ -68,8 +68,8 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_KeepsTheWordsOfAScriptArgumentAndAPathArgument_ButStillRedactsAWholeArgumentToken()
     {
-        // Windows tester round 3: arguments were split on whitespace, so "[canary]" and "STEP1canary" echoed by a cmd /c script, and the
-        // DLL path hostfxr named, came back as [REDACTED]. An argument is redacted only as a whole token; a fully qualified path never.
+        // Splitting arguments on whitespace would turn "[canary]" and "STEP1canary" echoed by a cmd /c script, and the
+        // DLL path hostfxr names, into [REDACTED]. An argument is redacted only as a whole token; a fully qualified path never.
         var path = OperatingSystem.IsWindows() ? @"C:\probe\probe-mcp.dll" : "/opt/probe/probe-mcp.dll";
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
@@ -86,8 +86,8 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_StillRedactsACredentialLikeWordInsideAScriptOrHeaderArgument()
     {
-        // Security review, tester round 3: whole-token redaction alone let a token inside one multi-word argument reach the model when
-        // the server echoed it alone. A 16+ letter-and-digit part or a Bearer/Basic/Token value is redacted; "powershell" is not.
+        // Whole-token redaction alone would let a token inside one multi-word argument reach the model when
+        // the server echoes it alone. A 16+ letter-and-digit part or a Bearer/Basic/Token value is redacted; "powershell" is not.
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
             ExecutionId = "run",
@@ -103,8 +103,8 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_RedactsTheValueOfAFlagInsideAScriptArgument_EvenWithoutDigits()
     {
-        // Codex review, tester round 3: "srv --token letters-only-secret" has no digits and follows no auth scheme, so the
-        // letter-and-digit rule missed it. A flag's value (space or '=' separated) is a credential whatever it looks like.
+        // "srv --token letters-only-secret" has no digits and follows no auth scheme, so the
+        // letter-and-digit rule misses it. A flag's value (space or '=' separated) is a credential whatever it looks like.
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
             ExecutionId = "run",
@@ -120,8 +120,8 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_RedactsAValueAssignedInsideAScriptArgument_EvenWithoutAFlag()
     {
-        // Codex review (second pass), tester round 3: "set API_KEY=letters-only-secret & server.exe" has no flag and no digits, so the
-        // flag rules missed the assigned value the old whitespace split had redacted.
+        // "set API_KEY=letters-only-secret & server.exe" has no flag and no digits, so the
+        // flag rules miss the assigned value; an assignment inside an argument is redacted on its own.
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
             ExecutionId = "run",
@@ -137,7 +137,7 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_RedactsACustomHeaderValueInsideAnArgument_ButDoesNotTreatAUrlAsAHeader()
     {
-        // Codex review (third pass), tester round 3: "X-Api-Key: letters-only-secret" follows no flag, no scheme and has no digits.
+        // "X-Api-Key: letters-only-secret" follows no flag, no scheme and has no digits.
         // A header value is a credential; a URL argument is redacted whole as every argument is, but "://" yields no "//host" secret.
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
@@ -154,8 +154,8 @@ public sealed class SandboxStderrTailTests
     [Test]
     public void For_DoesNotTreatADriveLetterPathInsideAScriptAsAHeaderValue()
     {
-        // Codex review (fourth pass), tester round 3: the drive colon of "C:\probe\notes.txt" matched the header separator, so the
-        // rest of the path became a secret and diagnostics showed "C:[REDACTED]". Checked here on every OS by spelling the path out.
+        // The drive colon of "C:\probe\notes.txt" must not match the header separator, or the
+        // rest of the path becomes a secret and diagnostics show "C:[REDACTED]". Checked here on every OS by spelling the path out.
         var tail = SandboxStderrTail.For(new SandboxCommandRequest
         {
             ExecutionId = "run",

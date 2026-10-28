@@ -308,7 +308,7 @@ public sealed class DevelopmentCommandProfileTests : IDisposable
 
         // Assert WHICH rule rejected these, not merely that something did. Every other structural rule throws the
         // same exception type, so without this the test would still pass if the baseline check were deleted and a
-        // neighbouring rule happened to catch the same input.
+        // neighboring rule happened to catch the same input.
         AssertEx.Contains(AssertEx.NotNull(statusRejection).Message, "baseline git", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(AssertEx.NotNull(diffCheckRejection).Message, "baseline git", StringComparison.OrdinalIgnoreCase);
     }

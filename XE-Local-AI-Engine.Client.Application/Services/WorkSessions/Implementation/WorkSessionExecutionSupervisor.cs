@@ -54,7 +54,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as the rest of
     ///     the session surface.
     /// </summary>
-    private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ConsumptionJsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>The admission gate: a slot is taken before the run is registered and released in the run's finally.</summary>
     /// <remarks>
@@ -313,7 +313,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var step = state.Session.StepCount + 1;
 
         // The attempt key for this step's operation ids. Every attempt writes at least one row, so a re-run under the same
-        // step index always reads a higher value, and idempotency no longer swallows its StepStarted or ParkTimedOut.
+        // step index always reads a higher value, and idempotency never swallows its StepStarted or ParkTimedOut.
         var attempt = state.Session.LastSequence;
 
         // ONE scope for the turn, holding only the scoped stream service the enumeration belongs to; every store write
@@ -529,7 +529,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                     break;
 
                 // A reasoning-only or whitespace delta is no sign of an answer: a thinking model emits a trailing "\n" of
-                // reasoning right after the approval request, and disarming on it left the park unbounded (V-04).
+                // reasoning right after the approval request, and disarming on it left the park unbounded.
                 case ChatStreamEventTypes.AssistantDelta when string.IsNullOrWhiteSpace(streamEvent.Delta):
                     break;
 

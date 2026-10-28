@@ -212,7 +212,7 @@ public sealed class ProcessContextAllocationResolverTests
     [Test]
     public async Task Resolve_WithAQuantizedKvType_ReservesStrictlyFewerBytesAtTheSameWindow()
     {
-        // A benchmark run frozen at q8_0/q4_0 holds a smaller KV cache than the fp16 figure the ledger used to book,
+        // A benchmark run frozen at q8_0/q4_0 holds a smaller KV cache than the fp16 figure,
         // and the two quantized sizes are themselves ordered. The window is identical in all three cases: only the KV
         // term moves.
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
@@ -237,7 +237,7 @@ public sealed class ProcessContextAllocationResolverTests
     public async Task Resolve_WithNoOrUnrecognizedKvType_IsTheAllocationEveryOtherCallerAlreadyGot(string? kvCacheType)
     {
         // The default has to stay byte-identical — same allocation AND the same cache entry — or every chat spawn on
-        // the box quietly re-resolves against a second key. Anything the estimator cannot read is fp16, conservatively.
+        // the host quietly re-resolves against a second key. Anything the estimator cannot read is fp16, conservatively.
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
         var frozen = ResolvedLaunchArguments.Replay(ctxSize: 32768);
 
@@ -882,7 +882,7 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.Equal(expected: 32768, allocation.ProcessContextTokens);
 
         // The tier walk was never entered, so no hardware allocation context exists for this key and the window cannot
-        // be quietly reduced later — an overridden explore is honoured exactly or it fails.
+        // be quietly reduced later — an overridden explore is honored exactly or it fails.
         AssertEx.False(resolver.TryDownTierForAdmission(allocation, out _),
             "an overridden allocation must not be down-tiered: the tier walk never ran for it.");
     }
@@ -955,7 +955,7 @@ public sealed class ProcessContextAllocationResolverTests
     [Arguments("bge-reranker-v2-m3 Q4_K_M", ModelRole.Reranker, 733)]
     public async Task Resolve_PooledRole_BooksAtLeastTheMeasuredVram(string model, ModelRole role, long measuredMib)
     {
-        // Receipts: box-wide VRAM delta per llama-server on an RTX 5090 (retrieval eval 2026-09-27). The facts are the real headers: no
+        // Receipts: box-wide VRAM delta per llama-server on an RTX 5090 (retrieval eval). The facts are the real headers: no
         // parameter_count or head_count_kv, so weights = file size, KV = 0, and the fixed runtime overhead covers the compute buffer.
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
             processBudget: 32 * Gb,

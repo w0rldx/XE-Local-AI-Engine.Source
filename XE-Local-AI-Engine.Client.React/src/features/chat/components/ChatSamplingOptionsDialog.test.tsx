@@ -205,7 +205,7 @@ describe("ChatSamplingOptionsDialog", () => {
 			expect(screen.getByTestId(`chat-sampling-unsupported-${key}`).textContent).toBe("Not supported by cloud providers");
 		}
 
-		// Knobs the cloud providers DO honour stay editable.
+		// Knobs the cloud providers DO honor stay editable.
 		for (const key of ["temperature", "topP", "presencePenalty", "frequencyPenalty", "maxOutputTokens", "seed"]) {
 			expect(screen.getByTestId(`chat-sampling-field-${key}`).hasAttribute("disabled")).toBe(false);
 			expect(screen.queryByTestId(`chat-sampling-unsupported-${key}`)).toBeNull();

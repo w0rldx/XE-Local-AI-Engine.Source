@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     authoritative state of its own.
 /// </summary>
 /// <remarks>
-///     The parsed-graph cache is a cost optimisation and nothing else, which is why a restart costs at most the work
+///     The parsed-graph cache is a cost optimization and nothing else, which is why a restart costs at most the work
 ///     in flight. <b>Every dispatch-side status write happens inside a serialized <see cref="AdvanceOnceAsync" />
 ///     call</b>: a lane's work produces a pollable RESULT and never transitions a row itself, so the only other
 ///     writers to a run are the human command paths, which is what the store's <c>Any</c> version sentinel exists for.
@@ -50,7 +50,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     private const string DrainedReason = "The run was cancelled.";
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>Bounded and drop-on-full: a signal is a latency hint, and blocking a committing caller to deliver one would be the wrong trade.</summary>
     private readonly Channel<Guid> _signals = Channel.CreateBounded<Guid>(new BoundedChannelOptions(capacity: 256)
@@ -958,7 +958,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         catch (GraphWorkflowInvalidTransitionException exception)
         {
             // Usually somebody else moved the run between this tick's read and its write. Their write stands and the next tick re-derives. Deliberately NOT
-            // re-signalled: where Dev Workflows has a separate concurrency exception, a stale version and an illegal move share ONE type here, so it would spin a BUG.
+            // re-signaled: where Dev Workflows has a separate concurrency exception, a stale version and an illegal move share ONE type here, so it would spin a BUG.
             _logger.LogWarning(exception, "Graph workflow run {RunId} could not commit a transition mid-tick.", runId);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

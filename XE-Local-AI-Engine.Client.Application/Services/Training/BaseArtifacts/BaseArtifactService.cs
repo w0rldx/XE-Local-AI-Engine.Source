@@ -127,7 +127,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
 
         // The row is the record of truth; a directory that survives is wasted disk, not a phantom artifact, so cleanup
         // failure must not fail the delete the operator already saw succeed.
-        TryDeleteDirectory(BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifactId));
+        BestEffortFile.TryDeleteDirectory(BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifactId));
         return BaseArtifactDeleteOutcome.Deleted;
     }
 
@@ -165,20 +165,5 @@ internal sealed class BaseArtifactService : IBaseArtifactService
     private static string FormatGigabytes(long bytes)
     {
         return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GB");
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: see the call site.
-        }
     }
 }

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The capability gate's treatment of <c>--cpu-moe</c>. The flag is not an optimization the gate may drop: the
 ///     admission ledger booked this process's footprint on the premise that the whole expert share sits in system RAM,
-///     so a runtime that cannot take the flag cannot honour that booking and the launch is REFUSED — never degraded,
+///     so a runtime that cannot take the flag cannot honor that booking and the launch is REFUSED — never degraded,
 ///     and never with a safe fallback, which would drop the flag and launch the very over-subscription being prevented.
 /// </summary>
 [Category(TestCategories.Unit)]

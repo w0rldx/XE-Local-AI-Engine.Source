@@ -32,9 +32,3 @@ internal static class PkceGenerator
                       .Replace('/', '_');
     }
 }
-
-/// <summary>
-///     One PKCE exchange's secret and its S256 digest: the verifier stays with the client until the token request,
-///     the challenge is what the authorization request carries.
-/// </summary>
-internal sealed record PkcePair(string CodeVerifier, string CodeChallenge);

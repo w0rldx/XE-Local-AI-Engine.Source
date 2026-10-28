@@ -55,9 +55,9 @@ public sealed class ContainerBridgeAddressWatcherTests
     }
 
     /// <summary>
-    ///     The cadence itself, driven off a clock the test owns. It proves the hosted loop re-reads the host's
-    ///     addresses — a container daemon creates and destroys bridge interfaces while the node runs, so a set frozen
-    ///     at boot would refuse a container that came up on an interface created after it.
+    ///     The cadence, on a clock the test owns: the hosted loop re-reads the host's addresses, since a container
+    ///     daemon creates and destroys bridge interfaces at run time and a set frozen at boot would refuse a container
+    ///     on a newer interface.
     /// </summary>
     [Test]
     public async Task Watcher_AsAHostedService_RereadsTheHostsAddressesOnceEveryInterval()

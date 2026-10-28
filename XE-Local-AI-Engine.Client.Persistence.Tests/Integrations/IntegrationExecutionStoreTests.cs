@@ -1135,8 +1135,8 @@ public sealed class IntegrationExecutionStoreTests
         var slowStore = new IntegrationExecutionStore(slow);
         var fastStore = new IntegrationExecutionStore(fast);
 
-        // The slow writer already holds the row in its change tracker at LastSequence 1 — exactly the state the append
-        // path used to read from, because EF's identity map returns the TRACKED instance rather than the fresh row.
+        // The slow writer already holds the row in its change tracker at LastSequence 1 — the state the append path
+        // must not read from, because EF's identity map returns the TRACKED instance rather than the fresh row.
         var tracked = await slow.IntegrationExecutions.SingleAsync(row => row.Id == accept.ExecutionId);
         AssertEx.Equal(expected: 1L, tracked.LastSequence);
 

@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
+import { useDownloadRateEstimates } from "@/core/model-downloads/hooks/useDownloadRateEstimates";
+import { humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import type { BrowseInstallRequest } from "@/features/images/models/ImageModels";
 import { ImageModelManagerPresentation } from "@/features/images/components/ImageModelManagerPresentation";
 import { useActiveImageModelDownloads } from "@/features/images/hooks/useActiveImageModelDownloads";
 import type {
+	BrowseInstallRequest,
 	DownloadDraft,
 	ImageModelCatalogEntryView,
 	ImageModelFamily,
@@ -22,8 +24,6 @@ import {
 	useRefreshInstalledImageModels,
 	useStartImageModelDownload,
 } from "@/features/images/queries/useImageQueries";
-import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
-import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 let nextPartId = 0;
 
@@ -70,7 +70,7 @@ interface ImageModelManagerProps {
 //
 // The download itself runs on the backend coordinator, which records a terminal phase for every attempt; while any are
 // in flight this component polls their status so a FAILED download surfaces its reason instead of leaving the operator
-// watching an indeterminate bar forever, and each in-flight row can be cancelled. Those progress rows and the
+// watching an indeterminate bar forever, and each in-flight row can be canceled. Those progress rows and the
 // per-model error alerts sit ABOVE the tabs, so switching tab mid-download never hides a running transfer.
 export function ImageModelManager({ models, isLoading, onPendingDownloadChange }: ImageModelManagerProps) {
 	const { t } = useTranslation();

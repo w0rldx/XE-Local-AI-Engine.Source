@@ -8,7 +8,7 @@ import type { KnowledgePendingUpload } from "@/features/knowledge/queries/useKno
 
 interface KnowledgeUploadPanelProps {
 	readonly pendingUploads: readonly KnowledgePendingUpload[];
-	/** Blocks ingestion entirely: the zone greys out, the picker never opens and a drop is swallowed. */
+	/** Blocks ingestion entirely: the zone grays out, the picker never opens and a drop is swallowed. */
 	readonly disabled?: boolean;
 	onUpload(files: readonly File[]): void;
 }
@@ -114,7 +114,7 @@ export function KnowledgeUploadPanel({ pendingUploads, disabled = false, onUploa
 					onChange={handleInputChange}
 					disabled={disabled}
 					style={{ display: "none" }}
-					// The drop zone above IS the labelled control; this input only opens the OS picker. Marked hidden so
+					// The drop zone above IS the labeled control; this input only opens the OS picker. Marked hidden so
 					// it is not reported as an unnamed form control.
 					aria-hidden={true}
 					tabIndex={-1}

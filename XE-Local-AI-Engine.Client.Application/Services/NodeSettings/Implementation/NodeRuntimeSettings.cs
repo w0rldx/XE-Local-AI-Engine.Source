@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 /// <remarks>
 ///     The stored value comes from the cached <see cref="INodeSettingsStore" />; the appsettings seed is captured from
-///     the bound options/configuration at construction, so first-run behaviour matches plain appsettings. For knobs
+///     the bound options/configuration at construction, so first-run behavior matches plain appsettings. For knobs
 ///     with no config section (the llama.cpp supervisor cap/TTL) the seed IS the hardcoded default.
 /// </remarks>
 public sealed class NodeRuntimeSettings : INodeRuntimeSettings
@@ -191,7 +191,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             StoredNodeSettings.DefaultKnowledgeScheduledReindexIntervalMinutes);
         _knowledgeAgentToolsEnabledSeed = BoolSeed(configuration, "KnowledgeBase:AgentToolsEnabled", StoredNodeSettings.DefaultKnowledgeAgentToolsEnabled);
         _allowCloudModelAccessSeed = BoolSeed(configuration, "KnowledgeBase:AllowCloudModelAccess", StoredNodeSettings.DefaultAllowCloudModelAccess);
-        // The background-model seeds keep the Ollama:ChatModel override the invocation runner also honours; blank falls to the default model.
+        // The background-model seeds keep the Ollama:ChatModel override the invocation runner also honors; blank falls to the default model.
         var ollamaChatModel = NonBlank(configuration.GetValue<string>("Ollama:ChatModel"));
         _playbookAnalysisModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookAnalysis:ModelName")) ?? ollamaChatModel;
         _playbookEvalModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookEval:ModelName")) ?? ollamaChatModel;
@@ -391,7 +391,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<string> GetRecommendedLlamaCppTagAsync(CancellationToken cancellationToken = default)
     {
         var stored = await LoadAsync(cancellationToken);
-        return StoredNodeSettings.IsValidRecommendedLlamaCppTag(stored.RecommendedLlamaCppTag)
+        return StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag(stored.RecommendedLlamaCppTag)
             ? stored.RecommendedLlamaCppTag!
             : LlamaCppReleasePins.PinnedTag;
     }
@@ -966,12 +966,12 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         stored.ChatCacheReuse ?? StoredNodeSettings.DefaultChatCacheReuse;
 
     private static string ResolveSpeculativeMode(StoredNodeSettings stored) =>
-        StoredNodeSettings.IsValidSpeculativeMode(stored.SpeculativeMode) && !string.IsNullOrWhiteSpace(stored.SpeculativeMode)
+        StoredNodeSettingsValidation.IsValidSpeculativeMode(stored.SpeculativeMode) && !string.IsNullOrWhiteSpace(stored.SpeculativeMode)
             ? stored.SpeculativeMode
             : StoredNodeSettings.DefaultSpeculativeMode;
 
     private static string ResolveKvCacheType(StoredNodeSettings stored) =>
-        StoredNodeSettings.IsValidKvCacheType(stored.KvCacheType) && !string.IsNullOrWhiteSpace(stored.KvCacheType)
+        StoredNodeSettingsValidation.IsValidKvCacheType(stored.KvCacheType) && !string.IsNullOrWhiteSpace(stored.KvCacheType)
             ? stored.KvCacheType
             : StoredNodeSettings.DefaultKvCacheType;
 

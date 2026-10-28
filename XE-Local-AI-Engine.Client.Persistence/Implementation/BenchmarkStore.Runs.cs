@@ -304,7 +304,7 @@ public sealed partial class BenchmarkStore
                                   RepeatGroupId = entity.RepeatGroupId,
                                   RepeatIndex = entity.RepeatIndex,
                                   IsWarmup = entity.IsWarmup,
-                                  // Positional, including the generation timeout the listing used to leave defaulted:
+                                  // Positional, including the generation timeout, which the listing must not leave defaulted:
                                   // an expression tree cannot take an out-of-position named argument.
                                   InvocationTimeoutSeconds = entity.InvocationTimeoutSeconds,
                                   RepeatMode = entity.RepeatMode,

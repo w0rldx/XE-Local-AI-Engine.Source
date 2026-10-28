@@ -10,8 +10,8 @@ interface CloudModelSectionProps {
 	items: ModelOption[];
 	title: string;
 	egressCue: string;
-	// Colour of the egress cue. Orange (the default) means the turn leaves this network; a declared-local external
-	// endpoint uses the dimmed colour instead, because saying "Local network" in a warning colour misreads.
+	// Color of the egress cue. Orange (the default) means the turn leaves this network; a declared-local external
+	// endpoint uses the dimmed color instead, because saying "Local network" in a warning color misreads.
 	egressCueColor?: string;
 	icon: ReactNode;
 	selectedModel: string;

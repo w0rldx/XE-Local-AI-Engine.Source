@@ -122,7 +122,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
 
         // One unbound conversation (mirrors production) holding messages from BOTH agents, plus a conversation that
         // is BOUND to agent B but whose rated message was produced by agent A — proving the conversation binding is
-        // ignored in favour of the per-message agent.
+        // ignored in favor of the per-message agent.
         var unbound = Guid.NewGuid();
         var boundToB = Guid.NewGuid();
         await InsertConversationAsync(connection, unbound, agentDefinitionId: null, purged: false, archived: false);

@@ -44,7 +44,7 @@ public sealed class ExternalAppRuntimeResponse
     public required ExternalAppCapabilitiesView Capabilities { get; init; }
 
     /// <summary>
-    ///     Owner-labelled containers whose install id belongs to another node data directory. Surfaced, never removed:
+    ///     Owner-labeled containers whose install id belongs to another node data directory. Surfaced, never removed:
     ///     removal stays a manual operator act.
     /// </summary>
     /// <remarks>
@@ -177,7 +177,7 @@ public sealed class ExternalAppSummaryView
 }
 
 /// <summary>
-///     The full manifest MINUS every <c>files[]</c> entry: those are base64 asset bodies the engine materialises,
+///     The full manifest MINUS every <c>files[]</c> entry: those are base64 asset bodies the engine materializes,
 ///     never UI data.
 /// </summary>
 /// <remarks>
@@ -503,7 +503,7 @@ public sealed class ExternalAppInstanceView
     public required string RuntimeProvider { get; init; }
 
     /// <summary>
-    ///     The INSTALLED snapshot, sanitised — <c>files[]</c> stripped, every <c>secret</c> variable's default nulled.
+    ///     The INSTALLED snapshot, sanitized — <c>files[]</c> stripped, every <c>secret</c> variable's default nulled.
     /// </summary>
     /// <remarks>
     ///     The detail page and the Settings tab read this and never the catalog: an instance installed at v2 must

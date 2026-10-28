@@ -852,7 +852,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     Defence in depth: the handler refuses a contract-less completion, but should one reach the event log anyway — an old
+    ///     Defense in depth: the handler refuses a contract-less completion, but should one reach the event log anyway — an old
     ///     event, a contract added mid-flight — the node is stood down for a person rather than routed on an answer nobody checked.
     /// </summary>
     [Test]
@@ -1085,8 +1085,8 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(entry, "nnnnnnnnnn", message: "the start's inputs still reach the entry node they were given to.");
         AssertEx.Contains(verify, $"- workItemRequest: {Request}", message: "the verification keeps the whole request it judges against.");
         AssertEx.False(verify.Contains("nnnnnnnnnn", StringComparison.Ordinal), "the start's inputs are the entry node's, not every agent's.");
-        AssertEx.True(entry.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the entry objective was {entry.Length} characters.");
-        AssertEx.True(verify.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the verify objective was {verify.Length} characters.");
+        AssertEx.True(entry.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters, $"the entry objective was {entry.Length} characters.");
+        AssertEx.True(verify.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters, $"the verify objective was {verify.Length} characters.");
     }
 
     /// <summary>Only a patch has to be read to the end: a report read in part still succeeds, and its line records how much.</summary>
@@ -1559,9 +1559,9 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(objective,
             "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
             message: "and the skipped branch is still named, because its room was set aside before the bodies apportioned the rest.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
-        AssertEx.True(objective.Length > DevWorkflowAgentExecutor.MaxObjectiveCharacters - 500,
+        AssertEx.True(objective.Length > DevWorkflowObjectiveComposer.MaxObjectiveCharacters - 500,
             $"the objective came to only {objective.Length} characters, so the artifact never crowded the budget and this test proves nothing.");
     }
 
@@ -1654,7 +1654,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(objective,
             " characters. Read the rest with read_upstream_artifact name=\"research.md\".)",
             message: "the marker says how much of the document the agent is not seeing, and how to read the rest.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling this lane holds itself to.");
     }
 
@@ -1709,7 +1709,7 @@ public sealed class DevWorkflowAgentExecutorTests
         string? refusal = null;
         try
         {
-            _ = await sessions.CreateAsync("Boundary", new string('o', DevWorkflowAgentExecutor.MaxObjectiveCharacters), Guid.NewGuid());
+            _ = await sessions.CreateAsync("Boundary", new string('o', DevWorkflowObjectiveComposer.MaxObjectiveCharacters), Guid.NewGuid());
         }
         catch (Exception exception)
         {
@@ -1717,7 +1717,7 @@ public sealed class DevWorkflowAgentExecutorTests
         }
 
         AssertEx.False(refusal?.Contains("objective is longer", StringComparison.OrdinalIgnoreCase) == true,
-            $"an objective of exactly {DevWorkflowAgentExecutor.MaxObjectiveCharacters} characters was refused for its length: {refusal}");
+            $"an objective of exactly {DevWorkflowObjectiveComposer.MaxObjectiveCharacters} characters was refused for its length: {refusal}");
     }
 
     /// <summary>
@@ -1748,7 +1748,7 @@ public sealed class DevWorkflowAgentExecutorTests
             AssertEx.Contains(objective, $"research-{branch}.md", message: "every branch the node inherited from is named, however little room each one got.");
         }
 
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"six references and their bodies came to {objective.Length} characters, past the ceiling.");
     }
 
@@ -1773,7 +1773,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the reference still reaches the agent even when the contents barely do.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
     }
 
@@ -1813,7 +1813,7 @@ public sealed class DevWorkflowAgentExecutorTests
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the node is still told the artifact exists.");
         AssertEx.Contains(objective, "too large to include here", message: "and why it is holding a reference rather than contents.");
-        AssertEx.Contains(objective, DevWorkflowAgentExecutor.ReadMoreMarker("research.md"), message: "and that the read tool can page through it.");
+        AssertEx.Contains(objective, DevWorkflowObjectiveComposer.ReadMoreMarker("research.md"), message: "and that the read tool can page through it.");
         AssertEx.False(objective.Contains("did not verify", StringComparison.Ordinal),
             "the bytes were gone, so anything that read them would have reported that instead — the size gate ran first.");
         AssertEx.False(objective.Contains("aaaaaaaaaa", StringComparison.Ordinal), "and no content was injected.");
@@ -1823,7 +1823,7 @@ public sealed class DevWorkflowAgentExecutorTests
     ///     The case the append guard exists for: instructions leave room for the section and its header but not for a
     ///     body, so what is rendered is a marker rather than content — and a marker is characters too. A bound that
     ///     capped only bodies would let the header and the marker together carry the objective past the limit with no
-    ///     document content to blame, which is exactly how this used to overrun.
+    ///     document content to blame, which is exactly how such a bound overruns.
     /// </summary>
     [Test]
     public async Task TheObjective_WhenOnlyAReferenceFits_KeepsItAndStillStopsAtTheLimit()
@@ -1842,7 +1842,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
         AssertEx.Contains(objective, "research.md", message: "the reference is the half worth keeping when the contents cannot fit.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling — the header and the marker were not counted.");
     }
 
@@ -1862,10 +1862,10 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId);
 
         var objective = await harness.ReadObjectiveAsync(runId, "plan");
-        AssertEx.True(objective.EndsWith($"({DevWorkflowAgentExecutor.ReadMoreMarker("research.md")})", StringComparison.Ordinal),
+        AssertEx.True(objective.EndsWith($"({DevWorkflowObjectiveComposer.ReadMoreMarker("research.md")})", StringComparison.Ordinal),
             "the header is followed by the read line and nothing else.");
         AssertEx.False(objective.Contains("aaaaaaaaaa", StringComparison.Ordinal), "no body had room.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters, $"the objective was {objective.Length} characters, past the ceiling.");
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters, $"the objective was {objective.Length} characters, past the ceiling.");
     }
 
     /// <summary>
@@ -1887,7 +1887,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Contains(objective, "diagram.png", message: "the node is told the artifact exists.");
         AssertEx.Contains(objective, "not text", message: "and why it is holding a reference rather than contents.");
         AssertEx.False(objective.Contains("read_upstream_artifact", StringComparison.Ordinal), "the read tool reads text only, so it is not offered as a way in.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
     }
 
@@ -1918,7 +1918,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(objective,
             Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(objective)),
             "an unpaired surrogate comes back from UTF-8 as U+FFFD, so a round trip that changes the text is a cut through a pair.");
-        AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
+        AssertEx.True(objective.Length <= DevWorkflowObjectiveComposer.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
     }
 
@@ -2027,7 +2027,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
     /// <summary>
     ///     The narrowing, asserted where it has teeth: the offer really does carry <c>run_python</c>, and the agent this
-    ///     node binds allows only <c>record_finding</c>. The judgement is over what the RESOLVER answers, so the write
+    ///     node binds allows only <c>record_finding</c>. The judgment is over what the RESOLVER answers, so the write
     ///     tool is not in the effective projection at all and the node runs.
     ///     <para>
     ///         The counterpart to the Default-Assistant case above. That one proves an empty allowed set is not an empty
@@ -2315,9 +2315,9 @@ public sealed class DevWorkflowAgentExecutorTests
     ];
 
     /// <summary>
-    ///     FU2-3: what the operator typed when they retried the node reaches the objective the retried attempt runs on,
-    ///     under a heading of its own. It used to reach the decision row and stop there — the model was handed a
-    ///     byte-identical brief and did the same thing again, with the person's correction visible only in the panel.
+    ///     What the operator typed when they retried the node reaches the objective the retried attempt runs on,
+    ///     under a heading of its own. Stopping at the decision row would hand the model a byte-identical brief,
+    ///     and it would do the same thing again, with the person's correction visible only in the panel.
     /// </summary>
     [Test]
     public async Task AnAgentNodeRetriedByAnOperator_IsToldWhatTheySaid()

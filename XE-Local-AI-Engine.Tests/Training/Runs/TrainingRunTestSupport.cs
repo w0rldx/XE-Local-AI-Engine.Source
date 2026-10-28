@@ -30,7 +30,7 @@ internal sealed class FixedNodeSqliteKeyHolder : INodeSqliteKeyHolder
 
 /// <summary>
 ///     A scripted trainer. Lines are handed to the reader in order; the process "exits" with the scripted status once
-///     the caller stops reading, and a stop or kill is recorded rather than signalled.
+///     the caller stops reading, and a stop or kill is recorded rather than signaled.
 ///     <para>
 ///         With <c>exitsOnStreamClose</c> false the exit task is never settled, which models the one
 ///         shape a scripted handle otherwise cannot: a trainer that closes its output and then wedges. Nothing —
@@ -143,7 +143,7 @@ internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
         if (lines.Count > 0)
         {
             // A scripted trainer that has something to say says it and exits, closing both pipes. One with NO lines
-            // stays open instead — that is how a wedged or cancellable run is modelled, and what the watchdog and the
+            // stays open instead — that is how a wedged or cancellable run is modeled, and what the watchdog and the
             // cooperative-stop tests need.
             _ = channel.Writer.TryComplete();
         }

@@ -3,15 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddBenchmarkLaunchIdentityScheme</c> stamps the launch-identity scheme a row was frozen under, so an intended
-///     hash and an effective hash computed under different schemes are never compared. The columns are nullable on
-///     purpose: a row frozen before the cutover carries NULL, and the guard reads NULL as scheme 1.
-///     <para>
-///         The rollback is the load-bearing half. It is step 4 of the downgrade runbook
-///         (<c>docs/runbooks/benchmark-launch-identity-scheme-downgrade-runbook.md</c>), run on a node that has already
-///         been quiesced and drained — a <c>Down</c> that fails there fails at the worst possible moment.
-///     </para>
+///     <c>AddBenchmarkLaunchIdentityScheme</c> stamps the launch-identity scheme a row was frozen under, so hashes
+///     computed under different schemes are never compared. Nullable: an older row's NULL reads as scheme 1.
 /// </summary>
+/// <remarks>
+///     The rollback is the load-bearing half. It is step 4 of the downgrade runbook
+///     (<c>docs/runbooks/benchmark-launch-identity-scheme-downgrade-runbook.md</c>), run on a node that has already
+///     been quiesced and drained — a <c>Down</c> that fails there fails at the worst possible moment.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
 {
@@ -73,7 +72,7 @@ public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
             AssertEx.False((await probe.ColumnsAsync(table)).Contains(column), $"Rollback must drop {table}.{column}.");
         }
 
-        // The three drops are three SQLite table rebuilds. The neighbouring launch-evidence columns are what a rolled-back
+        // The three drops are three SQLite table rebuilds. The neighboring launch-evidence columns are what a rolled-back
         // build still reads, so losing one of them here would be silent until an operator opened a run's evidence panel.
         AssertEx.True((await probe.ColumnsAsync("benchmark_runs")).IsSupersetOf(new[]
         {

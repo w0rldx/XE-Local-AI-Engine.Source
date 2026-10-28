@@ -8,10 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Covers both interceptor directions for the five encrypted judge columns. A column registered for encryption but
-///     not for decryption (or the reverse) round-trips as garbage rather than failing loudly, so each one is asserted
-///     as ciphertext at rest AND as plaintext after a fresh read — and the AAD is proven by substitution, across rows,
-///     across columns and across attempts.
+///     Both interceptor directions for the five encrypted judge columns: each is ciphertext at rest AND plaintext on a
+///     fresh read (a one-way registration yields garbage), and AAD is proven by substitution across rows and columns.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class BenchmarkJudgeEncryptionTests : IDisposable

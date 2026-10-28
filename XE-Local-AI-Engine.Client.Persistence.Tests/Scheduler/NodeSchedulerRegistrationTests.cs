@@ -143,8 +143,8 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     [Test]
     public async Task AddNodeScheduler_WhenEnabled_InterruptsRunningJobsOnShutdownAndWaitsForThemToUnwind()
     {
-        // Windows tester round 3 (N-20): without the interrupt a running scheduled job held the host's whole shutdown budget, so
-        // every service stopped after it reported its drain as cut short. Only the options are read; no scheduler starts.
+        // Without the interrupt a running scheduled job holds the host's whole shutdown budget, so
+        // every service stopped after it reports its drain as cut short. Only the options are read; no scheduler starts.
         await using var provider = BuildEnabledProvider(GetDatabasePath("scheduler-reg-options.sqlite"));
 
         var scheduler = provider.GetRequiredService<IOptions<QuartzOptions>>().Value;

@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The query-embedding cache is a bounded, RAM-only, TTL'd store keyed by (resolved model, query). These tests assert
-///     a stored vector is returned on a matching lookup, that a different model is a distinct key (no stale cross-model
-///     vector), that entries expire after the TTL, that the size bound evicts the coldest entry, and that a zero TTL
-///     disables caching entirely.
+///     The query-embedding cache: bounded, RAM-only, TTL'd, keyed by (resolved model, query). These pin a hit,
+///     a different model as a distinct key, expiry after the TTL, eviction of the coldest entry, and
+///     a zero TTL disabling it.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeQueryEmbeddingCacheTests

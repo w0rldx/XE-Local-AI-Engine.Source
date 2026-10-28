@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 
 /// <summary>
-///     One instance in full, carrying the SANITISED INSTALLED manifest rather than the catalog's current one: an
+///     One instance in full, carrying the SANITIZED INSTALLED manifest rather than the catalog's current one: an
 ///     instance installed at v2 renders what it is running, and an instance whose application has left the catalog
 ///     must still render at all.
 /// </summary>

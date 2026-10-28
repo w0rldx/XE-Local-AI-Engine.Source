@@ -77,7 +77,7 @@ describe("DevelopmentEventTimeline", () => {
 	});
 
 	// Only tokens whose label DIFFERS from the token can carry weight here: the mocked `t` falls back to the raw
-	// value, so asserting on `Failed` or `Passed` (labelled as themselves) would pass with the locale block deleted.
+	// value, so asserting on `Failed` or `Passed` (labeled as themselves) would pass with the locale block deleted.
 	it("labels the gate's rejection verdict", () => {
 		renderTimeline([event("event-1", 1, "ChangesRequested")]);
 

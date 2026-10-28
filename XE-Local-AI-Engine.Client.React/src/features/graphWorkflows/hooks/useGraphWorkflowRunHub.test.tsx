@@ -156,8 +156,8 @@ describe("useGraphWorkflowRunHub", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
 
 		// The publisher's three kinds, verbatim, with the EXACT key set each one drops. Exact rather than "contains":
-		// an unrecognised kind falls through to the everything-branch, whose keys are a superset of every arm's, so a
-		// `toContainEqual` assertion would pass on a capitalised literal that had silently stopped matching.
+		// an unrecognized kind falls through to the everything-branch, whose keys are a superset of every arm's, so a
+		// `toContainEqual` assertion would pass on a capitalized literal that had silently stopped matching.
 		const expectations = [
 			{ kind: "run", keys: [events, run, runList] },
 			{ kind: "node", keys: [events, run, nodes] },

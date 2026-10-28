@@ -18,7 +18,7 @@ public sealed class BinaryManagerHashVerificationTests
     {
         using var cache = new TempCacheDir();
         // The handler always returns bytes that cannot match the pinned SHA256 → forced corruption on every attempt.
-        using var handler = new CountingHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
@@ -44,7 +44,7 @@ public sealed class BinaryManagerHashVerificationTests
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "fake-llama-server");
 
-        using var handler = new CountingHandler(() =>
+        using var handler = new CountingHttpMessageHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
@@ -59,16 +59,15 @@ public sealed class BinaryManagerHashVerificationTests
     [Test]
     public async Task EnsureBinary_CachedBinaryInUpstreamTopLevelLayout_ResolvedByTreeSearch_NoDownload()
     {
-        // Regression: the pinned b9692 Linux archive extracts llama-server to a top-level llama-{tag}/ folder,
-        // NOT the pin's build/bin/ relative path. The manager must locate the executable by searching the extracted
-        // tree, or acquisition silently fails with "did not contain the expected server executable".
+        // Regression: the pinned b9692 Linux archive puts llama-server under a top-level llama-{tag}/, not build/bin/,
+        // so the manager searches the extracted tree, else "did not contain the expected server executable".
         using var cache = new TempCacheDir();
         var variantDir = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu");
         var actualServerPath = Path.Combine(variantDir, $"llama-{LlamaCppReleasePins.PinnedTag}", "llama-server");
         Directory.CreateDirectory(Path.GetDirectoryName(actualServerPath)!);
         await File.WriteAllTextAsync(actualServerPath, "fake-llama-server");
 
-        using var handler = new CountingHandler(() =>
+        using var handler = new CountingHttpMessageHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
@@ -78,24 +77,6 @@ public sealed class BinaryManagerHashVerificationTests
         AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Equal(actualServerPath, binary.ServerExecutablePath);
         AssertEx.True(binary.IsPinnedFallback);
-    }
-
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        private readonly Func<HttpResponseMessage> _responder;
-
-        public CountingHandler(Func<HttpResponseMessage> responder)
-        {
-            _responder = responder;
-        }
-
-        public int CallCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return Task.FromResult(_responder());
-        }
     }
 
     private sealed class TempCacheDir : IDisposable

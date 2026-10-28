@@ -3,10 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>DropApprovedUtilityImages</c> removes the last schema trace of the container-based model-fit probe that the
-///     Docker teardown deleted. A drop migration is the easy one to get wrong twice — reintroducing the table, or
-///     leaving it in place while believing it gone — so this pins BOTH ends: present at the migration before it, absent
-///     at the head of the chain.
+///     <c>DropApprovedUtilityImages</c> removes the last schema trace of the container-based model-fit probe. A drop is
+///     easy to get wrong both ways, so BOTH ends are pinned: present before it, absent at head.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class DropApprovedUtilityImagesMigrationTests

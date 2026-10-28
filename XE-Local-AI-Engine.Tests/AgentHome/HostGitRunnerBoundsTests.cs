@@ -61,8 +61,8 @@ public sealed class HostGitRunnerBoundsTests : IDisposable
     ///     <para>
     ///         The input is bigger than a pipe buffer, so the write cannot complete until the reader consumes it — and
     ///         <c>--version</c> never does. The write therefore blocks, git exits, and the write comes back as a broken
-    ///         pipe. Every failure this runner can have is a non-zero exit with a reason on stderr; this one used to be
-    ///         the exception to that, thrown straight past callers written to the contract.
+    ///         pipe. Every failure this runner can have is a non-zero exit with a reason on stderr; this one is no
+    ///         exception to that, never thrown straight past callers written to the contract.
     ///     </para>
     ///     <para>
     ///         It is also what pins the ORDER of the drains against the stdin write. With the drains started after the

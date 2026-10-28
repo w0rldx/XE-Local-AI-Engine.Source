@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 public sealed class DevWorkflowRunQueryService
 {
     /// <summary>The same lenient read the wire graph is deserialized with, so both see the same nodes and edges.</summary>
-    private static readonly JsonSerializerOptions GraphOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions GraphOptions = JsonSerializerOptions.Web;
 
     private readonly IAgentDefinitionService _agents;
     private readonly IWorkSessionService _sessions;
@@ -218,7 +218,7 @@ public sealed class DevWorkflowRunQueryService
 
     /// <summary>
     ///     How many attempts an operator has bought this node run: the distance the row's own <c>MaxAttempts</c> has
-    ///     travelled from the cap its definition declared, which each Retry raises by one IN PLACE.
+    ///     traveled from the cap its definition declared, which each Retry raises by one IN PLACE.
     /// </summary>
     /// <remarks>
     ///     Read off the row, never counted from <c>Retry</c> decision rows, which exist whether or not they were ever

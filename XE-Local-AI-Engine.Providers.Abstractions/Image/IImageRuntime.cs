@@ -22,6 +22,6 @@ public interface IImageRuntime
     ///     cancelled cleanly over HTTP; a job already generating is aborted by tree-killing and restarting the runtime
     ///     daemon, because sd-server cannot interrupt an in-flight generation.
     /// </remarks>
-    /// <exception cref="OperationCanceledException"><paramref name="ct" /> was signalled.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct" /> was signaled.</exception>
     Task<ImageGenerationResult> GenerateAsync(ImageGenerationRequest request, IProgress<ImageGenProgress> progress, CancellationToken ct);
 }

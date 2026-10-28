@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 /// </summary>
 /// <remarks>
 ///     The path is operator-owned and therefore safe to log, with no secret-hygiene violation. Nothing is logged when
-///     the override is unset, so a normal pinned-acquisition deploy stays byte-behaviour-unchanged.
+///     the override is unset, so a normal pinned-acquisition deploy stays byte-behavior-unchanged.
 /// </remarks>
 internal sealed class LlamaServerRuntimeOverrideStartupNotice : IHostedService
 {

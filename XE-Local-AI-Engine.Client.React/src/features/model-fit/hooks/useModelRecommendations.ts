@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+// Cross-feature hand-off (operator-approved): a download started from a recommendation row is owned by the Model
+// Management feature so it surfaces — with progress + cancel — on that page's download panel via the shared store.
+import { useStartGgufDownload } from "@/core/model-downloads/queries/useGgufDownload";
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
@@ -22,10 +26,6 @@ import {
 	useRefreshRecommendations,
 } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
-// Cross-feature hand-off (operator-approved): a download started from a recommendation row is owned by the Model
-// Management feature so it surfaces — with progress + cancel — on that page's download panel via the shared store.
-import { useStartGgufDownload } from "@/features/models/queries/useGgufDownload";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
 
 // The hardware-profile card's data + re-probe action, grouped so the card can be wired from one prop.

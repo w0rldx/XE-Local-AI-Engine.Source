@@ -286,11 +286,9 @@ public sealed class ConversationCompactionServiceTests
     }
 
     /// <summary>
-    ///     Regenerating an EARLY turn AFTER later turns exist mints a sibling whose PHYSICAL sequence lands past those
-    ///     later turns. Ordering by that raw sequence makes the stale answer look like the conversation's NEWEST message:
-    ///     it survives the keep-verbatim window while a genuinely recent exchange is folded away instead. Compaction must
-    ///     order and fold in anchor space, and persist the anchor as the covered sequence so the send/regenerate paths
-    ///     splice against the same value.
+    ///     Compaction folds in anchor space and stores the anchor (what send/regenerate splice against) as the covered
+    ///     sequence: an EARLY turn's regenerated sibling sits PHYSICALLY past later turns, so raw order would keep it as
+    ///     NEWEST.
     /// </summary>
     [Test]
     public async Task CompactAsync_WhenALateMintedSiblingOfAnEarlyTurnIsSelected_FoldsByLogicalOrderAndCoversTheAnchor()

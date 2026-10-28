@@ -37,7 +37,7 @@ function statusResponse(overrides: Record<string, unknown> = {}): Record<string,
 	};
 }
 
-// The node's own behaviour: the PUT persists the channel and answers with the status it recomputed, so the next
+// The node's own behavior: the PUT persists the channel and answers with the status it recomputed, so the next
 // GET and the mutation response agree. `saved()` is what proves the endpoint was reached with the right body.
 function stubStatus(overrides: Record<string, unknown> = {}): { saved: () => unknown; fetched: () => number } {
 	let current = statusResponse(overrides);

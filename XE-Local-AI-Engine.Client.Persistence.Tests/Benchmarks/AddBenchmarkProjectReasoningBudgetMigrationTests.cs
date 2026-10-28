@@ -4,14 +4,13 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddBenchmarkProjectReasoningBudget</c> adds the one column a project needs to pin a thinking budget onto
-///     every run it freezes. It must default to NULL — a project created before it existed pinned nothing, and
-///     backfilling a number would silently cap the reasoning of every run it freezes from then on — and it must be
-///     bounded inside the project's own context, because a budget at or above the window can never be honoured and
-///     would masquerade as "no budget". The rollback test is the load-bearing one: SQLite drops a column by rebuilding
-///     the table from this migration's target model, so a Down generated against a stale model deletes columns it
-///     never mentions.
+///     <c>AddBenchmarkProjectReasoningBudget</c> adds a project's pinned thinking budget. It defaults to NULL (a
+///     backfill would silently cap later runs) and stays below the context window, which no budget can fill.
 /// </summary>
+/// <remarks>
+///     The rollback test is load-bearing: SQLite drops a column by rebuilding the table from this migration's target
+///     model, so a Down generated against a stale model deletes columns it never mentions.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AddBenchmarkProjectReasoningBudgetMigrationTests
 {

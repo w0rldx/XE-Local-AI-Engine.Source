@@ -5,13 +5,11 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Hosting;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the desktop loopback-port persistence store. Verifies the best-effort read path (missing,
-///     malformed, out-of-range, taken → dynamic <c>:0</c> bind), the happy-path re-bind of a remembered free port, and
-///     the persist round-trip. Each test uses an isolated temp directory and never touches the real per-user data dir.
+///     The desktop loopback-port store: a missing, malformed, out-of-range or taken port binds <c>:0</c>, a remembered
+///     free port re-binds, and a persist round-trips, each in an isolated temp directory.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class DesktopPortStoreTests
@@ -146,7 +144,7 @@ public sealed class DesktopPortStoreTests
         // A non-existent data directory must not abort startup; the write failure is swallowed (best-effort).
         var missingDirectory = Path.Combine(Path.GetTempPath(), $"xe-port-missing-{Guid.NewGuid():N}");
 
-        var logger = new CapturingLogger<DesktopPortStoreTests>();
+        var logger = new RecordingLogger<DesktopPortStoreTests>();
 
         AssertEx.DoesNotThrow(() => DesktopPortStore.Persist(missingDirectory, 50000, logger),
             "a port-file write failure must not abort startup");

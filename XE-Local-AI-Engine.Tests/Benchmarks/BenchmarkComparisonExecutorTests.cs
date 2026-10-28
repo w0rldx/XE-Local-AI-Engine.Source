@@ -17,10 +17,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The launch-identity cutover guard on the pairwise path. A comparison freezes its intended launch identity at enqueue and
-///     writes its effective identity at execution, so a scheme change between the two leaves two hashes that were never
-///     meant to be compared. The comparison is failed before anything is leased or spawned, which removes the false
-///     drift warning at its root instead of rendering it.
+///     The pairwise launch-identity cutover guard: the identity frozen at enqueue and the one written at execution
+///     are incomparable across a scheme change, so the comparison fails before any lease or spawn, with no false
+///     drift warning.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkComparisonExecutorTests

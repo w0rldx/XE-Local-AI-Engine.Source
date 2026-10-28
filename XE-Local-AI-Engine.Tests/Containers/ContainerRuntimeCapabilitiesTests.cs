@@ -81,7 +81,7 @@ public sealed class ContainerRuntimeCapabilitiesTests
     [Arguments("")]
     public void AnUnknownName_CountsAsMissingRatherThanAsSatisfied(string unknown)
     {
-        // A runtime cannot honour a requirement it does not understand, and reading the unknown as met is how a
+        // A runtime cannot honor a requirement it does not understand, and reading the unknown as met is how a
         // manifest written against a later schema installs silently and fails at run time. The comparison is ordinal,
         // so a differently-cased spelling is a different name.
         AssertEx.Equal("|" + unknown, "|" + string.Join(",", ContainerRuntimeCapabilities.DockerReady.FindMissing([unknown])));
@@ -92,7 +92,7 @@ public sealed class ContainerRuntimeCapabilitiesTests
     {
         var missing = ContainerRuntimeCapabilities.None.FindMissing(["logs", "containers", "logs"]);
 
-        // Order and duplicates are kept rather than normalised: the result is reported to a user beside the manifest
+        // Order and duplicates are kept rather than normalized: the result is reported to a user beside the manifest
         // they wrote, so it reads back in the order they wrote it.
         AssertEx.Equal("logs,containers,logs", string.Join(",", missing));
     }

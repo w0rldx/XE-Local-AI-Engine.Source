@@ -93,7 +93,7 @@ public sealed class InvocationMonitorEndpointTests
         AssertEx.False(body.Contains("secret", StringComparison.OrdinalIgnoreCase));
     }
 
-    // The stored error stays redacted, but the category picks a fixed sentence, so a missing model no longer reads as the generic failure.
+    // The stored error stays redacted, but the category picks a fixed sentence, so a missing model never reads as the generic failure.
     [Test]
     [Arguments(FailureCategory.ModelUnavailable, "The selected model is not installed or not reachable. Install it or choose another model.")]
     [Arguments(FailureCategory.ModelNotInstalled, "The selected model is not installed or not reachable. Install it or choose another model.")]
@@ -140,9 +140,8 @@ public sealed class InvocationMonitorEndpointTests
         AssertEx.False(body.Contains("/home/operator", StringComparison.Ordinal), "the stored error must never reach the monitor");
     }
 
-    // A turn parked on an ask_user question is otherwise indistinguishable from an ordinary running one on this page —
-    // no output chunks, no pending approval, nothing to explain the silence. The flag is content-free by design: the
-    // question text is operator/model content and must not reach an ops endpoint, so only the boolean is asserted here.
+    // A turn parked on an ask_user question otherwise looks like an ordinary running one. The flag is content-free:
+    // the question text is operator/model content and must not reach an ops endpoint, so only the boolean is asserted.
     [Test]
     public async Task GetInvocations_WhenParkedOnQuestion_ReportsPendingQuestionWithoutItsContent()
     {

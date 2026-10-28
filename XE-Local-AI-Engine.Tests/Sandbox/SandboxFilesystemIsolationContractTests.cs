@@ -292,7 +292,7 @@ public sealed class SandboxFilesystemIsolationContractTests
     [Test]
     public async Task TheBwrapBoundary_ReportsThePosixView_AndIsUnaffectedByThePreviewSwitch()
     {
-        // The Linux behaviour this round must not move: bwrap is Stable, served without previews, and its handle reports /work.
+        // The Linux behavior this round must not move: bwrap is Stable, served without previews, and its handle reports /work.
         using var provider = CreateProvider(new StubProbe(SandboxContainment.None with
         {
             FilesystemIsolation = FakeIsolation()

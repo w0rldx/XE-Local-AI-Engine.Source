@@ -10,15 +10,15 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
-///     The managed cosine vector search streams stored <c>float32</c> BLOBs from <c>knowledge_chunk_vectors</c>,
-///     reinterprets each over a reused pooled buffer, scores it against the query vector, and keeps the top-k in a bounded
-///     heap. These tests exercise the real BLOB round-trip on the runtime SQLite connection and assert the optimized
-///     search returns the IDENTICAL ranking (ids, order, scores within 1e-5) as a naive reference cosine — on both the
-///     cosine path (before the normalization backfill) and the dot-product path (after it), including legacy unnormalized
-///     rows, top-k boundaries, ties, zero vectors, and cancellation. The node enforces foreign keys, so every vector row is
-///     seeded with the parent document and chunk the schema declares — an orphan vector row is not a shape production
-///     can produce.
+///     The managed cosine search streams <c>float32</c> BLOBs from <c>knowledge_chunk_vectors</c> over a pooled buffer,
+///     scores each against the query, and keeps the top-k in a bounded heap.
 /// </summary>
+/// <remarks>
+///     On the real runtime SQLite connection it returns the IDENTICAL ranking (ids, order, scores within 1e-5) as a
+///     naive reference cosine on both the cosine and the dot-product (post-backfill) paths, including legacy
+///     unnormalized rows, top-k boundaries, ties, zero vectors and cancellation. Foreign keys are enforced, so every
+///     vector row is seeded with its parent document and chunk: an orphan vector row cannot occur in production.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class ManagedCosineVectorSearchTests : IDisposable
 {

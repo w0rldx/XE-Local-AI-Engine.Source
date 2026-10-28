@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The meter bridge's second job: remembering the VRAM figures of the LAST SUCCESSFUL load per (model, role), which
-///     is what lets a node run settling minutes later say what the box looked like when its model was loaded.
+///     is what lets a node run settling minutes later say what the host looked like when its model was loaded.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerLastLoadVramTests
@@ -81,10 +81,9 @@ public sealed class LlamaServerLastLoadVramTests
     }
 
     /// <summary>
-    ///     An unadmitted reload measured nothing, but it still REPLACED the process the earlier reading described, so
-    ///     the key is cleared rather than left reporting bytes for a process that no longer exists. Contrast
-    ///     <see cref="RecordLoad_NonReadyAttempt_LeavesTheLastSuccessfulReadingAlone" />: a failed attempt never
-    ///     replaced anything, so it leaves the admitted reading standing.
+    ///     An unadmitted reload measured nothing but REPLACED the process the earlier reading described, so the key is
+    ///     cleared. Contrast <see cref="RecordLoad_NonReadyAttempt_LeavesTheLastSuccessfulReadingAlone" />: a failed
+    ///     attempt replaced nothing, so the admitted reading stands.
     /// </summary>
     [Test]
     public void RecordLoad_UnadmittedReadyReload_ClearsTheEarlierReading()

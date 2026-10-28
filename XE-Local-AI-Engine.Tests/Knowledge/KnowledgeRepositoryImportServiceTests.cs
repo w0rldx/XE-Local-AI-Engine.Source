@@ -283,7 +283,7 @@ public sealed class KnowledgeRepositoryImportServiceTests : IDisposable
             });
 
         // A configured bound is the caller's problem, so it carries the rejected type the endpoint maps to 400 —
-        // not the bare InvalidOperationException that used to make every I/O failure in here a 400 too.
+        // not a bare InvalidOperationException, which would make every I/O failure in here a 400 too.
         var exception = await AssertEx.ThrowsAsync<KnowledgeRepositoryImportRejectedException>(() =>
             service.ImportAsync(selectedFolderId, "repo", CancellationToken.None));
 

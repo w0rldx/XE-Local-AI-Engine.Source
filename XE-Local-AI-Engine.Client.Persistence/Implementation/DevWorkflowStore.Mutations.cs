@@ -319,7 +319,7 @@ public sealed partial class DevWorkflowStore
             async run =>
             {
                 // The WHOLE cascade has to fit, admitted here rather than on the caller's earlier read: a human Retry
-                // committing between that read and this transaction spends the same slots (FU3-4).
+                // committing between that read and this transaction spends the same slots.
                 if (command.MaxTotalAttempts is { } budget)
                 {
                     await EnsureRetryBudgetAsync(run.Id, budget, command.Resets.Count, cancellationToken);

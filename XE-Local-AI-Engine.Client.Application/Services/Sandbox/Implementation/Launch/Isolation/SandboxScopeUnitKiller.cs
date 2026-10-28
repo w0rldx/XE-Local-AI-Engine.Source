@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 /// <summary>The seam the transient-scope kill authority is reached through.</summary>
 /// <remarks>
 ///     It exists so the startup sweep's DECISIONS — which unit is claimed by a live worker, which is an orphan, which name this engine did
-///     not generate — can be tested without a systemd user manager and without signalling anything real.
+///     not generate — can be tested without a systemd user manager and without signaling anything real.
 /// </remarks>
 internal interface ISandboxScopeUnitKiller
 {
@@ -60,7 +60,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
     {
         if (!SandboxScopeUnit.IsEngineOwned(unitName))
         {
-            // A name this engine did not generate is never signalled. The whole sweep rests on that: a loose match
+            // A name this engine did not generate is never signaled. The whole sweep rests on that: a loose match
             // would let a unit some other tool named "xe-…" be killed by a startup that had nothing to do with it.
             return;
         }

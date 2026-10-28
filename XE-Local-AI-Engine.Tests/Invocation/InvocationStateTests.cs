@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="InvocationState.Clone" /> is the single snapshot routine both the worker event dispatcher and the
-///     resume registry call, and its own documentation requires every member to be copied there — a member added to
-///     the class but not to the clone travels as null on whichever path snapshots first, which is how the persisted
-///     value silently becomes null for a turn that did dispatch.
+///     <see cref="InvocationState.Clone" /> is the one snapshot routine the worker event dispatcher and the resume
+///     registry both call, so every member must be copied there: a member missing from the clone travels as null and
+///     is persisted as null for a turn that did dispatch.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class InvocationStateTests

@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Branch coverage for the durable MCP agent-run bounds. Four of the nine checks are equality pins rather than
-///     ranges — the payload and result caps are part of the approved inbound contract, so configuration may not move
-///     them in EITHER direction; those cases are asserted both above and below the pinned value so a "raise the limit"
-///     edit cannot pass by widening only one side.
+///     Durable MCP agent-run bounds. Four of the nine checks are equality pins: the payload and result caps are part of
+///     the approved inbound contract, so each is asserted on both sides of the pin and a one-sided "raise the limit"
+///     edit fails.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunOptionsValidatorTests

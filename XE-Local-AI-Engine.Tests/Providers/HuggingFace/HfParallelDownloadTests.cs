@@ -827,7 +827,7 @@ public sealed class HfParallelDownloadTests
         }
     }
 
-    // Yields its payload, then pauses before signalling EOF so a sibling chunk is guaranteed to have finished first,
+    // Yields its payload, then pauses before signaling EOF so a sibling chunk is guaranteed to have finished first,
     // making the "one range interrupted, the others complete" scenario deterministic.
     //
     // real-timer: releasing this on a gate would need the test to observe "the sibling ranges finished", and the

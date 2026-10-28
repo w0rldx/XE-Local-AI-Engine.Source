@@ -51,7 +51,7 @@ internal sealed class SensitiveFileExclusionService : ISensitiveFileExclusionSer
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // The wildcard SECRET rules, written as grep/find-compatible globs. Every entry is either "prefix*" or "*suffix" — one wildcard, at one end — which is what MatchesGlob below
-    // implements. This array is the ONLY definition of the pattern rules: the flag sets and both predicates read it, so a pattern can no longer be added to one and forgotten in the other.
+    // implements. This array is the ONLY definition of the pattern rules: the flag sets and both predicates read it, so a pattern cannot be added to one and forgotten in the other.
     private static readonly string[] SecretFileGlobs =
     [
         // ".env.local", ".env.production", … (the ".env" base name is already in SecretNames).
@@ -72,7 +72,7 @@ internal sealed class SensitiveFileExclusionService : ISensitiveFileExclusionSer
         "id_ed25519*"
     ];
 
-    // The copy filter's literal set is exactly the union, so the copy behaviour is unchanged by the split.
+    // The copy filter's literal set is exactly the union, so the copy behavior is unchanged by the split.
     private static readonly FrozenSet<string> ExcludedNames =
         SecretNames.Concat(CopySkipNames).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 

@@ -8,8 +8,8 @@ using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
 ///     Startup reaper for stale GGUF acquisition artifacts: operation-owned <c>.part</c> staging files and orphaned
-///     final <c>.xe-model.json</c> sidecars with no adjacent GGUF. No network; a temp models directory with
-///     hand-aged files stands in for a crashed import/download.
+///     <c>.xe-model.json</c> sidecars with no adjacent GGUF. A temp models directory with hand-aged files stands in
+///     for a crashed import/download.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufAcquisitionArtifactStartupReaperTests

@@ -42,7 +42,7 @@ public sealed record ConversationMessageDto
 
     /// <summary>
     ///     TRANSIENT, set only on the plain-chat attachment message: recomposes its content under a smaller character budget,
-    ///     or returns null when nothing fits, so the runner can fit the attachment to the launched window (model-matrix F6).
+    ///     or returns null when nothing fits, so the runner can fit the attachment to the launched window.
     /// </summary>
     [JsonIgnore]
     public Func<int, string?>? ShortenAttachment { get; init; }

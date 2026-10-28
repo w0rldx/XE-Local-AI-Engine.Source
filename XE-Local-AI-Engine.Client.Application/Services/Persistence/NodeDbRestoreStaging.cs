@@ -280,7 +280,7 @@ public static partial class NodeDbRestoreStaging
         }
 
         // The snapshot is installed from here on. An undeletable marker is a warning while a set-aside database lets the next
-        // start recognise the finished restore; without one the start must stop, or the snapshot would be applied twice.
+        // start recognize the finished restore; without one the start must stop, or the snapshot would be applied twice.
         var deleteProblem = TryDelete(markerPath);
         if (deleteProblem is not null && !File.Exists(asidePath))
         {

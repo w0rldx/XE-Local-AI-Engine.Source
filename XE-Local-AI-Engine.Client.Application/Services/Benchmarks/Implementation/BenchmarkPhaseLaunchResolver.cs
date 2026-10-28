@@ -90,7 +90,7 @@ public sealed class BenchmarkPhaseLaunchResolver : IBenchmarkPhaseLaunchResolver
         var applied = BenchmarkKvCacheType.Apply(resolved, effective);
 
         // The plan the supervisor will build for this spawn: a benchmark launch applies no launch policy, so a GPU
-        // replay gets a null plan and a CPU replay the two args a CPU build can honour.
+        // replay gets a null plan and a CPU replay the two args a CPU build can honor.
         var plan = variant == GpuVariant.Cpu ? _launchPolicy.ResolveCpuReplayPlan(applied) : (LlamaServerLaunchPlan?)null;
         var policy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1;
         var intendedIdentity = LlamaServerLaunchProjection.From(variant, applied, plan, ModelRole.Chat, policy.ChatCacheReuse, policy.ChatCacheRamMiB)

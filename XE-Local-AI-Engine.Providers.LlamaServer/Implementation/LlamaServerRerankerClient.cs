@@ -27,7 +27,7 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     /// </summary>
     public const string HttpClientName = "llamaserver-reranker";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     Floor of the scoring budget, and the whole budget for a degenerate empty pool. Covers the fixed cost of the
@@ -43,7 +43,7 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
     ///     The caller sends <c>max(20, 4 x limit)</c> chunks of about 500 tokens, which a CPU-only machine cannot finish
     ///     inside a flat 5 s — the reranker would then degrade to fusion order on every search while looking
     ///     configured. 500 ms per document is roughly double a measured CPU pass on a chunk that size: generous enough
-    ///     to stop punishing slow hardware without being a licence to hang.
+    ///     to stop punishing slow hardware without being a license to hang.
     /// </remarks>
     private static readonly TimeSpan RerankTimeoutPerDocument = TimeSpan.FromMilliseconds(500);
 

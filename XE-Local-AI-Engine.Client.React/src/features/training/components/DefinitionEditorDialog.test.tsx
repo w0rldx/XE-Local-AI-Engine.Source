@@ -29,8 +29,8 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 	updateTrainingDefinition: updateSpy,
 }));
 
-import type { TrainingDefinition } from "@/features/training/models/TrainingModels";
 import { DefinitionEditorDialog } from "@/features/training/components/DefinitionEditorDialog";
+import type { TrainingDefinition } from "@/features/training/models/TrainingModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const existing: TrainingDefinition = {

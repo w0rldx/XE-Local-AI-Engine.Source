@@ -158,7 +158,7 @@ public sealed class McpServerServiceTests
     [Test]
     public async Task SetEnabledAsync_WhenDisabling_RevokesTheServerBeforeReturning()
     {
-        // Codex review: the detached refresh left the server callable after the PATCH returned, so the disable revokes first.
+        // A detached refresh alone would leave the server callable after the PATCH returns, so the disable revokes first.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
         var existing = CreateRecord(CreateStdioInput(), enabled: true) with
@@ -371,7 +371,7 @@ public sealed class McpServerServiceTests
     [Test]
     public async Task UpdateAsync_WhenTheReconnectNeverCompletes_ReturnsAfterPersisting()
     {
-        // N-3: the PATCH awaited the refresh, which waits out the whole handshake timeout for a server that hangs on startup. The edit is
+        // The PATCH must not await the refresh, which waits out the whole handshake timeout for a hanging server. The edit is
         // persisted first; the refresh runs detached (no request token) and the tools endpoint reports its status.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
@@ -612,7 +612,7 @@ public sealed class McpServerServiceTests
     [Test]
     public async Task CreateAsync_WithEnvironmentOnAnHttpServer_ThrowsValidation()
     {
-        // O-D6 (e2): the HTTP transport launches nothing, so an environment was accepted, masked and silently never sent.
+        // The HTTP transport launches nothing, so an accepted environment would be masked and silently never sent.
         var service = CreateService(out var store, out _);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         var input = CreateHttpInput("http://127.0.0.1:8931/mcp") with
@@ -632,7 +632,7 @@ public sealed class McpServerServiceTests
     [Test]
     public async Task CreateAsync_WithUserInfoInTheUrl_ThrowsValidation()
     {
-        // O-D6 (e3): user:token@ was stored and shown in cleartext and never sent.
+        // An accepted user:token@ would be stored and shown in cleartext and never sent.
         var service = CreateService(out var store, out _);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
 

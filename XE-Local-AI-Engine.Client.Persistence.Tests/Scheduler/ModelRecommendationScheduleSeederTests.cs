@@ -90,9 +90,8 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
     [Test]
     public async Task StartAsync_WhenManagementServiceFails_SwallowsAndDoesNotThrow()
     {
-        // A provider WITHOUT the scheduler registered cannot resolve IScheduledJobManagementService, so the seeder's
-        // GetRequiredService throws InvalidOperationException — which must be caught and swallowed so the node still
-        // starts. This proves the best-effort guard.
+        // Without the scheduler, the seeder's GetRequiredService for IScheduledJobManagementService throws
+        // InvalidOperationException, which the best-effort guard must swallow so the node still starts.
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));

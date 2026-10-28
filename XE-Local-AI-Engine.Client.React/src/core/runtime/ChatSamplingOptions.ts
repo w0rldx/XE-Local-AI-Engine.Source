@@ -34,7 +34,7 @@ export interface SamplingFieldMeta {
 	allowDecimal: boolean;
 	// When true the dialog renders a Slider paired with a NumberInput; false = number-only (e.g. seed).
 	slider: boolean;
-	// True for knobs only the local runtimes honour. llama.cpp gets them via DeferredLlamaServerChatClient's body
+	// True for knobs only the local runtimes honor. llama.cpp gets them via DeferredLlamaServerChatClient's body
 	// patch and Ollama via its option map, but the OpenAI-shaped cloud paths (Codex/Azure) have no wire field for
 	// them, so the dialog disables these inputs while a cloud model is selected rather than pretending they apply.
 	localRuntimeOnly?: boolean;

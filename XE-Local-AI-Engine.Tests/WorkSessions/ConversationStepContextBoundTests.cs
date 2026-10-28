@@ -19,8 +19,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The step boundary's transcript bound. A session step replays every earlier step's state block, answer and
-///     reasoning verbatim, and its own knowledge-base reads can spend 16k tokens on a single document — on 2026-08-24 a
-///     27B model at a 65,536-token window went over at step 5. The bound folds the older turns before the send.
+///     reasoning verbatim, and its own knowledge-base reads can spend 16k tokens on a single document — a
+///     27B model at a 65,536-token window goes over by step 5. The bound folds the older turns before the send.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ConversationStepContextBoundTests
@@ -298,7 +298,7 @@ public sealed class ConversationStepContextBoundTests
     [Test]
     public void Project_LeavesOutAPromptWhoseAnswerWasStopped()
     {
-        // Mirrors ConversationContextBuilder.Build: a Stopped answer is not sent, and neither is its prompt (F-12).
+        // Mirrors ConversationContextBuilder.Build: a Stopped answer is not sent, and neither is its prompt.
         var estimator = new HeuristicTokenEstimator();
         var stopped = Message(sequence: 1, "assistant", "partial") with
         {
@@ -480,9 +480,9 @@ public sealed class ConversationStepContextBoundTests
     [Test]
     public void Project_UsesTheCalibratedDivisorOfTheModelTheSessionIsRunningOn()
     {
-        // The projection used to estimate with NO model name, so it always divided by the uncalibrated four while the
-        // two context budgeters it is supposed to agree with were already dividing by the model's measured divisor. The
-        // bound then fired against arithmetic nothing else in the turn used.
+        // The projection estimates with the session's model name: with none it divides by the uncalibrated four while
+        // the two context budgeters it must agree with divide by the model's measured divisor, and the
+        // bound fires against arithmetic nothing else in the turn uses.
         var store = new TokenEstimatorCalibrationStore();
         store.SetDivisor(SessionModel, charsPerToken: 2);
         var estimator = new HeuristicTokenEstimator(store);

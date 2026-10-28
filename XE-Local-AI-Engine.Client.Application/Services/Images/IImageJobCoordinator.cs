@@ -23,7 +23,7 @@ public interface IImageJobCoordinator
     /// </exception>
     Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken);
 
-    /// <summary>Requests cancellation of a tracked job by signalling its token.</summary>
+    /// <summary>Requests cancellation of a tracked job by signaling its token.</summary>
     /// <remarks>
     ///     A still-queued job is dropped to <see cref="Client.Persistence.Entities.ImageJobStatus.Cancelled" /> without ever calling the runtime,
     ///     while a generating job's token is cancelled and the runtime performs the queued-cancel or kill+restart. Returns

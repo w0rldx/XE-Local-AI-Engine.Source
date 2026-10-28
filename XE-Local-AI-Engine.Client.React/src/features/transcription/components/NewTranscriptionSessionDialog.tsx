@@ -126,7 +126,7 @@ export function NewTranscriptionSessionDialog({
 	const processCaptureSupported = runtimeQuery.data?.processCaptureSupported === true;
 	// A node ships with no weights, and the runtime only reports that on the first spawn — as a raw
 	// "The selected transcription model is not installed." after the operator has already picked a file and waited
-	// for the upload. The same cached catalogue the runtime card reads answers it before any of that, so the dialog
+	// for the upload. The same cached catalog the runtime card reads answers it before any of that, so the dialog
 	// says it up front and names where to fix it. The submit stays enabled: the model can be fetched in another tab
 	// while this session is being described, and a disabled button that explains nothing is what this replaces.
 	const modelsQuery = useTranscriptionModels();

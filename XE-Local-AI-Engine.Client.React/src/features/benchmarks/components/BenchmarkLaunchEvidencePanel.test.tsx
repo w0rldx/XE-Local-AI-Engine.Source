@@ -88,7 +88,7 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		expect(screen.queryByTestId("benchmark-intended-effective-differs-scheme-outdated")).toBeNull();
 	});
 
-	// A row under the CURRENT scheme keeps today's behaviour exactly: the flag is inert unless it is true.
+	// A row under the CURRENT scheme keeps today's behavior exactly: the flag is inert unless it is true.
 	it("still reports drift when the identity scheme is current", () => {
 		renderWithProviders(
 			<BenchmarkLaunchEvidencePanel

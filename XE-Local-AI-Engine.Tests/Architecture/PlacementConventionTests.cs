@@ -159,7 +159,7 @@ public sealed class PlacementConventionTests
 
     // Every rule above ends in WithoutRequiringPositiveResults(): ArchUnitNET otherwise fails a rule whose predicate
     // matched nothing. That default is a non-vacuity guard, but a per-assembly one — Providers.Ollama declares no
-    // *Options class and never will — and honouring it would mean an allow-list of "assemblies exempt from a rule they
+    // *Options class and never will — and honoring it would mean an allow-list of "assemblies exempt from a rule they
     // trivially satisfy". Each test instead asserts an explicit floor on how many types the whole scan saw, which is
     // the guard that actually catches a broken marker or an empty load.
     private static void AssertNoViolations(IArchRule rule, string because)

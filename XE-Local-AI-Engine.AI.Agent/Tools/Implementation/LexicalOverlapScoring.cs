@@ -8,7 +8,7 @@ using System.Collections.Frozen;
 /// </summary>
 /// <remarks>
 ///     Both rank free text against short candidate texts with no model and no external state, so they must tokenise
-///     and score identically: uppercase-normalise (CA1308-safe), split on non-alphanumeric runs, drop function words,
+///     and score identically: uppercase-normalize (CA1308-safe), split on non-alphanumeric runs, drop function words,
 ///     compare ordinally, and divide the overlap by the square root of the candidate's length. Two copies of this
 ///     drifted once already; one copy is the fix. See docs/wiki/04-agent-mode.md ("The lexical ranker and the
 ///     `list_tools` escape hatch").
@@ -22,7 +22,7 @@ internal static class LexicalOverlapScoring
     /// <remarks>
     ///     Dropped from BOTH sides: from the query so they can never match, and from the candidate so they do not
     ///     inflate the length divisor of a text that is merely wordy. Uppercase, because <see cref="Tokenize" />
-    ///     normalises before this set is consulted.
+    ///     normalizes before this set is consulted.
     /// </remarks>
     private static readonly FrozenSet<string> StopWords = new[]
     {
@@ -193,7 +193,7 @@ internal static class LexicalOverlapScoring
         "ZUR"
     }.ToFrozenSet(StringComparer.Ordinal);
 
-    /// <summary>Content-word overlap, normalised by the square root of the candidate's length.</summary>
+    /// <summary>Content-word overlap, normalized by the square root of the candidate's length.</summary>
     /// <remarks>
     ///     Square root rather than a plain division, because a full division over-corrects and makes a one-word name
     ///     beat a three-word match in a paragraph. Both token sets are expected to come from <see cref="Tokenize" />,
@@ -215,7 +215,7 @@ internal static class LexicalOverlapScoring
     }
 
     /// <summary>
-    ///     Uppercase-normalises (CA1308-safe), splits on non-alphanumeric runs and drops <see cref="StopWords" />. A
+    ///     Uppercase-normalizes (CA1308-safe), splits on non-alphanumeric runs and drops <see cref="StopWords" />. A
     ///     text that is blank, or nothing but function words, yields an empty set — the caller decides what that means.
     /// </summary>
     internal static IReadOnlySet<string> Tokenize(string? text)

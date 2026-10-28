@@ -92,7 +92,7 @@ public static class BenchmarkJudgeRubricDefaults
     /// </summary>
     /// <remarks>
     ///     A single criterion at full weight on purpose — the tests either pass or they do not, and averaging that
-    ///     against a model's opinion of the same code reintroduces exactly the judgement this preset replaces. Both
+    ///     against a model's opinion of the same code reintroduces exactly the judgment this preset replaces. Both
     ///     halves are placeholders the operator must edit: <c>testCode</c> is the hidden test suite, <c>exports</c>
     ///     names the symbols those tests call. It needs <c>Compute:Enabled</c> on a node whose sandbox can isolate and
     ///     enforce resource ceilings; where it cannot, runs are left unranked with <c>verifier-unavailable</c>, not 0.

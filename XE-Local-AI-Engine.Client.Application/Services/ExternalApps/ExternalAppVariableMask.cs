@@ -9,7 +9,7 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     (<c>ExternalAppInstance.VariablesJson</c>) and there is no editing reason to read one back, since the settings
 ///     form needs the variable DEFINITIONS, never the values. Masking is what makes the encryption meaningful against
 ///     anything holding a session. One symbol rather than a literal on each side: a mask the write side does not
-///     recognise silently stores the placeholder as the password. The SPA states the same literal once.
+///     recognize silently stores the placeholder as the password. The SPA states the same literal once.
 /// </remarks>
 public static class ExternalAppVariableMask
 {

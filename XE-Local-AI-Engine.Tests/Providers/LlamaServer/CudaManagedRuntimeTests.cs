@@ -198,8 +198,8 @@ public sealed class CudaManagedRuntimeTests
             Skip.Test("root reads a 0300 file, so the read failure cannot be produced.");
         }
 
-        // Any exception during serve validation used to discard the record, so one transient read error on the server
-        // binary lost the build for good.
+        // An exception during serve validation must not discard the record, or one transient read error on the server
+        // binary loses the build for good.
         using var dir = new TempDir();
         var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -232,8 +232,8 @@ public sealed class CudaManagedRuntimeTests
     ///     startup seed, or a build another checkout adopted after this process started) makes the selector ask for
     ///     Vulkan on a Linux NVIDIA box, and the requested variant then disagrees with the recorded CUDA build. Serving
     ///     the recorded build and seeding the signal from it keeps the chat working and makes every later selection
-    ///     agree; the record previously being DISCARDED here is what let the next acquisition write a prebuilt over the
-    ///     operator's source build, after which the next start's reconcile deleted the tree.
+    ///     agree; DISCARDING the record here would let the next acquisition write a prebuilt over the
+    ///     operator's source build, after which the next start's reconcile would delete the tree.
     /// </summary>
     [Test]
     [ExcludeOn(OS.Windows)]

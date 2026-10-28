@@ -25,7 +25,6 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
@@ -301,7 +300,7 @@ public sealed class McpServerConnectionManagerTests
             profile: SandboxSecurityProfile.High);
 
         AssertEx.Equal(McpConnectionFailureReason.SandboxRefusedByProfile, status.FailureReason);
-        AssertEx.Equal(McpServerConnectionManager.SafeMessage(McpConnectionFailureReason.SandboxRefusedByProfile), status.LastError);
+        AssertEx.Equal(McpFailureDescriber.SafeMessage(McpConnectionFailureReason.SandboxRefusedByProfile), status.LastError);
         AssertEx.Contains(status.LastError!, "'high'");
         AssertEx.Contains(status.LastError!, SandboxSecurityProfilePolicy.Remedy);
     }
@@ -369,7 +368,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_ALongTailIsScrubbedBeforeTheDisplayCut_SoASplitSecretCannotLeak()
     {
-        // Codex review 2026-09-30: the 1 KB display cut ran before the scrub, so a secret straddling the cut leaked its suffix.
+        // The scrub runs before the 1 KB display cut, so a secret straddling the cut cannot leak its suffix.
         const string secret = "tok-4f9a8b7c6d5e-abcdef";
         var padding = new string('x', 1024 - 8);
         var tail = $"{padding}{secret} rejected\nmore";
@@ -386,7 +385,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_TheScrubbedTailKeepsScriptWordsAndPathArguments_ButStillRedactsAWholeArgumentToken()
     {
-        // Tester round 3 (REPORT-3 §6.5, N-16): whitespace-splitting a cmd /c script argument blanked "[canary]" and the probe DLL path.
+        // Whitespace-splitting a cmd /c script argument would blank "[canary]" and the probe DLL path.
         var dll = OperatingSystem.IsWindows() ? @"C:\probe\probe-mcp.dll" : "/opt/probe/probe-mcp.dll";
         var status = await RefreshWithFailureAsync(() => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.",
                 $"[canary] STEP1canary\nThe application '{dll}' does not exist\nkey arg-secret-9f8e7d6c rejected"),
@@ -412,12 +411,12 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_StartupException_LogsTheWarningWithoutTheExceptionStack()
     {
-        // Windows tester round 3 (observation i): one failed sandboxed start printed three stacks. The startup exception's message is
+        // One failed sandboxed start must not print three stacks. The startup exception's message is
         // already the diagnosis and the transport logged the facts, so the manager's line carries no exception object.
         var record = StdioRecord("Broken");
         var factory = new FakeMcpClientFactory();
         factory.FailFor(record.Id, static () => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.", "node: not found"));
-        var logger = new CapturingLogger<McpServerConnectionManager>();
+        var logger = new RecordingLogger<McpServerConnectionManager>();
         await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), logger: logger);
 
         await manager.RefreshAsync();
@@ -429,7 +428,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task Classify_FileNotFound_IsServerNotFound()
     {
-        AssertEx.Equal(McpConnectionFailureReason.ServerNotFound, McpServerConnectionManager.Classify(new FileNotFoundException("missing"), hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.ServerNotFound, McpFailureDescriber.Classify(new FileNotFoundException("missing"), hasHeaders: false));
         await Task.CompletedTask;
     }
 
@@ -438,8 +437,8 @@ public sealed class McpServerConnectionManagerTests
     {
         var unauthorized = new HttpRequestException("401", inner: null, HttpStatusCode.Unauthorized);
 
-        AssertEx.Equal(McpConnectionFailureReason.AuthenticationRequired, McpServerConnectionManager.Classify(unauthorized, hasHeaders: false));
-        AssertEx.Equal(McpConnectionFailureReason.Authentication, McpServerConnectionManager.Classify(unauthorized, hasHeaders: true));
+        AssertEx.Equal(McpConnectionFailureReason.AuthenticationRequired, McpFailureDescriber.Classify(unauthorized, hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.Authentication, McpFailureDescriber.Classify(unauthorized, hasHeaders: true));
         await Task.CompletedTask;
     }
 
@@ -448,8 +447,8 @@ public sealed class McpServerConnectionManagerTests
     {
         var forbidden = new HttpRequestException("403", inner: null, HttpStatusCode.Forbidden);
 
-        AssertEx.Equal(McpConnectionFailureReason.Forbidden, McpServerConnectionManager.Classify(forbidden, hasHeaders: true));
-        AssertEx.Equal(McpConnectionFailureReason.Forbidden, McpServerConnectionManager.Classify(forbidden, hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.Forbidden, McpFailureDescriber.Classify(forbidden, hasHeaders: true));
+        AssertEx.Equal(McpConnectionFailureReason.Forbidden, McpFailureDescriber.Classify(forbidden, hasHeaders: false));
         await Task.CompletedTask;
     }
 
@@ -458,15 +457,15 @@ public sealed class McpServerConnectionManagerTests
     {
         var tls = new HttpRequestException("SSL", new AuthenticationException("The remote certificate is invalid."));
 
-        AssertEx.Equal(McpConnectionFailureReason.Tls, McpServerConnectionManager.Classify(tls, hasHeaders: false));
-        AssertEx.Equal(McpConnectionFailureReason.Tls, McpServerConnectionManager.Classify(new AuthenticationException("bare"), hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.Tls, McpFailureDescriber.Classify(tls, hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.Tls, McpFailureDescriber.Classify(new AuthenticationException("bare"), hasHeaders: false));
         await Task.CompletedTask;
     }
 
     [Test]
     public async Task Classify_StartupException_IsServerStartupFailed()
     {
-        AssertEx.Equal(McpConnectionFailureReason.ServerStartupFailed, McpServerConnectionManager.Classify(new McpServerStartupException("exited", "tail"), hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.ServerStartupFailed, McpFailureDescriber.Classify(new McpServerStartupException("exited", "tail"), hasHeaders: false));
         await Task.CompletedTask;
     }
 
@@ -493,7 +492,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_WhenACollidingServerIsAddedLater_KeepsTheOriginalSlug()
     {
-        // O-D5: slugs are persisted on first connect, so a later server whose Name slugifies alike takes the next suffix
+        // Slugs are persisted on first connect, so a later server whose Name slugifies alike takes the next suffix
         // instead of shifting the original's tool names (and every agent allow-list naming them) onto itself.
         await using var first = await InProcMcpServer.StartAsync("first",
             AIFunctionFactory.Create(GetForecast, "get_forecast"));
@@ -590,7 +589,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_ById_ReconnectsOnlyThatServer()
     {
-        // O-D11: a registration change reconnects the changed server, never every other server.
+        // A registration change reconnects the changed server, never every other server.
         await using var a1 = await InProcMcpServer.StartAsync("a1", AIFunctionFactory.Create(GetForecast, "tool_a"));
         await using var a2 = await InProcMcpServer.StartAsync("a2", AIFunctionFactory.Create(GetForecast, "tool_a"));
         await using var b = await InProcMcpServer.StartAsync("b", AIFunctionFactory.Create(GetForecast, "tool_b"));
@@ -617,7 +616,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task SessionEnds_MarksTheServerErrored_KeepsItsToolsOffered_AndACallFailsTyped()
     {
-        // O-D3: a crashed server stayed "connected" and its calls failed with a bare "Error: Function failed.".
+        // A crashed server must not stay "connected" with its calls failing as a bare "Error: Function failed.".
         await using var server = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         var record = StdioRecord("Weather");
         var factory = new FakeMcpClientFactory((record.Id, server.Client));
@@ -825,8 +824,8 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task ToolListChanged_RelistsAndRepublishesAfterTheDebounce()
     {
-        // O-D9: a server that adds a tool announces it with tools/list_changed; the offer must follow without a toggle.
-        // Pinned to an initialize-era revision: that is where a server sends list_changed unsolicited, as the live round's servers did.
+        // A server that adds a tool announces it with tools/list_changed; the offer must follow without a toggle.
+        // Pinned to an initialize-era revision: that is where a server sends list_changed unsolicited, as third-party servers do.
         var clock = new ManualTimeProvider();
         await using var server = await InProcMcpServer.StartAsync("weather", "2025-11-25", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         var record = StdioRecord("Weather");
@@ -848,7 +847,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task PerConversationScope_GivesEachConversationItsOwnSession_AndCallsWithoutOneShareTheServerSession()
     {
-        // O-D1: one shared session let a stateful server's per-session memory from conversation A block conversation B.
+        // One shared session would let a stateful server's per-session memory from conversation A block conversation B.
         await using var pool = new ServerPool();
         var record = StdioRecord("Counter") with
         {
@@ -890,8 +889,8 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task PerConversationScope_AReplacementSessionNeverReusesARetiredSessionsKey()
     {
-        // Codex review 2026-09-30: the idle sweep unmapped a session before its disposal finished, so a conversation resuming
-        // in that window got a replacement under the SAME key (same jail and execution id), which the old kill then destroyed.
+        // If the idle sweep unmapped a session before its disposal finished, a conversation resuming in that window would
+        // get a replacement under the SAME key (same jail and execution id), which the old kill would then destroy.
         var clock = new ManualTimeProvider();
         await using var pool = new ServerPool();
         var record = StdioRecord("Counter") with
@@ -954,7 +953,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task PerConversationScope_TheIdleSweepNeverRetiresASessionWithACallInFlight()
     {
-        // Codex review 2026-09-30: LastUsedUtc moved only on acquire, so a call longer than the idle window lost its session mid-call.
+        // LastUsedUtc must not move only on acquire, or a call longer than the idle window loses its session mid-call.
         var clock = new ManualTimeProvider();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var pool = new ServerPool();
@@ -1124,8 +1123,8 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task DisposeAsync_DisposesEverySessionConcurrently()
     {
-        // Windows tester round 3 (N-20): sessions were disposed one after another, so each stdio server's graceful-exit wait was
-        // paid in sequence inside the host's shutdown budget. Neither gated dispose can finish until both have started.
+        // Disposing sessions one after another would pay each stdio server's graceful-exit wait in sequence inside the
+        // host's shutdown budget. Neither gated dispose can finish until both have started.
         await using var alpha = await InProcMcpServer.StartAsync("alpha", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var bravo = await InProcMcpServer.StartAsync("bravo", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1213,8 +1212,8 @@ public sealed class McpServerConnectionManagerTests
     {
         var notFound = new HttpRequestException("404", inner: null, HttpStatusCode.NotFound);
 
-        AssertEx.Equal(McpConnectionFailureReason.SessionLost, McpServerConnectionManager.Classify(notFound, hasHeaders: false, inSession: true));
-        AssertEx.Equal(McpConnectionFailureReason.Transport, McpServerConnectionManager.Classify(notFound, hasHeaders: false));
+        AssertEx.Equal(McpConnectionFailureReason.SessionLost, McpFailureDescriber.Classify(notFound, hasHeaders: false, inSession: true));
+        AssertEx.Equal(McpConnectionFailureReason.Transport, McpFailureDescriber.Classify(notFound, hasHeaders: false));
         await Task.CompletedTask;
     }
 
@@ -1255,7 +1254,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RevokeAsync_WithdrawsTheServerAtOnce_EvenWhileAnotherRefreshHoldsTheRefreshGate()
     {
-        // Codex review: disable and delete returned before the detached refresh removed the server, so calls kept reaching it.
+        // Disable and delete must not return before the server is withdrawn, or calls keep reaching it.
         await using var pool = new ServerPool();
         var record = StdioRecord("Counter");
         var other = StdioRecord("Other");
@@ -1353,7 +1352,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task ReconnectAsync_OfAFailedServer_ReportsConnectingBeforeItTakesTheGate()
     {
-        // Codex review: the old error stayed until the gate was taken, and the SPA, polling only while connecting, stopped there.
+        // The old error must not stay until the gate is taken: the SPA, polling only while connecting, would stop there.
         await using var pool = new ServerPool();
         var record = StdioRecord("Counter");
         var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1387,8 +1386,8 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task ReconnectAsync_OfAServerWhosePrimaryExited_ReadsConnectingWhileQueuedBehindItsOwnGate()
     {
-        // Codex review: the exited primary stays on the entry, so clearing the error alone read "connected" with the old tools while the
-        // reconnect was still queued, and the SPA stopped polling before it learned the outcome.
+        // The exited primary stays on the entry, so clearing the error alone would read "connected" with the old tools while the
+        // reconnect is still queued, and the SPA would stop polling before it learned the outcome.
         await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         var record = StdioRecord("Weather");
@@ -1435,7 +1434,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_ById_ConnectsAnotherServer_WhileTheFirstServersSpawnIsParked()
     {
-        // N-51: one server's hanging handshake held a manager-wide gate, so every other enable waited out its timeout.
+        // One server's hanging handshake must not make every other enable wait out its timeout.
         await using var pool = new ServerPool();
         var parked = StdioRecord("Parked");
         var quick = StdioRecord("Quick");

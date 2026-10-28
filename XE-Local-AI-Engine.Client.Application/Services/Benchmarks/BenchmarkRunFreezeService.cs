@@ -275,46 +275,15 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             await LocalGgufModelKindClassifier.ReadDecisionTypeAsync(_ggufModels, primary.ModelName, cancellationToken));
         await EnsureKldBaseMatchesAsync(project, primary.ModelName, cancellationToken);
 
-        // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
+        // The judge is not part of the freeze: its runtime is resolved per attempt, against the policy
         // revision that attempt is judged under, so a judge change never re-freezes a run.
         var agentDefinitionId = request.AgentDefinitionId ?? project.AgentDefinitionId;
-        var definition = await _agentDefinitions.GetByIdAsync(agentDefinitionId, cancellationToken);
-        if (definition is null || definition.Kind != AgentDefinitionKind.Single)
-        {
-            // A variant the request named is the caller's input (400, like the project's own agent check); the project's agent vanishing is eligibility (422).
-            throw request.AgentDefinitionId is { } variantId
-                ? new BenchmarkValidationException($"Agent definition '{variantId}' is not an existing Single agent definition.")
-                : new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
-        }
+        var definition = await GetSingleAgentDefinitionAsync(agentDefinitionId, request.AgentDefinitionId is not null, cancellationToken);
 
         var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
-        // What a freeze fans out over. A project created before task suites has no item rows until something
-        // materializes item 0 from its core task; that lazy backfill is the only remaining reason a freeze writes.
-        var items = await _benchmarkStore.ListTaskItemsAsync(project.Id, cancellationToken);
-        if (items.Count == 0)
-        {
-            items = await _benchmarkStore.GetOrCreateItemsAsync(project.Id, cancellationToken);
-        }
-
-        // A generator is never a run target; the cases it expanded into are.
-        var leafItems = items.Where(static item => item.IsLeaf).OrderBy(static item => item.Index).ToArray();
-        if (leafItems.Length == 0)
-        {
-            throw new BenchmarkValidationException("The project has no runnable task item.");
-        }
-
-        // The second half of the long-context refusal: the project's context window is editable after expansion compared
-        // these numbers, and a probe silently truncated to a smaller window measures the window rather than the model.
-        foreach (var probe in leafItems)
-        {
-            if (BenchmarkNiahCase.TryRead(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
-            {
-                throw new BenchmarkValidationException($"The long-context probe '{probeCase.Label}' asks for {probeCase.ContextTokens} tokens, which does not fit the project's "
-                                                       + $"{project.ContextTokens}-token context window.");
-            }
-        }
+        var leafItems = await LoadLeafItemsAsync(project, cancellationToken);
 
         var repeatIndexes = RepeatIndexes(repeatCount, warmup).ToArray();
         var runCount = leafItems.Length * repeatIndexes.Length;
@@ -339,38 +308,14 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             project.ReasoningBudgetTokens is null ? null : reasoningBudgetEnforceable);
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        // ONE resolution per LEAF ITEM: the task text is the resolver's retrieval query, so the system prompt and skills
-        // may legitimately differ per item, and the dependency set guarding the commit derives from that resolution.
-        var frozenItems = new List<FrozenTaskItem>(leafItems.Length);
-        // Read once per request, the value InvocationRunner would read for the same turn, so the refusal cannot drift from the run.
-        var defaultContextTokens = await _runtimeSettings.GetDefaultContextTokensAsync(cancellationToken);
-        foreach (var item in leafItems)
-        {
-            var itemCoreTask = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span);
-            var resolved = await _agentResolver.ResolveAsync(agentDefinitionId,
-                               primaryModelName,
-                               itemCoreTask,
-                               capabilities.SupportsTools,
-                               honorModelProfile: false,
-                               activeModelIsCloud: false,
-                               cancellationToken)
-                           ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
-            var eligible = _eligibilityPolicy.Apply(resolved);
-            EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, primary.ModelName, primarySampling, defaultContextTokens);
-            var dependencySet = await _dependencies.CaptureAsync(agentDefinitionId,
-                eligible,
-                primaryModelName,
-                judgeModelName: null,
-                cancellationToken);
-            frozenItems.Add(new FrozenTaskItem
-            {
-                Item = item,
-                CoreTask = itemCoreTask,
-                Eligible = eligible,
-                Guard = new FreezeCommitGuard(_dependencies, dependencySet, agentDefinitionId, eligible, primaryModelName, judgeModelName: null),
-                Dependencies = dependencySet
-            });
-        }
+        var frozenItems = await FreezeItemsAsync(project,
+            leafItems,
+            agentDefinitionId,
+            primaryModelName,
+            primary.ModelName,
+            capabilities.SupportsTools,
+            primarySampling,
+            cancellationToken);
 
         // One snapshot per DISTINCT (item, sampling), memoized; answer-variance repeats differ ONLY in the seed.
         // The ITEM half of the key is load-bearing: keyed on the seed alone, every run answers item 0's prompt while its task_item_id column claims otherwise, and nothing fails loudly.
@@ -404,7 +349,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         }
 
         // A repeat group only exists when there is something to group: a plain single run keeps NULL in all three
-        // columns so nothing about the old shape changes for it.
+        // columns, so readers that ignore repeat groups see the same row shape for it as for any run without a group.
         var isGroup = repeatCount > 1 || warmup;
         var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
 
@@ -460,6 +405,103 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             ExpectedProjectVersion = expectedProjectVersion,
             Commands = commands
         };
+    }
+
+    /// <summary>The Single agent definition a freeze runs, or the refusal that names whose input it was.</summary>
+    /// <param name="requestNamedIt">
+    ///     A variant the request named is the caller's input (400, like the project's own agent check); the project's agent vanishing is
+    ///     eligibility (422).
+    /// </param>
+    private async Task<AgentDefinitionRecord> GetSingleAgentDefinitionAsync(Guid agentDefinitionId, bool requestNamedIt, CancellationToken cancellationToken)
+    {
+        var definition = await _agentDefinitions.GetByIdAsync(agentDefinitionId, cancellationToken);
+        if (definition is null || definition.Kind != AgentDefinitionKind.Single)
+        {
+            throw requestNamedIt
+                ? new BenchmarkValidationException($"Agent definition '{agentDefinitionId}' is not an existing Single agent definition.")
+                : new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
+        }
+
+        return definition;
+    }
+
+    /// <summary>The leaf task items a freeze fans out over, in index order, each long-context probe checked against the project's window.</summary>
+    private async Task<BenchmarkTaskItemRecord[]> LoadLeafItemsAsync(BenchmarkProjectRecord project, CancellationToken cancellationToken)
+    {
+        // A project created before task suites has no item rows until something materializes item 0 from its core task; that lazy
+        // backfill is the only remaining reason a freeze writes.
+        var items = await _benchmarkStore.ListTaskItemsAsync(project.Id, cancellationToken);
+        if (items.Count == 0)
+        {
+            items = await _benchmarkStore.GetOrCreateItemsAsync(project.Id, cancellationToken);
+        }
+
+        // A generator is never a run target; the cases it expanded into are.
+        var leafItems = items.Where(static item => item.IsLeaf).OrderBy(static item => item.Index).ToArray();
+        if (leafItems.Length == 0)
+        {
+            throw new BenchmarkValidationException("The project has no runnable task item.");
+        }
+
+        // The second half of the long-context refusal: the project's context window is editable after expansion compared
+        // these numbers, and a probe silently truncated to a smaller window measures the window rather than the model.
+        foreach (var probe in leafItems)
+        {
+            if (BenchmarkNiahCase.TryRead(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
+            {
+                throw new BenchmarkValidationException($"The long-context probe '{probeCase.Label}' asks for {probeCase.ContextTokens} tokens, which does not fit the project's "
+                                                       + $"{project.ContextTokens}-token context window.");
+            }
+        }
+
+        return leafItems;
+    }
+
+    /// <summary>
+    ///     ONE resolution per LEAF ITEM: the task text is the resolver's retrieval query, so the system prompt and skills may legitimately differ
+    ///     per item, and the dependency set guarding the commit derives from that resolution.
+    /// </summary>
+    private async Task<List<FrozenTaskItem>> FreezeItemsAsync(BenchmarkProjectRecord project,
+        BenchmarkTaskItemRecord[] leafItems,
+        Guid agentDefinitionId,
+        string primaryModelName,
+        string resolvedPrimaryModelName,
+        bool supportsTools,
+        BenchmarkSamplingSnapshotV1 primarySampling,
+        CancellationToken cancellationToken)
+    {
+        var frozenItems = new List<FrozenTaskItem>(leafItems.Length);
+        // Read once per request, the value InvocationRunner would read for the same turn, so the refusal cannot drift from the run.
+        var defaultContextTokens = await _runtimeSettings.GetDefaultContextTokensAsync(cancellationToken);
+        foreach (var item in leafItems)
+        {
+            var itemCoreTask = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span);
+            var resolved = await _agentResolver.ResolveAsync(agentDefinitionId,
+                               primaryModelName,
+                               itemCoreTask,
+                               supportsTools,
+                               honorModelProfile: false,
+                               activeModelIsCloud: false,
+                               cancellationToken)
+                           ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
+            var eligible = _eligibilityPolicy.Apply(resolved);
+            EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, resolvedPrimaryModelName, primarySampling, defaultContextTokens);
+            var dependencySet = await _dependencies.CaptureAsync(agentDefinitionId,
+                eligible,
+                primaryModelName,
+                judgeModelName: null,
+                cancellationToken);
+            frozenItems.Add(new FrozenTaskItem
+            {
+                Item = item,
+                CoreTask = itemCoreTask,
+                Eligible = eligible,
+                Guard = new FreezeCommitGuard(_dependencies, dependencySet, agentDefinitionId, eligible, primaryModelName, judgeModelName: null),
+                Dependencies = dependencySet
+            });
+        }
+
+        return frozenItems;
     }
 
     /// <summary>

@@ -9,10 +9,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint tests for the three routes that replace hand-typing a model: the curated catalog, Hugging Face browse
-///     and per-repo inspect. Two properties are load-bearing. Every one of them is operator-gated. And a Hub outage
-///     must degrade to an empty list, never a 500 — the browse panel going red the moment Hugging Face hiccups is
-///     exactly the failure the GGUF lane already learned to avoid.
+///     Endpoint tests for the routes that replace hand-typing a model: curated catalog, Hugging Face browse and
+///     per-repo inspect. All are operator-gated, and a Hub outage degrades to an empty list, never a 500.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ImageModelDiscoveryEndpointTests
@@ -66,7 +64,7 @@ public sealed class ImageModelDiscoveryEndpointTests
         AssertEx.True(sd15.GetProperty("totalSizeBytes").GetInt64() > 0, "The total is what the free-disk pre-flight and the progress bar are computed from.");
         AssertEx.False(sd15.GetProperty("isInstalled").GetBoolean(), "Nothing is installed in a fresh test node.");
 
-        // Unknown is a legitimate verdict on a box whose VRAM could not be probed — the test host is one such box, so
+        // Unknown is a legitimate verdict on a host whose VRAM could not be probed — the test host is one such host, so
         // this asserts the value is one of the four, not which one.
         var verdict = sd15.GetProperty("fitVerdict").GetString();
         AssertEx.True(verdict is "Fits" or "Tight" or "WontFit" or "Unknown", $"Unexpected fit verdict '{verdict}'.");

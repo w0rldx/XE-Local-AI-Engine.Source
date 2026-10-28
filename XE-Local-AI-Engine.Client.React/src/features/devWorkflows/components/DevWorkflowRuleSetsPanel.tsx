@@ -27,7 +27,7 @@ export interface DevWorkflowRuleSetsPanelProps {
 }
 
 /**
- * The rule-set catalogue: the policy documents the resolver injects into a matching node's objective at
+ * The rule-set catalog: the policy documents the resolver injects into a matching node's objective at
  * materialization time.
  *
  * It lives on the LIST page rather than on a work item because a rule set is scoped by `{ projectIds, nodeTypes }` and
@@ -44,7 +44,7 @@ export function DevWorkflowRuleSetsPanel({ projects }: DevWorkflowRuleSetsPanelP
 	const [saveError, setSaveError] = useState<string | undefined>(undefined);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 
-	// The body lives on the single-rule-set read, never on a summary: a catalogue of ten rule sets is otherwise forty
+	// The body lives on the single-rule-set read, never on a summary: a catalog of ten rule sets is otherwise forty
 	// kilobytes of policy prose fetched to render ten names.
 	const editingQuery = useDevWorkflowRuleSet(dialogOpened ? editingId : undefined);
 

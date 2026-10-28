@@ -27,7 +27,7 @@ import type {
 	GraphWorkflowGraphNode,
 	GraphWorkflowNodeKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { agentConfigSchema } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+import { agentConfigSchema } from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
 import { chatGraph, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
 /** The Agent members `agentConfigSchema` needs beyond the one under test. */
@@ -612,7 +612,7 @@ describe("edge conditions", () => {
 
 		const { graph: result } = canvasToGraph(canvas.nodes, canvas.edges);
 		expect(wireEdge(result, "e1").condition).toEqual({ op: "Eq", value: true });
-		// The two spellings are the same branch: the dirty check normalises the token as the server's parser does, so
+		// The two spellings are the same branch: the dirty check normalizes the token as the server's parser does, so
 		// opening a graph stored with `eq` does not report an edit that was never made.
 		const canonical = graph(source.nodes ?? [], [{ ...(source.edges ?? [])[0], condition: { op: "Eq", value: true } }]);
 		expect(graphWorkflowsEqual(canonical, source)).toBe(true);

@@ -43,7 +43,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     [Test]
     public async Task EmbedAsync_WhenModelWidthIsNotTheLegacyDefault_DerivesItAndSucceeds()
     {
-        // Regression: a 1024-wide model (bge-m3/mxbai) previously failed every chunk against the static 768 constant.
+        // Regression: a 1024-wide model (bge-m3/mxbai) must not fail every chunk against a static 768 constant.
         const int width = 1024;
         var provider = new CapturingProvider(Descriptor(ConfiguredName))
         {
@@ -110,8 +110,8 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     [Test]
     public async Task EmbedAsync_WhenServerAnswersWithNon2xx_ReportsRejection_NotMissingModel()
     {
-        // REGRESSION (capture run 2026-08-01): llama-server rejected every full-size chunk with a 500, and the user was
-        // told "No embedding model is installed ... install an embedding GGUF" — while the model was installed, loaded,
+        // REGRESSION: when llama-server rejects every full-size chunk with a 500, the user must not be told
+        // "No embedding model is installed ... install an embedding GGUF" while the model is installed, loaded,
         // and serving on the GPU. A REACHABLE server that answered is a different failure from an absent model, and
         // conflating them sends the user to fix something that is not broken.
         var provider = new CapturingProvider(Descriptor(ConfiguredName))

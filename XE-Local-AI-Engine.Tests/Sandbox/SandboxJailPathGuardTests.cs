@@ -187,7 +187,7 @@ public sealed class SandboxJailPathGuardTests : IDisposable
         await Task.CompletedTask;
     }
 
-    // The growth check is a TOCTOU detector, so pinning it means racing it: there is no seam to synchronise on,
+    // The growth check is a TOCTOU detector, so pinning it means racing it: there is no seam to synchronize on,
     // because the whole point is to catch a writer the reader cannot see. The read is therefore given a
     // multi-megabyte file — the guard sizes it, copies that many bytes, then probes one byte past the sized length,
     // so the window spans milliseconds — while an appender spins for the whole read. Each attempt is retried a few

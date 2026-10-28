@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The write path an endpoint calls, and the side effects it owes the rest of the node. A bare store write leaves
-///     the model unroutable, possibly not tool-capable, and — after a key edit — still being sent to with the previous
-///     key from a cached chat client.
+///     The write path an endpoint calls and the side effects it owes the node: a bare store write leaves the model
+///     unroutable, possibly not tool-capable, and, after a key edit, still sent the old key by a cached chat client.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalProviderAdministrationServiceTests

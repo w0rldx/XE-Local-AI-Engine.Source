@@ -8,14 +8,14 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Both interceptor directions for the four encrypted task-item payloads. A column registered for encryption but
-///     not for decryption (or the reverse) round-trips as garbage rather than failing loudly, so each is asserted as
-///     ciphertext at rest AND as plaintext after a fresh read — and the per-column AAD is proven by substitution.
-///     <para>
-///         A verifier config carries expected answers and a generator config carries the parameters that produce them,
-///         which is why neither is plaintext and why neither may be presentable as the prompt.
-///     </para>
+///     Both interceptor directions for the four encrypted task-item payloads: each is asserted as ciphertext at rest
+///     AND plaintext on a fresh read (a one-way registration round-trips as garbage), and the per-column AAD is proven
+///     by substitution.
 /// </summary>
+/// <remarks>
+///     A verifier config carries expected answers and a generator config carries the parameters that produce them,
+///     which is why neither is plaintext and why neither may be presentable as the prompt.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class BenchmarkTaskItemEncryptionTests : IDisposable
 {

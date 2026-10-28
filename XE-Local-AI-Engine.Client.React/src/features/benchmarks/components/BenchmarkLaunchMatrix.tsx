@@ -14,7 +14,7 @@ import type {
 import { benchmarkBaseModelLabel, benchmarkKvCacheTypes, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkRunEstimate, formatBenchmarkDuration } from "@/features/benchmarks/models/BenchmarkRunEstimate";
 import { benchmarkTaskItemLimits } from "@/features/benchmarks/models/BenchmarkTaskItems";
-import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
+import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarkRunMutations";
 
 /** The picker's "Auto" entry is a UI-only value; it is sent as an omitted `kvCacheType`, which the node resolves. */
 const autoKvCacheType = "auto";

@@ -5,9 +5,8 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     What an application may do, and what counts as asking for more. The grants are kept per service because a
-///     union hides the two widenings at the bottom of this file: a capability added to a service whose sibling
-///     already had it, and a second service becoming writable.
+///     What an application may do, and what counts as asking for more. Grants are kept per service because a union
+///     hides the two widenings at the bottom of this file: a sibling's capability added, a second writable service.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalAppEffectivePermissionsTests

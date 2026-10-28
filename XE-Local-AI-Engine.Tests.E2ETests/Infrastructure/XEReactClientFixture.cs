@@ -15,7 +15,7 @@ using TUnit.Core.Interfaces;
 ///     shell lives at the web-root rather than under an <c>/app</c> prefix.
 ///     No vite-preview server is started — the .NET host serves the SPA.
 ///     <para>
-///         Concurrency safety: <see cref="BuildLock" /> serialises all install + build invocations
+///         Concurrency safety: <see cref="BuildLock" /> serializes all install + build invocations
 ///         process-wide so parallel fixture instances never touch the shared React client directory at
 ///         the same time. <c>pnpm install --frozen-lockfile</c> is non-destructive (does not wipe
 ///         node_modules) and idempotent when the lockfile is already satisfied.
@@ -24,7 +24,7 @@ using TUnit.Core.Interfaces;
 public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
 {
     /// <summary>
-    ///     Process-wide lock that serialises pnpm install + build so concurrent fixture instances
+    ///     Process-wide lock that serializes pnpm install + build so concurrent fixture instances
     ///     never race on the shared React client directory.
     /// </summary>
     private static readonly SemaphoreSlim BuildLock = new(initialCount: 1, maxCount: 1);
@@ -68,13 +68,13 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
 
         var clientDir = FindReactClientDirectory();
 
-        // Serialise install + build across all concurrent fixture instances so pnpm never
+        // Serialize install + build across all concurrent fixture instances so pnpm never
         // races on the shared React client directory.
         await BuildLock.WaitAsync();
         try
         {
             // Install with --frozen-lockfile: non-destructive (does not wipe node_modules),
-            // idempotent when already installed, and honours the committed pnpm-lock.yaml.
+            // idempotent when already installed, and honors the committed pnpm-lock.yaml.
             // One retry handles transient ENOENT / pnpm store contention.
             try
             {
@@ -87,8 +87,8 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             }
 
             // "build:e2e" is a bare `vite build`; the default "build" script prefixes it with tsc --noEmit +
-            // biome + stylelint. The fixture only consumes dist/, never the lint output, so paying for it here was
-            // 20-45s of duplicated work per run. NOTE: this means a type error no longer fails at fixture init; the
+            // biome + stylelint. The fixture only consumes dist/, never the lint output, so paying for it here is
+            // 20-45s of duplicated work per run. NOTE: a type error therefore does not fail at fixture init; the
             // frontend lint gate is solely `pnpm run lint` (run it before cutting an RC).
             await RunProcessAsync("pnpm",
                 "run build:e2e",
@@ -183,8 +183,8 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         //   `pnpm.CMD`, `pnpm.ps1` — with the real binary content-addressed under the store at a
         //   path that changes with every pnpm version, so there is no `pnpm.exe` on PATH to find.
         //   Starting "pnpm" therefore threw Win32Exception "The system cannot find the file
-        //   specified" inside InitializeAsync, before a single test ran, on a box where
-        //   `pnpm --version` works perfectly from any shell — measured 2026-08-03, pnpm 11.18.0.
+        //   specified" inside InitializeAsync, before a single test ran, on a host where
+        //   `pnpm --version` works perfectly from any shell (seen with pnpm 11.18.0).
         //   Resolving the shim's full path is not enough either: CreateProcessW cannot execute a
         //   .CMD directly. cmd.exe is what makes the shim runnable, and it keeps stdout/stderr
         //   redirection working (UseShellExecute = true would not). This mirrors the guard the

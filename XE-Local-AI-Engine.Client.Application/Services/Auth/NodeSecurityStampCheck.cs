@@ -24,7 +24,7 @@ public sealed class NodeSecurityStampCheck
     }
 
     /// <summary>
-    ///     Why the validated token behind <paramref name="principal" /> is no longer honoured, or <see langword="null" /> when
+    ///     Why the validated token behind <paramref name="principal" /> is no longer honored, or <see langword="null" /> when
     ///     it still is. One check for the JWT events (every request and hub handshake) and the hub filter (every invocation).
     /// </summary>
     public async Task<string?> FindRevocationAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)

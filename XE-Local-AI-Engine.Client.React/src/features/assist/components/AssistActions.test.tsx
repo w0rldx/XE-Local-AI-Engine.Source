@@ -18,10 +18,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 }));
 // Ollama is not configured on these nodes, so its in-memory list is empty; the llama.cpp residents come from the
 // running-models poll, which each test sets. Both polls would otherwise issue real requests.
-vi.mock("@/features/loaded-models/queries/useLoadedModels", () => ({
+vi.mock("@/core/loaded-models/queries/useLoadedModels", () => ({
 	useLoadedModels: () => ({ data: { isAvailable: true, ollamaConfigured: false, error: null, models: [] } }),
 }));
-vi.mock("@/features/loaded-models/queries/useRunningModels", () => ({
+vi.mock("@/core/loaded-models/queries/useRunningModels", () => ({
 	useRunningModels: () => runningModelsState,
 }));
 

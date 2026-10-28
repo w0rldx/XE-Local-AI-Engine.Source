@@ -42,7 +42,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// <summary>The warm restore's fresh home, tmp and dotnet directories, removed once it finishes.</summary>
     private const string WarmDirectoryName = "warm";
 
-    /// <summary>The oldest git Development runs on: the first that honours <c>GIT_CONFIG_GLOBAL</c>.</summary>
+    /// <summary>The oldest git Development runs on: the first that honors <c>GIT_CONFIG_GLOBAL</c>.</summary>
     private const string MinimumGitVersion = "2.32";
 
     /// <summary>The in-sandbox root the per-task runtime directories are requested at.</summary>
@@ -97,7 +97,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// </summary>
     private static readonly string[] ScratchDirectoryNames = ["home", "tmp", "dotnet"];
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     The MSBuild and NuGet files whose discovery walks <em>up</em> from a project directory, written empty one
@@ -500,7 +500,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     /// <summary>The object format <c>rev-parse --show-object-format</c> printed, refusing anything but <c>sha1</c> or <c>sha256</c>.</summary>
     /// <remarks>
-    ///     Git before 2.29 echoes the unknown option and exits 0. Development needs 2.32 anyway, the first git that honours
+    ///     Git before 2.29 echoes the unknown option and exits 0. Development needs 2.32 anyway, the first git that honors
     ///     <c>GIT_CONFIG_GLOBAL</c>, so the refusal names that floor rather than letting a later init fail obscurely.
     /// </remarks>
     internal static string ParseObjectFormat(string output)
@@ -561,7 +561,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// </summary>
     /// <remarks>
     ///     Capability-gated, a real limitation rather than defensive coding: a backend fails a request it cannot
-    ///     honour CLOSED, so an unconditional <c>None</c> would remove Development Mode from every node resolved to
+    ///     honor CLOSED, so an unconditional <c>None</c> would remove Development Mode from every node resolved to
     ///     the process backend, where the attempt therefore still has egress — reported as the posture SERVED.
     ///     <see cref="DevelopmentSandboxOptions.RequireEgressDenial" /> or the <c>high</c> sandbox security profile makes denial a
     ///     precondition instead, and <see cref="SandboxSecurityProfilePolicy" /> holds the decision, so no consumer can stop matching the backend.

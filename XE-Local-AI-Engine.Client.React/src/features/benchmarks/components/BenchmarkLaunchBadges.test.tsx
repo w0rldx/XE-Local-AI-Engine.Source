@@ -43,7 +43,7 @@ describe("BenchmarkLaunchBadges", () => {
 		expect(screen.getByText("FA auto")).toBeTruthy();
 	});
 
-	// A source the node never recorded is unknown, not explicit — labelling it "explicit" would invent provenance.
+	// A source the node never recorded is unknown, not explicit — labeling it "explicit" would invent provenance.
 	it("omits the source suffix when the source was not recorded", () => {
 		renderBadges(facts({ kvCacheType: "f16", kvCacheTypeSource: null }));
 

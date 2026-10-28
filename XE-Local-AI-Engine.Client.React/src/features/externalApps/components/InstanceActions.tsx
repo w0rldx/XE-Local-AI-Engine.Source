@@ -108,7 +108,7 @@ export function InstanceActions({ instance, onUpdate, compact = false, "data-tes
 	 */
 	const confirmThen = (kind: "resetConfirm" | "uninstallConfirm", action: (version: number) => void): void => {
 		// Through the same gate as every other action, invoked immediately: a row with no version never opens a dialog
-		// that it could not honour.
+		// that it could not honor.
 		withVersion((version) => {
 			confirm({
 				title: t(`${keyPrefix}.${kind}.title`, { name }),

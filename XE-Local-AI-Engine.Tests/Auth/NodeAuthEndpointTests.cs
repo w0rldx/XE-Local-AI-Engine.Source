@@ -457,7 +457,7 @@ public sealed class NodeAuthEndpointTests
     // Pins the deliberate shape behind the OpenAPI spec listing only `password` as required on the login request:
     // `NodeLoginRequest.Email` is nullable on purpose, and `NodeAuthService.ResolveLoginUserAsync` resolves the single
     // SetupCompleted user when no email is supplied.
-    /// <summary>R1-08: a non-ASCII address the setup form accepts must set the node up and sign in, not fail Identity's user-name rule.</summary>
+    /// <summary>A non-ASCII address the setup form accepts must set the node up and sign in, not fail Identity's user-name rule.</summary>
     [Test]
     public async Task SetupAndLogin_WithANonAsciiEmail_Succeed()
     {

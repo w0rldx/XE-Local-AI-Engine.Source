@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     Runtime verification of the Linux process-group tree-kill path — the Linux branch a WSL2/Linux
-///     environment CAN exercise, unlike the Windows Job Object path. Spawns a real shell under <c>setsid</c> that forks a
-///     child, then tree-kills via the shared <see cref="LinuxProcessGroupHandle" /> and asserts NO descendant survives.
+///     Runtime check of the Linux process-group tree-kill path, the branch a Linux environment can exercise: a real
+///     shell under <c>setsid</c> forks a child, the shared <see cref="LinuxProcessGroupHandle" /> tree-kills it, and NO
+///     descendant survives.
 /// </summary>
 /// <remarks>
 ///     The Windows Job Object branch is implemented to the <c>dotnet-pinvoke</c> standard but cannot run here — it is

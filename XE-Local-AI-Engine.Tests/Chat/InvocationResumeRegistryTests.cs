@@ -322,7 +322,7 @@ public sealed class InvocationResumeRegistryTests
     [Test]
     public async Task ResumeAsync_WhenPendingQuestion_ReplaysQuestionRequestedOnceWithTheQuestions()
     {
-        // A mid-turn reload used to lose the prompt permanently — question-requested is emitted from one live
+        // A mid-turn reload must not lose the prompt — question-requested is emitted from one live
         // subscription and is never accumulated into parts[], so the pending slot on InvocationState is the only
         // surface a reconnecting browser has. The turn cannot proceed without an answer, so losing it wastes the turn.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -800,8 +800,8 @@ public sealed class InvocationResumeRegistryTests
     [Test]
     public async Task ResumeAsync_WhenLoadingThenGenerating_EmitsTheGeneratingPhaseBeforeAnyContent()
     {
-        // The transition a reconnect used to lose entirely, which left the client's elapsed timer counting until the
-        // first content delta arrived.
+        // The transition a reconnect must not lose, or the client's elapsed timer keeps counting until the
+        // first content delta arrives.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();

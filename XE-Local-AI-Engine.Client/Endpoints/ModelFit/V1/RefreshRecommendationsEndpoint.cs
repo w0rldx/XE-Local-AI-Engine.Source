@@ -39,7 +39,7 @@ public sealed class RefreshRecommendationsEndpoint : Endpoint<RefreshRecommendat
     public override async Task HandleAsync(RefreshRecommendationsRequest req, CancellationToken ct)
     {
         // Reject an unsupported use-case override with a 400 BEFORE anything fires: the override widens to a validated enum only (the same six llmfit-supported
-        // values the run validator enforces), never free text; an empty/null UseCase is a no-override refresh. The trigger re-checks it as a defence-in-depth boundary.
+        // values the run validator enforces), never free text; an empty/null UseCase is a no-override refresh. The trigger re-checks it as a defense-in-depth boundary.
         if (!string.IsNullOrWhiteSpace(req.UseCase) && !ModelFitRequestValidator.AllowedUseCases.Contains(req.UseCase))
         {
             AddError("Use case is not supported.");

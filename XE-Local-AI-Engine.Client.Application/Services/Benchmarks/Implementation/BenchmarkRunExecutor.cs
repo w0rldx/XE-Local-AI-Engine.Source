@@ -466,7 +466,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
         new()
         {
             // The sampler is float all the way to the wire; the snapshot keeps the double so the run's own column
-            // does not record a widening artefact.
+            // does not record a widening artifact.
             Temperature = (float?)sampling.Temperature,
             TopP = sampling.TopP,
             TopK = sampling.TopK,

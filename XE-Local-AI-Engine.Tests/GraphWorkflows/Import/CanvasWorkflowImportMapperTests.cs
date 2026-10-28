@@ -96,7 +96,7 @@ public sealed class CanvasWorkflowImportMapperTests
 
     /// <summary>
     ///     A Debug node was a side-event tap that forwarded its input unchanged, so eliding it and rewiring the edge
-    ///     around it preserves the run's meaning exactly. Anything less faithful would be a behaviour change smuggled
+    ///     around it preserves the run's meaning exactly. Anything less faithful would be a behavior change smuggled
     ///     into a data migration.
     /// </summary>
     [Test]
@@ -299,7 +299,7 @@ public sealed class CanvasWorkflowImportMapperTests
     ///     Guard 2 has no canvas that can reach it: this mapper emits <c>joinPolicy</c> on no node of any kind, so
     ///     every imported successor takes the parser's default <c>All</c> and an <c>Any</c> successor cannot be
     ///     produced by an import. The guard is stated in the importer anyway, and this is the pin that fails the day a
-    ///     mapped node starts declaring a policy — at which point the guard needs a behavioural test of its own.
+    ///     mapped node starts declaring a policy — at which point the guard needs a behavioral test of its own.
     /// </summary>
     [Test]
     [Arguments(CanvasGraphs.WithPause)]

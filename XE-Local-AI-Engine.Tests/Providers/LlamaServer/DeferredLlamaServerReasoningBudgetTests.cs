@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.ClientModel;
 using System.ClientModel.Primitives;
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OpenAI;
@@ -29,7 +27,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
     [Arguments(24576)]
     public async Task ApplyReasoningBudget_MarkerPresent_InjectsTheBudgetIntoWireBody(int budgetTokens)
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -52,7 +50,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
     [Test]
     public async Task ApplyReasoningBudget_MarkerAbsent_BodyHasNoBudget()
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -73,7 +71,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
     [Test]
     public async Task ReasoningBudgetMarker_WithoutThisClient_NeverReachesTheWire()
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -110,7 +108,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
         // explicit max-output cap) an unclamped 24576 is a budget the model can never spend and still answer — the
         // very "thought until the window ran out, returned nothing" failure the budget exists to prevent. Neither
         // marker call site knows the window, so the clamp lives here, where num_ctx and MaxOutputTokens both exist.
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -138,7 +136,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
     }
 
     /// <summary>
-    ///     Model-matrix F2: the node's default limit is the budget plus the answer cap, so halving it would cut "high" from
+    ///     The node's default limit is the budget plus the answer cap, so halving it would cut "high" from
     ///     24576 to 20480; only the window clamp applies. An explicit limit (the theory above) still halves.
     /// </summary>
     [Test]
@@ -146,7 +144,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
     [Arguments(4096, 4096, 2048)]
     public async Task ApplyReasoningBudget_UnderTheDefaultLimit_KeepsTheBudgetAndOnlyTheWindowClamps(int numCtx, int defaultLimit, int expected)
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
         var options = new ChatOptions
@@ -177,29 +175,5 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
         };
         var client = new OpenAIClient(new ApiKeyCredential("ignored"), options);
         return client.GetChatClient("test-model").AsIChatClient();
-    }
-
-    /// <summary>Captures the outbound request body and returns a canned OpenAI chat completion so no network is hit.</summary>
-    private sealed class CapturingHandler : HttpMessageHandler
-    {
-        private const string CannedCompletion =
-            "{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"test-model\","
-            + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],"
-            + "\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}";
-
-        public string? CapturedBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedCompletion, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }

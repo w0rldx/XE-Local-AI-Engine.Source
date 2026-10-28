@@ -5,14 +5,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins that two distinct model names can never share a weights directory.
-///     <para>
-///         The readable half of the segment is a lossy sanitization — every character outside <c>[A-Za-z0-9._-]</c>
-///         collapses to <c>_</c> — so <c>owner/model</c> and <c>owner_model</c> both reduce to <c>owner_model</c>. That
-///         is not cosmetic: a shared directory means the second install overwrites the first's weights whenever their
-///         file-sets share a leaf name (and they usually do — <c>vae.safetensors</c>, <c>model.safetensors</c>), and
-///         deleting either model removes the file the other still points at.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The readable half of the segment is a lossy sanitization (every character outside <c>[A-Za-z0-9._-]</c> becomes
+///     <c>_</c>), so <c>owner/model</c> and <c>owner_model</c> both reduce to <c>owner_model</c>. A shared directory
+///     lets the second install overwrite the first's weights on a shared leaf name (<c>vae.safetensors</c>,
+///     <c>model.safetensors</c>), and deleting either model removes the file the other still points at.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ImageModelDirectorySegmentTests
 {

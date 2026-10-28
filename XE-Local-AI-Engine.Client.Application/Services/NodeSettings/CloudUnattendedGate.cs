@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 /// <remarks>
 ///     A stateless function over <see cref="INodeRuntimeSettings" />, needing no interface, lifetime or registration
 ///     (same shape as <see cref="ExternalAccessGate" />). It is the <c>leavesNode &amp;&amp; !grant &amp;&amp; !switch</c>
-///     rule of <see cref="ExternalProviderCloudGrants" /> for <see cref="ExternalProviderCloudGrants.UnattendedRuns" />;
-///     every caller used to spell it inline, and a later change to the rule had to be made five times.
+///     rule of <see cref="ExternalProviderCloudGrants" /> for <see cref="ExternalProviderCloudGrants.UnattendedRuns" />.
+///     This is its one home, so a change to the rule is made once.
 /// </remarks>
 public static class CloudUnattendedGate
 {

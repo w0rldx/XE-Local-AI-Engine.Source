@@ -1,5 +1,5 @@
 // The six 409 discriminators this module can receive, read off the thrown `ApiError` rather than off a message string.
-// A conflictType that stops being recognised here does not throw — it degrades to a generic toast and the UI keeps
+// A conflictType that stops being recognized here does not throw — it degrades to a generic toast and the UI keeps
 // offering an action the server has already refused, so the member names are asserted literally.
 
 import { describe, expect, it } from "vitest";

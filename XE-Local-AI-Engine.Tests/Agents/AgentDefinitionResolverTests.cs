@@ -62,7 +62,7 @@ public sealed class AgentDefinitionResolverTests
     [Arguments(true, false)]
     public async Task ResolveAsync_WhenTheAgentListsRunPython_FlagsItWithheldOnlyWhileComputeIsOff(bool computeEnabled, bool expectedWithheld)
     {
-        // R4-05 review: the offer drops run_python while compute is off, and the flag is what turns that into a notice.
+        // The offer drops run_python while compute is off, and the flag is what turns that into a notice.
         var resolver = BuildResolver(out var store, out _, onGetOffered: null, [OfferTool("GetCurrentTime")], computeEnabled: computeEnabled);
         var definition = CreateDefinition(allowedTools: [ComputeToolDefinition.ToolName, "GetCurrentTime"]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
@@ -666,11 +666,10 @@ public sealed class AgentDefinitionResolverTests
     public async Task ResolveAsync_ProjectsOfferedMcpTool_AndPerAgentAutoExecuteCannotLoosenApproval()
     {
         // MCP tool projection under TIGHTEN-ONLY compose: an MCP tool is in the offer approval-ON by default (its
-        // catalog RequiresApproval=true). A per-agent ToolApprovals[mcpTool]=false can NO LONGER loosen it — the 3-tier
+        // catalog RequiresApproval=true). A per-agent ToolApprovals[mcpTool]=false can NOT loosen it — the 3-tier
         // compose is `nodePolicy(catalogDefault) || (perAgent && perAgentValue)`, so a per-agent false is a no-op and the
-        // resolved offer flag stays true. (Before the tighten-only compose was introduced, this test asserted the flag flipped to false. The MCP executable
-        // was ALWAYS wrapped in ApprovalRequiredAIFunction at McpServerConnectionManager regardless of this flag, so no
-        // real execution loosening is lost; the flag now correctly matches that structural floor.)
+        // resolved offer flag stays true. (The MCP executable is ALWAYS wrapped in ApprovalRequiredAIFunction at
+        // McpServerConnectionManager regardless of this flag, so the flag matches that structural floor.)
         const string mcpTool = "mcp__weather__get_forecast";
         var resolver = CreateResolver(out var store,
             OfferTool(mcpTool, requiresApproval: true),
@@ -784,7 +783,7 @@ public sealed class AgentDefinitionResolverTests
     [Test]
     public async Task ResolveAsync_WhenModelHasToolsCapability_KeepsOfferedTools()
     {
-        // Contrast: the same setup with supportsTools=true keeps the name-gated projection (today's behaviour).
+        // Contrast: the same setup with supportsTools=true keeps the name-gated projection (today's behavior).
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
@@ -1379,7 +1378,7 @@ public sealed class AgentDefinitionResolverTests
     public async Task ConfigHash_WhenInjectedMemoryChanges_ChangesDigest()
     {
         // Resume-safety: injected memory rides ResolvedSystemPrompt, which is a config-hash input. Changing WHICH memory
-        // is injected (different behaviour text) must move the digest — that is the intended, correct behaviour and proves
+        // is injected (different behavior text) must move the digest — that is the intended, correct behavior and proves
         // memory is genuinely in the hashed prompt (not bypassing it via a per-invocation provider).
         var builder = new LocalChatRuntimePackageBuilder();
         var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));

@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The usage-cost rate resolver precedence: local runtimes (llama.cpp / Ollama) are always free; otherwise
-///     an operator override for the model name wins, then the built-in default table, then zero (unknown / unpriced).
-///     Model names match case-insensitively; the constructor defensively drops blank keys and negative / non-finite rates.
+///     Usage-cost rate precedence: local runtimes (llama.cpp / Ollama) are free; otherwise an operator override
+///     wins, then the built-in table, then zero. Names match case-insensitively; blank keys and negative or
+///     non-finite rates are dropped.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class UsageRateResolverTests

@@ -12,9 +12,8 @@ public sealed class OrchestrationConfigHashTests
     [Test]
     public void Compute_WhenSpecIsNull_IsByteIdenticalToPreP5Vector()
     {
-        // The cross-repo round-trip guard: a null orchestration spec MUST yield the exact legacy canonical JSON and
-        // digest the server MixedEnvelopeConfigHashService reproduces. If this drifts, every encrypted invocation
-        // fails runtime-package-config-hash-mismatch.
+        // Cross-repo guard: a null orchestration spec MUST yield the exact legacy canonical JSON and digest the server
+        // MixedEnvelopeConfigHashService reproduces, or encrypted runs fail runtime-package-config-hash-mismatch.
         var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [

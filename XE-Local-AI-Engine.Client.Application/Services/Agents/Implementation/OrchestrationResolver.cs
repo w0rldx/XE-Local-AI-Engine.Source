@@ -125,7 +125,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         var edges = BuildEdges(orchestrator, topology, participants);
 
-        // The parser already fails an over-ceiling turn cap closed; this clamp is defence in depth for a topology
+        // The parser already fails an over-ceiling turn cap closed; this clamp is defense in depth for a topology
         // built without going through it. A non-positive cap still falls back to the resolver default.
         var maxTurnsPerAgent = topology.MaxTurnsPerAgent > 0
             ? Math.Min(topology.MaxTurnsPerAgent, OrchestrationTopologyJson.MaxTurnsPerAgentCeiling)

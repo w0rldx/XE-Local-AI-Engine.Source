@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for <see cref="LlamaCppRuntimeTag.IsUpdateAvailable" />. An update is offered only when the installed
-///     <c>b&lt;number&gt;</c> tag is strictly OLDER than the recommended one — a string inequality (the prior bug) wrongly
-///     advertised a downgrade as an update when the installed tag was newer than the recommended one.
+///     Unit tests for <see cref="LlamaCppRuntimeTag.IsUpdateAvailable" />: an update is offered only when the installed
+///     <c>b&lt;number&gt;</c> tag is strictly OLDER than the recommended one, so a recommended tag older than the
+///     installed one is never advertised as an update.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaCppRuntimeTagTests

@@ -260,7 +260,7 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         // Regression guard: on a platform where OS-native encrypted token-cache persistence is unavailable, the
         // persisted AuthenticationRecord alone has nothing to silently refresh from. The sign-in coordinator's live
-        // credential cache is the fix — a matching cache entry must let Create() succeed even when the persisted
+        // credential cache covers that — a matching cache entry must let Create() succeed even when the persisted
         // record store is empty (proving the factory does not depend solely on IEntraTokenCacheStore).
         var connection = CreateEntraConnection(signInMethod: EntraSignInMethod.DeviceCode);
         var liveCredentialCache = new EntraLiveCredentialCache();

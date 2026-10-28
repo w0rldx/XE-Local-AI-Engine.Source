@@ -30,7 +30,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// <remarks>
 ///     It drives the SAME seam the scheduler's <c>run-agent</c> template uses — <see cref="IAgentDefinitionResolver" />
 ///     + <see cref="ILocalChatRuntimePackageBuilder" /> + <see cref="InvocationExecutionContext.CreatePlain" /> +
-///     <see cref="IInvocationRunner" /> — with <c>IsUnattended: true</c>, serialised behind the node's single
+///     <see cref="IInvocationRunner" /> — with <c>IsUnattended: true</c>, serialized behind the node's single
 ///     invocation lease, and introduces no second runtime path. It diverges from the scheduler in three ways, each
 ///     with its reason: see docs/adr/0008-external-integrations.md ("Invariants the coordinator enforces").
 /// </remarks>
@@ -229,13 +229,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     }
 
     /// <summary>
-    ///     ONE channel reader, but processing is NOT serialised on it: each id is dispatched, and the node's invocation
-    ///     lease — a <see cref="SemaphoreSlim" /> granting in wait order — is what serialises the runs.
+    ///     ONE channel reader, but processing is NOT serialized on it: each id is dispatched, and the node's invocation
+    ///     lease — a <see cref="SemaphoreSlim" /> granting in wait order — is what serializes the runs.
     /// </summary>
     /// <remarks>
     ///     Awaiting <see cref="ProcessOneAsync" /> here would hold the next id in the channel for the whole of the
     ///     current run, and every deadline control plus the sole writer of <c>Queued</c> lives inside that method, so
-    ///     ADR 0008 R5-2's queue-age bound would measure the run ahead instead of the wait. The live-task count is bounded by
+    ///     ADR 0008's queue-age bound would measure the run ahead instead of the wait. The live-task count is bounded by
     ///     the admission cap, because each task holds a non-terminal row against it. See
     ///     docs/adr/0008-external-integrations.md ("Invariants the coordinator enforces").
     /// </remarks>
@@ -352,7 +352,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 await CancelGraphRunAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>(), graphRunId);
             }
 
-            // ADR 0008 R3-1: seed the ring from the highest sequence this execution can PROVE — its watermark, or a persisted event above it — so the sweep's terminal
+            // ADR 0008: seed the ring from the highest sequence this execution can PROVE — its watermark, or a persisted event above it — so the sweep's terminal
             // event continues its OWN numbering; seeding below a lost-race event collides with an existing (execution_id, sequence) row on every restart.
             var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken);
             if (!_buffer.TryCreate(row.Id, seedSequence))
@@ -417,7 +417,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
     {
         var executionId = execution.Id;
 
-        // 1. Everything the run needs. A missing conversation or seed is the ONE shape ADR 0008 R4-1's forward-running failure leaves behind — the execution row
+        // 1. Everything the run needs. A missing conversation or seed is the ONE shape ADR 0008's forward-running failure leaves behind — the execution row
         //    commits before they are written — and it is failed, never repaired: the seed text is not recoverable, and a run against an empty seed is worse.
         var sessions = services.GetRequiredService<IIntegrationSessionStore>();
         var session = await sessions.GetByIdAsync(execution.SessionId, runToken);
@@ -434,7 +434,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // The branch point (ADR 0008, amendment 2026-10-15): a graph target skips every agent step below — model, locality, kind, lease, capacity.
+        // The branch point (ADR 0008): a graph target skips every agent step below — model, locality, kind, lease, capacity.
         if (trigger.TargetKind == IntegrationTargetKind.Graph)
         {
             await ExecuteGraphAsync(services, context, execution, session, trigger, runToken, cancelToken, stoppingToken);
@@ -464,7 +464,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         var persistence = services.GetRequiredService<INodeChatPersistenceService>();
 
         // 2. A cancel that landed before this row was picked up. A row that already READS Cancelled was terminalized by
-        //    the cancel path, which owns both artefacts; this one appends nothing.
+        //    the cancel path, which owns both artifacts; this one appends nothing.
         if (execution.Status == IntegrationExecutionStatus.Cancelled)
         {
             return;
@@ -581,7 +581,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             : null;
 
         //     And the session's own tool history: a caller-managed continuation replays each completed call and its result as real function content, so the
-        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (ADR 0008 R6-1).
+        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (ADR 0008).
         var conversationContext = ConversationContextBuilder.Build(history,
             seed,
             selectedPath: null,
@@ -592,7 +592,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             toolResultExcerptChars);
 
         // 5. The headless package, and emit_output unioned in AFTER the definition's offer ∩ AllowedToolNames and BEFORE the agent is constructed — the seam
-        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (ADR 0008 R4-5).
+        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (ADR 0008).
         var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
         var offerProvider = services.GetRequiredService<ILocalToolOfferProvider>();
         AllowedToolDto[] offeredTools =
@@ -740,7 +740,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // ADR 0008 R5-2: the lease wait runs under the remaining budget — the dispatcher's first act is to await its SemaphoreSlim on this token, so the expiry
+        // ADR 0008: the lease wait runs under the remaining budget — the dispatcher's first act is to await its SemaphoreSlim on this token, so the expiry
         // surfaces as an OperationCanceledException with no lease held. The token goes to the lease request and NOWHERE else: the run must not inherit it.
         using var queueDeadline = CancellationTokenSource.CreateLinkedTokenSource(runToken);
         queueDeadline.CancelAfter(TimeSpan.FromMilliseconds(remaining));
@@ -884,7 +884,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 context.Version = reloaded.Version;
 
                 // The likely reason this CAS lost: the cancel path stamps its durable stop marker as a NON-terminal status update, which bumps the version
-                // without terminalizing. The marker is honoured rather than ignored, or a caller holding a cancel 202 is shown a failure it never caused.
+                // without terminalizing. The marker is honored rather than ignored, or a caller holding a cancel 202 is shown a failure it never caused.
                 if (reloaded.StopRequestedAtUtc is not null)
                 {
                     await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
@@ -1114,12 +1114,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             failureSummary = "The execution's tool events could not be persisted.";
         }
 
-        // 10. ONE transaction (ADR 0008 R5-4): the status CAS, the terminal event at the reserved sequence, and both watermarks. Never Append for a terminal
+        // 10. ONE transaction (ADR 0008): the status CAS, the terminal event at the reserved sequence, and both watermarks. Never Append for a terminal
         //     event — it publishes before the row exists — and never a CAS plus a separate insert: startup recovery scans only NON-terminal rows.
         if (!await TerminalizeAsync(context, RunningOnly, status, failureCategory, failureSummary))
         {
             // A Running row that lost every bounded attempt is stranded: nothing else picks it up, and its admission slot is held until the process restarts.
-            // The fault path re-reads over EVERY non-terminal status, honours the stop marker it finds, and returns at once if another writer closed the row.
+            // The fault path re-reads over EVERY non-terminal status, honors the stop marker it finds, and returns at once if another writer closed the row.
             await TerminalizeFromFaultAsync(context, status, failureCategory, failureSummary);
         }
     }
@@ -1147,7 +1147,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 SessionId = session.Id,
                 Status = null,
                 // One MORE than the cap: the current execution occupies a row here and is skipped below, so asking
-                // for exactly MaxPayloads would replay seven prior outputs where ADR 0008 R4-9(b) promises eight.
+                // for exactly MaxPayloads would replay seven prior outputs where ADR 0008 promises eight.
                 Limit = IntegrationPriorOutputsComposer.MaxPayloads + 1,
                 Offset = 0
             },

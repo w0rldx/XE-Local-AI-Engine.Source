@@ -33,7 +33,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 [Category(TestCategories.Integration)]
 public sealed class WorkSessionStepLoopTests
 {
-    /// <summary>An approval-required tool that is NOT <c>ask_user</c>: FU3-3 outlives ask_user's removal from workflow sessions.</summary>
+    /// <summary>An approval-required tool that is NOT <c>ask_user</c>, which workflow sessions do not offer.</summary>
     private const string RunCommandToolName = "run_command";
 
     /// <summary>Web defaults, matching the camelCase convention the supervisor writes the consumption record in.</summary>
@@ -270,7 +270,7 @@ public sealed class WorkSessionStepLoopTests
     public async Task Loop_WhenTheFirstAttemptRecordedACompletionBeforeParking_TheReRunStillCloses()
     {
         // Regression pin: the completion tool dedups per step NUMBER, so a re-run attempt
-        // cannot record it again; the settle must honour the completion the first attempt recorded before it parked.
+        // cannot record it again; the settle must honor the completion the first attempt recorded before it parked.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
         FakeNodeChatStreamService? stream = null;
@@ -499,7 +499,7 @@ public sealed class WorkSessionStepLoopTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         var fake = ResolveStream(factory, ref stream);
-        // V-04: the 27B emits a trailing reasoning "\n" right after approval-requested; it must not read as the answer.
+        // The 27B emits a trailing reasoning "\n" right after approval-requested; it must not read as the answer.
         fake.Enqueue(new StepScript
         {
             EventTypes = [],
@@ -565,7 +565,7 @@ public sealed class WorkSessionStepLoopTests
     [Test]
     public async Task Loop_WhenAnAnsweredParkWaitsForTheSlotPastMaxParkedSeconds_TheStepCarriesOnUnpaused()
     {
-        // R4-03: an answered turn sends nothing until it retakes the invocation slot, so the park clock checks at fire time.
+        // An answered turn sends nothing until it retakes the invocation slot, so the park clock checks at fire time.
         var sessionId = Guid.NewGuid();
         var time = new ManualTimeProvider(TimeProvider.System.GetUtcNow());
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -680,10 +680,9 @@ public sealed class WorkSessionStepLoopTests
     }
 
     /// <summary>
-    ///     FU3-3, the reported failure itself: the sink drops the ARMING event under backpressure and substitutes one
-    ///     <c>assistant-reconcile</c>, so the supervisor never sees the approval request. Before the reconcile case the
-    ///     park was never armed and the step sat until the node-wide pending tool-call age; now the reconcile arms it,
-    ///     and the step is bounded by <c>MaxParkedSeconds</c> again.
+    ///     The sink drops the ARMING event under backpressure and substitutes one <c>assistant-reconcile</c>, so the
+    ///     supervisor never sees the approval request. The reconcile arms the park, so the step is bounded by
+    ///     <c>MaxParkedSeconds</c> rather than sitting until the node-wide pending tool-call age.
     ///     <para>
     ///         Delete <c>case ChatStreamEventTypes.AssistantReconcile</c> and this test fails: the reconcile falls to
     ///         <c>default: break;</c>, nothing is armed, and the session never reaches <c>Paused</c> inside the wait.
@@ -1262,7 +1261,7 @@ public sealed class WorkSessionStepLoopTests
     /// <summary>
     ///     Resumes through the REST service, retrying the admission race. The settled run releases the node's one slot
     ///     in its <c>finally</c>, which lands AFTER the status row it settled — so a resume issued the instant the test
-    ///     sees <c>Paused</c> can legitimately lose the race and be refused. That is real behaviour, not a defect, and
+    ///     sees <c>Paused</c> can legitimately lose the race and be refused. That is real behavior, not a defect, and
     ///     an operator clicking Resume hits the same window; retrying is what makes the assertion about the GATE rather
     ///     than about timing.
     /// </summary>

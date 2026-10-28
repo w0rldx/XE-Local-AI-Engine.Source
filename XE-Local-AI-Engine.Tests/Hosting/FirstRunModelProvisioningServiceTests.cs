@@ -54,7 +54,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     [Test]
     public async Task CleanDesktopState_WarmsTheDeviceAuditWithAForcedRefreshAfterTheRuntimeIsEnsured()
     {
-        // Windows tester round 3 (N-26): only the banner acquisition warmed the audit, so the first chat after a first-run install paid
+        // Provisioning warms the audit too, not only the banner acquisition, so the first chat after a first-run install never pays
         // the fresh runtime's cold --list-devices probe. The forced refresh matters: a cached pre-install audit describes no binary.
         var binaryManager = new RecordingBinaryManager();
         var warmed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

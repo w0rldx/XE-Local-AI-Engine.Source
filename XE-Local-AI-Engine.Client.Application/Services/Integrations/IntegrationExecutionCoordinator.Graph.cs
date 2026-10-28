@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Graph half of <see cref="IntegrationExecutionCoordinator" />: a <c>Graph</c> target starts a saved graph workflow with
-///     origin <c>Integration</c>, follows the run by polling, and maps its events onto the existing stream types (ADR 0008,
-///     amendment 2026-10-15).
+///     origin <c>Integration</c>, follows the run by polling, and maps its events onto the existing stream types
+///     (ADR 0008).
 /// </summary>
 /// <remarks>
 ///     No invocation lease and no capacity decision here: the graph dispatcher takes both for each node it runs. The seed
@@ -31,7 +31,7 @@ internal sealed partial class IntegrationExecutionCoordinator
     /// <summary>How often a followed run is re-read: polling, not a push seam; the graph hub publishes to browsers only.</summary>
     private static readonly TimeSpan GraphRunPollInterval = TimeSpan.FromMilliseconds(250);
 
-    private static readonly JsonSerializerOptions GraphEventJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions GraphEventJsonOptions = JsonSerializerOptions.Web;
 
     private async Task ExecuteGraphAsync(IServiceProvider services,
         ExecutionRunContext context,

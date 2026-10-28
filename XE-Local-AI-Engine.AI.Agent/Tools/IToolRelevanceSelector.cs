@@ -18,7 +18,7 @@ public sealed record ToolRelevanceCandidate
 
     /// <summary>Whether the tool is always offered; core tools are never ranked and never trimmed.</summary>
     /// <remarks>
-    ///     Tool AUTHORISATION is never an input here: the core set is a fixed, node-wide name set, and an approval
+    ///     Tool AUTHORIZATION is never an input here: the core set is a fixed, node-wide name set, and an approval
     ///     policy edit must not reshape which tools a model is shown.
     /// </remarks>
     public required bool IsCore { get; init; }
@@ -26,7 +26,7 @@ public sealed record ToolRelevanceCandidate
 
 /// <summary>One selection decision: which names to offer this turn, and which were held back.</summary>
 /// <remarks>
-///     Both lists are in the input candidate order, so a fixed selected set always serialises to the same <c>tools</c>
+///     Both lists are in the input candidate order, so a fixed selected set always serializes to the same <c>tools</c>
 ///     array — which is what keeps the llama.cpp prompt prefix and its compiled GBNF grammar stable across the rounds
 ///     of one turn.
 /// </remarks>
@@ -61,7 +61,7 @@ public sealed class ToolRelevanceSelection
     ///     and selected.
     /// </summary>
     /// <remarks>
-    ///     Every selector shares this step: it is what makes a fixed selected set serialise to the same array whatever
+    ///     Every selector shares this step: it is what makes a fixed selected set serialize to the same array whatever
     ///     order the ranker produced it in, and neither the lexical nor the embedding selector gets an opinion about it.
     /// </remarks>
     /// <param name="candidates">The candidates, in the outbound array's own order.</param>

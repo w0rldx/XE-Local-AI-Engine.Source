@@ -7,12 +7,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// The sd-server runtime HttpClient must
-//  - NOT retry the state-changing job-submit POST (SdServerJobClient.SubmitAsync carries no idempotency key), and
-//  - retry safe methods (GET poll/readiness), while
-//  - keeping the attempt/total timeout and circuit breaker for all methods, and
-//  - remaining a SINGLE pipeline even under Aspire, where ServiceDefaults' ConfigureHttpClientDefaults would otherwise
-//    add a second, POST-retrying standard handler.
+// The sd-server runtime HttpClient never retries the job-submit POST (SdServerJobClient.SubmitAsync has no idempotency
+// key), retries safe GETs, keeps the timeout and circuit breaker for every method, and stays ONE pipeline under Aspire.
 [Category(TestCategories.Unit)]
 public sealed class StableDiffusionCppRuntimeResilienceTests
 {
@@ -44,6 +40,7 @@ public sealed class StableDiffusionCppRuntimeResilienceTests
         AssertEx.Equal(expected: 4, handler.Attempts, "A transient GET (safe poll/readiness method) must be retried.");
     }
 
+    // Under Aspire, ServiceDefaults' ConfigureHttpClientDefaults would otherwise add a second, POST-retrying handler.
     [Test]
     public async Task UnderSimulatedAspire_Post_IsNotDoubleRetried()
     {

@@ -301,7 +301,7 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The same rejection-survives-a-pause rule at a gate that HAS branches — so the fix is tested independently of
+    ///     The same rejection-survives-a-pause rule at a gate that HAS branches — so it is tested independently of
     ///     the zero-out-edge case, which reaches the cancel by a different arm of the same condition.
     /// </summary>
     [Test]
@@ -543,7 +543,7 @@ public sealed class DevWorkflowDispatcherTests
 
     /// <summary>
     ///     A cancel accepted while the pause drain is still waiting on the agent lane wins: the settle re-reads the run
-    ///     rather than trusting the tick's snapshot, which said Pausing and used to write Paused over the cancel.
+    ///     rather than trusting the tick's snapshot, which says Pausing and would write Paused over the cancel.
     /// </summary>
     [Test]
     public async Task ACancelLandingWhileThePauseDrainWaitsOnTheAgent_SettlesCancelledWithItsSession()
@@ -560,7 +560,7 @@ public sealed class DevWorkflowDispatcherTests
 
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId)).Status, "the operator's cancel must not be lost to the pause it overtook.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "research")).Status);
-        // The Pausing transition itself writes a run.paused row; what the race used to add was a SECOND one after the cancel.
+        // The Pausing transition itself writes a run.paused row; the race must not add a SECOND one after the cancel.
         var trail = (await harness.ReadEventsAsync(runId)).Select(static entry => entry.EventType).ToList();
         AssertEx.False(trail.Skip(trail.IndexOf("run.cancelled")).Contains("run.paused"),
             $"no pause may be recorded over the cancel: {string.Join(", ", trail)}");
@@ -737,9 +737,9 @@ public sealed class DevWorkflowDispatcherTests
     /// <summary>
     ///     A run pinned to a graph that declares one edge twice fails the same way, with the sentence saying why.
     ///     <para>
-    ///         A CONSEQUENCE of refusing duplicates at parse, and the better of the two failures available: such a
-    ///         graph used to parse, and then threw out of the materialization step on a duplicate key — where the
-    ///         tick's catch-all logs it and drops it, so every sweep re-threw and the run sat with nothing moving and
+    ///         A CONSEQUENCE of refusing duplicates at parse, and the better of the two failures on offer: parsed, such
+    ///         a graph would throw out of the materialization step on a duplicate key — where the tick's catch-all
+    ///         logs it and drops it, so every sweep would re-throw and the run sit with nothing moving and
     ///         nothing to read. A refusal a person can act on beats a silent wedge.
     ///     </para>
     /// </summary>
@@ -1012,9 +1012,9 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     FU2-3: an operator's Retry buys ONE more attempt and says why. Both halves used to be lost — the comment
-    ///     reached the durable decision row and nothing else, and the attempt went past a cap that never moved, so the
-    ///     row read "attempt 4 of 3" as though the runtime had broken its own budget.
+    ///     An operator's Retry buys ONE more attempt and says why. Without both halves the comment would reach the
+    ///     durable decision row and nothing else, and the attempt would go past a cap that never moved, so the row
+    ///     would read "attempt 4 of 3" as though the runtime had broken its own budget.
     /// </summary>
     [Test]
     public async Task AnOperatorRetryWithAReason_WidensTheCapByOneAndCarriesTheReasonOntoTheNextAttempt()

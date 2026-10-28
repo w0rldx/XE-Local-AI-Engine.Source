@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The three hand-mapped external routes as an integrator actually reaches them: inside <c>/api/local/v1</c>, on
-///     the integration key scheme ONLY, with no 403 reachable anywhere, and with the round-5 authorisation rule
+///     the integration key scheme ONLY, with no 403 reachable anywhere, and with the round-5 authorization rule
 ///     applied at the route — a key scoped to one trigger cannot read OR cancel its own principal's executions under
 ///     another.
 /// </summary>

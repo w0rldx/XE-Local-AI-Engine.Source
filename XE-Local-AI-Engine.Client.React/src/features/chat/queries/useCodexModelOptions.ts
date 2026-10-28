@@ -37,7 +37,7 @@ export function toCloudModelOption(modelName: string, capabilities?: CloudModelC
 		label: modelName,
 		displayName: modelName,
 		// Codex models support the full OpenAI Responses reasoning.effort vocabulary (none/minimal/low/medium/high/xhigh);
-		// the backend reports IsReasoningCapable = true for them. Defaulting to true keeps the previous behaviour when a
+		// the backend reports IsReasoningCapable = true for them. Defaulting to true keeps the previous behavior when a
 		// caller supplies no DTO.
 		isReasoningModel: capabilities?.isReasoningCapable ?? true,
 		// Codex (gpt-5.x / OpenAI Responses) supports function tools; the backend capability gate

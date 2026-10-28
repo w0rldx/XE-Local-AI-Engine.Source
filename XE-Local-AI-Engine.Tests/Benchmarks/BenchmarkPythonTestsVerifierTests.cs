@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         programs, the verdict table, the refusal mapping, the timeout clamp — and always run.
 ///     </para>
 ///     <para>
-///         The <b>behavioural</b> tests run the REAL generated parent and child through a gateway double that spawns a
+///         The <b>behavioral</b> tests run the REAL generated parent and child through a gateway double that spawns a
 ///         local interpreter, so the process boundary itself is exercised rather than asserted. That is deliberate: a
 ///         substitute returning canned stdout can only demonstrate that C# scores a marker-less result 0; it cannot
 ///         demonstrate that a candidate is unable to PRODUCE a marker, which is the property under test. The same rows
@@ -233,7 +233,7 @@ public sealed class BenchmarkPythonTestsVerifierTests
     public async Task PythonTests_CandidateAnswersProxyCallsCorrectly_Scores10()
     {
         // The positive control, and the design's actual claim: the child controls the ANSWERS, which is exactly what a
-        // candidate is supposed to control, and controls nothing about the judgement.
+        // candidate is supposed to control, and controls nothing about the judgment.
         var result = await RunLocallyAsync("""
                                            import sys
 

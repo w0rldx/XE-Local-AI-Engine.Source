@@ -100,7 +100,7 @@ internal sealed class ListToolsFunction : AIFunction
                               })
                               .ToList();
 
-        // Reveal AFTER the listing is materialised, on the decision this instance was bound to and on no other.
+        // Reveal AFTER the listing is materialized, on the decision this instance was bound to and on no other.
         decision.Reveal(revealable);
 
         return ValueTask.FromResult<object?>(JsonSerializer.Serialize(listing, ListingSerializerOptions));

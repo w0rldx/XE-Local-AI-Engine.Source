@@ -7,11 +7,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     <see cref="ProcessProbe" /> tests exercising the REAL process-spawn seam: a normal exit returns its code
-///     + stdout; a probe that overruns its wall-clock deadline is killed (process tree — a descendant never survives to
-///     complete its work) and returns a typed <c>TimedOut</c> result instead of hanging; caller cancellation tree-kills
-///     and surfaces cancellation; a missing tool degrades to <see langword="null" />. The POSIX-shell cases are gated to
-///     Linux (the box + CI); the missing-tool case is cross-platform.
+///     <see cref="ProcessProbe" /> over the REAL spawn seam: a normal exit returns code + stdout; an overrun is
+///     tree-killed and returns a typed <c>TimedOut</c>; caller cancellation tree-kills and
+///     propagates; a missing tool yields <see langword="null" />. POSIX-shell cases run on Linux only.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ProcessProbeTests

@@ -36,7 +36,7 @@ internal sealed class WebSearchService
     private const string UnavailableMessage =
         "Web search is temporarily unavailable (the search service refused the request). Try again later, or answer without searching.";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<WebSearchService> _logger;

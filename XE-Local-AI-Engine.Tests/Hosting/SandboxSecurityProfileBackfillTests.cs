@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The one-time upgrade backfill for the sandbox security profile (ADR 0020): a node past the external-access step with no profile is
-///     stamped <c>low</c>, today's behaviour.
+///     stamped <c>low</c>, today's behavior.
 /// </summary>
 /// <remarks>
 ///     The navigation-mode backfill's discriminator: a fresh install, a node still on the external-access chooser and a node already
@@ -116,7 +116,7 @@ public sealed class SandboxSecurityProfileBackfillTests
         AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfileLow, store.Current.SandboxSecurityProfile);
     }
 
-    // Against the REAL NodeSettingsStore over a hand-corrupted file: the behaviour under test is the strict read, and a double is
+    // Against the REAL NodeSettingsStore over a hand-corrupted file: the behavior under test is the strict read, and a double is
     // readable by definition.
     [Test]
     public async Task NodeWhoseSettingsFileIsUnreadable_WritesNothing_AndWarnsOnce()

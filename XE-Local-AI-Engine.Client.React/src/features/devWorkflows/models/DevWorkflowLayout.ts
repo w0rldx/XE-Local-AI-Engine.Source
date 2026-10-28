@@ -6,7 +6,7 @@
 //               ties broken by (materializationGroupKey, materializationIndex, nodeKey, id)
 // x = rank * 280, y = indexInRank * 130                            — TOP-ALIGNED, see below
 //
-// simplified: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
+// simplified: single barycenter pass, no crossing-minimization iterations — swap in dagre if edge crossings become
 // unreadable on real fan-out graphs; this module's signature is the seam.
 
 const RANK_SPACING_X = 280;
@@ -68,7 +68,7 @@ function compareTieBreak(left: DevWorkflowLayoutNode, right: DevWorkflowLayoutNo
 /**
  * Longest-path ranks in Kahn order. A graph that cannot drain is cyclic: whatever is left is parked one rank past
  * everything that did drain, in id order, so the layout terminates and every node is placed exactly once. The server makes v1
- * definitions acyclic; this guard is four lines of defence in depth, because a UI that hangs is a worse failure than a
+ * definitions acyclic; this guard is four lines of defense in depth, because a UI that hangs is a worse failure than a
  * UI that draws a strange graph.
  */
 function rankNodes(nodes: readonly DevWorkflowLayoutNode[], edges: readonly DevWorkflowLayoutEdge[]): Map<string, number> {
@@ -164,11 +164,11 @@ export function layoutDevWorkflowGraph(
 			orderById.set(node.id, indexInRank);
 			positions.set(node.id, {
 				x: rank * RANK_SPACING_X,
-				// TOP-ALIGNED, not centred. A y that divides by the rank's population moves every node in that rank
+				// TOP-ALIGNED, not centered. A y that divides by the rank's population moves every node in that rank
 				// the moment a decomposition lands in it, and that is the canonical materialization shape: clones arriving
 				// beside a node that has held a row since run start. Here a node's y depends only on its own index, and the
 				// sort above keeps the clones behind the nodes that were already there — so their indices, and their
-				// positions, do not change. The graph hangs from the top instead of straddling a centre line; that is the
+				// positions, do not change. The graph hangs from the top instead of straddling a center line; that is the
 				// price, and it is paid once at render rather than every time the runtime expands the graph.
 				y: indexInRank * NODE_SPACING_Y,
 				rank,

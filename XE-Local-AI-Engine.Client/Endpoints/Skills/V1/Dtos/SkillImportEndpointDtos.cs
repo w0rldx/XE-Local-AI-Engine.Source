@@ -44,7 +44,7 @@ public sealed class SkillImportPreviewRequest
 ///     The dry-run report the operator approves. Nothing was written to produce it.
 /// </summary>
 /// <remarks>
-///     <see cref="Token" /> is the short-lived, single-use handle to the materialised payload behind this report:
+///     <see cref="Token" /> is the short-lived, single-use handle to the materialized payload behind this report:
 ///     phase 2 persists that payload verbatim rather than re-parsing the upload or re-fetching the repository.
 /// </remarks>
 public sealed class SkillImportPreviewResponse

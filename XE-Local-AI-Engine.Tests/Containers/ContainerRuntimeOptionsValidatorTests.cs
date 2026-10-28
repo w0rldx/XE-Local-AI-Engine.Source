@@ -6,13 +6,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Startup validation of the application-container runtime configuration.
-///     <para>
-///         Two of these values are load-bearing beyond their own calls: the client's HTTP request timeout is sized
-///         from the probe timeout and the stop grace period, so a nonsense value there does not produce a nonsense
-///         setting — it produces a half-hour image pull cut off by a transport timeout, or a graceful stop killed
-///         before the application has written its state. That is why they fail at start rather than at first use.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The client's HTTP request timeout is sized from the probe timeout and the stop grace period, so a nonsense value
+///     there cuts a half-hour image pull off with a transport timeout or kills a graceful stop before the application
+///     writes its state. That is why they fail at start rather than at first use.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ContainerRuntimeOptionsValidatorTests
 {

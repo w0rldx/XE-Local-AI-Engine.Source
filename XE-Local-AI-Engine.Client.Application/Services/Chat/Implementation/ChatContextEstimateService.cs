@@ -178,7 +178,7 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
     ///     Mirrors <c>TurnPolicy.ResolveContextBudget</c> and <c>WithEffectiveContext</c>: a positive <c>num_ctx</c> is capped by a
     ///     known launched window, else taken as is. Without one: the launched window, a cold GGUF's ceiling capped at the node
     ///     default (under-reporting is the safe side), a declared window (external, or a Codex/Azure cloud model), else the node
-    ///     default. A cloud model with no declared window, or no longer recognised, takes the node default; any other is unknown.
+    ///     default. A cloud model with no declared window, or no longer recognized, takes the node default; any other is unknown.
     /// </remarks>
     private async Task<int?> ResolveWindowTokensAsync(string model, bool isCloud, int? numCtx, CancellationToken cancellationToken)
     {

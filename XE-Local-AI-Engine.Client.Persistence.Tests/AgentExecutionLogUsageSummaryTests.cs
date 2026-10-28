@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// <summary>
 ///     Aggregation round-trips for <see cref="AgentExecutionLogStore.SummarizeTokenUsageAsync" />: the set-based
 ///     GROUP BY over the run-envelope ledger sums tokens per (model, provider, UTC day), excludes the memory-diagnostics
-///     producer, counts missing token fields as zero, and honours the half-open date range — all executed server-side
+///     producer, counts missing token fields as zero, and honors the half-open date range — all executed server-side
 ///     against real SQLite so the arithmetic day-bucket and nullable SUM translations are proven. The per-provider rollup
 ///     is folded from these buckets by the endpoint mapper, so it is covered by the mapper test rather than here.
 /// </summary>
@@ -170,7 +170,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
     [Test]
     public async Task SummarizeTokenUsageAsync_CountsOnlyTheRunsThatReportedTokens()
     {
-        // R5-07: a run stopped before the model reported usage leaves its token columns NULL; the bucket says how many runs its sums cover.
+        // A run stopped before the model reported usage leaves its token columns NULL; the bucket says how many runs its sums cover.
         var databasePath = GetDatabasePath("usage-summary-reported.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 

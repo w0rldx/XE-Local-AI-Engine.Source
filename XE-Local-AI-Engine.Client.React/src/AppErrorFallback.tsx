@@ -6,10 +6,10 @@ import { useTranslation } from "react-i18next";
 import type { AppErrorFallbackProps } from "@/AppErrorFallback.types";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { buildIssueUrl } from "@/features/diagnostics/IssueUrl";
+import { exportSupportBundle } from "@/features/diagnostics/api/SupportBundle";
+import { buildIssueUrl } from "@/features/diagnostics/models/IssueUrl";
 import { useNodeInfo } from "@/features/diagnostics/queries/useNodeInfo";
-import { exportSupportBundle } from "@/features/diagnostics/SupportBundle";
-import { useSnapshots } from "@/features/diagnostics/UseSnapshots";
+import { useSnapshots } from "@/features/diagnostics/queries/useSnapshots";
 
 // Rendered inside the Theme/Query/Confirm providers (App.tsx and the router's root error component), so queries and
 // toasts work here. SupportBundle is imported statically on purpose: its only heavy dependency, fflate, is already in

@@ -1371,7 +1371,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         // The child must still be ALIVE when the marker is written. WriteProcessMarker reads /proc/<pid>/stat for the
         // pid-reuse guard and — correctly — records nothing when the process has already gone, so a command that exits
         // immediately makes this assertion a race against the launch: it passes on a loaded box and fails on an idle
-        // one. The product behaviour under test is "a group-leader launch records a marker while it runs", so the
+        // one. The product behavior under test is "a group-leader launch records a marker while it runs", so the
         // command has to run.
         var (executable, arguments) = SleepCommand(seconds: 1);
         var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
@@ -1537,9 +1537,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     ///     tests, and the real mechanisms are proven by the live-gated cases below.
     /// </summary>
     /// <summary>
-    ///     The listing survey, which replaced a <c>find</c> shell-out that did not exist on Windows at all. Seeded
+    ///     The listing survey, which needs no <c>find</c> shell-out (Windows has none). Seeded
     ///     through <c>CopyIntoAsync</c> rather than a shell so the assertion itself is OS-independent — this is the
-    ///     code path a Windows tester will run, and it has to be provable here.
+    ///     code path Windows runs, and it has to be provable here.
     /// </summary>
     [Test]
     public async Task ProcessSandboxProvider_ListFiles_ReturnsJailRelativeEntries()

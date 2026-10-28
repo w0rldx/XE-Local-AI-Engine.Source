@@ -87,12 +87,12 @@ public sealed class GraphWorkflowPurgeCoverageTests
 
     /// <summary>
     ///     Deleting one run takes its subtree and leaves the definition — the other half of the same ordered delete.
-    ///     <para>
-    ///         A SECOND run of the same definition, with a subtree of its own, is what makes the counts an assertion
-    ///         about scoping rather than about emptiness: every table below would read zero just as happily if the
-    ///         delete were unscoped and took the lot.
-    ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     A SECOND run of the same definition, with a subtree of its own, is what makes the counts an assertion
+    ///     about scoping rather than about emptiness: every table below would read zero just as happily if the
+    ///     delete were unscoped and took the lot.
+    /// </remarks>
     [Test]
     public async Task DeleteRun_TakesItsSubtreeAndLeavesTheDefinitionStanding()
     {

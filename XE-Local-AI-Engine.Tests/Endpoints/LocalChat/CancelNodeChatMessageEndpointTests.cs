@@ -8,12 +8,10 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The cancel endpoint used to catch the base <c>InvalidOperationException</c> as its "not found" signal, so any
-///     unrelated fault raised under <c>CancelMessageAsync</c> — a broken dependency, a bad invariant — was reported to
-///     the operator as a missing message. These drive the real pipeline with the persistence service substituted, and
-///     assert both halves of the narrowing: the typed correlation failure is still a 404, and a plain
-///     <c>InvalidOperationException</c> is now the 500 that says something is broken.
+///     The cancel endpoint must not treat the base <c>InvalidOperationException</c> as "not found", or any unrelated
+///     fault under <c>CancelMessageAsync</c> (a broken dependency, a bad invariant) reports as a missing message.
 /// </summary>
+/// <remarks>Real pipeline, persistence substituted: the typed correlation failure is 404, a plain one 500.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class CancelNodeChatMessageEndpointTests
 {

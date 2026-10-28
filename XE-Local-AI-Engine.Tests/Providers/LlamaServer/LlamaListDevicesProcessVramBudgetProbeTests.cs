@@ -8,11 +8,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The real available-VRAM probe: its pure <c>--list-devices</c> parser returns the LARGEST free-MiB column across
-///     devices in bytes (or null when nothing is parseable), and a <c>cpu</c> backend token short-circuits to "unknown"
-///     without ever touching the binary manager (no process spawned). Process-level GPU behavior is not exercised here —
-///     the parser is the unit; the no-spawn guard is proven via a substituted binary manager that records no call.
+///     The real available-VRAM probe: the <c>--list-devices</c> parser returns the largest free-MiB column in bytes
+///     (null when nothing parses), and a <c>cpu</c> backend token answers "unknown" without touching the binary manager.
 /// </summary>
+/// <remarks>The parser is the unit; a substituted binary manager that records no call proves no spawn.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class LlamaListDevicesProcessVramBudgetProbeTests
 {

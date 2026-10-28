@@ -5,6 +5,20 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { toSaveAgentDefinitionRequest } from "@/core/agents/models/AgentDefinitionMappers";
+import {
+	type AgentDefinition,
+	type AgentDefinitionFormValues,
+	isDefaultAssistantDefinition,
+} from "@/core/agents/models/AgentDefinitionModels";
+import { deserializeOrchestrationTopology, emptyOrchestrationTopology } from "@/core/agents/models/OrchestrationTopologyModels";
+import {
+	useAgentDefinitions,
+	useCreateAgentDefinition,
+	useDeleteAgentDefinition,
+	useToolCapableModels,
+	useUpdateAgentDefinition,
+} from "@/core/agents/queries/useAgentDefinitions";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getNodeSettingsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -22,23 +36,6 @@ import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsi
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import { useAgentEditorDialog } from "@/features/agents/hooks/useAgentEditorDialog";
-import { toSaveAgentDefinitionRequest } from "@/features/agents/models/AgentDefinitionMappers";
-import {
-	type AgentDefinition,
-	type AgentDefinitionFormValues,
-	isDefaultAssistantDefinition,
-} from "@/features/agents/models/AgentDefinitionModels";
-import {
-	deserializeOrchestrationTopology,
-	emptyOrchestrationTopology,
-} from "@/features/agents/models/OrchestrationTopologyModels";
-import {
-	useAgentDefinitions,
-	useCreateAgentDefinition,
-	useDeleteAgentDefinition,
-	useToolCapableModels,
-	useUpdateAgentDefinition,
-} from "@/features/agents/queries/useAgentDefinitions";
 import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
 
 const emptyFormValues: AgentDefinitionFormValues = {

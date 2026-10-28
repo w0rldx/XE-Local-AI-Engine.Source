@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Events;
 
-/// <summary>The send and regenerate paths' one notice for a grounded turn on a node with no embedding model (model-matrix F13).</summary>
+/// <summary>The send and regenerate paths' one notice for a grounded turn on a node with no embedding model.</summary>
 internal static class KnowledgeUnavailableNotice
 {
     // The SPA localizes this exact sentence; change both together.

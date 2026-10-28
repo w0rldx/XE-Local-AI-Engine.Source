@@ -447,7 +447,7 @@ public interface IBenchmarkStore
 
     /// <summary>
     ///     Writes the project's quant-fidelity settings, and ONLY those, deliberately ignoring the freeze the ordinary
-    ///     project write honours.
+    ///     project write honors.
     /// </summary>
     /// <remarks>
     ///     A frozen project refuses every other edit because its runs were measured against the task, context and
@@ -531,7 +531,7 @@ public interface IBenchmarkStore
     /// </remarks>
     /// <param name="cohortAttemptSeed">
     ///     When supplied, one Queued attempt per eligible run is inserted in the same transaction as the reset, and
-    ///     <see cref="BenchmarkJudgeAttemptSeed.ExpectedJudgePolicyRevisionId" /> is honoured.
+    ///     <see cref="BenchmarkJudgeAttemptSeed.ExpectedJudgePolicyRevisionId" /> is honored.
     /// </param>
     Task<BenchmarkJudgePolicyActivation> BeginProjectRejudgeAsync(Guid projectId,
         long expectedProjectVersion,

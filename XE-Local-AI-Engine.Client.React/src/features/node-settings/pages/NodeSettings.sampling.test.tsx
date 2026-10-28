@@ -95,7 +95,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 // The recommended-reranker download reuses the shared GgufDownload feed (SignalR hub + cancel mutation); stub it so
 // these composition tests never open a real hub connection.
-vi.mock("@/features/models/queries/useGgufDownload", () => ({
+vi.mock("@/core/model-downloads/queries/useGgufDownload", () => ({
 	useActiveGgufDownloads: () => new Map(),
 	useCancelGgufDownload: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
 }));

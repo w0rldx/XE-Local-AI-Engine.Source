@@ -769,7 +769,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     }
 
     // The daemon's state vocabulary is lower-case and this value is compared against those literals rather than
-    // displayed, so upper-casing would normalise away from the wire format the comparison is against.
+    // displayed, so upper-casing would normalize away from the wire format the comparison is against.
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "Docker's container state words are lower-case on the wire and are compared, not displayed.")]
     public async Task<IReadOnlyList<ContainerSummary>> ListContainersDetailedAsync(IReadOnlyDictionary<string, string> labels,
@@ -1305,7 +1305,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
     ///     The payload goes up WHILE the output is drained: a Docker exec is one bidirectional connection, so with
     ///     nothing reading, a child that writes as it reads fills the daemon's buffer, the daemon stops accepting the
     ///     payload and both sides wait until the command times out — Development Mode's 8 MB patch ceiling is well
-    ///     past where a serialised version stops working. The half-close after the write is equally load-bearing: a
+    ///     past where a serialized version stops working. The half-close after the write is equally load-bearing: a
     ///     child reading to end-of-input never returns while the write side is open.
     /// </remarks>
     private static async Task<ExecOutput> PumpAsync(MultiplexedStream stream,

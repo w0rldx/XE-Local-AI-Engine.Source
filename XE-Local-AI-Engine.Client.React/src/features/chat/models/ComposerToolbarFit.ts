@@ -5,7 +5,7 @@
 
 // Every toggle and icon button in the row is a 36px square, and so is a folded agent or workflow picker.
 const iconWidthPx = 36;
-// A labelled picker does not shrink; it caps at this width (ChatComposerToolbar.module.css `.select-trigger`
+// A labeled picker does not shrink; it caps at this width (ChatComposerToolbar.module.css `.select-trigger`
 // max-width), where a long agent name ellipsizes. Its tooltip carries the full choice either way.
 const labelledPickerWidthPx = 200;
 // Mantine `gap={4}` between the row's controls, plus the root row's `gap="xs"` before Send.
@@ -19,7 +19,7 @@ const modelTriggerMinWidthPx = 120;
 // The context readout with its compact and context-state buttons: a bare "1.1k/—" readout, and one with a progress bar.
 const contextWidthPx = 100;
 const contextWithProgressWidthPx = 150;
-// "Answer now" beside Stop while a reasoning turn streams, a labelled button.
+// "Answer now" beside Stop while a reasoning turn streams, a labeled button.
 const answerNowWidthPx = 110;
 // The Textarea's side padding around the bottomSection toolbar.
 const composerChromePx = 28;

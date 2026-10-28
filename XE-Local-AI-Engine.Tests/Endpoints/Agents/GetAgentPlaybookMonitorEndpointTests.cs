@@ -17,9 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class GetAgentPlaybookMonitorEndpointTests
 {
     /// <summary>
-    ///     One host for the default-configuration tests. Every assertion is scoped to the agent id the test just seeded
-    ///     (agent names are indexed but NOT unique, so duplicate seed names are safe), never to a store-wide count. The
-    ///     embedding-ranker test keeps its own host because it configures <c>PlaybookRetrieval:EmbeddingModelName</c>.
+    ///     One host for the default-configuration tests; each assertion is scoped to the agent id it seeded, never to a
+    ///     store-wide count. The embedding-ranker test keeps its own host: it configures
+    ///     <c>PlaybookRetrieval:EmbeddingModelName</c>.
     /// </summary>
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }

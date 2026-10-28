@@ -435,9 +435,8 @@ public sealed class WorkSessionEndpointTests
     }
 
     /// <summary>
-    ///     The generated SDK declares `body: never` for the four lifecycle verbs, so it posts nothing while the axios
-    ///     instance still stamps a JSON content type. A route-only POST must therefore be accepted with no body at all —
-    ///     this repo has a standing 415 trap for exactly that shape.
+    ///     The generated SDK declares `body: never` for the four lifecycle verbs, so it posts nothing while axios still
+    ///     stamps a JSON content type; a route-only POST must accept no body at all (the standing 415 trap).
     /// </summary>
     [Test]
     [Arguments("start")]

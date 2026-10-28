@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal static class PlaybookActionMapper
 {
     // Web defaults so the persisted camelCase EvalResult JSON binds to the positional response record (CA1869).
-    private static readonly JsonSerializerOptions EvalResultSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions EvalResultSerializerOptions = JsonSerializerOptions.Web;
 
     public static PlaybookActionResponse ToResponse(this PlaybookActionRecord record)
     {

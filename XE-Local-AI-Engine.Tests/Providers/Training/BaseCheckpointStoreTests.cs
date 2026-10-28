@@ -170,7 +170,7 @@ public sealed class BaseCheckpointStoreTests : IDisposable
     {
         const string Revision = "refs/pr/7";
 
-        // The default branch and the pinned revision hold DIFFERENT files. Labelling the default branch's list with the
+        // The default branch and the pinned revision hold DIFFERENT files. Labeling the default branch's list with the
         // requested revision would describe a checkpoint that does not exist at that pin.
         var defaultBranch = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {

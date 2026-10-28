@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </remarks>
 internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     /// <summary>Upper bound on the total chunk-content characters returned, so a large document is not dumped whole.</summary>
     private const int MaxContentChars = 50_000;

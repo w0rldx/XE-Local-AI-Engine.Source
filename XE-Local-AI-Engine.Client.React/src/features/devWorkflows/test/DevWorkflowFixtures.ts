@@ -1,5 +1,5 @@
 // The feature's one fixture file. Per-DTO builders rather than per-route on purpose: the run
-// payload backs four test files from one builder, parameterised by node status, so the suite needs about seven
+// payload backs four test files from one builder, parameterized by node status, so the suite needs about seven
 // builders rather than one hand-rolled handler set per endpoint.
 //
 // Every builder returns the WIRE shape (all fields optional, as hey-api types them from the OpenAPI document), so a
@@ -222,7 +222,7 @@ export function devWorkflowArtifact(overrides: Partial<ArtifactResponse> = {}): 
 	};
 }
 
-/** The catalogue row: everything but the body, which only the single-rule-set read carries. */
+/** The catalog row: everything but the body, which only the single-rule-set read carries. */
 export function devWorkflowRuleSetSummary(overrides: Partial<RuleSetSummaryResponse> = {}): RuleSetSummaryResponse {
 	return {
 		id: devWorkflowTestIds.ruleSet,

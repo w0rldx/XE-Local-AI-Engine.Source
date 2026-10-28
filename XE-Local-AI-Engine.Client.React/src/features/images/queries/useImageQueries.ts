@@ -176,7 +176,7 @@ export function useCreateImageJob() {
 }
 
 // Cancels a job (coordinator picks clean-cancel for queued vs daemon-restart for generating). Invalidates the job
-// list so the cancelled row reflects immediately even before the hub push lands.
+// list so the canceled row reflects immediately even before the hub push lands.
 export function useCancelImageJob() {
 	const queryClient = useQueryClient();
 

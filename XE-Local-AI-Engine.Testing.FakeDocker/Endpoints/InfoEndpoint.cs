@@ -5,12 +5,12 @@ using Microsoft.AspNetCore.Http;
 
 /// <summary>
 ///     <c>GET /info</c>. The installation id and the security options, and nothing else the client never reads.
-///     <para>
-///         The security options are rendered as the daemon renders them — comma-separated key/value groups whose
-///         first part is <c>name=…</c>, with the seccomp entry carrying a profile after it. The client matches on the
-///         <c>name=</c> part only, so an entry written as a bare word would silently never match.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The security options are rendered as the daemon renders them — comma-separated key/value groups whose
+///     first part is <c>name=…</c>, with the seccomp entry carrying a profile after it. The client matches on the
+///     <c>name=</c> part only, so an entry written as a bare word would silently never match.
+/// </remarks>
 internal static class InfoEndpoint
 {
     public static Task HandleAsync(HttpContext context, FakeDockerState state)

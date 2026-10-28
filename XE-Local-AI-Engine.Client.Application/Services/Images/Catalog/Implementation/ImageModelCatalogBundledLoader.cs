@@ -28,7 +28,7 @@ internal static class ImageModelCatalogBundledLoader
         }
 
         // Forced sync: the only caller is the ImageModelCatalog constructor, which publishes the loaded document through synchronous reads, so there is no async
-        // initialisation seam to move this to. The resource is embedded in this assembly, so the read never touches the filesystem.
+        // initialization seam to move this to. The resource is embedded in this assembly, so the read never touches the filesystem.
 #pragma warning disable MA0045 // forced sync: constructor-time embedded-resource read (see comment above)
         using var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream is null)

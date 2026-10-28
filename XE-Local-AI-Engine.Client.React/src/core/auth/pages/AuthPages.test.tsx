@@ -105,7 +105,7 @@ describe("node auth pages", () => {
 
 	// The lockout 401 is the only login failure that carries a body. Without the `code` branch the operator reads
 	// "Incorrect password" while holding the right one, with nothing saying that waiting is the fix.
-	// R1-02: a boot whose session restore stayed rate limited lands here, and the page says when to try again.
+	// A boot whose session restore stayed rate limited lands here, and the page says when to try again.
 	it("says when to try again after a rate-limited session restore", () => {
 		authApiMock.refreshRateLimitedForSeconds.mockReturnValue(42);
 

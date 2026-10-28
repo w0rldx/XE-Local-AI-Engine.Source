@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 ///     parser and hashed before the node cap ever gets a chance to refuse it. Two mechanisms, as elsewhere in this
 ///     tree: the metadata is what the HOST enforces before the body is read, and <see cref="IsOversized" /> is the
 ///     cheap early exit the handler makes for itself. The metadata is Kestrel-side, so the in-memory test host neither
-///     honours nor disproves it; the early exit is provable without a real connection.
+///     honors nor disproves it; the early exit is provable without a real connection.
 /// </remarks>
 internal sealed class GraphWorkflowRequestSizeLimit : IRequestSizeLimitMetadata
 {

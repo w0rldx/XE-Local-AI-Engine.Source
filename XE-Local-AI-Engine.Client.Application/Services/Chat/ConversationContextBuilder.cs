@@ -18,7 +18,7 @@ internal static class ConversationContextBuilder
 {
     /// <summary>
     ///     Appended to a user turn whose answer failed or was interrupted. Without it the model reads that request as
-    ///     still open and answers IT instead of the short message that follows (live QA F-16).
+    ///     still open and answers IT instead of the short message that follows.
     /// </summary>
     public const string UnansweredNotice = "[This request failed and was not answered. Answer only the latest message unless the user asks for this again.]";
 
@@ -152,8 +152,8 @@ internal static class ConversationContextBuilder
     ///     will not carry.
     /// </summary>
     /// <remarks>
-    ///     Sent, such a prompt sits next to the following one, and the chat template renders the two as one request
-    ///     (F-12), so the send and regenerate builders leave it out.
+    ///     Sent, such a prompt sits next to the following one, and the chat template renders the two as one request,
+    ///     so the send and regenerate builders leave it out.
     /// </remarks>
     /// <param name="includeToolHistory">
     ///     Whether the caller keeps a Stopped answer for its completed tool calls; a kept answer keeps its prompt.

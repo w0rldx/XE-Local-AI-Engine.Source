@@ -13,9 +13,8 @@ public sealed class ComputeOptionsValidatorTests
     [Test]
     public void ComputeOptions_DefaultToDisabled()
     {
-        // The whole fail-closed posture rests on this one default. It is what RunPythonToolHandler reads, and a node
-        // whose configuration was stripped, defaulted, or never mentioned Compute at all must not be able to execute
-        // model-authored code. Nothing else in the stack re-checks it, so a "true" here would arm the tool everywhere.
+        // The whole fail-closed posture rests on this default, which RunPythonToolHandler reads: a stripped or
+        // Compute-less configuration must not execute model-authored code, and nothing else in the stack re-checks it.
         AssertEx.False(new ComputeOptions().Enabled, "the compute tool must be off unless a node explicitly opts in");
     }
 

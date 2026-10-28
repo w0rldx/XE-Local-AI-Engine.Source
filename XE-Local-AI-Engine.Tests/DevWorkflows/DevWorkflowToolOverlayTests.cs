@@ -200,7 +200,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
 
     /// <summary>
     ///     A stored patch that is not the subject the task's approval names is not judged quietly against the base: it
-    ///     refuses the node. Validating the base and reporting green would be the same silent lie the fix removes.
+    ///     refuses the node. Validating the base and reporting green would be a silent lie.
     /// </summary>
     [Test]
     public async Task WhenTheStoredPatchIsNotTheApprovedSubject_TheNodeRefusesRatherThanJudgingTheBase()
@@ -218,7 +218,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
 
     /// <summary>
     ///     A validation node runs only after its implementation SUCCEEDED, so a sibling with no approved patch is an
-    ///     anomaly — not a licence to validate the base and report green about it. It refuses, naming the state.
+    ///     anomaly — not a license to validate the base and report green about it. It refuses, naming the state.
     /// </summary>
     [Test]
     public async Task WhenTheSiblingHasNoApprovedPatchYet_TheNodeRefusesRatherThanJudgingTheBase()

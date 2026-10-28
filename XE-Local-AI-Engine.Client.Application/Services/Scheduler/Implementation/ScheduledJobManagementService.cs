@@ -168,7 +168,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         bool enabled,
         CancellationToken cancellationToken = default)
     {
-        // A soft-deleted definition is invisible: enabling it would re-schedule a Quartz job nobody can see (F-35).
+        // A soft-deleted definition is invisible: enabling it would re-schedule a Quartz job nobody can see.
         var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
         if (existing is null || existing.DeletedAtUtc is not null)
         {
@@ -522,7 +522,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         SchedulerMisfirePolicy misfirePolicy,
         ScheduledJobDefinitionRecord? existing)
     {
-        // Out of range, DateTimeOffset.FromUnixTimeMilliseconds throws while scheduling, which surfaced as a 500 (F-60).
+        // Out of range, DateTimeOffset.FromUnixTimeMilliseconds throws while scheduling, which would surface as a 500.
         ValidateUnixMilliseconds(input.StartAtUtc, "Start time");
         ValidateUnixMilliseconds(input.EndAtUtc, "End time");
 
@@ -775,7 +775,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         var isRunAgent = string.Equals(record.TemplateId, RunSavedAgentHandler.TemplateIdValue, StringComparison.Ordinal);
 
         // A stored 600 on a run-agent schedule is ambiguous: it is what the withdrawn template default pre-filled, far likelier stale
-        // than a deliberate cap, so the operator decision is to treat it as unset and derive a ceiling, which is never lower.
+        // than a deliberate cap, so it is treated as unset, and the derived ceiling replaces it; that ceiling is never lower.
         var isLegacyTemplateDefault = isRunAgent && record.MaxRuntimeSeconds == LegacyRunAgentTemplateDefaultMaxRuntimeSeconds;
         if (record.MaxRuntimeSeconds is > 0 && !isLegacyTemplateDefault)
         {

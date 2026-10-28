@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The judge-change flow is the one page behaviour that cannot be tested through a component: the node answers the
+// The judge-change flow is the one page behavior that cannot be tested through a component: the node answers the
 // first save with 409 `RejudgeRequired` on purpose, and the page has to turn that into a confirmation and resend the
 // SAME policy with the flag set. The SignalR hub is stubbed (a selected run mounts the live pane) — it has its own
 // suite; everything else goes over MSW through the real generated client.

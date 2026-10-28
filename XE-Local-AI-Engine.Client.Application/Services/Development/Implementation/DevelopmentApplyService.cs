@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed class DevelopmentApplyService : IDevelopmentApplyService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentCoordinator _coordinator;
     private readonly IDevelopmentEvidenceService _evidence;

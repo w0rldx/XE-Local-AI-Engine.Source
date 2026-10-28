@@ -13,7 +13,7 @@ import {
 	formatBenchmarkDelta,
 	hasBenchmarkAgentVariants,
 } from "@/features/benchmarks/models/BenchmarkCells";
-import { useBenchmarkCellComparison } from "@/features/benchmarks/queries/useBenchmarks";
+import { useBenchmarkCellComparison } from "@/features/benchmarks/queries/useBenchmarkCells";
 
 interface BenchmarkPairedDeltaProps {
 	projectId: string;

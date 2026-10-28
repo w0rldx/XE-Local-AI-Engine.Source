@@ -10,7 +10,7 @@ import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapability
 import type { ChatUiCapabilities, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
-// The web review switch reads node settings and tutorial state through TanStack Query; its own behaviour is covered in
+// The web review switch reads node settings and tutorial state through TanStack Query; its own behavior is covered in
 // WebContentAutoAcceptToggle.test.tsx. Here it is a marker, so these tests can assert WHERE the composer places it.
 vi.mock("@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle", () => ({
 	WebContentAutoAcceptToggle: ({ conversationId }: { conversationId: string }) => (
@@ -253,7 +253,7 @@ describe("ChatInputArea image attachment gate", () => {
 		expect(fileInput?.getAttribute("accept")).toContain("image/*");
 	});
 
-	// The paperclip ActionIcon is the labelled control; the input behind it is display:none and only opens the OS
+	// The paperclip ActionIcon is the labeled control; the input behind it is display:none and only opens the OS
 	// picker, so it belongs out of the accessibility tree rather than in it as a nameless file field.
 	it("keeps the hidden file input out of the accessibility tree", () => {
 		const { container } = renderWithProviders(

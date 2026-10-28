@@ -73,7 +73,7 @@ public sealed class ExternalAppPublishedPort
 public static class ExternalAppJson
 {
     /// <summary>Web defaults — camelCase property names, case-insensitive reads — matching the catalog document's own.</summary>
-    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web);
+    public static JsonSerializerOptions Options { get; } = JsonSerializerOptions.Web;
 }
 
 /// <summary>
@@ -112,7 +112,7 @@ public sealed record ExternalAppInstanceSummary
 
 /// <summary>Everything the detail page and the settings tab render.</summary>
 /// <remarks>
-///     <see cref="Manifest" /> is the SANITISED installed snapshot — asset bodies stripped, secret defaults nulled —
+///     <see cref="Manifest" /> is the SANITIZED installed snapshot — asset bodies stripped, secret defaults nulled —
 ///     never the catalog's current manifest, so the page describes the application that is installed rather than the
 ///     one that could be. <see cref="MaskedVariables" /> carries the stored values with every <c>secret</c> replaced
 ///     by <see cref="ExternalAppVariableMask.Value" />, which is why this record may print: nothing on it is a secret.
@@ -153,7 +153,7 @@ public sealed record ExternalAppInstanceDetail
 /// <remarks>
 ///     <see cref="ManifestVersion" /> and <see cref="ManifestSha256" /> fingerprint the manifest as served. The
 ///     install command carries them back and admission refuses a mismatch, so a catalog refresh between the
-///     disclosure and the submit cannot authorise different images.
+///     disclosure and the submit cannot authorize different images.
 /// </remarks>
 public sealed class InstallPreview
 {

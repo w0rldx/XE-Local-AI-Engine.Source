@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     <c>DELETE proxy/key</c>: operator-gated, 404 when there is nothing to revoke, and 204 followed by
 ///     <c>configured=false</c> when there is — the documented way to turn the inbound proxy off without restarting.
-///     <para>Serialized for the same single-credential reason as the generate suite.</para>
 /// </summary>
+/// <remarks>Serialized for the same single-credential reason as the generate suite.</remarks>
 [NotInParallel("LocalModelProxyApiKeyRevoke")]
 [Category(TestCategories.Integration)]
 public sealed class RevokeLocalModelProxyApiKeyEndpointTests

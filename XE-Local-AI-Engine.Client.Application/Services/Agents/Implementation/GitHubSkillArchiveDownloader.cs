@@ -40,7 +40,7 @@ internal sealed partial class GitHubSkillArchiveDownloader
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    /// <summary>Validates an <c>owner/repo</c> slug. Throws rather than sanitising: a malformed slug is a caller bug, not something to guess at.</summary>
+    /// <summary>Validates an <c>owner/repo</c> slug. Throws rather than sanitizing: a malformed slug is a caller bug, not something to guess at.</summary>
     /// <exception cref="SkillImportException">Either part is empty or outside the permitted charset.</exception>
     public static void ValidateSlug(string? owner, string? repository)
     {

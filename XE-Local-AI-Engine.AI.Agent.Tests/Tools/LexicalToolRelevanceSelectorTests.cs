@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The shipped, model-free tool-relevance selector. Two properties matter more than the ranking itself: the fast
 ///     path at or below the threshold returns the whole array untouched (the byte-identical default), and the emitted
-///     order is always the INPUT order, so a fixed selected set serialises to the same tools array on every round of a
+///     order is always the INPUT order, so a fixed selected set serializes to the same tools array on every round of a
 ///     turn — which is what keeps the llama.cpp prompt prefix and its compiled GBNF grammar stable.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -160,7 +160,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     [Test]
     public async Task SelectAsync_WithAQueryOfNothingButFunctionWords_ReturnsEveryName()
     {
-        // "the and to" tokenises to nothing once function words are dropped, which is the blank-query case wearing a
+        // "the and to" tokenizes to nothing once function words are dropped, which is the blank-query case wearing a
         // disguise: with no content word to rank WITH, every score is zero and a "ranking" would just be the input
         // order, so the whole array is offered instead of two thirds of it being hidden on a coin toss.
         var candidates = BuildNonCore(Threshold + 8);
@@ -174,7 +174,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     [Test]
     public async Task SelectAsync_OnTheLiveCatalogue_OffersTheToolTheQueryIsAbout()
     {
-        // A real 20-tool node catalogue with its real descriptions. A raw-overlap ranker scores search_knowledge_base 3 on "A", "THEN" and
+        // A real 20-tool node catalog with its real descriptions. A raw-overlap ranker scores search_knowledge_base 3 on "A", "THEN" and
         // "TO", Calculate / read_document / read_surrounding_chunks / spawn_subagent 2 apiece on the same function
         // words, and leaves custom__currency_convert — the one tool on the node that could answer — ranked ninth and
         // hidden. Nothing here may regress to that.
@@ -192,7 +192,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     [Test]
     public async Task SelectAsync_WhenALongNoisyDescriptionRepeatsTheQueryWords_LosesToTheShortExactMatch()
     {
-        // Length normalisation, isolated: both candidates match both query words, so a raw count ties them and the
+        // Length normalization, isolated: both candidates match both query words, so a raw count ties them and the
         // input index — which puts the noisy one first — would decide. Divided by the candidate's length, the tool that
         // is ABOUT converting currency beats the essay that merely mentions it.
         List<ToolRelevanceCandidate> candidates =

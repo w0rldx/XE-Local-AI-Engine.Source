@@ -15,7 +15,7 @@ import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkMo
 // Boundary mappers: the generated OpenAPI shapes keep almost every member optional, so these supply the UI defaults.
 // The rule they encode is that a DEFAULT must never erase a lifecycle or provenance distinction — a missing numeric
 // metric stays null (nothing measured) rather than becoming 0 (measured as zero), a missing status fails closed, and
-// an unrecognised origin degrades to "legacy/unknown" instead of being trusted through.
+// an unrecognized origin degrades to "legacy/unknown" instead of being trusted through.
 
 // The generated response types are all-optional; a cast keeps each case to the fields it is actually about.
 // biome-ignore lint/suspicious/noExplicitAny: exercising the mappers' undefined-field defaults requires partial input.
@@ -154,7 +154,7 @@ describe("toBenchmarkRunSummary", () => {
 	});
 
 	// The quality score, its source, the rank and the exclusion reason are one story: a rank the node withheld must
-	// arrive with the node's reason, and an unrecognised reason must not be invented into the UI's vocabulary.
+	// arrive with the node's reason, and an unrecognized reason must not be invented into the UI's vocabulary.
 	it("maps the ranking projection and rejects an unknown exclusion reason", () => {
 		const ranked = toBenchmarkRunSummary(
 			partial({

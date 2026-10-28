@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Tests for <see cref="SchedulerDispatchJobRunner" /> — the Quartz <c>IJob</c> → executor hop. It must forward EVERY
-///     whitelisted per-fire override key (model-fit use-case AND breadth limit) from the merged data map to the executor;
-///     a regression here silently drops an override so the run falls back to the baked parameter (the limit-override bug
-///     caught in live verification 2026-06-03). A cron / no-override fire forwards a null override map. It also decides
-///     the run's trigger kind: the manual-fire marker means Manual, its absence means Schedule.
+///     Tests for <see cref="SchedulerDispatchJobRunner" />, the Quartz <c>IJob</c> → executor hop: it forwards EVERY
+///     whitelisted per-fire override key (model-fit use case AND breadth limit), else the run falls back silently.
 /// </summary>
+/// <remarks>
+///     A cron or no-override fire forwards a null override map. The manual-fire marker means trigger kind Manual; its
+///     absence means Schedule.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class SchedulerDispatchJobRunnerTests
 {

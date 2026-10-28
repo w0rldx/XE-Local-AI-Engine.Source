@@ -13,11 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     A persistence-pump fault (a FlushDeltaAsync / TerminalizeAsync exception) must not leave the assistant
-///     row streaming forever. <see cref="ChatInvocationStatePump.PumpAsync" /> now catches a non-cancellation fault,
-///     idempotently terminalizes the row Failed, emits the Failed terminal SSE, and rethrows so the caller cancels the
-///     run. The Failed terminalize rides the same NodeChatMessageTransitions atomic guard, so it can never overwrite a
-///     terminal that already committed.
+///     A pump fault must not leave the assistant row streaming:
+///     <see cref="ChatInvocationStatePump.PumpAsync" /> terminalizes it Failed (idempotent), emits the Failed SSE and
+///     rethrows to cancel the run, under the NodeChatMessageTransitions guard so no committed terminal is overwritten.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ChatInvocationStatePumpFaultTests : IDisposable
@@ -91,7 +89,7 @@ public sealed class ChatInvocationStatePumpFaultTests : IDisposable
     [Test]
     public async Task PumpAsync_AFailedTerminal_CarriesItsFailureCategoryOnTheLiveEvent()
     {
-        // Live-QA D1 phase 5: the live assistant-failed event of an expired approval read null while the row read Timeout.
+        // The live assistant-failed event of an expired approval carries Timeout, the category the row reads.
         await using var provider = await BuildProviderAsync("pump-live-failure-category.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var conversationId = Guid.NewGuid();

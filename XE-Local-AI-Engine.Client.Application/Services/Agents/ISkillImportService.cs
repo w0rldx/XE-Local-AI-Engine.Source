@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     Two-phase and dry-run first: a preview parses, guards and reports without writing a row, and the commit
-///     replays that MATERIALISED payload rather than re-parsing or re-fetching, so the operator cannot approve one
+///     replays that MATERIALIZED payload rather than re-parsing or re-fetching, so the operator cannot approve one
 ///     payload and persist another. An imported skill always lands <see cref="AgentSkillRecord.Enabled" />
 ///     <c>false</c> with <see cref="AgentSkillOrigin.Imported" /> provenance, and a script is never imported, only
 ///     reported as refused. The pipeline and its guards: docs/wiki/04-agent-mode.md ("Import pipeline").
@@ -107,7 +107,7 @@ public sealed class SkillImportOptions
 
 /// <summary>
 ///     The dry-run report the operator approves. <see cref="Token" /> is a short-lived, single-use handle to the
-///     materialised payload behind this report — the payload phase 2 persists verbatim.
+///     materialized payload behind this report — the payload phase 2 persists verbatim.
 /// </summary>
 public sealed class SkillImportPreview
 {

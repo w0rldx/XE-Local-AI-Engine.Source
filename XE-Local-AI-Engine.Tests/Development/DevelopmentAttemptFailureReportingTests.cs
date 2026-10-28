@@ -11,13 +11,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     The attempt lane's operator-facing reporting, which was measurably worse than the validation lane's.
+///     The attempt lane's operator-facing reporting, held to the validation lane's standard.
 ///     <para>
-///         Live on 2026-07-31, two consecutive coder attempts failed for two entirely different reasons — a
-///         changed-file manifest mismatch and an output-budget overrun — and both were reported to the operator with
+///         Two consecutive coder attempts can fail for two entirely different reasons — a
+///         changed-file manifest mismatch and an output-budget overrun — and reporting both to the operator with
 ///         the identical sentence "The bounded Development coder attempt failed before producing valid exact
 ///         evidence", with zero artifacts persisted (evidence is only written after the attempt passes its own
-///         checks). The first attempt had in fact produced the correct fix.
+///         checks), hides both causes, even when the first attempt had in fact produced the correct fix.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]

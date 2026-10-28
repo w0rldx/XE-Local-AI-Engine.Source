@@ -19,10 +19,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The privacy gate for adaptive-memory extraction: the agent MUST resolve a NODE-LOCAL provider via
-///     <see cref="ILocalModelProviderResolver" /> and run the model on the client that provider produces — never a shared
-///     cloud-capable <see cref="IChatClient" />. The agent has no <c>IChatClient</c> dependency at all (structural
-///     guarantee); these tests prove it routes through the node-local resolver and disables cleanly without a model.
+///     The privacy gate for adaptive-memory extraction: the agent resolves a NODE-LOCAL provider via
+///     <see cref="ILocalModelProviderResolver" /> and has no <see cref="IChatClient" /> dependency at all, so it never
+///     runs on a shared cloud-capable client; it also disables cleanly without a model.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class DefaultMemoryExtractionAgentTests

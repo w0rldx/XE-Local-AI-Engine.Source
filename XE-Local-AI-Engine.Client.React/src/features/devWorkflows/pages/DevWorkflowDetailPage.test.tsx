@@ -56,7 +56,7 @@ function runRoutes(id: string, status: string) {
 	];
 }
 
-// The catalogue answers every member of the summary, its seed provenance and last-write stamp included.
+// The catalog answers every member of the summary, its seed provenance and last-write stamp included.
 const startableDefinition = {
 	id: devWorkflowTestIds.definition,
 	name: "Research → Plan → Approval",
@@ -143,7 +143,7 @@ describe("DevWorkflowDetailPage", () => {
 	});
 
 	// TWO_PANE_BREAKPOINT answers "do two panes fit at all", not "does 320 + 380 plus this page's chrome fit", so
-	// just above it the unfloored centre track was squeezed under its own tab header and clipped it. The floor is the
+	// just above it the unfloored center track was squeezed under its own tab header and clipped it. The floor is the
 	// fix; the horizontal scroller is what keeps the overflow it can now produce visible, because FullHeightPage
 	// deliberately clips the X axis.
 	// Heading navigation has to land somewhere on every state of this page: the work item's own title once it is
@@ -175,7 +175,7 @@ describe("DevWorkflowDetailPage", () => {
 	});
 
 	// The other side of the same switch: below the breakpoint the grid is gone entirely and BOTH side surfaces are
-	// reachable only through the header's toggles, so a missing toggle strands the operator on the centre pane with no
+	// reachable only through the header's toggles, so a missing toggle strands the operator on the center pane with no
 	// way back to the run list. Mirrors the work-session detail page, which collapses through the identical mode.
 	it("collapses to the centre pane with two drawers below 1024px", async () => {
 		setViewportWidth(800);
@@ -399,7 +399,7 @@ describe("DevWorkflowDetailPage", () => {
 		expect(screen.queryByTestId("dev-workflow-detail-error")).toBeNull();
 	});
 
-	// A1: the centre pane is two views over one selection. `?tab=` is one param across both tab strips — the centre
+	// The center pane is two views over one selection. `?tab=` is one param across both tab strips — the center
 	// defaults to `graph`, the side pane to `artifacts` — so a value belonging to the other strip reads as that
 	// strip's default rather than blanking it.
 	it("opens on the graph with no tab selected, and keeps the node table mounted behind it", async () => {
@@ -434,7 +434,7 @@ describe("DevWorkflowDetailPage", () => {
 	it("leaves the centre pane alone when a side tab is clicked, because both strips write the same param", async () => {
 		server.use(...baseRoutes());
 		// The selection has to round-trip for this to mean anything: the side tab overwrites `tab` with `events`, and
-		// the centre pane must not read its own state back out of it.
+		// the center pane must not read its own state back out of it.
 		function StatefulDetailPage() {
 			const [selection, setSelection] = useState<DevWorkflowDetailSelection>({ tab: "nodes" });
 			return (

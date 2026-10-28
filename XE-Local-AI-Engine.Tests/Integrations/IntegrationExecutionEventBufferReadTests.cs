@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The replay-then-live cursor over the ring. Two properties carry the whole design and neither is obvious from the
-///     signature: a HOLE left by an abandoned reservation is skipped in silence, and a PENDING reservation is a
-///     BARRIER no reader may cross — a sequence published late would otherwise land below the reader's cursor and be
-///     lost to every live consumer, with no gap to report it.
+///     The replay-then-live cursor over the ring: a HOLE from an abandoned reservation is skipped silently, and a
+///     PENDING reservation is a BARRIER no reader crosses, or a late-published sequence would land below the cursor
+///     and be lost unreported.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionEventBufferReadTests

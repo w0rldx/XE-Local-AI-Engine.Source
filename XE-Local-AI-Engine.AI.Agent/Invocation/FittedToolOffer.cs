@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 
 /// <summary>
-///     The window-fitted tool offer (model-matrix F5): the estimated tokens the ranked tools may use beside the pinned
+///     The window-fitted tool offer: the estimated tokens the ranked tools may use beside the pinned
 ///     ones, and what each rankable tool costs, by name.
 /// </summary>
 /// <remarks>

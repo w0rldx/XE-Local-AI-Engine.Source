@@ -4,12 +4,12 @@
 //
 // The generated client types every enum as a bare `string` (they cross the wire as enum NAMES via `ToString()`), so
 // these unions are the client-side narrowing — and the place a status typo fails to compile instead of falling
-// silently through a colour map.
+// silently through a color map.
 //
 // Two narrowing shapes, deliberately:
 //   `narrow*` — a render must pick SOMETHING, so an unknown value falls back to the most inert state.
 //   `asMember*` — an unknown value has no honest substitute (a decision kind drives a BUTTON), so it reads as
-//                 `undefined` and the caller displays the raw token rather than mislabelling it.
+//                 `undefined` and the caller displays the raw token rather than mislabeling it.
 
 import type {
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1CreateGraphWorkflowDefinitionRequest as CreateGraphWorkflowDefinitionRequest,
@@ -308,7 +308,7 @@ export function narrowGraphWorkflowFailureClass(value: string | undefined | null
 }
 
 /**
- * `undefined`, not a fallback: a decision kind drives a BUTTON. An unrecognised token rendered as `Approve` would
+ * `undefined`, not a fallback: a decision kind drives a BUTTON. An unrecognized token rendered as `Approve` would
  * offer an operator a control that means something else.
  */
 export function asGraphWorkflowDecisionKind(value: string | undefined | null): GraphWorkflowDecisionKind | undefined {
@@ -323,14 +323,14 @@ export function toGraphWorkflowDecisionKinds(values: readonly string[] | undefin
 	});
 }
 
-/** `undefined` for an unknown token: the trail shows the raw string rather than mislabelling it as another event. */
+/** `undefined` for an unknown token: the trail shows the raw string rather than mislabeling it as another event. */
 export function asGraphWorkflowEventType(value: string | undefined | null): GraphWorkflowEventType | undefined {
 	return asMember(graphWorkflowEventTypes, value);
 }
 
 /**
- * Canonicalises a stored `op` token to its PascalCase member, case-insensitively — exactly as the server's own
- * `Enum.TryParse(..., ignoreCase: true)` does. `undefined` for anything else: an unrecognised operator has no safe
+ * Canonicalizes a stored `op` token to its PascalCase member, case-insensitively — exactly as the server's own
+ * `Enum.TryParse(..., ignoreCase: true)` does. `undefined` for anything else: an unrecognized operator has no safe
  * substitute, since guessing `Eq` would silently rewrite a branch on save.
  */
 export function normalizeGraphWorkflowConditionOperator(

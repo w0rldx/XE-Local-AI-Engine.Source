@@ -10,10 +10,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the provider satisfies all 8 <c>ILocalModelProvider</c> members over a faked supervisor + a fixed GGUF
-///     store with no network. Asserts the provider-name guard, the GGUF-store mapping for list/pull/delete, the
-///     supervisor mapping for warm/unload/health, and that the deferred chat/embedding clients ensure-run the right
-///     <c>(model, role)</c> on first use and route to the supervisor's endpoint.
+///     Verifies all 8 <c>ILocalModelProvider</c> members with no network: the name guard, GGUF-store list/pull/delete,
+///     supervisor warm/unload/health, and deferred clients that ensure-run <c>(model, role)</c> on first use and route
+///     to the supervisor's endpoint.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerProviderContractTests

@@ -45,7 +45,7 @@ public sealed class PlaybookMonitorService : IPlaybookMonitorService
             }
 
             // A blank scope is the overall (agent-level) cohort; a non-blank one requests the per-tool facet, which lights up only when Scope names an actual tool_events.tool_name.
-            // The store reads any non-null toolScope as a facet, so blank normalises to null; free text yields an empty, never-flagged InsufficientData cohort.
+            // The store reads any non-null toolScope as a facet, so blank normalizes to null; free text yields an empty, never-flagged InsufficientData cohort.
             var facetToolName = string.IsNullOrWhiteSpace(action.Scope) ? null : action.Scope;
 
             var comparison = await _monitorStore.GetCohortComparisonAsync(agentDefinitionId, enabledAtUtc, facetToolName, cancellationToken);

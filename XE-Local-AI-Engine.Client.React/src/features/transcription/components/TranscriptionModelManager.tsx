@@ -25,7 +25,7 @@ interface MutationHandlers {
 }
 
 /**
- * The whisper weight catalogue and the only affordance this node has for acquiring one.
+ * The whisper weight catalog and the only affordance this node has for acquiring one.
  *
  * A node ships with zero models: nothing seeds one at first run and nothing downloads one implicitly, so without
  * these controls the first transcription on every fresh install fails with "the selected transcription model is not

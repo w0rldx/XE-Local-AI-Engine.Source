@@ -40,7 +40,7 @@ internal static class ReasoningTierLabels
 /// <remarks>
 ///     Immutable constraints are deliberately ABSENT and no member here can carry one: approval policy, secret
 ///     masking, the loopback/Host gates, path guards, the sandbox, <c>AllowCloudModelAccess</c>, node-local-only
-///     analysis/eval/extraction/judge models and tool authorisation are never routing inputs. Every field has exactly
+///     analysis/eval/extraction/judge models and tool authorization are never routing inputs. Every field has exactly
 ///     one named source on the runtime package, so nothing is invented at the call site.
 /// </remarks>
 public sealed class ReasoningDispatchRequest
@@ -169,7 +169,7 @@ public static class ReasoningDispatchReasons
     /// <summary>The model was picked by the user or honored from the agent's pin, so it is not ours to replace.</summary>
     public const string ModelPinned = "model-pinned";
 
-    /// <summary>The turn can execute tools; the offer was ranked and authorised against the resolved model.</summary>
+    /// <summary>The turn can execute tools; the offer was ranked and authorized against the resolved model.</summary>
     public const string ToolsNoSwap = "tools-no-swap";
 
     /// <summary>An image rides the turn and the egress gate admitted it against the resolved model.</summary>
@@ -184,7 +184,7 @@ public static class ReasoningDispatchReasons
     /// <summary>A scheduled/headless run already holds a capacity reservation for its effective model.</summary>
     public const string UnattendedNoSwap = "unattended-no-swap";
 
-    /// <summary>The resolved model is cloud or external; a swap would change the egress posture the turn was authorised under.</summary>
+    /// <summary>The resolved model is cloud or external; a swap would change the egress posture the turn was authorized under.</summary>
     public const string CloudNoSwap = "cloud-no-swap";
 
     /// <summary>This node names no FAST model, so the tier is served by the resolved model at a lower effort.</summary>

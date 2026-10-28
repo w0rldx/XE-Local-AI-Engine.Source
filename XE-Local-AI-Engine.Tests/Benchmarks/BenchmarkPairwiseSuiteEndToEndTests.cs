@@ -17,9 +17,9 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>R7-02 end to end: the real planner, comparison executor and fitter over a 2-item suite, 27B against 9B.</summary>
+/// <summary>End to end: the real planner, comparison executor and fitter over a 2-item suite, 27B against 9B.</summary>
 /// <remarks>
-///     The unit tests of each half passed while the executor still refused every comparison the planner stamped with
+///     The unit tests of each half can pass while the executor refuses every comparison the planner stamped with
 ///     its task case, so this pins the seam between them.
 /// </remarks>
 [Category(TestCategories.Unit)]

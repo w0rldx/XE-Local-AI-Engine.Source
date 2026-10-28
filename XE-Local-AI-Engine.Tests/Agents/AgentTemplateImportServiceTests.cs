@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Import-service behavior against the real wired DI graph + encrypted SQLite: new slugs create seeded chat
-///     personas, already-seeded slugs are skipped (no duplicate), unknown slugs are reported without a write, and a
-///     duplicate slug in one request is deduped.
+///     Import-service behavior against the real DI graph + encrypted SQLite: new slugs create seeded chat personas,
+///     already-seeded slugs are skipped, unknown slugs are reported without a write, and a duplicate slug in one
+///     request is deduped.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AgentTemplateImportServiceTests

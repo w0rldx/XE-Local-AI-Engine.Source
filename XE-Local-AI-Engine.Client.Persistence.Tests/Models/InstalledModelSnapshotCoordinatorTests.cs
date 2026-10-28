@@ -62,10 +62,9 @@ public sealed class InstalledModelSnapshotCoordinatorTests
     }
 
     /// <summary>
-    ///     A GGUF this node merely FOUND on disk (reinstall, node reset, moved data directory, restored models folder)
-    ///     has no <c>model_provider_map</c> row — only a model acquired through this node gets one. Chat has always
-    ///     routed such a model to llama.cpp; the snapshot must say the same, or every benchmark surface refuses a model
-    ///     the chat surface happily runs. A row naming another provider still wins.
+    ///     A GGUF merely FOUND on disk (reinstall, reset, moved folders) has no <c>model_provider_map</c> row. Chat
+    ///     routes it to llama.cpp, so the snapshot must too, or benchmarks refuse a model chat runs. A row naming
+    ///     another provider still wins.
     /// </summary>
     [Test]
     public async Task ReadSnapshot_ReadsAnUnmappedRegistryGgufAsLlamaCppAndKeepsAForeignClaim()

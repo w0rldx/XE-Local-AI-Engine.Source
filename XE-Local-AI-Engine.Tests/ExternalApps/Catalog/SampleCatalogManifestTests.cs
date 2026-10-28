@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Content tests over <see cref="SampleCatalogManifest" />, the hand-authored test-only catalog document. The
-///     shipped seed is empty, so this fixture is where every manifest feature the engine has to honour is pinned:
+///     shipped seed is empty, so this fixture is where every manifest feature the engine has to honor is pinned:
 ///     both <c>dependsOn</c> conditions, the single open target, per-service storage sharing one storage name, the
 ///     inlined file asset, the capability add-back, the host-gateway disclosure, the required secret that ships no
 ///     default, all five variable types, the absence of any <c>user</c> key, and the <c>${…}</c> tokens resolving to
@@ -122,7 +122,7 @@ public sealed partial class SampleCatalogManifestTests
             AssertEx.NotEmpty(byType[type].ToArray(), $"the fixture must declare at least one '{type}' variable.");
         }
 
-        // D11: a secret never ships a default, and the required one exists so the install form's required-secret
+        // A secret never ships a default, and the required one exists so the install form's required-secret
         // path stays exercised against a manifest that validates.
         AssertEx.ContainsSingle(byType["secret"].ToArray(), variable => variable.Required);
         AssertEx.True(byType["secret"].All(variable => variable.Default is null), "a secret variable must never ship a default.");

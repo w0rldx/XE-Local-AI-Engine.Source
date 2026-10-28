@@ -8,11 +8,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
-///     <see cref="TokenStore" /> is read-only since the Central Platform pairing flow that wrote
-///     <c>worker-credentials.enc</c> was removed: nothing creates, updates or deletes the file any more. These tests
-///     pin the two reads a shipped node still depends on — a node that never paired answers null (so
-///     <c>AgentHomeIdentityProvider</c> falls back to the loopback identity), and one whose file an earlier build
-///     wrote keeps answering with the node id it was issued.
+///     <see cref="TokenStore" /> is read-only: nothing writes <c>worker-credentials.enc</c> (only the retired Central
+///     Platform pairing did). Pinned reads: no file answers null, so <c>AgentHomeIdentityProvider</c> uses the
+///     loopback identity, and an existing file keeps its node id.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TokenStoreTests : IDisposable

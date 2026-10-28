@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed class NodeTutorialStateService : INodeTutorialStateService
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
     private static readonly SemaphoreSlim PersistenceLock = new(initialCount: 1, maxCount: 1);
 
     private readonly INodeIdentityStore _identityStore;

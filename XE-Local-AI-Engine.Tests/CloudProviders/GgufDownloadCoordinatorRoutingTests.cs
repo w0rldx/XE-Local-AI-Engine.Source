@@ -17,14 +17,12 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
-using GgufAcquisitionOperationKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 /// <summary>
-///     Proves the GGUF download path writes the <c>model_provider_map</c> "llamacpp" row for the canonical model name on
-///     a successful download — the single production writer that makes a downloaded GGUF reach the llama.cpp runtime
-///     regardless of the unmapped-routing default. A failed download writes NO mapping row.
+///     A successful GGUF download writes the <c>model_provider_map</c> "llamacpp" row for the canonical name: the
+///     single production writer that routes a downloaded GGUF to llama.cpp regardless of the unmapped default. A failed
+///     download writes NO row.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufDownloadCoordinatorRoutingTests
@@ -88,7 +86,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Completed);
 
         AssertEx.Equal(GgufDownloadPhase.Completed, coordinator.GetStatus(canonical)!.Phase);
-        // V-03: the resumed download supersedes the Interrupted row instead of being listed beside it.
+        // The resumed download supersedes the Interrupted row instead of being listed beside it.
         var rows = coordinator.ListStatuses();
         AssertEx.Equal(expected: 1, rows.Count);
         AssertEx.Equal(GgufDownloadPhase.Completed, rows[0].Phase);
@@ -269,7 +267,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         var canonical = GgufModelName.Format(Repo, Quant);
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
         mapStore.Seed(canonical, "ollama");
-        var logger = new CapturingLogger<GgufDownloadCoordinator>();
+        var logger = new RecordingLogger<GgufDownloadCoordinator>();
         var coordinator = BuildCoordinator(new ProvisioningDownloadTransaction(),
             mapStore,
             GgufAcquisitionDisposition.VerifiedInstalled,

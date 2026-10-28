@@ -12,10 +12,9 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
 /// <summary>
-///     Shared process-boundary fakes for the <see cref="WhisperServerProcessSupervisor" /> tests: a launcher that
-///     records launch specs and hands back controllable in-memory handles (no real <c>whisper-server</c>), a readiness
-///     probe with toggleable readiness and liveness driven by gates the test owns, a fixed backend selector and binary
-///     manager, and a recording GPU-load admission.
+///     Shared process-boundary fakes for the <see cref="WhisperServerProcessSupervisor" /> tests: a launcher recording
+///     specs and returning controllable in-memory handles (no real <c>whisper-server</c>), a test-gated readiness
+///     probe, fixed selector and binary manager, and a recording GPU admission.
 /// </summary>
 /// <remarks>
 ///     Nothing here is copied out of the stable-diffusion.cpp doubles file — that file is read-only for this slice.
@@ -137,7 +136,7 @@ internal sealed class FakeWhisperReadinessProbe : IWhisperServerReadinessProbe
     /// <summary>When set, readiness parks on this gate and resolves to whatever it completes with.</summary>
     public TaskCompletionSource<bool>? ReadinessGate { get; set; }
 
-    /// <summary>Signalled once readiness has actually been awaited, so a test never races the code under test.</summary>
+    /// <summary>Signaled once readiness has actually been awaited, so a test never races the code under test.</summary>
     public TaskCompletionSource ReadinessReached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Count of reuse-path liveness probes issued — asserts the hot path did or did not probe.</summary>
@@ -374,8 +373,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Materializes an empty weight file for every catalogue row, because the supervisor refuses to spawn for a
-    ///     model it cannot find on disk — which is the honest behaviour, and means the fakes need a real directory.
+    ///     Materializes an empty weight file for every catalog row, because the supervisor refuses to spawn for a
+    ///     model it cannot find on disk — which is the honest behavior, and means the fakes need a real directory.
     /// </summary>
     private static string CreateModelsDirectory()
     {

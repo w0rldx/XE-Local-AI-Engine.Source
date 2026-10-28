@@ -105,7 +105,7 @@ public sealed class ListGraphWorkflowRunsRequestValidator : Validator<ListGraphW
             .InclusiveBetween(1, GraphWorkflowRequestLimits.MaxRunPageSize)
             .WithMessage($"A run page holds between 1 and {GraphWorkflowRequestLimits.MaxRunPageSize} runs.");
 
-        // Refused here rather than in the endpoint so an unknown token answers 400 with the name it did not recognise,
+        // Refused here rather than in the endpoint so an unknown token answers 400 with the name it did not recognize,
         // instead of the endpoint's Enum.Parse throwing its way to a 500.
         RuleFor(static request => request.Status)
             .Must(static status => status is not null && StatusNames.Contains(status, StringComparer.OrdinalIgnoreCase))

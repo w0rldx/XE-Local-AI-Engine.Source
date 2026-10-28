@@ -171,9 +171,9 @@ public sealed class SelectedPathResolverTests
     }
 
     /// <summary>
-    ///     A sibling minted by regenerating an EARLY turn AFTER later turns exist takes the next free sequence, so its
-    ///     raw sequence lands past those later turns. It still belongs to the early turn: the anchor resolver must place
-    ///     it at its group's earliest member sequence so callers order/filter it into the early position.
+    ///     A sibling minted by regenerating an EARLY turn after later turns exist takes the next free sequence, past
+    ///     those later turns, yet still belongs to the early turn: the anchor resolver places it at its group's
+    ///     earliest member sequence.
     /// </summary>
     [Test]
     public void CreateAnchorResolver_ForLateMintedSiblingOfEarlyTurn_AnchorsAtTheGroupsEarliestMember()

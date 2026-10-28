@@ -31,7 +31,7 @@ public static class SchedulerJobKeys
 
     /// <summary>
     ///     Per-fire trigger <c>JobDataMap</c> key carrying the id <c>TriggerNowAsync</c> minted and returned for this fire,
-    ///     so the caller can recognise its own terminal run event among every other fire of the same job.
+    ///     so the caller can recognize its own terminal run event among every other fire of the same job.
     /// </summary>
     /// <remarks>
     ///     Carried in memory from fire to the published run events only; it is never persisted and is not a parameter

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 // The editor's rules, tested on the hook rather than through the canvas: jsdom gives React Flow a 0×0 viewport, so a
-// connect gesture can never be made with a pointer here. What `onConnect` DOES with a connection is the behaviour that
+// connect gesture can never be made with a pointer here. What `onConnect` DOES with a connection is the behavior that
 // matters, and it is fully reachable by calling it.
 
 import { act, renderHook } from "@testing-library/react";
@@ -158,7 +158,7 @@ describe("useGraphWorkflowEditor palette", () => {
 		expect(result.current.nodes.map((node) => node.id)).toEqual(["agent-1", "agent-2"]);
 		expect(result.current.nodes[0]?.type).toBe("agent");
 		expect(result.current.nodes[0]?.data.kind).toBe("Agent");
-		// F-1: an Agent node starts on three attempts, a structural kind on one.
+		// An Agent node starts on three attempts, a structural kind on one.
 		expect(result.current.nodes[0]?.data.maxAttempts).toBe(3);
 	});
 

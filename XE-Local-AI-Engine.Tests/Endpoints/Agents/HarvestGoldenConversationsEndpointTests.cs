@@ -10,11 +10,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Harvest endpoints (<c>agents/{id}/golden-conversations/harvest</c> + <c>.../{goldenId}/approve</c>).
-///     Operator-gated; the harvest POST returns the per-run counts (404 for an unknown agent); approve flips a staged
-///     harvested case enabled (404 for an unknown / cross-agent / non-harvested / already-enabled case). Both are
-///     route-only POSTs, so the client posts <c>{}</c> (FastEndpoints 415s a truly empty body).
+///     Golden harvest and approve endpoints, Operator-gated: harvest returns per-run counts (404 for an unknown
+///     agent); approve enables a staged harvested case of that agent, else 404.
 /// </summary>
+/// <remarks>Both are route-only POSTs, so the client posts <c>{}</c>: FastEndpoints 415s a truly empty body.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class HarvestGoldenConversationsEndpointTests
 {

@@ -78,7 +78,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             // caller bug, and answering it with another run would hand out a run they never asked for.
             EnsureReplayIsOfTheSameDefinition(replayed, definitionId, requestId);
 
-            // Signalled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
+            // Signaled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
             // the run may still be waiting for its first tick.
             return await SignalAndComposeAsync(replayed.Id, cancellationToken);
         }
@@ -174,7 +174,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         }
 
         // A repeat cancel is the SAME ask answered again, not a conflict: the intent is already committed and the drain is already running, so this mirrors the
-        // start replay — accepted, idempotent and signalled, because a caller that never saw the first answer is exactly the caller that sends this one.
+        // start replay — accepted, idempotent and signaled, because a caller that never saw the first answer is exactly the caller that sends this one.
         if (run.Status == GraphWorkflowRunStatus.Cancelling)
         {
             return await SignalAndComposeAsync(runId, cancellationToken);
@@ -425,7 +425,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
 
     /// <summary>
     ///     The refusal the rows earn, or null; <paramref name="replay" /> is true when this id already steered the row.
-    ///     One judgement for the first read and for a declined append, so both answer alike.
+    ///     One judgment for the first read and for a declined append, so both answer alike.
     /// </summary>
     private Exception? SteerRefusal(GraphWorkflowRunSnapshot run,
         GraphWorkflowNodeRunSnapshot nodeRun,
@@ -635,7 +635,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
     /// <summary>The run status that follows its rows, written against the version it was read at.</summary>
     /// <remarks>
     ///     Deliberately NON-terminal only: terminalization carries the run's own result off the End node that
-    ///     succeeded, and that is the dispatcher's write in the tick this decision has just signalled. The one move
+    ///     succeeded, and that is the dispatcher's write in the tick this decision has just signaled. The one move
     ///     this owns is <c>WaitingForApproval → Running</c>, which is what makes the answer this method returns honest
     ///     instead of a status the caller would have to re-read to disbelieve.
     /// </remarks>

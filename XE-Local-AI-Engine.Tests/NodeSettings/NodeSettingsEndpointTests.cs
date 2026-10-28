@@ -552,7 +552,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("reasoningBudgetHighTokens", "200000", "A reasoning budget must be from", false)]
     [Arguments("chatOutputCapMaxTokens", "1", "The chat output cap ceiling must be from", false)]
     [Arguments("usageRates", "{\"m\":{\"inputPer1M\":-1,\"outputPer1M\":0}}", "Usage rates must have", false)]
-    // A body the serializer cannot convert names the wire path, never the CLR type (R1-05).
+    // A body the serializer cannot convert names the wire path, never the CLR type.
     [Arguments("usageRates.x", "1", "The value of 'usageRates.x' has the wrong JSON type or shape.", false)]
     // Shape checks on the agentic whitelist.
     [Arguments("speculativeMode", "\"bogus\"", "Unknown speculative decoding mode.", true)]
@@ -733,7 +733,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Contains(ceiling.Errors.Single().ErrorMessage, "or null for the default", StringComparison.Ordinal);
     }
 
-    /// <summary>F-70: an explicit null clears a stored nullable numeric knob back to "unset, use the default"; an omitted member keeps it.</summary>
+    /// <summary>An explicit null clears a stored nullable numeric knob back to "unset, use the default"; an omitted member keeps it.</summary>
     [Test]
     [Arguments(nameof(SaveNodeSettingsRequest.LlamaIdleTimeToLiveSeconds), 600L)]
     [Arguments(nameof(SaveNodeSettingsRequest.DetachedGraceSeconds), 0L)]
@@ -2469,7 +2469,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments(false, StoredNodeSettings.ExternalAccessProfileOffline)]
     public async Task SaveNodeSettings_WhenTheEditedSwitchIsFlippedBack_RestoresThePresetTheTripleMatches(bool presetValue, string preset)
     {
-        // R1-05: the triple is exactly a preset again, so the label is that preset, not "custom".
+        // The triple is exactly a preset again, so the label is that preset, not "custom".
         var settings = await SaveAsync(new StoredNodeSettings
             {
                 ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileCustom,
@@ -2517,7 +2517,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenTheProfileIsNotAPreset_ReturnsBadRequestWithoutSaving(string profile)
     {
         // "pending" and "custom" are engine-written states, so a client must not be able to claim either; an unknown
-        // literal is simply invalid. All three are rejected at the boundary, ahead of Normalize's defence in depth.
+        // literal is simply invalid. All three are rejected at the boundary, ahead of Normalize's defense in depth.
         var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
         {
             ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline
@@ -2599,7 +2599,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenTheUiModeIsNotOneOfTheTwoLiterals_ReturnsBadRequestWithoutSaving(string mode)
     {
         // The boundary is the trust boundary: the SPA can only produce the two literals, so anything else is a
-        // hand-written client and is rejected ahead of Normalize's defence in depth. An empty string is rejected
+        // hand-written client and is rejected ahead of Normalize's defense in depth. An empty string is rejected
         // rather than read as "keep the current value" — only an ABSENT member keeps.
         var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
         {
@@ -2669,7 +2669,7 @@ public sealed class NodeSettingsEndpointTests
     public async Task SaveNodeSettings_WhenTheSandboxSecurityProfileIsNotAChoice_ReturnsBadRequestWithoutSaving(string profile)
     {
         // "pending" is engine-written at setup, so a client must never claim it; anything else is not one of the two literals. Both are
-        // rejected at the boundary, ahead of Normalize's defence in depth, and an empty string is not read as "keep".
+        // rejected at the boundary, ahead of Normalize's defense in depth, and an empty string is not read as "keep".
         var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
         {
             SandboxSecurityProfile = StoredNodeSettings.SandboxSecurityProfileHigh
@@ -2799,7 +2799,7 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public async Task SaveNodeSettings_WhenTheFileIsUnreadable_ReturnsAProblemResponseNamingTheRecovery()
     {
-        // Driven against the REAL store over a hand-corrupted file, because the behaviour under test lives in the
+        // Driven against the REAL store over a hand-corrupted file, because the behavior under test lives in the
         // store's strict read, and a substitute would only assert a double against a double. It also goes through the
         // real handler chain, since the mapping is a global IExceptionHandler arm rather than a per-endpoint catch and
         // nothing in the endpoint itself shows it.
@@ -3083,7 +3083,7 @@ public sealed class NodeSettingsEndpointTests
         mutate(latest ?? new StoredNodeSettings());
 
     /// <summary>
-    ///     A substitute store holding <paramref name="current" />, wired to honour
+    ///     A substitute store holding <paramref name="current" />, wired to honor
     ///     <see cref="INodeSettingsStore.UpdateAsync" />'s contract: it runs the mutation against the record it holds
     ///     and RETURNS what it persisted, which is the record the save endpoint renders its response from.
     ///     NSubstitute's own auto-value for that call is a null record, which no real store may return.

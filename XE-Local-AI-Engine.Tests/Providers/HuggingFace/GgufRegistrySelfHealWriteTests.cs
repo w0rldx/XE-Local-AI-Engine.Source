@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
 using TUnit.Core.Exceptions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
@@ -12,8 +13,8 @@ using Infra = GgufStoreTestInfrastructure;
 ///     into the returned list whether or not the manifest can be rewritten.
 /// </summary>
 /// <remarks>
-///     The Windows brick this covers: the reader used to hold <c>index.json</c> open while the self-heal replaced it,
-///     so every read threw <see cref="UnauthorizedAccessException" /> for good.
+///     The Windows brick this covers: a reader holding <c>index.json</c> open while the self-heal replaces it makes
+///     every read throw <see cref="UnauthorizedAccessException" /> for good.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class GgufRegistrySelfHealWriteTests
@@ -100,7 +101,7 @@ public sealed class GgufRegistrySelfHealWriteTests
         var weightPath = Path.Combine(modelsDirectory, WeightFileName);
         await File.WriteAllBytesAsync(weightPath, [1, 2, 3, 4]);
 
-        var hash = await GgufAcquisitionSidecar.ComputeSha256Async(weightPath, CancellationToken.None);
+        var hash = await FileSha256.ComputeAsync(weightPath, CancellationToken.None);
         var modelFingerprint = GgufModelContentFingerprint.ComputeV1([
             new GgufModelContentMember
             {

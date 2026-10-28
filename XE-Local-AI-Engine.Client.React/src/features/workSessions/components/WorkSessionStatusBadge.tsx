@@ -8,7 +8,7 @@ import {
 	type WorkSessionTaskStatus,
 } from "@/features/workSessions/models/WorkSessionModels";
 
-// Colour map only — the pill itself is the shared StatusBadge, exactly as BenchmarkStatusBadge does it.
+// Color map only — the pill itself is the shared StatusBadge, exactly as BenchmarkStatusBadge does it.
 const statusColors: Record<WorkSessionStatus, MantineColor> = {
 	Draft: "gray",
 	Running: "blue",

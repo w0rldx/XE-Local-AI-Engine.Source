@@ -33,7 +33,7 @@ internal sealed partial class SecretValueRedactor
     public static IEnumerable<string> WithParts(IEnumerable<string> values, int minLength)
     {
         ArgumentNullException.ThrowIfNull(values);
-        // Whitespace parts catch "Bearer <token>"; the part after the first '=' catches "--api-key=<token>" (Codex review 2026-09-30).
+        // Whitespace parts catch "Bearer <token>"; the part after the first '=' catches "--api-key=<token>".
         return values.SelectMany(static value => value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Prepend(value))
                      .SelectMany(WithAssignedValue)
                      .Where(value => value.Length >= minLength);
@@ -44,7 +44,7 @@ internal sealed partial class SecretValueRedactor
     ///     whitespace parts, but each argument only as a whole token plus its after-<c>=</c> tail; never a fully qualified path or flag name.
     /// </summary>
     /// <remarks>
-    ///     An argument is already a token, so splitting it would blank every long word of a <c>cmd /c</c> script (Windows tester round 3);
+    ///     An argument is already a token, so splitting it would blank every long word of a <c>cmd /c</c> script;
     ///     a path is not a credential, the API returns arguments in plaintext anyway, and a missing-file error must show it.
     /// </remarks>
     public static IEnumerable<string> ForCommand(IEnumerable<string> secretValues, IEnumerable<string> arguments, int minLength)
@@ -83,7 +83,7 @@ internal sealed partial class SecretValueRedactor
     /// </summary>
     /// <remarks>
     ///     A token inside <c>cmd /c "srv --token sk-…"</c> or <c>"Authorization: Bearer sk-…"</c> is still redacted when the server
-    ///     echoes it alone (security and Codex reviews, tester round 3); plain script words and flag names stay readable.
+    ///     echoes it alone; plain script words and flag names stay readable.
     /// </remarks>
     private static IEnumerable<string> CredentialLikeParts(string argument)
     {

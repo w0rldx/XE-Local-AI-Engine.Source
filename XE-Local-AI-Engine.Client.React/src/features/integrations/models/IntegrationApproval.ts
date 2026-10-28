@@ -22,8 +22,8 @@ export function resolveApprovalRequiringTools(
 		}
 		// `ask_user` is approval-gated too — that is how the call reaches the human — but an unattended run does not
 		// stop on it: the coordinator stashes a "not answered" result and the turn continues. Warning about it named a
-		// tool that would not actually fail the run. Every other behaviour still composes the tighten-only OR, so an
-		// unrecognised value stays fail-closed: a failing tool is approval-gated by construction.
+		// tool that would not actually fail the run. Every other behavior still composes the tighten-only OR, so an
+		// unrecognized value stays fail-closed: a failing tool is approval-gated by construction.
 		if (entry.unattendedBehaviour === integrationToolContinuesUnanswered) {
 			return false;
 		}

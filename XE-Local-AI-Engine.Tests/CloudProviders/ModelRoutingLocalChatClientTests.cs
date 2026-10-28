@@ -12,10 +12,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Proves the model-routing client's reconnect property: it dispatches each send by
-///     <see cref="ChatOptions.ModelId" /> to the provider the persisted map names (or the default for unmapped models),
-///     reaches a NEW per-model client when the model switches mid-session (no node restart), caches one client per
-///     (provider, model), and never disposes a resolved adapter at the boundary.
+///     The model-routing client routes each send by <see cref="ChatOptions.ModelId" /> to the mapped provider (or the
+///     default), reaches a NEW per-model client when the model switches mid-session, caches one client per (provider,
+///     model), and never disposes a resolved adapter.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelRoutingLocalChatClientTests

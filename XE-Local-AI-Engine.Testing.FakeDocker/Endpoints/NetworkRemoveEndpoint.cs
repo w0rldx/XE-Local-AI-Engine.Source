@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Testing.FakeDocker.Endpoints;
 using Microsoft.AspNetCore.Http;
 
 /// <summary>
-///     <c>DELETE /networks/{id-or-name}</c>. A network that still has containers attached is refused with the
-///     daemon's own <c>403</c>, which is what makes teardown ordering observable; an absent one is a 404 the
-///     production client swallows, which is what makes removal idempotent.
+///     <c>DELETE /networks/{id-or-name}</c>. A network with attached containers gets the daemon's <c>403</c>, making
+///     teardown order observable; an absent one is a 404 the client swallows, making removal idempotent.
 /// </summary>
 internal static class NetworkRemoveEndpoint
 {

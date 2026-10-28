@@ -7,10 +7,9 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The always-on tool names a relevance filter may never hide. The set is deliberately narrow: the four
-///     work-session state tools plus every approval-bearing BUILT-IN. MCP and custom tools are ranked like anything
-///     else — they are exactly the tools that push a real agent past the threshold, and hiding one never bypasses the
-///     approval it carries from registry build.
+///     The always-on tool names relevance filtering never hides: the four work-session state tools plus every
+///     approval-bearing BUILT-IN. MCP and custom tools are ranked: they push agents past the threshold, and a
+///     hidden one keeps its approval.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ToolRelevanceCoreSetTests

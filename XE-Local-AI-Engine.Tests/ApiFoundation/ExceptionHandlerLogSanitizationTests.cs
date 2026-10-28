@@ -17,6 +17,7 @@ using Serilog.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -31,13 +32,13 @@ public sealed class ExceptionHandlerLogSanitizationTests
     private const string ExpectedPath = "/safe\\u000Apath\\u007F\\u2028next\\u2029line";
 
     [Test]
-    public void RequestLogSanitizer_EscapesEveryUnicodeControlCharacter()
+    public void LogValueSanitizer_EscapesEveryUnicodeControlCharacter()
     {
         var controls = string.Concat(Enumerable.Range(char.MinValue, char.MaxValue + 1)
                                                .Select(static value => (char)value)
                                                .Where(char.IsControl));
 
-        var sanitized = RequestLogSanitizer.Sanitize(controls);
+        var sanitized = LogValueSanitizer.Sanitize(controls);
 
         AssertEx.False(sanitized.Any(IsLineBreakingOrControlCharacter));
         foreach (var control in controls)
@@ -45,10 +46,10 @@ public sealed class ExceptionHandlerLogSanitizationTests
             AssertEx.Contains(sanitized, $"\\u{(int)control:X4}", StringComparison.Ordinal);
         }
 
-        AssertEx.Equal("\\u0085\\u2028\\u2029", RequestLogSanitizer.Sanitize("\u0085\u2028\u2029"));
-        AssertEx.Equal(string.Empty, RequestLogSanitizer.Sanitize(null));
-        AssertEx.Equal(string.Empty, RequestLogSanitizer.Sanitize(string.Empty));
-        AssertEx.Equal("ordinary/value", RequestLogSanitizer.Sanitize("ordinary/value"));
+        AssertEx.Equal("\\u0085\\u2028\\u2029", LogValueSanitizer.Sanitize("\u0085\u2028\u2029"));
+        AssertEx.Equal(string.Empty, LogValueSanitizer.Sanitize(null));
+        AssertEx.Equal(string.Empty, LogValueSanitizer.Sanitize(string.Empty));
+        AssertEx.Equal("ordinary/value", LogValueSanitizer.Sanitize("ordinary/value"));
     }
 
     [Test]

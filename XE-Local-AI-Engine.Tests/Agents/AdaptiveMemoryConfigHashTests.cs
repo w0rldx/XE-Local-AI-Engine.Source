@@ -16,11 +16,9 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
-///     Proves the adaptive-memory metadata fields are non-config-affecting: the per-agent <c>DefaultTemporaryChat</c>
-///     flag and a playbook action's <c>MemoryScope</c> never reach the runtime package config hash, and the resolver
-///     surfaces <c>PlaybookEnabled</c> on the runtime projection so the post-run extraction seam can gate without a
-///     re-fetch. The cross-repo golden in <c>RuntimePackageConfigHashTests</c> remains the canonical proof that
-///     <c>RuntimePackageConfigHash.Compute</c> is byte-identical (its signature is untouched by this feature).
+///     Proves <c>DefaultTemporaryChat</c> and playbook <c>MemoryScope</c> never reach the runtime package config hash
+///     (<c>RuntimePackageConfigHashTests</c> holds the golden), and the resolver surfaces <c>PlaybookEnabled</c>
+///     for the post-run extraction gate.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AdaptiveMemoryConfigHashTests

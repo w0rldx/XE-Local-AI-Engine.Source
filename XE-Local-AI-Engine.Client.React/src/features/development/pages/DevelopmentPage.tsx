@@ -21,7 +21,7 @@ import { useDevelopmentPageController } from "@/features/development/hooks/useDe
 import { developmentFilesystemBoundaryServed } from "@/features/development/models/DevelopmentModels";
 
 export interface DevelopmentPageProps {
-	/** Deep-link seed (X8). Absent — the ordinary arrival — leaves the default-to-the-first-project behaviour alone. */
+	/** Deep-link seed. Absent — the ordinary arrival — leaves the default-to-the-first-project behavior alone. */
 	readonly initialProjectId?: string;
 	readonly initialTaskId?: string;
 }
@@ -312,7 +312,7 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 											run: preview,
 										}}
 										repositoryReady={repositoryReady}
-										// Y3: while the run is live, the approval that authorises a workflow-driven apply is a
+										// While the run is live, the approval that authorizes a workflow-driven apply is a
 										// gate node upstream of the integration node and the workflow performs the apply — a
 										// second Apply button here would be a duplicate authority or a bypass of the graph's
 										// audit trail. Once the run has ENDED it can answer no further gate, so withholding

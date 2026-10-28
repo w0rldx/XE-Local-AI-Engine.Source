@@ -169,7 +169,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         //      release them together, so they truly contend for the lock with no sleeps deciding the winner; the safety
         //      invariant is asserted every round under real concurrency.
         //   2. Deterministic ordering coverage: a scheduler can, on some machines/loads, arbitrate every gated round the
-        //      SAME way, which used to flake the "both orderings observed" check. So the two orderings are ALSO forced
+        //      SAME way, which would flake the "both orderings observed" check. So the two orderings are ALSO forced
         //      explicitly — the intended winner is awaited to completion before the loser starts, so the lock arbitrates
         //      the intended branch instead of the scheduler — proving BOTH terminalize-then-purge and
         //      purge-then-terminalize on every run. There is no production seam to force the interleaving inside a single
@@ -296,7 +296,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     [Test]
     public async Task Cancel_BeforeTheRunStarted_AttributesTheThinEnvelopeFromTheRowsModel()
     {
-        // R5-07: a cancel before the run writes a thin envelope; it is booked under the row model's provider, never "unknown", and its tokens stay NULL (not reported).
+        // A cancel before the run writes a thin envelope; it is booked under the row model's provider, never "unknown", and its tokens stay NULL (not reported).
         await using var provider = await BuildProviderAsync("envelope-cancel-provider.sqlite");
         var persistence = CreateService(provider, LocalResolver());
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest

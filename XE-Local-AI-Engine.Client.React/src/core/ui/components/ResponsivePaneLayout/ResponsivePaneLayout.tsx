@@ -16,7 +16,7 @@ export interface ResponsivePaneLayoutProps {
 	readonly narrowMode: "stack" | "mainOnly";
 	/** The left rail: a definition list, a run list, a plan panel. The first grid column. */
 	readonly list: ReactNode;
-	/** The centre pane. The only pane a narrow viewport is guaranteed to show. */
+	/** The center pane. The only pane a narrow viewport is guaranteed to show. */
 	readonly main: ReactNode;
 	/** The third column, decoration included (a `Paper` wrap, a scroller). Falsy keeps the grid at two columns. */
 	readonly side?: ReactNode;
@@ -31,14 +31,14 @@ const FILL: CSSProperties = { flex: 1, minHeight: 0 };
 /**
  * The narrow/wide switch and the wide three-column grid shared by the graph-workflow editor and run modes, the
  * development-workflow detail page and the work-session detail page. Four call sites had rebuilt the same grid, and
- * the graph-workflow copy had silently drifted to a different centre floor; one component is what stops a fifth
+ * the graph-workflow copy had silently drifted to a different center floor; one component is what stops a fifth
  * variant appearing and what makes the floors below a single decision rather than four.
  *
  * This is layout only — WHAT is in a pane stays in the feature that owns it, which is why every pane arrives as a
  * node and the Drawers that carry a pane on a narrow viewport stay at the call site: their position, size, title and
  * open-state are feature state, and a prop object for each would share the word `Drawer` and nothing else.
- * (`docs/wiki/22-workflow-engines-divergence-register.md` D2/D10 keep the two workflow engines' *behaviour* apart;
- * the owner has ruled that this arithmetic is not engine behaviour and is shared deliberately.)
+ * (`docs/wiki/22-workflow-engines-divergence-register.md` D2/D10 keep the two workflow engines' *behavior* apart;
+ * the owner has ruled that this arithmetic is not engine behavior and is shared deliberately.)
  *
  * `isNarrow` is a prop rather than a viewport read of this component's own. The decision belongs to the page and is
  * made ONCE there, because the page's Drawers, its header toggles and this grid must agree exactly — and because the
@@ -54,7 +54,7 @@ const FILL: CSSProperties = { flex: 1, minHeight: 0 };
  * The wrappers exist only so React can reconcile the panes: `display: contents` keeps them out of layout entirely, so
  * the panes stay the grid's own items when wide, and the list stays a direct child of the stack when narrow.
  *
- * The centre track carries a floor: with `minmax(0, 1fr)` a container just wide enough for two panes left the centre
+ * The center track carries a floor: with `minmax(0, 1fr)` a container just wide enough for two panes left the center
  * at ~120px and clipped a tab header to "Gra"/"Nod". `overflowX: auto` is the other half: FullHeightPage clips the X
  * axis on purpose, so without its own scroller the grid would go on hiding the overflow the floor makes honest.
  */

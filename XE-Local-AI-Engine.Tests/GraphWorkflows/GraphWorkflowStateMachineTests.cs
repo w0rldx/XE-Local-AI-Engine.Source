@@ -389,7 +389,7 @@ public sealed class GraphWorkflowStateMachineTests
 
     /// <summary>
     ///     The refusal must be read STRUCTURALLY. A byte comparison against the minimal <c>PauseOutputJson</c> document
-    ///     recognises the pre-flight probe and misses every document a real run stores — and the run would then be
+    ///     recognizes the pre-flight probe and misses every document a real run stores — and the run would then be
     ///     cancelled with <c>FailureClass.None</c> and a reason that never mentions the rejection that stopped it.
     /// </summary>
     [Test]

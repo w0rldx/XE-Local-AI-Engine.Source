@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-/// <summary>Names — and recognises — the transient systemd scope every isolated command runs in.</summary>
+/// <summary>Names — and recognizes — the transient systemd scope every isolated command runs in.</summary>
 /// <remarks>
 ///     The unit name is the whole termination story: a jail's processes live in their own PID namespace and the pid the engine holds is
 ///     <c>setsid</c>'s, so naming the cgroup and asking the user manager to signal it is what reaches every process, one that deliberately

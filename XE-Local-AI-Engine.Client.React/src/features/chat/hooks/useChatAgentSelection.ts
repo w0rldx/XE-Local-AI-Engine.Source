@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 
-import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
+import { useAgentDefinitions } from "@/core/agents/queries/useAgentDefinitions";
 import type { AgentOption, ChatScope } from "@/features/chat/models/ChatModels";
 import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";

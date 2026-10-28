@@ -6,12 +6,12 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Guards against the exact drift <see cref="ConversationFootprintPurge" />'s remarks warn about — FK
-///     cascades are off on the node-sqlite connection, so a table keyed by <c>conversation_id</c> (or
-///     <c>message_id</c>) that is added to the EF model but never added to the purge helper would silently orphan
-///     encrypted rows on a retention purge. This walks the live EF model rather than a migrated schema so the failure
-///     fires the moment a new conversation/message-keyed entity configuration is added, before a migration even exists.
+///     Guards the drift <see cref="ConversationFootprintPurge" /> warns about: cascades are off on node-sqlite, so a
+///     <c>conversation_id</c>/<c>message_id</c>-keyed table missing from the purge orphans encrypted rows.
 /// </summary>
+/// <remarks>
+///     Walks the live EF model, not a migrated schema, so it fires as soon as such an entity is configured.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class ConversationFootprintPurgeCoverageTests : IDisposable
 {

@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { isTerminalAcquisitionPhase } from "@/core/model-downloads/models/GgufAcquisitionModels";
+import { useActiveGgufDownloads } from "@/core/model-downloads/queries/useGgufDownload";
 import { Chat } from "@/features/chat/pages/Chat";
-import { isTerminalAcquisitionPhase } from "@/features/models/models/GgufAcquisitionModels";
-import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
 import { AiAcknowledgementGate } from "@/features/onboarding/components/AiAcknowledgementGate";
 
 // Chat is the landing page, so it also carries the first-run download progress. The feed is the models feature's

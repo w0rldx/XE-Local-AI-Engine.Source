@@ -7,9 +7,9 @@ import {
 	downloadRecommendedEmbeddingMutation,
 	downloadRecommendedRerankerMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { useActiveGgufDownloads, useCancelGgufDownload } from "@/core/model-downloads/queries/useGgufDownload";
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { toast } from "@/core/ui/notifications/Toast";
-import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 /** One-click "download the recommended reranker / embedding model" actions and their shared progress feed. */
 export function useRecommendedModelDownloads() {

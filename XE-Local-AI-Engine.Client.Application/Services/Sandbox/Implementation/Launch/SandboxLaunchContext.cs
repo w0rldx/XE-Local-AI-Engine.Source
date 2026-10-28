@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 ///     which jail directory becomes the sandbox's writable root, and how long the transient scope may live.
 /// </summary>
 /// <remarks>
-///     Optional everywhere: a caller supplying nothing gets the non-isolated behaviour unchanged, which is what keeps AgentHome, Coder and
+///     Optional everywhere: a caller supplying nothing gets the non-isolated behavior unchanged, which is what keeps AgentHome, Coder and
 ///     Development Mode byte-identical to what they ran before this layer existed.
 /// </remarks>
 public sealed record SandboxLaunchContext

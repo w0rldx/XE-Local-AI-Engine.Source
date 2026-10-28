@@ -18,7 +18,7 @@ public sealed class SampleValidationContext
 
     public required IChatClient? CriticChatClient { get; init; }
 
-    /// <summary>"label|normalised user turn" keys this generation already accepted; the caller owns one set per run.</summary>
+    /// <summary>"label|normalized user turn" keys this generation already accepted; the caller owns one set per run.</summary>
     public ISet<string> AcceptedUserMessages { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 }
 
@@ -103,7 +103,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
             ScoredBy = "schema"
         });
 
-        // Not a flaw in the assistant's behaviour but in the generation itself, so these are rejected rather than kept
+        // Not a flaw in the assistant's behavior but in the generation itself, so these are rejected rather than kept
         // as Bad data: a Bad label on a correct answer would teach the wrong lesson.
         if (DatasetGenerationExecutor.EchoesTeacherPrompt(record!.UserMessage))
         {

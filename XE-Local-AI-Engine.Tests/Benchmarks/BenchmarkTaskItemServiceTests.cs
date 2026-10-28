@@ -196,7 +196,7 @@ public sealed class BenchmarkTaskItemServiceTests
             Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>An override the rubric can honour is written unchanged — the check refuses, it never rewrites.</summary>
+    /// <summary>An override the rubric can honor is written unchanged — the check refuses, it never rewrites.</summary>
     [Test]
     public async Task Create_WithAnOverrideTheRubricHonours_IsWritten()
     {

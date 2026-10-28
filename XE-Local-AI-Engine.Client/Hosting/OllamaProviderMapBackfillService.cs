@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Models;
 
 /// <summary>
-///     One-time startup backfill that closes the FRR-2 upgrade gap: every installed Ollama model pulled on an earlier
+///     One-time startup backfill that closes the provider-map upgrade gap: every installed Ollama model pulled on an earlier
 ///     build carries no <c>model_provider_map</c> row, and is mapped to <c>ollama</c> here.
 /// </summary>
 /// <remarks>

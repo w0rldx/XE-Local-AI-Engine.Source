@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 /// <summary>
 ///     The OS seam the orphan reaper kills through, mirroring <c>IStaleProcessScanner</c> so the reaper's
-///     decision logic can be tested against a fake without signalling anything real.
+///     decision logic can be tested against a fake without signaling anything real.
 /// </summary>
 public interface ISandboxProcessGroupKiller
 {
@@ -11,7 +11,7 @@ public interface ISandboxProcessGroupKiller
     /// </summary>
     /// <remarks>
     ///     The reaper compares it against the value recorded at launch: a mismatch means the pid was recycled onto an unrelated process
-    ///     and the group must NOT be signalled.
+    ///     and the group must NOT be signaled.
     /// </remarks>
     long? GetProcessStartTicks(int processId);
 

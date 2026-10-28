@@ -8,7 +8,7 @@
 
 /** The list rail's fixed track. */
 const PANE_LIST_WIDTH = 320;
-/** The centre track's floor — below this a tab header clipped to "Gra"/"Nod". */
+/** The center track's floor — below this a tab header clipped to "Gra"/"Nod". */
 const PANE_MAIN_MIN_WIDTH = 240;
 /** The side track's floor and ceiling. */
 const PANE_SIDE_MIN_WIDTH = 380;
@@ -17,15 +17,15 @@ const PANE_SIDE_MAX_WIDTH = 420;
 const PANE_GAP = 16;
 
 /**
- * The narrowest container width (px) the three-column grid fits in without scrolling: 972 with the shared centre
+ * The narrowest container width (px) the three-column grid fits in without scrolling: 972 with the shared center
  * floor.
  *
  * It is always the THREE-column minimum, even on a page whose `side` pane is currently absent: the side pane comes and
  * goes with a selection at every call site, so a threshold that followed it would restack the whole page the moment
  * the user selects a node and unstack it when they clear the selection.
  *
- * `mainMinWidth` is for a page whose centre needs more than the shared floor: a work session's centre pane is a whole
- * chat, which at 240px stacked its composer controls four rows deep. The page then stays narrow until the centre gets
+ * `mainMinWidth` is for a page whose center needs more than the shared floor: a work session's center pane is a whole
+ * chat, which at 240px stacked its composer controls four rows deep. The page then stays narrow until the center gets
  * that much; the tracks keep the shared floor, so wide mode only ever has more room. Anything below the shared floor
  * (0 for "no preference") counts as the shared floor.
  */

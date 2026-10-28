@@ -11,10 +11,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     The node-data-directory abstraction is the single seam that relocates per-node runtime state into the per-user
-///     data dir in desktop mode while staying byte-identical (rooted at the content root) off the desktop flag, and its
-///     first-launch migration carries a broken-RC tester's existing artifacts across. The settings store rounds-trips
-///     through that root and applies owner-only perms on non-Windows to match the key-file posture.
+///     The node-data-directory seam puts per-node state in the user data dir in desktop mode and at the content
+///     root otherwise, migrating a prior install's artifacts on first launch; the settings store uses it with
+///     owner-only perms off Windows.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class NodeDataDirectoryTests : IDisposable
@@ -57,7 +56,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
         var dataDir = Path.Combine(_root, "data");
         Directory.CreateDirectory(contentRoot);
 
-        // A tester upgrading from the broken RC has these in the shared install dir.
+        // An upgrading install has these in the shared install dir.
         File.WriteAllText(Path.Combine(contentRoot, "node-settings.json"), "{\"defaultModelName\":\"keep-me\"}");
         File.WriteAllBytes(Path.Combine(contentRoot, "worker-credentials.enc"), [1, 2, 3]);
 

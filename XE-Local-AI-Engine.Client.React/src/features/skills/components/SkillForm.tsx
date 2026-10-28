@@ -3,10 +3,10 @@ import { IconDeviceFloppy, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AssistDraft } from "@/core/assist/models/AssistModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import { AssistActions } from "@/features/assist/components/AssistActions";
-import type { AssistDraft } from "@/features/assist/models/AssistModels";
 import { SkillResourcesPanel } from "@/features/skills/components/SkillResourcesPanel";
 import {
 	SKILL_BODY_GUIDANCE_LINES,

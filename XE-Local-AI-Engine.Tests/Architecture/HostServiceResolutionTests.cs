@@ -67,9 +67,9 @@ public sealed class HostServiceResolutionTests
     ];
 
     /// <summary>
-    ///     Non-vacuity floors, set under the counts measured on 2026-09-18 (603 host files, 7 resolutions) the way
+    ///     Non-vacuity floors, set under the counts measured when set (603 host files, 7 resolutions) the way
     ///     <see cref="ConfigureAwaitPolicyTests" /> sets its own: a renamed directory reads too few files, and a
-    ///     matcher that stopped recognising the call reads no resolutions, and either fails here rather than passing on
+    ///     matcher that stopped recognizing the call reads no resolutions, and either fails here rather than passing on
     ///     an empty scan.
     /// </summary>
     private const int FileFloor = 500;
@@ -120,7 +120,7 @@ public sealed class HostServiceResolutionTests
     }
 
     /// <summary>
-    ///     The guard's own check. A matcher that stopped recognising the call, or a resolver that stopped finding the
+    ///     The guard's own check. A matcher that stopped recognizing the call, or a resolver that stopped finding the
     ///     types it classifies, reads clean source everywhere and reports a fence that cannot fire.
     /// </summary>
     [Test]

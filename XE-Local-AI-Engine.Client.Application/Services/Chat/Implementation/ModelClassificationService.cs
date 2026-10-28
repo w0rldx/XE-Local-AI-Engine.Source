@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 /// </remarks>
 internal sealed class ModelClassificationService : IModelClassificationService
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
     private readonly ILogger<ModelClassificationService> _logger;
     private readonly IOllamaModelService _ollamaModelService;
 

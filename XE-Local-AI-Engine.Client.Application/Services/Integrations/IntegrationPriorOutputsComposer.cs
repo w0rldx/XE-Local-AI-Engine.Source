@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Text;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>The framed "prior outputs" block a caller-managed continuation carries.</summary>
 /// <remarks>
@@ -79,7 +79,7 @@ internal static class IntegrationPriorOutputsComposer
             if (kept.Count == 0)
             {
                 var room = remaining - EntryOverhead(index: 0);
-                var head = room > 0 ? IntegrationStreamEventMapper.TruncateToUtf8ByteBudget(envelope, room) : string.Empty;
+                var head = room > 0 ? Utf8Truncation.TruncateToUtf8ByteBudget(envelope, room) : string.Empty;
                 if (head.Length > 0)
                 {
                     kept.Add(head);

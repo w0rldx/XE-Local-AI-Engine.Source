@@ -361,7 +361,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         }
 
         // A zero reasoning budget rides along for templates that render <think> but never read enable_thinking (LFM2.5): the
-        // kwarg is inert there and the budget is the only off switch. Probed at b10201: inert on a template that honours the kwarg.
+        // kwarg is inert there and the budget is the only off switch. Probed at b10201: inert on a template that honors the kwarg.
         return OpenAICompatibleRequestBody.Chain(options,
             static body =>
             {
@@ -478,7 +478,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     ///     With none of them set the options are returned unchanged, so every other request is byte-identical, and a
     ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> is composed rather than dropped.
     ///     <c>num_ctx</c> is deliberately EXCLUDED: llama-server's window is fixed by the context size it launched with,
-    ///     so a per-request value is not honoured and that knob stays a client-side history budget. Why the passthrough
+    ///     so a per-request value is not honored and that knob stays a client-side history budget. Why the passthrough
     ///     must exist and why the four names are safe (verified at b10201): wiki 03.
     /// </remarks>
     internal static ChatOptions? ApplySamplingPassthrough(ChatOptions? options)
@@ -526,15 +526,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     When the turn asks for a JSON-schema response format, returns a clone of <paramref name="options" /> whose
-    ///     request body carries the AUTHOR'S schema at the json-schema path llama-server reads, sanitised only where
+    ///     request body carries the AUTHOR'S schema at the json-schema path llama-server reads, sanitized only where
     ///     llama.cpp's GBNF converter could not compile it.
     /// </summary>
     /// <remarks>
     ///     Without a schema the options are returned unchanged, so every other request is byte-identical, and a
     ///     pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> is composed rather than dropped.
     ///     <see cref="ChatOptions.ResponseFormat" /> is deliberately LEFT in place — the MEAI-level consumers above
-    ///     this client read it — and no longer decides what goes on the wire. Why MEAI's strict-schema transform must
-    ///     be bypassed, why a body patch suffices, why non-strict, and the bound that still needs sanitising: wiki 03.
+    ///     this client read it — and does not decide what goes on the wire. Why MEAI's strict-schema transform must
+    ///     be bypassed, why a body patch suffices, why non-strict, and the bound that still needs sanitizing: wiki 03.
     /// </remarks>
     internal static ChatOptions? ApplyResponseSchemaPassthrough(ChatOptions? options)
     {
@@ -543,7 +543,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return options;
         }
 
-        // Serialised once, here, rather than inside the factory: the factory runs per request, and the author's
+        // Serialized once, here, rather than inside the factory: the factory runs per request, and the author's
         // JsonElement must not be captured past the lifetime of whatever document it came from.
         var payload = BinaryData.FromString(LlamaGrammarToolSchemaCompatibility.Sanitize(schema).GetRawText());
         var name = jsonFormat.SchemaName ?? DefaultResponseSchemaName;
@@ -566,7 +566,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// <summary>
     ///     When at least one offered tool carries a JSON-schema bound llama.cpp's GBNF converter cannot compile, returns
     ///     a clone of <paramref name="options" /> in which ONLY those tools are replaced by a
-    ///     <see cref="GrammarSafeSchemaAIFunction" /> advertising the sanitised schema.
+    ///     <see cref="GrammarSafeSchemaAIFunction" /> advertising the sanitized schema.
     /// </summary>
     /// <remarks>
     ///     When every tool is already compilable the options are returned unchanged, so every other request stays

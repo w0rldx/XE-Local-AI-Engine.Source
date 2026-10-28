@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -446,7 +447,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
                 var toAppend = data;
                 if (lineBytes > remaining)
                 {
-                    toAppend = TruncateToUtf8ByteBudget(data, remaining);
+                    toAppend = Utf8Truncation.TruncateToUtf8ByteBudget(data, remaining);
                     _capped = true;
                 }
 
@@ -461,31 +462,6 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
             {
                 return _capped ? _builder + "…[output truncated]" : _builder.ToString();
             }
-        }
-
-        private static string TruncateToUtf8ByteBudget(string value, int budget)
-        {
-            if (budget <= 0)
-            {
-                return string.Empty;
-            }
-
-            var used = 0;
-            var lastCharIndex = 0;
-            var charIndex = 0;
-            foreach (var rune in value.EnumerateRunes())
-            {
-                if (used + rune.Utf8SequenceLength > budget)
-                {
-                    break;
-                }
-
-                used += rune.Utf8SequenceLength;
-                charIndex += rune.Utf16SequenceLength;
-                lastCharIndex = charIndex;
-            }
-
-            return value[..lastCharIndex];
         }
     }
 }

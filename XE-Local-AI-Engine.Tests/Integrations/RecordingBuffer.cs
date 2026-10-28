@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
 ///     An <see cref="IIntegrationExecutionEventBuffer" /> that records what was RESERVED, PUBLISHED and ABANDONED, so a
-///     suite can assert the durable-before-visible ordering and the "exactly one of publish or abandon per reservation"
-///     invariant directly rather than inferring them from the rows that survived.
+///     suite asserts the durable-before-visible ordering and the "exactly one of publish or abandon per reservation"
+///     invariant directly.
 /// </summary>
 internal sealed class RecordingBuffer : IIntegrationExecutionEventBuffer
 {
@@ -34,7 +34,7 @@ internal sealed class RecordingBuffer : IIntegrationExecutionEventBuffer
     /// <summary>
     ///     Ids this double answers as UNTRACKED, which is what a post-terminal <c>Remove</c> leaves behind. The real
     ///     buffer throws on <c>Reserve</c> for one; nothing else about this double changes, so a suite that does not opt
-    ///     in sees the old behaviour.
+    ///     in sees the default behavior.
     /// </summary>
     public HashSet<Guid> Untracked { get; } = [];
 

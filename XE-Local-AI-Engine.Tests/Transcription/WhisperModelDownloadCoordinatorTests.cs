@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     lands in a terminal phase, and a late progress tick can never resurrect a finished one.
 /// </summary>
 /// <remarks>
-///     The weight store is a hand-written fake rather than a substitute because the behaviour under test is ORDERING
+///     The weight store is a hand-written fake rather than a substitute because the behavior under test is ORDERING
 ///     and cancellation across two calls, which <c>Returns</c>/<c>Received</c> cannot express without becoming harder
 ///     to read than the fake.
 /// </remarks>
@@ -61,7 +61,7 @@ public sealed class WhisperModelDownloadCoordinatorTests
     [Test]
     public async Task Start_PassesTheCataloguesOwnSizeAndDigest()
     {
-        // The expected size and digest come from the pinned catalogue, never from what the repository says about
+        // The expected size and digest come from the pinned catalog, never from what the repository says about
         // itself, which is what makes the verification meaningful.
         var store = new FakeWhisperWeightFileStore();
         using var fixture = new Fixture(store);
@@ -251,7 +251,7 @@ public sealed class WhisperModelDownloadCoordinatorTests
         /// <summary>When set, the FIRST call parks here so a test can act while a download is genuinely in flight.</summary>
         public TaskCompletionSource? Gate { get; set; }
 
-        /// <summary>Signalled once the first call has been entered, so a test never races the code under test.</summary>
+        /// <summary>Signaled once the first call has been entered, so a test never races the code under test.</summary>
         public TaskCompletionSource FirstCallReached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>When set, every call throws it.</summary>

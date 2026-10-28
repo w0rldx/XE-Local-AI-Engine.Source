@@ -110,7 +110,7 @@ public sealed class GraphWorkflowRunServiceTests
     ///     the other reads — and then the fast path refuses and the post-insert check never runs. Here the store is
     ///     substituted so only the other shape exists: nothing found by request id, and the insert answering with the
     ///     WINNER's run, which names a definition this caller never asked for. That run is refused, the dispatcher is
-    ///     never signalled for it, and the refusal provably comes from AFTER the insert.
+    ///     never signaled for it, and the refusal provably comes from AFTER the insert.
     /// </summary>
     [Test]
     public async Task StartAsync_WhenTheInsertAnswersWithAnotherDefinitionsRun_RefusesAfterTheInsertWithoutSignalling()
@@ -407,7 +407,7 @@ public sealed class GraphWorkflowRunServiceTests
     }
 
     /// <summary>
-    ///     F10: a start without input runs on the Start node's <c>defaultInput</c>, as the SPA pre-fills it, or the first
+    ///     A start without input runs on the Start node's <c>defaultInput</c>, as the SPA pre-fills it, or the first
     ///     node binding <c>run.input.*</c> fails. An explicit input still wins over the default.
     /// </summary>
     [Test]

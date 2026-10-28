@@ -18,7 +18,7 @@ internal static class UserQuestionParser
     private const int MinOptions = 2;
     private const int MaxOptions = 6;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     Projects the framework's argument bag into validated <see cref="UserQuestionSpec" />s. Returns
@@ -43,7 +43,7 @@ internal static class UserQuestionParser
         try
         {
             // Round-tripping through an element rather than reading the bag by hand keeps this correct for every shape
-            // a provider hands back — JsonElement values, boxed primitives, or already-materialised objects.
+            // a provider hands back — JsonElement values, boxed primitives, or already-materialized objects.
             parsed = JsonSerializer.Deserialize<AskUserArguments>(JsonSerializer.SerializeToElement(arguments, SerializerOptions), SerializerOptions);
         }
         catch (JsonException exception)

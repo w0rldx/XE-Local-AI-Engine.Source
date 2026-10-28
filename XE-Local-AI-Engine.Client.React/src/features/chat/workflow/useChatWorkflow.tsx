@@ -358,7 +358,7 @@ export function useChatWorkflow({
 	// along and the server's attachments-not-accepted refusal keeps the draft, since the definition's graph is not read.
 	const sendWhenResolved = (content: string, normalSend: () => void): Promise<void> =>
 		oneAtATime(async () => {
-			// Joins the read already in flight (the reload's or the switch's) rather than cancelling it for a duplicate.
+			// Joins the read already in flight (the reload's or the switch's) rather than canceling it for a duplicate.
 			const result = await runsQuery.refetch({ cancelRefetch: false });
 			if (result.data === undefined && getErrorStatus(result.error) === 404) {
 				normalSend();

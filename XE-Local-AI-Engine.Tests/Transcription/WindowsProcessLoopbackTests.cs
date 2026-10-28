@@ -38,7 +38,7 @@ public sealed class WindowsProcessLoopbackTests
 
         // ExcludeTargetProcessTree captures everything on the endpoint EXCEPT the target and its descendants. Read
         // quickly it looks like "just this application"; it is the opposite, and shipping it would record every
-        // other application on the box while the interface claimed one. The constant is the whole product surface
+        // other application on the host while the interface claimed one. The constant is the whole product surface
         // for this choice, so asserting it is asserting that the inversion cannot return.
         AssertEx.Equal(ProcessLoopbackMode.IncludeTargetProcessTree, WindowsProcessAudioCaptureSource.CaptureMode,
             "Per-application capture must ask for the target process tree.");

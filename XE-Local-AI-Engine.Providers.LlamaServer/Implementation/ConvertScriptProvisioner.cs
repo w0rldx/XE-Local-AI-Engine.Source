@@ -124,8 +124,8 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
 
         try
         {
-            TryDeleteDirectory(workDirectory);
-            TryDeleteDirectory(stagingDirectory);
+            BestEffortFile.TryDeleteDirectory(workDirectory);
+            BestEffortFile.TryDeleteDirectory(stagingDirectory);
             CreateOwnerOnlyDirectory(ScriptsRoot);
             CreateOwnerOnlyDirectory(workDirectory);
             CreateOwnerOnlyDirectory(fetchDirectory);
@@ -146,7 +146,7 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
 
             // Same-parent move → atomic: the commit directory appears complete or not at all, so a crash mid-copy can
             // never leave TryResolve reporting a half-populated tree as provisioned.
-            TryDeleteDirectory(finalDirectory);
+            BestEffortFile.TryDeleteDirectory(finalDirectory);
             Directory.Move(stagingDirectory, finalDirectory);
             _logger.LogInformation("Provisioned the llama.cpp conversion scripts at commit {Commit}.", commit);
 
@@ -162,8 +162,8 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         {
             // Both are no-ops on success: the work tree is disposable and the staging directory has already been moved
             // out from under this path. On ANY failure they are what stops a partial tree from being seen as adopted.
-            TryDeleteDirectory(workDirectory);
-            TryDeleteDirectory(stagingDirectory);
+            BestEffortFile.TryDeleteDirectory(workDirectory);
+            BestEffortFile.TryDeleteDirectory(stagingDirectory);
         }
     }
 
@@ -203,21 +203,6 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best effort: a leftover work/staging directory is reclaimed by the next provisioning attempt.
         }
     }
 }

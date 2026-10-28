@@ -42,7 +42,7 @@ public interface ITranscriptionService
     Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Cancels an in-flight transcription, interrupting and joining a live finalization or signalling a batch job.
+    ///     Cancels an in-flight transcription, interrupting and joining a live finalization or signaling a batch job.
     ///     False when neither a running job nor a live finalization is registered.
     /// </summary>
     Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken);

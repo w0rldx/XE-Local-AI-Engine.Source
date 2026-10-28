@@ -21,8 +21,8 @@ public sealed class ImageServerSupervisorTests
     [Test]
     public async Task EnsureRunning_ChildExitsBeforeReady_ReportsExitCodeAndStderrTail()
     {
-        // The Windows tester failure: sd-server died within a second of every spawn and the fixed sentence said nothing
-        // about why. The child's exit code and last stderr line now reach both the exception and one Warning line.
+        // sd-server can die within a second of every spawn, and a fixed sentence says nothing
+        // about why. The child's exit code and last stderr line reach both the exception and one Warning line.
         var launcher = new FakeImageProcessLauncher(bornDeadExitCode: 2, bornDeadStderrTail: "ggml_cuda_init: no CUDA devices found");
         var probe = new FakeImageReadinessProbe(hangsUntilCancelled: true);
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
@@ -41,8 +41,8 @@ public sealed class ImageServerSupervisorTests
     [Test]
     public async Task EnsureRunning_ChildLosesThePortRace_SaysThePortWasTakenNotThatTheModelIsBroken()
     {
-        // Two nodes on one box can probe the same free port at once; the loser used to be told its model was
-        // incompatible or too large.
+        // Two nodes on one box can probe the same free port at once; the loser is told the port was taken,
+        // never that its model is incompatible or too large.
         var launcher = new FakeImageProcessLauncher(bornDeadExitCode: 1, bornDeadStderrTail: "bind failed: Address already in use");
         var probe = new FakeImageReadinessProbe(hangsUntilCancelled: true);
         await using var supervisor = ImageSupervisorFactory.Create(launcher, probe);

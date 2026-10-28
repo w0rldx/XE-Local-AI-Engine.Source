@@ -36,14 +36,14 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     /// <summary>Upper bound on a measured tool-template preamble.</summary>
     /// <remarks>
     ///     Real templates spend a few hundred tokens at most on their tool instructions (~198 on Qwen3.8; the calibration measured 84 on
-    ///     Qwen2.5-0.5B beyond the per-tool constants); a measurement far above that is an artefact of the probe, not a template property,
+    ///     Qwen2.5-0.5B beyond the per-tool constants); a measurement far above that is an artifact of the probe, not a template property,
     ///     and would shrink every tool round's window by it.
     /// </remarks>
     public const int MaximumToolTemplatePreambleTokens = 1024;
 
     /// <summary>The tool-template preamble charged for a model that offers tools before its own preamble has been measured.</summary>
     /// <remarks>
-    ///     The largest preamble measured across the pinned model-matrix families (2026-10: Qwen3.5 218, Granite 4.1 133, LFM2.5 25), so
+    ///     The largest preamble measured across the pinned model families (2026-10: Qwen3.5 218, Granite 4.1 133, LFM2.5 25), so
     ///     an uncalibrated first tool round is not under-counted; replaced by the measured value, smaller or larger, once calibration lands.
     /// </remarks>
     public const int DefaultToolTemplatePreambleTokens = 220;
@@ -53,7 +53,7 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
 
     /// <summary>Bounds on the observed correction.</summary>
     /// <remarks>
-    ///     A ratio outside them is a measurement artefact rather than a tokenizer property (a cached prompt reported
+    ///     A ratio outside them is a measurement artifact rather than a tokenizer property (a cached prompt reported
     ///     oddly, a provider counting a whole conversation against one round), and letting one through would move the
     ///     window by a factor no tokenizer difference justifies.
     /// </remarks>

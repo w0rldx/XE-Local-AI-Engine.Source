@@ -14,7 +14,7 @@
 
 .select-trigger {
 	/* The agent and workflow pickers' trigger: 36px tall like the composer's action icons and send button, so the
-	   control row is one even height. Labelled, it keeps its width (a short choice like "No workflow" is unreadable
+	   control row is one even height. Labeled, it keeps its width (a short choice like "No workflow" is unreadable
 	   once ellipsized): fitComposerToolbar budgets the max-width below and folds it when the row needs the room. */
 	display: inline-flex;
 	align-items: center;
@@ -64,7 +64,7 @@
 }
 
 .toolbar[data-folded-pickers="true"] .select-content {
-	/* Auto margins centre the lone icon; Mantine sets the Group's justify inline, so a class cannot. */
+	/* Auto margins center the lone icon; Mantine sets the Group's justify inline, so a class cannot. */
 	flex: none;
 	margin-inline: auto;
 }

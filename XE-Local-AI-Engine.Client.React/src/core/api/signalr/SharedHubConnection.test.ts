@@ -259,7 +259,7 @@ describe("acquireHubConnection", () => {
 		expect(hoisted.builtConnections).toHaveLength(1);
 		expect(second.connection).toBe(connection);
 
-		// Advancing well past the ORIGINAL window must not stop it — the re-acquire cancelled the pending linger.
+		// Advancing well past the ORIGINAL window must not stop it — the re-acquire canceled the pending linger.
 		await advancePastLinger();
 		expect(connection?.stop).not.toHaveBeenCalled();
 	});

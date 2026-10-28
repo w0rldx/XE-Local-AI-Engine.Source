@@ -136,7 +136,7 @@ describe("missingBenchmarkCellItems", () => {
 	});
 
 	// A pre-suite run names no item and the node ranks it on its own run; asking it for the current item set would
-	// unrank a whole project's history the moment the legacy backfill materialises item 0.
+	// unrank a whole project's history the moment the legacy backfill materializes item 0.
 	it("asks nothing of a cell whose runs name no item at all", () => {
 		const legacy = benchmarkCellFixture({
 			items: [

@@ -15,7 +15,7 @@ public sealed class StableDiffusionBinaryManagerTests
     {
         using var cache = new TempCacheDir();
         // The handler always returns bytes that cannot match the pinned SHA256 → forced corruption on every attempt.
-        using var handler = new CountingHandler(static () => new HttpResponseMessage(HttpStatusCode.OK)
+        using var handler = new CountingHttpMessageHandler(static () => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
@@ -41,7 +41,7 @@ public sealed class StableDiffusionBinaryManagerTests
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "fake-sd-server");
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new StableDiffusionCppBinaryManager(http, cache.Path, StableDiffusionReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
@@ -67,7 +67,7 @@ public sealed class StableDiffusionBinaryManagerTests
             Backend = SdGpuBackend.Cuda
         };
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("An active override must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new StableDiffusionCppBinaryManager(http, cache.Path, StableDiffusionReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, overrideOptions);
@@ -91,31 +91,13 @@ public sealed class StableDiffusionBinaryManagerTests
             Backend = SdGpuBackend.Cuda
         };
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("A broken override must not fall through to a download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new StableDiffusionCppBinaryManager(http, cache.Path, StableDiffusionReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, overrideOptions);
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => manager.EnsureBinaryAsync(SdGpuBackend.Cuda, CancellationToken.None));
         AssertEx.Equal(expected: 0, handler.CallCount);
-    }
-
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        private readonly Func<HttpResponseMessage> _responder;
-
-        public CountingHandler(Func<HttpResponseMessage> responder)
-        {
-            _responder = responder;
-        }
-
-        public int CallCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return Task.FromResult(_responder());
-        }
     }
 
     private sealed class TempCacheDir : IDisposable

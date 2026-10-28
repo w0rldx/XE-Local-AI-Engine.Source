@@ -74,8 +74,8 @@ public sealed class HostGitRunnerHardeningTests : IDisposable
     ///     A caller that cancels mid-command leaves no git behind.
     /// </summary>
     /// <remarks>
-    ///     The kill used to sit on the internal-timeout branch only, so a caller's token firing mid-apply returned
-    ///     with the child still running while <c>NodePatchApplyService</c> released the node-wide apply gate — a
+    ///     The kill must not sit on the internal-timeout branch only: a caller's token firing mid-apply would return
+    ///     with the child still running while <c>NodePatchApplyService</c> releases the node-wide apply gate — a
     ///     second apply into a tree an unsupervised git was still mutating. Gated by the test, not a sleep: the
     ///     patch argument is a FIFO, so git's open-for-read and the test's open-for-write rendezvous before the
     ///     cancel, and afterwards a write into it must fail, which is what a departed reader looks like.

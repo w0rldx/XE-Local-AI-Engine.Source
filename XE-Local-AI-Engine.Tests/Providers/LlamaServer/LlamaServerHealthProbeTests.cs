@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The readiness/liveness probe must issue exactly ONE request per attempt — no exponential retries — so the
-///     supervisor's poll cadence, not a resilience handler, controls readiness-detection timing. These tests drive the
-///     probe over a counting message handler (the seam the DI change swaps for a dedicated, resilience-free client).
+///     The readiness/liveness probe issues exactly ONE request per attempt, with no retries, so the supervisor's poll
+///     cadence, not a resilience handler, controls readiness timing. Driven over a counting message handler.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerHealthProbeTests

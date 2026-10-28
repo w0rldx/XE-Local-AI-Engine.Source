@@ -43,7 +43,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         <c>MaxConcurrentRuns</c> is raised to the schema maximum because the cap counts <c>Running</c> runs across
 ///         the whole DATABASE: at the product default of four, the fifth concurrent test in a class would sit Pending
-///         forever. The cap's own behaviour is asserted by two tests in <c>DevWorkflowDispatcherTests</c>, which pin it
+///         forever. The cap's own behavior is asserted by two tests in <c>DevWorkflowDispatcherTests</c>, which pin it
 ///         explicitly on private hosts.
 ///     </para>
 /// </summary>
@@ -435,7 +435,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     }
 
     /// <summary>
-    ///     A run row with no node runs — the shape nothing in the runtime produces any more, kept so a test can prove
+    ///     A run row with no node runs — the shape nothing in the runtime produces, kept so a test can prove
     ///     the dispatcher does not invent the rows (and with them a request nobody made) for one that turns up anyway.
     /// </summary>
     public async Task<Guid> StartRunWithoutNodeRunsAsync(string graphJson)
@@ -696,8 +696,8 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     and carries the refusal sentence, then the Failed terminal (<c>GRAPH-C4-2</c>).
     ///     <para>
     ///         Both halves matter. The row is the durable cause the owning run reads back; a session settled without it
-    ///         is one that failed for a reason no reader can recover, which is exactly what the poll used to paper over
-    ///         by re-inspecting the agent definition as it stands NOW.
+    ///         is one that failed for a reason no reader can recover, and a poll re-inspecting the agent definition as
+    ///         it stands NOW would only paper over that.
     ///     </para>
     /// </summary>
     public async Task RefuseAgentWriteAsync(Guid runId, string nodeKey, string refusal)

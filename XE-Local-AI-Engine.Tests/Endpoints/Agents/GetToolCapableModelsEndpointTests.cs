@@ -15,9 +15,8 @@ public sealed class GetToolCapableModelsEndpointTests
     [Test]
     public async Task GetToolCapableModels_WhenOptionsContainDuplicate_ReturnsDistinctModels()
     {
-        // Regression: configuration list binding appends rather than replaces, so a repeated default model id
-        // (the default is ["qwen3:8b"]) lands in the bound list twice. The endpoint must distinct the projection so
-        // the response is a clean set rather than ["qwen3:8b","qwen3:8b"].
+        // Regression: configuration list binding appends, so a repeated default model id (default ["qwen3:8b"]) lands
+        // in the bound list twice; the endpoint must distinct the projection, not return ["qwen3:8b","qwen3:8b"].
         await using var factory = CreateFactory("qwen3:8b", "qwen3:8b");
         using var client = factory.CreateClient();
 

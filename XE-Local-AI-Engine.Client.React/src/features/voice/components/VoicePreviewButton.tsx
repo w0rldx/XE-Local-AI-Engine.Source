@@ -3,7 +3,7 @@ import { IconPlayerPlayFilled } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 
 // "Audition this voice" affordance for the Node Settings voice pickers. Clicking it barges in and speaks a short fixed
 // sample with the given voice (runtime.previewVoice) so the user can hear a candidate before committing to it. It is

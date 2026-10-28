@@ -29,7 +29,7 @@ public sealed class DevWorkflowEncryptionTests
         nameof(DevWorkflowNodeRun.WorkSessionSteps)
     ];
 
-    /// <summary>T-4: nothing sensitive reaches the file as plaintext — and the deliberately plaintext title does, which is what proves the scan works.</summary>
+    /// <summary>Nothing sensitive reaches the file as plaintext — and the deliberately plaintext title does, which is what proves the scan works.</summary>
     [Test]
     public async Task WorkflowPayloads_NeverReachTheFileAsPlaintext()
     {
@@ -217,7 +217,7 @@ public sealed class DevWorkflowEncryptionTests
         }
     }
 
-    /// <summary>T-5: re-parenting a node run onto another run, or a run onto another work item, fails the tag check.</summary>
+    /// <summary>Re-parenting a node run onto another run, or a run onto another work item, fails the tag check.</summary>
     [Test]
     public async Task ReParentingANodeRun_FailsAuthenticatedDecryption()
     {
@@ -258,7 +258,7 @@ public sealed class DevWorkflowEncryptionTests
         }
     }
 
-    /// <summary>T-5, run half: the owning work item is in the AAD, so a run cannot be adopted by another work item.</summary>
+    /// <summary>Re-parenting, run half: the owning work item is in the AAD, so a run cannot be adopted by another work item.</summary>
     [Test]
     public async Task ReParentingARun_FailsAuthenticatedDecryption()
     {
@@ -296,7 +296,7 @@ public sealed class DevWorkflowEncryptionTests
     }
 
     /// <summary>
-    ///     T-6, the security-critical one: a Gate node decides as a function of <c>output_json</c>, so copying the
+    ///     The security-critical case: a Gate node decides as a function of <c>output_json</c>, so copying the
     ///     policy blob from the same row into the output column must fail. Without distinct AAD column names a database
     ///     writer could flip a gate without forging a ciphertext or a tag.
     /// </summary>
@@ -393,7 +393,7 @@ public sealed class DevWorkflowEncryptionTests
 
 
     /// <summary>
-    ///     T-5, rule-set half. A rule set has no owner column to re-parent — <c>Guid.Empty</c> is fixed in the
+    ///     Re-parenting, rule-set half. A rule set has no owner column to re-parent — <c>Guid.Empty</c> is fixed in the
     ///     conversation slot — so the reachable attack is the ROW identity: give one rule set's body another rule set's
     ///     id and it must fail the tag check rather than read back as that rule set's text. Without it, a database
     ///     writer could swap the document a node's objective is composed from without forging a ciphertext.

@@ -11,7 +11,7 @@ public sealed record ContainerRuntimeCapabilities
     /// <summary>The runtime can create, start, stop, inspect and remove containers.</summary>
     public required bool Containers { get; init; }
 
-    /// <summary>The runtime can create and remove labelled bridge networks with DNS between attached containers.</summary>
+    /// <summary>The runtime can create and remove labeled bridge networks with DNS between attached containers.</summary>
     public required bool Networks { get; init; }
 
     /// <summary>The runtime can bind host directories into a container.</summary>
@@ -87,7 +87,7 @@ public sealed record ContainerRuntimeCapabilities
     /// <summary>The requested capability names this runtime does not offer, in the order they were asked for.</summary>
     /// <remarks>
     ///     A name this vocabulary does not define counts as MISSING rather than as satisfied: a runtime cannot
-    ///     honour a requirement it does not understand, and treating the unknown as met is how a manifest written
+    ///     honor a requirement it does not understand, and treating the unknown as met is how a manifest written
     ///     against a later schema installs silently and fails at run time.
     /// </remarks>
     public IReadOnlyList<string> FindMissing(IEnumerable<string> required)

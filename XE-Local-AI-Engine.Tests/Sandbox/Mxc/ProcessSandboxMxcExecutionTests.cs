@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -409,7 +408,7 @@ public sealed class ProcessSandboxMxcExecutionTests
         {
             ExitCode = 0
         });
-        var logger = new CapturingLogger<ProcessSandboxRuntimeProvider>();
+        var logger = new RecordingLogger<ProcessSandboxRuntimeProvider>();
         using var provider = Provider(Runtime(child), logger);
         var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
 

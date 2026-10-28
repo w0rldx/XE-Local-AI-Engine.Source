@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the startup backfill that feeds already-installed models into the tool-capable allow-list. The
-///     whole point of the service is that it is best-effort: it must run the registrar once and, when the registry or
-///     settings file cannot be read, log and swallow — a node that refuses to start because a backfill failed is a far
-///     worse outcome than a list that corrects itself on the next start.
+///     The startup backfill feeding installed models into the tool-capable allow-list is best-effort: it runs the
+///     registrar once and swallows (logged) an unreadable registry or settings file, since a stale list beats a node
+///     that will not start.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ToolCapableModelBackfillServiceTests

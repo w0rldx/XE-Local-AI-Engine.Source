@@ -43,7 +43,7 @@ public sealed record NodeSettingsResponse
     /// </summary>
     /// <remarks>
     ///     When on, an agent carrying many tools is offered a relevance-ranked subset per turn and recovers the rest
-    ///     through <c>list_tools</c>; a per-agent opt-out still wins. A context budget, never an authorisation
+    ///     through <c>list_tools</c>; a per-agent opt-out still wins. A context budget, never an authorization
     ///     boundary.
     /// </remarks>
     public bool? ToolRelevanceEnabled { get; init; }

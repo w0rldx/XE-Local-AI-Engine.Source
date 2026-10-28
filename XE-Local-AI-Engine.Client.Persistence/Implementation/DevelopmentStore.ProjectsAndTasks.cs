@@ -342,7 +342,7 @@ public sealed partial class DevelopmentStore
                 task.ApprovedSubjectHash = command.ApprovedSubjectHash ?? task.ApprovedSubjectHash;
 
                 // A task asked for rework is not an approved one, so it stops carrying the approved subject the moment it is asked rather than when the next coder
-                // attempt starts. Defence in depth: DevelopmentApplyService already refuses anything that is not AwaitingApply before reading this.
+                // attempt starts. Defense in depth: DevelopmentApplyService already refuses anything that is not AwaitingApply before reading this.
                 if (command.TargetStatus is DevelopmentTaskStatus.InProgress or DevelopmentTaskStatus.ChangesRequested)
                 {
                     task.ApprovedSubjectHash = null;

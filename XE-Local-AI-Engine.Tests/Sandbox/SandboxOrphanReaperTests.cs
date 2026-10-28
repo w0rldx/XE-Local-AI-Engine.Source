@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Decision coverage for <see cref="SandboxOrphanReaper" />, mirroring <c>StaleLlamaServerReaperTests</c>. The kill
-///     seam is faked so the reaper's three safety gates can be asserted without signalling a real process group —
-///     signalling is irreversible, and the interesting cases are precisely the ones where it must NOT happen.
+///     seam is faked so the reaper's three safety gates can be asserted without signaling a real process group —
+///     signaling is irreversible, and the interesting cases are precisely the ones where it must NOT happen.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SandboxOrphanReaperTests : IDisposable
@@ -74,7 +74,7 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     public async Task SandboxOrphanReaper_WhenThePidWasRecycled_RefusesToSignalTheGroup()
     {
         // Gate 2. Between the crash and this start the kernel may have handed the recorded pid to something unrelated.
-        // The start time is what distinguishes "our orphan" from "a stranger", and a mismatch must never be signalled.
+        // The start time is what distinguishes "our orphan" from "a stranger", and a mismatch must never be signaled.
         var jail = CreateJailUnderContainerRoot();
         var killer = new FakeKiller();
         killer.StartTicks[4242] = 555L; // A different process now holds the pid.
@@ -161,7 +161,7 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     public async Task Reap_KillsTheScopeOfADeadOwner_AndTheUnreferencedScopesAPreviousRunLeft()
     {
         // The transient scope is the reapable handle for an isolated command: its processes are in their own PID
-        // namespace, so the recorded pid identifies only the outermost helper and signalling that group reaches
+        // namespace, so the recorded pid identifies only the outermost helper and signaling that group reaches
         // nothing the workload started.
         var deadOwnerUnit = SandboxScopeUnit.Create("compute");
         var leftoverUnit = SandboxScopeUnit.Create("compute");
@@ -220,8 +220,8 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     {
         // THE RACE the pre-registered marker closes. `systemd-run` creates the scope as its first act, so between the
         // launch and a marker written afterwards there is a window in which a live worker's brand-new scope is on the
-        // manager with nothing claiming it. A second worker starting inside that window used to list it, find no
-        // marker, and SIGKILL a command that had just started running. The provider now registers the marker — pid
+        // manager with nothing claiming it. A second worker starting inside that window would list it, find no
+        // marker, and SIGKILL a command that had just started running. The provider registers the marker — pid
         // still unknown — before the launch, so the sweep sees the claim from the first instant the unit can exist.
         var launchingUnit = SandboxScopeUnit.Create("compute");
         var killer = new FakeKiller();
@@ -266,8 +266,8 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     [Test]
     public async Task Reap_WhenAMarkerNamesPgidZero_RefusesToSignalIt()
     {
-        // Defence against a marker from an older build or a torn write. To kill(2) a pgid of 0 means "my own process
-        // group": signalling it would have the reaper kill the worker it is starting.
+        // Defense against a marker from an older build or a torn write. To kill(2) a pgid of 0 means "my own process
+        // group": signaling it would have the reaper kill the worker it is starting.
         var killer = new FakeKiller();
         killer.StartTicks[0] = 1L;
         var store = new FakeMarkerStore(Marker(pgid: 0, ownerProcessId: 9999, scopeUnitName: null));
@@ -280,9 +280,9 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     [Test]
     public async Task Reap_WhenAnUnreferencedScopeIsYoungerThanTheGrace_LeavesItForTheNextStart()
     {
-        // Defence in depth behind the marker, for the worker whose marker store is unwritable: its live scopes are
+        // Defense in depth behind the marker, for the worker whose marker store is unwritable: its live scopes are
         // indistinguishable on disk from a previous run's leftovers, and only their age separates them. The two
-        // mistakes are not symmetric — signalling a live command destroys work, skipping an orphan costs it one
+        // mistakes are not symmetric — signaling a live command destroys work, skipping an orphan costs it one
         // RuntimeMaxSec — so a young unreferenced scope is left alone.
         var youngUnit = SandboxScopeUnit.Create("compute");
         var killer = new FakeKiller();
@@ -303,7 +303,7 @@ public sealed class SandboxOrphanReaperTests : IDisposable
     [Test]
     public async Task Reap_WhenAnUnreferencedScopesAgeIsUnknown_LeavesItAlone()
     {
-        // An age the user manager did not report is not an age of zero and not an age of infinity. Signalling on an
+        // An age the user manager did not report is not an age of zero and not an age of infinity. Signaling on an
         // unmeasured unit would make a parsing failure lethal, so the sweep fails towards leaving processes running.
         var unmeasuredUnit = SandboxScopeUnit.Create("compute");
         var killer = new FakeKiller();

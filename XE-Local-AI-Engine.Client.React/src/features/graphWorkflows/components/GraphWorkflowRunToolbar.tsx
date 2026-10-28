@@ -20,7 +20,7 @@ import { useCancelGraphWorkflowRun, useDeleteGraphWorkflowRun } from "@/features
 
 export interface GraphWorkflowRunToolbarProps {
 	readonly run: GraphWorkflowRunSummaryResponse;
-	/** Clears `runId` in the page selection, which is what puts the editor back in the centre pane. */
+	/** Clears `runId` in the page selection, which is what puts the editor back in the center pane. */
 	readonly onBackToEditor: () => void;
 }
 

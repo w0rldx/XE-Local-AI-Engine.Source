@@ -45,7 +45,7 @@ public sealed class McpUrlMaskTests
     [Test]
     public async Task Restore_ARepeatedQueryKey_RestoresEachOccurrenceInOrder_AndRefusesAnExtraOne()
     {
-        // Codex review 2026-09-30: only the first value per key was kept, so a port edit turned scope=read&scope=write into read,read.
+        // Every value per key is kept, so a port edit cannot turn scope=read&scope=write into read,read.
         const string stored = "http://127.0.0.1:1/mcp?scope=read&scope=write";
 
         AssertEx.Equal("http://127.0.0.1:2/mcp?scope=read&scope=write", McpUrlMask.Restore("http://127.0.0.1:2/mcp?scope=***&scope=***", stored));

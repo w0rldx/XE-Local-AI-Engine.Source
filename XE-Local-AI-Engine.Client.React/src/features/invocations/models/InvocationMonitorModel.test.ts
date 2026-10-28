@@ -139,7 +139,7 @@ describe("buildInvocationSummary", () => {
 		);
 	});
 
-	// R5-05: a step stopped at its provider-call cap is a designed bound, not a failure, on the badge and in the sentence.
+	// A step stopped at its provider-call cap is a designed bound, not a failure, on the badge and in the sentence.
 	it("shows a run stopped at its call budget as that outcome, not as a failure", () => {
 		const run = summaryInput({
 			status: "Failed",
@@ -161,7 +161,7 @@ describe("buildInvocationSummary", () => {
 		expect(getInvocationErrorText(summaryInput({ status: "Failed", error: "Other failure." }), keyOnly)).toBe("Other failure.");
 	});
 
-	// R5-07: the badge read the raw wire status, so the German page showed COMPLETED and CANCELLED.
+	// The badge reads the localized status, never the raw wire status (COMPLETED, CANCELLED) on the German page.
 	it("labels every status badge through the catalogue, with a German translation for each", () => {
 		const keyOnly = ((key: string) => key) as unknown as TFunction;
 		const statuses = ["Pending", "Assigned", "Running", "Completed", "Failed", "Cancelled"] as const;

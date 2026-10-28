@@ -1,4 +1,4 @@
-import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
+import type { AgentDefinition } from "@/core/agents/models/AgentDefinitionModels";
 import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
 
 /**

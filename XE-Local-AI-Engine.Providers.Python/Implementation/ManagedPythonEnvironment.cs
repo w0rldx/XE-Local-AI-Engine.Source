@@ -14,7 +14,7 @@ public static class ManagedPythonEnvironment
     private static readonly string[] UnixAllowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
 
     // Windows adds what a process needs to start at all: without SystemRoot, CPython's random-number and Winsock
-    // initialisation fail, and windir/SystemDrive/PATHEXT are what Win32 path and executable lookup read.
+    // initialization fail, and windir/SystemDrive/PATHEXT are what Win32 path and executable lookup read.
     private static readonly string[] WindowsAllowlist = [.. UnixAllowlist, "SystemRoot", "SystemDrive", "windir", "PATHEXT"];
 
     /// <summary>The environment for uv itself.</summary>

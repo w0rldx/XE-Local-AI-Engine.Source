@@ -224,7 +224,7 @@ describe("IntegrationSessionsPage", () => {
 		});
 	});
 
-	// D-2: `totalCount` counts every session the filters match, so the pager numbers the whole table rather than the
+	// `totalCount` counts every session the filters match, so the pager numbers the whole table rather than the
 	// page that happened to load.
 	it("shows the server's total and asks for the first page by default", () => {
 		sessionHooksMock.useIntegrationSessions.mockReturnValue(makeListQuery(sessions, 130));

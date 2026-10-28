@@ -2,13 +2,12 @@ namespace XE_Local_AI_Engine.Tests.HealthChecks;
 
 using System.Text.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Client.Hosting.Pipeline;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The /health/ready payload must distinguish a Degraded worker (which still returns HTTP 200 because it
-///     is serving local inference) with its per-check status, description, and structured reason data — so "degraded" is
-///     never an indistinguishable 200. A Healthy check with no data carries no reason block.
+///     The /health/ready payload distinguishes a Degraded worker (still HTTP 200, as it serves local inference) by
+///     per-check status, description and structured reason data; a Healthy check with no data carries no reason block.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ReadinessHealthResponseTests

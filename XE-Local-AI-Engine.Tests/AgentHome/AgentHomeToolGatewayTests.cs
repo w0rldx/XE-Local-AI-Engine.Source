@@ -351,7 +351,7 @@ public sealed class AgentHomeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenTheModelPutsNewlinesInItsExecutable_TheResultStillHasOneHeaderLine()
     {
-        // Defence in depth for a reader that scans lines rather than anchoring at index 0: the one model-authored
+        // Defense in depth for a reader that scans lines rather than anchoring at index 0: the one model-authored
         // string this summary renders is flattened, so the model cannot produce a second line that looks like a header.
         var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
             {

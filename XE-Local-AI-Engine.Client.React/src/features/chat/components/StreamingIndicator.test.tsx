@@ -5,7 +5,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The elapsed-time assertions read an interpolated string, so react-i18next needs the app's own initialised
+// The elapsed-time assertions read an interpolated string, so react-i18next needs the app's own initialized
 // instance registered as its default (see the header of src/test/RenderWithProviders.tsx). Importing it does
 // NOT change this file's bare-MantineProvider wrapper; without it `t` returns "{{elapsed}}" uninterpolated.
 import "@/i18n";
@@ -76,7 +76,7 @@ describe("StreamingIndicator", () => {
 		expect(screen.getByTestId("chat-stream-loading-model-indicator")).toBeTruthy();
 	});
 
-	// U6: the loading line names the model, why it loads and how long the last load took.
+	// The loading line names the model, why it loads and how long the last load took.
 	it("names the model, the unload reason and the last load duration when the node sends them", () => {
 		renderBare(
 			<StreamingIndicator

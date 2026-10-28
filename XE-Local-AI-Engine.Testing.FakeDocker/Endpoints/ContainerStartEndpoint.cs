@@ -5,9 +5,9 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 
 /// <summary>
-///     <c>POST /containers/{id}/start</c>. Starting is what turns the requested port bindings into effective ones:
-///     before it, <c>NetworkSettings.Ports</c> is empty and only <c>HostConfig.PortBindings</c> says anything, which
-///     is the split the production inspect mapping reads two different fields for.
+///     <c>POST /containers/{id}/start</c>. Starting turns requested port bindings into effective ones: before it,
+///     <c>NetworkSettings.Ports</c> is empty and only <c>HostConfig.PortBindings</c> has them, the split the
+///     production inspect mapping reads.
 /// </summary>
 internal static class ContainerStartEndpoint
 {

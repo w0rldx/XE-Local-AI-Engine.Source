@@ -7,10 +7,8 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Process-level regression for the downgrade commands' load-bearing placement before ordinary startup migrations.
-///     Each child receives a database whose migration history is intentionally absent; a command that drifted below
-///     <c>MigrateAsync</c> would create that history table and fail these assertions even if its exit code still looked
-///     correct.
+///     Process-level check that the downgrade commands run before ordinary startup migrations: each child gets a
+///     database with no migration history, which a command drifted below <c>MigrateAsync</c> would create.
 /// </summary>
 [NotInParallel]
 [Category(TestCategories.Integration)]

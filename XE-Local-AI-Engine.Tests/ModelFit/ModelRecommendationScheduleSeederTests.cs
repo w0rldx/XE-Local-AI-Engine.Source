@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="ModelRecommendationScheduleSeeder" /> tests: the startup seeder idempotently seeds ONE enabled Manual
-///     <c>model-recommendation-check</c> schedule whose parameters carry the new advisor schema (no approved-image /
-///     provider fields), and re-runs never duplicate it when a definition already exists.
+///     <c>model-recommendation-check</c> schedule with the advisor parameter schema (no approved-image / provider
+///     fields), and re-runs never duplicate it.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelRecommendationScheduleSeederTests

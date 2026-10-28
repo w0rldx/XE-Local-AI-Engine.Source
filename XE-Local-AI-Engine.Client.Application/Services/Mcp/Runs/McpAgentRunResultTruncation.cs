@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 /// <remarks>
 ///     An MCP client caps tool output (Claude Code at about 25k tokens by default), so an unbounded local-model answer would be cut
 ///     by the client with no hint why. The clipped text, marker included, never exceeds the bound, and the marker is how
-///     <c>get_agent_run</c> recognises a clipped result without an extra stored column.
+///     <c>get_agent_run</c> recognizes a clipped result without an extra stored column.
 /// </remarks>
 internal static class McpAgentRunResultTruncation
 {

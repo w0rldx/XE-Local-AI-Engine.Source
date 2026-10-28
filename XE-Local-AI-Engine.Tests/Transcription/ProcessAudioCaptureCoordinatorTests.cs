@@ -160,7 +160,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     public async Task BufferedAudioCap_StopsTheProducerAndDoesNotRetry()
     {
         // The real registry does not throw when the buffered-audio cap is crossed: it ends the session, which cancels ProducerToken
-        // before anything else. The fake mirrors that, so this asserts the behaviour the product actually meets.
+        // before anything else. The fake mirrors that, so this asserts the behavior the product actually meets.
         await using var harness = Harness.Create();
         var sessionId = Guid.NewGuid();
         harness.Source.FramesToPush = 10;
@@ -238,7 +238,7 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         AssertEx.Null(harness.Registry.ProducerFor(sessionId), "The producer was detached, so the registry is not holding a stopped one.");
         AssertEx.Equal(1, harness.Registry.DetachCount(sessionId), "Detaching happened exactly once, on the way out of Attach.");
 
-        // Settle first: a version that scheduled the loop before honouring the stop would have had every chance to
+        // Settle first: a version that scheduled the loop before honoring the stop would have had every chance to
         // run it by now, so this reads as red rather than as a lucky scheduling.
         await AssertEx.SettleAsync();
         AssertEx.Equal(0, harness.Source.CaptureCalls,
@@ -249,11 +249,11 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     public async Task ConcurrentStartAndStop_NeverMisreportTheOutcomeAndAlwaysCleanUpExactlyOnce()
     {
         // Attach publishes the detach handle, then the linked source, then reads its token. A stop running
-        // concurrently used to be able to slot its teardown between any two of those: it skipped the cancel
-        // because the source was still null, then disposed — from its own finally — the source Attach had just
-        // published. Attach's next read of `.Token` threw ObjectDisposedException, which derives from
-        // InvalidOperationException, so Start caught it and answered SessionNotLive for a capture that had in
-        // fact started and was now running on a token nothing could cancel.
+        // concurrently can slot its teardown between any two of those: if it skips the cancel
+        // because the source is still null, then disposes — from its own finally — the source Attach has just
+        // published, Attach's next read of `.Token` throws ObjectDisposedException, which derives from
+        // InvalidOperationException, so Start would catch it and answer SessionNotLive for a capture that has in
+        // fact started and is running on a token nothing can cancel.
         //
         // The interleaving is a thread race, so this asserts the INVARIANTS that must hold whichever way it goes,
         // over enough attempts to hit the window. It is not a timing test: no assertion waits on the clock.

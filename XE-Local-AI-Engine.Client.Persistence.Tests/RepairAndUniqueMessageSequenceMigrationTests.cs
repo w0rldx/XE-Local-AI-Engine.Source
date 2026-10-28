@@ -4,14 +4,14 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>RepairAndUniqueMessageSequence</c> closes the pre-lock send race — two concurrent sends both reading
-///     <c>MAX(sequence) + 1</c> — by making <c>(conversation_id, sequence)</c> unique. It cannot just create the index:
-///     databases in the field already carry the collisions that race produced, and <c>CREATE UNIQUE INDEX</c> would
-///     fail on them, leaving the node unable to start. So the migration first renumbers every conversation to a
-///     contiguous 0-based order, preserving the existing sequence order and breaking ties by created-at then id, which
-///     leaves well-formed data untouched and separates only genuine collisions. Both halves are asserted here: the
-///     repair over colliding rows, and the constraint that stops the collision recurring.
+///     <c>RepairAndUniqueMessageSequence</c> makes <c>(conversation_id, sequence)</c> unique, closing the race of two
+///     concurrent sends both reading <c>MAX(sequence) + 1</c>. Both halves are asserted: repair and constraint.
 /// </summary>
+/// <remarks>
+///     Existing databases can already carry collisions that would fail <c>CREATE UNIQUE INDEX</c> and stop the node,
+///     so the migration first renumbers each conversation to a contiguous 0-based order (existing order, ties by
+///     created-at then id), leaving well-formed data untouched.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class RepairAndUniqueMessageSequenceMigrationTests
 {

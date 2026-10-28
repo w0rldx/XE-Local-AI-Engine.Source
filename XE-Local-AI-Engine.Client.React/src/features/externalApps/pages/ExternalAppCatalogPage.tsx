@@ -35,7 +35,7 @@ export function ExternalAppCatalogPage() {
 	const refresh = useRefreshExternalAppCatalog();
 
 	const applications = catalogQuery.data?.applications ?? [];
-	// Decision D6: the feature counts as off while a loaded catalog lists nothing, because nothing can be installed.
+	// The feature counts as off while a loaded catalog lists nothing, because nothing can be installed.
 	// The card replaces the runtime card: Docker's state is not the operator's next step on an empty catalog.
 	const catalogEmpty = catalogQuery.data !== undefined && applications.length === 0;
 	// The instructions follow the startup and catalog state only. An empty start waits for an entry AND a restart;

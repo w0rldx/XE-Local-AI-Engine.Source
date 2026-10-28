@@ -13,7 +13,7 @@ public enum TrainingDatasetStatus
     Failed
 }
 
-/// <summary>Whether a sample demonstrates the behaviour to imitate or the behaviour to avoid.</summary>
+/// <summary>Whether a sample demonstrates the behavior to imitate or the behavior to avoid.</summary>
 public enum TrainingSampleLabel
 {
     Good,

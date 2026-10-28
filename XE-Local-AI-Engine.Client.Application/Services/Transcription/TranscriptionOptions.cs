@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 /// <summary>Configuration for local audio transcription.</summary>
 /// <remarks>
-///     <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture work sessions and graph
+///     <see cref="Enabled" /> gates <em>behavior</em>, never registration — the same posture work sessions and graph
 ///     workflows hold. The endpoints stay discovered when the feature is off, so the OpenAPI document, and therefore
 ///     the generated client, is identical on every node; a request-path middleware answers 404 instead.
 /// </remarks>

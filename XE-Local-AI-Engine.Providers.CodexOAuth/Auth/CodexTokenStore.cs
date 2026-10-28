@@ -19,7 +19,7 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
 {
     private const string TokensFileName = "codex-oauth-tokens.enc";
     private const string ProtectorPurpose = "WorkerNode.CodexOAuth.Tokens.v1";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<CodexTokenStore> _logger;
     private readonly IDataProtector _protector;

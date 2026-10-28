@@ -25,13 +25,13 @@ using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     No-bypass proof: a real <see cref="SchedulerDispatchExecutor" /> dispatching a definition that
-///     references the <c>model-recommendation-check</c> template runs the REAL handler through the registry's
-///     <c>TryGetHandler</c>, opening a <c>scheduled_job_runs</c> row that goes Running → Succeeded AND creating a
-///     <c>model_fit_snapshots</c> row via the local model advisor. The advisor is wired only behind the scheduler —
-///     there is no direct execution entry point in this graph. The new parameter schema carries no approved-image /
-///     provider-name fields.
+///     No-bypass proof: a real <see cref="SchedulerDispatchExecutor" /> dispatching a
+///     <c>model-recommendation-check</c> definition runs the REAL handler via <c>TryGetHandler</c>: its
+///     <c>scheduled_job_runs</c> row goes Running → Succeeded and a <c>model_fit_snapshots</c> row is created.
 /// </summary>
+/// <remarks>
+///     The advisor is wired only behind the scheduler, with no direct entry point in this graph; the parameter schema
+///     carries no approved-image or provider-name fields.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class ModelRecommendationCheckSchedulerPathTests
 {

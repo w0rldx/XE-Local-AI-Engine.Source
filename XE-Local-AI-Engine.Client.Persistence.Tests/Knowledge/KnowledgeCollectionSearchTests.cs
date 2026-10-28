@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge;
 
-using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -16,9 +15,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Regression coverage for the collection boundary shared by both retrieval arms and for the structure-aware FTS
-///     schema. Every test migrates a real SQLite database, so the FTS5 external-content table, triggers, BM25 weighting,
-///     vector joins, and final hydration query are exercised together with the production SQL.
+///     The collection boundary both retrieval arms share and the structure-aware FTS schema, on a migrated SQLite
+///     database so the FTS5 table, triggers, BM25 weights, vector joins and hydration run as production SQL.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeCollectionSearchTests : IDisposable
@@ -210,7 +208,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         await SeedChunkAsync(databasePath, document, Guid.NewGuid(), chunkIndex: 0, content: "degrade needle");
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var logger = new EventRecordingLogger();
+        var logger = new RecordingLogger<KnowledgeSearchService>();
         var result = await CreateLexicalSearchService(context, logger)
             .SearchAsync(new KnowledgeSearchRequest
             {
@@ -360,37 +358,5 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
-    }
-
-    // Keeps level, EventId and formatted message of every entry, so a test can pin a log call's stable EventId.
-    private sealed class EventRecordingLogger : ILogger<KnowledgeSearchService>
-    {
-        private readonly ConcurrentQueue<Entry> _entries = new();
-
-        public IReadOnlyList<Entry> Entries => [.. _entries];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull =>
-            null;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            _entries.Enqueue(new Entry
-            {
-                Level = logLevel,
-                EventId = eventId,
-                Message = formatter(state, exception)
-            });
-    }
-
-    private sealed class Entry
-    {
-        public required LogLevel Level { get; init; }
-
-        public required EventId EventId { get; init; }
-
-        public required string Message { get; init; }
     }
 }

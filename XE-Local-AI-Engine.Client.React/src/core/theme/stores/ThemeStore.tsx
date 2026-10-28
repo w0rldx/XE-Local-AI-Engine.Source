@@ -6,7 +6,7 @@ interface ThemeState {
 	setAccentColor: (_hex: string | null) => void;
 }
 
-// The localStorage key the ThemeProvider's colour-scheme manager is built with; the colour scheme lives there now,
+// The localStorage key the ThemeProvider's color-scheme manager is built with; the color scheme lives there now,
 // not here. Pinned explicitly because Mantine's default key has changed between minor versions.
 export const colorSchemeStorageKey = "mantine-color-scheme";
 

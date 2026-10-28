@@ -188,7 +188,7 @@ function KvQuantHint({ recommendation }: { recommendation: ModelFitRecommendatio
 // The KV cost of one token of context, plus the model's attention shape, as a second dimmed line under the Req. VRAM
 // figure. Deliberately independent of KvQuantHint: that one is an advisory about a DIFFERENT launch configuration, this
 // one is what the row's own context target costs. Rendered only when the header could size the KV term AND the quant
-// label came with it — an unlabelled byte count is ambiguous by a factor of two, so half a fact is not shown.
+// label came with it — an unlabeled byte count is ambiguous by a factor of two, so half a fact is not shown.
 function KvPerTokenHint({ recommendation }: { recommendation: ModelFitRecommendation }) {
 	const { t } = useTranslation();
 	const bytesPerToken = recommendation.kvBytesPerToken ?? null;

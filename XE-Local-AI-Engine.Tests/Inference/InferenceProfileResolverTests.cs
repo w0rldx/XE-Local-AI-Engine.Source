@@ -126,7 +126,7 @@ public sealed class InferenceProfileResolverTests
     [Arguments("q4_0", "q8_0")]
     public async Task FrozenProfile_AfterKvCacheTypeChange_IsMarkedStaleAndReturnsExplore(string frozenKvType, string selectedKvType)
     {
-        // D13's lifecycle, from the resolver's side and in BOTH directions: the KV-cache knob is one more thing axis (b)
+        // The lifecycle, from the resolver's side and in BOTH directions: the KV-cache knob is one more thing axis (b)
         // covers, so the existing MarkStale -> Explore path carries it with no new axis, call site or column. The
         // following spawn is an ordinary auto-fit explore, which no profiling lease can refuse.
         var store = Substitute.For<IInferenceProfileStore>();

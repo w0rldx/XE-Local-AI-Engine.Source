@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Http;
 ///         either and the client refuses the hijack outright rather than mis-reading the bytes.
 ///     </para>
 ///     <para>
-///         Read-only: the payload a caller sends on standard input is not modelled. The tests that need a genuinely
+///         Read-only: the payload a caller sends on standard input is not modeled. The tests that need a genuinely
 ///         bidirectional stream stay against a real daemon.
 ///     </para>
 /// </summary>

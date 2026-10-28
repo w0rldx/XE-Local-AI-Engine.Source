@@ -1,5 +1,5 @@
 // The feature's one fixture file, copied in shape from `devWorkflows/test/DevWorkflowFixtures.ts`: per-DTO builders
-// rather than per-route, so one run payload backs several test files parameterised by node status.
+// rather than per-route, so one run payload backs several test files parameterized by node status.
 //
 // Every builder returns the WIRE shape (all fields optional, as hey-api types them from the OpenAPI document), so a
 // test can spread overrides in without fighting a stricter local type than the server actually promises. The graph is
@@ -477,7 +477,7 @@ export function chatWorkflowEvents(
 }
 
 /**
- * The eight tools the node actually offers, already D6-filtered server-side — never re-filter this list. `GetCurrentTime`
+ * The eight tools the node actually offers, already filtered server-side — never re-filter this list. `GetCurrentTime`
  * and `Calculate` keep their PascalCase method names (`AIFunctionFactory` derives the name from the method), the six
  * others are snake_case. `parameterSchema` is raw JSON-schema TEXT that the argument form parses.
  */

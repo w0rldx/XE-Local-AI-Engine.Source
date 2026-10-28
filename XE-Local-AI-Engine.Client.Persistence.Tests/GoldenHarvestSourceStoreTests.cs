@@ -11,10 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Harvest read boundary <see cref="GoldenHarvestSourceStore" />: reconstructs harvest candidates from an agent's
-///     thumbs-up assistant turns. Messages are seeded through the encrypted context so the materialization interceptor
-///     decrypts content on read (proving EF decryption); the thumbs-up scan reads the plaintext feedback columns via raw
-///     ADO. FK enforcement is on (EnsureCreated) → seed agent → conversation → messages → feedback.
+///     <see cref="GoldenHarvestSourceStore" /> rebuilds harvest candidates from an agent's thumbs-up turns. Messages
+///     seed through the encrypted context (reads prove decryption); the thumbs-up scan reads plaintext columns via ADO.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class GoldenHarvestSourceStoreTests : IDisposable

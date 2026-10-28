@@ -13,7 +13,7 @@ import {
 import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
 import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler";
 
-/* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs every registered handler and releases the shared lease; the rule only recognises teardown of a connection created inline in the effect. */
+/* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs every registered handler and releases the shared lease; the rule only recognizes teardown of a connection created inline in the effect. */
 
 // Realtime authoritative refetch + operator feedback for the model-fit pages. Reuses the SAME scheduler SignalR hub
 // and event-name conventions as useSchedulerHub (no second hub server) — but where useSchedulerHub invalidates only

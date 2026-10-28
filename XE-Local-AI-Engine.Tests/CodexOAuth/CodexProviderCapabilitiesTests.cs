@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Asserts the Codex provider capability matrix after the tool-calling flip: tool calling is enabled for ALL Codex
-///     ids while parallel tool calls stay off (single-call first). The factory's <c>Capabilities</c> property and the
-///     chat / model-list gates all read <see cref="CodexProviderCapabilities.V0" />, so this single matrix governs the
-///     behaviour.
+///     The Codex provider capability matrix: tool calling is on for ALL Codex ids while parallel tool calls stay off
+///     (single-call first). The factory's <c>Capabilities</c> and the chat / model-list gates all read
+///     <see cref="CodexProviderCapabilities.V0" />, so this one matrix governs them.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CodexProviderCapabilitiesTests

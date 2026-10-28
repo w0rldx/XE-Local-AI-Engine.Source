@@ -30,10 +30,11 @@
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\RecordingLogger.cs" Link="Testing\RecordingLogger.cs"/>
     <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Fakes\ManualTimeProvider.cs" Link="Testing\ManualTimeProvider.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Client.Testing\Categories\TestCategories.cs" Link="Categories\TestCategories.cs"/>
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="XE_Local_AI_Engine.AI.Agent.Tests.Categories"/>
+    <Using Include="XE_Local_AI_Engine.Client.Testing.Categories"/>
     <Using Include="XE_Local_AI_Engine.Client.Testing.Fakes"/>
   </ItemGroup>
 

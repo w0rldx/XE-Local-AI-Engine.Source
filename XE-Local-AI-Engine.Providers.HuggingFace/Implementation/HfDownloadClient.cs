@@ -45,7 +45,7 @@ internal sealed class HfDownloadClient
     internal const string RangeSidecarSuffix = ".ranges.part";
 
     // The in-progress file this client writes beside every destination. Internal because a caller deciding whether to reuse an already-published
-    // destination must recognise the orphan beside it, and a second copy of the literal elsewhere would leave those bytes behind forever.
+    // destination must recognize the orphan beside it, and a second copy of the literal elsewhere would leave those bytes behind forever.
     internal const string PartSuffix = ".part";
     private readonly IHfDownloadMetrics _downloadMetrics;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
@@ -214,7 +214,7 @@ internal sealed class HfDownloadClient
             }
         }
 
-        // Single stream: not eligible for parallel mode, or the origin does not honour Range. Only bytes a RECORDED commit vouches for may be resumed — appending to a prefix a different commit wrote
+        // Single stream: not eligible for parallel mode, or the origin does not honor Range. Only bytes a RECORDED commit vouches for may be resumed — appending to a prefix a different commit wrote
         // splices two versions into a file that never existed upstream, usually with no sha256 to catch it. A .part with no record, or whose ref moved, refetches from byte 0.
         var resume = await ReadSingleStreamResumeAsync(partPath, expectedSizeBytes, ct).ConfigureAwait(false);
         var existingPartBytes = resume?.Bytes ?? 0L;
@@ -368,7 +368,7 @@ internal sealed class HfDownloadClient
     ///     pre-sized <c>.part</c>, resuming each range from its recorded cursor.
     /// </summary>
     /// <returns>
-    ///     The probe result (revision + any LFS OID), or <see langword="null" /> when the origin does not honour <c>Range</c>.
+    ///     The probe result (revision + any LFS OID), or <see langword="null" /> when the origin does not honor <c>Range</c>.
     /// </returns>
     /// <remarks>
     ///     All streams write into the one pre-sized file at their own offsets, because Hugging Face's CDN is per-connection throughput
@@ -446,7 +446,7 @@ internal sealed class HfDownloadClient
     }
 
     /// <summary>
-    ///     Asks for a single byte to learn whether the origin that will actually serve the payload honours <c>Range</c>
+    ///     Asks for a single byte to learn whether the origin that will actually serve the payload honors <c>Range</c>
     ///     and what it believes the file's length is.
     /// </summary>
     /// <remarks>
@@ -502,7 +502,7 @@ internal sealed class HfDownloadClient
             using var response = await SendAsync(request, token).ConfigureAwait(false);
             if (response.StatusCode != HttpStatusCode.PartialContent)
             {
-                // Throws for the real HTTP failures. A 2xx that is not 206 means the origin stopped honouring Range after the probe said it
+                // Throws for the real HTTP failures. A 2xx that is not 206 means the origin stopped honoring Range after the probe said it
                 // would; streaming a whole-file body into a chunk offset would silently corrupt the .part, so treat it as transient and re-probe.
                 ClassifyStatus(response.StatusCode);
                 throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
@@ -1246,7 +1246,7 @@ internal sealed class HfDownloadClient
         /// <remarks>
         ///     The increment and the delivery happen under one lock ON PURPOSE: chunks advance concurrently, and merely
         ///     making the running total atomic would still let a smaller figure reach the consumer after a larger one.
-        ///     Serialising both is what keeps reported progress monotonic. Contention is a lock per buffer read, which
+        ///     Serializing both is what keeps reported progress monotonic. Contention is a lock per buffer read, which
         ///     is nothing next to the bytes moved.
         /// </remarks>
         public void Advance(int count, string modelName, IProgress<PullProgress>? progress)

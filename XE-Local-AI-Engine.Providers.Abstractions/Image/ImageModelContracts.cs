@@ -95,7 +95,7 @@ public sealed record ImageModelPartRequest
     ///     A real file-set is not always published in one place: for Qwen-Image the quantized diffusion transformer and
     ///     the VAE ship in one repo while the Qwen2.5-VL text encoder ships in another, so a single set-level repo id
     ///     would make the model impossible to install rather than merely awkward. A part that overrides the repo cannot
-    ///     honour <see cref="ImageModelRequest.Revision" /> — a commit SHA pinning one repo is meaningless in another —
+    ///     honor <see cref="ImageModelRequest.Revision" /> — a commit SHA pinning one repo is meaningless in another —
     ///     so it resolves its own repo's default branch instead.
     /// </remarks>
     public string? RepoId { get; init; }

@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Request-shape rules that belong to the contract itself rather than to any one provider. Validating
-///     <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> at the init accessor is what makes a nonsense ceiling
-///     impossible to construct — a provider-side check would leave every other provider free to accept it, and a zero
-///     would read as "unlimited" exactly where the field means the opposite.
+///     Request-shape rules owned by the contract, not a provider. Validating
+///     <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> at the init accessor makes a nonsense ceiling
+///     unconstructible: a provider-side check leaves other providers free to accept it, and zero reads "unlimited".
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SandboxCreateRequestTests

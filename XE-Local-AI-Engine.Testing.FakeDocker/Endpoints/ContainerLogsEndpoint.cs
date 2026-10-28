@@ -19,7 +19,7 @@ internal static class ContainerLogsEndpoint
 
         var frames = (IEnumerable<FakeDockerLogFrame>)container.Logs;
 
-        // `tail` counts frames here rather than newlines. The client sends it and the daemon honours it; what the
+        // `tail` counts frames here rather than newlines. The client sends it and the daemon honors it; what the
         // production reader is tested for is the byte ceiling it applies to what comes back, so a per-frame tail is
         // the smallest thing that lets a test ask for less than everything. `since` is recorded, not applied: the
         // fake's frames carry no clock to filter against.

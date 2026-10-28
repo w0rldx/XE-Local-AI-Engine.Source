@@ -29,7 +29,7 @@ internal sealed class DevWorkflowDevTaskExecutor
     private const int ChildTaskAttempt = 0;
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>The attempt statuses that mean the chain is still working, so nothing here should ask it for more.</summary>
     private static readonly HashSet<DevelopmentAttemptStatus> ActiveAttemptStatuses =
@@ -957,7 +957,7 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     Best-effort by design, like <see cref="Brief" />: an input this cannot read is an input with no routed
     ///     failure in it, falling through to the unrouted branch rather than throwing on a document nobody promised
     ///     the shape of. The attempt is optional for the same reason and one more — a payload that carries none is
-    ///     answered exactly as it was before the attempt travelled on it.
+    ///     answered exactly as it was before the attempt traveled on it.
     /// </remarks>
     private static RoutedFailure? RoutedFailureOf(string? inputJson)
     {
@@ -1080,7 +1080,7 @@ internal sealed class DevWorkflowDevTaskExecutor
 
         var report = JsonSerializer.Deserialize<DevWorkflowValidationReport>(read.Content.Span, JsonOptions);
 
-        // A route written before the attempt travelled on the payload names no attempt, and accepts the report as it stands.
+        // A route written before the attempt traveled on the payload names no attempt, and accepts the report as it stands.
         return routed.Attempt is not { } attempt || report?.Attempt == attempt ? report : null;
     }
 

@@ -7,11 +7,10 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Mapper tests for the usage-summary projection: a bucket carries its fine-grained
-///     provider through to the response, the per-provider rollup folds the (model, provider, day) buckets down to one row
-///     per provider (biggest consumer first), and each level attaches a server-computed USD cost estimate — reasoning
-///     billed as output, rates per 1M tokens, local runtimes free, rounded to 4 decimals.
+///     Usage-summary mapper: a bucket carries its fine-grained provider, the per-provider rollup folds (model,
+///     provider, day) buckets to one row per provider (biggest first), and each level gets a server-computed USD cost.
 /// </summary>
+/// <remarks>Cost: reasoning billed as output, rates per 1M tokens, local runtimes free, 4-decimal rounding.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class UsageSummaryMapperTests
 {

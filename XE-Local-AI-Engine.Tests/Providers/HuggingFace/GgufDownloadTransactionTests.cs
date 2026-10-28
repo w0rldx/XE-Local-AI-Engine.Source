@@ -147,7 +147,7 @@ public sealed class GgufDownloadTransactionTests
     [Test]
     public async Task Prepare_ProjectorPair_ReportsLiveProgressAgainstTheSameTotalAnInterruptedRowCarries()
     {
-        // V-03: the live row showed the weight alone while the interrupted row showed weight + projector. Both now report the set.
+        // The live row and the interrupted row both report the whole set (weight + projector), not the weight alone.
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         var projectorFails = true;

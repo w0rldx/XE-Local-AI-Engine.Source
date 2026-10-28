@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client;
 using Microsoft.Net.Http.Headers;
 using Serilog.AspNetCore;
 using Serilog.Events;
-using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Common;
 
 public sealed partial class Program
 {
@@ -17,7 +17,7 @@ public sealed partial class Program
         options.EnrichDiagnosticContext = static (diagnosticContext, httpContext) =>
         {
             var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
-            var path = RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value);
+            var path = LogValueSanitizer.Sanitize(httpContext.Request.Path.Value);
             diagnosticContext.Set("RequestPathWithRedactedQuery", $"{path}{redactedQuery}");
             diagnosticContext.Set("QueryString", redactedQuery);
         };
@@ -30,8 +30,8 @@ public sealed partial class Program
         // those log-event values at the middleware's supported property boundary rather than mutating routing inputs.
         options.GetMessageTemplateProperties = static (httpContext, requestPath, elapsedMilliseconds, statusCode) =>
         [
-            new LogEventProperty("RequestMethod", new ScalarValue(RequestLogSanitizer.Sanitize(httpContext.Request.Method))),
-            new LogEventProperty("RequestPath", new ScalarValue(RequestLogSanitizer.Sanitize(requestPath))),
+            new LogEventProperty("RequestMethod", new ScalarValue(LogValueSanitizer.Sanitize(httpContext.Request.Method))),
+            new LogEventProperty("RequestPath", new ScalarValue(LogValueSanitizer.Sanitize(requestPath))),
             new LogEventProperty("StatusCode", new ScalarValue(statusCode)),
             new LogEventProperty("Elapsed", new ScalarValue(elapsedMilliseconds))
         ];

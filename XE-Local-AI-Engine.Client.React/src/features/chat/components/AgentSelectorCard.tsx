@@ -58,7 +58,7 @@ function AgentOptionItem({ agent, selected, onSelect }: AgentOptionItemProps) {
 			data-testid={`chat-agent-selector-option-${agent.id}`}
 			role="menuitemradio"
 			aria-checked={selected}
-			// Escape closes this picker, not the modal around it (Mantine's Modal honours this attribute).
+			// Escape closes this picker, not the modal around it (Mantine's Modal honors this attribute).
 			data-mantine-stop-propagation="true"
 			onClick={() => onSelect(agent.id)}
 			style={{
@@ -172,7 +172,7 @@ export function AgentSelectorCard({
 			offset={4}
 			withinPortal={true}
 			// The portalled dropdown is outside a parent Modal's focus trap: trap focus inside it so keyboard users
-			// can reach the rows, and hand focus back to the trigger when it closes (F-28).
+			// can reach the rows, and hand focus back to the trigger when it closes.
 			trapFocus={true}
 			returnFocus={true}
 			shadow="md"

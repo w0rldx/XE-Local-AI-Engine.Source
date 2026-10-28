@@ -36,9 +36,8 @@ public sealed class BenchmarkJudgeVerifierConfigTests
     [Test]
     public void Parse_ForPythonTests_ValidatesTestCodeExportsTimeoutAndExtract()
     {
-        // pythonTests is no longer a reserved name, so the interesting refusals are about its CONFIG. Each one is
-        // raised at activation rather than at judging, because an operator who learns an hour into a batch learns it
-        // from a failed run instead of from the form they were filling in.
+        // pythonTests is not a reserved name, so the refusals are about its CONFIG, raised at activation rather than at
+        // judging so an operator learns from the form, not from a run that failed an hour into a batch.
         var missingTests = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
             BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests, """{"exports":["solve"]}"""));
         var oversized = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>

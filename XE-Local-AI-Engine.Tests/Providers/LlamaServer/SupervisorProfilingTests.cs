@@ -379,7 +379,7 @@ public sealed class SupervisorProfilingTests
     {
         // cap=1 so a competing distinct-model admission must evict an idle LRU to make room. The profiling process is
         // idle past the TTL but PINNED, so the idle-LRU eviction skips it and the competing admission is rejected —
-        // proving the pin exempts the process from idle eviction (the same predicate the background reaper honours).
+        // proving the pin exempts the process from idle eviction (the same predicate the background reaper honors).
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
         var ttl = TimeSpan.FromMinutes(5);

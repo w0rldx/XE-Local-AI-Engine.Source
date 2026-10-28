@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The behaviour of the raw-model proxy forwarder: it provisions the requested local model and reverse-proxies the
+///     The behavior of the raw-model proxy forwarder: it provisions the requested local model and reverse-proxies the
 ///     request VERBATIM to the llama-server child's own OpenAI endpoint. The load-bearing guarantees under test are that
 ///     it forwards to the exact supervisor-provided loopback URL (no SSRF from the caller's path), that it is
 ///     llama.cpp-only and refuses any unknown/cloud model name with a 404 (so an external tool can never reach cloud

@@ -328,11 +328,11 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
     }
 
     /// <summary>
-    ///     A recorded source build outranks the requested variant, so the serve can hand back a GPU build under a Cpu
-    ///     selection (the selector reads Cpu whenever the GPU probe times out or finds no vendor). The evaluation must
-    ///     then take the VRAM admission ticket and spawn as the GPU build it actually is — keying either off the
-    ///     selector loads a CUDA build onto the device without ever entering the gate.
+    ///     A recorded source build outranks the requested variant, so a Cpu selection can be served a GPU build (Cpu is
+    ///     read when the GPU probe times out or finds no vendor). The evaluation must take the VRAM ticket and spawn as
+    ///     the build it got.
     /// </summary>
+    /// <remarks>Keying either off the selector loads a CUDA build onto the device without entering the gate.</remarks>
     [Test]
     public async Task Evaluation_WhenServedBuildIsGpu_TakesLoadTicketAndSpawnsAsGpu()
     {

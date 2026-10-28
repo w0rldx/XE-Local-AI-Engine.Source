@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Providers.Python.Implementation;
 
 using System.Formats.Tar;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -87,7 +86,7 @@ public sealed class UvBinaryAcquirer
             logSink($"Downloading uv {ManagedPythonPins.UvVersion}.");
             await DownloadToFileAsync(asset.DownloadUri(), tempArchive, ct).ConfigureAwait(false);
 
-            if (!await HashMatchesAsync(tempArchive, asset.Sha256, ct).ConfigureAwait(false))
+            if (!await FileSha256.MatchesAsync(tempArchive, asset.Sha256, ct).ConfigureAwait(false))
             {
                 throw new ManagedPythonException("The uv download failed integrity verification and was discarded.");
             }
@@ -97,7 +96,7 @@ public sealed class UvBinaryAcquirer
         }
         finally
         {
-            TryDeleteFile(tempArchive);
+            BestEffortFile.TryDeleteFile(tempArchive);
         }
 
         if (!File.Exists(executable))
@@ -133,7 +132,7 @@ public sealed class UvBinaryAcquirer
 
         foreach (var leftover in leftovers)
         {
-            TryDeleteDirectory(leftover);
+            BestEffortFile.TryDeleteDirectory(leftover);
         }
     }
 
@@ -171,16 +170,9 @@ public sealed class UvBinaryAcquirer
         }
         catch
         {
-            TryDeleteFile(destination);
+            BestEffortFile.TryDeleteFile(destination);
             throw;
         }
-    }
-
-    private static async Task<bool> HashMatchesAsync(string filePath, string expectedSha256, CancellationToken ct)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        return string.Equals(Convert.ToHexStringLower(hash), expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -214,7 +206,7 @@ public sealed class UvBinaryAcquirer
                 // rename(2) is atomic, so a concurrent acquirer sees either the broken tree or none, never half of one.
                 var stale = $"{versionDir}.{Guid.NewGuid():N}.stale";
                 TryMoveDirectory(versionDir, stale);
-                TryDeleteDirectory(stale);
+                BestEffortFile.TryDeleteDirectory(stale);
             }
 
             if (!TryMoveDirectory(stagingDir, versionDir) && !File.Exists(executable))
@@ -224,7 +216,7 @@ public sealed class UvBinaryAcquirer
         }
         finally
         {
-            TryDeleteDirectory(stagingDir);
+            BestEffortFile.TryDeleteDirectory(stagingDir);
         }
     }
 
@@ -271,36 +263,6 @@ public sealed class UvBinaryAcquirer
         catch (IOException)
         {
             return false;
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a staging or stale tree; a leftover sibling is never read as the cache.
-        }
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a temp download.
         }
     }
 }

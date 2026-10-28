@@ -61,10 +61,8 @@ public sealed class LocalModelAdministrationServiceTests
     [Test]
     public async Task SelectDefaultAsync_WhenAnotherWriterLandsBetweenTheLoadAndTheWrite_KeepsItsFieldsAndReportsTheRealPrevious()
     {
-        // Validation is async (it hits the GGUF store and the cloud resolver), so a whole-record save built from the
-        // settings loaded before it would roll back everything another writer changed in that window — here a machine
-        // key minted at boot. The previous name is read at write time for the same reason: the cache invalidation must
-        // describe the transition that actually happened on disk, not the one this call expected.
+        // Validation is async, so a whole-record save from settings loaded before it would roll back a concurrent write
+        // (a boot-minted machine key); the previous name is read at write time so invalidation matches what hit disk.
         var settings = new FakeNodeSettingsStore(new StoredNodeSettings
             {
                 DefaultModelName = "loaded-default"

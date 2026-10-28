@@ -63,13 +63,13 @@ vi.mock("@/features/model-fit/queries/useInferenceProfiles", () => ({
 	useFreezeInferenceProfile: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
 	useInvalidateInferenceProfile: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
 }));
-vi.mock("@/features/models/queries/useGgufDownload", () => ggufMock);
+vi.mock("@/core/model-downloads/queries/useGgufDownload", () => ggufMock);
 vi.mock("@/features/scheduler/queries/useScheduler", () => schedulerMock);
 vi.mock("@/features/model-fit/hooks/useModelFitSchedulerEvents", () => ({ useModelFitSchedulerEvents: hubMock }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { ModelRecommendationsPage } from "@/features/model-fit/pages/ModelRecommendationsPage";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function modelFitJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {

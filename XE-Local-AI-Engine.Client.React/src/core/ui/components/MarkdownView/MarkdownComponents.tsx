@@ -48,7 +48,7 @@ export const markdownComponents: Components = {
 		);
 	},
 	// Table parts go through Mantine too: its alignment and padding target only its own part classes, so a raw <th>
-	// kept the browser's centred header and sat offset from its column. GFM column alignment rides in `style`.
+	// kept the browser's centered header and sat offset from its column. GFM column alignment rides in `style`.
 	thead: ({ node: _node, ...properties }) => <Table.Thead {...properties} />,
 	tbody: ({ node: _node, ...properties }) => <Table.Tbody {...properties} />,
 	tr: ({ node: _node, ...properties }) => <Table.Tr {...properties} />,

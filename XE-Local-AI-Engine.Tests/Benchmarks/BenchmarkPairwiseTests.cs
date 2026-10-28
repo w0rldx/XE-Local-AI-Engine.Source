@@ -122,7 +122,7 @@ public sealed class BenchmarkPairwiseTests
     [Test]
     public void Plan_TwoItemsByTwoModels_PairsOnlyDifferentModelsOnTheSameItem()
     {
-        // R7-02: 2 items x 2 models used to produce 6 pairs, including one model's item 1 against its own item 0.
+        // 2 items x 2 models pair only across models: never 6 pairs with one model's item 1 against its own item 0.
         var item0Repeat = new Guid("44444444-4444-4444-4444-444444444444");
         var item1Large = new Guid("55555555-5555-5555-5555-555555555555");
         var item1Small = new Guid("66666666-6666-6666-6666-666666666666");

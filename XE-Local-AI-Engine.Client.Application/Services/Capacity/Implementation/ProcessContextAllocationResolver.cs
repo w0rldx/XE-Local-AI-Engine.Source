@@ -30,7 +30,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     /// <summary>The smallest chat tier the walk still prefers fully GPU-resident over an expert-offload placement at a larger tier.</summary>
     /// <remarks>
     ///     Expert offload (<c>--cpu-moe</c>) streams every expert weight from system RAM: on a 32 GB card the 35B-A3B ran about 5x slower at
-    ///     65,536 offloaded than at 32,768 resident (model-matrix round, 2026-10-04). Below this window the larger offloaded one stays the better trade.
+    ///     65,536 offloaded than at 32,768 resident. Below this window the larger offloaded one stays the better trade.
     /// </remarks>
     private const int ResidentPreferenceFloorTokens = 16384;
 

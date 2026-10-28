@@ -11,10 +11,10 @@ import {
 	narrowGraphWorkflowTriggerSource,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
-// Colour maps only — the pill is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it. Both maps are
+// Color maps only — the pill is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it. Both maps are
 // `Record<vocabulary, …>`, so a member added to the vocabulary fails to compile here rather than rendering colourless.
 // They stay module-private (`useComponentExportOnlyModules`): the test walks the vocabularies through a render and
-// reads the colour Mantine puts on the pill, which asserts the same thing without a second public surface.
+// reads the color Mantine puts on the pill, which asserts the same thing without a second public surface.
 
 const graphWorkflowRunStatusColors: Record<GraphWorkflowRunStatus, MantineColor> = {
 	Pending: "gray",

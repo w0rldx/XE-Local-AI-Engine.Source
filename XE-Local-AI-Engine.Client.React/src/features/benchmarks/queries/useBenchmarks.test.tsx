@@ -21,16 +21,20 @@ import {
 	useBenchmarkProjects,
 	useBenchmarkRun,
 	useBenchmarkRuns,
+	useEligibleBenchmarkModels,
+} from "@/features/benchmarks/queries/useBenchmarks";
+import {
 	useClearBenchmarkFidelityCache,
 	useClearBenchmarkRunScore,
-	useDeleteBenchmarkProject,
-	useEligibleBenchmarkModels,
-	useRejudgeBenchmarkProject,
 	useStartBenchmarkRun,
+} from "@/features/benchmarks/queries/useBenchmarkRunMutations";
+import {
+	useDeleteBenchmarkProject,
+	useRejudgeBenchmarkProject,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 	useUpdateBenchmarkProjectFidelity,
-} from "@/features/benchmarks/queries/useBenchmarks";
+} from "@/features/benchmarks/queries/useBenchmarkProjectMutations";
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
@@ -561,7 +565,7 @@ describe("benchmark queries over the real client", () => {
 	// Fidelity is measured on its OWN queue and only starts once the run itself is terminal, so a poll predicate reading
 	// just the primary and the judge goes quiet the instant a measurement is queued — and the numbers it queued for never
 	// arrive. Both runs below are terminal on primary and judge and differ ONLY in their fidelity row, so one elapsed
-	// clock separates the two behaviours: whatever kept the first one reading cannot have been the run's own state.
+	// clock separates the two behaviors: whatever kept the first one reading cannot have been the run's own state.
 	it("keeps polling a run whose fidelity measurement is in flight and leaves a measured one alone", async () => {
 		const measuredRunId = "bbbbbbbb-0000-4000-8000-000000000009";
 		const reads = { queued: 0, measured: 0 };

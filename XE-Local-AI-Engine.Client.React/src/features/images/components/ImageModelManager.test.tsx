@@ -38,7 +38,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	}),
 }));
 
-// No i18next instance is initialised under vitest, so the real useTranslation returns the default string with the
+// No i18next instance is initialized under vitest, so the real useTranslation returns the default string with the
 // {{placeholders}} intact. This interpolating stub lets the progress assertions check the actual values (the part
 // index, the percentage) rather than the template.
 vi.mock("react-i18next", () => ({

@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="SpawnSerializer" /> tests: same-model serialization with a bounded wait. Two same-model runs do not
-///     overlap (they serialize on the one process); a run that cannot acquire its turn within the timeout returns the
-///     "busy" fallback rather than hanging; and distinct models do not block each other.
+///     <see cref="SpawnSerializer" />: same-model serialization with a bounded wait. Two same-model runs serialize on
+///     the one process, a run that misses its turn within the timeout returns the "busy" fallback rather than
+///     hanging, and distinct models do not block each other.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SpawnSerializerTests

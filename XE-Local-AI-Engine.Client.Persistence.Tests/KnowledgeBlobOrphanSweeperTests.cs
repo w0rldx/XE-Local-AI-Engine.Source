@@ -13,11 +13,8 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     The startup sweep that reclaims knowledge document blobs whose <c>knowledge_documents</c> row is gone — the state a
-///     purge leaves behind when its post-commit file delete fails, and which no later purge can collect (the second purge
-///     finds no row and returns before touching the disk). Run on the real store over a real migrated SQLite database and
-///     a real filesystem: the control document, seeded through the store itself, is what proves the sweep deletes only
-///     what nothing owns.
+///     The startup sweep reclaiming knowledge blobs whose <c>knowledge_documents</c> row is gone, as left by a failed
+///     post-commit delete no later purge can retry. Real store, database and disk; a store-seeded control survives.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeBlobOrphanSweeperTests : IDisposable

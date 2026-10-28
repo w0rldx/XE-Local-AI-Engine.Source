@@ -26,7 +26,7 @@ public static class CudaToolkitLocator
     ///     resolves one (nothing to correct) or no conventional install exists (nothing to offer).
     /// </summary>
     /// <remarks>
-    ///     Returning <c>null</c> for the PATH case keeps the behaviour of every already-working host byte-identical. Both halves of a
+    ///     Returning <c>null</c> for the PATH case keeps the behavior of every already-working host byte-identical. Both halves of a
     ///     source build go through it: the prerequisite probe spawns the returned absolute path, and the build child gets <c>CUDACXX</c>
     ///     set to it so CMake picks the same toolkit the checklist was answered from. Without it the probe is stricter than the build it
     ///     gates — a probe spawning <c>nvcc</c> by bare name resolves only against the PARENT process PATH, while CMake's

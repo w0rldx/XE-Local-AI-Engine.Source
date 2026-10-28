@@ -24,7 +24,7 @@ export interface RuntimeResources {
 	readonly gpus: readonly GpuMemoryUsage[];
 }
 
-// A bar at or above this share of its capacity switches to the warning colour.
+// A bar at or above this share of its capacity switches to the warning color.
 export const HIGH_USAGE_PERCENT = 90;
 
 export function toRuntimeResources(dto: XeLocalAiEngineClientEndpointsModelFitV1RuntimeResourcesResponse): RuntimeResources {

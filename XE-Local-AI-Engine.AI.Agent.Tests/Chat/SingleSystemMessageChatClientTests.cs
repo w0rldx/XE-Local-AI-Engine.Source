@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>The fold that hands the provider one leading system message (R4-06), graded on its own inputs.</summary>
+/// <summary>The fold that hands the provider one leading system message, graded on its own inputs.</summary>
 [Category(TestCategories.Unit)]
 public sealed class SingleSystemMessageChatClientTests
 {

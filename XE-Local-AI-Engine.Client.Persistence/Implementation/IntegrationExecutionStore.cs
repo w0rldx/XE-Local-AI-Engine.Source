@@ -260,7 +260,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             throw new ArgumentException($"A '{command.EventType}' event's detail may not exceed {MaxEventDetailBytes} UTF-8 bytes.", nameof(command));
         }
 
-        // AsNoTracking: nothing on the row is mutated here any more — both watermarks move through SQL below — and a
+        // AsNoTracking: nothing on the row is mutated here — both watermarks move through SQL below — and a
         // tracked copy would only carry a stale LastSequence into the next call on this scoped context.
         var entity = await _dbContext.IntegrationExecutions.AsNoTracking()
                                      .SingleOrDefaultAsync(row => row.Id == command.ExecutionId, cancellationToken)

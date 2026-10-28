@@ -191,7 +191,7 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.WebSearchSearxngUrl)
     };
 
-    private static readonly JsonSerializerOptions SettingsSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SettingsSerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IRuntimeDeviceAudit _deviceAudit;
     private readonly IGgufModelStore _ggufModelStore;

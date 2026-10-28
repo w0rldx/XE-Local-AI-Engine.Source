@@ -39,7 +39,7 @@ internal interface IDevelopmentEvidenceService
 
 internal sealed class DevelopmentEvidenceService : IDevelopmentEvidenceService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentArtifactBlobStore _blobStore;
     private readonly IDevelopmentPatchEvidenceService _patchEvidence;

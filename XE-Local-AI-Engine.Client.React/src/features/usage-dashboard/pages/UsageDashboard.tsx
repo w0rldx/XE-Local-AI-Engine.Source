@@ -1,7 +1,6 @@
 import { Button, Card, Skeleton, Stack, Text, Title } from "@mantine/core";
 import { IconChartBar, IconChartHistogram, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import type { TFunction } from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -31,10 +30,6 @@ import {
 } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
 const FALLBACK_RETENTION_DAYS = 30;
-
-function errorMessage(error: unknown, t: TFunction): string {
-	return apiErrorMessage(error, t("pages.usage.loadError", "Usage summary could not be loaded."));
-}
 
 // Skeleton stand-in shown while the first summary loads, so the page keeps its shape instead of collapsing.
 function UsageSkeleton() {
@@ -151,7 +146,12 @@ export function UsageDashboard() {
 				onChange={handleRangeChange}
 			/>
 
-			{error ? <InlineErrorAlert message={errorMessage(error, t)} data-testid="usage-error" /> : null}
+			{error ? (
+				<InlineErrorAlert
+					message={apiErrorMessage(error, t("pages.usage.loadError", "Usage summary could not be loaded."))}
+					data-testid="usage-error"
+				/>
+			) : null}
 
 			{isLoading ? <UsageSkeleton /> : null}
 

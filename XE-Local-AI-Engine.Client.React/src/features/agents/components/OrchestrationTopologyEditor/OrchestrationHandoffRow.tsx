@@ -2,7 +2,7 @@ import { ActionIcon, Group, Paper, Select, TextInput } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import type { OrchestrationHandoff } from "@/features/agents/models/OrchestrationTopologyModels";
+import type { OrchestrationHandoff } from "@/core/agents/models/OrchestrationTopologyModels";
 
 interface OrchestrationHandoffRowProps {
 	edge: OrchestrationHandoff;

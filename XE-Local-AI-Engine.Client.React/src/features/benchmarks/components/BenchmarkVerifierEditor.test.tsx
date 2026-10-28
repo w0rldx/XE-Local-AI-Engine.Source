@@ -102,8 +102,8 @@ describe("BenchmarkVerifierEditor", () => {
 		expect(onChange).toHaveBeenCalledWith({ kind: "exact", config: '{"expected":"42"}' });
 	});
 
-	// `trim` is the node's only default-on normalisation flag; an unset config must read as on for it and off for the
-	// rest, or the checkbox row would claim a normalisation the node is not applying.
+	// `trim` is the node's only default-on normalization flag; an unset config must read as on for it and off for the
+	// rest, or the checkbox row would claim a normalization the node is not applying.
 	it("reflects the node's own normalisation defaults on an unset config", () => {
 		renderEditor("exact", '{"expected":"42"}');
 

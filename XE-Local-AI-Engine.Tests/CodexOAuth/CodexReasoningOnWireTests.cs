@@ -1,26 +1,22 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     On-WIRE reasoning-summary + reasoning-effort assertions for the Codex reasoning display. Proves the Codex
-///     Responses request the SDK actually POSTs opts into reasoning summaries (<c>reasoning.summary == "auto"</c>)
-///     and carries the per-send effort (<c>reasoning.effort</c>) mapped from the chat reasoning
-///     effort, WHILE preserving the store=false invariant and omitting server-side state ids. HTTP is mocked, so this
-///     body-shape assertion is the correctness proof; the MEAI summary→TextReasoningContent mapping is verified
-///     separately against a live model.
-///     <para>
-///         The effort reaches the Codex boundary via <see cref="ChatOptions.AdditionalProperties" />: the agent factory sets
-///         the Codex-only <c>codex_reasoning_effort</c> raw-string side channel for a thinking-capable model (full fidelity,
-///         incl. minimal/xhigh) and the Ollama-shaped <c>think</c> value (false / "low"/"medium"/"high" / true). These tests
-///         drive both channels through the real SDK serialization over a capturing transport.
-///     </para>
+///     On-WIRE assertions for the Codex reasoning display: the Responses request the SDK POSTs opts into summaries
+///     (<c>reasoning.summary == "auto"</c>) and carries the per-send <c>reasoning.effort</c>, keeps store=false and
+///     omits server-side state ids.
 /// </summary>
+/// <remarks>
+///     HTTP is mocked, so this body shape is the correctness proof; the MEAI summary→TextReasoningContent mapping is
+///     verified against a live model. The effort arrives via <see cref="ChatOptions.AdditionalProperties" />: the
+///     Codex-only <c>codex_reasoning_effort</c> raw string (full fidelity, incl. minimal/xhigh) and the Ollama-shaped
+///     <c>think</c> value (false / "low"/"medium"/"high" / true). Both channels run through the real SDK serialization
+///     over a capturing transport.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class CodexReasoningOnWireTests
 {
@@ -152,7 +148,7 @@ public sealed class CodexReasoningOnWireTests
 
     private static async Task<string> CaptureRequestBodyAsync(ChatOptions options)
     {
-        using var capture = new BodyCapturingHandler();
+        using var capture = new ResponsesBodyCapturingHandler();
         using var httpClient = new HttpClient(capture);
 
         var inner = CodexChatClientConstruction.Build(new Uri("https://chatgpt.com/backend-api/codex"),
@@ -171,26 +167,5 @@ public sealed class CodexReasoningOnWireTests
         }
 
         return AssertEx.NotNull(capture.RequestBody, "the Responses request body must have been sent");
-    }
-
-    /// <summary>Captures the outbound request body and returns a minimal canned Responses reply.</summary>
-    private sealed class BodyCapturingHandler : HttpMessageHandler
-    {
-        public string? RequestBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            const string CannedResponse =
-                """{"id":"resp_test","object":"response","status":"completed","model":"gpt-5.4","output":[]}""";
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }

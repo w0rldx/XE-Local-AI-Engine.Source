@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the per-family generation defaults. They matter because the wrong ones do not fail: <c>sd-server</c>'s own
-///     defaults are SD1.5's (20 steps, CFG 7.0, <c>euler_a</c>), and running a distilled FLUX-schnell or a Qwen-Image at
-///     those numbers produces a burnt image rather than an error — a failure mode that looks like a broken model.
+///     Pins the per-family generation defaults. Wrong ones do not fail: <c>sd-server</c> defaults to SD1.5's (20 steps,
+///     CFG 7.0, <c>euler_a</c>), which give a distilled FLUX-schnell or a Qwen-Image a burnt image rather than an error.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ImageFamilyDefaultsTests
@@ -31,7 +30,7 @@ public sealed class ImageFamilyDefaultsTests
     public void For_UnknownFamily_FallsBackToTheSdEraValuesRatherThanThrowing()
     {
         // An unclassified model still has to be generatable. The fallback is what the runtime would have used anyway,
-        // so the worst case is the previous behaviour rather than an unusable model.
+        // so the worst case is the previous behavior rather than an unusable model.
         var defaults = ImageFamilyDefaults.For(ImageModelFamily.Unknown);
 
         AssertEx.Equal(expected: 20, defaults.Steps);
@@ -56,7 +55,7 @@ public sealed class ImageFamilyDefaultsTests
     [Test]
     public void EditModesFor_QwenImageWithoutTheVisionTower_OffersImg2ImgOnly()
     {
-        // Measured 2026-10-02: sd-server fails every Qwen-Image 2.1 reference edit without --llm_vision, so a set
+        // Measured: sd-server fails every Qwen-Image 2.1 reference edit without --llm_vision, so a set
         // without the LlmVision part must not offer the mode.
         var modes = ImageFamilyDefaults.EditModesFor(ImageModelFamily.QwenImage,
             [ImageModelPartRole.Diffusion, ImageModelPartRole.Vae, ImageModelPartRole.Llm]);

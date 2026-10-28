@@ -67,7 +67,7 @@ public sealed class DriveInfoFreeSpaceProbeTests
     public void GetAvailableFreeBytes_WhenNothingExistsAtOrAboveThePath_Throws()
     {
         // Unix has no such path: every absolute path walks up to "/", which always exists. Q: is assumed to be
-        // unmounted on the runner; a box that does mount it fails this loudly rather than passing wrongly, because
+        // unmounted on the runner; a host that does mount it fails this loudly rather than passing wrongly, because
         // the probe would then answer with a figure where the test demands a refusal.
         _ = AssertEx.Throws<InvalidOperationException>(() => new DriveInfoFreeSpaceProbe().GetAvailableFreeBytes(@"Q:\xe-free-space-probe"));
     }

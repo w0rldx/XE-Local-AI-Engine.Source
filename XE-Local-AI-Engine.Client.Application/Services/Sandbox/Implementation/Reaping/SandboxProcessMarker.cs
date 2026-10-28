@@ -30,7 +30,7 @@ public sealed record SandboxProcessMarker
     /// <summary>The group leader's start time in clock ticks since boot, field 22 of <c>/proc/[pid]/stat</c>.</summary>
     /// <remarks>
     ///     The pid-reuse guard: between the crash and the next start the kernel may have recycled <see cref="ProcessGroupId" /> onto an
-    ///     unrelated process, and signalling that group would kill something that was never ours, so the reaper re-reads this field and
+    ///     unrelated process, and signaling that group would kill something that was never ours, so the reaper re-reads this field and
     ///     refuses to kill unless it matches. <see langword="null" /> exactly when <see cref="ProcessGroupId" /> is: a group id without the
     ///     guard that verifies it is not something the reaper may act on.
     /// </remarks>

@@ -82,7 +82,7 @@ START_CLI_STARTTIME=""
 START_PROC_ROOT="${XE_ASPIRE_START_PROC_ROOT:-/proc}"
 
 # Called by cleanup(), which is itself invoked indirectly by the EXIT trap.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # called by cleanup, which only the EXIT trap invokes
 rollback_start_session() {
   [[ "${START_SESSION_ID}" =~ ^[0-9]+$ ]] || return 0
   if [[ ! "${START_CLI_PID}" =~ ^[0-9]+$ || ! "${START_CLI_STARTTIME}" =~ ^[0-9]+$ ]] \
@@ -149,7 +149,7 @@ release_start_anchor() {
 }
 
 # Invoked indirectly by the EXIT trap immediately below.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # invoked by the EXIT trap below
 cleanup() {
   local status=$?
   trap - EXIT
@@ -168,7 +168,7 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 START_ATTEMPTED=true
 # The single-quoted body is intentionally expanded only inside the session-leader wrapper.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # expanded by the session-leader wrapper, on purpose
 setsid bash -c '
   set +e
   status_file="$1"

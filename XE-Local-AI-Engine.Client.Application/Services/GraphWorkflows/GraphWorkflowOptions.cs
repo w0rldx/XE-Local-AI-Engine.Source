@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 /// <summary>Configuration for graph workflows.</summary>
 /// <remarks>
-///     <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture development workflows
+///     <see cref="Enabled" /> gates <em>behavior</em>, never registration — the same posture development workflows
 ///     and work sessions hold: a disabled node has to answer legibly rather than 500 out of an empty container. The
 ///     request-path gate in <c>Program</c> is what turns the switch into a 404. The ranges here are sanity bounds the
 ///     binder can see; the semantic floors and the one cross-option relation live in

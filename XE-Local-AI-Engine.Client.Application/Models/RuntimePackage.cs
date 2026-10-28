@@ -119,8 +119,8 @@ public sealed record RuntimePackage
     ///     tool-capable orchestrator; the invocation runner branches to the workflow drive when this is set.
     /// </summary>
     /// <remarks>
-    ///     Null on the single-agent loopback path and on the encrypted/server path, where the config hash is byte-identical to the payload
-    ///     before orchestration was added.
+    ///     Null on the single-agent loopback path and on the encrypted/server path, where the config hash is byte-identical to a payload
+    ///     without orchestration.
     /// </remarks>
     public OrchestrationSpec? OrchestrationSpec { get; init; }
 

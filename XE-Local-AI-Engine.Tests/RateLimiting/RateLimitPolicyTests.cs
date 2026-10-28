@@ -189,7 +189,7 @@ public sealed class RateLimitPolicyTests
             }), $"Endpoints reference rate-limiting policies [{string.Join(", ", referenced)}], which is not the registered set.");
     }
 
-    // Q3 / I-D7: unauthenticated probes shared the key holder's 120/min bucket. They now get their own 20/min one.
+    // Unauthenticated probes get their own 20/min bucket and never spend the key holder's 120/min one.
     [Test]
     public async Task McpPolicy_UnauthenticatedBucket_ExhaustsWithoutSpendingTheBearerBucket()
     {
@@ -290,7 +290,7 @@ public sealed class RateLimitPolicyTests
     ///     An open SSE response consumes exactly ONE permit, and holding it consumes nothing further.
     ///     <para>
     ///         Two halves, because neither alone is the claim. First, the stream routes really do keep
-    ///         <c>.RequireRateLimiting</c> — the rule that stream routes stay rate-limited stands, and ADR 0008 R2-11
+    ///         <c>.RequireRateLimiting</c> — the rule that stream routes stay rate-limited stands, and ADR 0008
     ///         forbids removing it to make anything pass. Second, the
     ///         REGISTERED policy is a fixed window over the shared peer-address partition, and a fixed-window lease
     ///         returns nothing on disposal: holding one for a response's whole lifetime is therefore indistinguishable

@@ -239,10 +239,9 @@ public sealed class DevelopmentCloudScopedSecurityTests
     }
 
     /// <summary>
-    ///     A CloudScoped attempt is sent ONLY this bundle — the local prompt's policy section never leaves the node —
-    ///     so the workflow's snapshotted rule text has to be in it. Until it was, a cloud-routed coder or reviewer ran
-    ///     unconstrained while the task's <c>WorkflowPolicyApplied</c> event and its applied rule sets both claimed the
-    ///     attempt had been governed by it. Asserted for both roles because one seam serves both runners.
+    ///     A CloudScoped attempt is sent ONLY this bundle, so the workflow's snapshotted rule text must be in it, or a
+    ///     cloud-routed coder or reviewer runs unconstrained while <c>WorkflowPolicyApplied</c> claims it was governed.
+    ///     Both roles share this seam.
     /// </summary>
     [Test]
     [Arguments(DevelopmentAttemptRole.Coder)]

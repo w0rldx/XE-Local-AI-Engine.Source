@@ -58,7 +58,7 @@ public static class BenchmarkJudgeVerifiers
 
     /// <summary>
     ///     Decides one verifiable criterion. Throws <see cref="BenchmarkExecutionException" /> when the criterion is not
-    ///     verifiable or its configuration cannot be honoured — never a silent "failed".
+    ///     verifiable or its configuration cannot be honored — never a silent "failed".
     /// </summary>
     public static BenchmarkJudgeVerifierResultV1 Verify(BenchmarkJudgeRubricCriterionV1 criterion, string answer)
     {

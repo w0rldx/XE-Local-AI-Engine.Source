@@ -49,7 +49,7 @@ public sealed class ConversationUploadEndpointTests
         var oversized = new byte[2 * 1024 * 1024];
         using var response = await UploadAsync(factory, client, Guid.NewGuid(), "big.txt", oversized, "text/plain");
 
-        // R2-01: the form reader tripped its multipart limit before the handler ran and answered "malformed form data".
+        // The form reader's multipart limit must not trip before the handler and answer "malformed form data".
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         await RequestBodyTooLargeAssert.DeclaredProblemShapeAsync(response, "the chat attachment upload");
         AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The file exceeds the maximum upload size of 1 MB.");

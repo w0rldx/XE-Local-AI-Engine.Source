@@ -8,7 +8,7 @@ using System.ComponentModel.DataAnnotations;
 /// <remarks>
 ///     <c>appsettings.json</c> ships <c>WorkSessions:Enabled: true</c>, so the feature is on for every node that does not override the
 ///     key, while the compiled-in default of <see cref="Enabled" /> is <see langword="false" /> — what a host binding a configuration
-///     source WITHOUT the key gets, which is most test hosts and nothing that ships. <see cref="Enabled" /> gates BEHAVIOUR, never
+///     source WITHOUT the key gets, which is most test hosts and nothing that ships. <see cref="Enabled" /> gates BEHAVIOR, never
 ///     registration: the endpoints and the hub are mapped unconditionally, so a disabled node answers <c>404</c> from request-path
 ///     middleware ahead of authentication rather than the <c>500</c> an empty container would give.
 /// </remarks>

@@ -220,7 +220,7 @@ describe("useLiveCapture", () => {
 	// Plan §4.2: WhenSystemAudioHasNoAudioTrack_TheSessionIsNeverStarted
 	// A shared surface that came back silent is a failure, not a session that quietly records nothing. The picker
 	// is opened from the click (so `live/start` has already been sent by the time the stream is inspected), which is
-	// why "never started" is proved as: no frame ever reached the node, and the opened session was cancelled again.
+	// why "never started" is proved as: no frame ever reached the node, and the opened session was canceled again.
 	it("never runs a system-audio session whose shared surface has no audio track", async () => {
 		liveStartOk();
 		const { factory, sources } = harness({ systemAudio: new CaptureError("no-audio-track", "no audio track") });
@@ -341,7 +341,7 @@ describe("useLiveCapture", () => {
 
 	// The tester's four-minute spinner: the node ended the session because no frame ever arrived, and the page kept
 	// "capturing". Any terminal push leaves the capture phases and releases the sources; the node already ended the
-	// session, so nothing is ended or cancelled again.
+	// session, so nothing is ended or canceled again.
 	it.each([
 		{ status: "Abandoned", errorCode: "live-never-attached", error: "live-never-attached" },
 		{ status: "Failed", errorCode: "live-failed", error: null },
@@ -523,7 +523,7 @@ describe("useLiveCapture", () => {
 		expect(result.current.state).toBe("idle");
 	});
 
-	// B1/B3: live sessions are open-ended. A node that is behind buffers the audio and catches up, so frames whose
+	// Live sessions are open-ended. A node that is behind buffers the audio and catches up, so frames whose
 	// sends are still outstanding are not a reason to stop: every frame is sent and capture carries on.
 	it("keeps capturing while earlier frames are still outstanding", async () => {
 		liveStartOk();
@@ -546,8 +546,8 @@ describe("useLiveCapture", () => {
 		parked.resolve(undefined);
 	});
 
-	// A3: the microphone prompt comes BEFORE `live/start`, so the operator answers it while the node spends its
-	// first-use minute on the runtime, not after. R31 still holds: nothing is forwarded until the session is open.
+	// The microphone prompt comes BEFORE `live/start`, so the operator answers it while the node spends its
+	// first-use minute on the runtime, not after. Still, nothing is forwarded until the session is open.
 	it("acquires the microphone before live/start and forwards nothing until it resolves", async () => {
 		let microphoneStartedAtRequest: boolean | undefined;
 		const gate = deferred<void>();
@@ -577,7 +577,7 @@ describe("useLiveCapture", () => {
 		expect(hub.pushFrame).toHaveBeenCalledTimes(1);
 	});
 
-	// A3: the microphone is now hot before the node has accepted anything, so a refused `live/start` must release it.
+	// The microphone is now hot before the node has accepted anything, so a refused `live/start` must release it.
 	it("stops the microphone when live/start fails after it was acquired", async () => {
 		server.use(http.post(livePath, () => HttpResponse.json({ sessionId, status: "Cancelled", lastSeq: 3 }, { status: 409 })));
 		const { factory, sources } = harness();
@@ -657,7 +657,7 @@ describe("useLiveCapture", () => {
 			await started;
 		});
 
-		// The picker opens first; the microphone (A3) is asked for right behind it, still before `live/start`.
+		// The picker opens first; the microphone is asked for right behind it, still before `live/start`.
 		expect(orderAtEntry).toEqual(["systemAudio", "microphone"]);
 		expect(order).toEqual(["systemAudio", "microphone"]);
 	});
@@ -710,7 +710,7 @@ describe("useLiveCapture", () => {
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
 		expect(result.current.error).toBe("permission-denied");
 		expect(hub.endSession).not.toHaveBeenCalled();
-		// A3: the microphone is acquired before `live/start`, so its refusal means no session was ever opened.
+		// The microphone is acquired before `live/start`, so its refusal means no session was ever opened.
 		expect(abortCancels).toEqual([]);
 	});
 
@@ -802,7 +802,7 @@ describe("useLiveCapture", () => {
 	});
 
 	// Capture attaches to a session that is ALREADY live. Posting it first gives the node a recorder with no
-	// lane to push into, which the endpoint answers with a 409 — so the order is the contract, not an optimisation.
+	// lane to push into, which the endpoint answers with a 409 — so the order is the contract, not an optimization.
 	it("attaches process capture only after live/start has resolved", async () => {
 		const calls: string[] = [];
 		const gate = deferred<void>();

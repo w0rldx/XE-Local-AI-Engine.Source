@@ -131,7 +131,7 @@ export function useChatModelSelection({
 	// node-wide gate inside ChatInputArea), image attachment on its vision projector.
 	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
 	const activeModelMultimodal = selectedModelOption?.isMultimodal ?? false;
-	// Which effort vocabulary this model's provider actually honours — see ChatReasoningEfforts for the rule.
+	// Which effort vocabulary this model's provider actually honors — see ChatReasoningEfforts for the rule.
 	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(
 		() => resolveAvailableReasoningEfforts(selectedModelOption),
 		[selectedModelOption],

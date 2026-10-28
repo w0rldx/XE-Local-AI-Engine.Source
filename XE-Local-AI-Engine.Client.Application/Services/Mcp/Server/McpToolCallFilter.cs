@@ -13,7 +13,7 @@ using ModelContextProtocol.Server;
 ///     An argument problem is a tool execution error (<c>invalid_arguments</c>), not a JSON-RPC protocol error: the MCP
 ///     spec routes input validation to <c>isError</c> so the calling model can correct itself, and a thrown exception —
 ///     <c>McpProtocolException</c> included — is logged by SDK 2.2.0 as an Error with its stack trace. An unknown argument
-///     name is refused rather than dropped: a silently ignored <c>model_override</c> on <c>run_agent</c> was I-D2.
+///     name is refused rather than dropped, so a misspelled <c>model_override</c> on <c>run_agent</c> is never silently ignored.
 /// </remarks>
 public static class McpToolCallFilter
 {

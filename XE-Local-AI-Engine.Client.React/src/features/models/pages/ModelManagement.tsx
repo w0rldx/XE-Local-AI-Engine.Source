@@ -16,6 +16,7 @@ import {
 	putModelKindMutation,
 	selectLocalModelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { useTestedCatalogModels } from "@/core/model-downloads/queries/useGgufDownload";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -32,7 +33,6 @@ import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDia
 import { useGgufAcquisitionFlow } from "@/features/models/hooks/useGgufAcquisitionFlow";
 import { useModelDetailsDialog } from "@/features/models/hooks/useModelDetailsDialog";
 import { isInstalledLocalModel, toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
-import { useTestedCatalogModels } from "@/features/models/queries/useGgufDownload";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
@@ -59,7 +59,7 @@ export function ModelManagement() {
 	} = useQuery(listLocalModelsOptions());
 	// External-provider registrations ride the same list so the chat picker can offer them, but this page is the model
 	// STORE: its table hands out Set default / Delete / Reset, none of which mean anything for a remote endpoint (the
-	// delete endpoint answers 409, and D10 puts their whole lifecycle on the External providers page). Filtered out
+	// delete endpoint answers 409, and their whole lifecycle lives on the External providers page). Filtered out
 	// before the view-models are built, so no action on this page can address one.
 	const modelItems = useMemo(() => (modelsResponse?.items ?? []).filter(isInstalledLocalModel), [modelsResponse]);
 	const modelViewModels = useMemo(() => modelItems.map(toLocalModelViewModel), [modelItems]);

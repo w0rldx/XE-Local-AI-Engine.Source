@@ -46,7 +46,7 @@ public sealed class GgufCapabilityDetectorTests
     ///     A verbatim excerpt of the gemma-4 reasoning shape, copied from the <c>tokenizer.chat_template</c> in the GGUF
     ///     header of <c>unsloth/gemma-4-12b-it-GGUF:Q4_K_M</c> (read 2026-08-24, where <c>&lt;channel|&gt;</c> occurs
     ///     3×). gemma-4 uses no <c>&lt;think&gt;</c> pair at all: the thinking text is closed by <c>&lt;channel|&gt;</c>,
-    ///     which llama.cpp's specialised gemma4 parser hardcodes as its think-end tag. The excerpt keeps the literal
+    ///     which llama.cpp's specialized gemma4 parser hardcodes as its think-end tag. The excerpt keeps the literal
     ///     <c>reasoning_content</c> too, because that — not a think marker — is what makes gemma-4 grade as reasoning.
     /// </summary>
     private const string Gemma4ReasoningTemplate =
@@ -178,7 +178,7 @@ public sealed class GgufCapabilityDetectorTests
     /// <summary>
     ///     The gemma-4 family: the SAME verdict reached through a completely different marker. gemma-4 carries no
     ///     <c>&lt;think&gt;</c> pair — its thinking channel closes with <c>&lt;channel|&gt;</c>, which llama.cpp's
-    ///     specialised gemma4 parser hardcodes — so a detector that only knew the Qwen shape would wrongly drop a cap
+    ///     specialized gemma4 parser hardcodes — so a detector that only knew the Qwen shape would wrongly drop a cap
     ///     that live testing proves holds (255 reasoning tokens under a 256 budget vs 2 382 uncapped, b10201).
     /// </summary>
     [Test]
@@ -192,8 +192,8 @@ public sealed class GgufCapabilityDetectorTests
     }
 
     /// <summary>
-    ///     The regression this flag exists for, and the test that previously graded this template as budget-enforceable
-    ///     by omission. A template can open a thinking channel and never close it: it stays GRADED reasoning-capable —
+    ///     The regression this flag exists for: without it this template would grade as budget-enforceable by
+    ///     omission. A template can open a thinking channel and never close it: it stays GRADED reasoning-capable —
     ///     the effort control is genuinely available — while llama.cpp finds no think-end tag and therefore accepts a
     ///     <c>reasoning_budget_tokens</c> only to ignore it. Reporting the cap as enforceable here is what would let a
     ///     turn advertise a thinking budget that never fires.

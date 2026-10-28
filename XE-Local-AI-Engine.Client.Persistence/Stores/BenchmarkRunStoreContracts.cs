@@ -109,7 +109,7 @@ public sealed record BenchmarkPrimarySuccessCommand
 /// </summary>
 /// <remarks>
 ///     Persisted as plaintext numerics alongside the blended figures the columns already carried, never instead of
-///     them. Display only, by operator decision: no member of this record is a ranking input.
+///     them. Display only: no member of this record is a ranking input.
 ///     <see cref="CachedPromptTokens" /> above zero means <see cref="PromptMs" /> measured a partially cached prefill
 ///     rather than a cold one — it counts tokens served from the prompt cache across ALL of the turn's requests.
 /// </remarks>

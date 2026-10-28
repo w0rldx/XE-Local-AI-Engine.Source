@@ -3,13 +3,9 @@ import { IconInfoCircle, IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { CodeDiffViewer } from "@/core/ui/components/CodeEditor/CodeDiffViewer";
-import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
+import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import {
 	ASSIST_BRIEF_MAX,
 	type AssistDraft,
@@ -17,7 +13,11 @@ import {
 	type AssistMode,
 	type AssistSurface,
 	isSameModelName,
-} from "@/features/assist/models/AssistModels";
+} from "@/core/assist/models/AssistModels";
+import { CodeDiffViewer } from "@/core/ui/components/CodeEditor/CodeDiffViewer";
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import { useAssistDraft } from "@/features/assist/queries/useAssistDraft";
 import { resolveLocalDefaultModelName } from "@/features/chat/pages/ChatModelOptions";
 

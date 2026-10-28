@@ -8,6 +8,7 @@
 // the counter is only a fallback for the events carrying no attempt at all, and a page set anchored to the tail can
 // start after the retries that would have grown it. It never moves backwards.
 
+import { isRecord } from "@/core/models/JsonRecord";
 import type { DevWorkflowRunEventResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /** The subset of the 30-token catalog this module reads. Every one of them is attached to a node run. */
@@ -76,10 +77,6 @@ export interface DevWorkflowNodeAttempt extends DevWorkflowAttemptCost {
 }
 
 type MutableAttempt = { -readonly [K in keyof DevWorkflowNodeAttempt]: DevWorkflowNodeAttempt[K] };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
 
 /** An event's `detailJson` as an object. Absent, empty and unparseable all read the same: nothing was stated. */
 function detailOf(detailJson: string | null | undefined): Record<string, unknown> {

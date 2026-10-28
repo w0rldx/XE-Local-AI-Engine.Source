@@ -41,7 +41,7 @@ internal sealed class GraphWorkflowOutputTooLargeException : InvalidOperationExc
 internal static class GraphWorkflowDocuments
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>The document a node produced nothing for. Cloned once: an element outlives the reader that made it.</summary>
     public static JsonElement EmptyObject { get; } = JsonSerializer.SerializeToElement(new Dictionary<string, JsonElement>(StringComparer.Ordinal), JsonOptions);

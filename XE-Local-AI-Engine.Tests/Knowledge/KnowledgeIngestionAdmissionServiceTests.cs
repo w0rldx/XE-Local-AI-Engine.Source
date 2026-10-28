@@ -6,13 +6,13 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the shared admission rule extracted out of the knowledge upload endpoint and the repository
-///     importer's per-file loop: a document the store WROTE (a fresh insert, or a repository file whose bytes changed)
-///     is always queued; a dedupe hit is re-queued only from a RETRYABLE state (Pending — stranded by a full
-///     queue — or Failed, which the app's own messages tell the user to retry) and left alone once Indexed or mid-flight;
-///     the resolved status is reported even when nothing is enqueued; and a full bounded queue surfaces as QueueFull so
-///     the endpoint answers with a retryable busy response.
+///     The admission rule shared by the upload endpoint and the repository importer: a document the store WROTE is always
+///     queued, and a dedupe hit is re-queued only from a RETRYABLE state (Pending or Failed).
 /// </summary>
+/// <remarks>
+///     Indexed or mid-flight documents are left alone, the resolved status is reported even when nothing is enqueued,
+///     and a full bounded queue surfaces as QueueFull so the endpoint answers with a retryable busy response.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeIngestionAdmissionServiceTests
 {

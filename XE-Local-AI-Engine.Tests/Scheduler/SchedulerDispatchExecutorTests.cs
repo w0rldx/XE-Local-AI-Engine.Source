@@ -51,9 +51,8 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked for a disabled definition.");
     }
 
-    // Guard: definition soft-deleted (enabled flag is also false on soft-delete,
-    //        but the code checks DeletedAtUtc independently; test it with
-    //        enabled=true to exercise the deleted branch specifically)
+    // Guard: soft-deleted definition. Soft-delete also clears the enabled flag, but the code checks DeletedAtUtc
+    // independently, so the test keeps enabled=true to exercise the deleted branch.
 
     [Test]
     public async Task DispatchAsync_WhenDefinitionSoftDeleted_DoesNotInvokeHandlerAndDoesNotThrow()
@@ -303,7 +302,7 @@ public sealed class SchedulerDispatchExecutorTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, Now, cts.Token));
     }
 
-    // Codex review, tester round 3: Quartz now interrupts running jobs on a host stop, and that cancellation used to be recorded
+    // Quartz interrupts running jobs on a host stop, and that cancellation is recorded as Cancelled, never
     // as "exceeded its maximum runtime"; only the max-runtime plugin's interrupt is a timeout.
     [Test]
     [Arguments(true, ScheduledRunStatus.Cancelled, "shutting down")]
@@ -407,7 +406,7 @@ public sealed class SchedulerDispatchExecutorTests
             applicationLifetime ?? new FakeHostApplicationLifetime(stopping: false));
     }
 
-    /// <summary>A lifetime whose stopping token is either already signalled or never is; nothing else about it matters here.</summary>
+    /// <summary>A lifetime whose stopping token is either already signaled or never is; nothing else about it matters here.</summary>
     private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime
     {
         private readonly bool _stopping;

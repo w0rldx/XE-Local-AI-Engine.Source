@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 
-// Mantine color token per known provider, with a stable gray for anything unrecognised (including the backend's
-// `unknown` catch-all). Used for the donut segments and provider badges so a provider reads the same colour everywhere.
+// Mantine color token per known provider, with a stable gray for anything unrecognized (including the backend's
+// `unknown` catch-all). Used for the donut segments and provider badges so a provider reads the same color everywhere.
 const PROVIDER_COLORS: Record<string, string> = {
 	local: "blue.6",
 	ollama: "grape.6",

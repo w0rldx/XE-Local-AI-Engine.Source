@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 /// <remarks>Pure functions; every persistence collaborator consumes them via <c>using static</c>.</remarks>
 internal static class NodeChatMetadataSerializer
 {
-    private static readonly JsonSerializerOptions MetadataJsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly JsonSerializerOptions SelectedPathJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions MetadataJsonOptions = JsonSerializerOptions.Web;
+    private static readonly JsonSerializerOptions SelectedPathJsonOptions = JsonSerializerOptions.Web;
 
     internal static byte[] Encode(string value)
     {

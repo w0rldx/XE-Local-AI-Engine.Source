@@ -128,7 +128,7 @@ describe("ChatDisplayShell tool-call parts pass-through", () => {
 		expect(screen.queryByTestId("chat-tool-call-card-search_docs")).toBeNull();
 	});
 
-	// U7 / decision D2: the per-turn throughput line shows in Advanced UI mode only, read from the cached node settings.
+	// The per-turn throughput line shows in Advanced UI mode only, read from the cached node settings.
 	it.each([
 		["advanced", true],
 		["simple", false],

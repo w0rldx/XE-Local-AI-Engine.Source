@@ -63,7 +63,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
     /// <summary>
     ///     The other direction, asserted with the capability flipped rather than inferred. A backend fails a
-    ///     confinement request it cannot honour CLOSED, so an unconditional <c>None</c> would not harden Development
+    ///     confinement request it cannot honor CLOSED, so an unconditional <c>None</c> would not harden Development
     ///     Mode on such a node — it would remove Development Mode from it. What keeps that from being silent is the
     ///     Development status surface, which reports the posture the provider actually served.
     /// </summary>

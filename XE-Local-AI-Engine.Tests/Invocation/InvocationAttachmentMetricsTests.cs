@@ -12,11 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     <c>chat_stream_detached_invocations</c> is an UpDownCounter, so a single unbalanced Add strands it above (or
-///     below) zero for the process lifetime and the "leases held with nobody watching" gauge becomes noise. These pin
-///     that it returns to zero on BOTH exits — the client comes back, and the run terminalizes — including the ordering
-///     that actually happens on every completed turn: the terminal state arrives first, then the hub's <c>finally</c>
-///     disposes the attachment.
+///     <c>chat_stream_detached_invocations</c> is an UpDownCounter, so one unbalanced Add strands it off zero. These
+///     pin a return to zero on BOTH exits (client returns, run terminalizes), incl. the terminal-then-dispose order.
 /// </summary>
 [NotInParallel]
 [Category(TestCategories.Unit)]

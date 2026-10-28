@@ -75,7 +75,7 @@ public sealed record BenchmarkNiahConfigV1(
 /// <param name="ApproximateTokens">What the WHOLE prompt estimates to — haystack, framing and question.</param>
 /// <param name="Label">
 ///     The display name, and deliberately hedged (<c>≈32k @ 50%</c>). A probe that silently ran at 26k instead of 32k
-///     is worse than one labelled approximate.
+///     is worse than one labeled approximate.
 /// </param>
 public sealed record BenchmarkNiahCaseV1(
     int ContextTokens,
@@ -306,7 +306,7 @@ public static class BenchmarkNiahGenerator
     /// <summary>The probe as the model sees it.</summary>
     /// <remarks>
     ///     The answer instruction is emphatic because the case is graded by exact match with no judge model behind it:
-    ///     a correct passcode wrapped in a sentence scores the same as a wrong one, and the only defence against
+    ///     a correct passcode wrapped in a sentence scores the same as a wrong one, and the only defense against
     ///     measuring formatting instead of recall is asking plainly.
     /// </remarks>
     private static string BuildPrompt(string haystack, string question, string attribution)

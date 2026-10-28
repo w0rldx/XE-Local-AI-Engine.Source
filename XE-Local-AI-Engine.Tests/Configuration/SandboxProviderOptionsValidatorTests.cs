@@ -7,11 +7,10 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The two sandbox-provider startup guards, which look alike and guard opposite failures.
-///     <see cref="SandboxOptionsValidator" /> refuses to start Production with an UNSET provider (there is no
-///     execution-capable default, and silently falling back would hand a stripped config the host-command-executing
-///     provider), while <see cref="DevelopmentSandboxOptionsValidator" /> accepts an unset value and rejects a
-///     MISSPELLED one — which would otherwise only surface as a DI failure under a user action, long after the edit.
+///     Two look-alike startup guards for opposite failures: <see cref="SandboxOptionsValidator" /> refuses Production
+///     with an UNSET provider rather than fall back to the host-command provider, and
+///     <see cref="DevelopmentSandboxOptionsValidator" /> accepts unset but rejects a MISSPELLED value that would
+///     otherwise fail late, in DI.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SandboxProviderOptionsValidatorTests

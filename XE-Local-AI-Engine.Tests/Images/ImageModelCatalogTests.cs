@@ -9,10 +9,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The curated image-model catalog is the surface that replaces hand-typing a repo id, a weight file name, a model
-///     name and a family. That only holds if every shipped row is installable, so these tests cover both halves: the
-///     validator refuses the specific shapes that would produce a broken one-click install, and the bundled seed the
-///     app actually ships passes that validator with the multi-repo Qwen-Image set intact.
+///     The curated image-model catalog replaces hand-typing repo, weight file, name and family, so every shipped row
+///     must install: the validator refuses broken one-click shapes, and the bundled seed passes it with the
+///     multi-repo Qwen-Image set.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ImageModelCatalogTests
@@ -69,7 +68,7 @@ public sealed class ImageModelCatalogTests
         AssertEx.Equal("Comfy-Org/Qwen-Image-2.1", RepoOf(qwen, "Vae"));
         AssertEx.Equal("Qwen/Qwen3-VL-8B-Instruct-GGUF", RepoOf(qwen, "Llm"));
         // The vision projector is what makes a reference edit possible: sd-server refuses a Qwen-Image 2.1 reference edit without
-        // --llm_vision (measured 2026-10-02), so the curated set has to ship it.
+        // --llm_vision, so the curated set has to ship it.
         AssertEx.Equal("Qwen/Qwen3-VL-8B-Instruct-GGUF", RepoOf(qwen, "LlmVision"));
         AssertEx.Equal("mmproj-Qwen3VL-8B-Instruct-F16.gguf", qwen.Parts.Single(static p => p.Role == "LlmVision").FileName);
         AssertEx.False(document.Models.Any(static entry => entry.Id == "qwen-image"), "The 2.1 set replaces the original Qwen-Image entry.");

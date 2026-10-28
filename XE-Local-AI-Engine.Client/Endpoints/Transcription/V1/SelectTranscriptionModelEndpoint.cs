@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
-///     Sets or clears the operator's model choice and returns the refreshed catalogue. A null or blank id clears the
+///     Sets or clears the operator's model choice and returns the refreshed catalog. A null or blank id clears the
 ///     override, so the node falls back to the hardware recommendation. Operator-gated.
 /// </summary>
 public sealed class SelectTranscriptionModelEndpoint : Endpoint<SelectTranscriptionModelRequest, TranscriptionModelListResponse>

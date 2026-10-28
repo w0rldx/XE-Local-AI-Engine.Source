@@ -9,11 +9,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <c>unsloth/gemma-4-12b-it-GGUF</c> ships speculative-decoding drafters under
-///     <c>MTP/</c> whose file names parse to the SAME quant tokens as the root weights. Flattening them into one list
-///     put three 0.4-0.8 GB drafters at the TOP of the ladder (it sorts ascending by size), each labelled with the base
-///     model's quant — so <c>Q8_0</c> meant either 0.4 GB or 11.8 GB depending on which row was clicked, and both mapped
-///     to the same <c>{repoId}:{quant}</c> registry key. The file list below is the repo's real layout and sizes.
+///     <c>unsloth/gemma-4-12b-it-GGUF</c> ships drafters under <c>MTP/</c> that parse to the root weights' SAME quant
+///     tokens; flattened, they would top the size-sorted ladder under the base's
+///     <c>{repoId}:{quant}</c> keys. The files below are the repo's real layout.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufDiscoveryDraftModelTests

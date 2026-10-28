@@ -6,13 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     The read side of the two tool-schema token columns: a run-envelope row carrying them projects them through
-///     <c>ListRunEnvelopesAsync</c>, a row without them projects nulls, and the cumulative one survives a value above
-///     <see cref="int.MaxValue" /> — the single assertion that fails if any link from column to record narrows back to
-///     an <c>int</c>. The memory-diagnostics projection (kind 0) is deliberately NOT widened, and that is pinned too:
-///     these columns are always null on that kind, and adding permanently-null fields to its projection would
-///     misinform every reader of that endpoint.
+///     The read side of the two tool-schema token columns: <c>ListRunEnvelopesAsync</c> projects them, a row without
+///     them projects nulls, and the cumulative one survives a value above <see cref="int.MaxValue" />, which fails if
+///     any link from column to record narrows to an <c>int</c>.
 /// </summary>
+/// <remarks>
+///     The kind-0 memory-diagnostics projection stays narrow: always-null fields there would misinform its readers.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogToolSchemaTokenTests : IDisposable
 {

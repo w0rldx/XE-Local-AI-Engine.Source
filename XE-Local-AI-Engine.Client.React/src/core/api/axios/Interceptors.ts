@@ -33,7 +33,7 @@ function redirectToVaultOnce(): void {
 export const addFormDataContentTypeInterceptor = (axiosInstance: AxiosInstance) => {
 	axiosInstance.interceptors.request.use((request) => {
 		// The instance defaults Content-Type to application/json. For a FormData body that default is not just
-		// wrong but actively harmful: axios' transformRequest re-serialises FormData to a JSON object whenever a
+		// wrong but actively harmful: axios' transformRequest re-serializes FormData to a JSON object whenever a
 		// JSON content-type is present, silently downgrading every multipart request (skill import, chat/KB file
 		// uploads) to a JSON body the multipart-only endpoints reject with 415. Drop the header for FormData so the
 		// browser sets multipart/form-data with its boundary; plain JSON requests never enter this branch.

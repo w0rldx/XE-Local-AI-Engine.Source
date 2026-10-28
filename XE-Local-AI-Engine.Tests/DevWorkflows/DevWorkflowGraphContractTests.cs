@@ -60,7 +60,7 @@ public sealed class DevWorkflowGraphContractTests
             $"a {status} node run must advertise exactly the decisions the runtime can take from it.");
 
     /// <summary>
-    ///     Casing is normalised on the way in; anything the parser would refuse travels untouched so that the refusal
+    ///     Casing is normalized on the way in; anything the parser would refuse travels untouched so that the refusal
     ///     is the parser's to give. A NUMERIC token is the case that made this by-name: <c>Enum.TryParse</c> reads
     ///     <c>"1"</c> as <c>Apply</c>, and the node would be stored running in the mode nobody wrote.
     /// </summary>

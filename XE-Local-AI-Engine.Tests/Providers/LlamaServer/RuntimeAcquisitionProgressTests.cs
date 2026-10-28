@@ -634,7 +634,7 @@ public sealed class RuntimeAcquisitionProgressTests
     }
 
     /// <summary>
-    ///     Holds the FIRST request open until the test releases it (honouring the request token), then serves a body that
+    ///     Holds the FIRST request open until the test releases it (honoring the request token), then serves a body that
     ///     fails the pinned hash; every later request answers at once.
     /// </summary>
     private sealed class GatedHandler : HttpMessageHandler

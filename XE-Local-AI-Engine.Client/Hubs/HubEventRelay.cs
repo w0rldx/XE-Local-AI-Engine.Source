@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 
 using System.Threading.Channels;
 using Microsoft.AspNetCore.SignalR;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Client.Services.Training.Datasets;
-using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 /// <summary>
 ///     Bounded, ordered transport relay from an application event buffer to per-scope SignalR groups.
@@ -98,94 +95,4 @@ internal abstract class HubEventRelay<TEvent, THub> : BackgroundService
             // Normal host shutdown. The application buffer owns plaintext eviction for every execution terminal path.
         }
     }
-}
-
-/// <summary>Bridges buffered benchmark run output to the Operator-scoped benchmark hub.</summary>
-internal sealed class BenchmarkRunHubEventRelay : HubEventRelay<BenchmarkRunStreamEvent, BenchmarkRunHub>
-{
-    private readonly IBenchmarkEventBuffer _events;
-
-    public BenchmarkRunHubEventRelay(IBenchmarkEventBuffer events,
-        IHubContext<BenchmarkRunHub> hubContext,
-        ILogger<BenchmarkRunHubEventRelay> logger) : base(hubContext,
-        logger,
-        BenchmarkEventBufferOptions.DefaultMaxEventCount,
-        BenchmarkRunHubEvents.Event,
-        static streamEvent => BenchmarkRunHub.RunGroup(streamEvent.RunId),
-        static (log, streamEvent) => log.LogWarning("Benchmark live-event relay was saturated for run {RunId} at sequence {Sequence}; the client must replay.",
-            streamEvent.RunId,
-            streamEvent.Sequence))
-    {
-        ArgumentNullException.ThrowIfNull(events);
-        _events = events;
-    }
-
-    protected override void Subscribe() =>
-        _events.EventPublished += OnEventPublished;
-
-    protected override void Unsubscribe() =>
-        _events.EventPublished -= OnEventPublished;
-
-    private void OnEventPublished(object? sender, BenchmarkRunStreamEventArgs args) =>
-        Enqueue(args.StreamEvent);
-}
-
-/// <summary>Bridges buffered dataset generation progress to the Operator-scoped generation hub.</summary>
-internal sealed class DatasetGenerationHubEventRelay : HubEventRelay<DatasetGenerationEvent, DatasetGenerationHub>
-{
-    private readonly IDatasetGenerationEventBuffer _events;
-
-    public DatasetGenerationHubEventRelay(IDatasetGenerationEventBuffer events,
-        IHubContext<DatasetGenerationHub> hubContext,
-        ILogger<DatasetGenerationHubEventRelay> logger) : base(hubContext,
-        logger,
-        DatasetGenerationEventBufferOptions.DefaultMaxEventCount,
-        DatasetGenerationHubEvents.Event,
-        static generationEvent => DatasetGenerationHub.DatasetGroup(generationEvent.DatasetId),
-        static (log, generationEvent) => log.LogWarning("The dataset generation relay was saturated for dataset {DatasetId} at sequence {Sequence}; the client must replay.",
-            generationEvent.DatasetId,
-            generationEvent.Sequence))
-    {
-        ArgumentNullException.ThrowIfNull(events);
-        _events = events;
-    }
-
-    protected override void Subscribe() =>
-        _events.EventPublished += OnEventPublished;
-
-    protected override void Unsubscribe() =>
-        _events.EventPublished -= OnEventPublished;
-
-    private void OnEventPublished(object? sender, DatasetGenerationEventArgs args) =>
-        Enqueue(args.Event);
-}
-
-/// <summary>Bridges buffered training run progress to the Operator-scoped run hub.</summary>
-internal sealed class TrainingRunHubEventRelay : HubEventRelay<TrainingRunEvent, TrainingRunHub>
-{
-    private readonly ITrainingRunEventBuffer _events;
-
-    public TrainingRunHubEventRelay(ITrainingRunEventBuffer events,
-        IHubContext<TrainingRunHub> hubContext,
-        ILogger<TrainingRunHubEventRelay> logger) : base(hubContext,
-        logger,
-        TrainingRunEventBufferOptions.DefaultMaxEventCount,
-        TrainingRunHubEvents.Event,
-        static runEvent => TrainingRunHub.RunGroup(runEvent.RunId),
-        static (log, runEvent) => log.LogWarning("The training run relay was saturated for run {RunId} at sequence {Sequence}; the client must replay.",
-            runEvent.RunId,
-            runEvent.Sequence))
-    {
-        ArgumentNullException.ThrowIfNull(events);
-        _events = events;
-    }
-
-    protected override void Subscribe() =>
-        _events.EventPublished += OnEventPublished;
-
-    protected override void Unsubscribe() =>
-        _events.EventPublished -= OnEventPublished;
-
-    private void OnEventPublished(object? sender, TrainingRunEventArgs args) =>
-        Enqueue(args.Event);
 }

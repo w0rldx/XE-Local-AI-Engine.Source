@@ -8,13 +8,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Mcp;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the self-contained desktop launcher host hooks. Pure tests only: the
-///     desktop-mode gate, browser-command builder, loopback URL resolver, the signal→StopApplication seam, and the
-///     non-fatal browser-launch path. No real process, signal, or network is exercised.
+///     The desktop launcher host hooks: the desktop-mode gate, browser command, loopback URL, the signal to
+///     StopApplication seam and the non-fatal browser launch, with no real process, signal or network.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class DesktopLaunchTests
@@ -311,7 +309,7 @@ public sealed class DesktopLaunchTests
     {
         const string url = "http://127.0.0.1:5005/";
 
-        var logger = new CapturingLogger<DesktopLaunchTests>();
+        var logger = new RecordingLogger<DesktopLaunchTests>();
 
         // The launch action throws (e.g. xdg-open absent); OpenBrowser must swallow it and not propagate.
         AssertEx.DoesNotThrow(() => BrowserLauncher.OpenBrowser(url, isWindows: false, logger,

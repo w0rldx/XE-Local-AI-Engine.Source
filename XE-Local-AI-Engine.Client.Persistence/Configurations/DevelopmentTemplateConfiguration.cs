@@ -18,28 +18,3 @@ internal sealed class DevelopmentTemplateConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(entity => entity.Alias).IsUnique().HasDatabaseName("ux_development_templates_alias");
     }
 }
-
-internal sealed class DevelopmentTemplateMaterializationConfiguration : IEntityTypeConfiguration<DevelopmentTemplateMaterialization>
-{
-    public void Configure(EntityTypeBuilder<DevelopmentTemplateMaterialization> builder)
-    {
-        builder.ToTable("development_template_materializations");
-
-        // The selected folder IS the identity: one materialization produces one folder, and re-materializing into an
-        // existing registered folder is not a thing the create path allows.
-        builder.HasKey(entity => entity.SelectedFolderId);
-        builder.Property(entity => entity.SelectedFolderId).HasColumnName("selected_folder_id");
-        builder.Property(entity => entity.TemplateId).HasColumnName("template_id");
-        builder.Property(entity => entity.TemplateAlias).HasColumnName("template_alias").HasMaxLength(128).IsRequired();
-        builder.Property(entity => entity.TemplatePath).HasColumnName("template_path").IsRequired();
-        builder.Property(entity => entity.TemplateCommit).HasColumnName("template_commit").HasMaxLength(64).IsRequired();
-        builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
-
-        // Deliberately no foreign key to development_templates: removing a template from the registry must not delete,
-        // block, or rewrite the provenance of repositories already created from it.
-        builder.HasOne<NodeSelectedFolder>()
-               .WithMany()
-               .HasForeignKey(entity => entity.SelectedFolderId)
-               .OnDelete(DeleteBehavior.Cascade);
-    }
-}

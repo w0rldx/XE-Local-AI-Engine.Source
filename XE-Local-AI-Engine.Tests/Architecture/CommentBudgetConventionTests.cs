@@ -35,7 +35,7 @@ public sealed partial class CommentBudgetConventionTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "CommentBudgetAllowlist.txt");
 
     /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
-    private const int MaxEntries = 1665;
+    private const int MaxEntries = 1202;
 
     /// <summary>
     ///     A floor a little under today's file count, which the cleanup batches do not lower. A walk that lost
@@ -223,7 +223,7 @@ public sealed partial class CommentBudgetConventionTests
 
     /// <summary>
     ///     The guard's own check, and the proof that every rule still fires: a scanner that read quoted text as a
-    ///     comment, or stopped recognising a construct, reports a budget nobody is holding.
+    ///     comment, or stopped recognizing a construct, reports a budget nobody is holding.
     /// </summary>
     [Test]
     public void TheGuard_CountsRealCommentsAndIgnoresLookalikes()

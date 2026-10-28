@@ -540,7 +540,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     }
 
     /// <summary>
-    ///     Staging honours <c>.gitignore</c> because the BASELINE's own <c>add -A</c> did: forcing here would report
+    ///     Staging honors <c>.gitignore</c> because the BASELINE's own <c>add -A</c> did: forcing here would report
     ///     every ignored-but-copied file as one the run added. A model can hide its own work; it cannot reach the host.
     /// </summary>
     [Test]
@@ -964,7 +964,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     /// <summary>
     ///     The marker a payload would leave, named as a WORKSPACE-relative path.
     ///     <para>
-    ///         It used to be a host temp path. That stopped being a valid probe the moment AgentHome started asking
+    ///         It is not a host temp path, which is no valid probe once AgentHome asks
     ///         for a filesystem boundary: under isolation the sandbox has its own <c>/tmp</c> and cannot see the
     ///         host's, so a payload that "failed" to create a host marker would have proved the mount namespace and
     ///         nothing about the git guard. Inside the workspace the marker is reachable under BOTH modes, so the
@@ -1148,7 +1148,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var serviceProvider = new ServiceCollection()
                               .AddScoped<ISelectedFolderResolver>(_ => resolver)
                               // The REAL file-writing logger: the audit test below reads the run's commands.jsonl back
-                              // off disk, which is the artefact an operator audits and the one that lost the actor.
+                              // off disk, which is the artifact an operator audits and the one that lost the actor.
                               .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
                               .BuildServiceProvider();
 

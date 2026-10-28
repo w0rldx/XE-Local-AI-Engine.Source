@@ -54,8 +54,8 @@ public sealed class ImageModelFileSetRulesTests
     [Arguments("qwen_image-00001-of-00003.gguf")]
     public void DiffusersLayoutOrShardDiffusionPart_IsRejected(string fileName)
     {
-        // The tester's qwen-image-2.1 import: a Diffusers component downloaded fine, then sd-server exited with
-        // "get sd version from file failed". Refused before the download instead.
+        // A Diffusers component downloads fine, then sd-server exits with "get sd version from file failed", so the
+        // rule refuses it before the download.
         var error = ImageModelFileSetRules.Validate([Part(ImageModelPartRole.Diffusion, fileName)]);
 
         AssertEx.Equal(ImageWeightLayout.DiffusersLayoutUnsupportedMessage, error);

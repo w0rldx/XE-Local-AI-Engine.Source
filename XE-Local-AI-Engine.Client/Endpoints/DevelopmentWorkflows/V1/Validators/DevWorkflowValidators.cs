@@ -285,7 +285,7 @@ internal static class DevWorkflowRequestLimits
 
     /// <summary>A rule set body, bounded by what an objective can actually carry.</summary>
     /// <remarks>
-    ///     Deliberately well under <c>DevWorkflowAgentExecutor.MaxObjectiveCharacters</c> (7000), because a body
+    ///     Deliberately well under <c>DevWorkflowObjectiveComposer.MaxObjectiveCharacters</c> (7000), because a body
     ///     accepted here that the objective then has to cut is policy the operator believed was in force and the agent
     ///     never fully read. A document longer than this wants splitting into scoped rule sets, which is the whole
     ///     point of the scope.

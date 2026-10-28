@@ -229,7 +229,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
 
         AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "PRAGMA foreign_keys;"));
 
-        // The behavioural consequence, once: a declared cascade really removes the child rows.
+        // The behavioral consequence, once: a declared cascade really removes the child rows.
         await ExecuteAsync(connection, "CREATE TABLE parent(id INTEGER PRIMARY KEY);");
         await ExecuteAsync(connection, "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id) ON DELETE CASCADE);");
         await ExecuteAsync(connection, "INSERT INTO parent(id) VALUES(1), (2);");
@@ -305,8 +305,8 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     }
 
     /// <summary>
-    ///     The raw-open helper used to pass no logger, so a tuning pragma SQLite refused vanished without a trace. It now
-    ///     reaches the attached host logger.
+    ///     The raw-open helper passes the attached host logger, so a tuning pragma SQLite refused never vanishes without
+    ///     a trace.
     /// </summary>
     [Test]
     public async Task OpenAndConfigureAsync_SendsASwallowedTuningPragmaFailureToTheAttachedLogger()
@@ -372,7 +372,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         // Reproduces the Aspire-dev connection posture: the CommunityToolkit Sqlite integration hands EF a
         // "Data Source=…;Cache=Shared;Mode=ReadWriteCreate" string. Several services open the node database
         // concurrently at startup, so applying PRAGMA journal_mode=WAL on a shared-cache handle is refused
-        // (SQLite error 6/8) and used to log 'could not apply PRAGMA journal_mode' on every first run.
+        // (SQLite error 6/8), which must not log 'could not apply PRAGMA journal_mode' on every first run.
         var path = Path.Combine(_dir, "shared-cache.sqlite");
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -394,7 +394,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     }
 
     /// <summary>
-    ///     F16: on a shared cache, an uncommitted schema change (the readiness probe's DDL) fails a fresh open's first
+    ///     On a shared cache, an uncommitted schema change (the readiness probe's DDL) fails a fresh open's first
     ///     prepare with SQLITE_LOCKED_SHAREDCACHE (262), which busy_timeout never waits on.
     /// </summary>
     /// <remarks>
@@ -430,7 +430,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     }
 
     /// <summary>
-    ///     The F16 fix: the same Aspire string, rewritten by <see cref="NodeSqlitePragmas.WithPrivateCache" />, opens and
+    ///     The fix: the same Aspire string, rewritten by <see cref="NodeSqlitePragmas.WithPrivateCache" />, opens and
     ///     reads while the same schema change is held, because private-cache WAL readers never take a table lock.
     /// </summary>
     [Test]
@@ -441,7 +441,7 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             DataSource = Path.Combine(_dir, "private-schema-lock.sqlite"),
             Cache = SqliteCacheMode.Shared,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            // Without the fix this test fails in the repro's way; the short timeout keeps that failure short too.
+            // On a regression this test fails the repro's way; the short timeout keeps that failure short too.
             DefaultTimeout = 1
         }.ToString());
         await using var writer = new SqliteConnection(connectionString);

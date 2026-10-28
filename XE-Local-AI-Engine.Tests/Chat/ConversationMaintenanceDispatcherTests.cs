@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -75,7 +74,7 @@ public sealed class ConversationMaintenanceDispatcherTests
     [Test]
     public void Dispatch_WhenTheQueueIsFull_DropsTheNewestWithAWarningAndReleasesItsSlot()
     {
-        var logger = new CapturingLogger<ConversationMaintenanceDispatcher>();
+        var logger = new RecordingLogger<ConversationMaintenanceDispatcher>();
         var dispatcher = new ConversationMaintenanceDispatcher(Options.Create(new ConversationCompactionOptions
         {
             MaintenanceQueueCapacity = 2

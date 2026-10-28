@@ -84,7 +84,7 @@ export function useResumeEvaluation() {
 
 /**
  * Cancels a queued or running evaluation. A QUEUED one is terminalized to `Cancelled` by the request itself; a RUNNING
- * one is only signalled — the executor owns the terminal write — so the list keeps reporting `Running` until it settles
+ * one is only signaled — the executor owns the terminal write — so the list keeps reporting `Running` until it settles
  * and the invalidation below is the floor under the hub push that reports the settle.
  */
 export function useCancelEvaluation() {

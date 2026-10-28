@@ -57,7 +57,7 @@ internal sealed class IntegrationCancellationRegistry
         catch (AggregateException)
         {
             // A registered callback threw. Cancellation was still requested for every one of them, and the durable
-            // marker — not this call — is what finalises the row.
+            // marker — not this call — is what finalizes the row.
             return true;
         }
     }

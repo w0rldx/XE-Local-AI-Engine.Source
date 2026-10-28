@@ -166,12 +166,11 @@ public sealed class BenchmarkRunHubTests
         var caller = Substitute.For<ISingleClientProxy>();
         var clients = Substitute.For<IHubCallerClients>();
         clients.Caller.Returns(caller);
-        // The real pass-through service over the substituted store: the hub's door onto the run row is
-        // BenchmarkRecordService, and wrapping rather than substituting it keeps every assertion below on the
-        // store call the hub actually causes.
         // The hub never deletes, so the artifact blob store is never asked to touch its (absent) directory.
         var artifactBlobs = new BenchmarkRunArtifactBlobStore(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-benchmark-hub-unused")),
             new NullNodeSqliteKeyHolder());
+        // The real pass-through service over the substituted store: wrapping BenchmarkRecordService rather than
+        // substituting it keeps every assertion below on the store call the hub actually causes.
         var hub = new BenchmarkRunHub(new BenchmarkRecordService(store, artifactBlobs, NullLogger<BenchmarkRecordService>.Instance), events)
         {
             Context = context,

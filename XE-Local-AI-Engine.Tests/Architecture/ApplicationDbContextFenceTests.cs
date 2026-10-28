@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>Operator decision D5: no <c>DbContext</c> in the application layer, bar a reasoned allowlist entry.</summary>
+/// <summary>No <c>DbContext</c> in the application layer, bar a reasoned allowlist entry.</summary>
 /// <remarks>
 ///     Type-based, not a text scan: the measurement behind this fence found files naming the context only through a
 ///     lowercase <c>dbContext</c> lambda parameter, and most holders resolve it in a method body. NetArchTest reads IL

@@ -473,7 +473,7 @@ public sealed class DockerSandboxHardeningTests
     {
         // The regression guard for the finding that blocked Development Mode's container provider outright. The .NET
         // runtime backs a named Mutex with shared-memory files under a path compiled into the CoreCLR PAL, and the
-        // `dotnet` CLI takes such a mutex on its first invocation. The path honours no environment variable — the
+        // `dotnet` CLI takes such a mutex on its first invocation. The path honors no environment variable — the
         // engine already redirects TMPDIR/TMP/TEMP elsewhere and the runtime ignores all three — so with a read-only
         // root filesystem and no tmpfs here, every `dotnet` command failed EROFS before touching the project.
         //
@@ -650,7 +650,7 @@ public sealed class DockerSandboxHardeningTests
     public void FindViolations_DoesNotPrintTheWholeProfileIntoAViolationMessage()
     {
         // The profile is ~9 KB of JSON. A violation message an operator cannot read is a violation message nobody
-        // acts on, so the security options are summarised rather than dumped.
+        // acts on, so the security options are summarized rather than dumped.
         var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with
         {
             SecurityOptions = [Specification().SecurityOptions.First(option => option.StartsWith("seccomp=", StringComparison.Ordinal))]

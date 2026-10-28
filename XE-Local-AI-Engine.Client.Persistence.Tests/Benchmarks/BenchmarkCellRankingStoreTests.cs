@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// <summary>
 ///     Ranking over CELLS: one model, one KV type, one repeat of the whole task-item suite. A cell ranks only when
 ///     every scorable item in it produced a rankable score, and the two identity stamps a run carries decide whether
-///     it still answers a question — and a suite — the project recognises.
+///     it still answers a question — and a suite — the project recognizes.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class BenchmarkCellRankingStoreTests : IDisposable

@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Provenance-path store tests for the starter-pack seed: <c>AddSeededAsync</c> stamps <c>Seeded</c> + the slug,
-///     the normal <c>AddAsync</c> path stays <c>Manual</c> (forge-proof), seeded instructions encrypt at rest, the
-///     slug projection is decrypt-free, and the filtered-unique index rejects a duplicate non-null slug.
+///     Starter-pack seed provenance: <c>AddSeededAsync</c> stamps <c>Seeded</c> + slug, plain <c>AddAsync</c> stays
+///     <c>Manual</c> (forge-proof), seeded instructions encrypt at rest, the slug projection is decrypt-free, and the
+///     filtered-unique index rejects a duplicate slug.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AgentDefinitionSeededStoreTests : IDisposable

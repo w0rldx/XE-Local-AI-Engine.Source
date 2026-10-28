@@ -543,7 +543,7 @@ internal static class NodeSettingsEndpointDtoMapper
     private static ExternalAccessStamp ApplyExternalAccess(SaveNodeSettingsRequest request,
         StoredNodeSettings currentSettings)
     {
-        if (StoredNodeSettings.IsExternalAccessPreset(request.ExternalAccessProfile))
+        if (StoredNodeSettingsValidation.IsExternalAccessPreset(request.ExternalAccessProfile))
         {
             var enabled = string.Equals(request.ExternalAccessProfile, StoredNodeSettings.ExternalAccessProfileRecommended, StringComparison.Ordinal);
             return new ExternalAccessStamp(request.ExternalAccessProfile, enabled, enabled, enabled);

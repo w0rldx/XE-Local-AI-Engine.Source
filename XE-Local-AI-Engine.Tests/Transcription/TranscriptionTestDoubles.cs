@@ -201,7 +201,7 @@ internal sealed class FakeAudioTranscoder : IAudioTranscoder
     }
 }
 
-/// <summary>Resolves the node's effective model without touching settings, the catalogue or the hardware profile.</summary>
+/// <summary>Resolves the node's effective model without touching settings, the catalog or the hardware profile.</summary>
 internal sealed class FakeTranscriptionRuntimeService : ITranscriptionRuntimeService
 {
     private readonly string _effectiveModelId;

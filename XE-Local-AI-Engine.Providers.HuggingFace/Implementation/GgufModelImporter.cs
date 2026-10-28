@@ -289,7 +289,7 @@ internal sealed class GgufModelImporter : IGgufModelImporter
 
         var conflictingOwner = entries.Any(entry => string.Equals(entry.ModelName, commitReceipt.RegistryEntry.ModelName,
                                                         StringComparison.OrdinalIgnoreCase)
-                                                    || PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath));
+                                                    || PathContainment.PathsEqual(entry.LocalPath, commitReceipt.FinalGgufPath));
         if (conflictingOwner)
         {
             throw new GgufImportException(GgufImportRejectionCode.DestinationConflict,
@@ -301,7 +301,7 @@ internal sealed class GgufModelImporter : IGgufModelImporter
         if (commitReceipt.OwnsFinalGguf && File.Exists(commitReceipt.FinalGgufPath))
         {
             var info = new FileInfo(commitReceipt.FinalGgufPath);
-            var hash = await GgufAcquisitionSidecar.ComputeSha256Async(commitReceipt.FinalGgufPath, cancellationToken).ConfigureAwait(false);
+            var hash = await FileSha256.ComputeAsync(commitReceipt.FinalGgufPath, cancellationToken).ConfigureAwait(false);
             if (info.Length != commitReceipt.RegistryEntry.SizeBytes
                 || !string.Equals(hash, commitReceipt.RegistryEntry.Sha256, StringComparison.Ordinal)
                 || !string.Equals(GgufMemberFingerprint.Compute(hash, info.Length), commitReceipt.WeightMemberFingerprint,
@@ -354,12 +354,6 @@ internal sealed class GgufModelImporter : IGgufModelImporter
                 Owned = true
             });
         }
-    }
-
-    private static bool PathsEqual(string left, string right)
-    {
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
     }
 
     public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)

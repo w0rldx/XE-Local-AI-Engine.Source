@@ -76,7 +76,7 @@ public sealed class SpawnContext
     /// </summary>
     /// <remarks>
     ///     The child run executes within this scope so that, should the deliberately tool-less child ever reach the spawn path, the runtime
-    ///     depth guard in <see cref="SubAgentSpawnService" /> sees <see cref="Depth" /> ≥ 1 and rejects — defence-in-depth behind the primary
+    ///     depth guard in <see cref="SubAgentSpawnService" /> sees <see cref="Depth" /> ≥ 1 and rejects — defense-in-depth behind the primary
     ///     structural cap. It does NOT re-seed a root, so the parent's AsyncLocal is restored on dispose rather than cleared, and the caps are
     ///     carried forward unused, leaving the per-root fan-out and cloud counters authoritative on the root context.
     /// </remarks>

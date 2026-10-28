@@ -91,7 +91,7 @@ public sealed class TrainingRunServiceTests : IDisposable
     [Test]
     public async Task RunCreate_WhenTheHoldoutWouldBeEmpty_IsRejectedWithTheCountsAndLeavesNothingBehind()
     {
-        // Live (F-59): three samples at a quarter hold-out floor to nothing held back. The run used to start and could
+        // Three samples at a quarter hold-out floor to nothing held back. Such a run is refused, since it could
         // only dead-end later: evaluation refuses an empty hold-out, so its artifacts could never pass the quality gate.
         await using var provider = await BuildProviderAsync(Guid.NewGuid().ToString("N"));
         await using var scope = provider.CreateAsyncScope();

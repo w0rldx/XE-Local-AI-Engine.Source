@@ -12,9 +12,8 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 public sealed class ApplicationStartupTests
 {
     /// <summary>
-    ///     One host for the whole class. Every test below only resolves services from the built host — nothing mutates
-    ///     host state — so a single bootstrap answers all of them. The missing-base-url test deliberately keeps its own
-    ///     host: it asserts that startup FAILS, which a shared host cannot express.
+    ///     One host for the whole class: every test below only resolves services from the built host, so one bootstrap
+    ///     answers all. The missing-base-url test keeps its own host because it asserts that startup FAILS.
     /// </summary>
     [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
     public required TestServerWebAppFactory Factory { get; init; }

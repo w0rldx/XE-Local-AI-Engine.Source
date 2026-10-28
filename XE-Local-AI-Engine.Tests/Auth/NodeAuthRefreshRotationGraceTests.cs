@@ -188,7 +188,7 @@ public sealed class NodeAuthRefreshRotationGraceTests
     }
 
     // The grace pair is a sibling of the chain's head, not its replacement: whichever Set-Cookie the browser keeps must
-    // stay usable, and a third presenter of the same token inside the window is honoured too.
+    // stay usable, and a third presenter of the same token inside the window is honored too.
     [Test]
     public async Task Refresh_WhenTheGracePathIssuesAPair_TheWinnersTokenStaysLive()
     {
@@ -206,7 +206,7 @@ public sealed class NodeAuthRefreshRotationGraceTests
 
     // The grace follows the presented token's OWN chain. Here that chain is dead (its successor revoked with no successor
     // of its own — what a per-session revoke would leave) while a second session's token was created on the very instant
-    // of the rotation: the old "a live token created at the revocation instant" match would have honoured it.
+    // of the rotation: the old "a live token created at the revocation instant" match would have honored it.
     [Test]
     public async Task Refresh_WhenTheOwnChainIsDeadButAnotherSessionIsLive_FailsInsideTheWindow()
     {

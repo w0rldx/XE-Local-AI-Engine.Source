@@ -9,9 +9,8 @@ public sealed class IntegrationStreamEventTypesTests
     [Test]
     public void Persisted_IsExactlyTheNineNonAssistantTypes()
     {
-        // The one constant the coordinator, the stream writer and the output tool all branch on. A wrong entry copies
-        // transcript content into integration_execution_events, which is the leak that table was designed to avoid —
-        // and an "all except" formulation would silently persist any type a later slice adds.
+        // The constant the coordinator, stream writer and output tool branch on: a wrong entry leaks transcript content
+        // into integration_execution_events; an "all except" form would silently persist any type added later.
         string[] expected =
         [
             IntegrationStreamEventTypes.ExecutionAccepted,

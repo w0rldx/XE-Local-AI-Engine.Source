@@ -618,7 +618,7 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     /// <summary>
     ///     <c>list_files</c> and <c>search_text</c> both run the exclusion post-filter; <c>read_file</c> did not.
     ///     <para>
-    ///         This is defence in depth rather than a live hole: today the only AgentHome provisioning path COPIES the
+    ///         This is defense in depth rather than a live hole: today the only AgentHome provisioning path COPIES the
     ///         selected folder, and the copy filter already keeps an excluded file out of the jail, so the file this
     ///         test seeds cannot occur in production. It stops being unreachable the moment the reader is pointed at a
     ///         workspace that was preserved rather than copied — which is exactly what the Development workspace

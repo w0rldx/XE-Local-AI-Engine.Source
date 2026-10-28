@@ -63,10 +63,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string EmptyAnswerNoticeMessage = "The model stopped without an answer.";
 
     // The EmptyAnswer variant for a turn that spent its whole generation room thinking: the reasoning IS persisted and shown, so say so
-    // (tester round 6 read the plain sentence as "the thoughts are lost"). The SPA localizes this exact sentence; change both together.
+    // (the plain sentence reads as "the thoughts are lost"). The SPA localizes this exact sentence; change both together.
     private const string StoppedWhileThinkingNoticeMessage = "The model stopped while thinking before it could answer; its thoughts are kept above.";
 
-    // The EmptyAnswer variant for a final round whose reasoning ends in a tool-call block llama-server never parsed (model-matrix F4). The SPA localizes it.
+    // The EmptyAnswer variant for a final round whose reasoning ends in a tool-call block llama-server never parsed. The SPA localizes it.
     private const string ToolCallInReasoningNoticeMessage =
         "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.";
 
@@ -95,11 +95,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string ContextBudgetExceededMessage =
         "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
 
-    // The hard stop when the cause is the tool offer, which compacting cannot shrink (model-matrix F5).
+    // The hard stop when the cause is the tool offer, which compacting cannot shrink.
     private const string ToolOfferExceedsWindowMessage =
         "The tools offered with this message do not fit this model's context window — Turn off tools for this chat, or switch to a larger-context model.";
 
-    // The hard stop when the attachment cannot fit even shortened (model-matrix F6).
+    // The hard stop when the attachment cannot fit even shortened.
     private const string AttachmentExceedsWindowMessage =
         "The attached file does not fit this model's context window, even shortened — Remove the attachment, or switch to a larger-context model.";
 
@@ -342,7 +342,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var efficiencyRecord = new InvocationEfficiencyRecord
             {
                 InvocationId = package.InvocationId,
-                // With the try body in ExecuteTurnAsync the analyzer can see every path assigns it; the fallback is kept as it was before the split.
+                // With the try body in ExecuteTurnAsync the analyzer can see every path assigns it, so CA1508 flags the defensive fallback.
 #pragma warning disable CA1508
                 Outcome = invocationOutcome ?? "failed",
 #pragma warning restore CA1508
@@ -405,7 +405,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         new(_lifecycleTracker, _eventDispatcher.Value, package.InvocationId, _logger);
 
     // RunAsync's try body, part one: the tool-relevance scope and the model the turn runs on. Every scope opened here stays open
-    // until RunSelectedModelTurnAsync returns, so each is disposed where RunAsync's try used to end.
+    // until RunSelectedModelTurnAsync returns, so each is disposed only after the whole turn.
     private async Task ExecuteTurnAsync(TurnExecution turn, RuntimePackage package, TurnPolicy turnPolicy)
     {
         var dispatcher = turn.Dispatcher;
@@ -438,7 +438,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ReasoningDispatchDecision? dispatchDecision = null;
 
         // The exact "auto" guard above is the whole byte-identical story for every other effort: no scope, no dispatcher
-        // resolution, no request allocation, no node-side lookup. The package builder has already normalised the value.
+        // resolution, no request allocation, no node-side lookup. The package builder has already normalized the value.
         if (dispatchScope is not null)
         {
             dispatchDecision = await dispatchScope.ServiceProvider
@@ -446,7 +446,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                                   .DispatchAsync(BuildDispatchRequest(package, resolvedModel), invocationToken);
         }
 
-        // The model the turn was AUTHORISED for, and its capability flags, captured before the dispatch block can
+        // The model the turn was AUTHORIZED for, and its capability flags, captured before the dispatch block can
         // rewrite any of them. The send-boundary retry below restores exactly these.
         var originalModel = resolvedModel;
         var originalSupportsThinking = package.SupportsThinking;
@@ -597,7 +597,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
 
         // Fold the launched effective window into the turn policy (precedence: TurnPolicy.WithEffectiveContext) so the OUTER budgeter sizes history against the
-        // real window and the INNER num_ctx budgeter resolves the same one. Captured BEFORE the fold: the swapped model's policy would size against a window the authorised model never had.
+        // real window and the INNER num_ctx budgeter resolves the same one. Captured BEFORE the fold: the swapped model's policy would size against a window the authorized model never had.
         var preWarmPolicy = turnPolicy;
         turnPolicy = turnPolicy.WithEffectiveContext(effectiveContextTokens);
         await dispatcher.ReportTurnContextWindowAsync(package.InvocationId, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
@@ -675,7 +675,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
             }
             // The fast model went away between the capacity probe and the send — profiled away, ejected, uninstalled, or it would not fit — and nothing has
-            // reached the client, so re-run once on the authorised model. Keyed on "nothing streamed", which covers every such cause and cannot rot on provider wording.
+            // reached the client, so re-run once on the authorized model. Keyed on "nothing streamed", which covers every such cause and cannot rot on provider wording.
             catch (Exception) when (selection.SwapRetryEligible && !stream.FirstOutputRecorded && !invocationToken.IsCancellationRequested)
             {
                 // RELEASE THE FAST RESERVATION FIRST: it books the small model's bytes and, on an Allow verdict, a launch admission and one of the
@@ -713,7 +713,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             catch (Exception) when (modelWasSwapped && dispatchDecision is { } failedSwap)
             {
                 // Names the model that actually served. No served-model report: the turn produced no answer to attribute and the fast model may have died
-                // before its first token, so the seeded (authorised) model stays on the failed row. The FAILURE is the outer handler's, as for any other turn.
+                // before its first token, so the seeded (authorized) model stays on the failed row. The FAILURE is the outer handler's, as for any other turn.
                 await transport.EmitNoticeAsync(TurnNoticeKind.EffortDispatched,
                     BuildEffortDispatchedNoticeMessage(failedSwap.Tier, failedSwap.Effort, resolvedModel, swapped: true),
                     failedSwap.ReasonCode);
@@ -908,7 +908,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             BudgetGate = budgetGate,
 
             // Maps callId → the tool name plus what its Requested event carried, so a FunctionResultContent (which has no Name) resolves its tool from the
-            // matching FunctionCallContent, and a re-emitted FunctionCallContent is recognised as a repeat before it pays another serialize + dispatch.
+            // matching FunctionCallContent, and a re-emitted FunctionCallContent is recognized as a repeat before it pays another serialize + dispatch.
             PendingLocalToolCalls = new Dictionary<string, RequestedToolCall>(StringComparer.Ordinal),
 
             // Tool calls requested (or approved) and not yet resulted: while one is open the pull is server-side tool execution, which neither the idle watchdog
@@ -954,7 +954,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // turn offering no tool never keeps it. Skills count: their approval-gated tools come through the skills context provider, not AllowedTools.
             RetainSegmentUpdates = package.AllowedTools.Count > 0 || package.Skills is { Count: > 0 },
 
-            // Model-matrix F4: a thinking model can write its tool call inside the reasoning block, where llama-server keeps it as reasoning. Re-prompted once, never more.
+            // A thinking model can write its tool call inside the reasoning block, where llama-server keeps it as reasoning. Re-prompted once, never more.
             ReasoningToolCallReprompted = false,
             RepromptPending = false
         };
@@ -982,8 +982,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         await CompleteSingleAgentTurnAsync(loop, package, transport, stream, outputCap, invocationToken);
     }
 
-    // Model-matrix F2: a small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
-    // the pre-node-settings behaviour: no default cap, no length notice, the fixed thinking ladder.
+    // A small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
+    // the pre-node-settings behavior: no default cap, no length notice, the fixed thinking ladder.
     private async Task<OutputPolicy> ResolveOutputPolicyAsync(RuntimePackage package, CancellationToken invocationToken)
     {
         if (package.UsesFrozenBenchmarkPolicy)
@@ -1147,7 +1147,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         public StreamState? Stream { get; set; }
     }
 
-    /// <summary>The model a turn runs on after model resolution and `auto` dispatch, plus the authorised originals the swap fallback restores.</summary>
+    /// <summary>The model a turn runs on after model resolution and `auto` dispatch, plus the authorized originals the swap fallback restores.</summary>
     private sealed class TurnModelSelection
     {
         public required ModelResolution ModelResolution { get; init; }

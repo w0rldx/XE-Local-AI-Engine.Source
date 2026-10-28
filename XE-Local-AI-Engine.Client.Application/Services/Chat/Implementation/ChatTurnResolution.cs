@@ -151,7 +151,7 @@ internal sealed class ChatTurnResolution
     /// </summary>
     /// <remarks>
     ///     Read AFTER the offer was built, so a miss the offer provider self-healed (an installed template-capable GGUF)
-    ///     no longer counts. A compiled orchestration already gated its orchestrator on the list and carries its
+    ///     does not count. A compiled orchestration already gated its orchestrator on the list and carries its
     ///     participants' own offers, so it never qualifies.
     /// </remarks>
     public bool IsOfferTrimmedByAllowList(ILocalToolOfferProvider localToolOfferProvider)

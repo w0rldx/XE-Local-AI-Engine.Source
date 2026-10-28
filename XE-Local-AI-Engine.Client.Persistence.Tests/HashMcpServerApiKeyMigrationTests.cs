@@ -3,14 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>HashMcpServerApiKey</c> turns the inbound-MCP credential from a recoverable secret into a one-way digest, and
-///     the <c>DELETE</c> it performs first is the load-bearing half, not tidiness. A surviving row would carry
-///     ciphertext sealed under the old AAD column name, so once the column is renamed the AEAD tag no longer verifies
-///     and <b>every</b> read of the table throws — the key would not merely be stale, the table would be unreadable.
-///     Forcing regeneration is the deliberate trade; converting in place would need the node key, which a migration
-///     does not have. The column rename is pinned at both ends by <c>AddMcpServerApiKeyMigrationTests</c>; this suite
-///     owns the deletion.
+///     <c>HashMcpServerApiKey</c> turns the inbound-MCP credential into a one-way digest, and the <c>DELETE</c> it runs
+///     first is load-bearing: a surviving row's ciphertext is sealed under the old AAD column name, so after the rename
+///     <b>every</b> read throws.
 /// </summary>
+/// <remarks>
+///     Forcing regeneration is the deliberate trade; converting in place needs the node key, which a migration lacks.
+///     The rename is pinned at both ends by <c>AddMcpServerApiKeyMigrationTests</c>; this suite owns the deletion.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class HashMcpServerApiKeyMigrationTests
 {

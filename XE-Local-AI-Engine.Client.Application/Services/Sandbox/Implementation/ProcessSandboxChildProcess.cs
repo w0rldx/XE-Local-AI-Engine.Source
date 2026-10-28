@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 using System.Diagnostics;
 
-/// <summary>The <see cref="ISandboxChildProcess" /> over a started <see cref="Process" />: the behaviour the provider always had.</summary>
+/// <summary>The <see cref="ISandboxChildProcess" /> over a started <see cref="Process" />: the behavior the provider always had.</summary>
 internal sealed class ProcessSandboxChildProcess : ISandboxChildProcess
 {
     private readonly Process _process;

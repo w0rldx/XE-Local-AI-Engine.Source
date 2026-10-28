@@ -7,8 +7,8 @@ import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge } from "@/features/bench
 import type { BenchmarkJudgeState, BenchmarkPrimaryStatus } from "@/features/benchmarks/models/BenchmarkModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-// The badges are the only place a benchmark status colour is decided, and the primary and judge lifecycles are
-// separate unions with separate vocabularies — so every value in either one must resolve to a colour and to a
+// The badges are the only place a benchmark status color is decided, and the primary and judge lifecycles are
+// separate unions with separate vocabularies — so every value in either one must resolve to a color and to a
 // non-empty accessible label, with no untranslated key leaking through.
 
 const primaryStatuses: BenchmarkPrimaryStatus[] = ["Queued", "Running", "CancelRequested", "Succeeded", "Failed", "Cancelled"];
@@ -42,7 +42,7 @@ describe("BenchmarkStatusBadge", () => {
 		expect(screen.getByText("Cancellation requested")).toBeTruthy();
 	});
 
-	// Success and failure must never share a colour — it is the one distinction an operator reads at a glance.
+	// Success and failure must never share a color — it is the one distinction an operator reads at a glance.
 	it("colours success and failure differently", () => {
 		const succeeded = renderWithProviders(<BenchmarkStatusBadge status="Succeeded" />);
 		const succeededStyle = badge(succeeded.container).getAttribute("style");

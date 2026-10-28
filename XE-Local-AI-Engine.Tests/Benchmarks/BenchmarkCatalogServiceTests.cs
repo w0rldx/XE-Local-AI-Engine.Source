@@ -155,10 +155,9 @@ public sealed class BenchmarkCatalogServiceTests
     }
 
     /// <summary>
-    ///     The listing reads REGISTRY-RECORDED facts and hashes nothing: verifying costs one full re-hash of every
-    ///     member of every installed model per request (measured at 6m34s over a 174 GB models directory, page cache
-    ///     warm). A model whose registry entry predates the recorded aggregate identity is the only one that still pays
-    ///     for verification, and only for itself. <see cref="FactsProvider.Verified" /> is the proof.
+    ///     The listing reads REGISTRY-RECORDED facts and hashes nothing: verifying re-hashes every installed model per
+    ///     request (6m34s over 174 GB, warm cache). Only an entry without a recorded aggregate identity pays to verify,
+    ///     for itself; <see cref="FactsProvider.Verified" /> proves it.
     /// </summary>
     [Test]
     public async Task ListModels_ListsFromRecordedFactsAndVerifiesOnlyEntriesWithoutARecordedIdentity()

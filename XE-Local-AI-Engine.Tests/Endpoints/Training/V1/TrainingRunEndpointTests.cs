@@ -12,9 +12,8 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint integration tests for the training run routes against the real DI host and an empty database. Every
-///     route is Operator-gated, and the license confirmation is enforced at the boundary so an operator gets a 4xx
-///     rather than a fault — the store enforces it a second time so no other caller can bypass it.
+///     Training run routes against the real DI host and an empty database. Every route is Operator-gated; the license
+///     confirmation is enforced at the boundary (a 4xx, not a fault) and again by the store so no caller bypasses it.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TrainingRunEndpointTests

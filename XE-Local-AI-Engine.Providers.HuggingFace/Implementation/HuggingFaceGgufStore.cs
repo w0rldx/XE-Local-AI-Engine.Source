@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -268,7 +269,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 ? ProjectorDownloadResult.None
                 : await TryEnsureProjectorAsync(request.RepoId, fileName, revision, ct).ConfigureAwait(false);
 
-            var weightHash = await GgufAcquisitionSidecar.ComputeSha256Async(result.LocalPath, ct).ConfigureAwait(false);
+            var weightHash = await FileSha256.ComputeAsync(result.LocalPath, ct).ConfigureAwait(false);
             var weightFingerprint = GgufMemberFingerprint.Compute(weightHash, result.SizeBytes);
             var weightRelativePath = GgufFilePath.GetRelativeContainedPath(_options.ModelsDirectory, result.LocalPath);
             var contentMembers = new List<GgufModelContentMember>
@@ -480,7 +481,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
             _logger.LogInformation("Downloaded the multimodal projector {ProjectorFile} for {RepoId}; image input is available.",
                 projector.FileName, repoId);
-            var contentSha = await GgufAcquisitionSidecar.ComputeSha256Async(result.LocalPath, ct).ConfigureAwait(false);
+            var contentSha = await FileSha256.ComputeAsync(result.LocalPath, ct).ConfigureAwait(false);
             return new ProjectorDownloadResult
             {
                 SourceDisplayName = projector.FileName,

@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Exercises the default Vulkan device probe's decision purely through its injected seams (explicit-ICD env, WSL,
-///     ICD manifest) so no real filesystem or process environment is touched. Proves the WSL/ICD logic, the fail-safe on
-///     IO errors, and that the verdict is computed once and cached.
+///     Exercises the default Vulkan device probe purely through its injected seams (explicit-ICD env, WSL, ICD
+///     manifest), touching no real filesystem or environment: the WSL/ICD logic, the IO-error fail-safe, the cached
+///     verdict.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class DefaultVulkanDeviceProbeTests

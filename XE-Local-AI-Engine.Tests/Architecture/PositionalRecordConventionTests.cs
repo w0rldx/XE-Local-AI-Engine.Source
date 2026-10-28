@@ -148,7 +148,7 @@ public sealed class PositionalRecordConventionTests
     }
 
     /// <summary>
-    ///     The guard's own check. A scan that stopped recognising a split declaration, or that read a quoted snippet
+    ///     The guard's own check. A scan that stopped recognizing a split declaration, or that read a quoted snippet
     ///     as code, reads clean source everywhere and reports a fence that cannot fire.
     /// </summary>
     [Test]

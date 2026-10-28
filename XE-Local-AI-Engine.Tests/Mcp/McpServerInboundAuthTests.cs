@@ -76,8 +76,8 @@ public sealed class McpServerInboundAuthTests
     [Arguments("PUT")]
     public async Task McpEndpoint_WithAValidKeyButAnUnmappedVerb_IsMethodNotAllowed(string method)
     {
-        // Stateless Streamable HTTP maps only POST; before the guard an unmapped verb fell through to the JWT fallback
-        // policy and answered 401 "invalid_token" for a perfectly valid key (live round 2026-09-30, I-D5).
+        // Stateless Streamable HTTP maps only POST; unguarded, an unmapped verb falls through to the JWT fallback
+        // policy and answers 401 "invalid_token" for a perfectly valid key.
         var factory = Host.Factory;
         using var client = factory.CreateClient();
 

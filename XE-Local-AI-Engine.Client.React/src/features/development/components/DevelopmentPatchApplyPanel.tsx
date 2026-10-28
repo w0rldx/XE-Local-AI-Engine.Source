@@ -11,7 +11,7 @@ interface DevelopmentPatchApplyPanelProps {
 	readonly preview: { readonly data?: DevelopmentPatchPreview; readonly loading: boolean; readonly run: () => void };
 	readonly repositoryReady: boolean;
 	/**
-	 * Y3: a workflow-driven task's approval lives one node upstream, in the graph, and the workflow performs the apply.
+	 * A workflow-driven task's approval lives one node upstream, in the graph, and the workflow performs the apply.
 	 * The evidence stays visible — that is what this page is for — but the Apply button is not offered, because a
 	 * second one here would be either a duplicate authority or a bypass of the workflow's audit trail.
 	 */

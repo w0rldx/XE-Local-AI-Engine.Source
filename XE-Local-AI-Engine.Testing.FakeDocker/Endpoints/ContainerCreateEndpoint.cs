@@ -107,7 +107,7 @@ internal static class ContainerCreateEndpoint
     }
 
     /// <summary>
-    ///     One anonymous volume per <c>VOLUME</c> the image declares, the way a real daemon materialises them at
+    ///     One anonymous volume per <c>VOLUME</c> the image declares, the way a real daemon materializes them at
     ///     create time. They appear ONLY in the effective set — never in <c>HostConfig.Mounts</c>, which the caller
     ///     never asked to contain them — and that asymmetry is the whole reason the production mapper reads the
     ///     top-level <c>Mounts[]</c>.

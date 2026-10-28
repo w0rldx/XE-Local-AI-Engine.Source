@@ -231,7 +231,7 @@ describe("ManagedPythonCard", () => {
 		expect(screen.getByText(copy.mismatchesTitle)).toBeTruthy();
 	});
 
-	// N-66: Compute switched off on a platform that supports it is not "Not available on this platform".
+	// Compute switched off on a platform that supports it is not "Not available on this platform".
 	it("shows the translated reason, keeps uv not downloaded yet and disables both Compute actions while Compute is off", async () => {
 		server.use(
 			jsonRoute(
@@ -319,7 +319,7 @@ describe("ManagedPythonCard", () => {
 		expect(within(row).getByText(copy.reasons.Removing)).toBeTruthy();
 	});
 
-	// N-74: the removal is one blocking POST, so no poll sees the node's brief Removing code; the pending POST says it.
+	// The removal is one blocking POST, so no poll sees the node's brief Removing code; the pending POST says it.
 	it("labels Compute as Removing while the remove request is still pending", async () => {
 		let release: () => void = () => undefined;
 		const released = new Promise<void>((resolve) => {
@@ -417,7 +417,7 @@ describe("ManagedPythonCard", () => {
 		await waitFor(() => expect(reads.count()).toBeGreaterThan(first));
 	});
 
-	// N-65: a chat call provisions Compute behind the card's back, so a settled card still polls, only more slowly.
+	// A chat call provisions Compute behind the card's back, so a settled card still polls, only more slowly.
 	it("keeps polling every 10 seconds once every environment has settled", async () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		server.use(jsonRoute("get", statusPath, status([environment("compute")])));

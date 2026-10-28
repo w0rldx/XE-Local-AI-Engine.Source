@@ -5,18 +5,18 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
-import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import {
 	type AssistDraft,
 	type AssistExistingContent,
 	type AssistMode,
 	type AssistSurface,
 	isSameModelName,
-} from "@/features/assist/models/AssistModels";
+} from "@/core/assist/models/AssistModels";
+import { useLoadedModels } from "@/core/loaded-models/queries/useLoadedModels";
+import { useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
+import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import { isLocalChatModel } from "@/features/chat/pages/ChatModelOptions";
-import { useLoadedModels } from "@/features/loaded-models/queries/useLoadedModels";
-import { useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
 
 interface AssistActionsProps {
 	surface: AssistSurface;

@@ -68,7 +68,7 @@ public static class NodeSettingsPolicy
 
         // A draft speculative mode with no draft model must never persist: it passes every field-level check and then fails
         // chat-server start on the next spawn. This also covers an update clearing the draft model under a stored draft mode.
-        if (StoredNodeSettings.SpeculativeModeRequiresDraftModel(settings.SpeculativeMode)
+        if (StoredNodeSettingsValidation.SpeculativeModeRequiresDraftModel(settings.SpeculativeMode)
             && string.IsNullOrWhiteSpace(settings.SpeculativeDraftModelName))
         {
             return

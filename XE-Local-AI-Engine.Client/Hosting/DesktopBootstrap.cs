@@ -7,10 +7,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Vault;
 using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Fills the two configuration values a packaged desktop launch needs but that no env/Aspire source supplies: the
-///     node SQLite connection string (SEC-1) and the operator secret (SEC-2).
+///     node SQLite connection string and the operator secret.
 /// </summary>
 /// <remarks>
 ///     Strictly local-mode-only, and each key is layered in ONLY when not already supplied, so headless / Aspire / CI
@@ -515,7 +516,7 @@ internal static class DesktopBootstrap
         {
             // A write failure after winning the create left a torn/empty key; remove it so the next launch regenerates
             // cleanly rather than failing validation against a partial file.
-            TryDeleteTemp(keyPath);
+            BestEffortFile.TryDeleteFile(keyPath);
             throw new InvalidOperationException($"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
                 exception);
         }
@@ -554,21 +555,6 @@ internal static class DesktopBootstrap
         }
 
         return fileBytes;
-    }
-
-    private static void TryDeleteTemp(string tempPath)
-    {
-        try
-        {
-            if (File.Exists(tempPath))
-            {
-                File.Delete(tempPath);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of the temp file; the original write failure is already being surfaced.
-        }
     }
 }
 

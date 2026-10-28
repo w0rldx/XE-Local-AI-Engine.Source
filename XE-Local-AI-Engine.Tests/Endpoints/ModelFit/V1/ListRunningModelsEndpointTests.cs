@@ -12,13 +12,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The running-models family at the HTTP layer. The list degrades to an empty 200 so the running panel can keep
-///     polling a wedged or restarting llama-server. That degradation used to be a bare <c>catch (Exception)</c>, so a
-///     defect anywhere in the endpoint was reported to the operator — and to the eject/update gates that read this list —
-///     as "nothing is running". These tests pin both halves: a probe/transport failure still degrades, anything else
-///     stays a 500. The eject tests pin the sibling <c>POST model-fit/running/eject</c> contract: its two refusals, and
-///     the outcome projection the running panel and the runtime gates read.
+///     Running-models family over HTTP: the list degrades to an empty 200 on a probe/transport failure so the panel can
+///     keep polling a wedged llama-server; any other defect stays a 500, never "nothing is running" to the
+///     eject/update gates.
 /// </summary>
+/// <remarks>The eject tests pin <c>POST model-fit/running/eject</c>: two refusals and the outcome projection.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class ListRunningModelsEndpointTests
 {

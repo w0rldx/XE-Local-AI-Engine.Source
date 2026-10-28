@@ -390,10 +390,10 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     FU3-4 race B. A <c>Retry</c> recorded before the crash and never applied has spent no attempt for a sum over
+    ///     Race B. A <c>Retry</c> recorded before the crash and never applied has spent no attempt for a sum over
     ///     <c>Attempt</c> to see, but the dispatcher turns it into one on its first tick after this boot. Counting only
-    ///     that sum handed an interrupted sandbox row the very slot the pending decision had already promised, and the
-    ///     run made one more re-attempt than it allows. Recovery counts spent PLUS reserved, exactly as the live retry
+    ///     that sum would hand an interrupted sandbox row the very slot the pending decision had already promised, and
+    ///     the run would re-attempt once more than it allows. Recovery counts spent PLUS reserved, as the live retry
     ///     policy and the store's own admission do.
     /// </summary>
     [Test]
@@ -424,9 +424,9 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     FU3-4 race C. The run-wide budget is not the only bound: a node run also carries its OWN cap, which the live
-    ///     path checks before every automatic re-attempt. Recovery bypassed that check entirely, so an interrupted row
-    ///     already at its cap was reset to <c>Pending</c> with one attempt more than it declares — the runtime reporting
+    ///     Race C. The run-wide budget is not the only bound: a node run also carries its OWN cap, which the live
+    ///     path checks before every automatic re-attempt. Recovery must not bypass that check, or an interrupted row
+    ///     already at its cap is reset to <c>Pending</c> with one attempt more than it declares — the runtime reporting
     ///     that it broke its own budget, on a run with plenty of room left.
     /// </summary>
     [Test]
@@ -663,7 +663,7 @@ public sealed class DevWorkflowRestartTests
     /// <summary>
     ///     A budget refusal landing on the pass that would have SETTLED must not end recovery. A refused collapse rolls
     ///     back whole and writes nothing, so counting it as one of the three passes spends the settling pass on a
-    ///     judgement that never applied — and the stranded Tool row is left <c>Running</c>, one of the two states
+    ///     judgment that never applied — and the stranded Tool row is left <c>Running</c>, one of the two states
     ///     nothing downstream recovers. The run then waits for somebody to restart the host again.
     /// </summary>
     [Test]

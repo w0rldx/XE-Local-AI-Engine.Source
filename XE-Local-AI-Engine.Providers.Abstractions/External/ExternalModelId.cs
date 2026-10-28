@@ -10,7 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 ///     WHY a namespaced id at all: the node routes a chat turn by ONE model-name string through the provider map, and two
 ///     operators can legitimately register the same backing model id (<c>qwen3-27b</c>) on two different connections.
 ///     Prefixing with the connection slug makes the identity unique without a second routing key, and the <c>ext:</c>
-///     scheme lets every policy site recognise an external id by inspection alone. The grammar is deliberately narrow on
+///     scheme lets every policy site recognize an external id by inspection alone. The grammar is deliberately narrow on
 ///     the LEFT (<see cref="IsValidConnectionId" />) and wide on the RIGHT (<see cref="IsValidWireId" />).
 /// </remarks>
 public static class ExternalModelId

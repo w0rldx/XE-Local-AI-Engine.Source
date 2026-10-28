@@ -20,7 +20,7 @@ public interface IScheduledJobHandler
 
     /// <summary>
     ///     Performs the work defined by this template for one scheduled invocation. Implementations should respect
-    ///     <paramref name="cancellationToken" /> throughout (it is signalled on job interrupt / scheduler shutdown).
+    ///     <paramref name="cancellationToken" /> throughout (it is signaled on job interrupt / scheduler shutdown).
     ///     <see cref="OperationCanceledException" /> is allowed to propagate — the dispatcher does not swallow it.
     /// </summary>
     Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken);

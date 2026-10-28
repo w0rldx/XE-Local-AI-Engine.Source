@@ -8,10 +8,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The message list a package is rendered into, in isolation from the runner that sends it. The shape matters at
-///     the wire: Microsoft.Extensions.AI's OpenAI client takes its tool-calls-only branch only when the assistant
-///     message carries no content part, and a <c>tool</c> message not preceded by its call is what a strict chat
-///     template rejects.
+///     The message list a package is rendered into, apart from the runner. The OpenAI client sends tool calls alone only
+///     for an assistant message with no content part, and a strict template rejects a <c>tool</c> message before its call.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerChatMessageBuilderTests
@@ -107,9 +105,8 @@ public sealed class InvocationRunnerChatMessageBuilderTests
     [Test]
     public void BuildChatMessages_ForAnImageOnlyTurn_StillCarriesTheBlankTextPart()
     {
-        // The wire shape of a vision turn is unchanged: ChatTurnContextBuilder.BuildImageContextAsync attaches images
-        // to a message with NO text of its own, and that turn has always gone out as [TextContent(""), DataContent].
-        // The blank part is dropped only where a tool_calls message would otherwise carry one.
+        // A vision turn's images ride a message with NO text, sent as [TextContent(""), DataContent]; the blank part is
+        // dropped only where a tool_calls message would otherwise carry one.
         var package = RuntimePackageBuilder.Valid()
                                            .WithUserMessage("what is in the picture?")
                                            .WithImageMessage(string.Empty, "image/png", [1, 2, 3], sortOrder: 1)

@@ -1,3 +1,5 @@
+import { isRecord } from "@/core/models/JsonRecord";
+
 /**
  * The deterministic-validation report body.
  *
@@ -53,16 +55,12 @@ export interface DevelopmentValidationReportBody {
 /**
  * The "registered repository with no tests" policy case, spelled as both a report-level `failureCode` and a
  * per-outcome `parseFailureCode`. It is a distinct, actionable state — a validation run that proves nothing about
- * behaviour — and must never be rendered as an ordinary failure or, worse, as a pass.
+ * behavior — and must never be rendered as an ordinary failure or, worse, as a pass.
  */
 const noTestsCodes: ReadonlySet<string> = new Set(["no_tests_executed", "no_test_projects"]);
 
 export function isDevelopmentNoTestsCode(code: string | null | undefined): boolean {
 	return code !== null && code !== undefined && noTestsCodes.has(code);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 /**

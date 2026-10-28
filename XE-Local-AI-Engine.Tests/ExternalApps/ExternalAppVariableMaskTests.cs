@@ -5,9 +5,8 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The sentinel a masked secret is replaced with. Pinned as a literal here because three surfaces state it — the
-///     mask-out, the keep-on-write and the SPA — and a mask the write side does not recognise silently stores the
-///     placeholder as the application's password.
+///     The sentinel a masked secret is replaced with, pinned as a literal because three surfaces state it (mask-out,
+///     keep-on-write, the SPA) and a mask the write side misses silently stores the placeholder as the password.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalAppVariableMaskTests

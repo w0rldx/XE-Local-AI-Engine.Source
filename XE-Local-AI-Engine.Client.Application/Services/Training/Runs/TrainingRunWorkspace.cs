@@ -73,7 +73,7 @@ public sealed class TrainingRunWorkspace
         }
         catch
         {
-            DeleteFileIfExists(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
             throw;
         }
     }
@@ -98,7 +98,7 @@ public sealed class TrainingRunWorkspace
     }
 
     public void DeleteFrozenDataset(Guid datasetId, Guid freezeId) =>
-        DeleteFileIfExists(FrozenDatasetPath(datasetId, freezeId));
+        BestEffortFile.TryDeleteFile(FrozenDatasetPath(datasetId, freezeId));
 
     /// <summary>Removes the decrypted scratch. Best-effort: a failure here must never mask the run's own outcome.</summary>
     public void DeleteWorkDirectory(Guid runId)
@@ -140,18 +140,6 @@ public sealed class TrainingRunWorkspace
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
             // A filesystem that cannot express the mode (a mounted share) is not a reason to abandon the run.
-        }
-    }
-
-    private static void DeleteFileIfExists(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup.
         }
     }
 }

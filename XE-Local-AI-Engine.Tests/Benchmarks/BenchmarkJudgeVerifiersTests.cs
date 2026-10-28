@@ -42,9 +42,8 @@ public sealed class BenchmarkJudgeVerifiersTests
     [Test]
     public void Regex_CatastrophicPatternOnAHugeAnswer_Returns()
     {
-        // The classic (a+)+$ against a long non-matching input is the ReDoS demo. NonBacktracking runs it in time
-        // linear in the input, so this is a fast assertion rather than a hang — which is the whole reason the policy
-        // boundary refuses anything NonBacktracking cannot compile.
+        // (a+)+$ on a long non-matching input is the classic ReDoS demo. NonBacktracking runs it in linear time, so
+        // this asserts fast instead of hanging; that is why the policy refuses what NonBacktracking cannot compile.
         var answer = new string('a', 100_000) + "b";
         var stopwatch = Stopwatch.StartNew();
 

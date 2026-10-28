@@ -17,9 +17,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     An operator cancel of a RUNNING generation. The executor owns the terminal write, and — unlike a host stop — it
-///     must not rethrow, or the queue would log the operator's own cancel as a "queue failed" error and the next work
-///     item would still be waiting behind a loop that took the shutdown path.
+///     An operator cancel of a RUNNING generation. The executor owns the terminal write and, unlike a host stop, must
+///     not rethrow, or the queue logs the cancel as "queue failed" and the next item waits behind a loop on the
+///     shutdown path.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class DatasetGenerationCancelTests

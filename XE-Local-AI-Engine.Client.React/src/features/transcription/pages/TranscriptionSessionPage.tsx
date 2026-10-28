@@ -119,7 +119,7 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 	const capture = useLiveCapture(isLive ? sessionId : null);
 	const liveView = useLiveTranscript(sessionId);
 	const liveStatus = liveView?.status ?? "";
-	// A3: the first live start can spend a minute on the runtime download and model load; polled only while it does.
+	// The first live start can spend a minute on the runtime download and model load; polled only while it does.
 	const runtimeQuery = useTranscriptionRuntimeStatus(capture.state === "starting");
 
 	// The node persisted the last rows as it ended the session, so the REST view has to be re-read before it takes over

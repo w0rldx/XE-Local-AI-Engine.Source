@@ -9,11 +9,10 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins which repository-import failures are the caller's problem and which are the host's. The endpoint used to
-///     catch a bare <see cref="InvalidOperationException" />, which meant an unreadable Git index or a file that could
-///     not be opened came back as a 400 carrying an I/O message — a client error the client could do nothing about.
-///     Now only <see cref="KnowledgeRepositoryImportRejectedException" /> (and the folder/argument rejections) are 400;
-///     <see cref="KnowledgeRepositoryReadException" /> falls through to the global handler as a 500.
+///     Pins which repository-import failures are the caller's: only
+///     <see cref="KnowledgeRepositoryImportRejectedException" /> (and folder/argument rejections) are 400; a
+///     <see cref="KnowledgeRepositoryReadException" />, such as an unreadable Git index, is a 500 from the global
+///     handler, since the client cannot fix an I/O fault.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ImportKnowledgeRepositoryEndpointTests

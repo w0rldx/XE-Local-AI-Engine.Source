@@ -48,7 +48,7 @@ import {
 
 /**
  * Three shelves of one surface: the runs an operator came here for, the templates those runs execute, and the policy
- * catalogue the templates read. Runs stays the default because it is what this page is opened to look at.
+ * catalog the templates read. Runs stays the default because it is what this page is opened to look at.
  */
 const devWorkflowsPageTabs = ["runs", "templates", "ruleSets"] as const;
 type DevWorkflowsPageTab = (typeof devWorkflowsPageTabs)[number];
@@ -304,7 +304,7 @@ export function DevWorkflowsPage() {
 					) : null}
 				</Tabs.Panel>
 				<Tabs.Panel value="ruleSets" pt="md">
-					{/* Mounted only while its own shelf is open. The catalogue is a second request, and an operator who
+					{/* Mounted only while its own shelf is open. The catalog is a second request, and an operator who
 					    came here to look at runs should not pay for it before they ask. */}
 					{tab === "ruleSets" ? <DevWorkflowRuleSetsPanel projects={projectOptions} /> : null}
 				</Tabs.Panel>

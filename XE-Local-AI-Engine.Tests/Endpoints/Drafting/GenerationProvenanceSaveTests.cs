@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The save half of AI-assisted drafting: what the ordinary create/update routes do when the submitted content came
-///     out of a draft. Three behaviours are pinned here because each one is a place the feature could quietly go wrong.
+///     out of a draft. Three behaviors are pinned here because each one is a place the feature could quietly go wrong.
 ///     <list type="bullet">
 ///         <item>
 ///             <c>generated: true</c> forces the Imported posture — disabled, fenced, <c>sourceUri="generated"</c> —
@@ -192,7 +192,7 @@ public sealed class GenerationProvenanceSaveTests
         var skillId = created.RootElement.GetProperty("id").GetGuid();
 
         // An ordinary edit afterwards: the operator reviewed the draft and re-enables it, and the form carries no
-        // provenance block. The stored provenance must survive, and the enabled echo must be honoured.
+        // provenance block. The stored provenance must survive, and the enabled echo must be honored.
         using var updated = await SendAsync(factory,
             client,
             HttpMethod.Put,

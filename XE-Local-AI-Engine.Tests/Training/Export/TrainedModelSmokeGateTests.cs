@@ -17,9 +17,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The gate's verdicts, against a scripted transient server. A model-side failure is a RESULT here, never an
-///     exception: the caller has to record a decision, and a throw would leave the artifact stuck Pending with no
-///     reason for an operator to act on.
+///     The gate's verdicts against a scripted transient server. A model-side failure is a RESULT, never an exception:
+///     the caller must record a decision, and a throw would leave the artifact stuck Pending with no reason to act on.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TrainedModelSmokeGateTests

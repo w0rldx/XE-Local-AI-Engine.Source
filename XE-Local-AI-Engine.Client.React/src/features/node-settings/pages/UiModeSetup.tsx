@@ -10,7 +10,7 @@ import { getNodeSettingsQueryKey, saveNodeSettingsMutation } from "@/core/api/ge
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
 
-// Each radio sits in a box one h3 line tall so it centres on the card title's line, not on the card's top edge.
+// Each radio sits in a box one h3 line tall so it centers on the card title's line, not on the card's top edge.
 const titleLineStyle = {
 	display: "flex",
 	alignItems: "center",

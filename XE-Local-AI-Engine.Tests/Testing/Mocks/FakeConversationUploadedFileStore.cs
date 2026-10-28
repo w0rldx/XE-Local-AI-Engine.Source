@@ -3,11 +3,11 @@ namespace XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 /// <summary>
-///     In-memory <see cref="IConversationUploadedFileStore" /> for AgentHome staging tests. Tracks the metadata rows per
-///     conversation and, when <see cref="CreateStagingSnapshotAsync" /> is called, writes the configured decrypted
-///     Markdown into a fresh temp directory whose disposal removes it — mirroring the real store's staging contract
-///     without any encryption or persistence. Only the read/list/staging members the staging step uses are implemented.
+///     In-memory <see cref="IConversationUploadedFileStore" /> for AgentHome staging tests: tracks metadata rows per
+///     conversation, and <see cref="CreateStagingSnapshotAsync" /> writes the configured decrypted Markdown into a fresh
+///     temp directory removed on disposal, like the real store minus encryption and persistence.
 /// </summary>
+/// <remarks>Only the read/list/staging members the staging step uses are implemented.</remarks>
 public sealed class FakeConversationUploadedFileStore : IConversationUploadedFileStore
 {
     private readonly Dictionary<Guid, List<StagedFile>> _filesByConversation = [];

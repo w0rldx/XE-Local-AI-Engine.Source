@@ -79,7 +79,7 @@ public sealed class FfmpegAudioTranscoderTests
     ///     wait after the kill exist to prevent.
     ///     <para>
     ///         <b>What it cannot isolate.</b> The wait after the kill is what guarantees the child is GONE rather than
-    ///         merely signalled, and on Linux that guarantee is unobservable: <see cref="Process.Kill(bool)" /> sends
+    ///         merely signaled, and on Linux that guarantee is unobservable: <see cref="Process.Kill(bool)" /> sends
     ///         SIGKILL and the runtime reaps the child before this method can look, with or without the wait (measured:
     ///         fifteen runs each way, no difference). The failure the wait prevents belongs to Windows, where a handle
     ///         that is still open makes the upload slot's delete fail — and that failure is swallowed by design, so the

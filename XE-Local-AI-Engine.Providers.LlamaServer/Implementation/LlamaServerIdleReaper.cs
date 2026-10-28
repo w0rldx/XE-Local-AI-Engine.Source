@@ -252,7 +252,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     gate refused on budget, and returns its key; or, when none is idle, a key skipped only for its active lease.
     /// </summary>
     /// <remarks>
-    ///     Unlike <see cref="TryEvictIdleLeastRecentlyUsed" />, an in-window interactive chat process IS a victim here (operator decision: a chat
+    ///     Unlike <see cref="TryEvictIdleLeastRecentlyUsed" />, an in-window interactive chat process IS a victim here (by design: a chat
     ///     load may unload any chat model without a request in flight). Never the requesting key, a pooled role (the node's embedder and
     ///     reranker), a <paramref name="protectedModels" /> name, or a profiling process. The victim is tree-killed before this returns, outside
     ///     the gate; the caller's bounded re-probe covers the driver releasing its VRAM. Wiki 03, "Eviction &amp; reaper".

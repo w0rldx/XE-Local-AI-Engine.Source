@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import type { GgufDownloadTarget, GgufQuantTier, GgufRepositoryFile } from "@/core/model-downloads/models/GgufModels";
+import { fitVerdictColor, fitVerdictLabelKey, preferredGgufFileName } from "@/core/model-downloads/models/GgufModels";
+import { useInspectGgufRepository } from "@/core/model-downloads/queries/useGgufDownload";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { GgufDownloadTarget, GgufQuantTier, GgufRepositoryFile } from "@/features/models/models/GgufModels";
-import { fitVerdictColor, fitVerdictLabelKey, preferredGgufFileName } from "@/features/models/models/GgufModels";
-import { useInspectGgufRepository } from "@/features/models/queries/useGgufDownload";
 
 // i18n suffix under `pages.models.gguf.download.quality.*` per static quality tier.
 const qualityTierLabelKey: Record<GgufQuantTier, string> = {

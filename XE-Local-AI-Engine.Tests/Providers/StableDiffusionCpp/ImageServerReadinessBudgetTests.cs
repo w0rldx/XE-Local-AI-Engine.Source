@@ -6,11 +6,10 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     sd-server binds its socket only after the synchronous model load finishes, so the readiness wait IS the load
-///     wait — which makes a flat budget an assumption about model size. The flat two minutes that comfortably covers a
-///     ~2 GB SD1.5 file fails an ~18 GB Qwen-Image set on its FIRST launch, and the operator is told the runtime "did
-///     not become ready in time", which reads as a broken model rather than an impatient budget.
+///     sd-server binds its socket only after the synchronous model load, so the readiness wait IS the load wait and a
+///     flat budget is an assumption about model size.
 /// </summary>
+/// <remarks>Two minutes fits a ~2 GB SD1.5 file but fails an ~18 GB Qwen-Image set's first launch.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class ImageServerReadinessBudgetTests
 {

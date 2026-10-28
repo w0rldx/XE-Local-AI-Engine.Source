@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </remarks>
 internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IAgentHomeToolGateway _gateway;

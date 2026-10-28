@@ -106,7 +106,7 @@ export type ExternalProviderApiSurface = (typeof externalProviderApiSurfaces)[nu
 // server understands, so every recognized value is offered and the backend clamps it at the wire.
 export const externalReasoningEfforts: readonly ReasoningEffort[] = ["none", "on", "minimal", "low", "medium", "high", "xhigh"];
 
-// The connection slug grammar the backend stores ids under (D3): lowercase alphanumerics and hyphens, at most 32
+// The connection slug grammar the backend stores ids under: lowercase alphanumerics and hyphens, at most 32
 // characters. Canonicalized once at write time, so the editor rejects anything else up front rather than letting a
 // mixed-case id round-trip into a model id the name validator would refuse.
 const CONNECTION_ID = /^[a-z0-9-]{1,32}$/;
@@ -118,7 +118,7 @@ export const MAX_TIMEOUT_SECONDS = 3600;
 
 // Loopback, RFC 1918 private space, IPv4/IPv6 link-local, IPv6 unique-local, and the mDNS `.local` suffix — the set of
 // addresses that can only be reached from this machine or this network segment. Declaring "Local" for anything else
-// means prompts and workspace file contents leave the network, which is what the D1 warning says out loud.
+// means prompts and workspace file contents leave the network, which is what the local-trust warning says out loud.
 function isPrivateIpv4(host: string): boolean {
 	const octets = host.split(".");
 	if (octets.length !== 4) {
@@ -276,7 +276,7 @@ export function isPlainHttpUrl(baseUrl: string): boolean {
 	return /^\s*http:/i.test(baseUrl);
 }
 
-// Drives the D1 warning: the operator declared full local trust for an address this node cannot reach privately.
+// Drives the local-trust warning: the operator declared full local trust for an address this node cannot reach privately.
 // An unparseable URL does not warn — the base-URL error already tells that story, and two errors about one field
 // read as noise.
 export function shouldWarnLocalDeclaration(values: ExternalProviderFormValues): boolean {

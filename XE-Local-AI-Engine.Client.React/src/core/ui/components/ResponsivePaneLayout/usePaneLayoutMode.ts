@@ -28,15 +28,15 @@ export interface PaneLayoutMode {
  * gave the grid 725px of room for 972px of tracks, so the third column was reachable only by scrolling sideways. The
  * sidebar also collapses with no window resize at all, which a viewport read can never notice.
  *
- * This is a deliberate behaviour change: with the sidebar expanded a page now goes narrow below roughly a 1256px
- * viewport rather than 1024px, and it goes wide again when the sidebar is collapsed and the space allows.
+ * With the sidebar expanded a page goes narrow below roughly a 1256px viewport rather than 1024px, and it goes wide
+ * again when the sidebar is collapsed and the space allows.
  *
  * The viewport rule survives as the fallback for an UNMEASURED container — before the ref is attached, and in jsdom,
  * where every element measures 0. The first measurement is taken synchronously in a layout effect so the first paint
  * is already correct; `@mantine/hooks`'s `useElementSize` reports 0 until a debounced animation frame and would
  * reintroduce the narrow→wide flash this page family was built to avoid.
  *
- * `mainMinWidth` raises the centre pane's floor for a page whose centre needs more than the shared one; the viewport
+ * `mainMinWidth` raises the center pane's floor for a page whose center needs more than the shared one; the viewport
  * fallback is unchanged.
  */
 export function usePaneLayoutMode({ mainMinWidth }: { readonly mainMinWidth?: number } = {}): PaneLayoutMode {

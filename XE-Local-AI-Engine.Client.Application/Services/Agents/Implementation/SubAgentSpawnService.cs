@@ -27,7 +27,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// <remarks>
 ///     An admitted spawn runs a <see cref="ChatClientAgent" /> as an <see cref="AIFunction" /> over the SAME production-decorated
 ///     <see cref="IChatClient" />, routed cloud or local per send by the runtime client. The depth cap (≤ 2) is enforced two ways: PRIMARY
-///     and STRUCTURAL, the child's tool set has <c>spawn_subagent</c> filtered out UNCONDITIONALLY; plus defence-in-depth, a
+///     and STRUCTURAL, the child's tool set has <c>spawn_subagent</c> filtered out UNCONDITIONALLY; plus defense-in-depth, a
 ///     <see cref="SpawnContext.Depth" /> of 1 or more short-circuits to a sanitized reject. Every expected rejection is a sanitized string,
 ///     never an exception. What a profile-bound child inherits: <c>docs/wiki/04-agent-mode.md</c> ("Capacity gate &amp; sub-agent spawn").
 /// </remarks>
@@ -133,7 +133,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             return ReasonInvalidArguments;
         }
 
-        // Runtime depth guard, defence-in-depth behind the structural cap: a spawned child runs at Depth ≥ 1 and its tool set already omits
+        // Runtime depth guard, defense-in-depth behind the structural cap: a spawned child runs at Depth ≥ 1 and its tool set already omits
         // spawn_subagent, so it can never reach here — but a misconfiguration that offered it the tool rejects here rather than recursing.
         var context = SpawnContext.Current;
         if (context is { Depth: >= 1 })
@@ -542,7 +542,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     }
 
     // The inbound MCP path runs the agent directly rather than as an AIFunction: only the full response shows an approval request the run stopped on,
-    // and an empty answer must not be reported as success (I-D12). A provider context-size 400 becomes a typed rejection (I-D16).
+    // and an empty answer must not be reported as success. A provider context-size 400 becomes a typed rejection.
     private async Task<SpawnOutcome> RunSubAgentForMcpAsync(ResolvedBinding binding, SpawnContext context, string task, CancellationToken ct)
     {
         try

@@ -220,7 +220,7 @@ internal static class ReasoningOptionsResolver
     }
 
     /// <summary>
-    ///     The node's default limit (model-matrix F2), only where no explicit limit was sent: the applied reasoning budget plus
+    ///     The node's default limit, only where no explicit limit was sent: the applied reasoning budget plus
     ///     the answer cap, so the cap bounds the answer and never shortens a thinking budget the operator configured.
     /// </summary>
     /// <remarks>

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     The no-follow rules and the reuse-or-replace materialisation. Both exist because lexical confinement is not
+///     The no-follow rules and the reuse-or-replace materialization. Both exist because lexical confinement is not
 ///     confinement and because start, update and reset all re-enter the same pass: "a pre-existing file is a
 ///     violation" would fail every rebuild after the first.
 /// </summary>

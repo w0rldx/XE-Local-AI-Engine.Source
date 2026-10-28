@@ -26,7 +26,7 @@ describe("ResponsivePaneLayout", () => {
 		);
 
 		const grid = screen.getByTestId("grid");
-		// The floors are the documented fix for the centre track collapsing under its own chrome just above 1024,
+		// The floors are the documented fix for the center track collapsing under its own chrome just above 1024,
 		// and `overflowX: auto` is what makes the overflow they cause scrollable instead of clipped.
 		expect(grid.style.gridTemplateColumns).toBe("320px minmax(240px, 1fr) minmax(380px, 420px)");
 		expect(grid.style.overflowX).toBe("auto");

@@ -99,7 +99,7 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_WhenQueryIsOnlyFunctionWords_FallsBackToPriorityOrder()
     {
-        // Mixed English/German function words tokenise to nothing, so this is the blank-query case: every score is zero
+        // Mixed English/German function words tokenize to nothing, so this is the blank-query case: every score is zero
         // and the Priority/CreatedAtUtc order decides, exactly as SelectTopK_WhenQueryIsBlank_FallsBackToPriorityOrder.
         var third = Action("alpha", priority: 30, createdAtUtc: 1);
         var first = Action("beta", priority: 10, createdAtUtc: 5);

@@ -204,8 +204,8 @@ function ModelDetailsBody({
 	);
 }
 
-// Per-model details dialog. Replaces the old side-by-side details card + standalone license/template modal: details,
-// the editable type override, and llmfit fit info now live in one tabbed dialog opened by clicking a model name.
+// Per-model details dialog: details, license/template, the editable type override and llmfit fit info in one tabbed
+// dialog opened by clicking a model name.
 export function ModelDetailsDialog({
 	opened,
 	onClose,

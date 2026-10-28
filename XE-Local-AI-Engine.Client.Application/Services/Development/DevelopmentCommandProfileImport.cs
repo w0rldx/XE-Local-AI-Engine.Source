@@ -25,7 +25,7 @@ internal static class DevelopmentCommandProfileImport
 {
     public const string RelativePath = ".xe-dev/profile.json";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>Bounded so a hostile repository cannot make the engine read an arbitrarily large file.</summary>
     private const int MaxImportBytes = 64 * 1024;

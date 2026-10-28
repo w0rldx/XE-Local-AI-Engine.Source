@@ -20,7 +20,7 @@ internal static class ChatStreamEventMapper
 
     // Web defaults => camelCase property names, matching every other JSON payload the chat stream carries (tool
     // Arguments, the persisted parts[]), so the client parses one convention.
-    private static readonly JsonSerializerOptions QuestionsJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions QuestionsJsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     Maps a persisted terminal message status to its stream event type.

@@ -28,7 +28,7 @@ import {
 	useDeleteBenchmarkTaskItem,
 	useReorderBenchmarkTaskItems,
 	useUpdateBenchmarkTaskItem,
-} from "@/features/benchmarks/queries/useBenchmarks";
+} from "@/features/benchmarks/queries/useBenchmarkTaskItems";
 
 interface BenchmarkTaskItemEditorProps {
 	projectId: string;

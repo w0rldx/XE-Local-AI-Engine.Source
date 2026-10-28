@@ -9,11 +9,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="ModelFitBenchmarkStore.GetLatestSuccessfulForProfileAsync" /> backs the freeze gate's revision binding:
-///     it returns the newest benchmark row bound to a profile whose parent snapshot Succeeded, and excludes both legacy
-///     rows without a <c>ProfileId</c> and rows whose snapshot did not succeed — so a freeze can never be justified by a
-///     benchmark that belongs to a different (or unsuccessful) run. Exercises the real SQLite schema built by
-///     <c>EnsureCreated</c>, which includes the additive <c>profile_id</c> column.
+///     it returns the newest benchmark row bound to a profile whose parent snapshot Succeeded, excluding legacy rows
+///     without a <c>ProfileId</c> and rows whose snapshot did not succeed.
 /// </summary>
+/// <remarks>So a freeze is never justified by another (or unsuccessful) run's benchmark. Uses the real
+///     <c>EnsureCreated</c> SQLite schema, including the additive <c>profile_id</c> column.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class ModelFitBenchmarkStoreTests : IDisposable
 {

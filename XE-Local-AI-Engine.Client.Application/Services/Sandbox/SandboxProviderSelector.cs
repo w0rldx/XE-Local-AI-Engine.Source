@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
 ///     Picks the backend serving a workload's <see cref="SandboxRequirements" /> — ADR 0007 Decision 2: a consumer declares what it
-///     needs, this resolves a backend honouring the WHOLE declaration, and when none can it fails closed. No fallback, no downgrade.
+///     needs, this resolves a backend honoring the WHOLE declaration, and when none can it fails closed. No fallback, no downgrade.
 /// </summary>
 /// <remarks>
 ///     Resolution is MINIMAL-SATISFYING, not most-capable-wins: among the backends meeting every declared axis the one with the smallest
@@ -154,8 +154,8 @@ internal static class SandboxProviderSelector
 
     /// <summary>
     ///     The whole of the axis vocabulary in one pure function: the first requirement a backend supplying
-    ///     <paramref name="backendToolchain" /> and advertising <paramref name="capabilities" /> cannot honour, or
-    ///     <see langword="null" /> when it honours all of them.
+    ///     <paramref name="backendToolchain" /> and advertising <paramref name="capabilities" /> cannot honor, or
+    ///     <see langword="null" /> when it honors all of them.
     /// </summary>
     /// <remarks>
     ///     Internal so the architecture test can enumerate declarations against fixed capability sets and fail deterministically offline

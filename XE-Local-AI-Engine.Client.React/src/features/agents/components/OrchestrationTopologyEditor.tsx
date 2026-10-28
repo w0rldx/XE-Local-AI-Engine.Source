@@ -3,8 +3,9 @@ import { IconAlertTriangle, IconPlus } from "@tabler/icons-react";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentDefinition } from "@/core/agents/models/AgentDefinitionModels";
+import type { OrchestrationHandoff, OrchestrationTopology } from "@/core/agents/models/OrchestrationTopologyModels";
 import { OrchestrationHandoffRow } from "@/features/agents/components/OrchestrationTopologyEditor/OrchestrationHandoffRow";
-import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
 import {
 	incapableOrchestrationModels,
 	orchestrationDefinitionsById,
@@ -13,7 +14,6 @@ import {
 	resolveOrchestrationEndpoint,
 	toOrchestrationEndpointValue,
 } from "@/features/agents/models/OrchestrationTopologyEditorDerivations";
-import type { OrchestrationHandoff, OrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 
 interface OrchestrationTopologyEditorProps {
 	// The current structured topology (specialists + edges + knobs). Owned by the parent form.

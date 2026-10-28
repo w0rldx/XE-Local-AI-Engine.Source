@@ -402,7 +402,7 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal("high", codexEffort);
     }
 
-    // Defence in depth for the `auto` reasoning effort. `auto` is resolved into a concrete tier by the node's
+    // Defense in depth for the `auto` reasoning effort. `auto` is resolved into a concrete tier by the node's
     // invocation runner BEFORE the definition is built, so this factory must never see it. If one ever leaks past the
     // runner, it must behave exactly as any UNRECOGNIZED value already does — think:true (reason), no budget marker,
     // no Codex effort, no external marker — so nothing new can reach a provider wire.
@@ -489,10 +489,10 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
     }
 
-    /// <summary>Model-matrix F2: the node's default cap applies only where the request sent no explicit limit.</summary>
+    /// <summary>The node's default cap applies only where the request sent no explicit limit.</summary>
     /// <remarks>
     ///     The cap bounds the ANSWER and adds to the applied reasoning budget, so a high-effort turn is never cut off inside
-    ///     the thinking budget the operator configured (coordinator decision on F2, 2026-10-04).
+    ///     the thinking budget the operator configured.
     /// </remarks>
     [Test]
     [Arguments("high", 65_536, 16_384, null, 24_576 + 16_384, true)]
@@ -621,8 +621,8 @@ public sealed class InvocationAgentFactoryTests
     }
 
     /// <summary>
-    ///     An UNSPECIFIED effort on a thinking model gets the low rung by default: the old flat 8192 let a 0.8B reason
-    ///     for minutes over a greeting (model-matrix F3).
+    ///     An UNSPECIFIED effort on a thinking model gets the low rung by default: a flat 8192 lets a 0.8B reason
+    ///     for minutes over a greeting.
     /// </summary>
     [Test]
     [Arguments(null)]
@@ -1271,7 +1271,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task BuildInlineSkill_AdvertisesEveryResource_AndCarriesTheFrontmatter()
     {
-        // Behaviour, not registration order: MAF renders the <available_resources> block from the resources present when
+        // Behavior, not registration order: MAF renders the <available_resources> block from the resources present when
         // the skill's content is built, so a resource registered too late would be readable but never advertised — the
         // model would have no way to learn it exists. Assert the generated content actually names them.
         var skill = new InvocationSkill
@@ -1540,7 +1540,7 @@ public sealed class InvocationAgentFactoryTests
         // A tightening node policy reaches the resolver as requiresApproval on every offer placeholder, and the
         // resolver wraps each resolved executable. list_tools is appended AFTER that pass, so it is deliberately
         // subject to neither the tighten-only compose nor AllowedToolNames — an in-process listing of names the agent
-        // is already authorised for. This exemption is stated in the design, not discovered here.
+        // is already authorized for. This exemption is stated in the design, not discovered here.
         using var chatClient = new CapturingChatClient();
 
         using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))

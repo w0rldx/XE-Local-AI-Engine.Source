@@ -164,7 +164,7 @@ export function requiresExternalDraftModel(mode: string): boolean {
 	return speculativeModeClasses.get(mode.trim()) === "external-draft";
 }
 
-// `--spec-draft-n-max` (draft tokens per step) is honoured by both draft classes, including draft-mtp; ngram-* modes
+// `--spec-draft-n-max` (draft tokens per step) is honored by both draft classes, including draft-mtp; ngram-* modes
 // size their drafts from their own knobs instead.
 export function usesDraftTokensPerStep(mode: string): boolean {
 	const modeClass = speculativeModeClasses.get(mode.trim());
@@ -842,7 +842,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 	};
 }
 
-// The three switches a profile sets. The page uses this to recognise a hand edit that must clear a pending preset.
+// The three switches a profile sets. The page uses this to recognize a hand edit that must clear a pending preset.
 const externalAccessBooleanFields = new Set<keyof NodeSettingsFieldsForm>([
 	"autoCheckApplicationUpdates",
 	"autoCheckRuntimeUpdates",

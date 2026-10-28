@@ -7,16 +7,16 @@ using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Which connections belong to the bridge. One predicate answers it for both callers — the branch in
-///     <c>ContainerBridgePipeline</c> and the peer guard's own inertness check — because two definitions of "is this
-///     the bridge" that could drift apart is exactly how a request gets judged by one and routed by the other.
-///     <para>
-///         The port alone is not the answer. A desktop launch given <c>--port 18790</c> puts the node's loopback
-///         listener on the bridge's port, and every SPA and API request would be routed into the bridge branch and
-///         answered 401 by a token gate that has nothing to do with them. Such a node opens no bridge at all; this
-///         is the other half of that answer, and it holds even if the refusal is ever bypassed.
-///     </para>
+///     Which connections belong to the bridge. One predicate answers it for both <c>ContainerBridgePipeline</c>'s
+///     branch and the peer guard's inertness check, because two drifting definitions would let a request be judged by
+///     one and routed by the other.
 /// </summary>
+/// <remarks>
+///     The port alone is not the answer: a desktop launch given <c>--port 18790</c> puts the node's loopback listener
+///     on the bridge's port, and every SPA and API request would be answered 401 by the bridge's token gate. Such a
+///     node opens no bridge at all; this is the other half of that answer, and it holds even if the refusal is
+///     bypassed.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ResolvedContainerBridgeEndpointTests
 {

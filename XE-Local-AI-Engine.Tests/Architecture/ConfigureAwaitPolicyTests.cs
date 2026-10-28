@@ -57,7 +57,7 @@ public sealed class ConfigureAwaitPolicyTests
 
     /// <summary>
     ///     The floor on awaited calls the library rule actually inspected (1,080 today). A statement splitter that
-    ///     stopped recognising <c>await</c> would find no violations anywhere and pass in silence.
+    ///     stopped recognizing <c>await</c> would find no violations anywhere and pass in silence.
     /// </summary>
     private const int LibraryAwaitFloor = 900;
 

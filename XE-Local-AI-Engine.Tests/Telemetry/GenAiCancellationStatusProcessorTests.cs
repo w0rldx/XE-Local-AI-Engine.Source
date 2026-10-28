@@ -5,9 +5,8 @@ using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     A gen_ai span that failed only because a user pressed Stop must exit the processor with a non-Error
-///     status (so a cancelled turn is not counted as a service fault), while a genuine failure and a cancellation on a
-///     non-gen_ai source are left untouched.
+///     A gen_ai span that failed only because a user pressed Stop exits the processor with a non-Error status (a
+///     cancelled turn is no service fault); a genuine failure and a non-gen_ai cancellation stay untouched.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GenAiCancellationStatusProcessorTests

@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OpenAI.Responses;
@@ -11,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     On-WIRE tool-calling assertions for the Codex (ChatGPT-subscription) Responses transport. These drive the SAME
 ///     production <see cref="CodexStoreDisabledChatClient" /> wrapper the live send path uses (NOT the inner client
-///     directly), over the <c>BodyCapturingHandler</c> + real Responses-backed <see cref="IChatClient" /> harness the
+///     directly), over the <c>ResponsesBodyCapturingHandler</c> + real Responses-backed <see cref="IChatClient" /> harness the
 ///     sibling <see cref="CodexReasoningOnWireTests" /> / <see cref="CodexStoreFalseOnWireTests" /> use, and assert the
 ///     two requests the stateless tool loop depends on serialize correctly:
 ///     <list type="number">
@@ -147,7 +145,7 @@ public sealed class CodexToolCallingWireTests
             string.Equals(entry.GetString(), "reasoning.encrypted_content", StringComparison.Ordinal));
         AssertEx.True(hasEncryptedInclude, "include[] must still contain \"reasoning.encrypted_content\"");
 
-        // The system prompt was moved to instructions; no system-role input item remains.
+        // The system prompt rides instructions; no system-role input item remains.
         AssertEx.True(root.TryGetProperty("instructions", out var instructions), "request body must contain 'instructions'");
         AssertEx.True(instructions.GetString()?.Contains(SystemPrompt, StringComparison.Ordinal) == true,
             "the system prompt must be carried in 'instructions'");
@@ -265,7 +263,7 @@ public sealed class CodexToolCallingWireTests
 
     private static async Task<string> CaptureRequestBodyAsync(IEnumerable<ChatMessage> messages, ChatOptions options)
     {
-        using var capture = new BodyCapturingHandler();
+        using var capture = new ResponsesBodyCapturingHandler();
         using var httpClient = new HttpClient(capture);
 
         // Build the SAME Responses-backed IChatClient the factory builds, wrapped in the PRODUCTION store-disabling
@@ -287,27 +285,6 @@ public sealed class CodexToolCallingWireTests
         }
 
         return AssertEx.NotNull(capture.RequestBody, "the Responses request body must have been sent");
-    }
-
-    /// <summary>Captures the outbound request body and returns a minimal canned Responses reply.</summary>
-    private sealed class BodyCapturingHandler : HttpMessageHandler
-    {
-        public string? RequestBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            const string CannedResponse =
-                """{"id":"resp_test","object":"response","status":"completed","model":"gpt-5.4","output":[]}""";
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }
 #pragma warning restore OPENAI001

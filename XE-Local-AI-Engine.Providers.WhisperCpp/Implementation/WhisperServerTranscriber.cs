@@ -27,7 +27,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     /// <summary>Never the caller's file name: the daemon prints what it receives, and file names are user content.</summary>
     private const string SubmittedFileName = "audio.wav";
 
-    private static readonly JsonSerializerOptions ResponseSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ResponseSerializerOptions = JsonSerializerOptions.Web;
 
     // Enough of the daemon's error text to name the failure in a log line, never a whole HTML page.
     private const int LoggedErrorBodyChars = 300;
@@ -378,7 +378,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
 
-        // Dispose is deliberately NOT overridden. Stream's own teardown knows nothing about the wrapped handle, so inheriting it is exactly the required behaviour: the multipart content disposes this
+        // Dispose is deliberately NOT overridden. Stream's own teardown knows nothing about the wrapped handle, so inheriting it is exactly the required behavior: the multipart content disposes this
         // wrapper and the caller's stream underneath it is left open, which is what the transcription contract promises.
     }
 

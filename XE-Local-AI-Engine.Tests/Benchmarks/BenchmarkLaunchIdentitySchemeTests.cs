@@ -48,9 +48,8 @@ public sealed class BenchmarkLaunchIdentitySchemeTests
     [Test]
     public void SchemeTwoRowOnASchemeOneBuild_IsDrained()
     {
-        // The reverse skew: a downgrade that left newer work queued. The guard compares with != rather than "older
-        // than", so work from the FUTURE is refused exactly as firmly as work from the past. The build's own constant
-        // cannot be varied at runtime, so the future is expressed as a scheme this build does not compute either.
+        // Reverse skew: a downgrade left newer work queued. The guard compares with !=, refusing FUTURE work as firmly
+        // as past work; the build's constant is fixed, so the future is a scheme this build does not compute either.
         var thrown = AssertEx.Throws<BenchmarkExecutionException>(() =>
             BenchmarkLaunchIdentityScheme.RequireCurrent(Intent(LlamaServerLaunchProjection.IdentitySchemeVersion + 1)));
 

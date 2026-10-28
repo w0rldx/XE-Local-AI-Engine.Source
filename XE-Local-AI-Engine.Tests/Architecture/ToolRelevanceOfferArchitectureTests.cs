@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The structural property the whole tool-relevance offer rests on: <c>list_tools</c> is appended by exactly ONE
-///     production site, the single agent's tool assembly. The send-time hop refuses to filter any array that does not
-///     carry a <c>list_tools</c> instance, so that one append is what decides which arrays can be trimmed at all — an
-///     orchestration participant's array and a spawned sub-agent's array are inert precisely because they lack it. A
-///     second construction site anywhere in product code would silently make those arrays filterable, hiding tools from
-///     a turn that has no escape hatch to get them back. This was previously pinned by grep alone.
+///     The property the tool-relevance offer rests on: exactly ONE production site, the single agent's tool assembly,
+///     appends <c>list_tools</c>, and the send-time hop filters only arrays that carry a <c>list_tools</c> instance.
 /// </summary>
+/// <remarks>
+///     Participant and sub-agent arrays are inert because they lack it; a second construction site would silently make
+///     them filterable, hiding tools from a turn with no escape hatch. This pins it by type, not by grep alone.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ToolRelevanceOfferArchitectureTests
 {

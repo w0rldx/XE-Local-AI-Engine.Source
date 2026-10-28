@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The two-phase skill import pipeline. Phase 1 fetches, extracts, parses, validates and reports without writing;
-///     phase 2 persists the report's materialised payload.
+///     phase 2 persists the report's materialized payload.
 /// </summary>
 /// <remarks>
 ///     Name and description are validated by <see cref="AgentSkillFrontmatter" />, the code MAF itself runs, so
@@ -274,7 +274,7 @@ internal sealed partial class SkillImportService : ISkillImportService
         var problems = new List<string>();
         if (!SkillFrontmatterReader.TryRead(folder.SkillMarkdown, out var frontmatter, out var parseError) || frontmatter is null)
         {
-            // A root-level or pasted SKILL.md has no folder name and its frontmatter name is unreadable, so the row is labelled by
+            // A root-level or pasted SKILL.md has no folder name and its frontmatter name is unreadable, so the row is labeled by
             // the file; an empty name would render a blank row whose only content is the reason it cannot be imported.
             return Unimportable(folder.DirectoryName.Length > 0 ? folder.DirectoryName : "SKILL.md",
                 [parseError ?? "The skill frontmatter could not be read."]);

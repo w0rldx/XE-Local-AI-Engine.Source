@@ -28,7 +28,7 @@ public sealed class NodeStartupSettings
 
     /// <summary>Whether External Apps start with this node: the switch is on AND the catalog listed an application at startup. Only this opens the container bridge.</summary>
     /// <remarks>
-    ///     Rc.3 decision D6: the bridge binds a container-facing, non-loopback address, so an empty catalog keeps it
+    ///     The bridge binds a container-facing, non-loopback address, so an empty catalog keeps it
     ///     closed. The runtime switch, the route family and the hub still follow the stored setting alone.
     /// </remarks>
     public bool ExternalAppsEnabled { get; init; }

@@ -228,11 +228,11 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     /// <summary>
-    ///     A recorded path that merely RESEMBLES the legacy location must never be deleted. The manager compares the
-    ///     canonicalized record for exact Ordinal equality against a path it computes itself, so a traversal that lands
-    ///     elsewhere, a sibling sharing the pinned tag's leaf spelling, and a directory nested below the real bin
-    ///     directory all miss — and take the unrecognised-path branch (record and signal cleared, nothing deleted).
+    ///     A recorded path that merely RESEMBLES the legacy location is never deleted: the manager compares the
+    ///     canonicalized record by exact Ordinal equality against a path it computes, so a near miss clears the record
+    ///     and signal and deletes nothing.
     /// </summary>
+    /// <remarks>Near misses: a traversal landing elsewhere, a sibling with the tag's leaf name, a nested bin.</remarks>
     [Test]
     [Arguments("traversal-escapes-the-pinned-tree")]
     [Arguments("sibling-shares-the-pinned-tag-spelling")]
@@ -275,7 +275,7 @@ public sealed class ManagedSourceBuildSafetyTests
 
         AssertEx.True(File.Exists(survivingSentinel), "The decoy the record pointed at was deleted.");
         AssertEx.True(Directory.Exists(legacyTree), "The real pinned tree was deleted although the record never named it.");
-        // Unrecognised-path behaviour, unchanged: the record and the cached signal go even though no tree does.
+        // Unrecognised-path behavior, unchanged: the record and the cached signal go even though no tree does.
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
         AssertEx.Null(signal.ActiveVariant);
         AssertEx.True(signal.Version > before);

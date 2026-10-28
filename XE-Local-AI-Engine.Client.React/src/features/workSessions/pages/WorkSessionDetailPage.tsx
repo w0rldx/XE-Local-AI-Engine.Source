@@ -48,7 +48,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const { confirm } = useConfirm();
 	const navigate = useNavigate();
 	// One decision for the whole page: the header toggles, the two Drawers and the pane grid all read this. The ref
-	// goes on the layout's frame, because that is the element the panes are actually laid out inside. The centre pane
+	// goes on the layout's frame, because that is the element the panes are actually laid out inside. The center pane
 	// is a whole chat: below WORK_SESSION_CHAT_MIN_WIDTH its composer stacked four rows deep, so the page stays on the
 	// single-pane layout until the chat gets that much.
 	const { ref: paneContainerRef, isNarrow: isMobile } = usePaneLayoutMode({ mainMinWidth: WORK_SESSION_CHAT_MIN_WIDTH });

@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behavioural tests for <see cref="MemorySemanticDeduplicator" />: a paraphrase (cosine-near an existing memory) is
+///     Behavioral tests for <see cref="MemorySemanticDeduplicator" />: a paraphrase (cosine-near an existing memory) is
 ///     flagged; a genuinely distinct candidate is kept; a not-<c>IsConfident</c> resolution (or an embedder failure)
 ///     returns NotApplied so the caller keeps every candidate (no mass-dedup on outage); the configured threshold is the
 ///     deciding knob; scope confines the comparison; and existing-memory vectors are cached (RAM-only) while the
@@ -221,7 +221,7 @@ public sealed class MemorySemanticDeduplicatorTests
         };
     }
 
-    // Deterministic text -> vector map so cosine (and thus threshold behaviour) is fully controllable and Ollama-free.
+    // Deterministic text -> vector map so cosine (and thus threshold behavior) is fully controllable and Ollama-free.
     private sealed class VectorMap
     {
         private readonly Dictionary<string, float[]> _byText = new(StringComparer.Ordinal);

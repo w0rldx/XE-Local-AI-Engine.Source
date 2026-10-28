@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 /// <summary>
 ///     The scope factory the publishing store opens a cost collection on, with the two services that collection asks
 ///     for and a count of the scopes it took and gave back.
-///     <para>
-///         Hand-written rather than a real container: the point under test is that the collection gets a scope of its
-///         OWN and holds it until it finishes — including past the deadline that abandoned it — and the counts are how
-///         a test says that. Both services are internal to the application assembly, which rules out a substitute.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Hand-written rather than a real container: the point under test is that the collection gets a scope of its OWN
+///     and holds it until it finishes, including past the deadline that abandoned it, and the counts are how a test
+///     says that. Both services are internal to the application assembly, which rules out a substitute.
+/// </remarks>
 internal sealed class RecordingTelemetryScopeFactory : IServiceScopeFactory
 {
     private readonly IDevWorkflowStore _reads;

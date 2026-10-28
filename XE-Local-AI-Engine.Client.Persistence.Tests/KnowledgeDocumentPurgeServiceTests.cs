@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
 ///     The delete guarantee, proven on the real e_sqlite3 runtime connection under the foreign-key enforcement the node
-///     really runs (it does not run with enforcement off, whatever this suite used to claim). The purge service deletes
+///     really runs (it never runs with enforcement off). The purge service deletes
 ///     every dependent row in child-to-parent order inside one transaction, and the chunk delete fires the FTS delete
 ///     trigger so purged content is no longer searchable. Each test seeds a full document graph with real rows (which
 ///     fires the FTS insert trigger) plus a second document as a control, runs the purge, then asserts the unfiltered

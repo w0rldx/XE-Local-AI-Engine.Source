@@ -6,7 +6,7 @@ using Docker.DotNet.Models;
 /// <summary>Turns the daemon's per-layer pull stream into one progress figure a user can read.</summary>
 /// <remarks>
 ///     The daemon emits hundreds of messages a second across every layer at once, and a hub relaying each would
-///     spend the pull serialising status text, so emission is throttled with a final report — the last state is
+///     spend the pull serializing status text, so emission is throttled with a final report — the last state is
 ///     never the one that was dropped. The daemon also reports a byte total for some layers and not others, so a
 ///     zero <see cref="ContainerPullProgress.TotalBytes" /> means "the daemon did not say" and a caller renders the
 ///     layer counts rather than a false percentage.

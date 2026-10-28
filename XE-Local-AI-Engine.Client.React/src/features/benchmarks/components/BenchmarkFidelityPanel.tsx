@@ -14,11 +14,9 @@ import type {
 	BenchmarkProjectFidelityDraft,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkFidelityChunkLimits } from "@/features/benchmarks/models/BenchmarkModels";
-import {
-	useBenchmarkKldDiskEstimate,
-	useClearBenchmarkFidelityCache,
-	useUpdateBenchmarkProjectFidelity,
-} from "@/features/benchmarks/queries/useBenchmarks";
+import { useBenchmarkKldDiskEstimate } from "@/features/benchmarks/queries/useBenchmarks";
+import { useClearBenchmarkFidelityCache } from "@/features/benchmarks/queries/useBenchmarkRunMutations";
+import { useUpdateBenchmarkProjectFidelity } from "@/features/benchmarks/queries/useBenchmarkProjectMutations";
 
 /**
  * The disk side of the quant-fidelity axis. Perplexity costs nothing but a pass over a shipped corpus; KL divergence

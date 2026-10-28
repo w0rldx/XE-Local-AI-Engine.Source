@@ -13,7 +13,7 @@ public enum RunCancellationOutcome
     AlreadyTerminal = 1,
 
     /// <summary>
-    ///     Cancellation was requested and the run was active in Quartz: its <c>CancellationToken</c> has been signalled.
+    ///     Cancellation was requested and the run was active in Quartz: its <c>CancellationToken</c> has been signaled.
     ///     The handler will move the run to <c>Cancelled</c> once it observes the token.
     /// </summary>
     Requested = 2,

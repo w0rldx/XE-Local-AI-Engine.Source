@@ -441,9 +441,8 @@ public sealed class TrainingEvaluationStoreTests : IDisposable
         var runs = new TrainingRunStore(context, TimeProvider.System);
         var evaluation = await evaluations.CreateAndEnqueueAsync(Command(fixture));
 
-        // The training run's own work item was already claimed and terminalized by the fixture, so the evaluation is
-        // the only queued row. A run-scoped claim must decline it rather than run it without the runtime-mutation
-        // lease the run branch holds — that is what makes "acquire the right locks, then claim" safe.
+        // The fixture already terminalized the run's own work item, so the evaluation is the only queued row; a
+        // run-scoped claim declines it rather than run it without the run branch's runtime-mutation lease.
         AssertEx.Null(await runs.ClaimNextAsync(TrainingWorkKind.TrainingRun), "A run-scoped claim must not take an evaluation.");
 
         var claimed = AssertEx.NotNull(await runs.ClaimNextAsync(TrainingWorkKind.EvaluationRun));

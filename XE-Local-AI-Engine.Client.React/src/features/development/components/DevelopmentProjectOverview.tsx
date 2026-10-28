@@ -137,7 +137,7 @@ export function DevelopmentProjectOverview({
 			</Group>
 			{nextAction.error ? <InlineErrorAlert message={nextAction.error} /> : null}
 			{/* The reason now also arrives for ChangesRequested, which is a rework round rather than a stand-down, so
-			    the alert takes the status badge's own colour instead of always reading as red. */}
+			    the alert takes the status badge's own color instead of always reading as red. */}
 			{task.blockedReason ? <Alert color={statusColor(task.status)}>{task.blockedReason}</Alert> : null}
 		</SectionCard>
 	);

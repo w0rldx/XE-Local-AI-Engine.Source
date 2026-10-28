@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useReportProblem } from "@/features/diagnostics/hooks/useReportProblem";
 
 export interface ReportProblemButtonProps {
-	/** `icon` renders a compact ActionIcon (header bar); `button` renders a labelled Button. */
+	/** `icon` renders a compact ActionIcon (header bar); `button` renders a labeled Button. */
 	readonly variant?: "icon" | "button";
 	/** Invoked after a snapshot is captured successfully — e.g. navigate to the Diagnostics panel. */
 	readonly onReported?: () => void;

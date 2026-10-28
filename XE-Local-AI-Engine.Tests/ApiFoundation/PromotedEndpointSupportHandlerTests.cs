@@ -74,7 +74,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     }
 
     /// <summary>
-    ///     The import mapper's status split, which used to be repeated as a catch in both import endpoints. Every arm
+    ///     The import mapper's status split, shared by both import endpoints instead of a catch in each. Every arm
     ///     is asserted because the codes are the contract the SPA's import flow branches on.
     /// </summary>
     [Test]

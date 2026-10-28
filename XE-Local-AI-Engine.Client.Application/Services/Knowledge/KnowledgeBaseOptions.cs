@@ -75,7 +75,7 @@ public sealed class KnowledgeBaseOptions
     ///     The scale is the raw llama-server <c>relevance_score</c> of the recommended reranker, bge-reranker-v2-m3
     ///     (roughly -11 to +7), and is model-specific: another reranker needs its own value (a 0 to 1 scorer such as
     ///     qwen3 would read weak on every query). The default sits between the measured near-miss and answerable top
-    ///     scores of the bge live rounds. Only a reranked result gets a verdict.
+    ///     scores measured with bge. Only a reranked result gets a verdict.
     /// </remarks>
     public double WeakMatchRerankScoreThreshold { get; set; } = 0.75;
 
@@ -180,7 +180,7 @@ public sealed class KnowledgeBaseOptions
     /// <remarks>
     ///     <see cref="RankFusionStrategy.Rrf" /> is classic score-agnostic Reciprocal Rank Fusion, rank position only.
     ///     <see cref="RankFusionStrategy.ScoreAware" /> (default) additionally tilts each fused contribution by the arm's
-    ///     min-max normalized relevance score, so a marginal rank-1 hit no longer fuses identically to a strong one, and
+    ///     min-max normalized relevance score, so a marginal rank-1 hit does not fuse identically to a strong one, and
     ///     degrades to pure RRF whenever an arm carries no usable score spread — never worse than
     ///     <see cref="RankFusionStrategy.Rrf" />. Independent of the reranker, which still rescores the fused pool.
     /// </remarks>

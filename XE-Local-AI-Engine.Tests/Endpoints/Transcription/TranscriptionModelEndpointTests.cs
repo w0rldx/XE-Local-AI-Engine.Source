@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The four catalogue routes. Two rules earn most of these cases: an unknown model id is rejected at the boundary
+///     The four catalog routes. Two rules earn most of these cases: an unknown model id is rejected at the boundary
 ///     rather than reaching the coordinator, and a null selection is a VALID request that clears the override rather
 ///     than a missing field.
 /// </summary>

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 /// <remarks>
 ///     It must finish before this node's first MXC launch, or it strips that launch's live grant: <c>AddNodeApplication</c> registers it
 ///     as the FIRST hosted service, and hosted services start sequentially in registration order, before Kestrel serves a request. A
-///     second engine process on the box can still strip a live grant; that command fails closed. One node per data directory is supported.
+///     second engine process on the host can still strip a live grant; that command fails closed. One node per data directory is supported.
 /// </remarks>
 public sealed class MxcAclResidueSweepService : IHostedService
 {

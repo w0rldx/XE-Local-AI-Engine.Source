@@ -14,7 +14,7 @@
 // behaves identically on every platform.
 //
 // Only an ABSENT locale argument is redirected. A call that names its locale explicitly is passed through
-// untouched, so a test can still assert genuinely locale-specific behaviour.
+// untouched, so a test can still assert genuinely locale-specific behavior.
 
 const TEST_LOCALE = "en-US";
 

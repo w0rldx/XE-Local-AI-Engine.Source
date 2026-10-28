@@ -63,9 +63,9 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 	const [editOpened, setEditOpened] = useState(false);
-	// Seeded once from `?tab=`, sticky after that. Both tab strips write the same search param, so reading the centre
+	// Seeded once from `?tab=`, sticky after that. Both tab strips write the same search param, so reading the center
 	// pane straight off it meant a click on Events threw the operator back to the graph. Accepted drift: a reload after
-	// a side-tab click opens the centre on the graph again, because the param no longer says otherwise.
+	// a side-tab click opens the center on the graph again, because the param no longer says otherwise.
 	const [centreTab, setCentreTab] = useState<"graph" | "nodes">(selection.tab === "nodes" ? "nodes" : "graph");
 	// Which template the operator is considering. Local rather than a search param: it is a pre-start preview, and it
 	// stops existing the moment a run does.
@@ -453,7 +453,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 				</Group>
 				{deleteError ? <InlineErrorAlert variant="light" message={deleteError} data-testid="dev-workflow-delete-error" /> : null}
 				{/* Both side surfaces reach a phone through the header's two toggles, so the narrow viewport keeps the
-				    centre pane alone rather than stacking anything above it. */}
+				    center pane alone rather than stacking anything above it. */}
 				<ResponsivePaneLayout
 					isNarrow={isMobile}
 					narrowMode="mainOnly"

@@ -6,7 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 
-/// <summary>The small always-on-top command overlay on the engine's <see cref="Route" /> page (ADR 0013, 2026-10-15).</summary>
+/// <summary>The small always-on-top command overlay on the engine's <see cref="Route" /> page (ADR 0013).</summary>
 /// <remarks>It is a <see cref="DesktopWindow" />, so origin, profile, document policy and navigation guard are the main
 ///     window's. Escape, focus loss and closing only hide it; <see cref="DisposeAsync" /> is the one real close.</remarks>
 internal sealed class DesktopCommandWindow : IAsyncDisposable

@@ -63,7 +63,7 @@ public sealed class SdGpuBackendSelectorTests
     [Test]
     public async Task SelectBackendAsync_WindowsNvidia_ConsultsCudaProbe_AndSelectsCudaWhenDevicePresent()
     {
-        // The Windows branch is no longer blind: it asks the CUDA probe before committing to the CUDA prebuilt.
+        // The Windows branch is not blind: it asks the CUDA probe before committing to the CUDA prebuilt.
         var probe = new FakeCudaDeviceProbe(hasDevice: true);
         var selector = new SdGpuBackendSelector(Profiler(GpuVendor.Nvidia), isWindows: true, new ThrowingVulkanDeviceProbe(), probe);
 
@@ -76,7 +76,7 @@ public sealed class SdGpuBackendSelectorTests
     [Test]
     public async Task SelectBackendAsync_WindowsNvidia_ZeroCudaDevices_FallsBackToVulkan_AndWarns()
     {
-        // The tester box: nvidia-smi reports an NVIDIA GPU, no CUDA device enumerates, and sd-server exited on every
+        // nvidia-smi reports an NVIDIA GPU, no CUDA device enumerates, and the CUDA sd-server exits on every
         // spawn. Vulkan is served instead, and the reason is stated once at Warning.
         var logger = new RecordingLogger<SdGpuBackendSelector>();
         var selector = new SdGpuBackendSelector(Profiler(GpuVendor.Nvidia),

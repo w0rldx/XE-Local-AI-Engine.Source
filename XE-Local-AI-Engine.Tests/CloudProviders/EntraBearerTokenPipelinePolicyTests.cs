@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the outbound Entra ID bearer-token pipeline policy: a fresh token is fetched per call and set as
-///     <c>Authorization: Bearer &lt;token&gt;</c>, the requested scope is propagated to the credential, and it
-///     composes with <see cref="CustomHeaderPipelinePolicy" /> without either policy clobbering the other's header.
+///     Covers the outbound Entra ID bearer-token pipeline policy: each call fetches a fresh token and sets
+///     <c>Authorization: Bearer &lt;token&gt;</c>, the requested scope reaches the credential, and it composes with
+///     <see cref="CustomHeaderPipelinePolicy" /> without clobbering either header.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class EntraBearerTokenPipelinePolicyTests

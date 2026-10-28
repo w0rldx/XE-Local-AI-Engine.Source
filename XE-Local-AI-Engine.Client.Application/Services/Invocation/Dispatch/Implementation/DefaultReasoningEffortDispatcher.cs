@@ -170,7 +170,7 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
         try
         {
             // Swap gate 1. The turn's data was admitted against the resolved model's egress posture, so replacing a
-            // cloud model would move it where no gate authorised. Unresolved trust counts as cloud: fail-closed.
+            // cloud model would move it where no gate authorized. Unresolved trust counts as cloud: fail-closed.
             if (!await IsNodeLocalAsync(request.ResolvedModel, cancellationToken))
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.CloudNoSwap);
@@ -184,7 +184,7 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
             }
 
             // The small model would have to drive a tool loop against an offer that was ranked, resolved and
-            // authorised for the big one. The TIER still stands — this refuses only the swap.
+            // authorized for the big one. The TIER still stands — this refuses only the swap.
             if (request.OfferedToolCount > 0)
             {
                 return SwapResolution.Refused(ReasoningDispatchReasons.ToolsNoSwap);

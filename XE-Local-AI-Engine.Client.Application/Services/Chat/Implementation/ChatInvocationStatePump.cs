@@ -108,7 +108,7 @@ public sealed class ChatInvocationStatePump
         }
 
         // Persists one snapshot's content/reasoning delta. Emits nothing — the client was already fed by
-        // EmitDeltaAsync on its own cadence, and a persisted row is no longer needed to build a delta frame.
+        // EmitDeltaAsync on its own cadence, and a delta frame never needs a persisted row.
         async Task PersistPartialAsync(InvocationState snapshotToFlush)
         {
             var flush = await _invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, persistCursor, cancellationToken);

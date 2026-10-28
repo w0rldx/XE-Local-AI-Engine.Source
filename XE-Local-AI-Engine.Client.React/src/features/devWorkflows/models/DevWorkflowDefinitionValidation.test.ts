@@ -502,7 +502,7 @@ describe("validateDevWorkflowGraph", () => {
 	});
 
 	it("counts the entry node's own property, because a template may START with the gate or with the validation", () => {
-		// Both shapes are valid and both were 400s under a fixpoint initialised false on the entry.
+		// Both shapes are valid and both were 400s under a fixpoint initialized false on the entry.
 		expect(
 			validateDevWorkflowGraph({
 				schemaVersion: 1,

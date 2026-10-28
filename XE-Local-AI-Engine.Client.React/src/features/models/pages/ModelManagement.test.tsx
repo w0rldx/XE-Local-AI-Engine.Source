@@ -136,8 +136,9 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { toast } from "@/core/ui/notifications/Toast";
 import "@/i18n";
+
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const hardwareProfile = {
@@ -280,7 +281,7 @@ describe("ModelManagement", () => {
 		expect(await within(dialog).findByText("Context length: 8,192")).toBeTruthy();
 	});
 
-	// D10: the list endpoint appends external-provider registrations so the chat picker can offer them, but this page is
+	// The list endpoint appends external-provider registrations so the chat picker can offer them, but this page is
 	// the model STORE. An external model has no file to delete, no kind override to reset and no store default to hold,
 	// so it must never reach the installed table — where every row carries exactly those actions.
 	it("keeps external-provider models out of the installed table and its actions", async () => {

@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
 using Microsoft.Mxc.Sdk.V1;
 
-/// <summary>Read-only view of an MXC child's raw stdout whose async reads honour their token.</summary>
+/// <summary>Read-only view of an MXC child's raw stdout whose async reads honor their token.</summary>
 /// <remarks>
 ///     The SDK's stdout Read is synchronous and ignores the token, so an idle child would hold a reader's teardown until it wrote or
 ///     exited. The read runs on the thread pool; cancellation stops the wait and closes stdout through the SDK's closer, which ends the

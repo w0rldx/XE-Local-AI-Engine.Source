@@ -419,7 +419,7 @@ describe("CloudProviders page — OpenAI-compatible connections", () => {
 		expect(screen.getByText("Reachable")).toBeTruthy();
 	});
 
-	// D4: a routing failure warns with the exact URL tried, but the save stays enabled and goes through.
+	// A routing failure warns with the exact URL tried, but the save stays enabled and goes through.
 	it("warns on a no-route probe with the tried URL and still saves", async () => {
 		generatedMock.probeFn.mockResolvedValue({
 			reachable: true,

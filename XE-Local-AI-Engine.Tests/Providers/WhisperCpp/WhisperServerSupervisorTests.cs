@@ -138,7 +138,7 @@ public sealed class WhisperServerSupervisorTests
     {
         // The third of the four unwinds the admission ticket has to survive, and the one with its own code path: the
         // child dies during readiness rather than readiness simply running out. A ticket leaked here would wedge every
-        // llama and image load on the box behind a process that no longer exists.
+        // llama and image load on the host behind a process that no longer exists.
         var admission = new RecordingGpuLoadAdmission();
         var probe = new FakeWhisperReadinessProbe
         {
@@ -163,8 +163,8 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task EnsureRunning_ChildLosesThePortRace_SaysThePortWasTakenNotThatTheModelIsBroken()
     {
-        // The port is probed free and then handed to the child; a process binding it in between used to be reported as
-        // an incompatible or oversized model.
+        // The port is probed free and then handed to the child; a process binding it in between is reported as a lost
+        // port race, never as an incompatible or oversized model.
         var probe = new FakeWhisperReadinessProbe
         {
             ReadinessGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
@@ -185,7 +185,7 @@ public sealed class WhisperServerSupervisorTests
     public async Task EnsureRunning_CpuBackend_NeverTouchesLoadAdmission()
     {
         // Brief test 3. A CPU load does not contend for VRAM, so taking the shared gate would serialize it against
-        // every GPU load on the box for no reason. The forbidden gate throws if it is touched at all.
+        // every GPU load on the host for no reason. The forbidden gate throws if it is touched at all.
         await using var harness = new WhisperSupervisorHarness(loadAdmission: new ForbiddenGpuLoadAdmission());
 
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
@@ -260,7 +260,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task Load_OnCudaBackend_AcquiresAndReleasesLoadAdmission()
     {
-        // An in-place load initialises GPU weights exactly as a spawn does, so skipping the gate here would let a
+        // An in-place load initializes GPU weights exactly as a spawn does, so skipping the gate here would let a
         // model switch race another runtime's load.
         var admission = new RecordingGpuLoadAdmission();
         await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
@@ -485,7 +485,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task EnsureRunning_ModelFileMissing_ThrowsTypedAndNeverLaunches()
     {
-        // The catalogue row exists but the weights were never downloaded. Saying so beats spawning a daemon that
+        // The catalog row exists but the weights were never downloaded. Saying so beats spawning a daemon that
         // would fail to load and then die.
         await using var harness = new WhisperSupervisorHarness();
         File.Delete(Path.Combine(harness.ModelsDirectory, "base", "ggml-base.bin"));
@@ -589,7 +589,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task ReportRequestFailure_DaemonExited_WarnsOnceWithExitCodeAndTail_AndRespawnsNext()
     {
-        // The 2026-09-22 tester box: the daemon reported ready, then died on its first request. The operator-facing message
+        // The daemon reports ready, then dies on its first request. The operator-facing message
         // names the exit; the stderr tail goes to the Warning only.
         var logger = new RecordingLogger<WhisperServerProcessSupervisor>();
         await using var harness = new WhisperSupervisorHarness(logger: logger);
@@ -670,7 +670,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task ReportRequestFailure_PinnedCudaDaemonExited_LatchesTheCpuFallbackWithTheExitCode()
     {
-        // The tester box: the driver is present, so the nvcuda.dll probe passes, and only the daemon's death reveals that no
+        // The driver is present, so the nvcuda.dll probe passes, and only the daemon's death reveals that no
         // device enumerates. The latch is what stops every respawn from picking the cuBLAS build again.
         await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: true),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));
@@ -685,7 +685,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task ReportRequestFailure_PinnedCudaDaemonDiedOfSilentWindowLanguageDetection_DoesNotLatchTheCpuFallback()
     {
-        // The 2026-09-28 Windows tester log: VAD kept no speech, auto-detect was asked for, and the daemon died with an access
+        // On Windows, VAD keeps no speech, auto-detect is asked for, and the daemon dies with an access
         // violation on CUDA and CPU alike. That is the upstream language-detection bug, not a CUDA failure.
         await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: true),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));

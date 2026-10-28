@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The withdrawal half of <see cref="AskUserToolOffer" /> — the union half is pinned through the resolvers that
-///     call it. Both halves live in one type so they cannot drift, and these tests hold the pure list/spec rewrites; the
-///     seam that decides WHEN to withdraw is pinned in <c>NodeChatStreamServiceTests</c> and <c>WorkSessionStepLoopTests</c>.
+///     The withdrawal half of <see cref="AskUserToolOffer" />; its resolvers pin the union half, and one type holds
+///     both so they cannot drift. Tested here: the list/spec rewrites; WHEN to withdraw is pinned in
+///     <c>NodeChatStreamServiceTests</c> and <c>WorkSessionStepLoopTests</c>.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AskUserToolOfferTests

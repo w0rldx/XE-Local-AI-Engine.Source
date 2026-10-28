@@ -13,10 +13,9 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
-///     Shared fakes for the <see cref="ImageServerProcessSupervisor" /> tests: a launcher that records launch specs and
-///     hands back controllable in-memory handles (no real <c>sd-server</c>), a readiness probe with toggleable
-///     readiness + liveness, a fixed model store / backend selector / binary manager, and an advanceable clock. Mirrors
-///     the LlamaServer supervisor test doubles (reduced: no role split, no profiling).
+///     Shared fakes for the <see cref="ImageServerProcessSupervisor" /> tests: a launcher recording specs and returning
+///     controllable in-memory handles (no real <c>sd-server</c>), a toggleable readiness/liveness probe, a fixed store,
+///     selector and binary manager, and an advanceable clock.
 /// </summary>
 internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 {

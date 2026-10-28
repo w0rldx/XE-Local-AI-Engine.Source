@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Invariants of the static weight catalogue. The ascending-footprint ordering is the load-bearing one: the
-///     recommendation walks the list and keeps the last fitting row, so a re-ordering would silently change every
-///     recommendation this node makes without failing anything else.
+///     Invariants of the static weight catalog. Ascending footprint order is load-bearing: the recommendation keeps
+///     the last fitting row, so a re-ordering silently changes every recommendation without failing anything else.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WhisperModelCatalogTests

@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     authoritative state, which is why a restart costs at most the work in flight.
 /// </summary>
 /// <remarks>
-///     The parsed-graph cache is a cost optimisation and nothing else. Every node-run status write happens inside a
+///     The parsed-graph cache is a cost optimization and nothing else. Every node-run status write happens inside a
 ///     serialized <see cref="AdvanceOnceAsync" /> call — the invariant the design rests on: lane work only produces a
 ///     pollable result and never transitions a row itself, so the only other writer to a run is the human-decision
 ///     path, which the store's <c>Any</c> version sentinel exists for. Advancement is a pure database decision taking
@@ -57,7 +57,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private const int MaxDecisionComment = 500;
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>Written by the gate itself, so an upstream document carrying one of these names does not shadow it.</summary>
     private static readonly HashSet<string> ReservedGateProperties = new(StringComparer.Ordinal)
@@ -637,7 +637,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                     FailureClass = target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
                     TerminalReason = DecidedReason(target, settled.Comment),
                     IncrementAttempt = incrementAttempt,
-                    // EVERY Retry widens the cap by one, not only one at the cap — the ruling as written. The attempt it buys carries the operator's reason; the automatic ones it enables
+                    // EVERY Retry widens the cap by one, not only one at the cap. The attempt it buys carries the operator's reason; the automatic ones it enables
                     // do not. The run-wide MaxTotalAttempts budget still bounds everything, counting both alike, and no widening touches it. Nothing else sets this flag.
                     WidenMaxAttempts = incrementAttempt,
                     // A retry gets a NEW session: resuming the one that just failed resumes the context that failed with it. Releasing it here also stops the fresh attempt being

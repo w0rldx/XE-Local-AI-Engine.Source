@@ -358,8 +358,8 @@ public sealed class PureRequestCheckRefusalContractTests
     }
 
     /// <summary>
-    ///     R7-01: a missing version field binds to 0, which no row has, and used to answer 409 VersionConflict
-    ///     although nothing changed. It is a 400 naming the field, ahead of the unknown-id 404.
+    ///     A missing version field binds to 0, which no row has, and must not answer 409 VersionConflict when
+    ///     nothing changed. It is a 400 naming the field, ahead of the unknown-id 404.
     /// </summary>
     [Test]
     [Arguments("PUT", "/benchmarks/projects/{0}", "expectedVersion")]

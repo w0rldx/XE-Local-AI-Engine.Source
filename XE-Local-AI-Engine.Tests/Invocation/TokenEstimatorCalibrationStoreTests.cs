@@ -19,7 +19,7 @@ public sealed class TokenEstimatorCalibrationStoreTests
     {
         var store = new TokenEstimatorCalibrationStore();
 
-        // Byte-identical behaviour for a model nothing has been recorded for is the whole safety argument for this
+        // Byte-identical behavior for a model nothing has been recorded for is the whole safety argument for this
         // channel: neutral means the two budgeters compute the window they always did.
         AssertEx.Equal(TokenEstimatorCalibrationStore.NeutralObservedCorrection, store.ResolveObservedCorrection(Model));
         AssertEx.Equal(TokenEstimatorCalibrationStore.NeutralObservedCorrection, store.ResolveObservedCorrection(modelName: null));
@@ -77,7 +77,7 @@ public sealed class TokenEstimatorCalibrationStoreTests
     {
         var store = new TokenEstimatorCalibrationStore();
 
-        // The live 2026-08-24 shape: the budgeters believed 64,512 where the server counted 72,343 — ~12% optimistic.
+        // An observed shape: the budgeters believe 64,512 where the server counts 72,343 — ~12% optimistic.
         store.RecordObservedUsage(Model, estimatedTokens: 64_512, observedInputTokens: 72_343);
 
         // Folded from neutral, NOT taken raw. Taking the first sample raw would apply it at an effective alpha of 1.0,
@@ -94,8 +94,8 @@ public sealed class TokenEstimatorCalibrationStoreTests
     {
         var store = new TokenEstimatorCalibrationStore();
 
-        // The regression this seeding exists to prevent: a single absurd round used to land the correction on 2.0
-        // outright and take ~10 rounds to decay out of it, quietly halving every window in between.
+        // The regression this seeding exists to prevent: a single absurd round landing the correction on 2.0 outright,
+        // which then takes ~10 rounds to decay out of it, quietly halving every window in between.
         store.RecordObservedUsage(Model, estimatedTokens: 10_000, observedInputTokens: 10_000_000);
 
         var correction = store.ResolveObservedCorrection(Model);
@@ -267,7 +267,7 @@ public sealed class TokenEstimatorCalibrationStoreTests
     [Test]
     public void ApplyEstimateMargins_NeverDividesByMoreThanTheBound()
     {
-        // Defence in depth: the store clamps what it stores, so an out-of-bounds correction can only reach here from a
+        // Defense in depth: the store clamps what it stores, so an out-of-bounds correction can only reach here from a
         // future caller. It must not be able to collapse the window to nothing.
         var margined = TokenEstimatorCalibrationStore.ApplySafetyMargin(65_536);
 

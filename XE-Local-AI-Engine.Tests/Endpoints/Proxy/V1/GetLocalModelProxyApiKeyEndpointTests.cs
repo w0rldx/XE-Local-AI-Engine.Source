@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Client.Endpoints.Proxy.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <c>GET proxy/key</c>: operator-gated, and answers 200 with <c>configured=false</c> (not 404) when no credential
-///     exists so the settings page renders the empty state from one call. It also carries the live-request base URL an
-///     external tool is configured with.
+///     <c>GET proxy/key</c>: operator-gated; answers 200 with <c>configured=false</c> (not 404) when no credential
+///     exists, so the settings page renders the empty state from one call, and carries the live-request base URL.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class GetLocalModelProxyApiKeyEndpointTests

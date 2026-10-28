@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///     <see cref="ForeignInstallContainers" /> is the one number not about this installation's own rows: it counts
 ///     containers wearing this feature's owner label under a DIFFERENT install id — a data directory that moved, most
 ///     often — which are deliberately never removed and would otherwise be invisible while holding loopback ports.
-///     <see cref="RowsFailed" /> counts rows whose own judgement threw; those keep the status they had and the pass
+///     <see cref="RowsFailed" /> counts rows whose own judgment threw; those keep the status they had and the pass
 ///     carries on, because one unjudgeable instance must not cost every later row its verdict.
 /// </remarks>
 public sealed record ExternalAppReconcileSummary

@@ -198,7 +198,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // ONE row's judgement, not the pass: a container removed between list and inspect, or a snapshot the
+                // ONE row's judgment, not the pass: a container removed between list and inspect, or a snapshot the
                 // policy refuses, would otherwise skip every later row and the orphan sweep, and answer 500.
                 failed++;
                 _logger.LogWarning(exception, "Judging external application instance {InstanceId} failed; it keeps its status and the pass continues.", row.Id);
@@ -290,7 +290,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         };
     }
 
-    /// <summary>Branch A, uninstall arm: finishes what the user already authorised, in the order the pipeline uses.</summary>
+    /// <summary>Branch A, uninstall arm: finishes what the user already authorized, in the order the pipeline uses.</summary>
     /// <remarks>
     ///     Resuming a destructive action somebody asked for is not a new destructive decision, and the rows go
     ///     before the directory, so a directory that cannot be removed leaves a warning rather than an unreachable
@@ -527,7 +527,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
 
     /// <summary>
     ///     The user asked for this instance to be stopped and something is running it. Stopping is the one daemon
-    ///     mutation this branch makes, and it is the mutation that honours the desired state rather than overriding it.
+    ///     mutation this branch makes, and it is the mutation that honors the desired state rather than overriding it.
     /// </summary>
     private async Task<bool> StopStrayContainersAsync(IExternalAppInstanceStore store,
         IContainerRuntime runtime,

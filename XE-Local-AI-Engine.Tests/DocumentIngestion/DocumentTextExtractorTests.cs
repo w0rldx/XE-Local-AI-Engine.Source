@@ -208,7 +208,7 @@ public sealed class DocumentTextExtractorTests
     [Test]
     public async Task Extractor_WhenHtmlProseHasBareLessThan_KeepsEveryParagraph()
     {
-        // A bare '<' used to open a "tag" that the apostrophe then held open across both paragraphs, dropping them silently.
+        // A bare '<' must not open a "tag" the apostrophe then holds open across both paragraphs, dropping them silently.
         const string html = "<p>if a < b, it's true</p><p>Next paragraph's text</p>";
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(html));
 

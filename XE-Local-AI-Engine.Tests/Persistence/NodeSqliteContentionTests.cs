@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Instrumentation: classifies SQLITE_BUSY / SQLITE_LOCKED failures and records them on the
-///     <c>sqlite_busy_total</c> counter with bounded dimensions. A real busy is provoked with two connections so the
-///     classifier is exercised against an actual <see cref="SqliteException" />, not a synthetic one.
+///     Classifies SQLITE_BUSY / SQLITE_LOCKED failures and records them on the <c>sqlite_busy_total</c> counter with
+///     bounded dimensions. Two connections provoke a real busy, so the classifier sees an actual
+///     <see cref="SqliteException" />.
 /// </summary>
 [NotInParallel]
 [Category(TestCategories.Integration)]

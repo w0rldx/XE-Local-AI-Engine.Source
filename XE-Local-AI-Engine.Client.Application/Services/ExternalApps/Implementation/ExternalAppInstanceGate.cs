@@ -19,13 +19,13 @@ internal sealed class ExternalAppInstanceGate
     /// <summary>Test seam: how many keys currently hold an entry, so <see cref="Forget" /> is provable.</summary>
     internal int TrackedCount => _gates.Count;
 
-    /// <summary>The key one instance's operations serialise on.</summary>
+    /// <summary>The key one instance's operations serialize on.</summary>
     public static string InstanceKey(Guid instanceId)
     {
         return instanceId.ToString("N", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>The key install's already-installed check serialises on. Prefixed so it cannot collide with an instance key.</summary>
+    /// <summary>The key install's already-installed check serializes on. Prefixed so it cannot collide with an instance key.</summary>
     public static string ApplicationKey(string applicationId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationId);

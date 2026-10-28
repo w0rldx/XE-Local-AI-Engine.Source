@@ -12,7 +12,7 @@ interface TranscriptionSessionListProps {
 	readonly onDelete: (session: TranscriptionSessionView) => void;
 }
 
-// Status colours: a finished transcript is green, a refused or failed one red, anything still moving neutral.
+// Status colors: a finished transcript is green, a refused or failed one red, anything still moving neutral.
 const statusColors: Record<TranscriptionSessionView["status"], string> = {
 	Created: "gray",
 	Transcribing: "blue",

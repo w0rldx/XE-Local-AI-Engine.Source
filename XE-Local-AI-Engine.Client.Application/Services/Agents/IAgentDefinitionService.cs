@@ -56,7 +56,7 @@ public sealed class AgentDefinitionValidationException : Exception
 
 /// <summary>
 ///     Thrown when a name key matches more than one definition. Names are not unique (existing databases already hold
-///     duplicates), so a name-keyed lookup refuses to pick one rather than acting on whichever row came first (I-D6).
+///     duplicates), so a name-keyed lookup refuses to pick one rather than acting on whichever row came first.
 /// </summary>
 public sealed class AgentDefinitionAmbiguousNameException : Exception
 {

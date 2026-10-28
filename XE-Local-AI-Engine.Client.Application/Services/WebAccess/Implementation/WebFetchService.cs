@@ -38,7 +38,7 @@ internal sealed class WebFetchService
     /// <summary>The deepest element nesting handed to SmartReader; see <see cref="ExtractHtmlAsync" />.</summary>
     internal const int MaxReadabilityDepth = 64;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private static readonly HashSet<string> AllowedMediaTypes = new(StringComparer.OrdinalIgnoreCase)
     {

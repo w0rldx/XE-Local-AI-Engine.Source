@@ -12,7 +12,7 @@ export function nodeSettingsFieldLabel(t: Translate, field: keyof NodeSettingsFi
 }
 
 // The form's label for a wire field name, for surfaces outside the form (the pending-restart banner). Two fields are
-// labelled under a different key; a field this client does not know shows its wire name.
+// labeled under a different key; a field this client does not know shows its wire name.
 const labelKeyAliases: Readonly<Record<string, string>> = {
 	speculativeDraftModelName: "speculativeDraftModel",
 	llamaChatCacheRamMiB: "llamaChatCacheRam",

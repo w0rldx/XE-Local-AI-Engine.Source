@@ -138,9 +138,8 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
 
     private static async Task<bool> ModelNameUsesNoCaseCollationAsync(SqliteConnection connection)
     {
-        // The CREATE TABLE statement in sqlite_master records the per-column COLLATE clause; confirm model_name carries
-        // COLLATE NOCASE. PRAGMA takes no parameters and the table name is a fixed literal, so this stays free of
-        // caller-supplied SQL.
+        // The sqlite_master CREATE TABLE records per-column COLLATE; confirm model_name carries COLLATE NOCASE. PRAGMA
+        // takes no parameters and the table name is a fixed literal, so no caller-supplied SQL reaches it.
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_provider_map';";
         var sql = await command.ExecuteScalarAsync() as string;

@@ -87,7 +87,7 @@ public interface IAgentSkillStore
     ///     returns <c>null</c> when no skill has that id.
     /// </summary>
     /// <remarks>
-    ///     The import shape: the materialised preview payload is written wholesale, and any file the new payload
+    ///     The import shape: the materialized preview payload is written wholesale, and any file the new payload
     ///     dropped has to disappear with it.
     /// </remarks>
     Task<IReadOnlyList<AgentSkillResourceRecord>?> ReplaceResourcesAsync(Guid skillId,

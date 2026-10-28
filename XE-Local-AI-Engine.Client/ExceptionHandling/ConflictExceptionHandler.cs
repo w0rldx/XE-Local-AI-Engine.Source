@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
@@ -86,8 +87,8 @@ public class ConflictExceptionHandler : IExceptionHandler
 
         _logger.LogWarning(exception,
             "Handled conflict exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
-            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
+            LogValueSanitizer.Sanitize(httpContext.Request.Method),
+            LogValueSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status409Conflict,
             ProblemDetailsExtensions.ResolveTraceId(httpContext),
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",

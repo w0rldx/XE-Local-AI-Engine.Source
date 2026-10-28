@@ -64,7 +64,7 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "did not advertise resource ceilings");
 
         // Egress is neither served nor required on this node: the switch is off, so denial is a best-effort
-        // tightening the host cannot honour, not a precondition that would refuse the run.
+        // tightening the host cannot honor, not a precondition that would refuse the run.
         AssertEx.False(summary.NetworkIsolationRequired);
     }
 
@@ -422,7 +422,7 @@ public sealed class SandboxIsolationSummaryTests
             AssertEx.Equal(SandboxContainment.ExecutionPreviewsDisabledReason, summary.FilesystemIsolationUnavailableReason);
         }
 
-        // The provider names the same cause to a refusal (N-62), and nothing while it can isolate.
+        // The provider names the same cause to a refusal, and nothing while it can isolate.
         AssertEx.True(string.Equals(previewsEnabled ? null : SandboxContainment.ExecutionPreviewsDisabledReason,
                 provider.FilesystemIsolationUnavailableReason,
                 StringComparison.Ordinal),

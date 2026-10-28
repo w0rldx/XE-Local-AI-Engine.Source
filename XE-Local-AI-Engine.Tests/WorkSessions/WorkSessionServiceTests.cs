@@ -167,10 +167,8 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Create_WhenTheAgentsModelIsOutsideTheNodesToolCapableList_IsRejected()
     {
-        // The SECOND tool gate, and the one that used to be missed here: the model's own capability probe says yes
-        // while the operator's allow-list — which the offer applies unconditionally, cloud pins included — says no. The
-        // session would be created, every state-tool call would come back "Requested function ... not found", and the
-        // run would spend its whole step budget writing nothing.
+        // The SECOND tool gate: the capability probe says yes but the operator's allow-list (applied to every offer,
+        // cloud pins included) says no, so every state-tool call answers "not found" and the run wastes its budget.
         var factory = Host.Factory;
         var agentId = await SeedAgentAsync(factory, "a-model-nobody-listed");
 

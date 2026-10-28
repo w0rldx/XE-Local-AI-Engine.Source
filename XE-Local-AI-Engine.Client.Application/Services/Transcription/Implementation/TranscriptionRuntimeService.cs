@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
 ///     Default <see cref="ITranscriptionRuntimeService" />. Pure composition: it owns no state of its own and simply
-///     joins the supervisor, the static catalogue, the installed-runtime record, the node settings and the effective
+///     joins the supervisor, the static catalog, the installed-runtime record, the node settings and the effective
 ///     hardware profile into the shapes the endpoints return.
 /// </summary>
 public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
@@ -178,7 +178,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         await _settingsStore.LoadAsync(ct) ?? new StoredNodeSettings();
 
     /// <summary>
-    ///     A stored id that is no longer in the catalogue reads as no selection at all, so a node whose catalogue row
+    ///     A stored id that is no longer in the catalog reads as no selection at all, so a node whose catalog row
     ///     was retired falls back to the recommendation instead of reporting a model that cannot be loaded.
     /// </summary>
     private static string? NormalizeSelection(string? storedModelId) =>

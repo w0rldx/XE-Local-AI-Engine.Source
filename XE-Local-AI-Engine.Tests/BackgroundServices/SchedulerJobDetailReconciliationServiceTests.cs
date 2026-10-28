@@ -10,10 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the startup self-heal that refreshes persisted Quartz <c>JOB_CLASS_NAME</c> values. It is
-///     best-effort by design — a node must start even when the heal fails — so the interesting assertions are which
-///     failure classes are swallowed (the ones a stale/unavailable job store actually produces) and that anything
-///     outside that list still escapes.
+///     The startup self-heal refreshing persisted Quartz <c>JOB_CLASS_NAME</c> values. It is best-effort (a node
+///     must start even when it fails), so the tests pin that the failures a stale or unavailable job store produces
+///     are swallowed and others escape.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SchedulerJobDetailReconciliationServiceTests

@@ -7,8 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <c>GET custom-tools/{customToolId}</c>: operator-gated, 404 for an unknown id, and — the load-bearing one — a
-///     secret header value is returned MASKED. The read path must never hand a stored secret back, not even to the
-///     operator on the loopback surface.
+///     secret header value is returned MASKED. The read path never hands a stored secret back, even to the operator.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class GetCustomToolEndpointTests

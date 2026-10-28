@@ -849,7 +849,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         /// <summary>Whether the catalog entry is flagged as live-scenario tested; always <see langword="false" /> for an explore-lane row.</summary>
         public bool Tested { get; init; }
 
-        /// <summary>Whether the repository is gated (licence acceptance and a token needed to download), in either lane.</summary>
+        /// <summary>Whether the repository is gated (license acceptance and a token needed to download), in either lane.</summary>
         public bool IsGated { get; init; }
 
         /// <summary>The catalog entry id, or <see langword="null" /> for an explore-lane row.</summary>

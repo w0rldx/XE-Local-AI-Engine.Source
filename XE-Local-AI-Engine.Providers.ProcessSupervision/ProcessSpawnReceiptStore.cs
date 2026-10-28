@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// </remarks>
 public sealed class ProcessSpawnReceiptStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly string? _directory;
     private readonly ILogger _logger;

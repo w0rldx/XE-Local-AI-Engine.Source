@@ -2,15 +2,16 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNodeSettingsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { NodeAuthStatusResponse, NodeVaultState } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import type { NodeAuthRestoreResult } from "@/core/auth/utils/SessionRestore";
+
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Both guards are reached through their route module's exported `Route.options.beforeLoad` and called with a
 // hand-built context — no render, no router. `restoreNodeAuthSession` is stubbed because these tests are about the
@@ -40,7 +41,7 @@ vi.mock("@/core/auth/pages/VaultSetup", () => ({ VaultSetup: () => null }));
 
 // The layout route renders the whole app shell; the guard under test never touches the component, so stubbing it keeps
 // this file from importing every page in the tree.
-vi.mock("@/core/layout/components/Layout/Layout", () => ({ Layout: () => null }));
+vi.mock("@/AppLayout", () => ({ AppLayout: () => null }));
 
 vi.mock("@/features/node-settings/pages/ExternalAccessSetup", () => ({ ExternalAccessSetup: () => null }));
 
@@ -48,8 +49,8 @@ vi.mock("@/features/node-settings/pages/UiModeSetup", () => ({ UiModeSetup: () =
 
 vi.mock("@/features/node-settings/pages/SandboxProfileSetup", () => ({ SandboxProfileSetup: () => null }));
 
-import { Route as ExternalAccessRoute } from "@/routes/external-access";
 import { Route as LayoutRoute } from "@/routes/_layout";
+import { Route as ExternalAccessRoute } from "@/routes/external-access";
 import { Route as LoginRoute } from "@/routes/login";
 import { Route as SandboxProfileSetupRoute } from "@/routes/sandbox-profile-setup";
 import { Route as SetupRoute } from "@/routes/setup";
@@ -323,7 +324,7 @@ describe("route guards for the first-run external-access and interface-mode choi
 			.map(([path]) => path)
 			.sort();
 		expect(mountedIn).toEqual([layoutPath]);
-		expect(sources.get(layoutPath)).toMatch(/<OnboardingProvider>\s*<Layout \/>\s*<\/OnboardingProvider>/);
+		expect(sources.get(layoutPath)).toMatch(/<OnboardingProvider>\s*<AppLayout \/>\s*<\/OnboardingProvider>/);
 	});
 });
 

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 
 /// <summary>
 ///     Resolves where this node keeps its Whisper weights. The single place that turns the transcription provider's
-///     relative catalogue paths into absolute ones.
+///     relative catalog paths into absolute ones.
 /// </summary>
 /// <remarks>
 ///     Rooted at <see cref="INodeDataDirectory" />, never at the application base directory: in a desktop launch the
@@ -22,20 +22,20 @@ public sealed class WhisperModelPathResolver
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
     }
 
-    /// <summary>The directory holding every Whisper weight, one subdirectory per catalogue id.</summary>
+    /// <summary>The directory holding every Whisper weight, one subdirectory per catalog id.</summary>
     public string ModelsDirectory => Path.Combine(_dataDirectory.Root, "models", "whisper");
 
     /// <summary>The absolute path of the pinned Silero VAD weights.</summary>
     public string VadFilePath => Path.Combine(ModelsDirectory, "vad", WhisperModelCatalog.VadFileName);
 
-    /// <summary>The absolute path of a catalogue entry's weight file.</summary>
+    /// <summary>The absolute path of a catalog entry's weight file.</summary>
     public string FilePathFor(WhisperModelEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         return Path.Combine(ModelsDirectory, WhisperModelCatalog.RelativeFilePath(entry));
     }
 
-    /// <summary>Whether a catalogue entry's weight file is present on disk.</summary>
+    /// <summary>Whether a catalog entry's weight file is present on disk.</summary>
     public bool IsInstalled(WhisperModelEntry entry) =>
         File.Exists(FilePathFor(entry));
 

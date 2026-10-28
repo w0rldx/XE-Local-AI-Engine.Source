@@ -7,10 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Integration coverage for <see cref="IPlaybookActionStore.PromoteSuggestedIfCurrentAsync" /> against the real
-///     node SQLite store: the compare-and-swap that closes the promote-time TOCTOU. The write must land only on the exact
-///     validated snapshot (Version + Suggested state), and the enabled-action cap is re-checked inside the same
-///     transaction as the write so two promotes cannot both slip past a stale below-cap count.
+///     The compare-and-swap behind <see cref="IPlaybookActionStore.PromoteSuggestedIfCurrentAsync" /> on real SQLite
+///     writes only on the exact validated snapshot (Version + Suggested state), closing the promote-time TOCTOU,
+///     and re-checks the enabled-action cap in that transaction against stale counts.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class PlaybookActionStorePromotionConcurrencyTests

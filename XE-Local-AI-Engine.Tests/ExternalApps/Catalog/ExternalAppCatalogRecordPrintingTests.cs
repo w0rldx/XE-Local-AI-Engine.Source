@@ -5,11 +5,10 @@ using XE_Local_AI_Engine.Client.Testing.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The three catalog records that can carry a whole manifest — <see cref="ApplicationManifest" />,
-///     <see cref="ExternalAppCatalogSnapshot" /> and <see cref="StoredExternalAppCatalogCache" /> — suppress the
-///     record printer, so one <c>LogDebug("{Snapshot}", snapshot)</c> downstream cannot write the catalog (inlined
-///     file bodies, variable defaults, the raw fetched document) into the node log. Mirrors
-///     <c>ContainerRuntimeRecordPrintingTests</c> on the container side.
+///     <see cref="ApplicationManifest" />, <see cref="ExternalAppCatalogSnapshot" /> and
+///     <see cref="StoredExternalAppCatalogCache" /> suppress the record printer, so one
+///     <c>LogDebug("{Snapshot}", snapshot)</c> cannot write the catalog (file bodies, variable defaults, the fetched
+///     document) into the node log. Mirrors <c>ContainerRuntimeRecordPrintingTests</c>.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalAppCatalogRecordPrintingTests

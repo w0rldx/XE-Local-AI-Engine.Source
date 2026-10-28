@@ -326,6 +326,103 @@ public sealed class PersistenceEncryptionTests : IDisposable
     }
 
     [Test]
+    public async Task SaveChanges_WhenAnUpdateLeavesTheEncryptedColumnUnmodified_KeepsTheStoredCiphertext()
+    {
+        // A Modified row whose encrypted property is not among the modified ones is skipped: re-encrypting it would draw a fresh nonce and change the stored bytes.
+        var databasePath = GetDatabasePath("unmodified-column.sqlite");
+        var instructions = Encoding.UTF8.GetBytes("You are an unchanged agent.");
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            context.AgentDefinitions.Add(new AgentDefinition
+            {
+                Id = Guid.NewGuid(),
+                Name = "Before rename",
+                Instructions = instructions.ToArray(),
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        byte[] storedBefore;
+        await using (var rawContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
+        {
+            storedBefore = (await rawContext.AgentDefinitions.SingleAsync()).Instructions;
+        }
+
+        AssertEx.False(storedBefore.SequenceEqual(instructions), "The stored instructions should be ciphertext before the update, or the byte comparison below proves nothing.");
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            var definition = await context.AgentDefinitions.SingleAsync();
+            definition.Name = "After rename";
+            await context.SaveChangesAsync();
+
+            AssertBytesEqual(instructions, definition.Instructions, "The tracked entity should still hold plaintext after the update.");
+        }
+
+        await using (var rawContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
+        {
+            var stored = await rawContext.AgentDefinitions.SingleAsync();
+            AssertEx.Equal("After rename", stored.Name, "The plaintext column update should have been written.");
+            AssertBytesEqual(storedBefore, stored.Instructions, "An unmodified encrypted column should keep its stored ciphertext byte for byte.");
+        }
+    }
+
+    [Test]
+    public async Task SaveChanges_WhenTheSaveFails_RestoresPlaintextOnTheTrackedEntity()
+    {
+        // SaveChangesFailed puts the plaintext back, so a caller that catches the failure never holds ciphertext in its graph.
+        var databasePath = GetDatabasePath("failed-save.sqlite");
+        var id = Guid.NewGuid();
+        var instructions = Encoding.UTF8.GetBytes("You are a duplicate agent.");
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            context.AgentDefinitions.Add(new AgentDefinition
+            {
+                Id = id,
+                Name = "Original",
+                Instructions = Encoding.UTF8.GetBytes("You are the original agent."),
+                Version = 1,
+                CreatedAtUtc = 1,
+                UpdatedAtUtc = 1
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        await using var failingContext = CreateContext(databasePath, keyHolder);
+        var duplicate = new AgentDefinition
+        {
+            Id = id,
+            Name = "Duplicate",
+            Instructions = instructions.ToArray(),
+            Version = 1,
+            CreatedAtUtc = 1,
+            UpdatedAtUtc = 1
+        };
+        failingContext.AgentDefinitions.Add(duplicate);
+
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => failingContext.SaveChangesAsync(), "A duplicate primary key should fail the save.");
+
+        AssertBytesEqual(instructions, duplicate.Instructions, "A failed save should restore the plaintext on the tracked entity.");
+    }
+
+    [Test]
     public void NodeSqliteKeyHolder_WhenConfigured_DerivesExpectedHkdfKey()
     {
         var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
@@ -493,9 +590,8 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
                       .UseSqlite($"Data Source={databasePath}")
                       .AddInterceptors(new NodeEncryptionSaveChangesInterceptor(), new NodeEncryptionMaterializationInterceptor())
-                      // Fresh per-test options create a new EF internal service provider; in a FULL-SUITE run the
-                      // process-wide count crosses EF's 20-provider threshold and the warning (an error in this solution)
-                      // throws. The established repo-wide test pattern is to ignore it on throwaway options.
+                      // Fresh per-test options create a new EF internal service provider; a full-suite run crosses EF's
+                      // 20-provider threshold and the warning (an error here) throws, so throwaway options ignore it.
                       .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                       .Options;
 

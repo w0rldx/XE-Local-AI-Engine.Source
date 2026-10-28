@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// N-84: an out-of-range Development:WorkspaceRetention value stopped the node as a generic crash; startup must name the setting.
+// An out-of-range Development:WorkspaceRetention value must not stop the node as a generic crash; startup names the setting.
 [Category(TestCategories.Unit)]
 public sealed class SettingValidationFailureTests
 {
@@ -67,7 +67,7 @@ public sealed class SettingValidationFailureTests
         AssertEx.False(line.Contains('\n', StringComparison.Ordinal), "One line, so the stderr tail carries all of it.");
     }
 
-    // The production registration shape (Bind + ValidateDataAnnotations + ValidateOnStart) with the tester's 30-second value.
+    // The production registration shape (Bind + ValidateDataAnnotations + ValidateOnStart) with a 30-second value.
     private static ServiceCollection OutOfRangeServices()
     {
         var services = new ServiceCollection();

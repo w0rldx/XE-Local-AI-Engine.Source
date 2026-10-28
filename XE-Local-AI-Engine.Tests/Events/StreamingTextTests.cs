@@ -116,12 +116,8 @@ public sealed class StreamingTextTests
     [Test]
     public async Task Value_WhenAppendsAndReadsInterleaveAcrossThreads_EverySnapshotMaterializesItsOwnPrefix()
     {
-        // Materializing a node COLLAPSES its chain (drops the link to its ancestors) so the intermediate nodes — and the
-        // full strings cached on them — can be collected instead of being pinned for the whole turn. That collapse can
-        // land while another thread's Build is walking through the very node being collapsed, which is the hazard this
-        // exercises: readers materialize snapshots from several threads while the producer keeps appending and keeps
-        // materializing some of the nodes itself (the pump's debounced flush pattern, which is what leaves uncollapsed
-        // runs between collapsed nodes). Any snapshot whose value is not its own exact prefix is a truncated walk.
+        // Materializing a node COLLAPSES its chain (freeing intermediate nodes and their cached strings), which can
+        // land while another thread's Build walks that node; a snapshot that is not its exact prefix is a torn walk.
         const int count = 4_000;
         var expected = string.Concat(Enumerable.Range(start: 0, count).Select(index => (char)('a' + (index % 26))));
 
@@ -136,6 +132,8 @@ public sealed class StreamingTextTests
                 text = text.Append(expected[index].ToString());
                 snapshots.Enqueue(text);
 
+                // Materialize some nodes here too, like the pump's debounced flush, which leaves uncollapsed runs
+                // between collapsed nodes.
                 if (index % 7 == 0)
                 {
                     _ = text.Value;

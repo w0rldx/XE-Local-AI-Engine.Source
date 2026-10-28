@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The per-instance token requirement on every bridge route. The peer guard admits any container on an
-///     engine-owned network, so this is the layer that stops one of them using another's bridge — which is why an
-///     unverified request must never reach whatever is mapped behind it.
+///     The per-instance token requirement on every bridge route. The peer guard admits any container on an engine-owned
+///     network, so this layer stops one using another's bridge, and an unverified request never reaches what is mapped
+///     behind it.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ContainerBridgeTokenMiddlewareTests

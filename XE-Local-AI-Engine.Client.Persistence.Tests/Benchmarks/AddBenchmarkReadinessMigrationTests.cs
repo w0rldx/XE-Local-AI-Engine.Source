@@ -20,9 +20,9 @@ public sealed class AddBenchmarkReadinessMigrationTests
     private static readonly string[] RunColumns =
     [
         "primary_stop_reason",
-        // The throughput split: what one blended tokens_per_second used to conflate, plus how many provider requests
-        // the sums are made of. Added once a live run showed prompt + cached + generated summing exactly to the usage
-        // total — two requests, one recorded.
+        // The throughput split: what one blended tokens_per_second would conflate, plus how many provider requests
+        // the sums are made of, so prompt + cached + generated summing to the usage total cannot hide a second
+        // request.
         "ttft_ms",
         "prompt_tokens",
         "prompt_ms",
@@ -98,7 +98,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-output-budget-constraint.sqlite");
 
-        // A budget at or above the window could never be honoured, so the database refuses it rather than letting it
+        // A budget at or above the window could never be honored, so the database refuses it rather than letting it
         // masquerade as "no budget".
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, maxOutputTokens: 4096));
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, maxOutputTokens: 0));

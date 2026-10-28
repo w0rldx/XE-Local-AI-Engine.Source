@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class DevWorkflowReconcileTests
 {
     /// <summary>
-    ///     T-11: only node-runs the host left mid-flight collapse. Runs auto-resume, so no run status moves — and a
+    ///     Only node-runs the host left mid-flight collapse. Runs auto-resume, so no run status moves — and a
     ///     durable human-wait state is not something a restart invalidates.
     /// </summary>
     [Test]
@@ -405,7 +405,7 @@ public sealed class DevWorkflowReconcileTests
     }
 
     /// <summary>
-    ///     T-12: a purged conversation takes its work session's whole subtree with it, so the node-run's pointer can
+    ///     A purged conversation takes its work session's whole subtree with it, so the node-run's pointer can
     ///     outlive its target. That has to read back as "transcript no longer available", not as an error.
     /// </summary>
     [Test]

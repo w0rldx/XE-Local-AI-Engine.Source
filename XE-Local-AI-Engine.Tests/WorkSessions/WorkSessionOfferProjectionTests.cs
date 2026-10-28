@@ -11,9 +11,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The offer projection for the four state tools. Registering a handler in DI surfaces it in the RESOLUTION seam
-///     only; without the merge here the seeded work-session agents would intersect to an empty tool set and the whole
-///     feature would be inert — the trap <c>spawn_subagent</c> and the coder tools each hit before.
+///     The offer projection for the four state tools. A DI-registered handler surfaces only in the RESOLUTION seam;
+///     without the merge here the seeded work-session agents intersect to an empty tool set and the feature is inert.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WorkSessionOfferProjectionTests

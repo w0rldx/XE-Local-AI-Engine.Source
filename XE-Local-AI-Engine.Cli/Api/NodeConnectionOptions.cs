@@ -6,7 +6,7 @@ internal sealed class NodeConnectionOptions
     /// <summary>The node's loopback origin, as discovery returned it.</summary>
     public required Uri Origin { get; init; }
 
-    /// <summary>Accept a self-signed server certificate (the dev host). Off by default; honoured for a loopback origin only.</summary>
+    /// <summary>Accept a self-signed server certificate (the dev host). Off by default; honored for a loopback origin only.</summary>
     public bool AcceptAnyServerCertificate { get; init; }
 
     /// <summary>Test seam: returns a NEW transport handler per call in place of a socket handler.</summary>

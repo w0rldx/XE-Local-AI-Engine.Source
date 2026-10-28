@@ -8,7 +8,7 @@ export type PlaybookEditorTarget = { mode: "create" } | { mode: "edit"; id: stri
 
 /**
  * Everything the governance panel derives from the two independent reads (the action list and the monitor) plus the
- * open editor. Kept out of the panel so the panel body is markup: none of it mutates, and each value is memoised on
+ * open editor. Kept out of the panel so the panel body is markup: none of it mutates, and each value is memoized on
  * the query result it is derived from.
  */
 export function usePlaybookPanelDerivedState(

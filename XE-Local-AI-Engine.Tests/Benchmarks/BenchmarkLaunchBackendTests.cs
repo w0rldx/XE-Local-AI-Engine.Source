@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The backend token is the one place a raw receipt is turned into a word an operator reads, so every arm is
-///     pinned: a GPU build that placed nothing is <c>cpu-fallback</c>, not "cpu", and a CPU build on macOS is
-///     <c>metal-unverified</c> rather than a claim either way.
+///     The backend token is where a raw receipt becomes a word an operator reads, so every arm is pinned: a GPU build
+///     that placed nothing is <c>cpu-fallback</c>, not "cpu", and a CPU build on macOS is <c>metal-unverified</c>
+///     rather than a claim either way.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkLaunchBackendTests

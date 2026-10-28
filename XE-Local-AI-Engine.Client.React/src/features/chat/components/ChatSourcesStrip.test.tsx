@@ -133,7 +133,7 @@ describe("ChatSourcesStrip", () => {
 		expect(toggle.getAttribute("aria-expanded")).toBe("true");
 	});
 
-	// Formatting and localisation live in KnowledgeScoreBadge.test.tsx; this only proves each source renders its kind.
+	// Formatting and localization live in KnowledgeScoreBadge.test.tsx; this only proves each source renders its kind.
 	it("renders a score-kind badge for each source that records one", () => {
 		renderWithProviders(
 			<ChatSourcesStrip

@@ -15,9 +15,9 @@ using Microsoft.Extensions.Options;
 /// </remarks>
 internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEventBuffer, IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
-    /// <summary>The three types that make an entry evictable once PUBLISHED. Reserving one is not enough (ADR 0008 R4-2).</summary>
+    /// <summary>The three types that make an entry evictable once PUBLISHED. Reserving one is not enough (ADR 0008).</summary>
     private static readonly IReadOnlySet<string> TerminalTypes = new HashSet<string>(StringComparer.Ordinal)
     {
         IntegrationStreamEventTypes.ExecutionCompleted,
@@ -273,7 +273,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
                     throw new IntegrationEventGapException(executionId, cursor);
                 }
 
-                // The ADR 0008 R5-3 barrier: yielding above a reserved-but-unresolved sequence would advance the cursor PAST it, and the late publish would then fall
+                // The ADR 0008 barrier: yielding above a reserved-but-unresolved sequence would advance the cursor PAST it, and the late publish would then fall
                 // below the cursor and be lost to this reader forever with no gap to report it. Both Publish and Abandon complete the source captured below.
                 var barrier = entry.Pending.Count > 0 ? entry.Pending.Min : long.MaxValue;
                 // The list is kept in sequence order, so skip-then-take is the whole selection: no index arithmetic, no

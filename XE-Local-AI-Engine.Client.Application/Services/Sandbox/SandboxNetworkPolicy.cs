@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 /// <summary>Provider-neutral network posture requested for a sandbox.</summary>
 /// <remarks>
 ///     <see cref="None" /> and <see cref="Restricted" /> both ask the provider to CONSTRAIN egress; one that does not advertise
-///     <see cref="SandboxProviderCapabilities.SupportsNetworkPolicy" /> can honour neither and, under the fail-closed contract, rejects the
+///     <see cref="SandboxProviderCapabilities.SupportsNetworkPolicy" /> can honor neither and, under the fail-closed contract, rejects the
 ///     request with <see cref="SandboxCapabilityNotSupportedException" /> rather than handing back an un-isolated sandbox.
 ///     <see cref="Unrestricted" /> is the honest posture for a supervised-but-not-isolated provider: the caller acknowledges that the child
 ///     shares the host's network.

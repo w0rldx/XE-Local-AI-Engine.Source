@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
 using Microsoft.AspNetCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Common.Extensions;
+using XE_Local_AI_Engine.Client.Services.Common;
 
 /// <summary>
 ///     Answers the 413 a capped route DECLARES when the host is the one that refuses the body.
@@ -35,8 +36,8 @@ public sealed class RequestBodyTooLargeExceptionHandler : IExceptionHandler
 
         _logger.LogWarning(exception,
             "Refused an oversized request body while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}.",
-            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
-            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
+            LogValueSanitizer.Sanitize(httpContext.Request.Method),
+            LogValueSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status413PayloadTooLarge,
             ProblemDetailsExtensions.ResolveTraceId(httpContext));
 

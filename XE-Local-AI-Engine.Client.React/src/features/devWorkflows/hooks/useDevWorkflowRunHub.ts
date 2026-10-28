@@ -64,7 +64,7 @@ function isChangeKind(kind: string): kind is DevWorkflowChangeKind {
 /**
  * Live state for one workflow run over `development-workflows/hub`.
  *
- * Modelled on `useWorkSessionHub`, and explicitly NOT on a hub hook that dispatches payload into a store:
+ * Modeled on `useWorkSessionHub`, and explicitly NOT on a hub hook that dispatches payload into a store:
  * these pings carry no content at all — the DB is the replay authority and every byte the UI paints comes from a
  * REST read. So there is no client-side mirror, only a watermark: its jobs are `afterSeq` on re-subscribe and
  * monotonic dedupe of pings.

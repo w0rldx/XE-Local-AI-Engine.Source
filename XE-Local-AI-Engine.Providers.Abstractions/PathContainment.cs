@@ -44,4 +44,29 @@ public static class PathContainment
         // root as a target — and the trailing separator stops ".../llama.cpp-other" matching root ".../llama.cpp".
         return fullPath.Length > rootWithSeparator.Length && fullPath.StartsWith(rootWithSeparator, comparison);
     }
+
+    /// <summary>
+    ///     <see langword="true" /> when <paramref name="path" /> is <paramref name="root" /> itself or lies beneath it,
+    ///     for paths the caller has ALREADY canonicalized (resolved through links, or composed by
+    ///     <see cref="Path.GetFullPath(string)" />).
+    /// </summary>
+    /// <remarks>
+    ///     Unlike <see cref="IsUnderRoot" /> it normalizes nothing and compares ordinally on every platform, so a path
+    ///     that differs only in case is outside: the stricter answer for a jail or mount boundary. The trailing separator
+    ///     stops ".../app-other" matching root ".../app".
+    /// </remarks>
+    public static bool IsRootOrUnderCanonical(string path, string root)
+    {
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        return string.Equals(path, root, StringComparison.Ordinal) || path.StartsWith(rootWithSeparator, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     <see langword="true" /> when both paths normalize to the same full path, case-insensitively only on Windows.
+    ///     A trailing separator is significant, and an unparseable path throws.
+    /// </summary>
+    public static bool PathsEqual(string left, string right) =>
+        string.Equals(Path.GetFullPath(left),
+            Path.GetFullPath(right),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }

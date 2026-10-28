@@ -75,7 +75,7 @@ public interface IChatTurnContextBuilder
 
     /// <summary>
     ///     Whether an embedding model is installed for the knowledge base, resolved exactly as ingestion and search
-    ///     resolve it. Without one no document is indexed, so a grounded turn finds nothing (model-matrix F13).
+    ///     resolve it. Without one no document is indexed, so a grounded turn finds nothing.
     /// </summary>
     Task<bool> IsKnowledgeEmbeddingAvailableAsync(CancellationToken cancellationToken = default);
 

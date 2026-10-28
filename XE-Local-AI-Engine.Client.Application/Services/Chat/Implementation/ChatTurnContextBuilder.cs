@@ -136,7 +136,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             Content = content,
             SortOrder = 0,
             Kind = ConversationContextKind.Attachment,
-            // The fixed cap above knows nothing of the window; the runner, which does, shrinks it further (model-matrix F6).
+            // The fixed cap above knows nothing of the window; the runner, which does, shrinks it further.
             ShortenAttachment = charBudget => ConversationAttachmentContextComposer.Compose(parts, Math.Min(charBudget, maxChars), fenceSeed)
         };
     }

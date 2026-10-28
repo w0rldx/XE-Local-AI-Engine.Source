@@ -8,8 +8,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
-using AcquisitionKind = GgufAcquisitionOperationKind;
-using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoordinator
 {
@@ -59,7 +57,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             identity = _resolver.Resolve(new GgufAcquisitionIntent
             {
-                OperationKind = PreflightKind.Import,
+                OperationKind = GgufAcquisitionOperationKind.Import,
                 ModelBaseName = modelBaseName,
                 Quantization = inspection.DetectedQuantization
             });
@@ -129,7 +127,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
         {
             requestedIdentity = _resolver.Resolve(new GgufAcquisitionIntent
             {
-                OperationKind = PreflightKind.Import,
+                OperationKind = GgufAcquisitionOperationKind.Import,
                 ModelBaseName = command.ModelBaseName,
                 Quantization = command.Quantization
             });
@@ -148,8 +146,8 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
         // Reject an already-active acquisition BEFORE preflight (which blocks on the composite mutation lease for the whole
         // copy), else a second import hangs behind the first instead of getting an immediate 409; mirrors GgufDownloadCoordinator.StartAsync.
-        if (IsActive(_operations.GetNewest(AcquisitionKind.Download, requestedIdentity.CanonicalModelName))
-            || IsActive(_operations.GetNewest(AcquisitionKind.Import, requestedIdentity.CanonicalModelName)))
+        if (IsActive(_operations.GetNewest(GgufAcquisitionOperationKind.Download, requestedIdentity.CanonicalModelName))
+            || IsActive(_operations.GetNewest(GgufAcquisitionOperationKind.Import, requestedIdentity.CanonicalModelName)))
         {
             throw new GgufImportApplicationException("AcquisitionAlreadyActive", "An import for this model is already active.");
         }
@@ -161,7 +159,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
             reservation = await preflight.ResolveAndReserveAsync(new GgufAcquisitionIntent
                 {
-                    OperationKind = PreflightKind.Import,
+                    OperationKind = GgufAcquisitionOperationKind.Import,
                     ModelBaseName = command.ModelBaseName,
                     Quantization = command.Quantization
                 },
@@ -185,7 +183,7 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
 
         await using (reservation)
         {
-            var registration = _operations.Start(AcquisitionKind.Import,
+            var registration = _operations.Start(GgufAcquisitionOperationKind.Import,
                 reservation.Identity.CanonicalModelName,
                 inspection.SizeBytes);
             if (registration.AlreadyInFlight)
@@ -210,17 +208,17 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     }
 
     public bool Cancel(Guid operationId) =>
-        _operations.GetStatus(operationId)?.OperationKind == AcquisitionKind.Import
+        _operations.GetStatus(operationId)?.OperationKind == GgufAcquisitionOperationKind.Import
         && _operations.Cancel(operationId);
 
     public GgufAcquisitionStatus? GetStatus(Guid operationId)
     {
         var status = _operations.GetStatus(operationId);
-        return status?.OperationKind == AcquisitionKind.Import ? status : null;
+        return status?.OperationKind == GgufAcquisitionOperationKind.Import ? status : null;
     }
 
     public IReadOnlyList<GgufAcquisitionStatus> ListStatuses() =>
-        _operations.List(AcquisitionKind.Import);
+        _operations.List(GgufAcquisitionOperationKind.Import);
 
     private async Task RunImportAsync(Guid operationId,
         string sourcePath,

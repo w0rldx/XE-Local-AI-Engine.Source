@@ -5,12 +5,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the reuse-path wedged-server guard: a still-alive <c>llama-server</c> that stops answering the liveness
-///     probe (deadlocked, not exited) is torn down and respawned after
-///     <see cref="LlamaServerSupervisorOptions.MaxReuseLivenessFailures" /> consecutive failed probes, instead of being
-///     handed to every request forever (each reuse otherwise refreshes LastUsedUtc, so the idle reaper never sees it).
-///     The probe is rate-limited, so a reuse inside the interval is handed out with no HTTP probe.
+///     Reuse-path wedged-server guard: an alive but unresponsive <c>llama-server</c> is torn down and respawned after
+///     <see cref="LlamaServerSupervisorOptions.MaxReuseLivenessFailures" /> consecutive failed liveness probes instead
+///     of being handed out forever. A reuse inside the probe interval gets no HTTP probe.
 /// </summary>
+/// <remarks>Each reuse refreshes LastUsedUtc, so the idle reaper alone never sees a wedged server.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class SupervisorWedgedReuseTests
 {

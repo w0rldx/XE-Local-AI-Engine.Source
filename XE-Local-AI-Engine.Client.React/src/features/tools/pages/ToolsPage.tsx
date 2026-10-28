@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
-import { LocalToolsOverview } from "@/features/chat/components/LocalToolsOverview";
+import { LocalToolsOverview } from "@/features/tools/components/LocalToolsOverview";
 
 // The catalog rendered by LocalToolsOverview is now dynamic (dynamic tool-catalog): it fetches built-in tools plus the
 // tools discovered from enabled MCP servers via useToolCatalog. MCP server registration is managed on the

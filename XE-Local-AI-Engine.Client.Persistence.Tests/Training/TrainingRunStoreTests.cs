@@ -105,9 +105,9 @@ public sealed class TrainingRunStoreTests : IDisposable
         var failed = AssertEx.NotNull(await afterStore.GetAsync(runId));
         AssertEx.Equal(TrainingRunStatus.Failed, failed.Status);
         AssertEx.Equal(TrainingWorkStatus.Failed, failed.WorkStatus!.Value);
-        // Inverted deliberately: recovery used to null the receipt here. Terminalizing the row proves the HOST died,
-        // not the trainer — so dropping the receipt was dropping the only thing that could still identify a live
-        // orphan holding VRAM. The receipt now outlives recovery and only TrainingRunStartupReaper clears it, after it
+        // Recovery keeps the receipt on purpose. Terminalizing the row proves the HOST died,
+        // not the trainer — so dropping the receipt would drop the only thing that could still identify a live
+        // orphan holding VRAM. The receipt outlives recovery and only TrainingRunStartupReaper clears it, after it
         // has killed or ruled out the process.
         AssertEx.True(failed.LaunchReceiptJson.HasValue, "Recovery must leave the receipt for the reaper to act on.");
 

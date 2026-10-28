@@ -3,13 +3,13 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 
 const { useToolCatalogMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),
 }));
 
-vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+vi.mock("@/core/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: useToolCatalogMock,
 }));
 

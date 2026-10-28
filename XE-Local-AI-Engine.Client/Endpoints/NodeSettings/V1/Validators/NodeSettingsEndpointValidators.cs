@@ -72,33 +72,33 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
 
         // Shape only, never "is it installed": the default is legitimately set before its download, and null clears it to the seed.
         RuleFor(static request => request.DefaultModelName!)
-            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .Must(StoredNodeSettingsValidation.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.DefaultModelName))
             .WithMessage(StoredNodeSettings.ImplausibleDefaultModelNameMessage);
 
         RuleFor(static request => request.KeepModelWarmModelName!)
-            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .Must(StoredNodeSettingsValidation.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.KeepModelWarmModelName))
             .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
 
         RuleFor(static request => request.RerankerModelName!)
-            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .Must(StoredNodeSettingsValidation.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.RerankerModelName))
             .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
 
         // Shape here; "is it an installed embedding model" runs on save in the administration service.
         RuleFor(static request => request.KnowledgeEmbeddingModelName!)
-            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .Must(StoredNodeSettingsValidation.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.KnowledgeEmbeddingModelName))
             .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
 
         RuleFor(static request => request.AutoEffortFastModelName!)
-            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .Must(StoredNodeSettingsValidation.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.AutoEffortFastModelName))
             .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
 
         RuleFor(static request => request.HuggingFaceDefaultQuant!)
-            .Must(StoredNodeSettings.IsKnownQuant)
+            .Must(StoredNodeSettingsValidation.IsKnownQuant)
             .When(static request => !string.IsNullOrWhiteSpace(request.HuggingFaceDefaultQuant))
             .WithMessage(StoredNodeSettings.UnknownHuggingFaceDefaultQuantMessage);
 
@@ -108,34 +108,34 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .WithMessage("Tool-capable models must be a non-empty list of non-blank model names.");
 
         RuleFor(static request => request.RecommendedLlamaCppTag)
-            .Must(StoredNodeSettings.IsValidRecommendedLlamaCppTag)
+            .Must(StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag)
             .When(static request => !string.IsNullOrWhiteSpace(request.RecommendedLlamaCppTag))
             .WithMessage("Recommended llama.cpp tag must be in the form b<number>.");
 
         // IsExternalAccessPreset, NOT IsValidExternalAccessProfile: "custom" and "pending" are persistable but
         // engine-written, so a client must never be able to claim either as input.
         RuleFor(static request => request.ExternalAccessProfile)
-            .Must(StoredNodeSettings.IsExternalAccessPreset)
+            .Must(StoredNodeSettingsValidation.IsExternalAccessPreset)
             .When(static request => request.ExternalAccessProfile is not null)
             .WithMessage("External access profile must be recommended or offline.");
 
         // Both storable literals are client-sendable here (there is no engine-written third state), so the boundary
         // allow-list IS the full set. A blank string is rejected rather than read as "keep": only an absent member keeps.
         RuleFor(static request => request.UiMode)
-            .Must(StoredNodeSettings.IsValidUiMode)
+            .Must(StoredNodeSettingsValidation.IsValidUiMode)
             .When(static request => request.UiMode is not null)
             .WithMessage("Interface mode must be simple or advanced.");
 
         // The CHOICE allow-list, not the persistable one: "pending" is engine-written by setup, so a client must never claim it as input.
         RuleFor(static request => request.SandboxSecurityProfile)
-            .Must(StoredNodeSettings.IsSandboxSecurityProfileChoice)
+            .Must(StoredNodeSettingsValidation.IsSandboxSecurityProfileChoice)
             .When(static request => request.SandboxSecurityProfile is not null)
             .WithMessage("Sandbox security profile must be low or high.");
 
         // Same allow-list and same message as the dedicated PUT app-update/channel validator, so the two surfaces
         // that may write the channel cannot drift apart.
         RuleFor(static request => request.UpdateChannel)
-            .Must(StoredNodeSettings.IsValidUpdateChannel)
+            .Must(StoredNodeSettingsValidation.IsValidUpdateChannel)
             .When(static request => !string.IsNullOrWhiteSpace(request.UpdateChannel))
             .WithMessage("Update channel must be stable, preview or development.");
 
@@ -155,19 +155,19 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse);
 
         RuleFor(static request => request.SpeculativeMode)
-            .Must(StoredNodeSettings.IsValidSpeculativeMode)
+            .Must(StoredNodeSettingsValidation.IsValidSpeculativeMode)
             .When(static request => !string.IsNullOrWhiteSpace(request.SpeculativeMode))
             .WithMessage("Unknown speculative decoding mode.");
 
         RuleFor(static request => request.KvCacheType)
-            .Must(StoredNodeSettings.IsValidKvCacheType)
+            .Must(StoredNodeSettingsValidation.IsValidKvCacheType)
             .When(static request => !string.IsNullOrWhiteSpace(request.KvCacheType))
             .WithMessage("Unknown KV cache type.");
 
         // The parser IS the allow-list — one producer, so the accepted set cannot drift from the spelling Format writes — and it is case-insensitive, so a hand-written
         // client's "Docker" is accepted and normalized while "Podman" answers 400. A blank string is refused by NotBlank; null clears it.
         RuleFor(static request => request.ContainerRuntimeSelection)
-            .Must(StoredNodeSettings.IsValidContainerRuntimeSelection)
+            .Must(StoredNodeSettingsValidation.IsValidContainerRuntimeSelection)
             .When(static request => !string.IsNullOrWhiteSpace(request.ContainerRuntimeSelection))
             .WithMessage("Unknown container runtime selection. Use 'auto' or 'docker'.");
 
@@ -181,7 +181,7 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         // the model" with an immediate 400; it cannot see the CURRENT stored mode, so the endpoint re-checks the merged result — together, no draft-* mode persists modelless.
         RuleFor(static request => request.SpeculativeDraftModelName)
             .Must(static name => !string.IsNullOrWhiteSpace(name))
-            .When(static request => StoredNodeSettings.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
+            .When(static request => StoredNodeSettingsValidation.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
             .WithMessage("Speculative decoding is set to a draft model mode, but no draft model was selected.");
 
         NullOrBetween(RuleFor(static request => request.HuggingFaceDiskMarginBytes),
@@ -285,12 +285,12 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .WithMessage(ReasoningBudgetRangeMessage);
 
         RuleFor(static request => request.DefaultReasoningEffort)
-            .Must(static effort => StoredNodeSettings.IsValidDefaultReasoningEffort(effort?.Trim()))
+            .Must(static effort => StoredNodeSettingsValidation.IsValidDefaultReasoningEffort(effort?.Trim()))
             .When(static request => !string.IsNullOrWhiteSpace(request.DefaultReasoningEffort))
             .WithMessage("Default reasoning effort must be minimal, low, medium or high, or null for the default.");
 
         RuleFor(static request => request.ChatOutputCapMode)
-            .Must(static mode => StoredNodeSettings.IsValidChatOutputCapMode(mode?.Trim()))
+            .Must(static mode => StoredNodeSettingsValidation.IsValidChatOutputCapMode(mode?.Trim()))
             .When(static request => !string.IsNullOrWhiteSpace(request.ChatOutputCapMode))
             .WithMessage("Chat output cap mode must be cap, notice or off, or null for the default.");
 
@@ -421,7 +421,7 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .WithMessage("Usage rates must have a non-blank model name and finite, non-negative input/output rates (USD per 1M tokens).");
     }
 
-    // "" and whitespace used to clear a text setting; null is now the only clear signal, so a blank value is refused.
+    // Null is the only clear signal for a text setting, so a blank or whitespace value is refused.
     private static void NotBlank(IRuleBuilder<SaveNodeSettingsRequest, string?> rule, string message = "'{PropertyName}' cannot be blank; send null to clear it.")
     {
         rule.Must(static value => value is null || !string.IsNullOrWhiteSpace(value))

@@ -185,10 +185,9 @@ public sealed class ChatTurnResolverTests
         await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
 
         // The pin IS resolved once more, and for one thing only: the reasoning-budget flag, which is a property of the
-        // template of the model that actually runs (see the ResolveWithPinAsync tests below). This assertion used to
-        // read DidNotReceive, on the then-true premise that nothing downstream needed the pin's capabilities; grading
-        // the budget against the active model shipped a cap llama-server accepted and ignored, so the extra lookup is
-        // the fix rather than a regression. The gate assertions above are what keep the head itself from drifting.
+        // template of the model that actually runs (see the ResolveWithPinAsync tests below). Grading the budget
+        // against the active model would ship a cap llama-server accepts and ignores, so the extra lookup is intended,
+        // not a regression. The gate assertions above are what keep the head itself from drifting.
         await capabilityResolver.Received(1).ResolveAsync(pinnedModel, Arg.Any<CancellationToken>());
     }
 
@@ -206,7 +205,7 @@ public sealed class ChatTurnResolverTests
     [Test]
     public async Task ResolveAsync_WhenTheBoundAgentPinsAnEnforceableModel_ReportsTheBudgetEnforceable()
     {
-        // The converse, so the fix cannot be a constant: an unenforceable ACTIVE model must not suppress the budget for
+        // The converse, so a constant cannot pass: an unenforceable ACTIVE model must not suppress the budget for
         // a pinned model that can enforce it.
         var resolution = await ResolveWithPinAsync(activeModelEnforceable: false, pinnedModelEnforceable: true);
 

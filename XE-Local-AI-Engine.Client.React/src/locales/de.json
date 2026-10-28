@@ -158,7 +158,7 @@
 		},
 		"notices": {
 			"agentUnavailable": "Agent nicht verfügbar",
-			"agentUnavailableText": "Der Agent dieser Unterhaltung existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet.",
+			"agentUnavailableText": "Der Agent dieses Chats existiert nicht mehr, deshalb hat der Standard-Assistent geantwortet.",
 			"attachmentShortened": "Anhang gekürzt",
 			"attachmentShortenedText": "Die angehängte Datei wurde gekürzt, damit sie in das Kontextfenster dieses Modells passt; das Modell wurde darauf hingewiesen, dass sie unvollständig ist.",
 			"attachmentsNotSent": "Anhänge nicht gesendet",
@@ -183,8 +183,8 @@
 			"queuedBehindEvaluationRunText": "Diese Nachricht wartete auf eine laufende Trainings-Auswertung.",
 			"queuedBehindExportText": "Diese Nachricht wartete auf einen laufenden Modell-Export.",
 			"queuedBehindGpuWork": "Wartet auf GPU-Arbeit",
-			"queuedBehindParkedTurn": "Wartet auf eine andere Unterhaltung",
-			"queuedBehindParkedTurnText": "Diese Nachricht wartet auf eine Freigabe oder eine Frage in einer anderen Unterhaltung. Beantworte sie dort, um fortzufahren.",
+			"queuedBehindParkedTurn": "Wartet auf einen anderen Chat",
+			"queuedBehindParkedTurnText": "Diese Nachricht wartet auf eine Freigabe oder eine Frage in einem anderen Chat. Beantworten Sie sie dort, um fortzufahren.",
 			"queuedBehindTrainingRunText": "Diese Nachricht wartete auf einen laufenden Trainingslauf.",
 			"queuedBehindWorkSession": "Wartet auf eine Arbeitssitzung",
 			"queuedBehindWorkSessionText": "Diese Nachricht wurde hinter einem laufenden Schritt einer Arbeitssitzung eingereiht.",
@@ -267,7 +267,7 @@
 			"searchHeading": "Das Modell möchte im Web suchen nach"
 		},
 		"webReview": {
-			"accept": "Zur Unterhaltung hinzufügen",
+			"accept": "Zum Chat hinzufügen",
 			"backend": "Suchmaschine: {{backend}}",
 			"heading": "Webinhalt prüfen, bevor das Modell ihn liest",
 			"missingPreview": "Laden Sie die Seite neu, um diesen Webinhalt zu prüfen, bevor das Modell ihn liest.",
@@ -307,7 +307,7 @@
 		"hide": "Ausblenden",
 		"keepEditing": "Weiter bearbeiten",
 		"loading": "Lädt...",
-		"loadingRateLimited": "Zu viele Anfragen an den Knoten. Neuer Versuch in {{seconds}} s.",
+		"loadingRateLimited": "Zu viele Anfragen an den Node. Neuer Versuch in {{seconds}} s.",
 		"noData": "Keine Einträge gefunden",
 		"ok": "Ok",
 		"pagination": {
@@ -708,11 +708,11 @@
 						"title": "Nachricht senden"
 					},
 					"firstResponse": {
-						"content": "Die Antwort erscheint in der Unterhaltung. Sie sind startklar; weitere optionale Tutorials finden Sie unter Über → Tutorials.",
+						"content": "Die Antwort erscheint im Chat. Sie sind startklar; weitere optionale Tutorials finden Sie unter Über → Tutorials.",
 						"title": "Ihre erste Antwort"
 					},
 					"navChat": {
-						"content": "Der Chat ist bereit für Ihre erste Unterhaltung.",
+						"content": "Der Chat ist bereit für Ihre erste Nachricht.",
 						"title": "Chat öffnen"
 					},
 					"navModels": {
@@ -724,7 +724,7 @@
 						"title": "Bei Bedarf ein Chat-Modell installieren"
 					},
 					"setDefaultModel": {
-						"content": "Wählen Sie ein installiertes chatfähiges Modell als Standard für neue Unterhaltungen.",
+						"content": "Wählen Sie ein installiertes chatfähiges Modell als Standard für neue Chats.",
 						"title": "Standardmodell auswählen"
 					}
 				},
@@ -838,7 +838,7 @@
 			"loadError": "Die Lauf-Historie konnte nicht geladen werden.",
 			"loading": "Lauf-Historie wird geladen…",
 			"noPatch": "Keine Änderungen exportiert",
-			"openConversation": "Konversation öffnen",
+			"openConversation": "Chat öffnen",
 			"outcome": {
 				"Completed": "Abgeschlossen",
 				"Failed": "Fehlgeschlagen",
@@ -907,7 +907,7 @@
 					"label": "Erweitert"
 				},
 				"defaultTemporaryChat": {
-					"description": "Neue Konversationen mit diesem Agenten bringen ihm standardmäßig kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt. Jeder Chat kann dies überschreiben.",
+					"description": "Neue Chats mit diesem Agenten bringen ihm standardmäßig kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt. Jeder Chat kann dies überschreiben.",
 					"label": "Neue Chats standardmäßig temporär"
 				},
 				"description": {
@@ -1086,11 +1086,11 @@
 					"turnsPreview": "{{count}} Turns · {{role}}: {{text}}"
 				},
 				"subtitle": "Erstellen Sie Golden-Fälle, die die Freischaltung absichern: Eine Kandidatenaktion darf sie nicht verschlechtern, bevor {{name}} sie aktivieren kann.",
-				"title": "Golden-Konversationen",
+				"title": "Golden-Chats",
 				"turnCount": "{{count}} Eingabe-Turns"
 			},
 			"insights": {
-				"attributionFootnote": "Tool-Zählungen sind eine Zuordnung auf Konversationsebene: Feedback zu Nachrichten in Konversationen, in denen das Tool verwendet wurde, nicht zur konkreten Nachricht, die es aufgerufen hat.",
+				"attributionFootnote": "Tool-Zählungen sind eine Zuordnung auf Chat-Ebene: Feedback zu Nachrichten in Chats, in denen das Tool verwendet wurde, nicht zur konkreten Nachricht, die es aufgerufen hat.",
 				"countHeader": "Gesamt",
 				"down": "Negativ {{count}}",
 				"downHeader": "Negativ",
@@ -1352,7 +1352,7 @@
 				"csv": "CSV exportieren (v{{version}})",
 				"error": "Dieses Benchmark-Projekt konnte nicht exportiert werden.",
 				"json": "JSON exportieren (v{{version}})",
-				"schemaHelp": "Schema {{version}}: jeder Lauf in voller Tiefe mit seiner Prüfung und der Werkzeugaufruf-Summe, dazu die Aufgaben des Projekts, die Aufgaben- und Kombinationsstempel jedes Laufs und die Kombinationstabelle."
+				"schemaHelp": "Schema {{version}}: jeder Lauf in voller Tiefe mit seiner Prüfung und der Tool-Aufruf-Summe, dazu die Aufgaben des Projekts, die Aufgaben- und Kombinationsstempel jedes Laufs und die Kombinationstabelle."
 			},
 			"fidelity": {
 				"cacheClearError": "Die zwischengespeicherten Basis-Logits konnten nicht gelöscht werden.",
@@ -1893,8 +1893,8 @@
 			"subtitle": "Lokale Modelle mit derselben eingefrorenen Agentenaufgabe und optionaler unabhängiger Bewertung vergleichen.",
 			"title": "Lokale Modell-Benchmarks",
 			"tools": {
-				"count_one": "{{count}} Werkzeugaufruf",
-				"count_other": "{{count}} Werkzeugaufrufe",
+				"count_one": "{{count}} Tool-Aufruf",
+				"count_other": "{{count}} Tool-Aufrufe",
 				"repeated": "wiederholter Aufruf"
 			},
 			"validation": {
@@ -2002,8 +2002,8 @@
 		},
 		"chat": {
 			"actions": {
-				"branch": "Unterhaltung verzweigen",
-				"branchSuccess": "Verzweigte Unterhaltung wurde erstellt.",
+				"branch": "Chat verzweigen",
+				"branchSuccess": "Verzweigter Chat wurde erstellt.",
 				"copy": "Nachricht kopieren",
 				"copyCode": "Code kopieren",
 				"copyCodeSuccess": "Kopiert",
@@ -2038,7 +2038,7 @@
 			"agentSelector": {
 				"hint": "Einen auf diesem Node definierten Agenten auswählen.",
 				"noResults": "Keine Agenten gefunden",
-				"offOptionBoundHint": "Diese Unterhaltung ist an ihren Agenten gebunden; wähle stattdessen einen anderen Agenten",
+				"offOptionBoundHint": "Dieser Chat ist an seinen Agenten gebunden; wählen Sie stattdessen einen anderen Agenten",
 				"offOptionHint": "Kein Agent — verwendet die Node-Standardeinstellung",
 				"orchestratorBadge": "Orchestrator",
 				"pinnedModelHint": "Verwendet Modell: {{model}}",
@@ -2058,20 +2058,20 @@
 			"cloudToolsDisabled": "Cloud-Tools deaktiviert",
 			"cloudToolsEnabled": "Cloud-Tools aktiviert",
 			"cloudToolsLabel": "Cloud-Tools",
-			"cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Provider senden",
+			"cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Anbieter senden",
 			"cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
 			"commands": {
 				"menuLabel": "Slash-Befehle"
 			},
 			"compact": {
 				"aLocalModel": "einem lokalen Modell",
-				"aria": "Unterhaltung zusammenfassen",
+				"aria": "Chat zusammenfassen",
 				"compacted": "{{count}} ältere Nachricht(en) zusammengefasst. Ihre Originale bleiben erhalten.",
 				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} zusammengefasst, damit Ihr Chat auf dem Gerät bleibt. Ihre Originale bleiben erhalten.",
 				"confirm": "Zusammenfassen",
-				"confirmDescription": "Fassen Sie die älteren Nachrichten zu einer kompakten Übersicht zusammen, um das Kontextfenster zu entlasten. Ihre ursprünglichen Nachrichten bleiben erhalten und in der Unterhaltung sichtbar.",
-				"confirmTitle": "Unterhaltung zusammenfassen",
-				"error": "Die Unterhaltung konnte nicht zusammengefasst werden. Bitte versuchen Sie es erneut.",
+				"confirmDescription": "Fassen Sie die älteren Nachrichten zu einer kompakten Übersicht zusammen, um das Kontextfenster zu entlasten. Ihre ursprünglichen Nachrichten bleiben erhalten und im Chat sichtbar.",
+				"confirmTitle": "Chat zusammenfassen",
+				"error": "Der Chat konnte nicht zusammengefasst werden. Bitte versuchen Sie es erneut.",
 				"noModel": "Es ist kein lokales Chat-Modell zum Zusammenfassen installiert, daher kann die Zusammenfassung nicht auf dem Node laufen.",
 				"noSummary": "Es wurde keine Zusammenfassung erzeugt. Bitte versuchen Sie es erneut.",
 				"nothing": "Noch nichts zusammenzufassen — die aktuellen Nachrichten passen weiterhin ins Kontextfenster.",
@@ -2081,7 +2081,7 @@
 			"composer": {
 				"attach": "Datei anhängen",
 				"attachments": {
-					"noConversation": "Für den Upload konnte keine Unterhaltung vorbereitet werden.",
+					"noConversation": "Für den Upload konnte kein Chat vorbereitet werden.",
 					"remove": "{{name}} entfernen",
 					"removeFailed": "Anhang konnte nicht entfernt werden.",
 					"status": {
@@ -2110,7 +2110,7 @@
 			"connectionFailed": "Verbindung zum lokalen Chat-Hub fehlgeschlagen.",
 			"connectionFailedTitle": "Lokaler Chat nicht verfügbar",
 			"contextState": {
-				"aria": "Kontextzustand der Unterhaltung anzeigen",
+				"aria": "Kontextzustand des Chats anzeigen",
 				"categories": {
 					"CompletedWork": "Erledigte Arbeit",
 					"Constraint": "Einschränkungen",
@@ -2121,7 +2121,7 @@
 					"OpenQuestion": "Offene Fragen",
 					"ToolOutcome": "Tool-Ergebnisse"
 				},
-				"empty": "Noch nichts zusammengefasst. Fassen Sie die Unterhaltung zusammen, um ihren Kontextzustand aufzubauen.",
+				"empty": "Noch nichts zusammengefasst. Fassen Sie den Chat zusammen, um seinen Kontextzustand aufzubauen.",
 				"error": "Der Kontextzustand konnte nicht geladen werden.",
 				"inactive": "Ersetzt und zurückgezogen ({{count}})",
 				"notCompacted": "Noch nicht zusammengefasst",
@@ -2131,8 +2131,8 @@
 				"stateCoverage": "Zustand reicht bis Sequenz {{sequence}}, aktualisiert {{updatedAt}}",
 				"synopsis": "Zusammenfassung",
 				"synopsisCoverage": "Zusammenfassung reicht bis Sequenz {{sequence}}, aktualisiert {{updatedAt}}",
-				"title": "Kontext der Unterhaltung",
-				"tooltip": "Zeigen, was sich die Unterhaltung merkt"
+				"title": "Kontext des Chats",
+				"tooltip": "Zeigen, was sich der Chat merkt"
 			},
 			"contextUsage": {
 				"afterFirstResponse": "Wird nach der ersten Antwort aktualisiert.",
@@ -2149,7 +2149,7 @@
 				"section": {
 					"attachments": "Anhänge",
 					"compaction": "Kompaktierungszusammenfassung",
-					"conversation": "Unterhaltung",
+					"conversation": "Chat",
 					"free": "Frei",
 					"instructions": "Anweisungen",
 					"knowledge": "Wissen",
@@ -2189,19 +2189,19 @@
 				"withheld": "{{count}} Tools vom Relevanzfilter zurückgehalten"
 			},
 			"conversationList": {
-				"actionsAria": "Unterhaltungsaktionen",
+				"actionsAria": "Chat-Aktionen",
 				"archive": "Archivieren",
 				"archived": "Archiviert",
 				"collapseAria": "Seitenleiste einklappen",
 				"delete": "Löschen",
-				"deleteConfirm": "Diese Unterhaltung löschen? Das kann nicht rückgängig gemacht werden.",
+				"deleteConfirm": "Diesen Chat löschen? Das kann nicht rückgängig gemacht werden.",
 				"deleteShiftHint": "Umschalt+Klick überspringt Bestätigung",
-				"deleteSuccess": "Unterhaltung gelöscht.",
-				"empty": "Noch keine Unterhaltungen.",
+				"deleteSuccess": "Chat gelöscht.",
+				"empty": "Noch keine Chats.",
 				"expandAria": "Seitenleiste ausklappen",
 				"hide": "Seitenleiste einklappen",
 				"noClientAssigned": "Kein Client zugewiesen",
-				"noMatches": "Keine Unterhaltungen entsprechen Ihrer Suche.",
+				"noMatches": "Keine Chats entsprechen Ihrer Suche.",
 				"noMessages": "Keine Nachrichten",
 				"pin": "Anheften",
 				"pinned": "Angeheftet",
@@ -2209,19 +2209,19 @@
 				"remote": "Remote",
 				"remoteTooltip": "Von einem gekoppelten Client gestartet. Auf diesem Node nur lesbar.",
 				"rename": "Umbenennen",
-				"renameAria": "Unterhaltung umbenennen",
-				"searchAria": "Unterhaltungen durchsuchen",
+				"renameAria": "Chat umbenennen",
+				"searchAria": "Chats durchsuchen",
 				"searchPlaceholder": "Suchen",
 				"show": "Seitenleiste ausklappen",
 				"showAll": "Alle anzeigen",
 				"showArchived": "Archivierte anzeigen",
-				"title": "Unterhaltungen",
+				"title": "Chats",
 				"truncatedNotice": "Die 100 neuesten werden angezeigt",
 				"unarchive": "Aus Archiv holen",
 				"unpin": "Nicht mehr anheften",
-				"untitled": "Unbenannte Unterhaltung"
+				"untitled": "Unbenannter Chat"
 			},
-			"conversations": "Unterhaltungen",
+			"conversations": "Chats",
 			"defaultAgentName": "Standard-Assistent",
 			"disconnect": {
 				"button": "Trennen",
@@ -2230,7 +2230,7 @@
 				"descriptionWithoutName": "Den ausgewählten Client-Node trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
 				"title": "Client-Node trennen"
 			},
-			"emptyState": "Erstellen oder wählen Sie eine Unterhaltung, um zu chatten.",
+			"emptyState": "Erstellen oder wählen Sie einen Chat, um zu chatten.",
 			"encryptedConversation": {
 				"lockedDescription": "Geben Sie Ihr Passwort für verschlüsselte Synchronisierung ein, um verschlüsselte Chats zu entsperren.",
 				"lockedTitle": "Verschlüsselter Chat gesperrt"
@@ -2285,7 +2285,7 @@
 			"loadError": {
 				"body": "Beim Laden dieser Nachrichten ist ein Fehler aufgetreten.",
 				"retry": "Erneut versuchen",
-				"title": "Diese Unterhaltung konnte nicht geladen werden"
+				"title": "Dieser Chat konnte nicht geladen werden"
 			},
 			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
 			"loadingMessages": "Nachrichten werden geladen…",
@@ -2309,7 +2309,7 @@
 			"localToolsEnabled": "Lokale Tools aktiviert",
 			"localToolsLabel": "Lokale Tools",
 			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
-			"lockedState": "Diese Unterhaltung ist gesperrt. Entsperren Sie sie, um Nachrichten anzuzeigen.",
+			"lockedState": "Dieser Chat ist gesperrt. Entsperren Sie ihn, um Nachrichten anzuzeigen.",
 			"menu": {
 				"label": "Nachrichtenoptionen",
 				"showTokensPerSecond": "Tokens/Sek. anzeigen"
@@ -2348,7 +2348,7 @@
 				"setupTitle": "Ihr erstes Modell wird eingerichtet…",
 				"title": "Noch kein Chat-Modell installiert"
 			},
-			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Koppeln und verbinden Sie zuerst einen Worker-Node, bevor Sie Unterhaltungen erstellen.",
+			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Koppeln und verbinden Sie zuerst einen Worker-Node, bevor Sie Chats erstellen.",
 			"nodeDefaultModel": "Node-Standard",
 			"nodeReply": "Node-Antwort",
 			"pendingApprovalLabel": "Ausstehende Freigabe",
@@ -2387,8 +2387,8 @@
 			"remoteImage": {
 				"load": "Externes Bild laden"
 			},
-			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Node nur lesbar.",
-			"remoteViewOnlyTitle": "Remote-Unterhaltung",
+			"remoteViewOnly": "Dieser Chat wurde von einem gekoppelten Client gestartet und ist auf diesem Node nur lesbar.",
+			"remoteViewOnlyTitle": "Remote-Chat",
 			"retryConnection": "Erneut versuchen",
 			"revisions": {
 				"next": "Nächste Revision",
@@ -2406,7 +2406,7 @@
 			"samplingOptions": {
 				"close": "Schließen",
 				"cloudUnsupported": "Von Cloud-Anbietern nicht unterstützt",
-				"description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert, nicht pro Unterhaltung.",
+				"description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert, nicht pro Chat.",
 				"frequencyPenalty": "Häufigkeitsstrafe",
 				"frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
 				"groupLimits": "Limits",
@@ -2418,7 +2418,7 @@
 				"minPDescription": "Mindestwahrscheinlichkeit für ein Token relativ zum wahrscheinlichsten Token.",
 				"modelDefault": "Modellstandard",
 				"numCtx": "Kontextlänge (num_ctx)",
-				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens. Bei der lokalen llama.cpp-Laufzeit ist das Serverfenster beim Laden des Modells festgelegt, daher begrenzt dies nur, wie viel Gesprächsverlauf gesendet wird.",
+				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens. Bei der lokalen llama.cpp-Laufzeit ist das Serverfenster beim Laden des Modells festgelegt, daher begrenzt dies nur, wie viel Chat-Verlauf gesendet wird.",
 				"presencePenalty": "Präsenzstrafe",
 				"presencePenaltyDescription": "Bestraft Tokens, die bereits in der Ausgabe erschienen sind, unabhängig von der Häufigkeit.",
 				"repeatLastN": "Wiederholungsfenster (letzte N)",
@@ -2453,11 +2453,11 @@
 				"encrypted": "Verschlüsselt",
 				"encryptedTooltip": "Wird verschlüsselt gespeichert. Mit Ihrem Passwort für verschlüsselte Synchronisierung entsperren.",
 				"plain": "Normal",
-				"plainTooltip": "Wird als lesbarer Chatverlauf für Ihr Konto gespeichert."
+				"plainTooltip": "Wird als lesbarer Chat-Verlauf für Ihr Konto gespeichert."
 			},
 			"streamErrors": {
 				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuchen Sie es erneut.",
-				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuchen Sie es erneut oder aktualisieren Sie die Unterhaltung."
+				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuchen Sie es erneut oder aktualisieren Sie den Chat."
 			},
 			"streamFailedTitle": "Der lokale Chat-Stream ist fehlgeschlagen.",
 			"streaming": "Antwort wird empfangen",
@@ -2467,14 +2467,14 @@
 					"enableEncryptedTitle": "Verschlüsselten Sync aktivieren?",
 					"enableStandardTitle": "Standard-Sync aktivieren?",
 					"enableSync": "Sync aktivieren",
-					"encryptedDescription": "Dadurch wird diese TrustedLocal-Unterhaltung in verschlüsselten Sync umgewandelt. Sie müssen diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind.",
+					"encryptedDescription": "Dadurch wird dieser TrustedLocal-Chat in verschlüsselten Sync umgewandelt. Sie müssen diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind.",
 					"keepLocalOnly": "Lokal behalten",
-					"standardDescription": "Dadurch kann diese TrustedLocal-Unterhaltung mit der Plattform synchronisiert werden. Fahren Sie nur fort, wenn diese Unterhaltung von diesem Gerät hochgeladen werden soll."
+					"standardDescription": "Dadurch kann dieser TrustedLocal-Chat mit der Plattform synchronisiert werden. Fahren Sie nur fort, wenn dieser Chat von diesem Gerät hochgeladen werden soll."
 				},
 				"enableEncrypted": "Verschlüsselten Sync aktivieren",
 				"enableStandard": "Sync aktivieren",
-				"encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diese Unterhaltung aktiviert.",
-				"standardEnabledSuccess": "Standard-Sync wurde für diese Unterhaltung aktiviert."
+				"encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diesen Chat aktiviert.",
+				"standardEnabledSuccess": "Standard-Sync wurde für diesen Chat aktiviert."
 			},
 			"temporaryChat": {
 				"label": "Temporärer Chat",
@@ -2489,7 +2489,7 @@
 				"reject": "Ablehnen",
 				"title": "Tool-Freigabe erforderlich"
 			},
-			"turnParked": "Eine Antwort in dieser Unterhaltung wartet auf Ihre Eingabe. Beantworten Sie die wartende Karte und senden Sie dann erneut.",
+			"turnParked": "Eine Antwort in diesem Chat wartet auf Ihre Eingabe. Beantworten Sie die wartende Karte und senden Sie dann erneut.",
 			"turnThroughput": {
 				"cached": "{{value}} aus dem Cache",
 				"timeToFirstToken": "{{value}} s bis zum ersten Token",
@@ -2504,11 +2504,11 @@
 				"noticeInjection": "Webseiten und Suchergebnisse können versteckte Anweisungen enthalten (Prompt-Injection), die das Modell dazu bringen sollen, Ihre Daten preiszugeben oder Aktionen auszuführen, um die Sie nicht gebeten haben.",
 				"noticeReversible": "Sie können die Funktion jederzeit wieder ausschalten.",
 				"noticeTitle": "Webinhalte automatisch übernehmen?",
-				"noticeUnreviewed": "Mit automatischer Übernahme werden die Webanfragen des Modells in dieser Unterhaltung ohne Rückfrage gesendet, und ihre Ergebnisse gehen an das Modell, ohne dass sie Ihnen vorher angezeigt werden.",
+				"noticeUnreviewed": "Mit automatischer Übernahme werden die Webanfragen des Modells in diesem Chat ohne Rückfrage gesendet, und ihre Ergebnisse gehen an das Modell, ohne dass sie Ihnen vorher angezeigt werden.",
 				"off": "Webinhalte werden Ihnen zuerst zur Prüfung angezeigt",
 				"on": "Webinhalte gehen ungeprüft an das Modell"
 			},
-			"windowTitle": "Chatfenster",
+			"windowTitle": "Chat-Fenster",
 			"words_one": "Wort",
 			"words_other": "Wörter",
 			"workflow": {
@@ -2542,7 +2542,7 @@
 				"notice": {
 					"attachments": "Dieser Workflow nimmt keine Anhänge an. Entfernen Sie sie und senden Sie erneut.",
 					"busy": "Der Workflow läuft noch. Stoppen Sie ihn oder warten Sie, bis er fertig ist.",
-					"runsFailed": "Die Workflow-Läufe dieser Unterhaltung konnten nicht geladen werden, daher ist das Senden pausiert. Versuchen Sie es erneut, um fortzufahren.",
+					"runsFailed": "Die Workflow-Läufe dieses Chats konnten nicht geladen werden, daher ist das Senden pausiert. Versuchen Sie es erneut, um fortzufahren.",
 					"selectionChanged": "Ein anderer Workflow wartet auf Ihre Antwort. Wählen Sie ihn erneut aus, um zu antworten, oder stoppen Sie ihn zuerst."
 				},
 				"placeholder": "Nachricht an {{name}}",
@@ -2551,7 +2551,7 @@
 					"description": "Dieser Workflow ist abgeschlossen. Mit dieser Nachricht wird „{{name}}“ erneut gestartet.",
 					"title": "Workflow erneut ausführen?"
 				},
-				"runsCapped": "Aktivität der {{count}} neuesten Workflow-Läufe in dieser Unterhaltung.",
+				"runsCapped": "Aktivität der {{count}} neuesten Workflow-Läufe in diesem Chat.",
 				"selector": {
 					"empty": "Noch keine Chat-Workflows. Legen Sie einen auf der Seite Graph-Workflows an.",
 					"none": "Kein Workflow",
@@ -2580,7 +2580,7 @@
 					"title": "{{node}} steuern"
 				}
 			},
-			"workflowRunLive": "In dieser Unterhaltung läuft ein Workflow; antworten Sie darüber oder stoppen Sie ihn zuerst."
+			"workflowRunLive": "In diesem Chat läuft ein Workflow; antworten Sie darüber oder stoppen Sie ihn zuerst."
 		},
 		"cloudProviders": {
 			"add": "Anbieter hinzufügen",
@@ -2761,7 +2761,7 @@
 			},
 			"loading": "Cloud-Einstellungen werden geladen…",
 			"placeholder": {
-				"description": "Provider-Konfiguration nutzt geheimnissichere lokale API-Antworten.",
+				"description": "Anbieter-Konfiguration nutzt geheimnissichere lokale API-Antworten.",
 				"title": "Cloud-Einstellungen"
 			},
 			"provider": {
@@ -2805,7 +2805,7 @@
 				"unavailable": "Befehle sind nicht verfügbar: Graph-Workflows sind auf diesem Node ausgeschaltet."
 			},
 			"reply": {
-				"failed": "Der Assistent konnte nicht antworten. Öffnen Sie die Unterhaltung, um es erneut zu versuchen.",
+				"failed": "Der Assistent konnte nicht antworten. Öffnen Sie den Chat, um es erneut zu versuchen.",
 				"openInChat": "Im Chat öffnen",
 				"waiting": "Warten auf den Assistenten…"
 			},
@@ -3322,7 +3322,7 @@
 					"modelReadiness": "Modellbereitschaft",
 					"none": "Für diesen Versuch wurde nichts erfasst.",
 					"outsideTurnTime": "Außerhalb der Turns",
-					"providerCalls": "Provider-Aufrufe",
+					"providerCalls": "Anbieter-Aufrufe",
 					"queuedFor": "In der Warteschlange",
 					"ranFor": "Laufzeit",
 					"reasoning": "Reasoning-Tokens",
@@ -3359,7 +3359,7 @@
 					"ModelCapability": "Modellfähigkeit",
 					"ObjectiveNotMet": "Ziel nicht erreicht",
 					"Policy": "Richtlinie",
-					"Provider": "Provider",
+					"Provider": "Anbieter",
 					"Rejected": "Abgelehnt",
 					"Timeout": "Zeitüberschreitung",
 					"ToolOrCommand": "Tool oder Befehl"
@@ -4142,7 +4142,7 @@
 				"loopbackOnly": "Nur von diesem Computer erreichbar",
 				"networkTitle": "Netzwerkzugriff",
 				"noDevices": "Keinen Zugriff auf angeschlossene Geräte",
-				"noXeData": "Keinen Zugriff auf Ihre XE-Daten, Modelle oder Unterhaltungen",
+				"noXeData": "Keinen Zugriff auf Ihre XE-Daten, Modelle oder Chats",
 				"storage": "Einen eigenen, von XE verwalteten Speicherordner",
 				"title": "Was diese Anwendung erhält"
 			},
@@ -4397,7 +4397,7 @@
 				"bindingParameter": "Parameter",
 				"bindingPath": "Pfad",
 				"chatInputPrompt": "Was der Benutzer gefragt wird",
-				"chatInputPromptHelp": "Der Lauf wartet hier, bis der Benutzer in der Unterhaltung antwortet.",
+				"chatInputPromptHelp": "Der Lauf wartet hier, bis der Benutzer im Chat antwortet.",
 				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Node-Einstellungen → Datenschutz & Updates eingeschaltet ist oder die externe Verbindung des Modells unbeaufsichtigte Läufe erlaubt.",
 				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)",
 				"conditionPathHelp": "Ausgehende Kanten ohne eigenen Pfad vergleichen diesen.",
@@ -4510,7 +4510,7 @@
 				"issues": {
 					"agentInstructionsMissing": "„{{subject}}“ ist ein Agentenknoten ohne Anweisungen.",
 					"chatInputNeedsUnconditionalEdge": "„{{subject}}“ ist eine Chat-Eingabe, deren ausgehende Verbindungen alle eine Bedingung haben. Fügen Sie eine ohne Bedingung hinzu, damit jede Antwort weiterführt.",
-					"chatInputOutsideChatGraph": "„{{subject}}“ ist eine Chat-Eingabe, die nur ein Chat-Workflow enthalten kann: Nur eine Unterhaltung kann sie beantworten.",
+					"chatInputOutsideChatGraph": "„{{subject}}“ ist eine Chat-Eingabe, die nur ein Chat-Workflow enthalten kann: Nur ein Chat kann sie beantworten.",
 					"chatInputPromptMissing": "„{{subject}}“ ist eine Chat-Eingabe ohne Frage an den Benutzer.",
 					"chatSettingsOnStandardGraph": "Chat-Einstellungen gelten nur für einen Chat-Workflow. Stellen Sie die Workflow-Art auf Chat oder entfernen Sie sie.",
 					"conditionEdgeHasNoPath": "Die Kante „{{subject}}“ hat eine Bedingung, aber keinen Pfad, und ihr Quellknoten hat keinen, den sie erben könnte.",
@@ -4895,7 +4895,7 @@
 					"description": "Prüft einen Vorschlag gleichzeitig aus drei Blickwinkeln und führt sie in einer Entscheidungsvorlage zusammen.",
 					"name": "Parallele Perspektiven"
 				},
-				"startFromDescription": "Eine Vorlage ist ein vollständiger Workflow, den Sie sofort mit jedem installierten Chatmodell ausführen können.",
+				"startFromDescription": "Eine Vorlage ist ein vollständiger Workflow, den Sie sofort mit jedem installierten Chat-Modell ausführen können.",
 				"startFromLabel": "Beginnen mit",
 				"summarizeWithApproval": {
 					"description": "Fasst ein Dokument zusammen und wartet dann, bis eine Person die Zusammenfassung freigibt oder ablehnt.",
@@ -4909,7 +4909,7 @@
 			"settings": {
 				"acceptsAttachments": "Nimmt Anhänge an",
 				"kind": "Workflow-Art",
-				"kindHelp": "Ein Chat-Workflow läuft in einer Unterhaltung und kann dem Benutzer Fragen stellen.",
+				"kindHelp": "Ein Chat-Workflow läuft in einem Chat und kann dem Benutzer Fragen stellen.",
 				"kindOption": {
 					"Chat": "Chat",
 					"Standard": "Standard"
@@ -5027,13 +5027,13 @@
 			},
 			"job": {
 				"defaultSampler": "Standard-Sampler",
-				"deleteBlocked": "Dieser Auftrag läuft noch. Brechen Sie ihn zuerst ab, dann können Sie ihn löschen.",
-				"deleteConfirm": "Dieser Auftrag, sein Prompt und das erzeugte Bild werden gelöscht — das Bild wird von der Festplatte entfernt. Das lässt sich nicht rückgängig machen.",
-				"deleteConfirmNoImage": "Dieser Auftrag und sein Prompt werden gelöscht. Es wurde kein Bild erzeugt. Das lässt sich nicht rückgängig machen.",
-				"deleteError": "Der Bildauftrag konnte nicht gelöscht werden.",
-				"deleteHint": "Löscht den Auftrag und das erzeugte Bild.",
-				"deleteTitle": "Diesen Bildauftrag löschen?",
-				"deleted": "Bildauftrag gelöscht.",
+				"deleteBlocked": "Diese Aufgabe läuft noch. Brechen Sie sie zuerst ab, dann können Sie sie löschen.",
+				"deleteConfirm": "Diese Aufgabe, ihr Prompt und das erzeugte Bild werden gelöscht — das Bild wird von der Festplatte entfernt. Das lässt sich nicht rückgängig machen.",
+				"deleteConfirmNoImage": "Diese Aufgabe und ihr Prompt werden gelöscht. Es wurde kein Bild erzeugt. Das lässt sich nicht rückgängig machen.",
+				"deleteError": "Die Bildaufgabe konnte nicht gelöscht werden.",
+				"deleteHint": "Löscht die Aufgabe und das erzeugte Bild.",
+				"deleteTitle": "Diese Bildaufgabe löschen?",
+				"deleted": "Bildaufgabe gelöscht.",
 				"duration": "{{seconds}} s",
 				"elapsed": "{{seconds}} s",
 				"eta": "noch ca. {{seconds}} s",
@@ -5045,9 +5045,9 @@
 				"steps": "Schritt {{step}} von {{totalSteps}}"
 			},
 			"jobs": {
-				"cancelError": "Der Auftrag konnte nicht abgebrochen werden.",
-				"empty": "Noch keine Bildaufträge. Erzeugen Sie einen, um ihn hier zu sehen.",
-				"title": "Aufträge"
+				"cancelError": "Die Aufgabe konnte nicht abgebrochen werden.",
+				"empty": "Noch keine Bildaufgaben. Erzeugen Sie eine, um sie hier zu sehen.",
+				"title": "Aufgaben"
 			},
 			"models": {
 				"browse": {
@@ -5223,7 +5223,7 @@
 				"Queued": "In Warteschlange",
 				"Succeeded": "Erfolgreich"
 			},
-			"subtitle": "Erzeugen Sie Bilder lokal mit stable-diffusion.cpp. Aufträge laufen nacheinander und melden während der Verarbeitung ihren groben Status.",
+			"subtitle": "Erzeugen Sie Bilder lokal mit stable-diffusion.cpp. Aufgaben laufen nacheinander und melden während der Verarbeitung ihren groben Status.",
 			"title": "Bildgenerierung",
 			"uploads": {
 				"deleteError": "Das hochgeladene Bild konnte nicht gelöscht werden.",
@@ -5396,7 +5396,7 @@
 			"sessions": {
 				"delete": {
 					"action": "Löschen",
-					"description": "Diese Sitzung löschen? Ihre Unterhaltung, ihre Ausführungen und deren aufgezeichnete Ereignisse werden entfernt. Das kann nicht rückgängig gemacht werden.",
+					"description": "Diese Sitzung löschen? Ihr Chat, ihre Ausführungen und deren aufgezeichnete Ereignisse werden entfernt. Das kann nicht rückgängig gemacht werden.",
 					"title": "Sitzung löschen"
 				},
 				"detail": {
@@ -5437,7 +5437,7 @@
 					"Active": "Aktiv",
 					"Closed": "Geschlossen"
 				},
-				"subtitle": "Unterhaltungen, die ein Trigger mit vom Aufrufer verwalteter Sitzung über mehrere Aufrufe hinweg behält. Beim Löschen werden die Unterhaltung und alle darin ausgeführten Läufe entfernt.",
+				"subtitle": "Chats, die ein Trigger mit vom Aufrufer verwalteter Sitzung über mehrere Aufrufe hinweg behält. Beim Löschen werden der Chat und alle darin ausgeführten Läufe entfernt.",
 				"title": "Integrations-Sitzungen"
 			},
 			"triggers": {
@@ -5488,7 +5488,7 @@
 						"placeholder": "sensor-hub-ingest"
 					},
 					"sessionPolicy": {
-						"description": "Ob jeder Aufruf eine neue Unterhaltung startet oder der Aufrufer eine über mehrere Aufrufe hinweg behält.",
+						"description": "Ob jeder Aufruf einen neuen Chat startet oder der Aufrufer einen über mehrere Aufrufe hinweg behält.",
 						"label": "Sitzungsrichtlinie",
 						"options": {
 							"CallerManaged": "Vom Aufrufer verwaltete Sitzung",
@@ -5549,9 +5549,9 @@
 		"invocations": {
 			"monitor": {
 				"active": "Aktiv",
-				"callBudgetReached": "Am Budget für Anbieteraufrufe gestoppt; eine Arbeitssitzung setzt mit ihrem nächsten Schritt fort.",
+				"callBudgetReached": "Am Budget für Anbieter-Aufrufe gestoppt; eine Arbeitssitzung setzt mit ihrem nächsten Schritt fort.",
 				"current": {
-					"conversation": "Unterhaltung: {{value}}",
+					"conversation": "Chat: {{value}}",
 					"empty": "Aktuell ist kein Aufruf zugewiesen oder aktiv.",
 					"model": "Modell: {{value}}",
 					"no": "Nein",
@@ -5597,8 +5597,8 @@
 				},
 				"subtitle": "Den aktiven Aufruf und den lokalen In-Memory-Verlauf des Workers einsehen.",
 				"summary": {
-					"callBudget": "Nach {{duration}}{{withModel}} am Budget für Anbieteraufrufe gestoppt.",
-					"callBudgetNoDuration": "Am Budget für Anbieteraufrufe gestoppt{{withModel}}.",
+					"callBudget": "Nach {{duration}}{{withModel}} am Budget für Anbieter-Aufrufe gestoppt.",
+					"callBudgetNoDuration": "Am Budget für Anbieter-Aufrufe gestoppt{{withModel}}.",
 					"cancelled": "Abgebrochen nach {{duration}}{{withModel}}.",
 					"cancelledNoDuration": "Abgebrochen{{withModel}}.",
 					"completed": "Abgeschlossen in {{duration}}{{withModel}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning, {{tools}}.",
@@ -5672,9 +5672,9 @@
 				"content-missing": "Der Dokumentinhalt wurde nicht gefunden.",
 				"embedding-incomplete": "Das Embedding-Modell hat ein unvollständiges Ergebnis geliefert. Stellen Sie sicher, dass das konfigurierte Embedding-Modell geladen ist, und versuchen Sie es erneut.",
 				"embedding-model-changed": "Das Embedding-Modell hat sich während der Indizierung geändert. Wiederholen Sie das Dokument.",
-				"embedding-rejected": "Das Embedding-Modell ist installiert, hat die Anfrage aber abgelehnt. Prüfen Sie die Knotenprotokolle auf die Antwort des Servers und versuchen Sie es dann erneut.",
+				"embedding-rejected": "Das Embedding-Modell ist installiert, hat die Anfrage aber abgelehnt. Prüfen Sie die Node-Protokolle auf die Antwort des Servers und versuchen Sie es dann erneut.",
 				"embedding-unavailable": "Es ist kein Embedding-Modell installiert, daher können keine Dokumente indiziert werden. Verwenden Sie in den Node-Einstellungen „Empfohlenes Embedding-Modell herunterladen“ oder installieren Sie ein Embedding-GGUF unter Modelle → Hugging Face durchsuchen und versuchen Sie es dann erneut.",
-				"embedding-unreachable": "Das Embedding-Modell ist installiert, aber sein Prozess wurde beendet oder ist nicht erreichbar. Prüfen Sie die Knotenprotokolle und wiederholen Sie dann das Dokument.",
+				"embedding-unreachable": "Das Embedding-Modell ist installiert, aber sein Prozess wurde beendet oder ist nicht erreichbar. Prüfen Sie die Node-Protokolle und wiederholen Sie dann das Dokument.",
 				"extraction-failed": "Der Text des Dokuments konnte nicht extrahiert werden.",
 				"interrupted-repeatedly": "Die Aufnahme wurde wiederholt unterbrochen und abgebrochen.",
 				"invalid-vector": "Das Embedding-Modell hat einen ungültigen Vektor geliefert. Indizieren Sie mit einem unterstützten Embedding-Modell neu.",
@@ -5871,11 +5871,11 @@
 				"sessionScope": {
 					"label": "Sitzung",
 					"options": {
-						"PerConversation": "Pro Unterhaltung",
+						"PerConversation": "Pro Chat",
 						"Shared": "Gemeinsam"
 					},
-					"perConversationDescription": "Jede Unterhaltung erhält eine eigene Serversitzung; Stdio-Server sind auf 4 begrenzt.",
-					"sharedDescription": "Alle Unterhaltungen teilen sich eine Serversitzung."
+					"perConversationDescription": "Jeder Chat erhält eine eigene Serversitzung; Stdio-Server sind auf 4 begrenzt.",
+					"sharedDescription": "Alle Chats teilen sich eine Serversitzung."
 				},
 				"transport": {
 					"description": "Stdio startet einen lokalen Prozess; HTTP verbindet sich mit einem laufenden Loopback-Server.",
@@ -6590,7 +6590,7 @@
 					"label": "Nach llama.cpp-Laufzeit-Updates suchen"
 				},
 				"autoEffortFastModel": {
-					"description": "Wenn eine Chat-Runde den automatischen Reasoning-Aufwand verwendet und die Runde einfach wirkt, wird sie stattdessen auf diesem kleinen llama.cpp-Modell ausgeführt. Aus lassen, um das Modell der Unterhaltung zu behalten und nur den Aufwand zu senken. Benötigt einen zweiten Prozessplatz; Änderungen gelten ab der nächsten Nachricht.",
+					"description": "Wenn eine Chat-Runde den automatischen Reasoning-Aufwand verwendet und die Runde einfach wirkt, wird sie stattdessen auf diesem kleinen llama.cpp-Modell ausgeführt. Aus lassen, um das Modell des Chats zu behalten und nur den Aufwand zu senken. Benötigt einen zweiten Prozessplatz; Änderungen gelten ab der nächsten Nachricht.",
 					"empty": "Keine installierten llama.cpp-Chatmodelle",
 					"label": "Schnelles Modell für automatischen Reasoning-Aufwand",
 					"off": "Aus"
@@ -6632,11 +6632,11 @@
 					}
 				},
 				"chatRetentionDays": {
-					"label": "Aufbewahrung von Unterhaltungen"
+					"label": "Aufbewahrung von Chats"
 				},
 				"chatRetentionEnabled": {
-					"description": "Unterhaltungen samt Uploads und Nachrichten endgültig löschen, sobald sie länger als der Zeitraum unten inaktiv sind.",
-					"label": "Alte Unterhaltungen löschen"
+					"description": "Chats samt Uploads und Nachrichten endgültig löschen, sobald sie länger als der Zeitraum unten inaktiv sind.",
+					"label": "Alte Chats löschen"
 				},
 				"cloudModelAccess": {
 					"title": "Cloud-Modelle"
@@ -6734,7 +6734,7 @@
 					"title": "Downloads"
 				},
 				"embeddingModel": {
-					"description": "Das Modell, mit dem jedes Dokument und jede Anfrage der Wissensdatenbank eingebettet wird. Der Knoten legt das Modell fest, das das erste Dokument indiziert; ein weiteres installiertes Embedding-Modell ändert es daher nie. Wenn Sie es hier ändern, wird jedes mit einem anderen Modell indizierte Dokument zur Neuindizierung vorgemerkt.",
+					"description": "Das Modell, mit dem jedes Dokument und jede Anfrage der Wissensdatenbank eingebettet wird. Der Node legt das Modell fest, das das erste Dokument indiziert; ein weiteres installiertes Embedding-Modell ändert es daher nie. Wenn Sie es hier ändern, wird jedes mit einem anderen Modell indizierte Dokument zur Neuindizierung vorgemerkt.",
 					"downloadAlreadyInstalled": "Das empfohlene Embedding-Modell ({{model}}) ist bereits installiert.",
 					"downloadError": "Der Download des empfohlenen Embedding-Modells konnte nicht gestartet werden.",
 					"downloadInFlight": "Das empfohlene Embedding-Modell ({{model}}) wird bereits heruntergeladen.",
@@ -6898,7 +6898,7 @@
 				"llamaChatCacheRam": {
 					"auto": "Automatisch",
 					"custom": "Eigener Wert",
-					"description": "Arbeitsspeicher, den llama-server für zwischengespeicherte Prompts nutzt. Automatisch verwendet ein Achtel des RAM (512–8192 MiB). Das beschleunigt die Rückkehr zu langen Unterhaltungen, kostet bei jeder neuen Unterhaltung etwa eine Sekunde und hilft Unterhaltungen mit Tools nie; wählen Sie „Aus“, wenn Sie nur mit Tools arbeiten. Gilt nach einem Neustart des Nodes.",
+					"description": "Arbeitsspeicher, den llama-server für zwischengespeicherte Prompts nutzt. Automatisch verwendet ein Achtel des RAM (512–8192 MiB). Das beschleunigt die Rückkehr zu langen Chats, kostet bei jedem neuen Chat etwa eine Sekunde und hilft Chats mit Tools nie; wählen Sie „Aus“, wenn Sie nur mit Tools arbeiten. Gilt nach einem Neustart des Nodes.",
 					"label": "Prompt-Cache-Speicher",
 					"off": "Aus",
 					"sizeLabel": "Größe des Prompt-Caches"
@@ -7097,7 +7097,7 @@
 					"label": "Tool-fähige Modelle"
 				},
 				"toolLimits": {
-					"title": "Tool- und Anbieterlimits"
+					"title": "Tool- und Anbieter-Limits"
 				},
 				"toolPipelineMaxConsecutiveInvalidToolCalls": {
 					"description": "Wie viele fehlerhafte Aufrufe eines Tools in Folge erlaubt sind, bevor es abgelehnt wird.",
@@ -7201,7 +7201,7 @@
 				"sourceBuild": {
 					"activity": {
 						"busy": "Bildlaufzeit beschäftigt",
-						"detail": "{{jobs}} Auftrag/Aufträge, {{starting}} im Start, {{processes}} aktive(r) Prozess(e)",
+						"detail": "{{jobs}} Aufgabe(n), {{starting}} im Start, {{processes}} aktive(r) Prozess(e)",
 						"idle": "Bildlaufzeit im Leerlauf"
 					},
 					"backend": "Backend",
@@ -7420,7 +7420,7 @@
 			"localModelProxyKey": {
 				"clientHint": "Richten Sie Ihren OpenAI-kompatiblen Client auf base_url = den Endpunkt oben mit api_key = dem erzeugten Schlüssel. Bereitgestellt wird nur das lokale Modell: keine Agenten-Tools, kein Gedächtnis, keine Wissensdatenbank.",
 				"configured": "Schlüssel konfiguriert",
-				"description": "Erlauben Sie einem externen OpenAI-kompatiblen Tool (LiteLLM, Continue, einem lokalen Agenten), Ihr lokales Modell über diesen Node als gewöhnlichen OpenAI-Provider zu nutzen: Setzen Sie dessen base_url auf den Endpunkt unten und dessen API-Schlüssel auf den erzeugten Schlüssel. Bereitgestellt wird nur das reine Modell, ohne Agenten-Tools und ohne Gedächtnis. Gespeichert wird nur ein Einweg-Hash des Schlüssels, daher wird er beim Erzeugen genau einmal angezeigt und kann danach nicht mehr abgerufen werden. Nur Clients auf diesem Rechner können sich verbinden.",
+				"description": "Erlauben Sie einem externen OpenAI-kompatiblen Tool (LiteLLM, Continue, einem lokalen Agenten), Ihr lokales Modell über diesen Node als gewöhnlichen OpenAI-Anbieter zu nutzen: Setzen Sie dessen base_url auf den Endpunkt unten und dessen API-Schlüssel auf den erzeugten Schlüssel. Bereitgestellt wird nur das reine Modell, ohne Agenten-Tools und ohne Gedächtnis. Gespeichert wird nur ein Einweg-Hash des Schlüssels, daher wird er beim Erzeugen genau einmal angezeigt und kann danach nicht mehr abgerufen werden. Nur Clients auf diesem Rechner können sich verbinden.",
 				"dismissReveal": "Ich habe ihn kopiert",
 				"endpointLabel": "base_url",
 				"generate": "Schlüssel erzeugen",
@@ -7807,12 +7807,12 @@
 				"editTitle": "Geplante Aufgabe bearbeiten"
 			},
 			"errors": {
-				"cancel": "Die Ausführung konnte nicht abgebrochen werden.",
+				"cancel": "Der Lauf konnte nicht abgebrochen werden.",
 				"delete": "Die geplante Aufgabe konnte nicht gelöscht werden.",
 				"enable": "Der Aufgabenstatus konnte nicht geändert werden.",
 				"load": "Geplante Aufgaben konnten nicht geladen werden.",
-				"loadRun": "Die Ausführung konnte nicht geladen werden.",
-				"loadRuns": "Ausführungsverlauf konnte nicht geladen werden.",
+				"loadRun": "Der Lauf konnte nicht geladen werden.",
+				"loadRuns": "Der Verlauf der Läufe konnte nicht geladen werden.",
 				"save": "Die geplante Aufgabe konnte nicht gespeichert werden.",
 				"trigger": "Die Aufgabe konnte nicht ausgelöst werden."
 			},
@@ -7851,7 +7851,7 @@
 					"label": "Parameter (JSON)"
 				},
 				"preventOverlap": {
-					"label": "Überlappende Ausführungen verhindern"
+					"label": "Überlappende Läufe verhindern"
 				},
 				"repeatCount": {
 					"description": "Leer lassen, um unbegrenzt zu wiederholen.",
@@ -7910,7 +7910,7 @@
 				"triggerAria": "{{name}} jetzt ausführen"
 			},
 			"runs": {
-				"cancelAria": "Ausführung abbrechen",
+				"cancelAria": "Lauf abbrechen",
 				"columns": {
 					"actions": "Aktionen",
 					"duration": "Dauer",
@@ -7922,20 +7922,20 @@
 				"detail": {
 					"completed": "Abgeschlossen",
 					"duration": "Dauer",
-					"empty": "Wählen Sie eine Ausführung, um ihre Details anzuzeigen.",
+					"empty": "Wählen Sie einen Lauf, um seine Details anzuzeigen.",
 					"fired": "Ausgelöst",
-					"loading": "Ausführung wird geladen…",
+					"loading": "Lauf wird geladen…",
 					"summary": "Zusammenfassung",
-					"title": "Ausführungsdetails"
+					"title": "Laufdetails"
 				},
-				"empty": "Keine Ausführungen entsprechen den aktuellen Filtern.",
+				"empty": "Keine Läufe entsprechen den aktuellen Filtern.",
 				"filters": {
 					"allJobs": "Alle Aufgaben",
 					"allStatuses": "Alle Status",
 					"job": "Aufgabe",
 					"status": "Status"
 				},
-				"loading": "Ausführungsverlauf wird geladen…",
+				"loading": "Verlauf der Läufe wird geladen…",
 				"status": {
 					"Cancelled": "Abgebrochen",
 					"Failed": "Fehlgeschlagen",
@@ -7945,14 +7945,14 @@
 					"Succeeded": "Erfolgreich",
 					"TimedOut": "Zeitüberschreitung"
 				},
-				"title": "Ausführungsverlauf",
+				"title": "Verlauf der Läufe",
 				"trigger": {
 					"Agent": "Agent",
 					"Manual": "Manuell",
 					"Schedule": "Zeitplan",
 					"System": "System"
 				},
-				"viewAria": "Ausführung ansehen"
+				"viewAria": "Lauf ansehen"
 			},
 			"subtitle": "Planen Sie wiederkehrende und einmalige Aufgaben auf diesem Node. Neue Aufgaben sind sofort aktiviert (deaktivieren Sie eine, um sie anzuhalten), und Parameter werden verschlüsselt gespeichert.",
 			"title": "Planer",
@@ -8254,7 +8254,7 @@
 					"starting": "Wird gestartet…"
 				},
 				"stop": "Aufnahme beenden",
-				"stopFailed": "Die Transkription konnte nicht beendet werden. Prüfen Sie die Verbindung zu diesem Knoten und versuchen Sie es erneut."
+				"stopFailed": "Die Transkription konnte nicht beendet werden. Prüfen Sie die Verbindung zu diesem Node und versuchen Sie es erneut."
 			},
 			"channel": {
 				"Others": "Andere",
@@ -8421,7 +8421,7 @@
 			"setupTitle": "Wie viel von der Engine möchten Sie sehen?",
 			"simple": {
 				"badge": "Für die meisten empfohlen",
-				"body": "Chat, Agenten, Modelle, Wissen, Bilder und Transkription. Die Werkzeuge zum Bauen und Überwachen bleiben im Hintergrund.",
+				"body": "Chat, Agenten, Modelle, Wissen, Bilder und Transkription. Die Tools zum Bauen und Überwachen bleiben im Hintergrund.",
 				"title": "Einfach"
 			}
 		},
@@ -8526,7 +8526,7 @@
 			},
 			"delete": {
 				"confirm": "Löschen",
-				"description": "Ihr Plan, ihre Erkenntnisse, Artefakte, Checkpoints und die gesamte Unterhaltung werden entfernt. Das lässt sich nicht rückgängig machen.",
+				"description": "Ihr Plan, ihre Erkenntnisse, Artefakte, Checkpoints und der gesamte Chat werden entfernt. Das lässt sich nicht rückgängig machen.",
 				"failed": "Diese Arbeitssitzung konnte nicht gelöscht werden.",
 				"open": "Löschen",
 				"title": "Diese Arbeitssitzung löschen?"
@@ -8549,8 +8549,8 @@
 			},
 			"empty": "Noch keine Arbeitssitzungen. Geben Sie einem Agenten ein Ziel, und er plant und erledigt die Arbeit.",
 			"events": {
-				"consumption": "{{calls}}/{{cap}} Provider-Aufrufe · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
-				"consumptionAcrossBudgets": "{{calls}} Provider-Aufrufe über {{budgets}} Budgets (Limit {{cap}} pro Budget) · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
+				"consumption": "{{calls}}/{{cap}} Anbieter-Aufrufe · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
+				"consumptionAcrossBudgets": "{{calls}} Anbieter-Aufrufe über {{budgets}} Budgets (Limit {{cap}} pro Budget) · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
 				"empty": "In dieser Sitzung ist noch nichts passiert.",
 				"hideDetail": "Details ausblenden",
 				"loadMore": "Mehr laden",
@@ -8607,8 +8607,8 @@
 				"start": "Starten",
 				"stepOf": "Schritt {{step}} von {{max}}",
 				"title": "Plan",
-				"waitingForApproval": "Wartet auf Ihre Freigabe in der Unterhaltung. Die Sitzung belegt so lange das Modell dieses Nodes.",
-				"waitingForInput": "Der Agent hat Ihnen in der Unterhaltung eine Frage gestellt. Die Sitzung belegt so lange das Modell dieses Nodes."
+				"waitingForApproval": "Wartet auf Ihre Freigabe im Chat. Die Sitzung belegt so lange das Modell dieses Nodes.",
+				"waitingForInput": "Der Agent hat Ihnen im Chat eine Frage gestellt. Die Sitzung belegt so lange das Modell dieses Nodes."
 			},
 			"retry": "Erneut versuchen",
 			"status": {

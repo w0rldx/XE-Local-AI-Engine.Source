@@ -31,9 +31,9 @@ import type { ThemeProviderProperties } from "@/core/theme/provider/ThemeProvide
 import { colorSchemeStorageKey, useThemeStore } from "@/core/theme/stores/ThemeStore";
 
 // Mantine's light-mode `--mantine-color-dimmed` is gray-6 (#868e96), which is about 3.3:1 on white — under the
-// 4.5:1 WCAG 1.4.3 floor, and it is the colour of the size="sm"/"xs" secondary text that carries real meaning on
+// 4.5:1 WCAG 1.4.3 floor, and it is the color of the size="sm"/"xs" secondary text that carries real meaning on
 // every page (subtitles, hints, table captions). gray-7 (#495057) is about 8.2:1 and is already the resting
-// label colour of the navigation rail, so nothing looks new. In dark mode dark-2 (#828282) on the dark-6/7 surfaces is
+// label color of the navigation rail, so nothing looks new. In dark mode dark-2 (#828282) on the dark-6/7 surfaces is
 // 3.5–4:1 and read as faint, so dimmed moves halfway to dark-1 (#9d9d9d, 5:1 or better): all the way to dark-1 would
 // sit next to the dark-0 body text and lose the hierarchy. Disabled Button/ActionIcon labels were dark-3 (about 2.5:1
 // on the dark-6 disabled fill) and looked like plain text, not a control; dark-2 (about 3.5:1) makes them legible

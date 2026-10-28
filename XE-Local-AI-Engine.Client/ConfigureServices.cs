@@ -294,7 +294,7 @@ public static class ConfigureServices
                     BearerFormat = "JWT"
                 });
 
-                // NJsonSchema emits CLR member names for string enums; honour [JsonStringEnumMemberName] so the OpenAPI enum values
+                // NJsonSchema emits CLR member names for string enums; honor [JsonStringEnumMemberName] so the OpenAPI enum values
                 // match the wire format ("running", not "Running"). Without this, generated client validators reject valid responses.
                 settings.SchemaSettings.SchemaProcessors.Add(new JsonStringEnumMemberNameSchemaProcessor());
                 settings.OperationProcessors.Add(new McpServerApiKeyOpenApiOperationProcessor());
@@ -454,7 +454,7 @@ public static class ConfigureServices
             // Sized for real MCP traffic — a connect does tools/list, then a call per delegated task — which is why it is well above the auth endpoints'. Testing is relaxed like AuthPolicy.
             options.AddPolicy(NodeAuthRateLimits.McpPolicy, httpContext =>
             {
-                // No bearer at all (an OAuth discovery probe) gets its own smaller bucket, so it cannot spend the key holder's (Q3, I-D7).
+                // No bearer at all (an OAuth discovery probe) gets its own smaller bucket, so it cannot spend the key holder's.
                 // This runs before authentication, so presenting a bearer, valid or not, is the split.
                 var presentsBearer = httpContext.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
                 return RateLimitPartition.GetFixedWindowLimiter((presentsBearer ? "bearer:" : "anonymous:") + GetRateLimitPartitionKey(httpContext),
@@ -544,7 +544,7 @@ public static class ConfigureServices
         // Upgrade backfill for the sandbox security profile (ADR 0020), stamping "low" on a node past onboarding. Same discriminator as the
         // mode backfill above, so it is order-independent of both services before it.
         builder.Services.AddHostedService<SandboxSecurityProfileBackfillService>();
-        // FRR-2 upgrade backfill: maps an Ollama model pulled on an EARLIER build, which wrote no provider-map row, to the ollama provider, so the flipped
+        // Upgrade backfill: maps an Ollama model pulled on an EARLIER build, which wrote no provider-map row, to the ollama provider, so the flipped
         // llamacpp default does not silently re-route it. Idempotent, offline-tolerant and not desktop-gated.
         builder.Services.AddHostedService<OllamaProviderMapBackfillService>();
         // Desktop-only first-run model provisioning: installs and selects a small node-local GGUF through the bundled llama.cpp runtime, so a fresh

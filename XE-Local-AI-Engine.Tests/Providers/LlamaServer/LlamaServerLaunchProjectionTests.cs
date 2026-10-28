@@ -145,8 +145,8 @@ public sealed class LlamaServerLaunchProjectionTests
     [Test]
     public void ArgumentVector_CpuReplayWithCpuReplayPlan_CarriesContextAndThreads()
     {
-        // The pre-existing gap this closes: a CPU spawn emits none of a GPU profile's replay args, so with no plan it
-        // previously emitted NO -c and NO thread counts and ran at llama.cpp's own defaults.
+        // A CPU spawn emits none of a GPU profile's replay args, so with no plan it would emit
+        // NO -c and NO thread counts and run at llama.cpp's own defaults.
         var policy = NewPolicy(cpuThreads: 6, cpuThreadsBatch: 8);
         var resolved = ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24);
 

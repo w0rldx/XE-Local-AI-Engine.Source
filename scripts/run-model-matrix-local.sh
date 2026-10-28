@@ -90,7 +90,7 @@ judge_results() {
 }
 
 # Sourcing guard for scripts/tests/model-matrix.test.sh: define the functions above, run nothing.
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317  # the exit runs only when executed, not sourced
 if [[ -n "${XE_MODEL_MATRIX_LIB_ONLY:-}" ]]; then
   return 0 2>/dev/null || exit 0
 fi
@@ -197,7 +197,7 @@ ASPIRE_APPHOST="${XE_ASPIRE_APPHOST:-${MATRIX_PROJECT_ROOT}/XE-Local-AI-Engine.A
 
 # Field 22 of /proc/<pid>/stat, counted after the command name (which may contain spaces); empty once it is gone.
 # Used by cleanup, which only the EXIT trap invokes.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # used by cleanup, which only the EXIT trap invokes
 proc_start_time() {
   local stat
   stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 0
@@ -205,7 +205,7 @@ proc_start_time() {
 }
 
 # Invoked by the EXIT trap below.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # invoked by the EXIT trap below
 cleanup() {
   local status=$?
   trap - EXIT

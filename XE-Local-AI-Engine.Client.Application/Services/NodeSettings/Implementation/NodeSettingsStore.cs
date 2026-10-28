@@ -376,10 +376,10 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
                 StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens),
             ReasoningBudgetHighTokens = ClampToRange(settings.ReasoningBudgetHighTokens,
                 StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens),
-            DefaultReasoningEffort = StoredNodeSettings.IsValidDefaultReasoningEffort(TrimToNull(settings.DefaultReasoningEffort))
+            DefaultReasoningEffort = StoredNodeSettingsValidation.IsValidDefaultReasoningEffort(TrimToNull(settings.DefaultReasoningEffort))
                 ? TrimToNull(settings.DefaultReasoningEffort)
                 : null,
-            ChatOutputCapMode = StoredNodeSettings.IsValidChatOutputCapMode(TrimToNull(settings.ChatOutputCapMode))
+            ChatOutputCapMode = StoredNodeSettingsValidation.IsValidChatOutputCapMode(TrimToNull(settings.ChatOutputCapMode))
                 ? TrimToNull(settings.ChatOutputCapMode)
                 : null,
             ChatOutputCapMaxTokens = ClampToRange(settings.ChatOutputCapMaxTokens,
@@ -563,7 +563,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     ///     and the boot backfill may stamp it.
     /// </summary>
     /// <remarks>
-    ///     A non-blank string the engine does not recognise is the opposite case: somebody wrote a profile, just not one this engine
+    ///     A non-blank string the engine does not recognize is the opposite case: somebody wrote a profile, just not one this engine
     ///     knows, so the node is ASKED AGAIN rather than answered for — it loads as
     ///     <see cref="StoredNodeSettings.ExternalAccessProfilePending" />. The gated services wait on <c>pending</c>, the backfill leaves
     ///     any non-null profile alone, the three switches beside it are kept exactly as they are, and the SPA shows the profile chooser
@@ -578,7 +578,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             return null;
         }
 
-        return StoredNodeSettings.IsValidExternalAccessProfile(trimmed) ? trimmed : StoredNodeSettings.ExternalAccessProfilePending;
+        return StoredNodeSettingsValidation.IsValidExternalAccessProfile(trimmed) ? trimmed : StoredNodeSettings.ExternalAccessProfilePending;
     }
 
     /// <summary>
@@ -600,7 +600,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             return null;
         }
 
-        return StoredNodeSettings.IsValidSandboxSecurityProfile(trimmed) ? trimmed : StoredNodeSettings.SandboxSecurityProfilePending;
+        return StoredNodeSettingsValidation.IsValidSandboxSecurityProfile(trimmed) ? trimmed : StoredNodeSettings.SandboxSecurityProfilePending;
     }
 
     /// <summary>
@@ -617,7 +617,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     private static string? NormalizeUiMode(string? value)
     {
         var trimmed = TrimToNull(value);
-        return StoredNodeSettings.IsValidUiMode(trimmed) ? trimmed : null;
+        return StoredNodeSettingsValidation.IsValidUiMode(trimmed) ? trimmed : null;
     }
 
     /// <summary>
@@ -633,13 +633,13 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     private static string? NormalizeUpdateChannel(string? value)
     {
         var trimmed = TrimToNull(value);
-        return StoredNodeSettings.IsValidUpdateChannel(trimmed) ? trimmed : null;
+        return StoredNodeSettingsValidation.IsValidUpdateChannel(trimmed) ? trimmed : null;
     }
 
     private static string? NormalizeRecommendedTag(string? value)
     {
         var trimmed = TrimToNull(value);
-        return StoredNodeSettings.IsValidRecommendedLlamaCppTag(trimmed) ? trimmed : null;
+        return StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag(trimmed) ? trimmed : null;
     }
 
     private static string? NormalizeKvCacheType(string? value)
@@ -663,7 +663,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         // An unknown/malformed mode falls back to null so the accessor re-seeds it to disabled (never persist junk that
         // would surface as an invalid --spec-type at launch). A valid mode is kept trimmed.
         var trimmed = TrimToNull(value);
-        return StoredNodeSettings.IsValidSpeculativeMode(trimmed) ? trimmed : null;
+        return StoredNodeSettingsValidation.IsValidSpeculativeMode(trimmed) ? trimmed : null;
     }
 
     private static string? NormalizeAbsoluteUrl(string? value)

@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { useToolCatalog } from "@/core/tools/queries/useToolCatalog";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { toast } from "@/core/ui/notifications/Toast";
-import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
 import { SampleKindRow } from "@/features/training/components/DefinitionEditorDialog/SampleKindRow";
 import {
 	type DefinitionDraft,

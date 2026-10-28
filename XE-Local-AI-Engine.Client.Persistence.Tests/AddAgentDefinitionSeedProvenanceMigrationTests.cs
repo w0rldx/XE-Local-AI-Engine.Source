@@ -4,13 +4,13 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddAgentDefinitionSeedProvenance</c> is what makes seeding the built-in agent gallery idempotent: the seed
-///     slug carries a unique index <b>filtered to non-null values</b>, so re-running the seeder cannot duplicate a
-///     template, while the many operator-authored definitions — which have no slug at all — stay unconstrained. Drop
-///     the filter and the second user-authored agent fails to save; drop the uniqueness and every startup re-seeds.
-///     The columns themselves are asserted at head by <c>AddAgentDefinitionsMigrationTests</c>; this suite owns the
-///     index semantics, which nothing else pins.
+///     <c>AddAgentDefinitionSeedProvenance</c> makes gallery seeding idempotent: the seed slug's unique index is
+///     <b>filtered to non-null values</b>, so re-seeding cannot duplicate a template; slug-less rows stay free.
 /// </summary>
+/// <remarks>
+///     Without the filter a second user-authored agent fails to save; without uniqueness every start re-seeds.
+///     Columns are asserted by <c>AddAgentDefinitionsMigrationTests</c>; this suite owns the index semantics.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AddAgentDefinitionSeedProvenanceMigrationTests
 {

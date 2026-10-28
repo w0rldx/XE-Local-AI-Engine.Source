@@ -154,7 +154,7 @@ public sealed class CodexAuthServiceTests : IDisposable
     {
         using var handler = new CapturingHttpMessageHandler();
         handler.EnqueueJson(HttpStatusCode.BadRequest, json: """{"error":"invalid_grant"}""");
-        var logger = new CapturingLogger<CodexAuthService>();
+        var logger = new RecordingLogger<CodexAuthService>();
         var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out _, logger: logger);
         var current = new CodexTokens("secret-access-abc", "secret-refresh-def", DateTimeOffset.UtcNow, CodexTestHelpers.AccountId);
 

@@ -125,7 +125,7 @@ public sealed class LlamaServerSystemOneClientTests
     [Test]
     public async Task APromptLargerThanOneBatch_IsARefusedRequest_ThoughTheServerSays500()
     {
-        // Body verbatim from b11669 (lane B live round, 2026-10-19).
+        // Body verbatim from llama.cpp b11669.
         using var handler = new BodyCapturingHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
         {
             Content = new StringContent(

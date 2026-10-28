@@ -91,7 +91,7 @@ export function DevWorkflowArtifactsTab({ runId, artifacts }: DevWorkflowArtifac
 										{artifact.name}
 									</Text>
 									<Badge size="xs" variant="light">
-										{/* An unrecognised kind prints its own token rather than being relabelled as a known one. */}
+										{/* An unrecognized kind prints its own token rather than being relabeled as a known one. */}
 										{kind ? t(`pages.devWorkflows.artifactKind.${kind}`, kind) : (artifact.kind ?? "")}
 									</Badge>
 									{artifact.isStale ? (

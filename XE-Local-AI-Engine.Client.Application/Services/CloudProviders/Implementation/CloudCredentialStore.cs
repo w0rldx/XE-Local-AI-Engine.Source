@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 {
     private const string CredentialsFileName = "cloud-credentials.enc";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly string _credentialsPath;
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);

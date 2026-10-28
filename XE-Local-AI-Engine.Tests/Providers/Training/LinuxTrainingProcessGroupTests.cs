@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     A trainer is signalled through its process group, so a receipt that recorded the HOST's group turned an operator
+///     A trainer is signaled through its process group, so a receipt that recorded the HOST's group turned an operator
 ///     cancel into a SIGTERM to the node, its launcher and Vite. These pin the confirmation loop and the guard.
 /// </summary>
 [Category(TestCategories.Unit)]

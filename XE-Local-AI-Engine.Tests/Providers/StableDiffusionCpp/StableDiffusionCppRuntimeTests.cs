@@ -151,7 +151,7 @@ public sealed class StableDiffusionCppRuntimeTests
         bytes.AddRange(BitConverter.GetBytes(width).Reverse());
         bytes.AddRange(BitConverter.GetBytes(height).Reverse());
 
-        // Bit depth / colour type / compression / filter / interlace — present so the chunk is well-formed.
+        // Bit depth / color type / compression / filter / interlace — present so the chunk is well-formed.
         bytes.AddRange([0x08, 0x02, 0x00, 0x00, 0x00]);
         return bytes.ToArray();
     }
@@ -219,8 +219,8 @@ public sealed class StableDiffusionCppRuntimeTests
     [Test]
     public async Task Generate_JobFailed_ThrowsSanitizedLogsTheDaemonReasonAndEvictsTheDaemon()
     {
-        // Tester round 4: a failed job (CUDA OOM after a chat model took the VRAM) left the same broken daemon resident,
-        // so every later job failed too, and the log carried no reason at all.
+        // A failed job (CUDA OOM after a chat model took the VRAM) must not leave the broken daemon resident,
+        // or every later job fails too; the log carries the daemon's reason.
         using var handler = new RuntimeHandler((_, route) => route switch
         {
             "img_gen" => Json(HttpStatusCode.Accepted, """{"id":"job-1","status":"queued"}"""),
@@ -250,8 +250,8 @@ public sealed class StableDiffusionCppRuntimeTests
     [Test]
     public async Task Generate_JobFailedWithAGpuOutOfMemoryOnStderr_LogsTheTailAndFailsWithTheOutOfMemoryMessage()
     {
-        // Tester round 5: sd-server reported only "generate_image returned no results"; the CUDA out-of-memory line was in
-        // its stderr tail, which the eviction discarded before anyone read it.
+        // sd-server reports only "generate_image returned no results"; the CUDA out-of-memory line is in
+        // its stderr tail, which must be read before the eviction discards it.
         const string tail = "ggml_backend_cuda_buffer_type_alloc_buffer: allocating 9216.00 MiB on device 0: cudaMalloc failed: out of memory";
         using var handler = new RuntimeHandler((_, route) => route switch
         {

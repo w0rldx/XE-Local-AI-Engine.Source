@@ -5,11 +5,10 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The Ollama client uses a short <see cref="System.Net.Http.SocketsHttpHandler.ConnectTimeout" />; when it fires it
-///     throws an <see cref="OperationCanceledException" />, not the <see cref="HttpRequestException" /> the codebase
-///     catches to detect an unreachable daemon. <see cref="OllamaConnectFailureHandler" /> normalizes that so a hung
-///     connect (no caller cancellation) presents as a connection failure, while a genuine caller cancellation is left
-///     untouched.
+///     The Ollama client uses a short <see cref="System.Net.Http.SocketsHttpHandler.ConnectTimeout" />, which throws
+///     <see cref="OperationCanceledException" /> rather than the <see cref="HttpRequestException" /> the codebase
+///     treats as an unreachable daemon. <see cref="OllamaConnectFailureHandler" /> turns a hung connect (no caller
+///     cancellation) into a connection failure and leaves a genuine caller cancellation untouched.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class OllamaConnectFailureHandlerTests
@@ -22,7 +21,7 @@ public sealed class OllamaConnectFailureHandlerTests
     private static HttpMessageInvoker Invoker(Exception failure)
     {
 #pragma warning disable CA2000 // The invoker (disposeHandler defaults to true) owns and disposes the handler chain.
-        return new HttpMessageInvoker(new OllamaConnectFailureHandler(new ThrowingHandler(failure)));
+        return new HttpMessageInvoker(new OllamaConnectFailureHandler(new ThrowingHttpMessageHandler(failure)));
 #pragma warning restore CA2000
     }
 
@@ -52,7 +51,7 @@ public sealed class OllamaConnectFailureHandlerTests
         await cts.CancelAsync();
         using var invoker = Invoker(new OperationCanceledException());
 
-        // A signalled caller token means a real cancellation: it must NOT be turned into an HttpRequestException.
+        // A signaled caller token means a real cancellation: it must NOT be turned into an HttpRequestException.
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => invoker.SendAsync(Request(), cts.Token));
     }
 
@@ -77,21 +76,6 @@ public sealed class OllamaConnectFailureHandlerTests
         var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => invoker.SendAsync(Request(), CancellationToken.None));
 
         AssertEx.True(ReferenceEquals(refused, thrown), "an existing HttpRequestException must propagate unchanged");
-    }
-
-    private sealed class ThrowingHandler : HttpMessageHandler
-    {
-        private readonly Exception _exception;
-
-        public ThrowingHandler(Exception exception)
-        {
-            _exception = exception;
-        }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            return Task.FromException<HttpResponseMessage>(_exception);
-        }
     }
 
     private sealed class RespondingHandler : HttpMessageHandler

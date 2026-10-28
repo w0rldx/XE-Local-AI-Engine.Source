@@ -53,7 +53,7 @@ public sealed class McpClientFactoryLoopbackTests
     [Test]
     public async Task BuildHttpTransportOptions_CarriesTheConfiguredHeaders_AndNoneWhenUnset()
     {
-        // O-D6: the only way to reach a protected server was a cleartext ?token= URL. The SDK copies AdditionalHeaders onto
+        // Headers spare a protected server the cleartext ?token= URL. The SDK copies AdditionalHeaders onto
         // every POST, SSE GET and DELETE of the session, so the built options are the whole of what the credential rides on.
         var factory = CreateFactory();
         var withHeaders = HttpRecord("http://127.0.0.1:18912/mcp") with
@@ -130,7 +130,7 @@ public sealed class McpClientFactoryLoopbackTests
     [Test]
     public void BuildStdioTransportOptions_GivesTheServerTwoSecondsToExitAfterItsSessionCloses()
     {
-        // Windows tester round 3 (N-20): the SDK's 5 s default was paid on every disable and inside the host's shutdown budget.
+        // The SDK's 5 s default would be paid on every disable and inside the host's shutdown budget.
         var options = McpClientFactory.BuildStdioTransportOptions(StdioRecord(new Dictionary<string, string>(StringComparer.Ordinal)));
 
         AssertEx.Equal(TimeSpan.FromSeconds(2), options.ShutdownTimeout);

@@ -10,10 +10,10 @@ internal static class CodexTestHelpers
     internal const string AccountId = "acct_test_123";
 
     /// <summary>
-    ///     Builds an unsigned JWT whose payload carries the <c>chatgpt_account_id</c> claim under the
-    ///     <c>https://api.openai.com/auth</c> namespace and an <c>exp</c>, matching what
-    ///     <see cref="XE_Local_AI_Engine.Providers.CodexOAuth.Auth.CodexAuthService" /> decodes. Not a real signed
-    ///     token — the service only base64url-decodes the payload, it does not verify the signature.
+    ///     Builds an unsigned JWT carrying the <c>chatgpt_account_id</c> claim under the
+    ///     <c>https://api.openai.com/auth</c> namespace and an <c>exp</c>, as
+    ///     <see cref="XE_Local_AI_Engine.Providers.CodexOAuth.Auth.CodexAuthService" /> decodes it; the service only
+    ///     base64url-decodes the payload and never verifies a signature.
     /// </summary>
     internal static string BuildAccountJwt(string accountId = AccountId, DateTimeOffset? expiresUtc = null)
     {

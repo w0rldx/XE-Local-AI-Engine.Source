@@ -2,9 +2,9 @@ import { ActionIcon, Badge, Text } from "@mantine/core";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import type { AgentDefinition } from "@/core/agents/models/AgentDefinitionModels";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
-import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
 
 interface AgentDefinitionListProps {
 	definitions: readonly AgentDefinition[];

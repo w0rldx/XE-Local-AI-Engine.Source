@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 internal static class SpaHostingPipelineExtensions
 {
     /// <summary>
-    ///     Marks the SPA shell fallback endpoint so the middleware just after <c>UseRouting</c> can recognise it
+    ///     Marks the SPA shell fallback endpoint so the middleware just after <c>UseRouting</c> can recognize it
     ///     and detach it from requests under the local API prefix. A marker rather than a second routed fallback:
     ///     see the comment at that middleware.
     /// </summary>

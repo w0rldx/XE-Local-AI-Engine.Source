@@ -8,11 +8,10 @@ using XE_Local_AI_Engine.Client.Services.Proxy.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The inbound model-proxy credential lifecycle: generation, ONE-WAY storage, revocation, and the fail-closed
-///     validation the authentication handler depends on. The load-bearing property is that the key is shown exactly once
-///     and is unrecoverable afterwards — a database read must yield nothing that can be presented to the proxy endpoint.
-///     This mirrors the MCP key's guarantees because the proxy shares its security posture and differs only in scheme.
+///     The inbound model-proxy credential lifecycle: generation, ONE-WAY storage, revocation and fail-closed validation.
+///     The key is shown exactly once and unrecoverable afterwards: a database read yields nothing the proxy accepts.
 /// </summary>
+/// <remarks>Mirrors the MCP key's guarantees: same security posture, different scheme.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelProxyApiKeyServiceTests
 {
@@ -190,7 +189,7 @@ public sealed class LocalModelProxyApiKeyServiceTests
 
     /// <summary>
     ///     In-memory stand-in for the EF store. Mirrors the real singleton-upsert semantics (a set REPLACES, and resets
-    ///     the timestamps) so the replacement/revocation behaviour under test is the behaviour that actually ships.
+    ///     the timestamps) so the replacement/revocation behavior under test is the behavior that actually ships.
     /// </summary>
     private sealed class InMemoryLocalModelProxyApiKeyStore : ILocalModelProxyApiKeyStore
     {

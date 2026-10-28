@@ -98,7 +98,7 @@ internal sealed record LiveLatency
         ordered[Math.Max(0, (int)Math.Ceiling(percentile * ordered.Length) - 1)];
 }
 
-/// <summary>One query's top-hit scores (D6 capture): the raw material for an abstention-threshold decision.</summary>
+/// <summary>One query's top-hit scores: the raw material for an abstention-threshold decision.</summary>
 internal sealed record LiveQueryScore
 {
     public required string QueryId { get; init; }
@@ -177,7 +177,7 @@ internal sealed record LiveAbstainThreshold
     public required int AnswerableCount { get; init; }
 
     /// <summary>
-    ///     Tries every observed top-1 score as t and maximises (no-answer recall + answerable retention) / 2 over no-answer
+    ///     Tries every observed top-1 score as t and maximizes (no-answer recall + answerable retention) / 2 over no-answer
     ///     queries vs answerable queries whose top-1 is relevant; ties keep the lowest t. Null when either side is empty.
     /// </summary>
     public static LiveAbstainThreshold? Find(IReadOnlyCollection<double> noAnswerTop1, IReadOnlyCollection<double> answerableRelevantTop1)
@@ -293,7 +293,7 @@ internal sealed record LiveConfigResult
     /// </summary>
     public double? BacklogDrainMilliseconds { get; init; }
 
-    /// <summary>Per-query top-hit scores in query order (D6 capture).</summary>
+    /// <summary>Per-query top-hit scores in query order.</summary>
     public IReadOnlyList<LiveQueryScore> PerQuery { get; init; } = [];
 }
 

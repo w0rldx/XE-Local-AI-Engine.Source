@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The frozen dataset copy holds the same plaintext the encrypted <c>content_json</c> column does, so it is
-///     encrypted at rest with the same node key and framing. The decrypted copy under <c>work/</c> is the one plaintext
-///     this feature puts on disk — the trainer needs a real file to open — so it is owner-only and swept on every
-///     terminal path, failures included.
+///     The frozen dataset copy holds the plaintext the encrypted <c>content_json</c> column does, so it is encrypted
+///     at rest with the same node key and framing. The decrypted <c>work/</c> copy the trainer opens is owner-only and
+///     swept on every terminal path.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TrainingRunWorkspaceTests : IDisposable

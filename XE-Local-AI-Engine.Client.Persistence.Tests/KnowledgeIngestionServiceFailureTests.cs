@@ -16,11 +16,9 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Ingestion state-machine failure path on a real database: when the embedding model cannot be resolved, the run must
-///     end with <c>status = Failed</c> and a fixed, content-free <c>failure_reason</c> — never chunk or document text. The
-///     embedder is driven with a provider resolver that throws the caught <see cref="InvalidOperationException" />, which
-///     the real embedder maps to a content-free <see cref="KnowledgeIngestionException" />. The seeded document text is a
-///     distinctive token that must NOT leak into the persisted failure reason.
+///     Ingestion failure path on a real database: an unresolvable embedding model (a resolver throwing
+///     <see cref="InvalidOperationException" />, which the embedder maps to <see cref="KnowledgeIngestionException" />)
+///     ends the run <c>status = Failed</c> with a fixed <c>failure_reason</c> that never carries the seeded text.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
@@ -67,7 +65,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     [Test]
     public async Task IngestionRerun_FailingEmbedder_DoesNotFlipIndexedToFailed()
     {
-        // A duplicate run of an already indexed document used to drop it out of search and, when the run failed, mark it Failed.
+        // A duplicate run of an already indexed document must not drop it out of search or, when it fails, mark it Failed.
         var databasePath = GetDatabasePath("ingestion-indexed-rerun.sqlite");
         var documentId = Guid.NewGuid();
         await MigrateAsync(databasePath);

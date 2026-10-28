@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using Serilog;
@@ -115,6 +116,47 @@ public sealed partial class Program
             await standardError.WriteLineAsync("The admin password does not unlock this node's key.");
             return VaultUnlockAttempt.Exit(5);
         }
+    }
+
+    /// <summary>
+    ///     The vault stage of <c>CreateAppCoreAsync</c>: unlocks, waits for the unlock page's port, injects the secret and
+    ///     registers the one-time unlock ticket. A refusal releases <paramref name="instanceLease" /> before it returns.
+    /// </summary>
+    private static async Task<VaultUnlockAttempt> UnlockLockedVaultAsync(VaultUnlockRequestContext request, SingleInstanceLease? instanceLease)
+    {
+        var attempt = await UnlockVaultAsync(request);
+        if (attempt.Outcome is null)
+        {
+            instanceLease?.Dispose();
+            return attempt;
+        }
+
+        var vaultUnlock = attempt.Outcome;
+        var bindUrl = request.BindUrl;
+        var portRelease = Stopwatch.StartNew();
+        if (vaultUnlock.BoundUrl is { } unlockPageUrl)
+        {
+            if (!await RebindUnlockPagePortAsync(unlockPageUrl, request.StandardError))
+            {
+                CryptographicOperations.ZeroMemory(vaultUnlock.MasterKey);
+                instanceLease?.Dispose();
+                return VaultUnlockAttempt.Exit(UnlockPortLostExitCode);
+            }
+
+            bindUrl = unlockPageUrl;
+        }
+
+        InjectUnlockedSecret(request.Builder.Configuration, vaultUnlock);
+        if (vaultUnlock.UnlockTicket is { } unlockTicket)
+        {
+            // The password unlock's one-time ticket: NodeRefreshEndpoint trades it for a session once when the stored refresh cookie fails.
+            request.Builder.Services.AddSingleton(unlockTicket);
+        }
+
+        Log.Information("Vault unlocked; port {Port} free again after {ElapsedMs} ms; building the engine host.",
+            Uri.TryCreate(bindUrl, UriKind.Absolute, out var boundUri) ? boundUri.Port : 0,
+            portRelease.ElapsedMilliseconds);
+        return attempt;
     }
 
     /// <summary>Layers the unwrapped secret in as the in-memory operator secret, marks the vault unlocked and zeroes the buffer.</summary>

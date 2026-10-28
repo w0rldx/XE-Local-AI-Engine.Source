@@ -4,8 +4,8 @@
 // issue is a control that takes the operator to its node or edge, an unkeyed one is a sentence in a single Alert, and
 // both arrive through the same `GraphWorkflowGraphIssue` whether the client or the server raised them.
 //
-// Warnings arrive on their own prop. They share the shape and the click behaviour and share nothing else: their own
-// Alert, their own colour, and never the sentence that says the graph cannot be saved.
+// Warnings arrive on their own prop. They share the shape and the click behavior and share nothing else: their own
+// Alert, their own color, and never the sentence that says the graph cannot be saved.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

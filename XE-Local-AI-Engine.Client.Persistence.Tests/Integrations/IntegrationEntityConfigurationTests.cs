@@ -52,8 +52,8 @@ public sealed class IntegrationEntityConfigurationTests
         _ = AssertEx.NotNull(failure.InnerException as SqliteException);
         context.ChangeTracker.Clear();
 
-        // A DIFFERENT principal replaying the same request id must insert cleanly. Ruling R4-6 replaced the global
-        // unique index precisely so one integrator cannot preclaim another's request id and force it a permanent 409.
+        // A DIFFERENT principal replaying the same request id must insert cleanly. The index is per principal, not
+        // global, so one integrator cannot preclaim another's request id and force it a permanent 409.
         var otherSession = IntegrationTestFixture.Session(trigger.Id, otherPrincipal);
         _ = context.IntegrationSessions.Add(otherSession);
         _ = context.IntegrationExecutions.Add(IntegrationTestFixture.Execution(trigger.Id, otherSession.Id, otherPrincipal, requestId: requestId));

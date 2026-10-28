@@ -12,9 +12,8 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint integration tests for the training runtime and base-artifact routes. Covers 401 on every route without
-///     a bearer token (all are Operator-gated, none desktop-gated), reachability with an operator token, and the
-///     404/validation shapes. Runs against the real DI host with an empty database.
+///     Training runtime and base-artifact routes against the real DI host and an empty database: 401 without a bearer
+///     token (all Operator-gated, none desktop-gated), reachability with an operator token, and 404/validation shapes.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TrainingRuntimeEndpointTests

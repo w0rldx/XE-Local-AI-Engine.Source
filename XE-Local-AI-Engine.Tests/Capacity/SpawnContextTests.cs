@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="SpawnContext" /> tests: the per-root-invocation spawn state. A seeded root starts at Depth 0; the
-///     fan-out cap admits exactly its budget of concurrent leases and rejects the next until one is released; the
-///     cloud-spawn cap counts for the whole turn and never decrements; and a missing ambient context defaults safe.
+///     <see cref="SpawnContext" />, per-root-invocation spawn state: a root starts at Depth 0, the fan-out cap
+///     admits its lease budget and rejects the next until a release, the cloud-spawn cap counts per turn and never
+///     decrements, and no ambient context defaults safe.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SpawnContextTests

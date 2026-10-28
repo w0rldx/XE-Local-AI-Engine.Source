@@ -26,7 +26,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     /// </remarks>
     internal const string ProfileVersion = "development-validation-v2";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly DevelopmentOptions _options;

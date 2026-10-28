@@ -17,9 +17,9 @@ using XE_Local_AI_Engine.Tests.Transcription;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
-///     The upload route end to end against the REAL <see cref="ITranscriptionService" />, with only the runtime seams
-///     faked: the size cap, the missing-file refusal, the typed 415 for a container this node cannot decode, and the
-///     guarantee that a traversal-laden client file name never reaches a path.
+///     The upload route end to end against the REAL <see cref="ITranscriptionService" />, only runtime seams faked: the
+///     size cap, the missing-file refusal, the typed 415 for an undecodable container, and a traversal-laden client
+///     file name never reaching a path.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TranscriptionUploadEndpointTests

@@ -14,7 +14,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
 {
     /// <summary>
     ///     Scheme marker. Makes a leaked key greppable and instantly attributable to this product, and lets secret
-    ///     scanners recognise it. Also what distinguishes the token from the node's JWTs on the same origin.
+    ///     scanners recognize it. Also what distinguishes the token from the node's JWTs on the same origin.
     /// </summary>
     private const string KeyScheme = "xemcp_";
 

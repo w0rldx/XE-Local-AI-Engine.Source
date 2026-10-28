@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Proves the runtime-switch property: the registered <see cref="RuntimeChatClient" />
-///     is captured once by singleton consumers, yet each send re-selects cloud-vs-local — so signing in routes the
-///     NEXT send to the cloud without a restart, and signing out routes the next send back to local.
+///     Proves the runtime-switch property: singleton consumers capture the registered <see cref="RuntimeChatClient" />
+///     once, yet each send re-selects cloud-vs-local, so signing in routes the NEXT send to the cloud without a
+///     restart, and signing out routes it back to local.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class RuntimeChatClientTests

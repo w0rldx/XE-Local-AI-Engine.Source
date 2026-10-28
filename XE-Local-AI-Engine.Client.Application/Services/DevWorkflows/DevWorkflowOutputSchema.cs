@@ -25,7 +25,7 @@ internal static class DevWorkflowOutputSchema
 
     /// <summary>The longest the rendered contract may be, in characters, measured on <see cref="WorkSessionOutputSchema.Render" />.</summary>
     /// <remarks>
-    ///     The contract lands in the objective uncapped, counted against <c>DevWorkflowAgentExecutor.MaxObjectiveCharacters</c>
+    ///     The contract lands in the objective uncapped, counted against <c>DevWorkflowObjectiveComposer.MaxObjectiveCharacters</c>
     ///     (7000) before policy gets the rest, so the member caps above alone would let it reach ~35K and refuse every run.
     ///     2000 is under a third of that ceiling: it leaves the node's instructions, what was asked and a full 4096-character
     ///     rule set body room beside it, and is still three times what the dev-intake-v1 classifier renders.

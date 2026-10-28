@@ -10,13 +10,13 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pipeline-EXECUTION regression coverage for the v1-surface auth-policy-ordering bug (live-confirmed against a
-///     real APIM gateway): <see cref="OpenAI.OpenAIClient" />'s ctor built its own authentication policy from a
-///     placeholder <see cref="System.ClientModel.ApiKeyCredential" /> and placed it in a FIXED pipeline slot that the
+///     Pipeline-EXECUTION regression coverage for the v1-surface auth-policy ordering, which a real APIM gateway
+///     enforces: <see cref="OpenAI.OpenAIClient" />'s ctor builds its own authentication policy from a
+///     placeholder <see cref="System.ClientModel.ApiKeyCredential" /> and places it in a FIXED pipeline slot that the
 ///     SDK's internal pipeline-assembly code puts AFTER every <c>PipelinePosition.PerCall</c> policy — so a real
-///     Entra bearer token set by a PerCall <see cref="EntraBearerTokenPipelinePolicy" /> was silently overwritten by
-///     the placeholder before the request left the process. Construction-only tests (does <c>Create()</c> return a
-///     client?) could not catch this: the bug only shows up in the actual bytes on the wire. These tests fire ONE
+///     Entra bearer token set by a PerCall <see cref="EntraBearerTokenPipelinePolicy" /> can be silently overwritten by
+///     the placeholder before the request leaves the process. Construction-only tests (does <c>Create()</c> return a
+///     client?) cannot catch this: it only shows up in the actual bytes on the wire. These tests fire ONE
 ///     request through the REAL assembled <see cref="OpenAI.OpenAIClient" /> pipeline — the same construction path
 ///     <see cref="AzureFoundryChatClientFactory.Create" /> uses, via the <see cref="AzureFoundryChatClientFactory.CreateOpenAiV1ClientForTesting" />
 ///     test seam — over a request-capturing fake transport, and assert on the CAPTURED outbound request.

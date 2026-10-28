@@ -31,7 +31,7 @@ public sealed partial class DevWorkflowStore : IDevWorkflowStore
     ///     the attempt walk and the transcript link silently see nothing at all. The log is append-only, so rows
     ///     written before FX-D stay PascalCase for ever and the readers take either spelling.
     /// </remarks>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly NodeChatDbContext _dbContext;
     private readonly TimeProvider _timeProvider;
@@ -220,7 +220,7 @@ public sealed partial class DevWorkflowStore : IDevWorkflowStore
     ///     Spent is Σ(Attempt − 1) over the run's node runs. A Retry recorded but not yet settled has spent none of that sum, so it counts as a RESERVATION; settled
     ///     means the node run's <c>Attempt</c> has moved past the attempt its decision was recorded against. The decision endpoint's own check is for the operator's
     ///     message — this is the authority, because only a count taken under the writer lock refuses the second of two decisions taken in one tick window. A human's
-    ///     Retry and a policy's re-attempt spend the same budget (FU3-4).
+    ///     Retry and a policy's re-attempt spend the same budget.
     /// </remarks>
     /// <param name="cost">How many re-attempts the admitted act makes: one for a decision or a single re-attempt, the whole cascade a routed fix loop resets.</param>
     private async Task EnsureRetryBudgetAsync(Guid runId, int maxTotalAttempts, int cost, CancellationToken cancellationToken)

@@ -26,7 +26,7 @@ export interface ManualDownloadFormProps {
 	onRemovePart: (id: string) => void;
 }
 
-// The manual escape hatch, unchanged in behaviour. It stays because discovery cannot cover everything: a brand-new
+// The manual escape hatch, unchanged in behavior. It stays because discovery cannot cover everything: a brand-new
 // repo the Hub has not tagged text-to-image yet, or a private mirror, is still installable by typing it in.
 export function ManualDownloadForm({
 	draft,

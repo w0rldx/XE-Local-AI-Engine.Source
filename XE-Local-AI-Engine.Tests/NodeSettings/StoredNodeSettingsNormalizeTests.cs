@@ -487,7 +487,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Arguments("b12345")]
     public void RecommendedLlamaCppTag_WellFormed_IsValid(string tag)
     {
-        AssertEx.True(StoredNodeSettings.IsValidRecommendedLlamaCppTag(tag));
+        AssertEx.True(StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag(tag));
     }
 
     [Test]
@@ -661,7 +661,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         // to mirror. Casing and surrounding whitespace are accepted because an operator types this; a name the engine
         // has no runtime for is not, and neither is blank: "no selection" is the field being absent, not present and
         // empty.
-        AssertEx.Equal(expected, StoredNodeSettings.IsValidContainerRuntimeSelection(value));
+        AssertEx.Equal(expected, StoredNodeSettingsValidation.IsValidContainerRuntimeSelection(value));
     }
 
     [Test]
@@ -685,7 +685,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Test]
     public async Task Normalize_MapsAnUnknownExternalAccessProfileToPending()
     {
-        // Somebody wrote a profile, just not one this engine recognises, so the node is ASKED AGAIN rather than answered
+        // Somebody wrote a profile, just not one this engine recognizes, so the node is ASKED AGAIN rather than answered
         // for: "pending" keeps the gated services waiting, keeps the switches beside it, and — unlike null — is a
         // non-null profile the boot backfill leaves alone instead of stamping "recommended" over an operator's opt-outs.
         await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"airgapped\" }");
@@ -859,7 +859,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Arguments(StoredNodeSettings.ExternalAccessProfilePending)]
     public void IsValidExternalAccessProfile_AcceptsAllFourLiterals(string profile)
     {
-        AssertEx.True(StoredNodeSettings.IsValidExternalAccessProfile(profile), $"'{profile}' must be persistable.");
+        AssertEx.True(StoredNodeSettingsValidation.IsValidExternalAccessProfile(profile), $"'{profile}' must be persistable.");
     }
 
     [Test]
@@ -869,7 +869,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Arguments("airgapped")]
     public void IsValidExternalAccessProfile_RejectsEverythingElse(string? profile)
     {
-        AssertEx.False(StoredNodeSettings.IsValidExternalAccessProfile(profile), $"'{profile}' must not be persistable.");
+        AssertEx.False(StoredNodeSettingsValidation.IsValidExternalAccessProfile(profile), $"'{profile}' must not be persistable.");
     }
 
     [Test]
@@ -881,7 +881,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     {
         // The two-predicate split is the whole mechanism keeping "pending" and "custom" un-sendable: the boundary
         // validator gates on THIS predicate, so a client can never claim an engine-written state.
-        AssertEx.Equal(expected, StoredNodeSettings.IsExternalAccessPreset(profile));
+        AssertEx.Equal(expected, StoredNodeSettingsValidation.IsExternalAccessPreset(profile));
     }
 
     [Test]
@@ -972,7 +972,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Test]
     public async Task Normalize_WhenUpdateChannelIsDifferentlyCasedOrPadded_TreatsPaddingButNotCasingAsValid()
     {
-        // Pins the ORDINAL comparison: padding is normalised away, casing is not accepted. A later case-insensitive
+        // Pins the ORDINAL comparison: padding is normalized away, casing is not accepted. A later case-insensitive
         // change has to edit this test, i.e. it becomes a visible decision.
         await WriteSettingsJsonAsync("{ \"updateChannel\": \"  development  \" }");
         AssertEx.Equal(AppUpdateChannelNames.Development, (await LoadAsync()).UpdateChannel);
@@ -1025,7 +1025,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     {
         // One predicate, unlike the external-access pair: there is no engine-written mode, so what may be STORED and
         // what a client may SEND are the same set, and the boundary validator gates on this very method.
-        AssertEx.Equal(expected, StoredNodeSettings.IsValidUiMode(mode));
+        AssertEx.Equal(expected, StoredNodeSettingsValidation.IsValidUiMode(mode));
     }
 
     [Test]

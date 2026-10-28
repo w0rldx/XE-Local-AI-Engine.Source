@@ -5,7 +5,7 @@
 // materialized at run start — and they are overlaid on it. A definition edited since is then only worth SAYING
 // (`graphNotice: "definitionChanged"`), never worth degrading the drawing for.
 //
-// The pre-F5-1 path is still here for a response that carries no graph: the definition's current graph while
+// The fallback path is still here for a response that carries no graph: the definition's current graph while
 // `run.graphHash === definition.graphHash`, and NODES ONLY, laid out from the rows, when the two disagree
 // (`graphNotice: "nodesOnly"`) — drawing today's edges over an older run would be a lie about routing.
 
@@ -43,7 +43,7 @@ export interface GraphWorkflowRunCanvasSource {
 	readonly nodeRuns: readonly GraphWorkflowNodeRunSummaryResponse[];
 	/**
 	 * The run's PINNED graph, off `GET runs/{runId}`. Preferred over the definition whenever it is there: it is the
-	 * document this run routed on. Optional because a response older than F5-1 carries none.
+	 * document this run routed on. Optional because a response from a node that predates pinned graphs carries none.
 	 */
 	readonly runGraph?: GraphWorkflowGraph;
 	/** The definition as it stands NOW, with its own hash. Absent while the definition query is still loading. */

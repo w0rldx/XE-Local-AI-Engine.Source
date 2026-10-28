@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 internal static class GoldenConversationMapper
 {
     // Web defaults so the persisted/serialized golden JSON is camelCase, matching the runner's parsing + the client (CA1869).
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     public static GoldenConversationResponse ToResponse(this GoldenConversationRecord record)
     {

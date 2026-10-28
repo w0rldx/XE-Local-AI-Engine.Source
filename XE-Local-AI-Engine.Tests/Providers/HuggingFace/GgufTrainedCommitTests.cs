@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
-///     A training export commits through the SAME importer a local import does — the only difference is a trained
-///     destination with lineage attached. These are the end-to-end invariants that decide whether a promoted model is
-///     traceable and, for an adapter, launchable at all.
+///     A training export commits through the SAME importer as a local import, differing only in a trained destination
+///     with lineage. These end-to-end invariants decide whether a promoted model is traceable and, for an adapter,
+///     launchable at all.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufTrainedCommitTests

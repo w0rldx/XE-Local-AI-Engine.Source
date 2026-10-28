@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
 ///     The terminal events' payloads: <c>execution.completed</c> is <c>{tokens?, durationMs}</c> and
@@ -32,7 +32,7 @@ internal static class IntegrationTerminalPayload
         JsonSerializer.SerializeToElement(new
             {
                 category,
-                summary = summary is null ? null : IntegrationStreamEventMapper.TruncateToUtf8ByteBudget(summary, MaxSummaryBytes)
+                summary = summary is null ? null : Utf8Truncation.TruncateToUtf8ByteBudget(summary, MaxSummaryBytes)
             },
             Options);
 

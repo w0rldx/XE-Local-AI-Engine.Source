@@ -4,7 +4,7 @@ using System.Globalization;
 
 /// <summary>Shared comparison logic for llama.cpp runtime release tags.</summary>
 /// <remarks>
-///     A tag is the validated form <c>b&lt;number&gt;</c> (regex <c>^b\d+$</c>, enforced at the transport boundary by <c>StoredNodeSettings.IsValidRecommendedLlamaCppTag</c>
+///     A tag is the validated form <c>b&lt;number&gt;</c> (regex <c>^b\d+$</c>, enforced at the transport boundary by <c>StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag</c>
 ///     and <c>NodeSettingsEndpointValidators</c>). Because the numeric suffix is monotonically increasing upstream, an update is only
 ///     "available" when the installed build is strictly OLDER than the recommended one — a string inequality would falsely advertise a
 ///     downgrade as an update when the installed tag is newer than the recommended one (e.g. installed <c>b9700</c> vs recommended <c>b9692</c>).

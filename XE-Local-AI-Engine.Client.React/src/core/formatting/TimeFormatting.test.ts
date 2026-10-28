@@ -1,4 +1,4 @@
-// The shared instant/duration formatters. The one behaviour worth pinning is whose locale a timestamp is rendered in:
+// The shared instant/duration formatters. The one behavior worth pinning is whose locale a timestamp is rendered in:
 // a session switched to German used to render German labels beside US-ordered dates, because `toLocaleString()` reads
 // the machine's regional setting and knows nothing about the language the operator chose.
 //

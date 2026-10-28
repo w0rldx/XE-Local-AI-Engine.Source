@@ -327,7 +327,7 @@ public sealed class ComparisonReportService : IComparisonReportService
     }
 
     /// <summary>
-    ///     The run's judge score, read from its current attempt. Plaintext and already 0..100 — the report no longer
+    ///     The run's judge score, read from its current attempt. Plaintext and already 0..100 — the report never
     ///     decrypts and parses a verdict to find a number the store can sort by.
     /// </summary>
     private static int? ReadJudgeScore(BenchmarkRunRecord? run) =>

@@ -5,7 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { toolCatalogQueryKeys } from "@/features/tools/queries/ToolCatalogQueryKeys";
+import { toolCatalogQueryKeys } from "@/core/tools/queries/ToolCatalogQueryKeys";
 
 // Mock the generated hey-api TanStack mutation factories. Each returns an object carrying a `mutationFn` the hook
 // spreads into useMutation; the hooks layer their own onSuccess invalidation on top.

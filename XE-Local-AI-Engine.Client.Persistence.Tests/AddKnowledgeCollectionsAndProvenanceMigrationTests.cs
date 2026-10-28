@@ -4,15 +4,15 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddKnowledgeCollectionsAndProvenance</c> re-scopes the knowledge base from one flat corpus to named
-///     collections and records how each document was parsed and chunked. Two consequences are asserted here because
-///     nothing else pins them. First, dedupe moves scope: the unique index on <c>content_hash</c> alone is replaced by
-///     one on <c>(collection_id, content_hash)</c>, so the same file may exist once per collection but still only once
-///     within one — without the move, adding a document to a second collection would be rejected as a duplicate.
-///     Second, existing documents predate every provenance field, so they backfill to the honest <c>legacy</c>
-///     placeholder rather than to the current parser/chunker version, which would claim they had been produced by code
-///     that never touched them and defeat the re-index check that reads these columns.
+///     <c>AddKnowledgeCollectionsAndProvenance</c> re-scopes the knowledge base to named collections and records how
+///     each document was parsed and chunked. Two consequences are pinned here because nothing else pins them.
 /// </summary>
+/// <remarks>
+///     Dedupe moves scope: the unique index on <c>content_hash</c> becomes <c>(collection_id, content_hash)</c>, so a
+///     file may exist once per collection; otherwise adding it to a second collection is rejected as a duplicate.
+///     Existing documents backfill provenance to the honest <c>legacy</c> placeholder, not the current parser/chunker
+///     version, which would claim code that never touched them and defeat the re-index check reading these columns.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
 {

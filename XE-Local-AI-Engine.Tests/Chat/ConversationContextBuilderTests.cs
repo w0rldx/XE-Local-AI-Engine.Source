@@ -315,7 +315,7 @@ public sealed class ConversationContextBuilderTests
     [Test]
     public void Build_WithToolHistoryOn_ReplaysADeniedPartWithItsDenialText()
     {
-        // N-90: a denial is stored as its own state; dropping it from the replay would leave the model's call unanswered.
+        // A denial is stored as its own state; dropping it from the replay would leave the model's call unanswered.
         var conversationId = Guid.NewGuid();
         var denied = new NodeChatMessagePart(NodeChatMessagePartKinds.Tool,
             Sequence: 0,
@@ -401,7 +401,7 @@ public sealed class ConversationContextBuilderTests
 
     /// <summary>
     ///     A Stopped answer is not sent, so its prompt is left out too: sent alone it sits next to the new message as
-    ///     one merged request (F-12). Empty and partial Stopped answers behave alike; neither is marked unanswered.
+    ///     one merged request. Empty and partial Stopped answers behave alike; neither is marked unanswered.
     /// </summary>
     [Test]
     [Arguments("")]

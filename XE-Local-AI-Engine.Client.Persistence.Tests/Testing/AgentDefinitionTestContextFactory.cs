@@ -5,13 +5,13 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 /// <summary>
 ///     Builds <see cref="NodeChatDbContext" /> test instances while keeping EF's internal service-provider count flat.
-///     The agent-definition suite creates many short-lived SQLite databases; the naive
-///     <c>new DbContextOptionsBuilder().AddInterceptors(new ...)</c> pattern builds a distinct internal provider per
-///     context and, combined with the existing tests, trips EF's twenty-provider
-///     <c>ManyServiceProvidersCreatedWarning</c> (which is configured as an error in this solution). Reusing one pair of
-///     interceptor instances lets EF reuse a single cached internal provider for every encrypted context, and the
-///     warning is ignored as a defensive backstop — it is a performance advisory irrelevant to short-lived test contexts.
 /// </summary>
+/// <remarks>
+///     A naive <c>new DbContextOptionsBuilder().AddInterceptors(new ...)</c> per context builds a distinct internal
+///     provider and trips EF's twenty-provider <c>ManyServiceProvidersCreatedWarning</c> (an error in this solution).
+///     One shared pair of interceptors lets EF reuse a single cached provider; the warning is also ignored as a
+///     backstop, being a performance advisory irrelevant to short-lived test contexts.
+/// </remarks>
 internal static class AgentDefinitionTestContextFactory
 {
     private static readonly NodeEncryptionSaveChangesInterceptor SaveChangesInterceptor = new();

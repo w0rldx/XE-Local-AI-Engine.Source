@@ -75,9 +75,8 @@ public sealed class UserQuestionParserTests
     [Arguments("""{"questions":[{"question":"Q?","options":[{"label":"A"},{"label":""}]}]}""", "a blank option label")]
     public void TryParse_WithAnInvalidCall_FailsWithAReasonInsteadOfPrompting(string json, string why)
     {
-        // The runner is the FIRST guard on these arguments: ask_user is approval-required, so it is intercepted before
-        // ToolArgumentRepairAIFunction (which normally coerces and repairs) ever runs. Nothing unvalidated may reach a
-        // human, so a bad call must fail here with a reason the model can act on.
+        // The runner is the FIRST guard: ask_user is approval-required, so it is intercepted before
+        // ToolArgumentRepairAIFunction runs. A bad call fails here, before any human, with a reason the model can use.
         var parsed = UserQuestionParser.TryParse(Arguments(json), out var questions, out var error);
 
         AssertEx.False(parsed, $"{why} must be rejected");

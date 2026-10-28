@@ -8,10 +8,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 /// <summary>
-///     The guard on <see cref="MigratedDatabaseTemplate" /> itself. Every suite that copies a template instead of
-///     replaying the migration chain is trusting these three claims: the copy is indistinguishable from a replay, no
-///     committed row is left behind in a write-ahead-log sidecar the copy does not carry, and a rebuilt migrations
-///     assembly cannot be served a stale template.
+///     The guard on <see cref="MigratedDatabaseTemplate" />. Every suite copying a template trusts three claims: the
+///     copy equals a replay, no committed row stays in a WAL sidecar the copy lacks, and a rebuilt migrations assembly
+///     never gets a stale template.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class MigratedDatabaseTemplateTests : IDisposable

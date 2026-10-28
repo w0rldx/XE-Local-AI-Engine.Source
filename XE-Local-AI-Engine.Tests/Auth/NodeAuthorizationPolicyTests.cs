@@ -12,13 +12,13 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the shape of the node's three authorization policies as the container actually resolves them, not as the
-///     registration source reads. The separation is the whole point: <see cref="NodeAuthorizationPolicies.McpServer" />
-///     and <see cref="NodeAuthorizationPolicies.LocalModelProxy" /> each accept exactly ONE non-JWT scheme, so a browser
-///     session or a stolen operator token can never drive them, and the operator policy is the only one that carries a
-///     role requirement. A silent loosening — an extra scheme added to a policy, or the admin role dropped — compiles
-///     and passes every other suite, so it is asserted here directly.
+///     Pins the node authorization policies as DI resolves them: <see cref="NodeAuthorizationPolicies.McpServer" />
+///     and <see cref="NodeAuthorizationPolicies.LocalModelProxy" /> each accept exactly ONE non-JWT scheme, so no
+///     browser session or stolen operator token drives them, and only the operator policy carries a role.
 /// </summary>
+/// <remarks>
+///     A silent loosening (an extra scheme, a dropped admin role) compiles and passes every other suite.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class NodeAuthorizationPolicyTests
 {

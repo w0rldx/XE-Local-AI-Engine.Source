@@ -43,7 +43,7 @@ public sealed record SandboxCreateRequest
     /// </summary>
     /// <remarks>
     ///     Only meaningful with <see cref="SandboxIsolationMode.Filesystem" />; supplying them without it is rejected, because the
-    ///     non-isolated mode already reads the whole host filesystem and honouring the list would suggest a narrowing that did not happen.
+    ///     non-isolated mode already reads the whole host filesystem and honoring the list would suggest a narrowing that did not happen.
     ///     Engine-generated only and deliberately narrow: name the interpreter tree, never a directory that also holds the scratch, the
     ///     cache or the lock state a later command would inherit.
     /// </remarks>

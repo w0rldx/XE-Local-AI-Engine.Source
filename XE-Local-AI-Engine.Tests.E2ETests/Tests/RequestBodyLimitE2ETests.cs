@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The body cap on a REAL connection, which is the only place it behaves the way it ships. The in-memory test host
-///     honours neither <c>IRequestSizeLimitMetadata</c> nor the read that enforces it, so every unit test of the cap
+///     honors neither <c>IRequestSizeLimitMetadata</c> nor the read that enforces it, so every unit test of the cap
 ///     exercises the endpoint's own Content-Length exit and none of them can see what a browser gets.
 ///     <para>
 ///         What a browser gets is Kestrel's: it enforces the cap as it READS, inside model binding, before any handler

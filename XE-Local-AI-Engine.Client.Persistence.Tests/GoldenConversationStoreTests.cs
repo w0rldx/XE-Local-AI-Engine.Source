@@ -273,10 +273,8 @@ public sealed class GoldenConversationStoreTests : IDisposable
             AssertEx.Equal(GoldenConversationSource.Harvested, list[0].Source);
         }
 
-        // The encrypted columns are still ciphertext at rest for a harvested row (no interceptor exemption): the raw
-        // input_turns/rubric BLOBs must NOT equal the UTF-8 plaintext. Read after the EF contexts are disposed so the
-        // raw connection sees the committed row (there is exactly one golden row, so no id filter is needed — which also
-        // avoids depending on the provider's Guid-to-column storage format).
+        // A harvested row's encrypted columns stay ciphertext at rest. Read raw after the EF contexts are disposed; the
+        // single golden row needs no id filter, which avoids depending on the provider's Guid column format.
         var rawInputTurns = await ReadRawInputTurnsAsync(databasePath);
         var rawRubric = await ReadRawRubricAsync(databasePath);
         AssertEx.False(rawInputTurns.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(InputTurns)),

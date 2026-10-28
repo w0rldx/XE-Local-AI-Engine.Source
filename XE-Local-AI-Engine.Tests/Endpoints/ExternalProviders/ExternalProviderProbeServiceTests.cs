@@ -364,9 +364,8 @@ public sealed class ExternalProviderProbeServiceTests
     [Test]
     public async Task Probe_ForADraftAddressOnAnotherOrigin_DoesNotForwardTheStoredKey()
     {
-        // THE exfiltration path. An Operator API caller who cannot read the encrypted key could otherwise point the
-        // probe at a listener they control and have the node present the stored secret as a bearer token. Testing a
-        // moved endpoint probes with only what the caller supplied — here, nothing.
+        // THE exfiltration path: a caller who cannot read the key could aim the probe at their own listener and have
+        // the node send the stored key as a bearer token. A moved endpoint probes with only what the caller supplied.
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 

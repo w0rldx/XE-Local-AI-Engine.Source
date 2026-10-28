@@ -410,7 +410,7 @@ public sealed class RuntimePackageConfigHashTests
 
     // `auto` is a CONFIGURATION value, so switching the picker to it must move the digest — a resume of a turn
     // authored `high` must not silently replay as an auto-dispatched one. It must also be distinguishable from
-    // "unspecified" (null), which is what an unrecognized value used to collapse to.
+    // "unspecified" (null): auto is a recognized value, never one that collapses to null.
     [Test]
     public void Compute_WhenReasoningEffortIsAuto_DiffersFromEveryGradedLevelAndFromNull()
     {
@@ -477,8 +477,8 @@ public sealed class RuntimePackageConfigHashTests
     }
 
     // Stability guard: the binary-"on" feature must NOT shift the hash of any capable-model effort. The canonical
-    // JSON for low/medium/high/none must remain byte-identical to the pre-fix serialization (only the previously
-    // failing binary-on turn changes). Pinned as literals so any drift in named-effort normalization fails loudly.
+    // JSON for low/medium/high/none stays byte-identical (only the binary-on turn hashes
+    // differently). Pinned as literals so any drift in named-effort normalization fails loudly.
     [Test]
     [Arguments("low", "low")]
     [Arguments("medium", "medium")]

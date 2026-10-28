@@ -19,9 +19,8 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The catalog's five sources fail independently, and that policy — not the list endpoint's mapping — is what
-///     keeps a node with no Ollama, no cloud session and an unreadable GGUF registry able to answer a picker query.
-///     Each test kills exactly one source and asserts the others survive it.
+///     The catalog's five sources fail independently, and that policy, not the endpoint's mapping, keeps a node with no
+///     Ollama, no cloud session and an unreadable GGUF registry able to answer a picker query. Each test kills one.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelCatalogServiceTests

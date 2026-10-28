@@ -54,7 +54,7 @@ public sealed class ExternalAppStateObserverTests
 
         // The whole sentence, not just the number: the state word and the exit code come from two different members
         // of the listing, and a summary that said "is exited" with the code dropped would still contain "137"
-        // through nothing but the service name's neighbours.
+        // through nothing but the service name's neighbors.
         AssertEx.Contains(AssertEx.NotNull(row.FailureSummary), "exited with exit code 137");
     }
 
@@ -187,7 +187,7 @@ public sealed class ExternalAppStateObserverTests
         // A second row the observer WILL be able to judge, and which it must reach after the unreadable one.
         var second = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running);
 
-        // Valid JSON that deserialises to nothing: the shape a snapshot written by a build this engine no longer is.
+        // Valid JSON that deserializes to nothing: the shape a snapshot written by a build this engine no longer is.
         await harness.ReplaceManifestSnapshotAsync(harness.InstalledId, "null");
 
         await observer.PollOnceAsync(CancellationToken.None);

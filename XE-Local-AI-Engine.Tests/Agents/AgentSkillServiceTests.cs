@@ -25,9 +25,9 @@ public sealed class AgentSkillServiceTests
                 Body = "body"
             }));
 
-        // Leading, trailing AND consecutive dashes are all rejected. The consecutive case is the regression: the
-        // superseded ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ regex accepted "foo--bar", which MAF rejects, so the skill
-        // persisted here and then threw ArgumentException when built into an AgentInlineSkill.
+        // Leading, trailing AND consecutive dashes are all rejected. The consecutive case matters: a
+        // ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ regex accepts "foo--bar", which MAF rejects, so the skill would
+        // persist here and then throw ArgumentException when built into an AgentInlineSkill.
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
             service.CreateAsync(new AgentSkillInput
             {

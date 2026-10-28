@@ -225,7 +225,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
 
     /// <summary>
     ///     Every verifier override an item carries must name a criterion the project's CURRENT judge rubric has, and
-    ///     must be a configuration that criterion's kind can honour.
+    ///     must be a configuration that criterion's kind can honor.
     /// </summary>
     /// <remarks>
     ///     An override naming a criterion the rubric lacks is not a harmless no-op: the judge falls back to the
@@ -264,7 +264,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
     /// </summary>
     /// <exception cref="BenchmarkValidationException">
     ///     The override names a criterion the rubric does not have, or carries a configuration that criterion's kind
-    ///     cannot honour.
+    ///     cannot honor.
     /// </exception>
     public static void EnsureOverridesFitRubric(ReadOnlyMemory<byte> verifierConfigJson, BenchmarkJudgeRubricV1 rubric)
     {
@@ -367,7 +367,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         ];
     }
 
-    /// <summary>Serialises an optional JSON body to UTF-8 bytes for an encrypted column, keeping an absent one null.</summary>
+    /// <summary>Serializes an optional JSON body to UTF-8 bytes for an encrypted column, keeping an absent one null.</summary>
     /// <remarks>
     ///     The cast is load-bearing. Without it the conditional's natural type is <c>byte[]?</c>, and a null array
     ///     converts to an EMPTY <see cref="ReadOnlyMemory{T}" /> rather than to a null nullable — so an omitted payload

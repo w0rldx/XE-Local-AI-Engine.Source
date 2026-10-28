@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 /// <summary>
-///     Turns off the Windows hard-error and fault dialogs for this process, so a child that fails to initialise exits instead of
+///     Turns off the Windows hard-error and fault dialogs for this process, so a child that fails to initialize exits instead of
 ///     waiting on a dialog nobody sees.
 /// </summary>
 /// <remarks>
-///     Child processes inherit the error mode: a sandboxed MCP server dying with 0xC0000142 (a DLL failed to initialise) then exits at once and its
+///     Child processes inherit the error mode: a sandboxed MCP server dying with 0xC0000142 (a DLL failed to initialize) then exits at once and its
 ///     stdout closes, where the dialog kept it alive past the connect timeout. Whether MXC's ProcessContainer spawn passes the mode on
 ///     is checked by a Windows run only; no test on this platform can observe it.
 /// </remarks>

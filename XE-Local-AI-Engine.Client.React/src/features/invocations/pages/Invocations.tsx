@@ -1,7 +1,6 @@
 import { ActionIcon, Badge, Button, CopyButton, Group, Loader, SimpleGrid, Stack, Text, Title, Tooltip } from "@mantine/core";
 import { IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import type { TFunction } from "i18next";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -25,14 +24,6 @@ import {
 	isInvocationActive,
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
-
-// Routed through the canonical helper rather than reading `error.message` directly: a request that never reached the
-// node arrives as a NetworkError whose message is deliberately empty, so the raw read would render a BLANK alert.
-// apiErrorMessage answers that case with the localized "can't reach the node"
-// sentence and keeps the server's own text for every other failure.
-function errorMessage(error: unknown, t: TFunction): string {
-	return apiErrorMessage(error, t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded."));
-}
 
 // Copyable W3C trace id so a failed run's "See local logs" row correlates with the exported trace. Renders
 // nothing when no trace id was captured (legacy/platform runs). Uses the app's idiomatic CopyButton affordance.
@@ -280,7 +271,14 @@ export function Invocations() {
 				</Group>
 			) : null}
 
-			{monitorError ? <InlineErrorAlert message={errorMessage(monitorError, t)} /> : null}
+			{monitorError ? (
+				<InlineErrorAlert
+					message={apiErrorMessage(
+						monitorError,
+						t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded."),
+					)}
+				/>
+			) : null}
 
 			<CurrentInvocation current={monitor?.current ?? null} />
 			{otherLive.map((row) => (

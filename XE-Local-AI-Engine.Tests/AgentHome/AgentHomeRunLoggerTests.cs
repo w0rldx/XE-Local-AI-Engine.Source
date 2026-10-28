@@ -235,7 +235,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         var (logger, ctx) = CreateLogger();
         await logger.OpenAsync(ctx);
 
-        // Arguments are sanitised by the caller; we pass only model-safe strings.
+        // Arguments are sanitized by the caller; we pass only model-safe strings.
         var commandRecord = new AgentHomeCommandLogRecord
         {
             Actor = AgentHomeCommandActors.Node,

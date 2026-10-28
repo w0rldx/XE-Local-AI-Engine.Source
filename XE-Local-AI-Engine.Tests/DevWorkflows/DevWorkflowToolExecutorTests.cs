@@ -371,7 +371,7 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
-    ///     A node may ask for a pause before it tries again, and the pause is honoured: the re-attempt is scheduled
+    ///     A node may ask for a pause before it tries again, and the pause is honored: the re-attempt is scheduled
     ///     immediately — the row is <c>Pending</c> and the log says when it may go — but nothing admits it until then.
     /// </summary>
     [Test]
@@ -403,7 +403,7 @@ public sealed class DevWorkflowToolExecutorTests
 
     /// <summary>
     ///     A run cancelled while one of its node runs is waiting out a retry delay leaves nothing behind it. The
-    ///     promises are held in memory and only cleared by the re-attempt that honours them, so one belonging to a run
+    ///     promises are held in memory and only cleared by the re-attempt that honors them, so one belonging to a run
     ///     that will never ask again would sit there for the life of the process.
     /// </summary>
     [Test]
@@ -454,7 +454,7 @@ public sealed class DevWorkflowToolExecutorTests
 
     /// <summary>
     ///     A prepared workspace carrying a committed credential is recorded on the run rather than written where it is
-    ///     found — which is the whole reason the secrets seam exists, because that write used to resolve a Dev Mode task
+    ///     found — which is the whole reason the secrets seam exists, because that write would resolve a Dev Mode task
     ///     row a node run does not have.
     /// </summary>
     [Test]

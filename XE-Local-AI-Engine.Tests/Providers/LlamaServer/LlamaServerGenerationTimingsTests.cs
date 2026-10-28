@@ -8,19 +8,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins how llama-server's <c>timings</c> object is lifted off a streamed chunk. Three things must hold, and each
-///     of them has a different failure mode if it silently stops holding:
-///     <list type="number">
-///         <item>the field is reachable at all — it is not in OpenAI's schema, so it only exists on the SDK's
-///         experimental <c>Patch</c> surface, and a package bump that moves it turns every benchmark's pp/tg split
-///         silently null instead of failing;</item>
-///         <item>the Agent-Framework wrapper hop is followed — production consumes
-///         <c>AgentResponseUpdate</c>, whose raw representation is the MEAI <c>ChatResponseUpdate</c>, whose own raw
-///         representation is the OpenAI chunk;</item>
-///         <item>a chunk WITHOUT timings (every cloud provider, and every non-final llama-server chunk) yields null
-///         rather than throwing — the reader sits on the hot streaming path of every turn in the product.</item>
-///     </list>
+///     Pins how llama-server's <c>timings</c> object is lifted off a streamed chunk. Each of three invariants fails
+///     silently if it stops holding.
 /// </summary>
+/// <remarks>
+///     (1) The field is reachable: it is not in OpenAI's schema, so it lives only on the SDK's experimental <c>Patch</c>
+///     surface, and a package bump that moves it nulls every benchmark's pp/tg split. (2) The Agent-Framework hop is
+///     followed: <c>AgentResponseUpdate</c> wraps the MEAI <c>ChatResponseUpdate</c>, which wraps the OpenAI chunk.
+///     (3) A chunk without timings (every cloud provider, every non-final llama-server chunk) yields null rather than
+///     throwing, because the reader sits on the hot streaming path of every turn.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerGenerationTimingsTests
 {

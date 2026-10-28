@@ -13,7 +13,7 @@ import { invalidate, transcriptionQueryIds } from "@/features/transcription/quer
 // passes through the SDK call. The ProblemDetails interceptor turns any non-2xx, including the typed 415, into an
 // ApiError.
 //
-// The endpoint answers 200 for EVERY finished outcome (succeeded, cancelled, runtime-failed), so the caller reads the
+// The endpoint answers 200 for EVERY finished outcome (succeeded, canceled, runtime-failed), so the caller reads the
 // returned session's `status` / `errorCode` rather than the HTTP status. Only 400/404/415 reject.
 
 export interface UseTranscriptionUploadResult {

@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 /// </remarks>
 public enum SandboxSecurityProfile
 {
-    /// <summary>Today's behaviour: a containment axis a workload prefers is requested wherever the host advertises it, and degrades where it does not.</summary>
+    /// <summary>Today's behavior: a containment axis a workload prefers is requested wherever the host advertises it, and degrades where it does not.</summary>
     Low = 0,
 
     /// <summary>Every axis a workload's declaration prefers becomes a precondition, refused fail-closed where the host cannot serve it.</summary>

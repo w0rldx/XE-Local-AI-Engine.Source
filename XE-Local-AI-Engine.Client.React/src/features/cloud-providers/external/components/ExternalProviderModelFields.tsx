@@ -194,7 +194,7 @@ export function ExternalProviderModelFields({ values, errors, modelRowIds, dispa
 							{t("pages.externalProviders.models.apiSurfaceHelp")}
 						</Text>
 
-						{/* D6: the tool declaration is not scoped to chat. A model declared tool-capable joins the node's
+						{/* The tool declaration is not scoped to chat. A model declared tool-capable joins the node's
 						    tool-capable allow-list, which the Agents page reads too. */}
 						<Text size="xs" c="dimmed">
 							{t("pages.externalProviders.models.toolsHelp")}

@@ -4,6 +4,7 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>What an application container is allowed to be, stated once as the specification the engine asks for and verified against what the daemon says it created.</summary>
 /// <remarks>
@@ -312,7 +313,7 @@ internal static class ApplicationContainerPolicy
             // Both sides go through their links before they are compared, and the planned side is confined by its REAL
             // location: a component swapped for a link between plan and create defeats a string comparison.
             var plannedReal = ResolveThroughLinks(Path.GetFullPath(expected.HostPath));
-            if (confinement is not null && !IsInside(plannedReal, confinement))
+            if (confinement is not null && !PathContainment.IsRootOrUnderCanonical(plannedReal, confinement))
             {
                 violations.Add($"the mount at '{destination}' resolves to '{plannedReal}', which is outside this instance's own directory ({daemonMode} daemon)");
                 continue;
@@ -334,14 +335,6 @@ internal static class ApplicationContainerPolicy
         {
             violations.Add($"the planned mount at '{missing}' was not applied");
         }
-    }
-
-    /// <summary>Whether a resolved path is the instance directory itself or something beneath it.</summary>
-    private static bool IsInside(string resolved, string root)
-    {
-        return string.Equals(resolved, root, StringComparison.Ordinal)
-               || resolved.StartsWith(root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar,
-                   StringComparison.Ordinal);
     }
 
     /// <summary>One absolute path with every component resolved through its links, which is what a path string cannot do for itself.</summary>

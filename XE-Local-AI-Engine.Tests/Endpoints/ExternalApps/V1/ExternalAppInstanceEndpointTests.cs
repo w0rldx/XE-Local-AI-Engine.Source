@@ -368,7 +368,7 @@ public sealed class ExternalAppInstanceEndpointTests
 
     /// <summary>
     ///     The detail page reads the INSTALLED snapshot and never the catalog. The fixture's instance runs v2 while the
-    ///     catalog offers v3, and it is v2 that must render, sanitised.
+    ///     catalog offers v3, and it is v2 that must render, sanitized.
     /// </summary>
     [Test]
     public async Task GetInstance_RendersTheSanitisedInstalledSnapshot()

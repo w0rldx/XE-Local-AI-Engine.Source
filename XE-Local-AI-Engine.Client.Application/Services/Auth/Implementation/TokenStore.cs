@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public sealed class TokenStore : ITokenStore
 {
     private const string CredentialsFileName = "worker-credentials.enc";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
     private readonly StoredWorkerCredentials? _credentials;
     private readonly TimeProvider _timeProvider;
 

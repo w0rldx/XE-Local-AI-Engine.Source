@@ -30,7 +30,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     private const string CancelledInFlight = "The run was cancelled while this node run's tool call was in flight.";
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly GraphWorkflowInFlightLane<ToolInvocationOutcome> _lane;
     private readonly ILogger<GraphWorkflowToolExecutor> _logger;
@@ -227,7 +227,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         int written;
         if (flight.Work.IsCanceled)
         {
-            // Defence rather than an expected path: the invocation service answers every cancellation with an outcome instead of throwing. Checked anyway, and
+            // Defense rather than an expected path: the invocation service answers every cancellation with an outcome instead of throwing. Checked anyway, and
             // BEFORE the await, because awaiting a cancelled task would rethrow, the dispatcher would swallow it, and the row would rethrow on every tick forever.
             written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken);
         }

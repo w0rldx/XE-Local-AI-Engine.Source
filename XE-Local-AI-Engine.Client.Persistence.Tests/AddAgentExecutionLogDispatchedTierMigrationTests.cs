@@ -8,10 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the adaptive-effort dispatch half of the cumulative <c>AddAiTrendsWave</c> migration: it adds the two
-///     dispatch columns to <c>agent_execution_logs</c>, on both an upgrade from the preceding migration and a fresh
-///     migrate-to-head; a row written before the migration reads back null on both; rollback drops the whole wave's
-///     columns from this table while leaving everything underneath it; and the model has no snapshot drift.
+///     The adaptive-effort dispatch half of <c>AddAiTrendsWave</c>: both columns land on <c>agent_execution_logs</c>
+///     on upgrade and fresh migrate, older rows read null, rollback drops the wave's columns here only, no drift.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposable

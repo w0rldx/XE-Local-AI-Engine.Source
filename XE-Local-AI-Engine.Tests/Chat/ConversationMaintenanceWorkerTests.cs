@@ -131,8 +131,8 @@ public sealed class ConversationMaintenanceWorkerTests
     [Test]
     public async Task StopAsync_WhenTheHostTokenIsAlreadyCancelled_SaysTheHostBudgetWasSpentNotThatTheDrainExceeded()
     {
-        // Windows tester round 3 (N-20): a host whose shutdown budget an earlier service had spent stopped this worker on a
-        // cancelled token, and the log claimed the 10 s drain was exceeded although the worker had waited no time at all.
+        // A host whose shutdown budget an earlier service spent stops this worker on a cancelled token; the log must
+        // not claim the 10 s drain was exceeded when the worker waited no time at all.
         var clock = new ManualTimeProvider();
         await using var harness = new ConversationMaintenanceHarness(timeProvider: clock);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

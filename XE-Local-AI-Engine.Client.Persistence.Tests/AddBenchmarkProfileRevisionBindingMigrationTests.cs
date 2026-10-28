@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddBenchmarkProfileRevisionBinding</c> binds a benchmark row to the inference profile it ran under, and
-///     records the two launch knobs that change the number most (<c>flash_attn</c>, the V-cache type). Without the
-///     binding a benchmark is an unattributable number that cannot be compared to another run.
+///     <c>AddBenchmarkProfileRevisionBinding</c> binds a benchmark row to its inference profile and records the two
+///     launch knobs that move the number most (<c>flash_attn</c>, the V-cache type). Unbound, a benchmark cannot be
+///     compared to another run.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddBenchmarkProfileRevisionBindingMigrationTests

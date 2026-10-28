@@ -17,20 +17,15 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The one body-limit mechanism that is provable without a real Kestrel connection: the bounded read.
-///     <para>
-///         The other two — the <c>IRequestSizeLimitMetadata</c> the route carries and the
-///         <see cref="IHttpMaxRequestBodySizeFeature" /> the handler sets — are Kestrel-side, and the in-memory test
-///         host presents no Kestrel connection, so an assertion here would neither pass nor disprove anything about
-///         them; only a real Kestrel host proves them. What IS asserted here is that a caller who lies about, or omits,
-///         <c>Content-Length</c> gets the same 413 and never allocates more than one byte past the cap.
-///     </para>
-///     <para>
-///         Mechanism 2's HANDLING is provable here even though its trigger is not: the throw Kestrel raises as it
-///         consumes an oversized body is a plain <see cref="BadHttpRequestException" />, which a fake body pipe can
-///         raise verbatim.
-///     </para>
+///     The one body-limit mechanism provable without a real Kestrel connection: the bounded read. A caller who lies
+///     about, or omits, <c>Content-Length</c> gets the same 413 and never allocates more than one byte past the cap.
 /// </summary>
+/// <remarks>
+///     The route's <c>IRequestSizeLimitMetadata</c> and the <see cref="IHttpMaxRequestBodySizeFeature" /> the handler
+///     sets are Kestrel-side; the in-memory host has no Kestrel connection, so only a real Kestrel host proves them.
+///     Mechanism 2's HANDLING is provable here though: the throw Kestrel raises on an oversized body is a plain
+///     <see cref="BadHttpRequestException" />, which a fake body pipe can raise verbatim.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class IntegrationApiHandlerBodyLimitTests
 {

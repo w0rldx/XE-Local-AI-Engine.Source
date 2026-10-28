@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// </summary>
 /// <remarks>
 ///     The parsed graph itself stays internal on purpose: it is the runtime's projection, not a wire shape, and the
-///     API composes its own field-for-field mirror from the JSON. What must not be duplicated is the JUDGEMENT —
+///     API composes its own field-for-field mirror from the JSON. What must not be duplicated is the JUDGMENT —
 ///     whether a graph is routable, which answers a node run can take, where a rejection would go, and which tools a
 ///     definition would run — because a second implementation of any of those would drift from the one that decides.
 /// </remarks>

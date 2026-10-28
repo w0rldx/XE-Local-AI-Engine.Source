@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { VoiceMessagePlayButton } from "@/features/voice/components/VoiceMessagePlayButton";
-import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
-import type { VoiceRuntimeContextValue } from "@/features/voice/VoiceRuntimeContext";
+import type { VoiceRuntimeContextValue } from "@/features/voice/hooks/VoiceRuntimeContext";
+import { useVoicePreferencesStore } from "@/features/voice/stores/VoicePreferencesStore";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // Controllable runtime context: the component reads it via useVoiceRuntime, which the mock below returns.
@@ -15,7 +15,7 @@ let mockContext: VoiceRuntimeContextValue;
 const playMessage = vi.fn(() => Promise.resolve());
 const stopPlayback = vi.fn();
 
-vi.mock("@/features/voice/VoiceRuntimeContext", () => ({
+vi.mock("@/features/voice/hooks/VoiceRuntimeContext", () => ({
 	useVoiceRuntime: (): VoiceRuntimeContextValue => mockContext,
 }));
 

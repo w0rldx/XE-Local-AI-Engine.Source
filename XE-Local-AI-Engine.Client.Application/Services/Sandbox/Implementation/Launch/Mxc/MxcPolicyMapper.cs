@@ -92,7 +92,7 @@ public static class MxcPolicyMapper
                     HostLoopback = NetworkAction.Deny
                 },
             },
-            // Win32k allowed so node.js and CoreCLR children start (ADR 0019 amendment, round-4 evidence); clipboard and input injection stay denied.
+            // Win32k allowed so node.js and CoreCLR children start (ADR 0019 amendment); clipboard and input injection stay denied.
             Ui = new UiPolicy
             {
                 Disable = false,

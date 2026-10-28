@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 
 /// <summary>
 ///     Creates a trigger. 400 when the target agent is missing or is an orchestrator, or when the target graph workflow is
-///     missing or graph workflows are off; 409 when the normalised name is already taken.
+///     missing or graph workflows are off; 409 when the normalized name is already taken.
 /// </summary>
 public sealed class CreateIntegrationTriggerEndpoint : Endpoint<CreateIntegrationTriggerRequest, IntegrationTriggerView>
 {

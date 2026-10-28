@@ -89,8 +89,8 @@ internal static class DevWorkflowGraphs
                                  """;
 
     /// <summary>
-    ///     The same fan-out as a shape the runtime can actually drive today: the implementation node is an Agent because
-    ///     the DevTask lane arrives in B6, and everything the fix loop is specified against — one producer, two checks
+    ///     The same fan-out as a shape the runtime can drive with an Agent: the implementation node is an Agent rather
+    ///     than a DevTask, and everything the fix loop is specified against — one producer, two checks
     ///     that both depend on it, a join, and the failing check routing back — is unchanged.
     /// </summary>
     public const string FanOutFixLoop = """

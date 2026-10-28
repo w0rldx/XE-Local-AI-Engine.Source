@@ -86,7 +86,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
             AssertEx.Equal(expected.CreatedAtUtc, actual.CreatedAtUtc);
         }
 
-        // 2. The resolver therefore picks the SAME messages — including honouring the pin on the older sibling, so the
+        // 2. The resolver therefore picks the SAME messages — including honoring the pin on the older sibling, so the
         //    newest-sibling default is genuinely overridden and the cap did not quietly restore it.
         var fullPath = SelectedPathResolver.Resolve(full.Messages, full.SelectedPath).Select(message => message.MessageId).ToArray();
         var turnPath = SelectedPathResolver.Resolve(turn.Messages, turn.SelectedPath).Select(message => message.MessageId).ToArray();
@@ -296,8 +296,8 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
     [Test]
     public async Task ReadMessageAsync_ReturnsTheSameMessageTheFullReadProjects()
     {
-        // ReadMessageAsync used to materialize the WHOLE conversation and pick one entry out of it, on the ~10/s
-        // partial-flush path. It now filters in SQL. This pins the equivalence: for every message, the single-message
+        // ReadMessageAsync filters in SQL rather than materializing the WHOLE conversation on the ~10/s
+        // partial-flush path. This pins the equivalence: for every message, the single-message
         // read must project exactly what the full read projects for it — including the LEFT JOIN'd feedback row.
         await using var provider = await BuildProviderAsync("read-message-targeted.sqlite");
         var service = CreateService(provider);
@@ -326,7 +326,7 @@ public sealed class NodeChatTurnReadCapTests : IDisposable
         {
             var actual = AssertEx.NotNull(await NodeChatPersistenceSql.ReadMessageAsync(dbContext, built.ConversationId, expected.MessageId, CancellationToken.None));
 
-            // Parts/Sources are collections, which record equality compares by reference; normalise them out and check
+            // Parts/Sources are collections, which record equality compares by reference; normalize them out and check
             // them separately so this stays meaningful if a fixture later persists parts.
             AssertEx.Equal(expected with
                 {

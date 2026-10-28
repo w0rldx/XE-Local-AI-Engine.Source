@@ -107,8 +107,8 @@ public sealed class ProcessGpuVendorProbeTests
 
     /// <summary>
     ///     NVIDIA answers from NVML or <c>nvidia-smi</c> long before the adapter list, so nothing on the Windows
-    ///     adapter path can change what an NVIDIA box selects. Pinned because that is the regression this change is
-    ///     most able to cause.
+    ///     adapter path can change what an NVIDIA box selects. Pinned because that is the regression an adapter-path
+    ///     change is most able to cause.
     /// </summary>
     [Test]
     public async Task OnWindows_NvidiaStillAnswersBeforeAnyAdapterQueryIsAttempted()

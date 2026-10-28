@@ -4,7 +4,7 @@ import { z } from "zod";
 import { DevelopmentConsentGate } from "@/features/development/components/DevelopmentConsentGate";
 import { DevelopmentPage } from "@/features/development/pages/DevelopmentPage";
 
-// Deep-link targets, both optional (X8): a workflow's DevTask node links here with the project and task it drove, so
+// Deep-link targets, both optional: a workflow's DevTask node links here with the project and task it drove, so
 // the operator lands on that project's evidence rather than on whichever project happens to be first. Arriving without
 // them is unchanged — the page still defaults to the first project.
 const developmentSearchSchema = z.object({

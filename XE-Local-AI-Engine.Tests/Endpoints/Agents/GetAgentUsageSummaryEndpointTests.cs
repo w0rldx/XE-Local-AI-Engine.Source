@@ -207,7 +207,7 @@ public sealed class GetAgentUsageSummaryEndpointTests
         $"xe-usage-{Guid.NewGuid():N}";
 
     // The loopback Host/Origin guard rejects an API request without an Origin, so every request carries one — the
-    // shape the neighbouring run-envelope tests use.
+    // shape the neighboring run-envelope tests use.
     private static HttpRequestMessage Request(Action<HttpRequestMessage>? authorize, string query = "")
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/agents/usage-summary{query}");
@@ -236,7 +236,7 @@ public sealed class GetAgentUsageSummaryEndpointTests
 
     // Seeded through raw parameterized SQL rather than the DbSet: the run-envelope entity type is internal to the
     // persistence assembly and no store API writes one (the real write is the terminalize command's own statement,
-    // covered separately). Unlike the neighbouring run-envelope seeds this one sets the provider and the four token
+    // covered separately). Unlike the neighboring run-envelope seeds this one sets the provider and the four token
     // columns explicitly, because they are the group key and the sums under test. Every value is a bound parameter.
     private async Task SeedEnvelopeAsync(string modelName,
         string provider,

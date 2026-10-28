@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Pins where a file upload is cut before transcription, on synthetic tone bursts parted by digital silence.
 /// </summary>
 /// <remarks>
-///     The two long clips mirror the tester's N-72 recordings: seventeen short utterances 34 s apart and four utterances
-///     30 s apart, which whisper-server returned as one and two segments when sent whole.
+///     The two long clips mirror real recordings: seventeen short utterances 34 s apart and four utterances
+///     30 s apart, which whisper-server returns as one and two segments when sent whole.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class SilenceSplitterTests
@@ -16,7 +16,7 @@ public sealed class SilenceSplitterTests
     [Test]
     public async Task Split_SeventeenUtterancesPartedBy34Seconds_YieldsSeventeenRegions()
     {
-        // 1.28 s of speech every 35.28 s, the shape of the tester's ten-minute clip.
+        // 1.28 s of speech every 35.28 s, the shape of a real ten-minute clip.
         var starts = Enumerable.Range(0, 17).Select(index => 450L + (index * 35_280L)).ToList();
         const long TotalMs = 17 * 35_280L;
 

@@ -44,7 +44,7 @@ module.exports = {
       name: "no-core-to-features",
       comment:
         "TRACKED DEBT (promote to error later): core/ is the shared foundation and must not depend on " +
-        "feature/ modules. Known violation: HeaderBar -> features/about.",
+        "feature/ modules.",
       severity: "warn",
       from: { path: "^src/core" },
       to: { path: "^src/features" },

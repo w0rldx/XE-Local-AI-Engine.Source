@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         Two properties carry it: every case a caller could use to probe for a session it may not see answers ONE
 ///         404 with a byte-identical body, and the per-session critical section covers the busy read AND the seed write
-///         it authorises, so two accepts can never land two seeds in one conversation.
+///         it authorizes, so two accepts can never land two seeds in one conversation.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]

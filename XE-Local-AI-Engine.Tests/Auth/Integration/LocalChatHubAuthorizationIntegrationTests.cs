@@ -67,9 +67,8 @@ public sealed class LocalChatHubAuthorizationIntegrationTests
         using var request = new HttpRequestMessage(HttpMethod.Get, route);
         using var response = await client.SendAsync(request);
 
-        // The access_token query token is accepted by the JwtBearer handler, so authorization
-        // passes. SignalR then rejects the non-WebSocket GET at the transport layer, but it must
-        // never surface as 401 Unauthorized once a valid access_token query token is supplied.
+        // The access_token query token passes JwtBearer authorization. SignalR then rejects the
+        // non-WebSocket GET at the transport layer, which must never surface as 401 Unauthorized.
         AssertEx.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

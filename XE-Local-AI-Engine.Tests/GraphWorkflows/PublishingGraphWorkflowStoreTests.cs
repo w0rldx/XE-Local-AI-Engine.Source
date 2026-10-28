@@ -10,10 +10,8 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The notification seam. It wraps the store rather than living at each call site in the runtime because a missed
-///     call site is a pane that silently stops updating and no test would notice — which is why the coverage assertion
-///     below is the point of the design rather than decoration: a mutation added to the store interface fails this
-///     file until it is announced.
+///     The notification seam. It wraps the store rather than each runtime call site, because a missed call site is a
+///     pane that silently stops updating; the coverage assertion below fails this file for any unannounced mutation.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class PublishingGraphWorkflowStoreTests

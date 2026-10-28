@@ -4,8 +4,8 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 
+import type { GgufRepository } from "@/core/model-downloads/models/GgufModels";
 import { GgufDownloadDialog } from "@/features/models/components/GgufDownloadDialog";
-import type { GgufRepository } from "@/features/models/models/GgufModels";
 import { jsonRoute } from "@/test/msw/Handlers";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -167,7 +167,7 @@ describe("GgufDownloadDialog default quant", () => {
 			renderDialog("owner/many");
 
 			expect(await screen.findByTestId("gguf-download-row-Q6_K")).toBeTruthy();
-			// Row offset 400 inside the list, centred: 400 - (200 - 40) / 2 = 320, set on the list and nothing else.
+			// Row offset 400 inside the list, centered: 400 - (200 - 40) / 2 = 320, set on the list and nothing else.
 			expect(scrollTopSet.mock.calls).toEqual([[320]]);
 			expect(isList(scrollTopSet.mock.contexts[0] as Element)).toBe(true);
 			expect((Element.prototype.scrollIntoView as unknown as Mock).mock.calls).toHaveLength(0);

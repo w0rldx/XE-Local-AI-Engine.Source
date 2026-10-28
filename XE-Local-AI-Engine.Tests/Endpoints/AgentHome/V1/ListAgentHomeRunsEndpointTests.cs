@@ -165,7 +165,7 @@ public sealed class ListAgentHomeRunsEndpointTests
             return Task.FromResult(Page);
         }
 
-        // The text reads are this stub's neighbours on the interface; their own route tests own them.
+        // The text reads are this stub's neighbors on the interface; their own route tests own them.
         public Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default) =>
             Task.FromResult<AgentHomeRunText?>(null);
 

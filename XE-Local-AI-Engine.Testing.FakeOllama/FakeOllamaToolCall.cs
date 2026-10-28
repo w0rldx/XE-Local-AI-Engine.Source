@@ -11,7 +11,7 @@ public sealed record FakeOllamaToolCall
     public required string Name { get; init; }
 
     /// <summary>
-    ///     JSON-serialisable arguments object. Will be serialised as the <c>arguments</c> field
+    ///     JSON-serializable arguments object. Will be serialized as the <c>arguments</c> field
     ///     in the Ollama <c>tool_calls[0].function</c> wire chunk.
     ///     Example: <c>new { expression = "12*9" }</c>
     /// </summary>

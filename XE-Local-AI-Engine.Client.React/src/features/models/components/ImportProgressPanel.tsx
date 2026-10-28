@@ -2,10 +2,10 @@ import { Button, Card, Group, Loader, Progress, Stack, Text, Title } from "@mant
 import { IconFileImport, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
+import type { GgufAcquisitionStatus } from "@/core/model-downloads/models/GgufAcquisitionModels";
+import { isCancellableAcquisitionPhase } from "@/core/model-downloads/models/GgufAcquisitionModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
-import type { GgufAcquisitionStatus } from "@/features/models/models/GgufAcquisitionModels";
-import { isCancellableAcquisitionPhase } from "@/features/models/models/GgufAcquisitionModels";
 import { importErrorMessage } from "@/features/models/models/GgufImportErrors";
 
 interface ImportProgressPanelProps {

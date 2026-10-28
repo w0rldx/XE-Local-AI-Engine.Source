@@ -17,10 +17,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The warm-decision half of the model-readiness step, exercised without building the whole invocation runner. Two
-///     rules carry the weight: only the llama.cpp runtime is warmable (a cloud-routed or Ollama model must never trigger
-///     a local cold-load), and every non-cancellation failure degrades to "no warm" / "window unknown" rather than
-///     failing the turn — a cancellation still propagates, because the turn is terminating.
+///     The warm decision, without the whole runner: only llama.cpp is warmable (a cloud or Ollama model never triggers
+///     a local cold-load), and a non-cancellation failure degrades to "no warm" / "window unknown"; a cancellation
+///     propagates.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalRuntimeWarmerTests
@@ -74,7 +73,7 @@ public sealed class LocalRuntimeWarmerTests
         AssertEx.Null(await warmer.ResolveWarmableProviderAsync("model.gguf", Guid.NewGuid(), CancellationToken.None));
     }
 
-    /// <summary>R7-03: a local turn loading its model during a training run sat in "loading model" with no reason.</summary>
+    /// <summary>A local turn loading its model during a training run says why, never a bare "loading model".</summary>
     [Test]
     [Arguments(true)]
     [Arguments(false)]

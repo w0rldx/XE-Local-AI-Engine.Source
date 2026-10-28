@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behavioural pin on per-feature provider selection. Two roles, two configuration keys, and a
+///     Behavioral pin on per-feature provider selection. Two roles, two configuration keys, and a
 ///     deliberate asymmetry: the agent role cannot reach a container provider at all, while the Development role can —
 ///     and falls back to the agent role's choice when it is not configured, which is what makes the seam a runtime
 ///     no-op on a node that has never set the new key.
@@ -158,7 +158,7 @@ public sealed class SandboxProviderSelectionTests
         services.AddOptions<LocalContainerOptions>().Bind(configuration.GetSection(LocalContainerOptions.SectionName));
         services.AddOptions<ContainerSandboxOptions>().Bind(configuration.GetSection(ContainerSandboxOptions.SectionName));
         // Constructing the Docker provider only captures its dependencies — it contacts no daemon until a sandbox is
-        // created — so selection can be pinned on a box with no Docker installed at all.
+        // created — so selection can be pinned on a host with no Docker installed at all.
         services.AddSingleton(Substitute.For<IDockerRuntimeClientFactory>());
         // The container provider derives its install id from this; hashing a path touches no disk.
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-selection-tests")));

@@ -30,7 +30,7 @@ public interface IImageModelDownloadCoordinator
 
     /// <summary>
     ///     Requests cancellation of an in-flight download. Returns <see langword="true" /> when a running download was
-    ///     signalled, <see langword="false" /> when nothing was in flight for that name (idempotent — cancelling an
+    ///     signaled, <see langword="false" /> when nothing was in flight for that name (idempotent — cancelling an
     ///     already-finished download is not an error).
     /// </summary>
     /// <remarks>

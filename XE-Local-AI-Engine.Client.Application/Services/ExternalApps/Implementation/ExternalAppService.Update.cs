@@ -339,7 +339,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
         var resources = await _resourceGate.EvaluateAsync(target, _layout.Root, cancellationToken);
 
         // alreadyInstalled is false on purpose: this application IS installed, and that is the precondition of an
-        // update rather than a reason to refuse one. An update restarts the application, so D6's restart rule leads.
+        // update rather than a reason to refuse one. An update restarts the application, so the empty-catalog restart rule leads.
         return new InstallAdmission
         {
             BlockedReason = policy ?? BlockingReason(alreadyInstalled: false, BridgeUnavailableFor(target), resolution, target, missing, resources),

@@ -63,7 +63,7 @@ public enum IntegrationTriggerOutcome
     /// <summary>The row was written; the result carries it.</summary>
     Saved,
 
-    /// <summary>Another trigger already owns the normalised name. 409.</summary>
+    /// <summary>Another trigger already owns the normalized name. 409.</summary>
     NameConflict,
 
     /// <summary>The target agent definition does not exist. 400.</summary>
@@ -112,7 +112,7 @@ public interface IIntegrationTriggerService
     Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Normalises an external trigger name the one way the whole feature agrees on: trimmed and lowercased.
+    ///     Normalizes an external trigger name the one way the whole feature agrees on: trimmed and lowercased.
     /// </summary>
     /// <remarks>
     ///     Both the admin writes and the invoke lookup call it, so a name saved from the UI and a name typed into a

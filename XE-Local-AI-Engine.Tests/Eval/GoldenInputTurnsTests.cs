@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Direct unit tests for the shared golden-turns parse/validation used by BOTH the create/update path and the
-///     eval-time scoring path. A JSON <c>null</c> array element must degrade to a malformed-turn validation failure, not
-///     a NullReferenceException that would escape the per-case eval loop or surface as an unhandled 500 at authoring time.
+///     The shared golden-turns parse/validation used by authoring and eval-time scoring. A JSON <c>null</c> element
+///     must be a malformed-turn validation failure, not a NullReferenceException escaping the eval loop or a 500.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GoldenInputTurnsTests

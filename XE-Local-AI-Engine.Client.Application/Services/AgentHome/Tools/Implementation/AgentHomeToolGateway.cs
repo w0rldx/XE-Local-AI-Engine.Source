@@ -107,7 +107,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     ///     <c>[agent-home run=&lt;runId&gt; outcome=&lt;Token&gt; patch=&lt;exported|none&gt;]</c> then <c>\n</c>.
     /// </summary>
     /// <remarks>
-    ///     Position is the defence: the prose after it embeds model-authored text before the run's genuine patch
+    ///     Position is the defense: the prose after it embeds model-authored text before the run's genuine patch
     ///     path, so a reader recovering the run id by scanning could be handed another run's patch. Every field
     ///     here is node-derived and precedes any model-authored byte. <c>patch=exported</c> means the patch was
     ///     written; one over <see cref="AgentHomeOptions.MaxPatchBytes" /> reports <c>none</c>. A rejection creates
@@ -309,7 +309,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
     /// </summary>
     /// <remarks>
     ///     COUNTS from a fixed template, never the paths — those are model-chosen, and this result reaches a model
-    ///     holding the node's other tools. An unexplained file is not an error here: the operator's ruling is that a
+    ///     holding the node's other tools. An unexplained file is not an error here: a
     ///     gap is reported and never blocks. Silent when everything reconciles, which is the common case.
     /// </remarks>
     private static string BuildWrittenGapNote(AgentHomeWrittenFileGap gap)

@@ -57,7 +57,7 @@ function graphNodes(graph: GraphWorkflowGraph | undefined): readonly GraphNodeSh
 	return graph?.nodes ?? [];
 }
 
-/** The node's label, falling back to its key: an unlabelled node is still named by something the operator typed. */
+/** The node's label, falling back to its key: an unlabeled node is still named by something the operator typed. */
 export function workflowNodeLabel(graph: GraphWorkflowGraph | undefined, nodeKey: string): string {
 	const label = graphNodes(graph)
 		.find((node) => node.key === nodeKey)
@@ -112,7 +112,7 @@ export function toWorkflowPath(
 	return [...ranks.filter((rank) => rank.length > 0), ...(orphans.length > 0 ? [orphans] : [])];
 }
 
-/** ✓ succeeded · ● running/queued/waiting · ○ pending · ✕ failed or cancelled. Skipped keeps ○ and renders dimmed. */
+/** ✓ succeeded · ● running/queued/waiting · ○ pending · ✕ failed or canceled. Skipped keeps ○ and renders dimmed. */
 export function workflowNodeGlyph(status: GraphWorkflowNodeRunStatus): string {
 	switch (status) {
 		case "Succeeded":
@@ -188,7 +188,7 @@ export function workflowNodeFailureReason(
 	return error;
 }
 
-/** The first node (in graph order) that ended in `status` — where a failed or cancelled run stopped. */
+/** The first node (in graph order) that ended in `status` — where a failed or canceled run stopped. */
 export function workflowNodeWithStatus(path: WorkflowPath, status: GraphWorkflowNodeRunStatus): WorkflowPathNode | undefined {
 	return path.flat().find((node) => node.status === status);
 }

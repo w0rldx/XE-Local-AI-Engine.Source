@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -414,7 +415,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // script the uv download cache, the uv binary and the lockfile state marker too — see ComputePythonEnvironment.BuildRuntime.
             ReadOnlyTrees = runtime.ReadOnlyTrees,
             ThreadLimit = _options.ThreadLimit,
-            // Still stated, though the isolated chain's --unshare-net enforces it and the registry no longer consults the separate egress
+            // Still stated, though the isolated chain's --unshare-net enforces it and the registry does not consult the separate egress
             // capability for an isolated request. It is the create request's default anyway; spelling it keeps the intent legible here.
             NetworkPolicy = SandboxNetworkPolicy.None,
             // Unconditional too, and it needs no capability check because it can only ASK FOR LESS than the node-wide jail ceiling, so a provider
@@ -442,7 +443,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         {
             ExecutionId = "compute-" + invocationId,
             // The venv's interpreter at its host path, which resolves inside because the venv and the store are bound read-only AT THEIR OWN
-            // CANONICAL PATHS. On Windows the store's python.exe instead of uv's trampoline (N-60). The sandbox's writable tree is the working directory.
+            // CANONICAL PATHS. On Windows the store's python.exe instead of uv's trampoline. The sandbox's writable tree is the working directory.
             Executable = runtime.BaseInterpreterPath ?? runtime.InterpreterPath,
             // `-I` is isolated mode: no PYTHONPATH, no user site-packages, no script-directory import, so the import surface is the provisioned lockfile
             // closure and not the working directory or the operator's environment. The program arrives on stdin, so it never hits disk or argv.
@@ -488,7 +489,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// <remarks>
     ///     The WHOLE rendering fits <see cref="ComputeOptions.MaxOutputBytes" /> (or a tighter tool-result
     ///     budget), because the tool-result pipeline clips the END of anything longer, and the end is where the stderr
-    ///     traceback is (F-61). Stderr may claim half the stream budget and keeps its TAIL; stdout keeps its head and
+    ///     traceback is. Stderr may claim half the stream budget and keeps its TAIL; stdout keeps its head and
     ///     is trimmed first. Bytes bound characters, so a byte budget also fits the pipeline's character budget.
     /// </remarks>
     private string FormatResult(SandboxCommandResult result)
@@ -517,7 +518,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
         if (stdoutBytes > stdoutAllowed)
         {
-            builder.Append(TruncateToUtf8ByteBudget(result.StandardOutput, stdoutAllowed)).Append(Marker);
+            builder.Append(Utf8Truncation.TruncateToUtf8ByteBudget(result.StandardOutput, stdoutAllowed)).Append(Marker);
         }
         else
         {
@@ -563,32 +564,5 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         }
 
         return value[charIndex..];
-    }
-
-    /// <summary>
-    ///     Keeps the HEAD of a stream within a BYTE budget without ever splitting a rune.
-    /// </summary>
-    /// <remarks>
-    ///     A plain <c>GetBytes</c>/<c>GetString</c> slice would split one at a multi-byte boundary. Same algorithm as
-    ///     <c>HostProcessExecutor.CappedOutput</c>'s, for the same reason: the cap is in bytes and the value is text.
-    /// </remarks>
-    private static string TruncateToUtf8ByteBudget(string value, int budget)
-    {
-        var used = 0;
-        var lastCharIndex = 0;
-        var charIndex = 0;
-        foreach (var rune in value.EnumerateRunes())
-        {
-            if (used + rune.Utf8SequenceLength > budget)
-            {
-                break;
-            }
-
-            used += rune.Utf8SequenceLength;
-            charIndex += rune.Utf16SequenceLength;
-            lastCharIndex = charIndex;
-        }
-
-        return value[..lastCharIndex];
     }
 }

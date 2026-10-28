@@ -188,7 +188,7 @@ describe("TranscriptionRuntimeCard", () => {
 		expect(hint.textContent).toContain("CUDA");
 	});
 
-	// Start is a 202 that never reports the outcome, so the mutation MUST invalidate the catalogue: the refetched
+	// Start is a 202 that never reports the outcome, so the mutation MUST invalidate the catalog: the refetched
 	// running row is both what the operator sees and what arms the five-second poll.
 	it("starts a download and shows the row's progress once the catalogue is re-read", async () => {
 		let started: unknown = null;
@@ -316,7 +316,7 @@ describe("TranscriptionRuntimeCard", () => {
 		expect(screen.getByTestId("transcription-model-download-tiny").textContent).toBe(copy.retry);
 	});
 
-	// The select endpoint answers 400 for an id outside the catalogue. Swallowing it would leave the row looking
+	// The select endpoint answers 400 for an id outside the catalog. Swallowing it would leave the row looking
 	// unchanged with no explanation of why the pick did not stick.
 	it("surfaces the node's refusal when a model cannot be selected", async () => {
 		server.use(
@@ -373,7 +373,7 @@ describe("TranscriptionRuntimeCard", () => {
 				expect(card.textContent).toContain(en.pages.transcription.runtime.vadMissing);
 			});
 
-			// The catalogue's own five-second poll — the only observer of a finished transfer.
+			// The catalog's own five-second poll — the only observer of a finished transfer.
 			await vi.advanceTimersByTimeAsync(5_000);
 
 			await waitFor(() => {
@@ -444,7 +444,7 @@ describe("TranscriptionRuntimeCard", () => {
 		});
 	});
 
-	// The catalogue is a separate read from the runtime status: a card that rendered its status but silently no
+	// The catalog is a separate read from the runtime status: a card that rendered its status but silently no
 	// model list would look complete while offering no way to install anything.
 	it("reports a catalogue that could not be read", async () => {
 		server.use(

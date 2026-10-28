@@ -13,7 +13,7 @@ import { providerColor, providerLabel } from "@/features/usage-dashboard/models/
 const USAGE_MODEL_PAGE_SIZE_STORAGE_KEY = "usage-model-table";
 
 // Per-model usage table: one row per model (aggregated across providers/days), sorted heaviest-first. The provider(s)
-// the model ran under render as colour-coded badges. Client-side pagination over the already-loaded list.
+// the model ran under render as color-coded badges. Client-side pagination over the already-loaded list.
 export function UsageModelTable({
 	rows,
 	externalConnectionNames,

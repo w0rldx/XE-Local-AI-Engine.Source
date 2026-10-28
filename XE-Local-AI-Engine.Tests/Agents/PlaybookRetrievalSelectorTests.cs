@@ -37,7 +37,7 @@ public sealed class PlaybookRetrievalSelectorTests
     public async Task SelectAsync_WhenAtOrBelowThreshold_OverBudget_TrimsFromStoreOrderTail_WithoutCallingRanker()
     {
         // Below the retrieval threshold the set is not ranked, so the budget trim drops the LAST items in store order and
-        // keeps the survivors in that order. Each behaviour is 8 chars => 2 tokens; a 4-token budget keeps two of three.
+        // keeps the survivors in that order. Each behavior is 8 chars => 2 tokens; a 4-token budget keeps two of three.
         var first = Scoped("aaaaaaaa", priority: 1, createdAtUtc: 1, scope: null);
         var second = Scoped("bbbbbbbb", priority: 2, createdAtUtc: 2, scope: null);
         var third = Scoped("cccccccc", priority: 3, createdAtUtc: 3, scope: null);
@@ -138,10 +138,8 @@ public sealed class PlaybookRetrievalSelectorTests
     [Test]
     public async Task SelectAsync_WhenOverTokenBudget_TrimsLowestRanked()
     {
-        // Three enabled actions above the threshold with a query => retrieval engages. The ranker returns them in
-        // relevance order (most relevant first). With a 2-token budget and each behaviour estimating 1 token (4 chars),
-        // only the top-two-ranked survive; the lowest-ranked is dropped. The selector then re-imposes Priority order on the
-        // survivors, so the assertion checks BOTH that the lowest-ranked was dropped and the survivors are store-ordered.
+        // Three actions over the threshold engage retrieval, ranked most relevant first. A 2-token budget at 1 token
+        // (4 chars) each keeps the top two, re-ordered by Priority: the asserts check the drop AND the store order.
         var mostRelevant = Scoped("aaaa", priority: 30, createdAtUtc: 1, scope: null);
         var secondRelevant = Scoped("bbbb", priority: 10, createdAtUtc: 2, scope: null);
         var leastRelevant = Scoped("cccc", priority: 20, createdAtUtc: 3, scope: null);
@@ -165,7 +163,7 @@ public sealed class PlaybookRetrievalSelectorTests
     [Test]
     public async Task SelectAsync_TokenEstimateIsDeterministic_SameBudgetTrimsSameSet()
     {
-        // The trim is a pure function of the stored behaviour text and the budget, so two identical inputs must trim to
+        // The trim is a pure function of the stored behavior text and the budget, so two identical inputs must trim to
         // the identical surviving set every time (resume-safety: a fixed memory set always composes the same prompt).
         var first = Scoped("aaaaaaaa", priority: 1, createdAtUtc: 1, scope: null); // 8 chars => 2 tokens
         var second = Scoped("bbbbbbbb", priority: 2, createdAtUtc: 2, scope: null); // 8 chars => 2 tokens
@@ -211,7 +209,7 @@ public sealed class PlaybookRetrievalSelectorTests
     [Test]
     public async Task SelectAsync_WhenBudgetUnbounded_KeepsAllRankedTopK()
     {
-        // A zero (unbounded) budget is the legacy behaviour: no trimming, every top-k item survives.
+        // A zero (unbounded) budget is the legacy behavior: no trimming, every top-k item survives.
         var first = Scoped("aaaa", priority: 1, createdAtUtc: 1, scope: null);
         var second = Scoped("bbbb", priority: 2, createdAtUtc: 2, scope: null);
         var third = Scoped("cccc", priority: 3, createdAtUtc: 3, scope: null);

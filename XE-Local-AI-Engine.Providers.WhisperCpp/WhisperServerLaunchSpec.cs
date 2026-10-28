@@ -12,7 +12,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 /// </remarks>
 internal sealed class WhisperServerLaunchSpec
 {
-    /// <summary>The catalogue id the process is being started for.</summary>
+    /// <summary>The catalog id the process is being started for.</summary>
     public required string ModelId { get; init; }
 
     /// <summary>Absolute path to the resolved <c>whisper-server</c> executable.</summary>

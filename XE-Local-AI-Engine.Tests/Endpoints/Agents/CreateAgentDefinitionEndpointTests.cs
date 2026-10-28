@@ -5,10 +5,9 @@ using System.Net.Http.Json;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Guards the typed <c>Send.CreatedAtAsync&lt;GetAgentDefinitionEndpoint&gt;()</c> Location round-trip on
-///     <c>POST agents</c>. This is one of the three create endpoints whose Location header is resolved by the target
-///     endpoint's generated name; the global <c>Endpoints.NameGenerator</c> (Program.cs) must keep that resolution
-///     working — if it regressed, the POST would throw (500) instead of returning 201 + a resolvable Location.
+///     Guards the <c>Send.CreatedAtAsync&lt;GetAgentDefinitionEndpoint&gt;()</c> Location on <c>POST agents</c>: the
+///     global <c>Endpoints.NameGenerator</c> must keep resolving the target's generated name, or the POST answers 500,
+///     not 201.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class CreateAgentDefinitionEndpointTests

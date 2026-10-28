@@ -55,7 +55,7 @@ public interface IExternalProviderStore
 /// </summary>
 /// <remarks>
 ///     Four states, not "a config, possibly empty", because the three empty-looking outcomes call for opposite
-///     behaviour: one is a fresh node, one is a node that cannot see its own configuration, and one is a node that has
+///     behavior: one is a fresh node, one is a node that cannot see its own configuration, and one is a node that has
 ///     been downgraded past a payload it must not interpret.
 /// </remarks>
 public abstract record ExternalProviderLoadResult
@@ -196,7 +196,7 @@ public sealed record ExternalProviderModelSaveRequest
     /// <summary>Whether the model produces a reasoning channel.</summary>
     public bool? SupportsReasoning { get; init; }
 
-    /// <summary>Whether the endpoint honours a top-level <c>reasoning_effort</c> body field.</summary>
+    /// <summary>Whether the endpoint honors a top-level <c>reasoning_effort</c> body field.</summary>
     public bool? SupportsReasoningEffort { get; init; }
 
     /// <summary>The effort applied when the turn selects none; validated against the chat reasoning vocabulary.</summary>

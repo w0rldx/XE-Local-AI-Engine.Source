@@ -62,7 +62,7 @@ public sealed class AgentUnitFailureClassTests
 
     /// <summary>
     ///     A class written by an older or a newer build groups as <c>Internal</c> rather than throwing. This projects a
-    ///     persisted column onto a read model, and a drill-down must not 500 over a token it does not recognise.
+    ///     persisted column onto a read model, and a drill-down must not 500 over a token it does not recognize.
     /// </summary>
     [Test]
     public void AnUnrecognisedClass_GroupsAsInternal() =>

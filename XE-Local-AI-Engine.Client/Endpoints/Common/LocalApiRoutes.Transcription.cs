@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 public static partial class LocalApiRoutes
 {
     /// <summary>
-    ///     Local audio transcription: the whisper.cpp runtime, its managed source build, and the model catalogue.
+    ///     Local audio transcription: the whisper.cpp runtime, its managed source build, and the model catalog.
     /// </summary>
     /// <remarks>
     ///     The whole surface is gated on <c>Transcription:Enabled</c> by request-path middleware in <c>Program</c> that
@@ -25,7 +25,7 @@ public static partial class LocalApiRoutes
         public const string RuntimeSourceBuildCancel = "transcription/runtime/source-build/cancel";
         public const string RuntimeSourceBuildRemove = "transcription/runtime/source-build/remove";
 
-        // Whisper weight catalogue: what exists, what is installed, what is downloading, and which one is selected.
+        // Whisper weight catalog: what exists, what is installed, what is downloading, and which one is selected.
         public const string Models = "transcription/models";
         public const string ModelDownloads = "transcription/models/downloads";
         public const string ModelDownloadCancel = "transcription/models/downloads/cancel";

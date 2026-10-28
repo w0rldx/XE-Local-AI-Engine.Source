@@ -127,7 +127,7 @@ public sealed class StaleProcessReaper : IHostedService
 
     /// <summary>
     ///     Signals every receipted child that is still exactly the process this node spawned, and removes every receipt it has
-    ///     finished with. Returns the pids signalled.
+    ///     finished with. Returns the pids signaled.
     /// </summary>
     /// <remarks>
     ///     All of these must hold before a signal: the pid is live and not this host's own child,

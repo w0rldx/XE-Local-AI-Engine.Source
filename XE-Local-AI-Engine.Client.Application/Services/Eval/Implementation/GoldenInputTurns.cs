@@ -18,7 +18,7 @@ internal static class GoldenInputTurns
     internal const string UserRole = "user";
     internal const string AssistantRole = "assistant";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     Parses and validates the stored turns. On success <paramref name="messages" /> holds the mapped

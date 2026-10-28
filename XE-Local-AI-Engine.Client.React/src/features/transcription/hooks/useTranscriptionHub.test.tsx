@@ -349,7 +349,7 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.view?.replayTruncated).toBe(false);
 	});
 
-	// B3: a node that is behind buffers and catches up, so the client has no in-flight limit. Frames sent while
+	// A node that is behind buffers and catches up, so the client has no in-flight limit. Frames sent while
 	// earlier ones are still outstanding are all invoked, none rejected — a slow round-trip is not a failure.
 	it("PushFrame_WithManyFramesOutstanding_InvokesEveryOneAndRejectsNone", async () => {
 		// Every send is held open, then settled at the end: sends left pending forever keep the test from finishing.
@@ -371,7 +371,7 @@ describe("useTranscriptionHub", () => {
 		await expect(Promise.all(held)).resolves.toHaveLength(20);
 	});
 
-	// B2: the node reports its backlog so the capture controls can say how far behind it is. Null until the first
+	// The node reports its backlog so the capture controls can say how far behind it is. Null until the first
 	// report, so "nothing reported" and "caught up" stay distinguishable; another session's report is ignored.
 	it("CatchUpProgress_SurfacesBufferedMsForThisSessionOnly", async () => {
 		const { result } = renderHub();
@@ -389,7 +389,7 @@ describe("useTranscriptionHub", () => {
 		await waitFor(() => expect(result.current.view?.bufferedMs).toBe(0));
 	});
 
-	// F-18: a captured application that went silent is reported, never ended. Zero means audio returned; another
+	// A captured application that went silent is reported, never ended. Zero means audio returned; another
 	// session's or a malformed push is ignored.
 	it("SourceQuiet_SurfacesQuietMsForThisSessionOnlyAndClearsOnZero", async () => {
 		const { result } = renderHub();
@@ -548,7 +548,7 @@ describe("useTranscriptionHub", () => {
 		expect(result.current.view?.status).toBe("Failed");
 	});
 
-	// M1: nothing retries an initial subscribe — `withAutomaticReconnect` does not retry an initial start either, so
+	// Nothing retries an initial subscribe — `withAutomaticReconnect` does not retry an initial start either, so
 	// a refused subscription never fires `onreconnected`. Without a named failure the view sits empty and
 	// permanently disconnected while the UI keeps offering Start.
 	it("SubscribeSession_WhenTheInvokeRejects_SurfacesSubscribeFailedAndStaysDisconnected", async () => {

@@ -12,14 +12,12 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Pins the synthetic turn-context composition the send and regenerate paths share: the attachment-presence probe
-///     that gates the cloud withhold notice, the inlined attachment text, the per-turn image budget, and the
-///     best-effort knowledge grounding.
+///     The turn-context composition the send and regenerate paths share: the attachment probe behind the cloud withhold
+///     notice, the inlined attachment text, the per-turn image budget and the knowledge grounding.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ChatTurnContextBuilderTests
@@ -107,7 +105,7 @@ public sealed class ChatTurnContextBuilderTests
 
     /// <summary>
     ///     A scanned PDF extracts to no text and its chip still says "Extracted", and an image on a model without vision is skipped by the
-    ///     caller: both used to vanish from the turn with no sign to the user.
+    ///     caller: neither may vanish from the turn with no sign to the user.
     /// </summary>
     [Test]
     public async Task ListUnsentAttachmentNamesAsync_NamesTheFilesNoBuilderSends()
@@ -147,7 +145,7 @@ public sealed class ChatTurnContextBuilderTests
     }
 
     /// <summary>
-    ///     A row extracted before whitespace normalisation can count whitespace in ExtractedChars: it was sent as an empty
+    ///     A row extracted before whitespace normalization can count whitespace in ExtractedChars: it was sent as an empty
     ///     block and named nowhere, so the user never learned the model did not see it.
     /// </summary>
     [Test]
@@ -242,7 +240,7 @@ public sealed class ChatTurnContextBuilderTests
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
                      .Returns<Task<KnowledgeSearchResult>>(_ => throw new InvalidOperationException("embedding provider is down"));
-        var logger = new CapturingLogger<ChatTurnContextBuilder>();
+        var logger = new RecordingLogger<ChatTurnContextBuilder>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
         var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?");
@@ -259,7 +257,7 @@ public sealed class ChatTurnContextBuilderTests
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
                      .Returns<Task<KnowledgeSearchResult>>(_ => throw new InvalidOperationException("embedding provider is down"));
-        var logger = new CapturingLogger<ChatTurnContextBuilder>();
+        var logger = new RecordingLogger<ChatTurnContextBuilder>();
         var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService), logger: logger);
 
         var grounding = await builder.BuildKnowledgeContextAsync("how do I restart it?", isRegeneratedTurn: true);

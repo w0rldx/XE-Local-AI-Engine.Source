@@ -26,7 +26,7 @@ export const formatKldValue = (value: number | null): string | null => (value ==
  * Whether the KLD trio may be RENDERED AS NUMBERS. The node already withholds them unless the run's stored base-logit
  * digest is the one the project currently expects, and this repeats the gate on the reading side so
  * a future contract that sends a figure alongside a non-`ok` state still cannot leak one into a comparison. A stale
- * measurement gets a badge, never a greyed-out figure — a number a reader can still see is a number they will compare.
+ * measurement gets a badge, never a grayed-out figure — a number a reader can still see is a number they will compare.
  */
 export const isKldComparable = (fidelity: Pick<BenchmarkRunFidelity, "kldState">): boolean => fidelity.kldState === "ok";
 

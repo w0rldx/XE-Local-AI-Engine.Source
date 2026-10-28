@@ -187,8 +187,8 @@ public sealed class SourceBuildRecoveryTests
 
     /// <summary>
     ///     Booting while CUDA is briefly unusable (driver/library mismatch until reboot, lost WSL passthrough) makes
-    ///     <c>--list-devices</c> print no device. That used to read as "the tree is not what the record promises" and
-    ///     deleted a valid 20-40 min build.
+    ///     <c>--list-devices</c> print no device. That must not read as "the tree is not what the record promises" and
+    ///     delete a valid 20-40 min build.
     /// </summary>
     [Test]
     [RunOn(OS.Linux)]
@@ -408,9 +408,9 @@ public sealed class SourceBuildRecoveryTests
     }
 
     /// <summary>
-    ///     The 2026-09-02 data loss: <c>installed-runtime.json</c> is user-level and shared by every checkout, so a node
-    ///     on a fresh database recorded an auto-acquired Vulkan prebuilt over the operator's managed CUDA record. The
-    ///     next start read that prebuilt record — which carries no source-build path at all — as authority to delete the
+    ///     A data-loss path: <c>installed-runtime.json</c> is user-level and shared by every checkout, so a node
+    ///     on a fresh database can record an auto-acquired Vulkan prebuilt over the operator's managed CUDA record. The
+    ///     next start then reads that record — which carries no source-build path at all — as authority to delete the
     ///     source build. A record that names no source build is not authority over one.
     /// </summary>
     [Test]

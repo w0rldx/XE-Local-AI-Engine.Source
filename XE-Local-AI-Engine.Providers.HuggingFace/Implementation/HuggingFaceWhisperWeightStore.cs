@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Security.Cryptography;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -51,9 +52,9 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
                 return request.DestinationPath;
             }
 
-            // Present but not what the pinned catalogue describes: a truncated copy, an upstream re-upload, or a foreign file under our name. Remove it and its residue so the download has a clean
+            // Present but not what the pinned catalog describes: a truncated copy, an upstream re-upload, or a foreign file under our name. Remove it and its residue so the download has a clean
             // destination to commit onto instead of failing on the same conflict guard forever.
-            TryDelete(request.DestinationPath);
+            BestEffortFile.TryDeleteFile(request.DestinationPath);
             DeleteTransferArtifacts(request.DestinationPath);
         }
 
@@ -72,7 +73,7 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
         if (result.Sha256 is { Length: > 0 } actual
             && !string.Equals(actual, request.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
         {
-            TryDelete(request.DestinationPath);
+            BestEffortFile.TryDeleteFile(request.DestinationPath);
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.HashMismatch,
                 "The downloaded transcription model did not match its expected checksum.");
         }
@@ -81,7 +82,7 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
     }
 
     /// <summary>
-    ///     Whether the file already at the destination is byte-for-byte the one the pinned catalogue describes. The
+    ///     Whether the file already at the destination is byte-for-byte the one the pinned catalog describes. The
     ///     size check is the cheap gate; the digest is what actually decides, so a truncated file of the right length
     ///     cannot pass as installed.
     /// </summary>
@@ -109,19 +110,7 @@ internal sealed class HuggingFaceWhisperWeightStore : IWhisperWeightFileStore
     private static void DeleteTransferArtifacts(string destinationPath)
     {
         var partPath = destinationPath + HfDownloadClient.PartSuffix;
-        TryDelete(partPath);
-        TryDelete(partPath + HfDownloadClient.RangeSidecarSuffix);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: the caller is already being told the file is unusable.
-        }
+        BestEffortFile.TryDeleteFile(partPath);
+        BestEffortFile.TryDeleteFile(partPath + HfDownloadClient.RangeSidecarSuffix);
     }
 }

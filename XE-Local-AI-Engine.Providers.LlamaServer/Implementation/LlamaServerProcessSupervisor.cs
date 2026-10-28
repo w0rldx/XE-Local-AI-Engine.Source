@@ -100,7 +100,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     private readonly ILlamaLayerPlacementReport _layerPlacementReport;
     private readonly ILlamaServerLoadTelemetry _loadTelemetry;
 
-    // Capacity admission for cold embedding / reranker spawns; null in provider-only hosts and tests (no gate, today's behaviour).
+    // Capacity admission for cold embedding / reranker spawns; null in provider-only hosts and tests (no gate, today's behavior).
     private readonly ILlamaServerPooledLaunchAdmission? _pooledLaunchAdmission;
 
     // Ticked after every change CheckHealthAsync shows: registration, detach, a lease taken or released, an ensure and a process's own exit.

@@ -70,7 +70,7 @@ public sealed class IntegrationAccessResult
 }
 
 /// <summary>
-///     The ONE authorisation rule for every external route that addresses an execution or a session, written once so no
+///     The ONE authorization rule for every external route that addresses an execution or a session, written once so no
 ///     caller re-derives half of it.
 /// </summary>
 /// <remarks>
@@ -121,7 +121,7 @@ public sealed class IntegrationExternalAccess
         ArgumentNullException.ThrowIfNull(caller);
 
         // The store's two-column predicate IS the ownership limb — a missing row and a foreign one come back as the same non-result, so no loaded row is
-        // here for a later edit to start reading. The allowlist is the second limb and stays here: it is an authorisation rule, not a persistence one.
+        // here for a later edit to start reading. The allowlist is the second limb and stays here: it is an authorization rule, not a persistence one.
         var session = await _sessions.GetForPrincipalAsync(sessionId, caller.PrincipalId, cancellationToken);
 
         // Same constant shape as the execution path above: the key read and the allowlist scan run whether or not the

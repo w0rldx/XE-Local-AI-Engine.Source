@@ -18,7 +18,7 @@ export const compareKeys = (left, right) => Buffer.compare(Buffer.from(left), Bu
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
-// Serialised by hand rather than with JSON.stringify on a rebuilt object: JS objects iterate integer-like keys first
+// Serialized by hand rather than with JSON.stringify on a rebuilt object: JS objects iterate integer-like keys first
 // whatever their insertion order, which would silently break the byte-wise order for a key such as "2" or "10".
 export function serializeSorted(value, indent = "") {
 	const inner = `${indent}\t`;

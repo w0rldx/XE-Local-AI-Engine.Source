@@ -7,8 +7,12 @@ import { useTranslation } from "react-i18next";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import type { McpWorkspace } from "@/features/mcp/models/McpWorkspaceModels";
-import { useCreateMcpWorkspace, useDeleteMcpWorkspace, useMcpWorkspaces } from "@/features/mcp/queries/useMcpWorkspaces";
+import type { McpWorkspace } from "@/features/node-settings/models/McpWorkspaceModels";
+import {
+	useCreateMcpWorkspace,
+	useDeleteMcpWorkspace,
+	useMcpWorkspaces,
+} from "@/features/node-settings/queries/useMcpWorkspaces";
 
 export function McpWorkspaceAllowlistPanel() {
 	const { t } = useTranslation();

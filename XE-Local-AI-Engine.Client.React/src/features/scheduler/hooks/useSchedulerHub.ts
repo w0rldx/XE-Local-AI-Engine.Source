@@ -7,7 +7,7 @@ import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { notifySchedulerRunEvent } from "@/features/scheduler/notifications/SchedulerRunNotifications";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
-/* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs every registered handler and releases the shared lease; the rule only recognises teardown of a connection created inline in the effect. */
+/* eslint-disable react-doctor/effect-needs-cleanup -- The cleanup does tear down: it offs every registered handler and releases the shared lease; the rule only recognizes teardown of a connection created inline in the effect. */
 
 // The data layer is the generated hey-api TanStack query layer, whose query keys are single-element arrays
 // `[{ _id: "<operationId>", ... }]`. Invalidating with the `_id` partial object (via schedulerInvalidationKey)

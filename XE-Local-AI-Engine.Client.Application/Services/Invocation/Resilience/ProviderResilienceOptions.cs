@@ -14,7 +14,7 @@ public sealed class ProviderResilienceOptions
 
     /// <summary>
     ///     Whether the bounded retry runs at all. When false the provider send is attempted exactly once and any
-    ///     failure is surfaced immediately (the pre-hardening behaviour).
+    ///     failure is surfaced immediately (the pre-hardening behavior).
     /// </summary>
     public bool RetryEnabled { get; set; } = true;
 
@@ -30,7 +30,7 @@ public sealed class ProviderResilienceOptions
     /// <summary>Upper bound (before jitter) on any single backoff delay in milliseconds.</summary>
     public int MaxDelayMilliseconds { get; set; } = 2000;
 
-    /// <summary>Longest provider-requested <c>Retry-After</c> wait, in seconds, that the retry honours.</summary>
+    /// <summary>Longest provider-requested <c>Retry-After</c> wait, in seconds, that the retry honors.</summary>
     /// <remarks>
     ///     A 429 or 503 carrying <c>Retry-After</c> (delta-seconds or an HTTP-date) waits exactly that long instead of the
     ///     exponential backoff; a longer request is not retried, so the send fails at once with the "retry after" hint.

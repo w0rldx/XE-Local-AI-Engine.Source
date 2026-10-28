@@ -116,7 +116,7 @@ describe("shouldRetryQuery attempt counts", () => {
 	});
 });
 
-// N-86: the vault pre-host frees the port ~2.6 s before the real host listens; a route guard's status read must ride
+// The vault pre-host frees the port ~2.6 s before the real host listens; a route guard's status read must ride
 // that gap out instead of landing on the error boundary.
 describe("retryTransient", () => {
 	beforeEach(() => {

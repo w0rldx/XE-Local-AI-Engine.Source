@@ -55,8 +55,8 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task UpdateWorkPlan_MovesTheSessionsCurrentTaskPointer_SoTheDetailReadIsNotStale()
     {
-        // The pointer used to move only on a status transition, so it went stale for the rest of a multi-step run every
-        // time the agent switched tasks — and WorkSessionDetail.CurrentTaskId is what the session page reads.
+        // Moving the pointer only on a status transition would leave it stale for the rest of a multi-step run every
+        // time the agent switches tasks — and WorkSessionDetail.CurrentTaskId is what the session page reads.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
@@ -131,7 +131,7 @@ public sealed class WorkSessionToolHandlerTests
     public async Task UpdateWorkPlan_WhenAKeyIsUnknown_ReturnsTheExampleAndNoClrTypeName()
     {
         // Valid JSON, wrong shape: the deserializer rejects the unknown key for the whole batch, and its own message
-        // names the CLR request type — useless to a model and the thing that used to be echoed straight back.
+        // names the CLR request type — useless to a model, so it is never echoed straight back.
         var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid());
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
@@ -210,9 +210,9 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task UpdateWorkPlan_Add_RetriedByteIdenticallyInTheSameStep_AddsTheTaskOnceAndNamesTheSameId()
     {
-        // The id used to be a fresh Guid, and DescribeBatch folds it into the batch's idempotency key — so a retry
-        // after a lost response computed a DIFFERENT key, the store's dedupe saw a new operation, and the same add
-        // landed as a second task row.
+        // DescribeBatch folds the id into the batch's idempotency key, so a fresh Guid per call would give a retry
+        // after a lost response a DIFFERENT key; the store's dedupe would see a new operation, and the same add
+        // would land as a second task row.
         var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
@@ -871,7 +871,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task EveryHandler_WhenTheFeatureIsDisabled_SaysSoRatherThanWriting()
     {
-        // The kill switch gates behaviour, never registration: an empty container would answer 500 where a disabled node
+        // The kill switch gates behavior, never registration: an empty container would answer 500 where a disabled node
         // has to answer legibly. Private host: that kill switch is a host-level config value.
         await using var factory = new TestServerWebAppFactory
         {

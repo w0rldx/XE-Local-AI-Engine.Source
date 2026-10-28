@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
@@ -164,7 +163,7 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
     {
         // A reusable attach key means the second call is an ATTACH, not a create, so the ceiling it names would
         // otherwise be silently dropped — the caller would believe it had bought a tighter bound and have the
-        // creator's. Tightening is the one direction that is safe to honour after the fact.
+        // creator's. Tightening is the one direction that is safe to honor after the fact.
         var registry = CreateRegistry();
         var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
         {
@@ -243,7 +242,7 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
     public async Task RemoveAndTerminate_WhenTheJailCannotBeDeleted_LogsThePathItLeftBehind()
     {
         Skip.When(Environment.IsPrivilegedProcess, "BLOCKED: a privileged process deletes through the directory mode this test relies on.");
-        var logger = new CapturingLogger<SandboxLifecycleRegistryTests>();
+        var logger = new RecordingLogger<SandboxLifecycleRegistryTests>();
         var registry = CreateRegistry(logger);
         var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()));
         var jail = AssertEx.NotNull(handle.WorkingRoot);

@@ -284,7 +284,7 @@ public sealed class BenchmarkJudgeExecutorTests
     [Test]
     public async Task Execute_WhenTheContextBudgetRefusedTheJudge_NamesTheWindowAndTheRemedy()
     {
-        // Live (F-55): a judge the context budget refused failed as "The benchmark judge invocation failed", which says
+        // A judge the context budget refused must not fail as "The benchmark judge invocation failed", which says
         // nothing the user can act on. It names the judge policy's own window and remedy, never the primary run's agent advice.
         var installed = Installed();
         var snapshot = Snapshot(installed);
@@ -449,7 +449,7 @@ public sealed class BenchmarkJudgeExecutorTests
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
                  Version = 5
              });
-        // F-55: the decision's reason says what is loaded and what to eject; a long resident list is cut, not the whole text.
+        // The decision's reason says what is loaded and what to eject; a long resident list is cut, not the whole text.
         const string ReasonHead = "Insufficient capacity for 'judge.gguf' (Chat): not enough free memory for another model. Loaded now: ";
         var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient)
         {

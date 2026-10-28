@@ -32,7 +32,7 @@ interface DevelopmentConsentGateProps {
  * asks for SandboxNetworkPolicy.None wherever the backend advertises SupportsNetworkPolicy
  * (DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy) — which is Linux with a working `unshare` probe, and
  * the container provider — and Unrestricted where it does not, because a backend fails a confinement request it cannot
- * honour CLOSED and an unconditional denial would remove Development Mode from Windows rather than harden it. The one
+ * honor CLOSED and an unconditional denial would remove Development Mode from Windows rather than harden it. The one
  * sandbox that keeps egress by design is the engine's own warm restore against the BASE COMMIT, which runs before the
  * agent has written anything. So this copy says "denied where this node can enforce it", names the exception, and
  * points at the Sandbox isolation panel for which of the two was actually served — it must not promise denial, and it

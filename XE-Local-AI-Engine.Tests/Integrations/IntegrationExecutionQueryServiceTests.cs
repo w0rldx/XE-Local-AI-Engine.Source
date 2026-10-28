@@ -21,7 +21,7 @@ public sealed class IntegrationExecutionQueryServiceTests
     {
         // The route hands this method RequestAborted. On the caller's token the marker write, the terminal transaction
         // and the audit all abort, and the OperationCanceledException escapes before the signal — leaving a queued row
-        // parked in its lease wait until MaxQueueAgeSeconds, because the durable marker is only honoured post-lease.
+        // parked in its lease wait until MaxQueueAgeSeconds, because the durable marker is only honored post-lease.
         using var harness = new Harness();
         var executionId = harness.Seed(IntegrationExecutionStatus.Queued);
         using var aborted = new CancellationTokenSource();
@@ -74,8 +74,8 @@ public sealed class IntegrationExecutionQueryServiceTests
     [Test]
     public async Task RequestCancel_OnARowWhoseMarkerIsAlreadyStamped_WritesNothingASecondTime()
     {
-        // Every cancel used to re-stamp the marker under a fresh version. A caller hammering the endpoint drifted the
-        // row's version out from under the coordinator's bounded terminal retries and stranded it Running.
+        // A repeated cancel must not re-stamp the marker under a fresh version, or a caller hammering the endpoint drifts
+        // the row's version out from under the coordinator's bounded terminal retries and strands it Running.
         using var harness = new Harness();
         var executionId = harness.Seed(IntegrationExecutionStatus.Running);
 

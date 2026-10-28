@@ -1,4 +1,4 @@
-// A labelled JSON document with its Zod message underneath. The three JSON-shaped members (`defaultInput`,
+// A labeled JSON document with its Zod message underneath. The three JSON-shaped members (`defaultInput`,
 // `responseJsonSchema`, `argumentsJson`) are held as TEXT on the canvas, so this is a `CodeEditor`, not a parsed
 // object editor — and the message is the only place a parse failure surfaces before save.
 

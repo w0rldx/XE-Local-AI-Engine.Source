@@ -409,7 +409,7 @@ public sealed class NodeAgentMcpToolsTests
     public async Task GetAgentRunAsync_WhenTheRunFailed_ReportsTheRunsFailureInsideMetadataOnly()
     {
         // The poll succeeded; only the RUN failed. A top-level failure_code would make McpToolCallFilter mark the
-        // answer isError and a client would treat a correct status read as a failed call (review 2026-09-30).
+        // answer isError and a client would treat a correct status read as a failed call.
         var harness = new Harness();
         harness.RunCoordinator.GetResult = CreateRunView(McpAgentRunStatus.Failed) with
         {
@@ -912,7 +912,7 @@ public sealed class NodeAgentMcpToolsTests
             "the bounded result must explain that truncation happened at the MCP server.");
     }
 
-    // I-D11: run_agent had no task bound while start_agent_run enforced 32 KiB without naming it.
+    // run_agent enforces the same named task bound as start_agent_run (32 KiB).
     [Test]
     public async Task RunAgentAsync_WhenTaskExceedsBound_RejectsTaskTooLargeWithoutSpawning()
     {
@@ -936,7 +936,7 @@ public sealed class NodeAgentMcpToolsTests
         await harness.McpService.DidNotReceiveWithAnyArgs().SpawnForMcpAsync(default!, default!, default, default);
     }
 
-    // I-D15: a long generation reported only 0, 0.1 and 1.0, so a client's idle window could abort a healthy run.
+    // A long generation must report more than 0, 0.1 and 1.0, or a client's idle window can abort a healthy run.
     [Test]
     public async Task RunAgentAsync_WhileGenerating_ReportsIncreasingHeartbeatUntilTheRunEnds()
     {

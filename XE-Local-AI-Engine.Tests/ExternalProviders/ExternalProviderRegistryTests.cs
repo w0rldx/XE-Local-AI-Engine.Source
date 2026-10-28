@@ -7,8 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The registry as the chat path consumes it: a cached projection that reflects a save without a restart, hands
-///     out no keys with its descriptors, and answers the synchronous send-path question honestly — including the one
-///     answer that is not "no": "I do not know yet."
+///     out no keys, and answers the synchronous send-path question honestly, including "I do not know yet."
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalProviderRegistryTests
@@ -72,7 +71,7 @@ public sealed class ExternalProviderRegistryTests
             {
                 CloudGrants = grants
             },
-            // A hand-edited file: the save never stores grants on a Local row, and the projection must not honour them.
+            // A hand-edited file: the save never stores grants on a Local row, and the projection must not honor them.
             Connection("local-box", models: ["qwen3"]) with
             {
                 CloudGrants = grants

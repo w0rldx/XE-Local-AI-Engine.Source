@@ -3,15 +3,15 @@ namespace XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 
 /// <summary>
-///     Hand-written <see cref="IAgentInstructionProvider" /> fake. <see cref="IAgentInstructionProvider" /> is
-///     internal to <c>XE-Local-AI-Engine.AI.Agent</c>, and Castle DynamicProxy (NSubstitute's proxy generator) cannot
-///     build a proxy for an internal type without an assembly-level <c>InternalsVisibleTo("DynamicProxyGenAssembly2")</c>
-///     grant — which this repo deliberately does not add. A hand-written fake sidesteps that entirely (mirrors
-///     <c>FakeAgentToolRegistry</c> / <c>EmptyClientLocalToolRegistry</c> / <c>EmptyMcpToolRegistry</c>, the same
-///     pattern used for every other internal AI.Agent interface in tests).
-///     <see cref="BaseScaffold" /> defaults to empty, which <c>BaseInstructionComposer</c> treats as "no scaffold" —
-///     so a test that does not care about scaffold composition keeps asserting the bare persona prompt unchanged.
+///     Hand-written <see cref="IAgentInstructionProvider" /> fake. <see cref="BaseScaffold" /> defaults to empty, which
+///     <c>BaseInstructionComposer</c> treats as "no scaffold", so a test indifferent to scaffold composition still
+///     asserts the bare persona prompt.
 /// </summary>
+/// <remarks>
+///     The interface is internal to <c>XE-Local-AI-Engine.AI.Agent</c>, and Castle DynamicProxy (NSubstitute's proxy
+///     generator) cannot proxy an internal type without an <c>InternalsVisibleTo("DynamicProxyGenAssembly2")</c> grant,
+///     which this repo deliberately does not add; every internal AI.Agent interface uses this hand-written pattern.
+/// </remarks>
 internal sealed class FakeAgentInstructionProvider : IAgentInstructionProvider
 {
     public string LocalChatInstructions { get; set; } = string.Empty;

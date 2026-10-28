@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 ///     next to the node's other secrets, written 0600, guarded by a process-wide lock and a compare-and-swap revision.
 /// </summary>
 /// <remarks>
-///     Modelled on <c>CloudCredentialStore</c> — same protector-per-purpose, same "decryption failed ⇒ quarantine and
+///     Modeled on <c>CloudCredentialStore</c> — same protector-per-purpose, same "decryption failed ⇒ quarantine and
 ///     report empty" posture, same create-at-0600 write — because both files hold API keys and a second, subtly
 ///     different secret-file discipline is how one of them ends up world-readable. The base URL and the connection slug
 ///     are normalized HERE and nowhere else. Why:
@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
 {
     private const string StoreFileName = "external-providers.enc";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<ExternalProviderStore> _logger;

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     output, and the parity walk that finds the generated document is scoped to this checkout.
 /// </summary>
 /// <remarks>
-///     The per-manifest rules the curated entry used to pin here — digest pinning, no floating <c>latest</c> tag,
+///     The per-manifest rules for the curated entry — digest pinning, no floating <c>latest</c> tag,
 ///     file bodies hashing to their declared sha256, <c>internet: true</c>, the committed <c>manifestSha256</c>
 ///     agreeing with <see cref="ExternalAppManifestFingerprint" /> — are validator rules, and
 ///     <c>ExternalAppCatalogBundledLoaderTests.Load_BundledSeed_PassesTheSameValidatorGateARemoteFetchDoes</c> runs

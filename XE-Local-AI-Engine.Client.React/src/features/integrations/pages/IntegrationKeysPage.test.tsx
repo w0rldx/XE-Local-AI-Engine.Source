@@ -99,7 +99,7 @@ const triggers: IntegrationTrigger[] = [
 
 function makeMutation() {
 	// `reset` is part of the surface the page uses: it drops the mutation cache entry the show-once plaintext arrived
-	// in, right after capturing it. Real behaviour is pinned in IntegrationKeysPage.cache.test.tsx against a real client.
+	// in, right after capturing it. Real behavior is pinned in IntegrationKeysPage.cache.test.tsx against a real client.
 	return { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null };
 }
 

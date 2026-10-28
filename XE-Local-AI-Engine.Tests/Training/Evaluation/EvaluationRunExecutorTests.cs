@@ -20,11 +20,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Training.Runs;
 
 /// <summary>
-///     Pins that an evaluation scores against the definition body the DATASET pinned, not the live definition row. The
-///     tool offers and the system instructions are the whole question an evaluation asks, so a definition edited after
-///     generation would otherwise score the model against tools the dataset never demonstrated. Sample trajectories
-///     come from the run-owned immutable corpus, so a later live review edit cannot change an evaluation already queued.
+///     Pins that an evaluation scores against the definition body the DATASET pinned, not the live row: tool offers
+///     and system instructions are the whole question, so a later edit would score tools the dataset never showed.
 /// </summary>
+/// <remarks>Trajectories come from the run's immutable corpus; a later review edit cannot alter a queued run.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class EvaluationRunExecutorTests : IDisposable
 {

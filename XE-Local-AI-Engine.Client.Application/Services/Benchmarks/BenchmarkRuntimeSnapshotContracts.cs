@@ -127,7 +127,7 @@ public sealed record BenchmarkLlamaRuntimeSnapshotV1(
 ///     inert <see langword="true" />: never remove a cap that was working.
 /// </param>
 public sealed record BenchmarkSamplingSnapshotV1(
-    // double, unlike its neighbours: the one member duplicated onto a plaintext run column and exported, where a float widened into it reads back as 0.699999988079071 for a temperature of
+    // double, unlike its neighbors: the one member duplicated onto a plaintext run column and exported, where a float widened into it reads back as 0.699999988079071 for a temperature of
     // 0.7. The sampler still takes a float; SamplingOptions narrows it at the provider boundary. Serialized bytes are unchanged — 0.7 is 0.7 either way, so no stored snapshot re-hashes.
     double? Temperature,
     float? TopP,

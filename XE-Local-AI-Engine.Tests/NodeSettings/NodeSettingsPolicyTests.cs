@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The cross-field save policy runs on the MERGED settings, so it must reject a draft-* mode with no draft model
-///     and a keep-warm-enabled state with no model, and it must fall back to the EFFECTIVE runtime value (from
-///     <see cref="INodeRuntimeSettings" />) for the process-slot and interval rules when the request omitted the knob.
+///     The cross-field save policy runs on the MERGED settings: it rejects a draft-* mode without a draft model and
+///     keep-warm without a model, and falls back to the EFFECTIVE runtime value (<see cref="INodeRuntimeSettings" />)
+///     for an omitted process-slot or interval knob.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class NodeSettingsPolicyTests

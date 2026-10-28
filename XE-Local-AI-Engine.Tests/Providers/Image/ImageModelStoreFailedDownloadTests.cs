@@ -10,11 +10,9 @@ using XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The download client creates the model's destination directory before it issues the first request, so a
-///     weight file that does not exist (404) used to leave an orphan empty folder under the image-models directory that
-///     nothing ever cleaned up. These tests pin both halves of the fix: the failure surfaces as a sanitized
-///     <see cref="HuggingFaceDownloadException" />, and the empty directory is removed — while a resumable partial
-///     download is deliberately preserved.
+///     The download client creates the destination directory before its first request, so a missing weight file (404)
+///     must surface as a sanitized <see cref="HuggingFaceDownloadException" /> and remove the empty directory, while a
+///     resumable partial download is deliberately preserved.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ImageModelStoreFailedDownloadTests

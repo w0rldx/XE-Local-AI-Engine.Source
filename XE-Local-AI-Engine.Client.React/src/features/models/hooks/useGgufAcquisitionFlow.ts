@@ -3,20 +3,20 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { toast } from "@/core/ui/notifications/Toast";
-import { defaultGgufQuant, type GgufDownloadTarget, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
+import { defaultGgufQuant, type GgufDownloadTarget, type GgufRepositoryFile } from "@/core/model-downloads/models/GgufModels";
 import {
 	useActiveGgufAcquisitions,
 	useCancelGgufImport,
 	useGgufImportCapability,
-} from "@/features/models/queries/useGgufAcquisitions";
+} from "@/core/model-downloads/queries/useGgufAcquisitions";
 import {
 	useActiveGgufDownloads,
 	useBrowseGgufRepositories,
 	useCancelGgufDownload,
 	useStartGgufDownload,
-} from "@/features/models/queries/useGgufDownload";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
+} from "@/core/model-downloads/queries/useGgufDownload";
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
+import { toast } from "@/core/ui/notifications/Toast";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- The acquisition actions intentionally coordinate the in-flight set, the quant dialog and the result notification in one user-event callback. */
 

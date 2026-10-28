@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
-/// <summary>One catalogue row, annotated with what this node knows about it.</summary>
+/// <summary>One catalog row, annotated with what this node knows about it.</summary>
 public sealed class TranscriptionModelView
 {
-    /// <summary>The static catalogue row.</summary>
+    /// <summary>The static catalog row.</summary>
     public required WhisperModelEntry Entry { get; init; }
 
     /// <summary>Whether the weight file is present on disk.</summary>
@@ -16,16 +16,16 @@ public sealed class TranscriptionModelView
     public required WhisperModelDownloadStatus? Download { get; init; }
 }
 
-/// <summary>The model catalogue as this node sees it, with the selected and recommended ids resolved.</summary>
+/// <summary>The model catalog as this node sees it, with the selected and recommended ids resolved.</summary>
 public sealed record TranscriptionModelCatalogView
 {
-    /// <summary>Every catalogue row, ordered as the catalogue orders them.</summary>
+    /// <summary>Every catalog row, ordered as the catalog orders them.</summary>
     public required IReadOnlyList<TranscriptionModelView> Models { get; init; }
 
     /// <summary>The operator's explicit choice, or <see langword="null" /> when none was made.</summary>
     public required string? SelectedModelId { get; init; }
 
-    /// <summary>The hardware-fit recommendation; always a real catalogue id.</summary>
+    /// <summary>The hardware-fit recommendation; always a real catalog id.</summary>
     public required string RecommendedModelId { get; init; }
 }
 
@@ -68,7 +68,7 @@ public sealed record TranscriptionRuntimeView
 }
 
 /// <summary>
-///     The application-layer facade the transcription endpoints call. It composes the supervisor, the catalogue, the
+///     The application-layer facade the transcription endpoints call. It composes the supervisor, the catalog, the
 ///     node settings and the hardware profile so no endpoint has to know how those fit together.
 /// </summary>
 public interface ITranscriptionRuntimeService
@@ -79,7 +79,7 @@ public interface ITranscriptionRuntimeService
     /// <summary>Ejects the resident daemon, or reports the activity that blocked the attempt.</summary>
     Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct);
 
-    /// <summary>The catalogue with installed flags, download statuses, and the selected and recommended ids.</summary>
+    /// <summary>The catalog with installed flags, download statuses, and the selected and recommended ids.</summary>
     Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct);
 
     /// <summary>The hardware-fit recommendation for the backend this node would actually use.</summary>
@@ -89,7 +89,7 @@ public interface ITranscriptionRuntimeService
     ///     Persists the operator's model choice. A <see langword="null" /> or blank id clears the override, so the
     ///     node falls back to the recommendation.
     /// </summary>
-    /// <exception cref="ArgumentException">A non-blank id that is not in the catalogue.</exception>
+    /// <exception cref="ArgumentException">A non-blank id that is not in the catalog.</exception>
     Task<TranscriptionModelCatalogView> SelectModelAsync(string? modelId, CancellationToken ct);
 
     /// <summary>

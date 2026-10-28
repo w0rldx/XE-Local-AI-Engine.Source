@@ -112,7 +112,7 @@ public sealed class TranscriptSegmentEditServiceTests
 
         var result = await service.UpdateSegmentTextAsync(sessionId, seq: 1, "corrected", CancellationToken.None);
 
-        // Before the fix the vanished read-back threw, which the endpoint answered with a 500.
+        // A vanished read-back is SegmentNotFound, never a throw the endpoint would answer with a 500.
         AssertEx.Equal(UpdateTranscriptSegmentOutcome.SegmentNotFound, result.Outcome);
         AssertEx.Null(result.Segment);
     }

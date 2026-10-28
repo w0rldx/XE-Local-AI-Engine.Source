@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     Content-validation helpers shared by the executors (execution-time defence in depth) and the CRUD service (author-time rejection).
+///     Content-validation helpers shared by the executors (execution-time defense in depth) and the CRUD service (author-time rejection).
 /// </summary>
 /// <remarks>
 ///     Kept in one place so the two layers can never disagree on what a legal custom tool is: the same interpreter denylist, MAF-safe name

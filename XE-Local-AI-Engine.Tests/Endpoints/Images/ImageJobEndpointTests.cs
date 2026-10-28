@@ -14,12 +14,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint integration tests for the image-job API: every route requires the operator token (401 without it), a
-///     create → get round-trip returns the persisted Queued view through a stubbed coordinator, and the body-less cancel
-///     POST is accepted (not 415) — an unknown job reports 404. Delete answers 204 for a terminal job, 404 for an
-///     unknown one and 409 while the job is still in play; the list is paged server-side and carries the unpaged total.
-///     Edit parameters are validated, carried to the coordinator and echoed; models carry their family's edit modes.
+///     Image-job API endpoint tests: every route needs the operator token (401 without), create → get returns the
+///     persisted Queued view through a stubbed coordinator, and the body-less cancel POST is accepted (not 415).
 /// </summary>
+/// <remarks>Cancel or delete of an unknown job is 404; delete is 204 when terminal, 409 in play. The list is paged
+///     with the unpaged total; edit parameters are validated, passed on and echoed; models carry their family's edit
+///     modes.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class ImageJobEndpointTests
 {

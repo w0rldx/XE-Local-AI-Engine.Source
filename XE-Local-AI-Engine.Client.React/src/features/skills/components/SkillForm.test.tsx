@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AssistDraft } from "@/features/assist/models/AssistModels";
+import type { AssistDraft } from "@/core/assist/models/AssistModels";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({

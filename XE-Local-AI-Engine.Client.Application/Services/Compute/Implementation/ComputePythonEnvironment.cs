@@ -1,6 +1,7 @@
 ﻿namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
@@ -356,7 +357,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                 _directory.DeleteVenvTrees();
                 File.Delete(_directory.StatePath);
                 File.Delete(_directory.LegacyStatePath);
-                ComputeRuntimeDirectory.TryDeleteDirectory(_directory.WorkDirectory);
+                BestEffortFile.TryDeleteDirectory(_directory.WorkDirectory);
                 // Nothing points into the pre-shared-store toolchain once the venv is gone.
                 _ = ManagedPythonToolchain.TryDeleteLegacyToolchain(_directory.CacheRoot);
             }
@@ -634,7 +635,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             PythonInstallDirectory = _toolchain.PythonInstallDirectory
         });
         File.Delete(_directory.LegacyStatePath);
-        ComputeRuntimeDirectory.TryDeleteDirectory(_directory.WorkDirectory);
+        BestEffortFile.TryDeleteDirectory(_directory.WorkDirectory);
         ComputeRuntimeDirectory.SetTreeWritable(venvDirectory, writable: false);
         return Adopt(interpreter, _directory.VenvRoot);
     }

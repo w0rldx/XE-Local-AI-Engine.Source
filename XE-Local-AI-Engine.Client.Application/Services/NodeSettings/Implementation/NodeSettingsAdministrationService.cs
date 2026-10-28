@@ -33,7 +33,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
 
     // Comparison-only serializer for the write-time conflict check below. Its settings are irrelevant as long as both
     // sides use the same instance; it is deliberately NOT the store's (private) one.
-    private static readonly JsonSerializerOptions ComparisonSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ComparisonSerializerOptions = JsonSerializerOptions.Web;
 
     private readonly DefaultModelSelectionPolicy _defaultModelSelectionPolicy;
     private readonly IGgufModelStore _ggufModelStore;
@@ -198,7 +198,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             var settings = apply(validatedAgainst);
 
             // Enforcement point 1 of the node-locality gate, on BOTH save paths: a cloud id, an `ext:` id or an Ollama name here would carry
-            // turn data somewhere no egress gate authorised. Only on a CHANGE — point 2 (the dispatcher) re-checks per turn. Wiki 08.
+            // turn data somewhere no egress gate authorized. Only on a CHANGE — point 2 (the dispatcher) re-checks per turn. Wiki 08.
             if (!string.Equals(settings.AutoEffortFastModelName, validatedAgainst.AutoEffortFastModelName, StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
                 && !await IsInstalledNodeLocalModelAsync(settings.AutoEffortFastModelName, cancellationToken))

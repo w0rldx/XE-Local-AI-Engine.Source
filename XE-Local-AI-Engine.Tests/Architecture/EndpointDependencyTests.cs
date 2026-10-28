@@ -41,9 +41,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         silently exempts any forbidden type wrapped in an allowed generic.
 ///     </para>
 ///     <para>
-///         The rule holds for every type it scans and has no exemption list. It once carried one, frozen at the
-///         violations that existed when the rule was written; each was migrated behind an application-layer service
-///         until the list was empty, and it was then deleted. None may be reintroduced: a new violation is fixed by
+///         The rule holds for every type it scans and has no exemption list, and none may be added: a new
+///         violation is fixed by
 ///         moving the dependency into a <c>Client.Application</c> service the host type takes instead. The one
 ///         namespace outside the scan is the Data Protection key ring — see
 ///         <see cref="HostDependencyRule.DataProtectionNamespace" /> for why that one is about persisted data rather
@@ -69,7 +68,7 @@ public sealed class EndpointDependencyTests
         .. ClientAssembly.GetTypes().Where(type => type.IsClass && !type.IsAbstract && typeof(Hub).IsAssignableFrom(type))
     ];
 
-    // Non-vacuity floors for the four scans below, set UNDER the counts measured on 2026-09-18 (446 endpoint types,
+    // Non-vacuity floors for the four scans below, set UNDER the counts measured when set (446 endpoint types,
     // 19 hub types, 2 DI-constructed classes under Endpoints/, 40 elsewhere in the host) so a planned removal
     // is not brittle. A floor equal to its measurement is not rounded down: retiring one hub would turn a real
     // regression into a red herring about the floor. Each floor only has to catch a scan that found nothing or nearly
@@ -89,7 +88,7 @@ public sealed class EndpointDependencyTests
     /// <summary>
     ///     The floor on the rest of the host: the hosted services, the hub-side event publishers and relays, the
     ///     exception handlers, the authentication handlers, the app-update and proxy services, the desktop lifecycle,
-    ///     the boot backfills. Forty as measured on 2026-09-18.
+    ///     the boot backfills. Forty when measured.
     /// </summary>
     private const int HostFloor = 30;
 

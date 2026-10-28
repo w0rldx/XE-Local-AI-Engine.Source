@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The managed-runtime record is a fail-closed tombstone as much as it is a success record. These cases pin that:
-///     a corrupt primary degrades to a tombstone carrying the operator's selection rather than to "nothing installed",
-///     which would let resolution hand back a prebuilt that contradicts the UI.
+///     The managed-runtime record is a fail-closed tombstone too: a corrupt primary degrades to a tombstone carrying
+///     the operator's selection, not to "nothing installed", which would let resolution return a prebuilt
+///     contradicting the UI.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WhisperInstalledRuntimeStoreTests

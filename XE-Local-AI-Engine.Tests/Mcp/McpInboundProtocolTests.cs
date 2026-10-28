@@ -19,9 +19,9 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     End-to-end protocol coverage for the inbound server using the real MCP SDK Streamable HTTP transport against
-///     <see cref="TestServerWebAppFactory" />. The lifecycle and workspace seams are explicit deterministic fakes, so no
-///     model process, dispatcher timing, or filesystem is involved.
+///     End-to-end protocol coverage for the inbound server over the real MCP SDK Streamable HTTP transport against
+///     <see cref="TestServerWebAppFactory" />. The lifecycle and workspace seams are deterministic fakes, so no model
+///     process, dispatcher timing or filesystem is involved.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class McpInboundProtocolTests
@@ -165,8 +165,8 @@ public sealed class McpInboundProtocolTests
         AssertEx.Equal(requestId, admitted.Binding.ExecutionRequestId);
     }
 
-    // I-D1/I-D2: bad arguments were an opaque "An error occurred invoking" plus an ERR stack trace, and a wrong
-    // spelling (model_override on run_agent, modelOverride on start_agent_run) was silently dropped.
+    // Bad arguments are never an opaque "An error occurred invoking" plus an ERR stack trace, and a wrong
+    // spelling (model_override on run_agent, modelOverride on start_agent_run) is never silently dropped.
     [Test]
     public async Task StreamableHttpSdk_BadArguments_AreTypedInvalidArgumentsNamingTheParameter()
     {
@@ -195,7 +195,7 @@ public sealed class McpInboundProtocolTests
         AssertEx.Null(coordinator.LastStartRequest, "A rejected call must never reach the tool.");
     }
 
-    // I-D3/I-D9: every failure is isError with snake_case failure_code; success stays isError false.
+    // Every failure is isError with snake_case failure_code; success stays isError false.
     [Test]
     public async Task StreamableHttpSdk_TypedFailures_SetIsErrorWithSnakeCaseFailureCode()
     {
@@ -221,8 +221,8 @@ public sealed class McpInboundProtocolTests
         AssertEx.False(ok.IsError ?? false);
     }
 
-    // Review 2026-09-30: the filter parsed run_agent's free model output, so an answer that was JSON with a top-level failure_code
-    // came back isError. Driven over the real client, so the wire shape (no internal _meta marker) is what is asserted.
+    // The filter must not parse run_agent's free model output, or an answer that is JSON with a top-level failure_code
+    // comes back isError. Driven over the real client, so the wire shape (no internal _meta marker) is what is asserted.
     [Test]
     public async Task StreamableHttpSdk_RunAgentAnswerThatLooksLikeATypedFailure_IsNotFlaggedAsError()
     {

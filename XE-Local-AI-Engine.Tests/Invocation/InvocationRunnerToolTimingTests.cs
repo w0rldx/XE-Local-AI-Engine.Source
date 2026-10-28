@@ -49,10 +49,10 @@ public sealed class InvocationRunnerToolTimingTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var lifecycle = new List<ToolCallLifecyclePayload>();
         dispatcher.ReportToolCallLifecycleAsync(Arg.Do<ToolCallLifecyclePayload>(lifecycle.Add)).Returns(Task.CompletedTask);
-        var runner = InvocationRunnerTests.CreateRunner(RealPipelineFactory(pipeline, tools), eventDispatcher: dispatcher);
+        var runner = InvocationRunnerTestSupport.CreateRunner(RealPipelineFactory(pipeline, tools), eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().WithAllowedTool(ToolA).WithAllowedTool(ToolB).Build();
 
-        await InvocationRunnerTests.RunAsync(runner, package);
+        await InvocationRunnerTestSupport.RunAsync(runner, package);
 
         var completed = lifecycle.Where(static payload => payload.Phase == ToolCallLifecyclePhase.Completed).ToDictionary(static payload => payload.ToolCallId);
         AssertEx.Equal(expected: 2, completed.Count, "both calls of the round must complete");
@@ -74,10 +74,10 @@ public sealed class InvocationRunnerToolTimingTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var lifecycle = new List<ToolCallLifecyclePayload>();
         dispatcher.ReportToolCallLifecycleAsync(Arg.Do<ToolCallLifecyclePayload>(lifecycle.Add)).Returns(Task.CompletedTask);
-        var runner = InvocationRunnerTests.CreateRunner(eventDispatcher: dispatcher, agentUpdates: UntimedToolRound());
+        var runner = InvocationRunnerTestSupport.CreateRunner(eventDispatcher: dispatcher, agentUpdates: UntimedToolRound());
         var package = RuntimePackageBuilder.Valid().WithAllowedTool(ToolA).Build();
 
-        await InvocationRunnerTests.RunAsync(runner, package);
+        await InvocationRunnerTestSupport.RunAsync(runner, package);
 
         var completed = lifecycle.Single(static payload => payload.Phase == ToolCallLifecyclePhase.Completed);
         AssertEx.Equal("call-a", completed.ToolCallId);

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 using System.Text.Json;
 using System.Threading.Channels;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Integrations.Tools;
@@ -99,7 +100,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
         {
             Type = IntegrationStreamEventTypes.AssistantCompleted,
             ContentType = null,
-            Payload = Text(TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes))
+            Payload = Text(Utf8Truncation.TruncateToUtf8ByteBudget(streamedContent ?? string.Empty, maxOutputBytes))
         };
 
     /// <summary>
@@ -149,39 +150,6 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     private static bool IsToolOutcomeOk(ToolCallLifecyclePayload payload) =>
         !string.Equals(payload.ToolName, EmitOutputToolDefinition.ToolName, StringComparison.Ordinal)
         || EmitOutputToolDefinition.IsDelivered(payload.Result);
-
-    /// <summary>Cuts at a whole-rune boundary against a UTF-8 BYTE budget.</summary>
-    /// <remarks>
-    ///     A surrogate-only guard bounds nothing: a 3-byte CJK glyph is a single <see cref="char" />, so it would
-    ///     overshoot by up to two bytes per character. Copied from <c>HostProcessExecutor</c>, which solved the same
-    ///     problem for tool output.
-    /// </remarks>
-    public static string TruncateToUtf8ByteBudget(string value, int budget)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-
-        if (budget <= 0)
-        {
-            return string.Empty;
-        }
-
-        var used = 0;
-        var lastCharIndex = 0;
-        var charIndex = 0;
-        foreach (var rune in value.EnumerateRunes())
-        {
-            if (used + rune.Utf8SequenceLength > budget)
-            {
-                break;
-            }
-
-            used += rune.Utf8SequenceLength;
-            charIndex += rune.Utf16SequenceLength;
-            lastCharIndex = charIndex;
-        }
-
-        return value[..lastCharIndex];
-    }
 
     /// <summary>The handler the coordinator's existing subscription calls: it maps, appends and returns.</summary>
     /// <remarks>
@@ -342,7 +310,7 @@ internal sealed class IntegrationStreamEventMapper : IAsyncDisposable
     private static JsonElement Json<T>(T value) =>
         JsonSerializer.SerializeToElement(value, JsonOptions);
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private IntegrationStreamEvent AppendLocked(IntegrationStreamEventDraft draft) =>
         _buffer.Append(_executionId, _sessionId, draft.Type, draft.ContentType, draft.Payload);

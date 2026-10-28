@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 /// <summary>
-///     The accept path under test, wired to in-memory stores rather than mocks so the ORDER of its writes is
-///     observable: admission commits first, then the owned conversation and the seed. Shared by the invocation-service
-///     suite and the caller-managed session suites, so both drive ONE accept path rather than two that can disagree.
+///     The accept path under test, on in-memory stores rather than mocks so the ORDER of its writes is observable:
+///     admission commits first, then the owned conversation and the seed. The invocation-service and session suites
+///     share it.
 /// </summary>
 internal sealed class IntegrationInvokeHarness
 {

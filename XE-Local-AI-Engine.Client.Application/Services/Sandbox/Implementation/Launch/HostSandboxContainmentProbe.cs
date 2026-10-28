@@ -32,7 +32,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     /// <summary>The measured AppContainer mechanism's name (ADR 0019).</summary>
     internal const string MxcMechanism = "mxc-processcontainer";
 
-    /// <summary>Why a Windows host has no ceilings: ProcessContainer has none and the Job Object path (S1) was not built.</summary>
+    /// <summary>Why a Windows host has no ceilings: ProcessContainer has none and no Job Object path is built.</summary>
     internal const string WindowsResourceLimitsReason =
         "Windows has no CPU, memory or process-count ceiling for a sandboxed child (the MXC ProcessContainer has none and the Job Object path is not implemented); a command is bounded only by its timeout";
 

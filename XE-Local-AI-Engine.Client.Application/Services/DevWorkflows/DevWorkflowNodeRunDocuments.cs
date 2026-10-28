@@ -9,14 +9,14 @@ using System.Text.Json;
 /// <remarks>
 ///     Kept beside those writers rather than in the read model, for the reason
 ///     <see cref="DevWorkflowRulePolicyResolver.Read" /> is: a column that will not parse is a hand-edited row, and
-///     whether that costs the node one field or the whole read a 500 is a judgement about the document, belonging to
-///     the code that owns it. A reader in an endpoint would be a second copy of that judgement, and the catch it needs
+///     whether that costs the node one field or the whole read a 500 is a judgment about the document, belonging to
+///     the code that owns it. A reader in an endpoint would be a second copy of that judgment, and the catch it needs
 ///     is exactly what the endpoint layer must not carry.
 /// </remarks>
 public static class DevWorkflowNodeRunDocuments
 {
     /// <summary>camelCase, matching the documents the runtime wrote into these columns.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     A stored route, or null when the column is empty or unreadable — the node then has no route to show.
@@ -65,7 +65,7 @@ public static class DevWorkflowNodeRunDocuments
     }
 
     /// <summary>
-    ///     The stored document, whose lists may be absent — <see cref="TryParseRoute" /> is what normalises them. A row
+    ///     The stored document, whose lists may be absent — <see cref="TryParseRoute" /> is what normalizes them. A row
     ///     written before the waived bucket existed simply omits it, which reads back as the empty list it means.
     /// </summary>
     private sealed record StoredRoute(

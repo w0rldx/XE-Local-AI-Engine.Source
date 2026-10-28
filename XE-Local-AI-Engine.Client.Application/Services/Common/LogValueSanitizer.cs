@@ -7,13 +7,12 @@ using System.Globalization;
 ///     Unicode escapes. Ordinary values are returned unchanged.
 /// </summary>
 /// <remarks>
-///     The same rule as the host's <c>RequestLogSanitizer</c>, which serves the ASP.NET exception handlers and
-///     the request-completion enricher. It cannot be shared: the host references this assembly and not the other
-///     way round, so each layer carries the barrier at its own trust boundary.
+///     The one barrier for request- and caller-derived log values: the host's ASP.NET exception handlers and
+///     request-completion enricher use it as well as this assembly's own trust boundaries.
 /// </remarks>
-internal static class LogValueSanitizer
+public static class LogValueSanitizer
 {
-    internal static string Sanitize(string? value)
+    public static string Sanitize(string? value)
     {
         if (string.IsNullOrEmpty(value))
         {

@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Coverage for the local "forgot password" recovery path: <see cref="INodeAuthService.ResetAdminPasswordAsync" />,
-///     which the operator-run <c>--reset-admin-password</c> CLI calls to set a new admin password without the old one.
-///     Exercised at the service layer (the CLI branch in Program.cs is a thin scope+resolve+exit wrapper over this).
+///     Coverage for the local "forgot password" path: <see cref="INodeAuthService.ResetAdminPasswordAsync" />, which
+///     the operator-run <c>--reset-admin-password</c> CLI calls to set a new admin password without the old one,
+///     tested at the service layer below the thin Program.cs CLI wrapper.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class NodeAuthPasswordResetTests

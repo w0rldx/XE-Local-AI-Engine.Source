@@ -49,13 +49,12 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     public async Task<NodeChatDbContext> CreateSchemaAsync()
     {
         var context = CreateContext();
+        // This leaves a WAL database, not a rollback journal: EF Core's SqliteDatabaseCreator.Create enables WAL, and
+        // journal_mode is a persistent file property.
         _ = await context.Database.EnsureCreatedAsync();
 
-        // This leaves a WAL database, not a rollback journal: EF Core's SqliteDatabaseCreator.Create enables WAL, and
-        // journal_mode is a persistent file property. The encryption suite scans the MAIN database file and its
-        // positive control — the plaintext title IS in the file — holds anyway, because it reads through
-        // SqliteFileProbe.ReadAllBytesAsync, whose ClearAllPools closes the last connection and SQLite checkpoints the
-        // log back into the main file on that close.
+        // The encryption suite's MAIN-file scan still finds its plaintext-title control: its SqliteFileProbe read
+        // calls ClearAllPools, and SQLite checkpoints the log into the main file when the last connection closes.
         return context;
     }
 

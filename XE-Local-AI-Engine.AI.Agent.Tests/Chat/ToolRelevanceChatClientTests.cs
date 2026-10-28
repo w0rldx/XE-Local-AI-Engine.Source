@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -273,8 +272,8 @@ public sealed class ToolRelevanceChatClientTests
     }
 
     /// <summary>
-    ///     Model-matrix F5: an offer that does not fit the window is narrowed to the fitted token budget even below the
-    ///     threshold, and the node core no longer pins tools past it; list_tools stays so the rest can be revealed.
+    ///     An offer that does not fit the window is narrowed to the fitted token budget even below the threshold, and
+    ///     the node core pins no tools past it; list_tools stays so the rest can be revealed.
     /// </summary>
     [Test]
     public async Task GetResponseAsync_WithAWindowFittedBudget_NarrowsBelowTheThresholdAndKeepsListTools()
@@ -292,7 +291,7 @@ public sealed class ToolRelevanceChatClientTests
     }
 
     /// <summary>
-    ///     Model-matrix V4: the fit is by size in rank order. The best match that does not fit is skipped, not the whole
+    ///     The fit is by size in rank order. The best match that does not fit is skipped, not the whole
     ///     offer, and the next ranked tool takes its place before any unrelated one.
     /// </summary>
     [Test]
@@ -315,7 +314,7 @@ public sealed class ToolRelevanceChatClientTests
 
     /// <summary>
     ///     A query with nothing to rank by (function words only, or no user text) takes every selector's offer-everything
-    ///     path, which must still honour the fitted budget, or the turn overflows the window it was fitted to.
+    ///     path, which must still honor the fitted budget, or the turn overflows the window it was fitted to.
     /// </summary>
     [Test]
     [Arguments("and the of a")]
@@ -507,7 +506,7 @@ public sealed class ToolRelevanceChatClientTests
     public async Task GetResponseAsync_WhenTheSelectorThrows_SendsTheUnfilteredOptionsInstance()
     {
         // IToolRelevanceSelector is public, so a node-side selector can throw anything at all. The filter is a
-        // context-budget optimisation, never an authorisation boundary: a failure costs the saving, not the turn.
+        // context-budget optimization, never an authorization boundary: a failure costs the saving, not the turn.
         var (tools, _) = BuildArray(FillerNames(30));
         using var inner = new CapturingChatClient();
         using var sut = BuildSut(inner, new ThrowingSelector());
@@ -739,7 +738,7 @@ public sealed class ToolRelevanceChatClientTests
         // under a template deliberately scrubbed to counts. The type name is the whole allowed diagnosis.
         const string Secret = "SECRET-TRAJECTORY-MARKER";
         var (tools, _) = BuildArray(FillerNames(30));
-        var logger = new CapturingLogger<ToolRelevanceChatClient>();
+        var logger = new RecordingLogger<ToolRelevanceChatClient>();
         using var inner = new CapturingChatClient();
         using var sut = new ToolRelevanceChatClient(inner,
             new ThrowingSelector($"the selector broke on {Secret}", new InvalidOperationException($"inner {Secret}")),
@@ -919,37 +918,6 @@ public sealed class ToolRelevanceChatClientTests
             CancellationToken cancellationToken)
         {
             throw new InvalidOperationException(_message, _inner);
-        }
-    }
-
-    // Keeps the exception argument as well as the formatted message: a template scrubbed to counts proves nothing if
-    // the exception object rides alongside it, because the sink renders that too.
-    private sealed class CapturingLogger<T> : ILogger<T>
-    {
-        public List<Entry> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull =>
-            null;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-            Entries.Add(new Entry
-            {
-                Message = formatter(state, exception),
-                Exception = exception
-            });
-        }
-
-        public sealed record Entry
-        {
-            public required string Message { get; init; }
-
-            public required Exception? Exception { get; init; }
         }
     }
 

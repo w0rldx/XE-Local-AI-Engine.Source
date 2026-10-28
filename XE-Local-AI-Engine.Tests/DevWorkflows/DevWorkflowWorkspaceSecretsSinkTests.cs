@@ -21,8 +21,8 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///     without a <c>DevelopmentTask</c> row behind it?
 ///     <para>
 ///         It is a go/no-go for the Tool and DevTask node executors, so it is written as evidence rather than as a
-///         regression guard: one test proves the old path really did fail without those rows, and one proves the whole
-///         chain — prepare, then run a profile command — now works from a bare <c>(projectId, nodeRunId)</c> pair.
+///         regression guard: one test proves the row-bound path fails without those rows, and one proves the whole
+///         chain — prepare, then run a profile command — works from a bare <c>(projectId, nodeRunId)</c> pair.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Integration)]
@@ -66,7 +66,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]));
     }
 
-    /// <summary>Dev Mode's own behaviour, forwarded verbatim: the keys and the paths reach the store unchanged.</summary>
+    /// <summary>Dev Mode's own behavior, forwarded verbatim: the keys and the paths reach the store unchanged.</summary>
     [Test]
     public async Task DevModeSink_ForwardsItsKeysAndPathsToTheStoreUnchanged()
     {

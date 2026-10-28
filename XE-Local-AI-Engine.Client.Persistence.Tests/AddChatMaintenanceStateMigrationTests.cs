@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddChatMaintenanceState</c> migration: it creates the <c>chat_maintenance_state</c> durable
-///     key/value table (name PK + value, both NOT NULL, unencrypted) on both an upgrade from the immediately preceding
-///     migration and a fresh migrate-to-head, drops it on rollback, and leaves no model/snapshot drift.
+///     <c>AddChatMaintenanceState</c> creates the <c>chat_maintenance_state</c> key/value table (name PK + value, both
+///     NOT NULL, unencrypted) on upgrade and fresh migrate, drops it on rollback, and leaves no snapshot drift.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddChatMaintenanceStateMigrationTests : IDisposable

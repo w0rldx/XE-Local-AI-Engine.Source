@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Common.Extensions;
+using XE_Local_AI_Engine.Client.Services.Common;
 
 /// <summary>
 ///     Represents default exception handler.
@@ -34,8 +35,8 @@ public class DefaultExceptionHandler : IExceptionHandler
         // id, so a reported id joins this line and distributed traces. RequestId stays the connection id, not the W3C trace.
         _logger.LogError(exception,
             "Unhandled exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. SpanId: {SpanId}. RequestId: {RequestId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
-            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
+            LogValueSanitizer.Sanitize(httpContext.Request.Method),
+            LogValueSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status500InternalServerError,
             ProblemDetailsExtensions.ResolveTraceId(httpContext),
             Activity.Current?.SpanId.ToString(),

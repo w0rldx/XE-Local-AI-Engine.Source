@@ -7,7 +7,7 @@ import type { ReactElement, ReactNode } from "react";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // i18n is NOT set up here: `src/i18n.ts` is the first vitest `setupFiles` entry, so the app's own i18next instance is
-// initialised once per test file — before any test imports anything — and `useTranslation()` resolves against the real
+// initialized once per test file — before any test imports anything — and `useTranslation()` resolves against the real
 // `en` bundle with no <I18nextProvider> in the tree, in every file. This helper therefore provides only Mantine, a
 // QueryClient, the jsdom stubs and an optional memory router.
 //
@@ -16,7 +16,7 @@ import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTe
 // tree is gone, and a portal's node outlives the render it belonged to — and neither is something a test asserts.
 //
 // A file that `vi.mock("react-i18next")`s the module wholesale MAY now use this helper: the mock applies to the
-// components' own imports, while the real instance initialised in setup is untouched (the setup import runs before the
+// components' own imports, while the real instance initialized in setup is untouched (the setup import runs before the
 // hoisted mock and stays cached, so nothing calls `i18next.use(undefined)`). Verified with a throwaway probe that
 // mocked react-i18next with the usual `t: (key, defaultValue) => defaultValue ?? key` shape and rendered through
 // `renderWithProviders`. Note what such a mock costs: the component then renders its in-code default, not the shipped

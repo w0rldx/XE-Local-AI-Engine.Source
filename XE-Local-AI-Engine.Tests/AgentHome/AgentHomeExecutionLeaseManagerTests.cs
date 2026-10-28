@@ -128,7 +128,7 @@ public sealed class AgentHomeExecutionLeaseManagerTests
     }
 
     /// <summary>
-    ///     The race the peek cannot close, pinned as the behaviour it IS: a lease taken after the read still reads as
+    ///     The race the peek cannot close, pinned as the behavior it IS: a lease taken after the read still reads as
     ///     free to the caller holding that stale answer. Callers treat "held" as a refusal, never "not held" as
     ///     exclusivity.
     /// </summary>

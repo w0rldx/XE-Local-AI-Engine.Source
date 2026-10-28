@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     <c>AddConversationUploadedFiles</c> creates the chat attachment table. The cascade FK to <c>conversations</c> is
-///     the load-bearing part: deleting a conversation must take its uploaded-file rows with it, or the purge leaves
-///     orphaned rows pointing at blobs nothing will ever clean up.
+///     load-bearing: deleting a conversation takes its file rows, or the purge orphans rows pointing at blobs nothing
+///     cleans up.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddConversationUploadedFilesMigrationTests

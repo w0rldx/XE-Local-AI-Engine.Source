@@ -6,20 +6,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>The save interceptor encrypts exactly the columns the materialization interceptor decrypts, and no bulk update writes one.</summary>
 /// <remarks>
-///     Both interceptors list their columns by hand, one block per entity type, so a column added to one list only
-///     reads back as ciphertext or lands on disk as plaintext. <c>ExecuteUpdate</c>'s <c>SetProperty</c> bypasses the
-///     save interceptor, so it would write plaintext into an encrypted column. The scan reads comment- and
-///     literal-stripped source of <c>XE-Local-AI-Engine.Client.Persistence</c>.
+///     Both interceptors walk the one column table in <c>NodeEncryptedColumns</c>; a column registered anywhere else
+///     would only read back as ciphertext or land on disk as plaintext, so neither interceptor may call a protector
+///     itself. <c>ExecuteUpdate</c>'s <c>SetProperty</c> bypasses the save interceptor, so it would write plaintext
+///     into an encrypted column. The scan reads comment- and literal-stripped source of
+///     <c>XE-Local-AI-Engine.Client.Persistence</c>.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed partial class EncryptedColumnRegistryTests
 {
-    /// <summary>Non-vacuity floor under today's count: a parser that stops matching would otherwise compare two empty sets.</summary>
-    private const int EncryptedColumnFloor = 125;
+    /// <summary>Today's column count as a floor: a parser that stops matching fails here, and removing a column is a deliberate edit to this constant.</summary>
+    private const int EncryptedColumnFloor = 128;
 
     private const int DbSetFloor = 50;
 
     private const string PersistenceRoot = "XE-Local-AI-Engine.Client.Persistence/";
+
+    /// <summary>The only encrypt/decrypt-named calls an interceptor may make: its own entry points and the table's walk.</summary>
+    private static readonly HashSet<string> TableWalkMethods = new(StringComparer.Ordinal) { "EncryptTrackedPayloads", "EncryptTracked", "DecryptColumns", "Decrypt" };
+
+    private static readonly string ColumnTablePath =
+        RepositoryPaths.Combine("XE-Local-AI-Engine.Client.Persistence", "NodeEncryptedColumns.cs");
 
     private static readonly string SaveInterceptorPath =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Client.Persistence", "NodeEncryptionSaveChangesInterceptor.cs");
@@ -31,25 +38,33 @@ public sealed partial class EncryptedColumnRegistryTests
     public void Interceptors_EncryptAndDecryptTheSameColumns()
     {
         var encrypted = EncryptedColumns();
-        var decrypted = DecryptedColumns();
 
         AssertEx.True(encrypted.Count >= EncryptedColumnFloor,
-            $"Parsed {encrypted.Count} encrypted columns from NodeEncryptionSaveChangesInterceptor, below the floor of "
-            + $"{EncryptedColumnFloor}: the parser stopped matching the Encrypt*Property registrations.");
-        AssertEx.True(decrypted.Count >= EncryptedColumnFloor,
-            $"Parsed {decrypted.Count} decrypted columns from NodeEncryptionMaterializationInterceptor, below the floor "
-            + $"of {EncryptedColumnFloor}: the parser stopped matching the DecryptColumns assignments.");
+            $"Parsed {encrypted.Count} encrypted columns from NodeEncryptedColumns, below the floor of "
+            + $"{EncryptedColumnFloor}: a column was removed (lower the floor in the same change, deliberately) or the parser "
+            + "stopped matching the Required/Optional registrations.");
 
-        var onlyEncrypted = encrypted.Except(decrypted).Order(StringComparer.Ordinal).ToList();
-        var onlyDecrypted = decrypted.Except(encrypted).Order(StringComparer.Ordinal).ToList();
+        var offenders = new List<string>();
 
-        AssertEx.True(onlyEncrypted.Count == 0 && onlyDecrypted.Count == 0,
-            "NodeEncryptionSaveChangesInterceptor.EncryptTrackedPayloads and "
-            + "NodeEncryptionMaterializationInterceptor.DecryptColumns must name the same (entity, property) columns. "
-            + "Encrypted on save but never decrypted on read:"
-            + Environment.NewLine + string.Join(Environment.NewLine, onlyEncrypted)
-            + Environment.NewLine + "Decrypted on read but never encrypted on save:"
-            + Environment.NewLine + string.Join(Environment.NewLine, onlyDecrypted));
+        foreach (var path in new[] { SaveInterceptorPath, MaterializationInterceptorPath })
+        {
+            var source = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(path));
+
+            if (!source.Contains("NodeEncryptedColumns.", StringComparison.Ordinal))
+            {
+                offenders.Add($"{Path.GetFileName(path)}: does not walk NodeEncryptedColumns");
+            }
+
+            offenders.AddRange(DirectCipherUse().Matches(source).Select(match => $"{Path.GetFileName(path)}: uses {match.Value} directly"));
+            offenders.AddRange(TransformCall().Matches(source)
+                                              .Where(match => !TableWalkMethods.Contains(match.Groups["name"].Value))
+                                              .Select(match => $"{Path.GetFileName(path)}: calls {match.Groups["name"].Value} outside the table"));
+        }
+
+        AssertEx.Empty(offenders,
+            "NodeEncryptionSaveChangesInterceptor and NodeEncryptionMaterializationInterceptor must both encrypt and decrypt "
+            + "through the NodeEncryptedColumns table and register no column of their own:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
     /// <summary>A bulk <c>SetProperty</c> skips the save interceptor, so it must never target an encrypted column.</summary>
@@ -89,37 +104,17 @@ public sealed partial class EncryptedColumnRegistryTests
             + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
-    /// <summary>The (entity, property) pairs <c>EncryptTrackedPayloads</c> registers, one <c>Entries&lt;T&gt;()</c> block per entity.</summary>
+    /// <summary>The (entity, property) pairs <c>NodeEncryptedColumns</c> registers, one <c>Entity</c>/<c>NodeScoped</c> block per entity.</summary>
     private static HashSet<string> EncryptedColumns()
     {
-        var source = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(SaveInterceptorPath));
+        var source = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(ColumnTablePath));
         var columns = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var block in Blocks(source, EntriesHeader()))
+        foreach (var block in Blocks(source, EntityHeader()))
         {
-            foreach (Match match in EncryptRegistration().Matches(block.Text))
+            foreach (Match match in ColumnRegistration().Matches(block.Text))
             {
                 _ = columns.Add(block.EntityType + "." + match.Groups["property"].Value);
-            }
-        }
-
-        return columns;
-    }
-
-    /// <summary>The (entity, property) pairs <c>DecryptColumns</c> assigns from a decrypt of themselves, one <c>case</c> per entity.</summary>
-    private static HashSet<string> DecryptedColumns()
-    {
-        var source = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(MaterializationInterceptorPath));
-        var columns = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var block in Blocks(source, CaseHeader()))
-        {
-            foreach (Match match in DecryptAssignment().Matches(block.Text))
-            {
-                if (match.Groups["variable"].Value == block.Variable)
-                {
-                    _ = columns.Add(block.EntityType + "." + match.Groups["property"].Value);
-                }
             }
         }
 
@@ -138,7 +133,6 @@ public sealed partial class EncryptedColumnRegistryTests
             yield return new EntityBlock
             {
                 EntityType = headers[index].Groups["type"].Value,
-                Variable = headers[index].Groups["variable"].Value,
                 Text = source[start..end]
             };
         }
@@ -216,18 +210,17 @@ public sealed partial class EncryptedColumnRegistryTests
         return resolved;
     }
 
-    [GeneratedRegex(@"\.Entries<(?<type>\w+)>\(\)")]
-    private static partial Regex EntriesHeader();
+    [GeneratedRegex(@"\b(?:Entity|NodeScoped)<(?<type>\w+)>\(")]
+    private static partial Regex EntityHeader();
 
-    [GeneratedRegex(@"\bcase\s+(?<type>\w+)\s+(?<variable>\w+)\s*:")]
-    private static partial Regex CaseHeader();
+    [GeneratedRegex(@"\.(?:Required|Optional)\(\s*(?<lambda>\w+)\s*=>\s*\k<lambda>\.(?<property>\w+)\b")]
+    private static partial Regex ColumnRegistration();
 
-    [GeneratedRegex(@"\bEncrypt(?:Optional|Required)Property\(\s*(?<entry>\w+)\s*,\s*\k<entry>\.Property\(\s*(?<lambda>\w+)\s*=>\s*\k<lambda>\.(?<property>\w+)\s*\)")]
-    private static partial Regex EncryptRegistration();
+    [GeneratedRegex(@"\b(?:NodePayloadProtector|NodeChatContentProtection|INodeAeadCipher|AesGcmNodeAeadCipher|AesGcm)\b")]
+    private static partial Regex DirectCipherUse();
 
-    // The property is assigned from a Decrypt*/Unprotect call whose first argument is that same property.
-    [GeneratedRegex(@"\b(?<variable>\w+)\.(?<property>\w+)\s*=(?![=>])[^;]*?\b(?:Decrypt\w*|Unprotect)\(\s*\k<variable>\.\k<property>\b")]
-    private static partial Regex DecryptAssignment();
+    [GeneratedRegex(@"\b(?<name>(?:Encrypt|Decrypt|Protect|Unprotect)\w*)\s*\(")]
+    private static partial Regex TransformCall();
 
     [GeneratedRegex(@"\bDbSet<(?<type>\w+)>\s+(?<name>\w+)")]
     private static partial Regex DbSetDeclaration();
@@ -238,12 +231,10 @@ public sealed partial class EncryptedColumnRegistryTests
     [GeneratedRegex(@"\bSet<(?<type>\w+)>\(\)|\.(?<member>\w+)\b")]
     private static partial Regex ReceiverCandidate();
 
-    /// <summary>One entity type's registrations: the header's type, its pattern variable (if any) and the text up to the next header.</summary>
+    /// <summary>One entity type's registrations: the header's type and the text up to the next header.</summary>
     private sealed class EntityBlock
     {
         public required string EntityType { get; init; }
-
-        public required string Variable { get; init; }
 
         public required string Text { get; init; }
     }

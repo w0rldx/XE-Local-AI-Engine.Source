@@ -125,7 +125,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
                 if (facts.ModelContentFingerprint is not { } fingerprint)
                 {
                     // A legacy entry acquired before the registry recorded an aggregate identity has to be verified to
-                    // learn one. That model alone pays the hashing cost the whole catalog used to pay.
+                    // learn one. Only that model pays the hashing cost, never the whole catalog.
                     await using var lease = await AcquireEligibleModelAsync(descriptor.ModelName, cancellationToken);
                     eligible.Add(new BenchmarkEligibleModel
                     {

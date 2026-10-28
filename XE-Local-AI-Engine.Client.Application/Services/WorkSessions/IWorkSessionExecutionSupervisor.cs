@@ -14,7 +14,7 @@ internal enum WorkSessionStopReason
 ///     <c>MaxConcurrentSessions</c> is an ADMISSION cap, not a concurrency setting: the node has exactly one invocation slot, a
 ///     <c>SemaphoreSlim(1, 1)</c> in <c>WorkerEventDispatcher</c> that every invocation takes, so a second admitted session buys
 ///     queue depth rather than parallelism and a running step delays the operator's own chat turn until it finishes. That is a
-///     node-wide behavioural consequence of shipping work sessions, and <c>MaxParkedSeconds</c> bounds its worst case.
+///     node-wide behavioral consequence of shipping work sessions, and <c>MaxParkedSeconds</c> bounds its worst case.
 /// </remarks>
 internal interface IWorkSessionExecutionSupervisor
 {

@@ -56,7 +56,7 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.True(harness.Handler.Descriptor.AllowManualTrigger, "operators may run a scheduled agent on demand.");
         AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, harness.Handler.Descriptor.DefaultMisfirePolicy);
         // No template default on purpose: the descriptor value pre-fills the per-schedule ceiling, and a fixed 600 s
-        // capped every unattended run below a raised node "Maximum message request timeout". With none, the management
+        // would cap every unattended run below a raised node "Maximum message request timeout". With none, the management
         // service derives the ceiling from that setting (ScheduledJobManagementServiceTests covers the derivation).
         AssertEx.Null(harness.Handler.Descriptor.DefaultMaxRuntimeSeconds);
         AssertEx.Equal(HistoryDetailLevel.Detailed, harness.Handler.Descriptor.HistoryDetailLevel);
@@ -140,8 +140,8 @@ public sealed class RunSavedAgentHandlerTests
         await harness.Gguf.Received(1).ExistsAsync("pinned-local-model", Arg.Any<CancellationToken>());
     }
 
-    // A missing GGUF used to reach capacity, whose unknown footprint read as "insufficient capacity". The refusal names the model and is
-    // reported under the slot, so the invocation monitor records it as ModelUnavailable.
+    // A missing GGUF is refused before capacity, whose unknown footprint reads as "insufficient capacity". The refusal
+    // names the model and is reported under the slot, so the invocation monitor records it as ModelUnavailable.
     [Test]
     public async Task ExecuteAsync_WhenThePinnedLlamaModelIsNotInstalled_RefusesNamingTheModelBeforeCapacity()
     {
@@ -528,8 +528,8 @@ public sealed class RunSavedAgentHandlerTests
     public async Task ExecuteAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
     {
         // Send/regenerate parity: the operator's node-level "Maximum message request timeout" (900s here) must
-        // bound a scheduled run too. Before the fix the package carried no timeout block and the builder's own 600s
-        // default cut long unattended runs off. 900 is deliberately NOT the default, so this still fails if the wiring
+        // bound a scheduled run too. Without a timeout block in the package the builder's own 600s
+        // default cuts long unattended runs off. 900 is deliberately NOT the default, so this still fails if the wiring
         // is dropped. Tool-call/stream-idle are not operator-controlled and keep their defaults.
         using var harness = new Harness();
         harness.NodeSettings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings

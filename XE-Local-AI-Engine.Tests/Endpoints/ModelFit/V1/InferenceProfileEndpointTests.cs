@@ -222,7 +222,7 @@ public sealed class InferenceProfileEndpointTests
         AssertEx.Equal("chat", first.GetProperty("role").GetString());
         AssertEx.Equal("Frozen", first.GetProperty("status").GetString());
 
-        // The local-only machine key must NEVER leave the box.
+        // The local-only machine key must NEVER leave the host.
         AssertEx.False(json.Contains("machineKey", StringComparison.OrdinalIgnoreCase), "Profiles response must not expose the machine key.");
         AssertEx.False(json.Contains("machine_key", StringComparison.OrdinalIgnoreCase), "Profiles response must not expose the machine key.");
     }

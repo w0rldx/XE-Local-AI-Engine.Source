@@ -17,16 +17,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         REGRESSION (capture run 2026-08-01). A non-2xx from llama-server surfaced as
-///         <c>System.ClientModel.ClientResultException</c> — the MEAI OpenAI adapter's own type — which matched NOBODY's
-///         catch set. It escaped <c>KnowledgeChunkEmbedder</c>'s handler, escaped the ranker's, and reached
-///         <c>KnowledgeIngestionService</c>'s catch-all, where every document was stamped
-///         "Ingestion failed unexpectedly. Retry the upload." and the log recorded only the type NAME. The result was a
+///         REGRESSION. A non-2xx from llama-server surfaces as
+///         <c>System.ClientModel.ClientResultException</c> — the MEAI OpenAI adapter's own type — which no other catch
+///         set matches. Unmapped, it escapes <c>KnowledgeChunkEmbedder</c>'s handler, escapes the ranker's, and reaches
+///         <c>KnowledgeIngestionService</c>'s catch-all, where every document is stamped
+///         "Ingestion failed unexpectedly. Retry the upload." and the log records only the type NAME: a
 ///         100%-reproducible failure with no status, no server response, and no failing step recorded anywhere.
 ///     </para>
 ///     <para>
 ///         These tests run against a real loopback <see cref="HttpListener" /> rather than a mocked adapter, because the
-///         defect lived in what the SDK does with a real HTTP response — a hand-thrown exception would have proven
+///         failure lives in what the SDK does with a real HTTP response — a hand-thrown exception would prove
 ///         nothing about the shape the SDK actually raises.
 ///     </para>
 /// </remarks>
@@ -34,7 +34,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DeferredLlamaServerEmbeddingGeneratorFailureTests
 {
     // The verbatim body a llama-server returns when a pooled embedding input exceeds the physical batch size. This is
-    // the exact failure that broke knowledge-base ingestion, captured from a live nomic-embed-text-v1.5 server.
+    // the failure that breaks knowledge-base ingestion, captured from a nomic-embed-text-v1.5 server.
     private const string OversizedInputBody =
         """{"error":{"code":500,"message":"input (678 tokens) is too large to process. increase the physical batch size (current batch size: 512)","type":"server_error"}}""";
 

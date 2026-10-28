@@ -35,7 +35,7 @@ public sealed partial class DevelopmentStore : IDevelopmentStore
     ///     <c>JsonSerializerDefaults.Web</c> reads case-insensitively, which is what makes re-casing the writes safe on
     ///     an append-only log.
     /// </remarks>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private static readonly IReadOnlyDictionary<DevelopmentTaskStatus, HashSet<DevelopmentTaskStatus>> LegalTaskTransitions =
         new Dictionary<DevelopmentTaskStatus, HashSet<DevelopmentTaskStatus>>

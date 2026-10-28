@@ -181,7 +181,7 @@ echo "== gpu actually used =="
 
 # THE load-bearing assertion. Both halves must be able to fail independently.
 # Read by assert_gpu_was_used, which lives in the sourced script the linter is told not to follow.
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034  # read by assert_gpu_was_used in the sourced script
 MIN_UTIL_PERCENT=15
 # shellcheck disable=SC2034  # read by assert_gpu_was_used in the sourced script
 MIN_VRAM_RISE_MIB=150
@@ -316,7 +316,7 @@ check "an unknown model has no edit modes" "1" "$?"
 echo "== eject =="
 
 # Read by assert_vram_released in the sourced script.
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034  # read by assert_vram_released in the sourced script
 EJECT_TOLERANCE_MIB=600
 out="$(assert_vram_released 3300 9000 2>&1)"; status=$?
 check "VRAM still held after eject fails" "1" "${status}"
@@ -345,7 +345,7 @@ check "a legitimate below-baseline reading still passes" "0" "$?"
 # gpu_vram_now must distinguish "nvidia-smi failed" from "0 MiB used". Returning 0 with a success
 # status is the fail-open that let a broken read certify VRAM as released.
 # These test doubles replace the sourced gpu_sample_once; gpu_vram_now calls them indirectly.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2329  # test double, called indirectly by gpu_vram_now
 gpu_sample_once() { return 1; }
 gpu_vram_now >/dev/null 2>&1
 check "gpu_vram_now fails when nvidia-smi produces nothing" "1" "$?"
@@ -434,7 +434,7 @@ check_contains "measured zero keeps the CPU-fallback diagnosis" "silent-CPU-fall
 echo "== ledger (the anti-vacuous-pass gate) =="
 
 # All five arrays are the sourced ledger's own state.
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034  # the arrays are the sourced ledger's state
 ledger_reset() { LEDGER_EXPECTED=(); LEDGER_PASSED=(); LEDGER_SKIPPED=(); LEDGER_FAILED=(); FAILURES=(); }
 
 # Nothing ran at all — the vacuous run. This is the single most important case here.
@@ -512,7 +512,7 @@ check_contains "--no-tools names the flag that caused it" "--no-tools" "${out}"
 echo "== build/guard/start source contract =="
 smoke_source="$(cat "${SMOKE}")"
 # These are literal source fragments; expansion would defeat the contract check.
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016  # literal source fragment, must not expand
 check_contains "the exact configured AppHost is selected" \
   'ASPIRE_APPHOST="${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}"' \
   "${smoke_source}"

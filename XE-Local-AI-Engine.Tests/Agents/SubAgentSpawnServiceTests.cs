@@ -23,7 +23,6 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Capacity;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -964,7 +963,7 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal(0, harness.ChatClient.CallCount);
     }
 
-    // I-D12: an empty final answer or an approval request left in the response was reported as Success("").
+    // An empty final answer or an approval request left in the response fails typed, never as Success("").
     [Test]
     public async Task SpawnForMcp_WhenRunEndsWithoutAnswerOrOnApprovalRequest_FailsTyped()
     {
@@ -995,7 +994,7 @@ public sealed class SubAgentSpawnServiceTests
         }
     }
 
-    // Q5 / I-D6: a run bound by a name several agents share is refused instead of running whichever row came first.
+    // A run bound by a name several agents share is refused instead of running whichever row came first.
     [Test]
     public async Task SpawnForMcp_WhenAgentNameIsAmbiguous_RejectsAmbiguousName()
     {
@@ -1014,7 +1013,7 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal(0, harness.ChatClient.CallCount);
     }
 
-    // I-D16: llama-server's context-size 400 escaped as an unhandled exception and an opaque MCP error.
+    // llama-server's context-size 400 is a typed rejection, never an unhandled exception or an opaque MCP error.
     [Test]
     public async Task SpawnForMcp_WhenProviderRejectsContextSize_RejectsTaskTooLarge()
     {
@@ -1669,7 +1668,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly FakeCustomToolCatalog _customToolCatalog = new();
         private IMcpAgenticToolAdapter _mcpAgenticToolAdapter = Substitute.For<IMcpAgenticToolAdapter>();
         private readonly FakeMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory = new();
-        private readonly CapturingLogger<SubAgentSpawnService> _logger = new();
+        private readonly RecordingLogger<SubAgentSpawnService> _logger = new();
         private readonly INodeSettingsStore _nodeSettingsStore = Substitute.For<INodeSettingsStore>();
         private bool _reservationDisposed;
 

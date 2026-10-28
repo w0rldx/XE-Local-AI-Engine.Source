@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The escape hatch itself. The listing is the easy half; the reveal is the one that has to land on the RIGHT
-///     array, which is why the function is bound to a decision object rather than looking one up by key — there is no
-///     ambient "current array" slot to race, and a signature assertion below is what keeps one from coming back.
+///     The escape hatch. The reveal must land on the RIGHT array, so the function is bound to a decision object, not
+///     looked up by key: no ambient "current array" slot to race, and a signature assertion keeps one from returning.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ListToolsFunctionTests

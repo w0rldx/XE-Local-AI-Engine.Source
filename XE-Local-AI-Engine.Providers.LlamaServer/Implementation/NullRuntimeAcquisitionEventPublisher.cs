@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     The Client host replaces it with a hub-backed publisher; without a host (tests, headless, Aspire, CI)
-///     acquisition progress is simply not broadcast, so those hosts stay byte-behaviour-identical.
+///     acquisition progress is simply not broadcast, so those hosts stay byte-behavior-identical.
 /// </remarks>
 public sealed class NullRuntimeAcquisitionEventPublisher : IRuntimeAcquisitionEventPublisher
 {

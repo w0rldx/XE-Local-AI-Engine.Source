@@ -143,7 +143,7 @@ public sealed class WorkSessionAgentSeederTests
 
     /// <summary>
     ///     The upgrade path. Seeding is additive-only and returns early on an existing slug, so a database written
-    ///     before the spelling was fixed would keep <c>get_current_time</c> — a name no tool carries — and its two
+    ///     with the old spelling would keep <c>get_current_time</c> — a name no tool carries — and its two
     ///     personas would silently never get the clock tool again. The seeder repairs that row in place.
     ///     <para>
     ///         Everything else on the row has to survive it: the repair rebuilds from the STORED record, because an

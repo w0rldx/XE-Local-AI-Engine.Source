@@ -6,12 +6,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     The read side of the two adaptive-effort dispatch columns: a run-envelope row carrying them projects them
-///     through <c>ListRunEnvelopesAsync</c>, and a turn that authored a concrete effort projects nulls — which is what
-///     makes <c>authored_effort IS NULL</c> the before-population of the measurement. The memory-diagnostics
-///     projection (kind 0) is deliberately NOT widened, and that is pinned here too: these columns are always null on
-///     that kind, so adding permanently-null fields to its projection would misinform every reader of that endpoint.
+///     The read side of the two adaptive-effort dispatch columns: <c>ListRunEnvelopesAsync</c> projects them, and a
+///     turn with an authored effort projects nulls, so <c>authored_effort IS NULL</c> marks the before-population.
 /// </summary>
+/// <remarks>
+///     The kind-0 memory-diagnostics projection stays narrow: always-null fields there would misinform its readers.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogDispatchedTierTests : IDisposable
 {

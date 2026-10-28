@@ -289,7 +289,7 @@ public sealed class MemoryExtractionServiceTests
         return new MemoryExtractionService(agent,
             store,
             // Default: a NOT-applied deduplicator so these baseline tests exercise the lexical-only path exactly as
-            // before (the no-confident-embedding-model / outage fallback). Semantic behaviour is covered by the
+            // before (the no-confident-embedding-model / outage fallback). Semantic behavior is covered by the
             // semantic-specific tests below and by MemorySemanticDeduplicatorTests.
             semanticDeduplicator ?? StubSemanticDeduplicator.NotApplied(),
             Options.Create(new MemoryExtractionOptions()),
@@ -390,9 +390,9 @@ public sealed class MemoryExtractionServiceTests
         };
     }
 
-    // A controllable semantic-dedup stub: either NOT-applied (the lexical-only fallback the service must honour) or
+    // A controllable semantic-dedup stub: either NOT-applied (the lexical-only fallback the service must honor) or
     // applied while flagging a fixed set of candidate indexes as semantic duplicates. Lets the service integration be
-    // verified without an embedder; the real cosine/IsConfident behaviour is covered by MemorySemanticDeduplicatorTests.
+    // verified without an embedder; the real cosine/IsConfident behavior is covered by MemorySemanticDeduplicatorTests.
     private sealed class StubSemanticDeduplicator : IMemorySemanticDeduplicator
     {
         private readonly bool _applied;

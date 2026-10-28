@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
@@ -13,7 +14,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 ///     uv-managed Python training runtime, which then adopts the result.
 /// </summary>
 /// <remarks>
-///     Modelled on <c>LlamaCppSourceBuildService</c> — serialized start transaction, detached worker, bounded log ring
+///     Modeled on <c>LlamaCppSourceBuildService</c> — serialized start transaction, detached worker, bounded log ring
 ///     streamed to a hub, and a staged-then-atomic adopt that parks the previous runtime in a backup. Every subprocess
 ///     runs under a scrubbed, allow-listed environment in an owner-only (0700) work directory inside the cache root,
 ///     never <c>/tmp</c>, and the install is strictly lockfile-driven, which is ADR 0005's "no floating resolves". See
@@ -98,7 +99,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         _shippedLockfileSha256 = new Lazy<string?>(ComputeShippedLockfileSha256);
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
         // Forced sync: a constructor cannot await, and the installed state must be present before the synchronous
-        // public GetStatus() read can answer; there is no async initialisation seam on this service.
+        // public GetStatus() read can answer; there is no async initialization seam on this service.
 #pragma warning disable MA0045 // Contract-forced: constructor.
         _installed = _stateStore.ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
 #pragma warning restore MA0045
@@ -271,7 +272,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
             await PublishPhaseAsync(TrainingRuntimePhase.Removing, terminal: false, sanitizedError: null).ConfigureAwait(false);
             DeleteDirectoryRequired(TrainingRuntimeLayout.VenvRoot(_cacheRoot));
-            TryDeleteDirectory(WorkDirectory);
+            BestEffortFile.TryDeleteDirectory(WorkDirectory);
             _stateStore.Delete();
 
             // No environment is left to point into the pre-shared-store toolchain. The shared store itself is never touched.
@@ -335,8 +336,8 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     internal void Recover()
     {
         SweepLegacyToolchain();
-        TryDeleteDirectory(WorkDirectory);
-        TryDeleteDirectory(TrainingRuntimeLayout.StagingVenv(_cacheRoot));
+        BestEffortFile.TryDeleteDirectory(WorkDirectory);
+        BestEffortFile.TryDeleteDirectory(TrainingRuntimeLayout.StagingVenv(_cacheRoot));
 
         var active = TrainingRuntimeLayout.ActiveVenv(_cacheRoot);
         var backup = TrainingRuntimeLayout.BackupVenv(_cacheRoot);
@@ -347,7 +348,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
         if (Directory.Exists(active))
         {
-            TryDeleteDirectory(backup);
+            BestEffortFile.TryDeleteDirectory(backup);
             return;
         }
 
@@ -364,9 +365,9 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
 
         try
         {
-            TryDeleteDirectory(workDir);
-            TryDeleteDirectory(staging);
-            TryDeleteDirectory(backup);
+            BestEffortFile.TryDeleteDirectory(workDir);
+            BestEffortFile.TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(backup);
             CreateOwnerOnlyDirectory(_cacheRoot);
             CreateOwnerOnlyDirectory(workDir);
 
@@ -438,8 +439,8 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 await _stateStore.WriteAsync(state, ct).ConfigureAwait(false);
 
                 // Only now is the previous runtime genuinely superseded, so only now may the backup go.
-                TryDeleteDirectory(backup);
-                TryDeleteDirectory(workDir);
+                BestEffortFile.TryDeleteDirectory(backup);
+                BestEffortFile.TryDeleteDirectory(workDir);
                 AppendLog($"Training runtime ready on Python {state.PythonVersion} with torch {state.TorchVersion}.");
                 await SetTerminalAsync(TrainingRuntimePhase.Ready, sanitizedError: null, state).ConfigureAwait(false);
             }
@@ -454,22 +455,22 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
         catch (OperationCanceledException)
         {
-            TryDeleteDirectory(workDir);
-            TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(workDir);
+            BestEffortFile.TryDeleteDirectory(staging);
             await TerminalizeFailureAsync("The training runtime install was cancelled.").ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException)
         {
             _logger.LogWarning(exception, "The training runtime install failed.");
-            TryDeleteDirectory(workDir);
-            TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(workDir);
+            BestEffortFile.TryDeleteDirectory(staging);
             await TerminalizeFailureAsync(exception.Message).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "The training runtime install failed unexpectedly.");
-            TryDeleteDirectory(workDir);
-            TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(workDir);
+            BestEffortFile.TryDeleteDirectory(staging);
             await TerminalizeFailureAsync("The training runtime install failed unexpectedly.").ConfigureAwait(false);
         }
     }
@@ -493,10 +494,10 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     {
         try
         {
-            TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(staging);
             if (swapped)
             {
-                TryDeleteDirectory(active);
+                BestEffortFile.TryDeleteDirectory(active);
             }
 
             if (parked)
@@ -636,8 +637,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         File.Copy(project, Path.Combine(staging, TrainingRuntimeLayout.ProjectFileName), overwrite: true);
         File.Copy(lockfile, Path.Combine(staging, TrainingRuntimeLayout.LockfileName), overwrite: true);
 
-        await using var stream = new FileStream(lockfile, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        return await FileSha256.ComputeAsync(lockfile, ct).ConfigureAwait(false);
     }
 
     /// <summary>The shipped lockfile's digest, hashed once: the scripts directory does not change under a running process.</summary>
@@ -857,21 +857,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a partial install tree.
         }
     }
 

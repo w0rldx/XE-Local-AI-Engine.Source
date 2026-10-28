@@ -115,7 +115,7 @@ internal sealed class GraphWorkflowCondition
         if (left.ValueKind == JsonValueKind.Number && right.ValueKind == JsonValueKind.Number)
         {
             // Widest exact type first: through double, 9007199254740992 and 9007199254740993 are the SAME value, so a 'gt' over ids
-            // or byte counts past 2^53 would answer on a rounding artefact. Double is the last resort, and a token it cannot read is no ordering.
+            // or byte counts past 2^53 would answer on a rounding artifact. Double is the last resort, and a token it cannot read is no ordering.
             if (left.TryGetInt64(out var leftLong) && right.TryGetInt64(out var rightLong))
             {
                 return leftLong.CompareTo(rightLong);
@@ -135,7 +135,7 @@ internal sealed class GraphWorkflowCondition
             }
 
             // simplified: fractional and exponent tokens beyond decimal range still round through double, so two differing only past ~17 significant
-            // digits read as equal. Upgrade path: normalise each token into a BigInteger significand plus a base-10 exponent and compare those.
+            // digits read as equal. Upgrade path: normalize each token into a BigInteger significand plus a base-10 exponent and compare those.
             return left.TryGetDouble(out var leftDouble) && right.TryGetDouble(out var rightDouble)
                 ? leftDouble.CompareTo(rightDouble)
                 : null;

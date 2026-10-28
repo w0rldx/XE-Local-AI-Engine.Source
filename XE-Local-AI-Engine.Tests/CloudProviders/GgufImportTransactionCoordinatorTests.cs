@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
-using GgufAcquisitionOperationKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 [Category(TestCategories.Unit)]
 public sealed class GgufImportTransactionCoordinatorTests
@@ -135,10 +134,10 @@ public sealed class GgufImportTransactionCoordinatorTests
     [Test]
     public async Task Start_WhenSameModelAlreadyActive_ReturnsAcquisitionAlreadyActiveWithoutBlockingOnPreflight()
     {
-        // Regression: a second import of the same model used to fall through to preflight, which blocks on the
+        // Regression: a second import of the same model must not fall through to preflight, which blocks on the
         // composite mutation lease held by the first (still-running) import for the entire copy. The active-operation
         // check must reject the second Start before preflight is even reached, so SecondCallHangsPreflight makes any
-        // second ResolveAndReserveAsync call hang forever — proving the fix short-circuits ahead of it.
+        // second ResolveAndReserveAsync call hang forever — proving the check short-circuits ahead of it.
         var sourcePath = Path.Combine(Path.GetTempPath(), "private", "example-Q4_K_M.gguf");
         var resolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
         var identity = resolver.Resolve(new GgufAcquisitionIntent

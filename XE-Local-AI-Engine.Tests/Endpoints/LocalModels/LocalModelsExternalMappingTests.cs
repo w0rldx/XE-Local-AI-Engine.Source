@@ -71,7 +71,7 @@ public sealed class LocalModelsExternalMappingTests
         var binaryOnly = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Local, supportsReasoning: true)],
             selectedModelName: null);
 
-        // Both models reason; only one honours reasoning_effort. Without this pair the composer offers a graded menu
+        // Both models reason; only one honors reasoning_effort. Without this pair the composer offers a graded menu
         // of levels to an endpoint that ignores every one of them.
         AssertEx.Equal(expected: true, graded.Single().IsReasoningEffortCapable);
         AssertEx.Equal(expected: false, binaryOnly.Single().IsReasoningEffortCapable);

@@ -5,14 +5,14 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Brief test 6. The recommendation is a pure function over a <see cref="HardwareProfile" />, so every case here is
-///     a literal profile and an expected catalogue row — no hardware, no probe, no host.
-///     <para>
-///         The GPU table deliberately pins the two boundaries INSIDE <see cref="WhisperModelTier.LargeTurbo" />, not
-///         only the tier jumps: three rows share that tier, so a rule written against tiers rather than rows would pass
-///         a tier-only table while recommending a different model than this one does.
-///     </para>
+///     The recommendation is a pure function over a <see cref="HardwareProfile" />, so every case here is a literal
+///     profile and an expected catalog row: no hardware, no probe, no host.
 /// </summary>
+/// <remarks>
+///     The GPU table pins the two boundaries INSIDE <see cref="WhisperModelTier.LargeTurbo" />, not only the tier
+///     jumps: three rows share that tier, so a rule written against tiers would pass a tier-only table while
+///     recommending a different model than this one does.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class WhisperModelRecommendationTests
 {
@@ -25,7 +25,7 @@ public sealed class WhisperModelRecommendationTests
     [Arguments(3L, "large-v3-turbo-q8_0")]
     // 4 GiB: the full turbo's 3.25 GiB fits.
     [Arguments(4L, "large-v3-turbo")]
-    // A machine with a 32 GiB card: still the full turbo, because nothing larger exists in the catalogue.
+    // A machine with a 32 GiB card: still the full turbo, because nothing larger exists in the catalog.
     [Arguments(28L, "large-v3-turbo")]
     public void Recommend_GpuBudgets_ReturnExpectedRow(long vramGigabytes, string expectedModelId)
     {

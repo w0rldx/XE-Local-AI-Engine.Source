@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import {
 	defaultTrainingExportQuantization,
-	trainingExportQuantizations,
 	type TrainingArtifactKindValue,
+	trainingExportQuantizations,
 } from "@/features/training/models/TrainingModels";
 
 interface TrainingArtifactExportDialogProps {

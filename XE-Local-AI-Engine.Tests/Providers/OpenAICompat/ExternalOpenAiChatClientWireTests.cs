@@ -222,8 +222,8 @@ public sealed class ExternalOpenAiChatClientWireTests
     [Test]
     public async Task Send_AfterTheApiKeyIsRotated_PresentsTheNewKey()
     {
-        // The cached adapter's identity used to exclude the credential, so rotating or clearing a key changed nothing
-        // the comparison could see and the previous key kept going on the wire — which an operator experiences as "I
+        // The cached adapter's identity includes the credential: without it, rotating or clearing a key changes nothing
+        // the comparison can see and the previous key keeps going on the wire — which an operator experiences as "I
         // fixed the key and it still fails", or, for a revoked key, as one that keeps working.
         var recorder = new OpenAiWireRecorder();
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(), apiKey: "sk-old");

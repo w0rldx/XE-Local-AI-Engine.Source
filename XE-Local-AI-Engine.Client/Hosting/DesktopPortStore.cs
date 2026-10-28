@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Persists and reuses the loopback port a desktop launch binds.
@@ -115,7 +116,7 @@ internal static class DesktopPortStore
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(exception, "Could not persist engine readiness to {ReadyFilePath}.", path);
-            TryDelete(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
         }
     }
 
@@ -235,18 +236,6 @@ internal static class DesktopPortStore
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(exception, "Could not remove stale engine readiness file {ReadyFilePath}.", path);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; temporary files are never read.
         }
     }
 

@@ -48,7 +48,7 @@ export interface WorkSessionLiveState {
 	/**
 	 * Bumped on every `step` AND `status` push so the embedded `Chat` re-arms its re-attach for the server-side turn. A
 	 * `step` push can land before the server has registered the turn (the resume then completes empty), so the later
-	 * `status` push (Running / WaitingForInput) is the retry; re-arming while already attached is a no-op (F-30).
+	 * `status` push (Running / WaitingForInput) is the retry; re-arming while already attached is a no-op.
 	 */
 	readonly resumeNonce: number;
 	/** Polling cadence for the page's queries while the hub is down; `undefined` while it is live. */
@@ -114,7 +114,7 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 
 		// `watermark` is bumped here before the next change is read, so the sequence itself is the dedupe — a separate
 		// seen-set would only grow for the hook's life. The one exception is the attach trigger: a `step`/`status` push
-		// is honoured even with a stale seq (a re-run step can carry its ORIGINAL event's seq, F-31), without moving
+		// is honored even with a stale seq (a re-run step can carry its ORIGINAL event's seq), without moving
 		// the watermark; re-invalidating and re-arming the attach twice is harmless.
 		const apply = (change: WorkSessionChanged): void => {
 			const kind = isChangeKind(change.kind) ? change.kind : undefined;

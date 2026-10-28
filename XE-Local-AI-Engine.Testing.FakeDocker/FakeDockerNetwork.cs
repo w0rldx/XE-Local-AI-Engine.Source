@@ -23,7 +23,7 @@ public sealed class FakeDockerNetwork
 
     /// <summary>
     ///     Ids of the containers attached to this network. A real daemon refuses to remove a network that still has
-    ///     endpoints, and modelling that is what makes teardown ordering observable.
+    ///     endpoints, and modeling that is what makes teardown ordering observable.
     /// </summary>
     public ISet<string> AttachedContainerIds { get; } = new HashSet<string>(StringComparer.Ordinal);
 }

@@ -16,15 +16,15 @@ import {
 	benchmarkKvCacheTypes,
 	isUnsupportedKvCacheTypeError,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
+import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarkRunMutations";
 import {
 	useDeleteBenchmarkRun,
-	useEligibleBenchmarkModels,
 	useRejudgeBenchmarkRun,
 	useStartBenchmarkRun,
 	useStartBenchmarkRunBatch,
 	useStartBenchmarkRunFidelity,
-} from "@/features/benchmarks/queries/useBenchmarks";
+} from "@/features/benchmarks/queries/useBenchmarkRunMutations";
+import { useEligibleBenchmarkModels } from "@/features/benchmarks/queries/useBenchmarks";
 
 const autoKvCacheType = "auto";
 

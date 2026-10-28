@@ -90,7 +90,7 @@ const runtimePhaseLoadingModel = "loading_model";
 const runtimePhaseGenerating = "generating";
 
 // Events that are no sign the park ended. A resume replays the prompt BEFORE its snapshot and current phase, and a
-// thinking model emits a trailing reasoning-only delta ("\n") right after the request (V-04). A cold load disarms the
+// thinking model emits a trailing reasoning-only delta ("\n") right after the request. A cold load disarms the
 // park, so a stalled load after the answer is still watched on its own deadline.
 function keepsParkArmed(event: NodeChatStreamEventDto): boolean {
 	switch (event.type) {

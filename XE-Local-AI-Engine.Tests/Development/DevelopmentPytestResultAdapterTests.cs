@@ -230,7 +230,7 @@ public sealed class DevelopmentPytestResultAdapterTests
     /// </summary>
     /// <remarks>
     ///     Two causes, both measured: the report JSON escapes <c>'</c> as <c>\u0027</c>, so a quoted path met the path redaction behind a
-    ///     <c>7</c> and survived whole (live round 6); and a redacted path keeps its last two segments, so a hash-named one (Nix) kept a
+    ///     <c>7</c> and survived whole; and a redacted path keeps its last two segments, so a hash-named one (Nix) kept a
     ///     high-entropy run. Either way the scanner's entropy rule rejected the whole report.
     /// </remarks>
     [Test]

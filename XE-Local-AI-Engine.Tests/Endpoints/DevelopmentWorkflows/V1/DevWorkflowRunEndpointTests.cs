@@ -303,7 +303,7 @@ public sealed class DevWorkflowRunEndpointTests
     /// <summary>
     ///     The fan-out's identity and size are the SERVER's answer: the group is the decompose node run that produced
     ///     it, and the count is taken over the run's whole node-run list. A client counting the rows it drew is wrong by
-    ///     construction past the render cap, which is the bug this replaces.
+    ///     construction past the render cap.
     ///     <para>
     ///         The template here is a TWO-node subtree cloned twice, which is the shape that catches the counting
     ///         mistake: four clone ROWS, two CHILDREN, and a <c>materializationIndex</c> that only ever counts children.
@@ -712,7 +712,7 @@ public sealed class DevWorkflowRunEndpointTests
 
     /// <summary>
     ///     The parseable-but-partial case, which the unreadable one above does not cover. A document that omits a list
-    ///     deserialises it as null, and the generated client validates the response with zod, whose <c>.optional()</c>
+    ///     deserializes it as null, and the generated client validates the response with zod, whose <c>.optional()</c>
     ///     accepts a missing member and rejects a null one — so an absent list has to reach the wire as an empty array
     ///     or one hand-edited column costs the whole drill-down. Same for a null element inside the tool names.
     /// </summary>
@@ -1289,7 +1289,7 @@ public sealed class DevWorkflowRunEndpointTests
     }
 
     /// <summary>
-    ///     FU2-3: an operator's Retry widens the node run's own cap, so the raw pair on the row reads "attempt 4 of 4"
+    ///     An operator's Retry widens the node run's own cap, so the raw pair on the row reads "attempt 4 of 4"
     ///     for a node whose definition allows three. The count of retries ships beside it, and the cap the definition
     ///     declared is the subtraction — otherwise the badge either quotes a budget nobody set or reports the runtime
     ///     breaking one.

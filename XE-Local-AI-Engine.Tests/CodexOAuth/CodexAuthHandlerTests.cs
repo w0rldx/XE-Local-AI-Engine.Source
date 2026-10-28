@@ -12,9 +12,9 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the <see cref="CodexAuthHandler" /> 401-retry path: a 401 triggers a single-flight
-///     refresh and exactly one retry, and — because a sent <see cref="HttpRequestMessage" /> cannot be resent — the
-///     retry goes on a fresh CLONE of the request carrying the original (buffered) content and the refreshed bearer.
+///     Covers the <see cref="CodexAuthHandler" /> 401-retry path: a 401 triggers a single-flight refresh and exactly
+///     one retry, and, because a sent <see cref="HttpRequestMessage" /> cannot be resent, the retry goes on a fresh
+///     CLONE carrying the original buffered content and the refreshed bearer.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CodexAuthHandlerTests

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Caching.Memory;
 /// </summary>
 /// <remarks>
 ///     A single-entry, no-TTL cache: node settings are read often and change only via an operator <c>SaveAsync</c>, and the inner file store
-///     keeps its semaphore + 0600-perms behaviour. A write only INVALIDATES the entry, never publishes its own value, and a LOAD publishes only
+///     keeps its semaphore + 0600-perms behavior. A write only INVALIDATES the entry, never publishes its own value, and a LOAD publishes only
 ///     under a <c>_writeVersion</c> guard — both because a value published across a concurrent write would then be permanently stale.
 ///     Why each rule is the order-insensitive one: docs/wiki/08-data-and-persistence.md ("Reading: the cache, and the synchronous twins").
 /// </remarks>

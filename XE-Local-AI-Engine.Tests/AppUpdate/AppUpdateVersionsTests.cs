@@ -53,7 +53,7 @@ public sealed class AppUpdateVersionsTests
     [Test]
     public void IsHigher_ASnapshotStampedOutsideTheDevelopmentScheme_LosesToEveryDevelopmentBuild()
     {
-        // The tester round's scheme: SemVer ranks the alphanumeric "dev" above any number, so an older Development build
+        // A snapshot off the scheme: SemVer ranks the alphanumeric "dev" above any number, so an older Development build
         // outranks a newer snapshot and the update check offers a downgrade.
         AssertEx.True(AppUpdateVersions.IsHigher("1.0.0-rc.2.dev.20261001.1", "1.0.0-rc.2.20261008.1"));
         AssertEx.False(AppUpdateVersions.IsHigher("1.0.0-rc.2.20261008.1", "1.0.0-rc.2.dev.20261001.1"));

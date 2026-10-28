@@ -19,7 +19,7 @@ public sealed class ExternalAppEventPublisherTests
 {
     /// <summary>
     ///     Asserted against the literals, not against <c>kind.ToString()</c>: the client switches on these strings, so
-    ///     a capitalised name would match no arm and silently stop updating the view, and nothing else would catch it.
+    ///     a capitalized name would match no arm and silently stop updating the view, and nothing else would catch it.
     /// </summary>
     [Test]
     [Arguments(ExternalAppInstanceEventKind.Installed, "installed")]

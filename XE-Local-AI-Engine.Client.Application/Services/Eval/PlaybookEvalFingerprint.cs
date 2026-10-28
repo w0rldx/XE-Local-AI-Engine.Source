@@ -5,7 +5,7 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Computes a stable fingerprint over every behaviour-affecting input of a playbook eval run, so a recorded pass
+///     Computes a stable fingerprint over every behavior-affecting input of a playbook eval run, so a recorded pass
 ///     authorizes promotion only while those inputs are unchanged.
 /// </summary>
 /// <remarks>

@@ -5,10 +5,9 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the runtime-bundle identity byte stream. The hash is a member of every persisted launch-policy
-///     fingerprint, so a change here silently invalidates every frozen inference profile — the literal below is an
-///     independent restatement of the documented framing (int32-LE name length, UTF-8 name, int64-LE file length, content hash),
-///     over the bundle files in ordinal name order.
+///     The runtime-bundle hash is in every launch-policy fingerprint, so a change invalidates every frozen
+///     profile; the literal restates the framing (int32-LE name length, UTF-8 name, int64-LE length, content hash),
+///     names in ordinal order.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class RuntimeBundleIdentityCalculatorTests

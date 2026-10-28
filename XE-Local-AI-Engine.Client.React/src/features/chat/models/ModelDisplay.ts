@@ -32,13 +32,13 @@ const QUANT_SUFFIX = /[:_-](IQ\d+[A-Z0-9_]*|Q\d+[A-Z0-9_]*|MXFP\d+[A-Z0-9_]*|BF1
 const REPO_KIND_SUFFIX = /-GGUF$/i;
 
 // Characters, not pixels: the trigger and the option rows both clamp with CSS, so this only has to stop a
-// pathologically long id from pushing the ellipsis past the point where the name is still recognisable.
+// pathologically long id from pushing the ellipsis past the point where the name is still recognizable.
 const MAX_PRIMARY_LENGTH = 30;
 
-// Cloud providers as the catalog tags them, in the spelling an operator would recognise.
+// Cloud providers as the catalog tags them, in the spelling an operator would recognize.
 const PROVIDER_LABELS: Record<string, string> = {
 	CodexOAuth: "OpenAI Codex",
-	AzureFoundry: "Azure Foundry",
+	AzureFoundry: "Azure AI Foundry",
 };
 
 /**

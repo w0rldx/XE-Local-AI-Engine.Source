@@ -73,8 +73,8 @@ public sealed class ProviderCallBudgeterTests
     }
 
     /// <summary>
-    ///     Model-matrix D2: three tool rounds pushed the user's message out of the recent window and it was dropped (llama-server:
-    ///     "No user query found"). It is irreducible; the round is flagged over the window instead.
+    ///     Three tool rounds can push the user's message out of the recent window, and dropping it fails the request
+    ///     (llama-server: "No user query found"). It is irreducible; the round is flagged over the window instead.
     /// </summary>
     [Test]
     public void Budget_NeverDropsTheUsersCurrentMessage_AndFlagsTheRoundWhenOnlyDroppingItWouldFit()
@@ -217,7 +217,7 @@ public sealed class ProviderCallBudgeterTests
     }
 
     /// <summary>
-    ///     Model-matrix 4,096 window: round 2 overshot only because round 1's reasoning was still counted. Everything here sits in the
+    ///     In a 4,096 window round 2 overshoots only when round 1's reasoning is still counted. Everything here sits in the
     ///     recent window, so no drop can help; stripping the superseded reasoning does.
     /// </summary>
     [Test]

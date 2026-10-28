@@ -83,7 +83,7 @@ describe("downsampleToInt16", () => {
 
 		downsampleToInt16(input, 1.5, 0, out, 0);
 
-		// The second output reads at 1.5, half a sample past the end; the lower neighbour is held.
+		// The second output reads at 1.5, half a sample past the end; the lower neighbor is held.
 		expect(out[1]).toBe(Math.round(Math.fround(0.5) * 32767));
 	});
 });

@@ -8,14 +8,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the two no-ops the composition root substitutes when the OPTIONAL Ollama runtime is gated off, and the
-///     gate-off host that needs them. <c>AddOllamaLocalModelProvider</c> holds the only real
-///     <c>IModelCapabilityClient</c> and <c>IOllamaApiClient</c> registrations, so opting out used to leave
-///     <see cref="ModelCapabilityProber" /> and <c>OllamaModelService</c> unactivatable. The host test here runs on the
-///     fixture, which fakes an <c>IOllamaApiClient</c> unconditionally; the production-shape assertion lives in
-///     <c>ServiceProviderValidationTests.CompositionRoot_WithTheOllamaRuntimeGateOff_BuildsWithScopeAndBuildValidationEnabled</c>.
-///     Each test owns its host because the gate is a host-build-time configuration value a shared factory cannot vary.
+///     Pins the no-ops the composition root substitutes when the OPTIONAL Ollama runtime is gated off, without which
+///     <see cref="ModelCapabilityProber" /> and <c>OllamaModelService</c> are unactivatable, and the gate-off host.
 /// </summary>
+/// <remarks><c>AddOllamaLocalModelProvider</c> holds the only real <c>IModelCapabilityClient</c> and
+///     <c>IOllamaApiClient</c> registrations. The fixture fakes an <c>IOllamaApiClient</c>; the production shape is in
+///     <c>ServiceProviderValidationTests.CompositionRoot_WithTheOllamaRuntimeGateOff_BuildsWithScopeAndBuildValidationEnabled</c>.
+///     Each test owns its host because the gate is a host-build-time value a shared factory cannot vary.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class OllamaRuntimeGateStartupTests
 {
@@ -31,7 +30,7 @@ public sealed class OllamaRuntimeGateStartupTests
         };
 
         // Resolving the reporter forces the container to activate the prober, which is where the missing
-        // IModelCapabilityClient used to surface as a host-build failure.
+        // IModelCapabilityClient would surface as a host-build failure.
         var reporter = factory.Services.GetRequiredService<ICapabilityReporter>();
 
         AssertEx.False(await reporter.VerifyOllamaAndModelAsync(modelName: null, CancellationToken.None),

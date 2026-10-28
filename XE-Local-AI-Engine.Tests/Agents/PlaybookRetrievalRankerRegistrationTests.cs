@@ -13,12 +13,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// AddServices builds the full service graph with ValidateOnBuild, which eagerly constructs NodeOperatorSecretProvider and
-// so resolves the operator secret. That secret is read process-env-first (XE_NODE_SQLITE_KEY) before configuration, so
-// this class shares the same process-global resource as DesktopBootstrapTests and the CUDA env-scrub test. The shared
-// NotInParallel key serializes them so a concurrent env mutation can neither remove the key this test supplies nor leak an
-// invalid one into it; the key itself is provided via in-memory configuration below rather than by mutating the process
-// environment, so this class only reads the resource and never poisons a sibling.
+// ValidateOnBuild resolves the operator secret, read process-env-first (XE_NODE_SQLITE_KEY), so this class shares that
+// resource with DesktopBootstrapTests and the CUDA env-scrub test; the NotInParallel key keeps their env mutations out.
 [NotInParallel("XE_NODE_SQLITE_KEY")]
 [Category(TestCategories.Integration)]
 public sealed class PlaybookRetrievalRankerRegistrationTests : IDisposable

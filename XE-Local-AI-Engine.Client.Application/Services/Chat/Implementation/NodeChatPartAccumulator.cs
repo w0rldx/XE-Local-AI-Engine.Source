@@ -157,7 +157,7 @@ public sealed class NodeChatPartAccumulator
         lock (_syncRoot)
         {
             // A per-message ceiling on top of the per-image cap: many small images must not grow one metadata row without
-            // bound (Codex review 2026-09-30). Beyond it the card keeps only the placeholder text.
+            // bound. Beyond it the card keeps only the placeholder text.
             if (_imageParts >= MaxToolImagesPerMessage || _imageBytes + dataUri.Length > MaxToolImageBytesPerMessage)
             {
                 return false;
@@ -212,7 +212,7 @@ public sealed class NodeChatPartAccumulator
     /// </summary>
     /// <remarks>
     ///     A turn that ended right after a tool call has no answer text; it keeps the whole text as its content and
-    ///     <see cref="Snapshot" /> emits no text part, exactly as before the split existed.
+    ///     <see cref="Snapshot" /> emits no text part.
     /// </remarks>
     public string FinalSegment(string content)
     {

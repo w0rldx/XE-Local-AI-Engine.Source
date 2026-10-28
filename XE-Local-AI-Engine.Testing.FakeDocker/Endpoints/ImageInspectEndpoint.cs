@@ -6,11 +6,11 @@ using Microsoft.AspNetCore.Http;
 /// <summary>
 ///     <c>GET /images/{reference}/json</c>. The reference is a catch-all segment because a registry-qualified one
 ///     carries slashes of its own (<c>ghcr.io/owner/name@sha256:…</c>), which a single-segment route would split.
-///     <para>
-///         The client reads nothing out of a successful response: the whole answer is present-or-404, and the 404 is
-///         what Docker.DotNet turns into the <c>DockerImageNotFoundException</c> it catches.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The client reads nothing out of a successful response: the whole answer is present-or-404, and the 404 is
+///     what Docker.DotNet turns into the <c>DockerImageNotFoundException</c> it catches.
+/// </remarks>
 internal static class ImageInspectEndpoint
 {
     private const string InspectSuffix = "/json";

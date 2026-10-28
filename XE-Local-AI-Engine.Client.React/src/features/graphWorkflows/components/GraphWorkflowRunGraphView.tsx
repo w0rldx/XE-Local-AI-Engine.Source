@@ -78,7 +78,7 @@ function cx(...values: Array<string | false | undefined>): string {
 }
 
 /**
- * ONE read-only card for all eight kinds. Deliberately not Lane D1's editor card: this one has no editing affordance to
+ * ONE read-only card for all eight kinds. Deliberately not the editor's card: this one has no editing affordance to
  * suppress and no issue ring to draw, and importing the editor's would couple the run view to the editor's props.
  *
  * The canvas is a pointer surface; `GraphWorkflowNodeRunTable` stays the keyboard and screen-reader path through a run,

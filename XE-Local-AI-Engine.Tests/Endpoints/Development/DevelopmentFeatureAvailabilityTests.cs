@@ -74,11 +74,10 @@ public sealed class DevelopmentFeatureAvailabilityTests
     }
 
     /// <summary>
-    ///     Development Mode's endpoints are kept out of FastEndpoints DISCOVERY when the feature is off (the
-    ///     <c>EndpointDiscoveryOptions.Filter</c> in <c>ConfigureServices</c>), which is what lets them inject their
-    ///     services through a constructor. This pins that the exclusion is per host: a node that booted with the
-    ///     feature off must not leave a process-wide discovery cache behind that strips the routes from the next host.
+    ///     The Development endpoints' exclusion from FastEndpoints DISCOVERY (feature off) is per host: a node booted
+    ///     with it off must not leave a process-wide discovery cache that strips the routes from the next host.
     /// </summary>
+    /// <remarks>That exclusion (<c>EndpointDiscoveryOptions.Filter</c>) enables constructor injection.</remarks>
     [Test]
     public async Task ListProjects_AfterAHostWithDevelopmentModeDisabled_IsStillRoutedByAnEnabledHost()
     {

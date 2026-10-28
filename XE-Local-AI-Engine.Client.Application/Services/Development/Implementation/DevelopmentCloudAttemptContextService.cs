@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 internal sealed class DevelopmentCloudAttemptContextService : IDevelopmentCloudAttemptContextService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentArtifactBlobStore _blobStore;
     private readonly IDevelopmentCloudContextBuilder _contextBuilder;

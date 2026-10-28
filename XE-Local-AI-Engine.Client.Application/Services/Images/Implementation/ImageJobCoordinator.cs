@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>
-///     Default <see cref="IImageJobCoordinator" />, modelled on the GGUF download coordinator: a per-job in-flight
+///     Default <see cref="IImageJobCoordinator" />, modeled on the GGUF download coordinator: a per-job in-flight
 ///     <see cref="CancellationTokenSource" /> registry, throttled progress push, detached run tasks, and generation
 ///     serialized through a single-slot <see cref="SemaphoreSlim" />.
 /// </summary>
@@ -269,7 +269,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         try
         {
             // Explicitly not propagating: this is the shutdown drain itself, so cancelling it is exactly what must
-            // not happen — the per-job tokens in _inFlight were already signalled by CancelAllInFlight above.
+            // not happen — the per-job tokens in _inFlight were already signaled by CancelAllInFlight above.
             await Task.WhenAll(_runTasks.Values.ToArray()).WaitAsync(ShutdownDrainTimeout, CancellationToken.None);
         }
         catch (TimeoutException)

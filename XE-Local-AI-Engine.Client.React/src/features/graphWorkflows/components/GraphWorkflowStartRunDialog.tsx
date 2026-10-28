@@ -24,7 +24,7 @@ export interface GraphWorkflowStartRunDialogProps {
 /**
  * Starting a run. Two things here are load-bearing rather than decoration.
  *
- * The `requestId` is minted ONCE per dialog open and reused across every retry, which is the whole of D7's
+ * The `requestId` is minted ONCE per dialog open and reused across every retry, which is the whole of the run's
  * idempotency: a resend after a dropped response returns the run that already started instead of starting a second
  * one. The body is only mounted while the dialog is open, so a new open is a new mount and therefore a new id.
  *

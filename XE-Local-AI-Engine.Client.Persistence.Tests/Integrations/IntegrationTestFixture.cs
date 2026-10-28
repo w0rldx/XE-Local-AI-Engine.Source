@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     One throwaway on-disk SQLite database per test, with both encryption interceptors wired, so a round trip through
-///     a fresh context proves the encrypt/decrypt path rather than the change tracker's in-memory plaintext. Shaped on
+///     One throwaway on-disk SQLite database per test, with both encryption interceptors wired, so a fresh-context
+///     round trip proves the encrypt/decrypt path rather than the change tracker's plaintext. Shaped on
 ///     <c>DevWorkflowTestFixture</c>.
 /// </summary>
 /// <remarks>

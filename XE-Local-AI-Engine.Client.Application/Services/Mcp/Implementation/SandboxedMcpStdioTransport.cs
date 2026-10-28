@@ -151,8 +151,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
         _nodeOptions = (nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions))).Value;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-        // Every transport instance owns a jail nobody else can attach to: the shared session's replacement used to reuse the
-        // retiring jail's identity while teardown was still running, and the old kill then hit the replacement (Codex 2026-09-30).
+        // Every transport instance owns a jail nobody else can attach to: a replacement that reused the retiring
+        // jail's identity while teardown still runs would be hit by the old kill.
         _sessionIdentity = RuntimeProfile + "-" + record.Id.ToString("N") + (string.IsNullOrEmpty(sessionKey) ? string.Empty : "-" + sessionKey)
                            + "-" + Interlocked.Increment(ref _instanceCounter).ToString(CultureInfo.InvariantCulture);
     }
@@ -655,7 +655,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 ManifestVersion = SandboxGeneration
             },
             RuntimeProfile = RuntimeProfile,
-            // Unconditional: ConnectAsync already refused the connection if this provider cannot honour it. Unlike a
+            // Unconditional: ConnectAsync already refused the connection if this provider cannot honor it. Unlike a
             // resource ceiling this is not a preference a provider may quietly drop.
             Isolation = SandboxIsolationMode.Filesystem,
             ReadOnlyTrees = readOnlyTrees,
@@ -851,7 +851,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         /// </summary>
         private static readonly Dictionary<uint, string> ExitCodeHints = new()
         {
-            // STATUS_DLL_INIT_FAILED: a DLL's initialiser failed in the loader.
+            // STATUS_DLL_INIT_FAILED: a DLL's initializer failed in the loader.
             [0xC0000142] = "0xC0000142 means a DLL failed to initialise while the process started: under the sandbox this is usually "
                            + "a library in a folder the sandbox cannot read, or a program that needs a desktop session; "
                            + "move the server under Program Files or a folder the sandbox is granted.",

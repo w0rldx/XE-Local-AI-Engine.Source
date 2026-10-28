@@ -170,7 +170,7 @@ public sealed class ContainerRuntimeWireMappingTests
         var afterInterval = aggregator.Report(Layer("a", "Downloading", current: 3, total: 100));
 
         // The daemon emits hundreds of messages a second and the caller relays each report over a hub, so the
-        // throttle is what stops a pull spending itself on serialising status text.
+        // throttle is what stops a pull spending itself on serializing status text.
         AssertEx.NotNull(first);
         AssertEx.Null(throttled);
         AssertEx.NotNull(afterInterval);

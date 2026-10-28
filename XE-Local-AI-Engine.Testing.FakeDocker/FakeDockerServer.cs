@@ -11,17 +11,13 @@ using XE_Local_AI_Engine.Testing.FakeDocker.Endpoints;
 /// <summary>
 ///     An in-memory Docker Engine API server: the subset of routes <c>DockerDotNetRuntimeClient</c> calls, served
 ///     over loopback HTTP so a test can exercise the real wire client end to end without a daemon.
-///     <para>
-///         Loopback TCP rather than a Unix socket is enough on purpose. The <c>unix</c>/<c>npipe</c> restriction is a
-///         policy in <c>ContainerRuntimeResolver</c>, not in the wire client, and every test that builds the client
-///         directly bypasses it — so the fake can be exactly the shape <c>FakeOllamaServer</c> already is.
-///     </para>
-///     <para>
-///         One server per test, disposed with the test. A shared instance would carry a container another test
-///         created into the next one's label filter, and the reset API that would need is more machinery than a
-///         Kestrel start on a dynamic loopback port costs.
-///     </para>
 /// </summary>
+/// <remarks>
+///     Loopback TCP is enough: the <c>unix</c>/<c>npipe</c> restriction is policy in <c>ContainerRuntimeResolver</c>,
+///     which a test building the client directly bypasses, so the fake mirrors <c>FakeOllamaServer</c>. One server per
+///     test: a shared instance would leak a container into the next test's label filter, and a reset API costs more
+///     than a Kestrel start on a dynamic loopback port.
+/// </remarks>
 public sealed class FakeDockerServer : IAsyncDisposable
 {
     [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded", Justification = "The fake test server must bind to loopback on a dynamic port.")]

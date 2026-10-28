@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
-///     In-memory <see cref="IModelFitSnapshotStore" /> for refresh tests. Mirrors the production store's
-///     contract: assigns ids/timestamps on create, stamps terminal fields, and enforces the single-latest-successful
-///     invariant per <c>(operation, use_case, provider_name, model_name)</c> key on a Succeeded terminal transition.
-///     It exposes the stored rows so tests can assert status / raw / diagnostics / latest-successful without decryption.
+///     In-memory <see cref="IModelFitSnapshotStore" /> mirroring the production contract: ids and timestamps on create,
+///     terminal fields stamped, one latest-successful row per <c>(operation, use_case, provider_name, model_name)</c>.
+///     Rows are exposed so tests assert them without decryption.
 /// </summary>
 internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
 {

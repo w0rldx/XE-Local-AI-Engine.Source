@@ -10,9 +10,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Wire payloads and helpers shared by the integration admin endpoint suites. Request bodies are anonymous objects
-///     rather than the DTO records on purpose: these suites assert the HTTP contract the generated SDK actually sends,
-///     so a rename on a DTO surfaces as a failing request here.
+///     Wire payloads and helpers shared by the integration admin endpoint suites. Bodies are anonymous objects, not the
+///     DTO records, so the suites pin the HTTP contract the generated SDK sends and a DTO rename fails here.
 /// </summary>
 internal static class IntegrationEndpointPayloads
 {

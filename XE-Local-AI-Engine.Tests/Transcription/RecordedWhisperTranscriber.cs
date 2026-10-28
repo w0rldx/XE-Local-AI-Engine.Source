@@ -52,7 +52,7 @@ internal sealed record GoldenFixture
 
     public required string VadModel { get; init; }
 
-    /// <summary>Digest of the VAD weights the recording ran under; the golden test pins it to the catalogue's.</summary>
+    /// <summary>Digest of the VAD weights the recording ran under; the golden test pins it to the catalog's.</summary>
     public required string VadSha256 { get; init; }
 
     public required int MaxWindowSeconds { get; init; }
@@ -73,16 +73,10 @@ internal sealed record GoldenFixture
 ///     Replays a recorded run of the real runtime, window by window, as an <see cref="IWhisperTranscriber" />.
 /// </summary>
 /// <remarks>
-///     <para>
-///         A hand-written fake, which is the last rung of the repository's mock order, and the reason is that the
-///         three rungs above it cannot express this. The real thing is a subprocess, there is no repository fake seam
-///         for whisper, and a substitute would need a call handler that answers <em>this</em> window with <em>that</em>
-///         recorded response and fails loudly on an unknown one — which is this class, written inside a lambda.
-///     </para>
-///     <para>
-///         It never invents a response. An unmatched window throws, naming both ranges, because a fake that returned
-///         an empty result on a miss would let a changed segmenter pass a golden test in silence.
-///     </para>
+///     A hand-written fake, the last rung of the mock order, because the rungs above cannot express this: the real
+///     thing is a subprocess, whisper has no repository fake seam, and a substitute would need a handler answering
+///     <em>this</em> window with <em>that</em> recorded response, failing loudly otherwise, which is this class. An
+///     unmatched window throws, naming both ranges, so a changed segmenter cannot pass a golden test in silence.
 /// </remarks>
 internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
 {

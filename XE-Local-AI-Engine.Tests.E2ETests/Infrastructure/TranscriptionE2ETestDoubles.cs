@@ -116,7 +116,7 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
             return Rejected(durationSeconds);
         }
 
-        // Too short to judge: neither accepted nor signalled, so the next tick's longer window decides.
+        // Too short to judge: neither accepted nor signaled, so the next tick's longer window decides.
         if (envelope.Length < MinimumBlocksForAVerdict)
         {
             return Rejected(durationSeconds);

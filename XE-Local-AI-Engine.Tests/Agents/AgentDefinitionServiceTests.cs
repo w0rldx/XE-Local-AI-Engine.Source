@@ -178,7 +178,7 @@ public sealed class AgentDefinitionServiceTests
             "agent names must resolve by exact ordinal match.");
     }
 
-    // Q5 / I-D6: names are not unique, and the first match used to win silently.
+    // Names are not unique, so a shared name is refused rather than silently taking the first match.
     [Test]
     public async Task GetByKeyAsync_WithSharedName_ThrowsAmbiguousName()
     {

@@ -19,7 +19,7 @@ const { useToolCatalogMock, useSkillsMock } = vi.hoisted(() => ({
 	useSkillsMock: vi.fn(),
 }));
 
-vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+vi.mock("@/core/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: useToolCatalogMock,
 }));
 
@@ -29,9 +29,9 @@ vi.mock("@/features/skills/queries/useSkills", () => ({
 	useSkills: useSkillsMock,
 }));
 
+import type { AgentDefinition, AgentDefinitionFormValues } from "@/core/agents/models/AgentDefinitionModels";
+import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 import { AgentDefinitionForm, type AgentDefinitionFormHandle } from "@/features/agents/components/AgentDefinitionForm";
-import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
-import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 import { localApiPath } from "@/test/msw/Handlers";
 import { createTestQueryClient } from "@/test/RenderWithProviders";

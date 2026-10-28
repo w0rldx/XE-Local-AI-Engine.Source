@@ -193,7 +193,7 @@ public sealed class DevWorkflowStateMachineTests
 
     /// <summary>
     ///     The other half of the same rule, and the reason it is read off the graph rather than off the row: a skip
-    ///     BELOW something that failed is the failure travelling, not a decision, and it must kill the join exactly as
+    ///     BELOW something that failed is the failure traveling, not a decision, and it must kill the join exactly as
     ///     it always has.
     /// </summary>
     [Test]
@@ -262,7 +262,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     Where a waived skip stops travelling. The join carries the surviving branch, so the tail behind it runs —
+    ///     Where a waived skip stops traveling. The join carries the surviving branch, so the tail behind it runs —
     ///     which is the whole of what the live finding lost.
     /// </summary>
     [Test]
@@ -808,7 +808,7 @@ public sealed class DevWorkflowStateMachineTests
     /// <summary>
     ///     One recomputation over a chain <c>node-0 -> node-1 -> ...</c> as long as the statuses named, so the LAST of
     ///     them is the graph's one terminal node. The completion rule reads completion off a terminal node, so a graph
-    ///     is no longer optional here: a helper that invented anonymous rows with no edges cannot ask the question.
+    ///     is required here: a helper that invented anonymous rows with no edges cannot ask the question.
     /// </summary>
     private static DevWorkflowRunStatus Recompute(DevWorkflowRunStatus current, params DevWorkflowNodeRunStatus[] nodeRuns) =>
         DevWorkflowStateMachine.Recompute(current, Chain(nodeRuns.Length), [.. nodeRuns.Select((status, index) => NodeRun($"node-{index}", status))]).Status;

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     The on-disk shape of one installed application instance, and the only code that creates, materialises or
+///     The on-disk shape of one installed application instance, and the only code that creates, materializes or
 ///     deletes anything under it.
 /// </summary>
 /// <remarks>
@@ -63,7 +63,7 @@ internal sealed class ExternalAppStorageLayout
     }
 
     /// <summary>
-    ///     Creates every directory the manifest's services need and materialises their <c>files[]</c>, then returns
+    ///     Creates every directory the manifest's services need and materializes their <c>files[]</c>, then returns
     ///     the paths a deployment plan binds.
     /// </summary>
     /// <remarks>
@@ -289,7 +289,8 @@ internal sealed class ExternalAppStorageLayout
         }
         finally
         {
-            TryDeleteTempFile(temporary);
+            // The rename usually consumed it already.
+            BestEffortFile.TryDeleteFile(temporary);
         }
 
         if (!string.Equals(await HashFileAsync(target, cancellationToken), expected, StringComparison.Ordinal))
@@ -328,25 +329,11 @@ internal sealed class ExternalAppStorageLayout
         throw new ExternalAppStorageException($"No temporary file name was free for '{target}' after {MaxTempAttempts.ToString(CultureInfo.InvariantCulture)} attempts.");
     }
 
-    private static void TryDeleteTempFile(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The rename consumed it, or the directory is gone with it. Either way there is nothing to clean up and
-            // nothing a caller could do about it.
-        }
-    }
-
     private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
         try
         {
-            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
+            return await FileSha256.ComputeAsync(path, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

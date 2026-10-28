@@ -7,11 +7,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// Asserts the observability instruments are published on the shared "XE.Node" meter and carry their documented,
-// bounded tags. A wrong meter name or a dropped tag would silently strip the signal from the exporter; capturing through
-// a real MeterListener (the same surface OpenTelemetry attaches) catches that. Serial so a sibling test's node-meter
-// emission cannot bleed into a capture window.
-[NotInParallel]
+// Asserts the instruments publish on the shared "XE.Node" meter with their documented, bounded tags, captured through
+// a real MeterListener (OpenTelemetry's own surface): a wrong meter name or dropped tag silently loses the signal.
+[NotInParallel] // Serial so a sibling test's node-meter emission cannot bleed into a capture window.
 [Category(TestCategories.Unit)]
 public sealed class NodeMetricsInstrumentPublicationTests
 {

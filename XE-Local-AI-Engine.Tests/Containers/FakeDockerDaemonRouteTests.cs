@@ -8,12 +8,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The production wire client against the fake daemon's identity and image routes.
-///     <para>
-///         These run the real <c>DockerDotNetRuntimeClient</c> over a real socket, so what they prove is the round
-///         trip: the request it builds, the JSON the daemon answers with, and the mapping back. A test that called
-///         the mapping directly would prove the mapping and nothing about the wire it is reached over.
-///     </para>
 /// </summary>
+/// <remarks>
+///     These run the real <c>DockerDotNetRuntimeClient</c> over a real socket, so what they prove is the round trip:
+///     the request it builds, the JSON the daemon answers with, and the mapping back. A test that called the mapping
+///     directly would prove the mapping and nothing about the wire it is reached over.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class FakeDockerDaemonRouteTests
 {

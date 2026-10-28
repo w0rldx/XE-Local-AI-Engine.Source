@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.ClientModel;
 using System.ClientModel.Primitives;
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OpenAI;
@@ -42,7 +40,7 @@ public sealed class DeferredLlamaServerStructuredOutputTests
 {
     // The schema an author actually writes: tight value bounds, all of them well inside
     // LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound, and one property (`notes`) deliberately left out
-    // of `required`. Every one of these is something the strict transform used to destroy.
+    // of `required`. Every one of these is something a strict transform would destroy.
     private const string AuthoredSchema =
         """
         {"type":"object","properties":{
@@ -78,8 +76,8 @@ public sealed class DeferredLlamaServerStructuredOutputTests
     }
 
     /// <summary>
-    ///     The whole point of the passthrough: the bounds the transform used to relocate arrive intact, the optional
-    ///     property is still optional, and nothing was closed or annotated on the way out.
+    ///     The whole point of the passthrough: the bounds a strict transform would relocate arrive intact, the optional
+    ///     property is still optional, and nothing is closed or annotated on the way out.
     /// </summary>
     [Test]
     public async Task JsonSchemaResponseFormat_CarriesTheAuthoredKeywordsVerbatim()
@@ -236,7 +234,7 @@ public sealed class DeferredLlamaServerStructuredOutputTests
 
     private static async Task<string> CaptureAsync(ChatOptions? options, bool applyClientTransforms = true)
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -294,29 +292,5 @@ public sealed class DeferredLlamaServerStructuredOutputTests
         };
         var client = new OpenAIClient(new ApiKeyCredential("ignored"), options);
         return client.GetChatClient("test-model").AsIChatClient();
-    }
-
-    /// <summary>Captures the outbound request body and returns a canned OpenAI chat completion so no network is hit.</summary>
-    private sealed class CapturingHandler : HttpMessageHandler
-    {
-        private const string CannedCompletion =
-            "{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"test-model\","
-            + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],"
-            + "\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}";
-
-        public string? CapturedBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedCompletion, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }

@@ -157,7 +157,7 @@ describe("ComparisonCreateDialog evaluation lifecycle", () => {
 	it("treats a cancel the node answers 404 as already done, not as a failure", async () => {
 		// `CancelEvaluationEndpoint` answers 404 for an evaluation that is already terminal, and a row can be stale by
 		// the width of the asynchronous Running-cancel window. Blaming the operator for that would be a lie: the
-		// evaluation IS cancelled. The refetch is the whole remedy, and it is what makes the row tell the truth.
+		// evaluation IS canceled. The refetch is the whole remedy, and it is what makes the row tell the truth.
 		const listed = serveEvaluations(evaluationRow({ status: "Running" }));
 		server.use(problemDetailsRoute("post", `training/evaluations/${evaluationId}/cancel`, 404, { detail: "Not Found" }));
 		renderDialog();

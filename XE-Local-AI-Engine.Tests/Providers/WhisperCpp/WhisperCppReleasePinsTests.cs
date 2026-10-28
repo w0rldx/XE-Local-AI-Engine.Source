@@ -5,9 +5,8 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Brief test 1, asset-resolution half: the pinned table must pick the cuBLAS zip on an NVIDIA Windows box, the CPU
-///     zip on any other Windows box, and the Ubuntu tarball on Linux — including for a Linux CUDA request, because
-///     whisper.cpp ships no Linux CUDA prebuilt at all. Pure table lookups, so every case is exercised on any host.
+///     Asset resolution: the pinned table picks the cuBLAS zip on an NVIDIA Windows box, the CPU zip on other Windows
+///     boxes, and the Ubuntu tarball on Linux, even for a CUDA request (no Linux CUDA prebuilt exists). Pure lookups.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WhisperCppReleasePinsTests

@@ -536,7 +536,7 @@ internal sealed partial class ExternalAppService
     ///     BY LABEL, never by the name <c>xe-app-&lt;id&gt;</c>: a second installation on the same daemon generates
     ///     the same names. It never throws — a teardown that did would strand the row in a transient status — but it
     ///     does not answer with silence either: a caller that goes on to destroy the row or the storage, or to
-    ///     materialise replacements, must know the old containers are confirmed absent rather than merely asked to
+    ///     materialize replacements, must know the old containers are confirmed absent rather than merely asked to
     ///     leave, and the confirmation is a second listing after the removals.
     /// </remarks>
     /// <returns><see langword="true" /> when no container of this instance is left on the daemon.</returns>
@@ -921,7 +921,7 @@ internal sealed partial class ExternalAppService
             summary);
 
         // CancellationToken.None: this runs BECAUSE the operation was cancelled or failed, and a settling write that
-        // honoured the dead token would leave the row transient forever.
+        // honored the dead token would leave the row transient forever.
         if (await ApplyAsync(store, cursor, FailureTransition(cursor, failure.Category, summary), CancellationToken.None))
         {
             return;

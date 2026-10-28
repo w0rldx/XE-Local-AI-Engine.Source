@@ -359,7 +359,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				display = createSource("systemAudio", systemChannel(), undefined);
 				acquired.push(display);
 				displayStarted = display.start(onFrame);
-				// Parked until it is awaited below; without this a picker cancelled while `live/start` is in flight is an
+				// Parked until it is awaited below; without this a picker canceled while `live/start` is in flight is an
 				// unhandled rejection.
 				displayStarted.catch(() => undefined);
 			}
@@ -385,7 +385,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 			};
 
 			try {
-				// A3: the microphone (and its permission prompt) comes BEFORE `live/start`, so the operator answers the
+				// The microphone (and its permission prompt) comes BEFORE `live/start`, so the operator answers the
 				// prompt while the node spends its first-use minute on the runtime download and model load, not after.
 				// Its frames are dropped until `forwardingRef` is set below: audio captured while the session was
 				// still opening is discarded on purpose. No session is open yet, so a stale generation cancels nothing.
@@ -444,7 +444,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				forwardingRef.current = true;
 				setPhase("capturing");
 			} catch (startError: unknown) {
-				// Failure disposes everything: a cancelled picker must not leave a hot microphone, and a microphone that
+				// Failure disposes everything: a canceled picker must not leave a hot microphone, and a microphone that
 				// failed must not leave a screen share running. The error is reported and the acquired sources stopped
 				// without waiting for a picker that may still be open.
 				if (startGenerationRef.current !== generation) {

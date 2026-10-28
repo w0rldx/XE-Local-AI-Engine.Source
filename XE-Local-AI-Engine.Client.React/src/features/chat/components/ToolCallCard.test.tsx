@@ -6,9 +6,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 import { ToolCallCard } from "@/features/chat/components/ToolCallCard";
 import type { ChatToolPart } from "@/features/chat/models/ChatModels";
-import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
@@ -25,7 +25,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 // session-scope-eligible tool (the flag is what the card branches on, not the tool's identity); mcp__files__write_file
 // is the ineligible case; anything absent falls back to fail-closed Unknown + the pre-catalog session-button fallback.
 const { useToolCatalogMock } = vi.hoisted(() => ({ useToolCatalogMock: vi.fn() }));
-vi.mock("@/features/tools/queries/useToolCatalog", () => ({ useToolCatalog: useToolCatalogMock }));
+vi.mock("@/core/tools/queries/useToolCatalog", () => ({ useToolCatalog: useToolCatalogMock }));
 
 const chatCatalog: ToolCatalogEntry[] = [
 	{
@@ -190,7 +190,7 @@ describe("ToolCallCard", () => {
 	});
 
 	it("shows the arguments of a pending approval without the operator expanding the card", () => {
-		// F-24: the operator approves WHAT runs, so the collapsed body opens while the prompt is pending.
+		// The operator approves WHAT runs, so the collapsed body opens while the prompt is pending.
 		renderWithProviders(
 			<ToolCallCard
 				part={toolPart({
@@ -259,7 +259,7 @@ describe("ToolCallCard", () => {
 
 	it("prefers the backend per-request flag over the catalog when deciding the session button", () => {
 		// The catalog answers at tool-identity level and does not carry the MAF skill tools at all, so run_skill_script and
-		// imported skills kept offering a session scope the node never honours. The runner publishes its own answer with
+		// imported skills kept offering a session scope the node never honors. The runner publishes its own answer with
 		// the approval request, and it wins in both directions.
 		renderWithProviders(
 			<ToolCallCard

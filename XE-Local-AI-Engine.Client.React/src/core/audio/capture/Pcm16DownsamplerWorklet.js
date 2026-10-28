@@ -37,7 +37,7 @@ export function downsampleToInt16(input, ratio, cursor, out, outIndex) {
 		const left = Math.floor(readCursor);
 		const weight = readCursor - left;
 		const lower = input[left] ?? 0;
-		// The last sample of a quantum has no right-hand neighbour yet; holding it flat is a sub-sample error at a
+		// The last sample of a quantum has no right-hand neighbor yet; holding it flat is a sub-sample error at a
 		// boundary, which the mel filterbank cannot see.
 		const upper = left + 1 < input.length ? (input[left + 1] ?? 0) : lower;
 		const sample = lower + (upper - lower) * weight;
@@ -56,7 +56,7 @@ if (typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor ===
 			const targetSampleRate = processorOptions.targetSampleRate ?? 16000;
 			const frameMs = processorOptions.frameMs ?? 250;
 			// `sampleRate` is an AudioWorkletGlobalScope global carrying the context's REAL rate, whether or not the
-			// 16 kHz request was honoured. A honoured request makes this 1 and the resample a copy.
+			// 16 kHz request was honored. A honored request makes this 1 and the resample a copy.
 			this.ratio = sampleRate / targetSampleRate;
 			this.frameSamples = Math.round((targetSampleRate * frameMs) / 1000);
 			this.frame = new Int16Array(this.frameSamples);

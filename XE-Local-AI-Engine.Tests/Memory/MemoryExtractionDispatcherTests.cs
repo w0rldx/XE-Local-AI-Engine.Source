@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -106,7 +105,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     {
         var agentId = Guid.NewGuid();
         var extraction = Substitute.For<IMemoryExtractionService>();
-        // Signalled from inside the substitute the moment ExtractAsync is entered, so the assertions synchronize on the
+        // Signaled from inside the substitute the moment ExtractAsync is entered, so the assertions synchronize on the
         // actual call rather than on the exec-log row (which the worker writes BEFORE calling ExtractAsync — polling the
         // row and then asserting Received(1) races that ordering).
         var extractionEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -300,7 +299,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                   });
 
         await using var provider = await BuildProviderAsync("exec-log-deadline.sqlite", extraction);
-        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var logger = new RecordingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
             MaxConcurrentExtractions = 1,
@@ -330,8 +329,8 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     [Test]
     public async Task StopAsync_WhenTheHostTokenIsAlreadyCancelled_SaysTheHostBudgetWasSpentNotThatTheDrainExceeded()
     {
-        // Windows tester round 3 (N-20): a host whose budget was spent stopped this worker on a cancelled token, and the log
-        // claimed the drain was exceeded. The window here is a minute, so only the cancelled token can end the drain in time.
+        // A host whose budget is spent stops this worker on a cancelled token, and the log must not claim the drain
+        // was exceeded. The window here is a minute, so only the cancelled token can end the drain in time.
         var agentId = Guid.NewGuid();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var extraction = Substitute.For<IMemoryExtractionService>();
@@ -344,7 +343,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                   });
 
         await using var provider = await BuildProviderAsync("exec-log-host-budget.sqlite", extraction);
-        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var logger = new RecordingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
             MaxConcurrentExtractions = 1,
@@ -402,7 +401,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                   });
 
         await using var provider = await BuildProviderAsync("exec-log-abandon.sqlite", extraction);
-        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var logger = new RecordingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
             MaxConcurrentExtractions = 1,
@@ -478,7 +477,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                   });
 
         await using var provider = await BuildProviderAsync("exec-log-pending-slot.sqlite", extraction);
-        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var logger = new RecordingLogger<MemoryExtractionWorker>();
         var optionsAccessor = Options.Create(new MemoryExtractionOptions
         {
             MaxConcurrentExtractions = 1,

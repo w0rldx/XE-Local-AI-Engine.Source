@@ -1103,7 +1103,7 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     /// <summary>
-    ///     A substitute store holding <paramref name="current" />, wired to honour
+    ///     A substitute store holding <paramref name="current" />, wired to honor
     ///     <see cref="INodeSettingsStore.UpdateAsync" />'s contract: it runs the mutation against the record it holds
     ///     and RETURNS what it persisted, which is the record the service now hands back to its caller. NSubstitute's
     ///     own auto-value for that call is a null record, which no real store may return.

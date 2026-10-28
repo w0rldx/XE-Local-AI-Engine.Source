@@ -156,7 +156,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.getByTestId("dev-workflow-node-session-purged")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-node-session-link")).toBeNull();
 		// And nothing mounts against the dead conversation id: an empty chat pane is indistinguishable from a session
-		// that has simply not spoken yet, which is explicitly rejected behaviour.
+		// that has simply not spoken yet, which is explicitly rejected behavior.
 		expect(screen.queryByTestId("embedded-chat")).toBeNull();
 		expect(hubMock.acquire).not.toHaveBeenCalled();
 	});
@@ -692,7 +692,7 @@ describe("DevWorkflowNodePanel", () => {
 
 		expect(screen.getByTestId("dev-workflow-node-branch-taken-ship")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-node-branch-taken-fix")).toBeNull();
-		// A run cancelled before a branch ran did not choose that branch either.
+		// A run canceled before a branch ran did not choose that branch either.
 		expect(screen.queryByTestId("dev-workflow-node-branch-taken-audit")).toBeNull();
 	});
 

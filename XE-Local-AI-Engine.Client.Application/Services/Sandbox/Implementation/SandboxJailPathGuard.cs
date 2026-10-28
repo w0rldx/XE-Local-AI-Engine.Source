@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>The process sandbox's path-safety guards, gathered so the security invariant is one file to audit.</summary>
 /// <remarks>
@@ -42,22 +43,12 @@ internal static class SandboxJailPathGuard
         var combined = Path.Combine(jailRoot, relative);
         var canonical = Path.GetFullPath(combined);
 
-        if (!IsUnderJailRoot(jailRoot, canonical))
+        if (!PathContainment.IsRootOrUnderCanonical(canonical, jailRoot))
         {
             throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' escapes the jail and is rejected.");
         }
 
         return canonical;
-    }
-
-    private static bool IsUnderJailRoot(string jailRoot, string canonicalPath)
-    {
-        var jailPrefix = jailRoot.EndsWith(Path.DirectorySeparatorChar)
-            ? jailRoot
-            : jailRoot + Path.DirectorySeparatorChar;
-
-        return string.Equals(canonicalPath, jailRoot, StringComparison.Ordinal)
-               || canonicalPath.StartsWith(jailPrefix, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -80,7 +71,7 @@ internal static class SandboxJailPathGuard
         {
             // A component above the jail root means the path escaped (defense in depth; ResolveJailPath already
             // rejected escapes, but never walk past the trusted boundary).
-            if (!IsUnderJailRoot(jailRootFull, current))
+            if (!PathContainment.IsRootOrUnderCanonical(current, jailRootFull))
             {
                 throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' escapes the jail and is rejected.");
             }

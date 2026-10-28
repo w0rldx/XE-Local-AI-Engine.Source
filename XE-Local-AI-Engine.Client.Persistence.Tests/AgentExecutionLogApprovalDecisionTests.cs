@@ -8,12 +8,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Round-trips for <see cref="AgentExecutionLogStore.AddApprovalDecisionAsync" />: a resolved tool-approval
-///     decision is persisted as a metadata-only row (kind 2) that REUSES existing columns without a schema change — tool
-///     name → model_name, category → config_hash, decision → terminal_status, source → provider — and stays invisible to
-///     every other read view (the diagnostics view, the run-envelope ledger, and the usage summary each filter their own
-///     kind). Executed against real SQLite so the column mapping and the read-view filters are proven.
+///     <see cref="AgentExecutionLogStore.AddApprovalDecisionAsync" /> persists a tool-approval decision as a
+///     metadata-only kind-2 row reusing existing columns, invisible to every other read view, on real SQLite.
 /// </summary>
+/// <remarks>
+///     Mapping: tool name → model_name, category → config_hash, decision → terminal_status, source → provider.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AgentExecutionLogApprovalDecisionTests : IDisposable
 {

@@ -93,7 +93,7 @@ public sealed class MxcProbeTests
         AssertEx.True(result.Supported);
         AssertEx.Contains(result.Warnings.Single(), flag);
         AssertEx.False(result.HostPrepMissing);
-        // N-46: the facts ride to the containment log line as MXC reported them.
+        // The facts ride to the containment log line as MXC reported them.
         var facts = AssertEx.NotNull(result.UiFacts);
         AssertEx.True(facts.CanBlockClipboardRead && facts.CanBlockClipboardWrite && facts.CanBlockInputInjection);
         AssertEx.Equal(flag != nameof(UiCapabilitySupport.CanBlockDesktopSwitching), facts.CanBlockDesktopSwitching);
@@ -103,7 +103,7 @@ public sealed class MxcProbeTests
     [Test]
     public async Task NoShippedText_NamesWin32k()
     {
-        // N-45: the reason and warnings reach the isolation panel, which speaks of "the Windows UI kernel interface", never "Win32k".
+        // The reason and warnings reach the isolation panel, which speaks of "the Windows UI kernel interface", never "Win32k".
         string[] flags =
         [
             "", nameof(UiCapabilitySupport.CanBlockClipboardRead), nameof(UiCapabilitySupport.CanBlockClipboardWrite),

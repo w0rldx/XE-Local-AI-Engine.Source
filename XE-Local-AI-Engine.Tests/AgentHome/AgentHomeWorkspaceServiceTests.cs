@@ -245,7 +245,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         // `git config` command. It had to move: AgentHomeGitHardening rewrites that config to a node-owned allow-list
         // before every node git invocation, so a value STORED there would be dropped between the baseline and the
         // later diff and the two sides of the comparison would stop agreeing. Asserted on EVERY baseline command,
-        // which the old shape could not do — a stored value was only present after the command that stored it.
+        // which a stored value could not satisfy: it is only present after the command that stores it.
         AssertEx.True(gitCommands.All(command => command.Arguments.Contains("core.autocrlf=false")),
             "every baseline command must pin core.autocrlf=false, so the config rewrite cannot drop it");
         AssertEx.True(gitCommands.All(command => command.Arguments.Contains("core.filemode=false")),

@@ -72,7 +72,7 @@ public sealed class NodeChatTitleEncryptionBackfillService : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    // Read-both means a plaintext row can no longer land here; a throw now indicates a genuinely
+                    // Read-both means a plaintext row cannot land here; a throw indicates a genuinely
                     // undecryptable envelope (e.g. ciphertext written under a previous node key). Skip that row only.
                     _logger.LogWarning(
                         "NodeChatTitleEncryptionBackfillService: could not decrypt message content for conversation {ConversationId}; skipping (row likely encrypted under a previous node key). [{ErrorType}]",

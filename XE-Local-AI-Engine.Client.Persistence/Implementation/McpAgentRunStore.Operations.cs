@@ -166,7 +166,7 @@ public sealed partial class McpAgentRunStore
 
         await using var connection = await OpenConnectionAsync(cancellationToken);
         // A queued listing is the dispatcher's claim order, so it is oldest-first: newest-first starved every run past the
-        // claim window under sustained load (I-D13). Every other listing stays newest-first.
+        // claim window under sustained load. Every other listing stays newest-first.
         var order = status == McpAgentRunStatus.Queued ? "ASC" : "DESC";
         var sql = MetadataSelectColumns + (status is null ? string.Empty : " WHERE status = $status") + $" ORDER BY created_at_utc {order} LIMIT $limit;";
         await using var command = CreateCommand(connection, transaction: null, sql);

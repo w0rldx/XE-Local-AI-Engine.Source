@@ -493,7 +493,7 @@ public sealed class DevWorkflowReconciledNodeRun
     /// </summary>
     /// <remarks>
     ///     The live path checks it before every automatic re-attempt; recovery without it resets an interrupted row at
-    ///     its cap to <c>Pending</c> with one more attempt than the row declares (FU3-4). Defaulted to
+    ///     its cap to <c>Pending</c> with one more attempt than the row declares. Defaulted to
     ///     <see cref="int.MaxValue" /> — "no cap" — so a projection that forgets it admits rather than blocking every
     ///     row it sees.
     /// </remarks>
@@ -853,7 +853,7 @@ public sealed record TransitionDevWorkflowNodeRunCommand
     ///     Set only by an automatic re-attempt; <see langword="null" /> means no budget applies, which is every other
     ///     transition. It is carried at all because a budget checked on a read taken before the write and committed
     ///     with no re-check lets a human <c>Retry</c> committing in that window spend the same last slot, and the run
-    ///     makes one more re-attempt than it allows (FU3-4). Only a count taken under the writer lock refuses the
+    ///     makes one more re-attempt than it allows. Only a count taken under the writer lock refuses the
     ///     second.
     /// </remarks>
     public int? MaxTotalAttempts { get; init; }
@@ -955,7 +955,7 @@ public sealed class MarkDevWorkflowStaleCommand
 /// </summary>
 /// <remarks>
 ///     <see cref="MaxTotalAttempts" /> is the run-wide re-attempt budget this act has to fit inside. It travels on the
-///     command because the store reads no options, and is set only for <c>Retry</c> — the one decision that authorises
+///     command because the store reads no options, and is set only for <c>Retry</c> — the one decision that authorizes
 ///     another attempt; null means no budget applies, which is every other decision. It is carried rather than left to
 ///     the caller because admission has to happen where the write does: several blocked node runs each checked before
 ///     the dispatcher settles any would all see the same unspent budget and all pass.

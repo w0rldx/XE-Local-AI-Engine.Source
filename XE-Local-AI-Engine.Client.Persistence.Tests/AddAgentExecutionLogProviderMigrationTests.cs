@@ -3,11 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddAgentExecutionLogProvider</c> records which provider served each agent turn. Rows written before the column
-///     existed genuinely cannot be attributed, and the migration says so explicitly: they backfill to the literal
-///     <c>unknown</c> rather than to the current default provider, which would silently credit historical latency and
-///     token counts to whichever backend happens to be configured today and skew every per-provider comparison drawn
-///     from this table.
+///     <c>AddAgentExecutionLogProvider</c> records which provider served each turn. Older rows backfill to
+///     <c>unknown</c>, not today's default provider, which would credit it with historical latency and tokens and
+///     skew per-provider comparisons.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddAgentExecutionLogProviderMigrationTests

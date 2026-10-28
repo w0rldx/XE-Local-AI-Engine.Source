@@ -96,7 +96,7 @@ public sealed class SandboxMountBrokerTests : IDisposable
     public async Task ProcessProvider_MapsEveryRequestedMountToItsOwnHostPath()
     {
         // A host child sees the host filesystem, so the requested sandbox path is DISCARDED and the host path is what
-        // is reported. Asserting the requested path is absent is the point: honouring it would name a directory this
+        // is reported. Asserting the requested path is absent is the point: honoring it would name a directory this
         // provider never created.
         var workspace = CreateDirectory("workspace");
         var home = CreateDirectory("runtime/home");

@@ -185,7 +185,7 @@ describe("ImageRuntimeSourceBuildCard", () => {
 
 	afterEach(() => cleanup());
 
-	// The ungating, stated as behaviour: the card renders in full and subscribes to the node on a machine where
+	// The ungating, stated as behavior: the card renders in full and subscribes to the node on a machine where
 	// Developer Mode is off, and it passes no `enabled` flag at all — the queries are unconditional now.
 	// The reason the disclosure exists: each prerequisite GET really RUNS the toolchain (`cmake --version`, `gcc`,
 	// `g++`, `ninja`/`make`, `git`, plus the backend's own tools), and three of these cards render on Node Settings

@@ -57,7 +57,7 @@ export const useTranscriptionCaptureStore = create<TranscriptionCaptureStoreStat
 		}),
 		{
 			name: "xe-transcription-capture",
-			// Actions are behaviour, not state: persisting them would rehydrate a stale closure over an old `set`.
+			// Actions are behavior, not state: persisting them would rehydrate a stale closure over an old `set`.
 			partialize: (state) => ({
 				lastSourceKind: state.lastSourceKind,
 				deviceIdBySession: state.deviceIdBySession,

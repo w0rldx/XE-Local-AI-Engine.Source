@@ -6,13 +6,13 @@ using Microsoft.AspNetCore.Http;
 
 /// <summary>
 ///     <c>GET /containers/{id}/json</c>.
-///     <para>
-///         <c>Config</c> and <c>HostConfig</c> are the create request echoed back, split the way the daemon splits
-///         it, rather than projected through a model of this fake's own. That is deliberate: the sandbox path never
-///         sends a restart policy, extra hosts or a healthcheck and the application path never sends <c>Tmpfs</c>,
-///         so anything this fake filled in would report a field a real daemon would have left at its zero value.
-///     </para>
 /// </summary>
+/// <remarks>
+///     <c>Config</c> and <c>HostConfig</c> are the create request echoed back, split the way the daemon splits
+///     it, rather than projected through a model of this fake's own. That is deliberate: the sandbox path never
+///     sends a restart policy, extra hosts or a healthcheck and the application path never sends <c>Tmpfs</c>,
+///     so anything this fake filled in would report a field a real daemon would have left at its zero value.
+/// </remarks>
 internal static class ContainerInspectEndpoint
 {
     /// <summary>The daemon's rendering of "never": the caller's mapper reads it back as null.</summary>

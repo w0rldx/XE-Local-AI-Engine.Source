@@ -6,15 +6,15 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
-import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import {
 	fitVerdictColor,
 	fitVerdictLabelKey,
 	type GgufDownloadTarget,
 	type GgufRepository,
 	type GgufTestedModel,
-} from "@/features/models/models/GgufModels";
+} from "@/core/model-downloads/models/GgufModels";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 
 interface GgufBrowsePanelProps {
 	repositories: readonly GgufRepository[];

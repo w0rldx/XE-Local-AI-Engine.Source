@@ -7,10 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Admission-control tests for <see cref="KnowledgeIngestionDispatcher" />: the queue is BOUNDED, so a
-///     burst that exceeds capacity is rejected with a typed <see cref="KnowledgeIngestionEnqueueResult.QueueFull" />
-///     result (never silently dropped or blocked), and the accept / reject counters plus the live queue-depth gauge are
-///     published on the <c>XE.Node</c> meter.
+///     Admission control for <see cref="KnowledgeIngestionDispatcher" />: the queue is BOUNDED, so an over-capacity
+///     burst is rejected with a typed <see cref="KnowledgeIngestionEnqueueResult.QueueFull" /> (never dropped or
+///     blocked), and the accept / reject counters and queue-depth gauge are published on the <c>XE.Node</c> meter.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeIngestionDispatcherTests

@@ -21,7 +21,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
 {
     private const int MaxCancelAttempts = 3;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IConversationUploadedFileStore _files;
     private readonly INodeChatMutationGuard _guard;

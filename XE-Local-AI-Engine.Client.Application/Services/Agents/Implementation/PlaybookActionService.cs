@@ -215,7 +215,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             };
         }
 
-        // The recorded eval must reflect the CURRENT behaviour-affecting context, so recompute over base instructions,
+        // The recorded eval must reflect the CURRENT behavior-affecting context, so recompute over base instructions,
         // sibling actions, the golden set and the model. A legacy result with no fingerprint reads as stale: safe.
         var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken);
         if (owningAgent is null)
@@ -258,7 +258,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             };
         }
 
-        // Absolute quality floor, defence in depth: the writer folds this into Passed, but a legacy or hand-crafted
+        // Absolute quality floor, defense in depth: the writer folds this into Passed, but a legacy or hand-crafted
         // result could claim Passed with zero candidate passes, and a run where every case failed proves nothing.
         if (evalResult.CandidatePassCount <= 0)
         {

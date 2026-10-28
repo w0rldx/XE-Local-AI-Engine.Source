@@ -8,10 +8,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The production wire client against the fake daemon's network and exec routes.
 ///     <para>
-///         The network half is daemon constraint modelling rather than kernel truth — a name conflict, an ownership
-///         comparison, a removal refused while endpoints are attached — which is exactly the class of behaviour an
+///         The network half is daemon constraint modeling rather than kernel truth — a name conflict, an ownership
+///         comparison, a removal refused while endpoints are attached — which is exactly the class of behavior an
 ///         HTTP-level fake can reproduce faithfully. The exec half proves the three-call create/start/inspect dance
-///         and Docker's frame demultiplexing; what a real process would have done with the command is not modelled
+///         and Docker's frame demultiplexing; what a real process would have done with the command is not modeled
 ///         and is not claimed.
 ///     </para>
 /// </summary>

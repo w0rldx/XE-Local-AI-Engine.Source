@@ -48,7 +48,7 @@ public sealed class MemoryExtractionOptions
     /// </summary>
     /// <remarks>
     ///     When on, a candidate surviving lexical dedup is embedded and dropped if it is cosine-near a live memory;
-    ///     off, or with no confident node-local embedding model, the lexical-only behaviour is byte-for-byte. The
+    ///     off, or with no confident node-local embedding model, the lexical-only behavior is byte-for-byte. The
     ///     IsConfident gate already no-ops on a node with no embedding model, so this flag exists so an operator can
     ///     disable semantic dedup WITHOUT unconfiguring the embedding model retrieval also shares.
     /// </remarks>

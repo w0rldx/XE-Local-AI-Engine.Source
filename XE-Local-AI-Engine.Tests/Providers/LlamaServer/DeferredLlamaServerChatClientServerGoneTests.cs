@@ -138,8 +138,8 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     }
 
     // A profiling spawn replaces the chat process between the endpoint resolve and the lease lookup. Reported as
-    // "not running" this used to license the request to go out leaseless — against a CACHED endpoint whose port the
-    // measurement spawn commonly inherits, contaminating the measurement and then dying to its teardown.
+    // "not running" this would license the request to go out leaseless — against a CACHED endpoint whose port the
+    // measurement spawn commonly inherits, contaminating the measurement and then dying in its teardown.
 
     [Test]
     public async Task GetResponse_WhenProfilingOwnsTheKey_ReEnsuresAndNeverEngagesTheProfilingEndpoint()

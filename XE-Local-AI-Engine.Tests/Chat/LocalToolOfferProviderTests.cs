@@ -65,9 +65,9 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_WhenActiveModelEqualsToolCapableEntry_OffersTheCapabilityGatedTools()
     {
-        // Regression: the live-evidence model id (qwen3:8b, the default ToolCapableModels entry) MUST satisfy
-        // the gate when it is the offer-time active model — the bug was that this model never reached this seam, not
-        // that the seam mismatched it. An exact match offers the capability-gated tools.
+        // Regression: the default model id (qwen3:8b, the default ToolCapableModels entry) MUST satisfy
+        // the gate when it is the offer-time active model — the risk is this model never reaching this seam, not
+        // the seam mismatching it. An exact match offers the capability-gated tools.
         var provider = CreateProvider("qwen3:8b");
 
         var offered = provider.GetOfferedTools("qwen3:8b");
@@ -78,9 +78,9 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_WhenAllowlistChangesAfterConstruction_TakesEffectWithoutARestart()
     {
-        // THE regression test. The allow-list used to be captured into a HashSet at DI composition, so
-        // an operator could add their model in Node Settings, save successfully, and still be offered no tools until the
-        // node restarted — with no restart hint on that field. The provider now reads INodeRuntimeSettings live on every
+        // THE regression test. An allow-list captured into a HashSet at DI composition would let
+        // an operator add their model in Node Settings, save successfully, and still be offered no tools until the
+        // node restarted — with no restart hint on that field. The provider reads INodeRuntimeSettings live on every
         // offer, so a change between two calls on the SAME instance must be observed.
         //
         // The mutable list is the whole point: a Build()-time snapshot would pass a weaker version of this test even
@@ -262,7 +262,7 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedToolsForProfile_WhenComputeIsTurnedOff_WithholdsRunPython()
     {
-        // R4-05: with the node switch off run_python was still offered, called and only then refused.
+        // With the node switch off run_python is not offered at all, rather than offered, called and then refused.
         RequireComputePlatform();
 
         AssertEx.False(ComputeOffProvider().GetOfferedToolsForProfile("qwen3:8b").Any(static tool => tool.Name == ComputeToolDefinition.ToolName),
@@ -650,7 +650,7 @@ public sealed class LocalToolOfferProviderTests
     }
 
     /// <summary>
-    ///     Profiling F8 (2026-10-19): with no description on <c>limit</c> the 27B asked for 10 hits in 4 of 9 turns, doubling
+    ///     With no description on <c>limit</c> a 27B model asks for 10 hits in 4 of 9 turns, doubling
     ///     the search result. The offered schema must say the limit is optional and when to raise it.
     /// </summary>
     [Test]
@@ -673,7 +673,7 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_WhenModelIsCloud_WithholdsCoderFileToolsByDefault()
     {
-        // RR3-4 Part C: the coder workspace file tools read node-local attachment/workspace content, so they are gated
+        // The coder workspace file tools read node-local attachment/workspace content, so they are gated
         // off a cloud model by default alongside the knowledge tools.
         var provider = CreateProvider("qwen3:8b");
 
@@ -787,7 +787,7 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_AskUser_IsApprovalGatedReadLocalAndCarriesTheSharedSchema()
     {
-        // RequiresApproval is STRUCTURAL here, not a risk judgement: it is what makes the runner surface the call as an
+        // RequiresApproval is STRUCTURAL here, not a risk judgment: it is what makes the runner surface the call as an
         // approval request and do the human wait OUTSIDE the stream-idle watchdog. A handler that simply blocked would
         // trip StreamIdleTimeout. The schema/description come from the single AskUserTool source, so the offered
         // contract cannot drift from what the handler validates.
@@ -996,7 +996,7 @@ public sealed class LocalToolOfferProviderTests
     [Arguments(true)]
     public void GetOfferedTools_WhenTheModelLeavesTheNode_WithholdsMcpToolsByDefault(bool unresolved)
     {
-        // The gap this closes: the synchronous whole offer used to append every MCP tool whatever the model's locality.
+        // The synchronous whole offer must not append every MCP tool whatever the model's locality.
         var provider = CreateSwitchProvider(static settings => settings);
         var model = unresolved ? UnresolvedExternalModel : "qwen3:8b";
 

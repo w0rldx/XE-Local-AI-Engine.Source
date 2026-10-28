@@ -714,7 +714,7 @@ describe("node chat stream state", () => {
 	});
 
 	it("carries an approval event's arguments onto the waiting tool card", () => {
-		// F-24/F-22: the live prompt and its reload replay both carry the arguments the operator is approving.
+		// The live prompt and its reload replay both carry the arguments the operator is approving.
 		const approval = applyNodeChatStreamEvent(
 			conversation,
 			streamEvent({
@@ -824,7 +824,7 @@ describe("node chat stream state", () => {
 	});
 
 	it("renders an approval raised after a stream resume as a web review only when the event carries the call identity", () => {
-		// Live round D1: after a reload the resumed stream sent the third web call's approval before the node had folded
+		// After a reload the resumed stream sent the third web call's approval before the node had folded
 		// the call id, tool name and preview onto the pending slot. With no tool card to attach to, the reducer builds a
 		// generic request-id-keyed card named "tool" — the blind Approve the operator saw.
 		const webReview = { toolName: "web_fetch", url: "https://example.com/b", text: "page b" };
@@ -1770,7 +1770,7 @@ describe("node chat stream state", () => {
 		});
 	});
 
-	// U6: the load reason and the last load duration ride the same phase event, survive a snapshot like the phase, and clear with it.
+	// The load reason and the last load duration ride the same phase event, survive a snapshot like the phase, and clear with it.
 	it("carries the load reason and last load duration from the phase event, across a snapshot, until content lands", () => {
 		const phase = applyNodeChatStreamEvent(
 			conversation,

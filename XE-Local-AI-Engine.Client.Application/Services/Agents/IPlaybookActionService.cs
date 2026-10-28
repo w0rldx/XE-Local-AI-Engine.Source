@@ -62,7 +62,7 @@ public interface IPlaybookActionService
     /// <remarks>
     ///     Human review, because staging is not active. <see cref="PlaybookPromotionResult.Status" /> is
     ///     <c>NotFound</c> for a missing, cross-agent or non-pending action, <c>EvalRequired</c> with no eval since
-    ///     authoring, <c>EvalStale</c> for an older snapshot or changed behaviour-affecting context,
+    ///     authoring, <c>EvalStale</c> for an older snapshot or changed behavior-affecting context,
     ///     <c>EvalIncomplete</c> for a scored subset, <c>EvalRegressed</c> for a failure, <c>CapReached</c> at the
     ///     cap, and <c>Promoted</c> only when the eval passed, is complete and current and its fingerprint matches.
     /// </remarks>

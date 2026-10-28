@@ -6,7 +6,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -364,7 +363,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
             finally
             {
-                TryDeleteDirectory(stagingDir);
+                BestEffortFile.TryDeleteDirectory(stagingDir);
             }
 
             var serverPath = ResolveServerPath(variantDir, pin)
@@ -768,7 +767,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
             finally
             {
-                TryDeleteDirectory(stagingDir);
+                BestEffortFile.TryDeleteDirectory(stagingDir);
             }
 
             var serverPath = ResolveServerPathForAsset(variantDir, pin)
@@ -778,7 +777,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // half-validated variant dir where a later EnsureBinaryAsync tier-1 resolve could serve it unverified — best-effort delete it before surfacing.
             if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
             {
-                TryDeleteDirectory(variantDir);
+                BestEffortFile.TryDeleteDirectory(variantDir);
                 throw new LlamaRuntimeException("The downloaded llama.cpp runtime failed its post-install self-check.");
             }
 
@@ -910,14 +909,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             // A half-CUDA dir (main archive extracted, runtime libraries missing) must not survive to look like a valid CUDA
             // install on a later resolve — discard it so the next acquisition re-runs the complete pairing.
-            TryDeleteDirectory(variantDir);
+            BestEffortFile.TryDeleteDirectory(variantDir);
             throw;
         }
 
         if (MissingCudaCompanionFamily(serverDir) is { } missingFamily)
         {
             var message = IncompleteCompanionSetMessage(missingFamily, serverDir);
-            TryDeleteDirectory(variantDir);
+            BestEffortFile.TryDeleteDirectory(variantDir);
             throw new LlamaRuntimeException(message);
         }
     }
@@ -1001,7 +1000,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         finally
         {
-            TryDeleteDirectory(companionDir);
+            BestEffortFile.TryDeleteDirectory(companionDir);
         }
 
         Diagnose(() => _logger.LogInformation("Repaired the CUDA runtime libraries of llama.cpp {Tag} in {ServerDir}; the next model load uses CUDA.",
@@ -1135,7 +1134,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
 
             reporter?.Report(RuntimeAcquisitionPhase.Verifying, CudartStepIndex);
-            if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
+            if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
                 return new LlamaRuntimeException("The llama.cpp CUDA runtime archive failed integrity verification.");
             }
@@ -1166,8 +1165,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         finally
         {
-            TryDeleteFile(tempArchive);
-            TryDeleteDirectory(stagingDir);
+            BestEffortFile.TryDeleteFile(tempArchive);
+            BestEffortFile.TryDeleteDirectory(stagingDir);
         }
     }
 
@@ -1202,7 +1201,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         finally
         {
-            TryDeleteFile(partial);
+            BestEffortFile.TryDeleteFile(partial);
         }
     }
 
@@ -1387,7 +1386,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // Verification and extraction of a few-hundred-MB archive are not instant; without their own phases the UI
             // would sit at 100 % of the byte counter with nothing to explain the remaining wait.
             reporter?.Report(RuntimeAcquisitionPhase.Verifying, stepIndex);
-            if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
+            if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
                 return new DownloadAttempt(null, new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification."));
             }
@@ -1405,7 +1404,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         finally
         {
-            TryDeleteFile(tempArchive);
+            BestEffortFile.TryDeleteFile(tempArchive);
         }
     }
 
@@ -1473,17 +1472,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch
         {
-            TryDeleteFile(destination);
+            BestEffortFile.TryDeleteFile(destination);
             throw;
         }
-    }
-
-    private static async Task<bool> HashMatchesAsync(string filePath, string expectedSha256, CancellationToken ct)
-    {
-        await using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-        var actual = Convert.ToHexStringLower(hash);
-        return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     // Extracts into a temp sibling of variantDir (same volume, so the later publish is an atomic move) and returns it; a partial extract is deleted here.
@@ -1510,7 +1501,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch
         {
-            TryDeleteDirectory(stagingDir);
+            BestEffortFile.TryDeleteDirectory(stagingDir);
             throw;
         }
     }
@@ -1559,7 +1550,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         if (aside is not null)
         {
-            TryDeleteDirectory(aside);
+            BestEffortFile.TryDeleteDirectory(aside);
         }
     }
 
@@ -1608,7 +1599,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 if (candidate.EndsWith(".tmp", StringComparison.Ordinal)
                     && Directory.GetLastWriteTimeUtc(candidate) < olderThanUtc.UtcDateTime)
                 {
-                    TryDeleteDirectory(candidate);
+                    BestEffortFile.TryDeleteDirectory(candidate);
                     swept += Directory.Exists(candidate) ? 0 : 1;
                 }
             }
@@ -1622,25 +1613,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         await using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         await using var gzip = new GZipStream(fileStream, CompressionMode.Decompress);
         await TarFile.ExtractToDirectoryAsync(gzip, destination, overwriteFiles: true, ct).ConfigureAwait(false);
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a temp download; ignore.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a temp download; ignore.
-        }
     }
 
     /// <summary>Validates a release tag against the upstream <c>b&lt;N&gt;</c> scheme before it is composed into a URL.</summary>
@@ -1660,28 +1632,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                && AssetNameRegex().IsMatch(assetName);
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a failed install; never mask the original failure.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a failed install; never mask the original failure.
-        }
-    }
-
     /// <summary>
     ///     Strips a leading <c>sha256:</c> prefix (if present) from a publisher digest. Case is preserved — the hash
-    ///     comparison in <see cref="HashMatchesAsync" /> is already case-insensitive, so no case folding is needed.
+    ///     comparison in <see cref="FileSha256.MatchesAsync" /> is already case-insensitive, so no case folding is needed.
     /// </summary>
     private static string StripDigestPrefix(string? digest)
     {

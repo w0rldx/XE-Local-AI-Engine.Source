@@ -64,8 +64,8 @@ const TOKEN_PATTERNS: readonly RegExp[] = [
 
 // `password=…`, `api_key: …`, `password="…"` and JSON `"password": "…"` keep the key, the separator and any quotes;
 // only the value is masked. A quoted value runs to the SAME closing quote, so the other quote character may appear
-// inside it (`password="it's"`), and a backslash consumes the character after it: in a JSON-serialised value `\"` is
-// an escaped quote, not the end of the secret (the console collector serialises object arguments before redacting, so
+// inside it (`password="it's"`), and a backslash consumes the character after it: in a JSON-serialized value `\"` is
+// an escaped quote, not the end of the secret (the console collector serializes object arguments before redacting, so
 // a password holding a quote would otherwise leak its tail). Mirrors the server's AssignedSecretRegex, quoted branch
 // included; change both together: a bare value cannot start with `[` and a quoted one may not start with the marker,
 // so an already-masked value never matches again.

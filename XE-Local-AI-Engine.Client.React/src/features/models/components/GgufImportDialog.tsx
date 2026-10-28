@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse } from "@/core/api/generated";
+import { usePreviewGgufImport, useStartGgufImport } from "@/core/model-downloads/queries/useGgufAcquisitions";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { importErrorCodeFrom, importErrorMessage } from "@/features/models/models/GgufImportErrors";
 import { formatModelSize } from "@/features/models/models/LocalModelModel";
-import { usePreviewGgufImport, useStartGgufImport } from "@/features/models/queries/useGgufAcquisitions";
 
 interface GgufImportDialogProps {
 	readonly opened: boolean;

@@ -61,7 +61,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     private static readonly string[] KnownFinishReasons = ["stop", "length", "tool_calls", "content_filter"];
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IReadOnlyList<IGraphWorkflowDecisionProvider> _decisionProviders;
     private readonly IReadOnlyList<IGraphWorkflowNativeDecisionProvider> _nativeDecisionProviders;
@@ -576,7 +576,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                         : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
                 }
 
-                // Upstream reaches the prompt only through a binding. Bindings are not path-analysed: any binding beside a local-data predecessor refuses.
+                // Upstream reaches the prompt only through a binding. Bindings are not path-analyzed: any binding beside a local-data predecessor refuses.
                 if (localDataSource is not null
                     && config.InputBindings.Count > 0
                     && await CloudLocalDataGate.WithholdsAsync(leavesNode: true, grants, runtimeSettings, cancellationToken))

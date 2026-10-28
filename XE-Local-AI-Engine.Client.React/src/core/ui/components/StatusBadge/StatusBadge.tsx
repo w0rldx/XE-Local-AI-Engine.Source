@@ -10,7 +10,7 @@ interface StatusBadgeProps {
 	"data-testid"?: string;
 }
 
-// Standard status pill. Features own the status -> colour mapping and delegate rendering here so every
+// Standard status pill. Features own the status -> color mapping and delegate rendering here so every
 // status reads the same across the app.
 export function StatusBadge({
 	label,

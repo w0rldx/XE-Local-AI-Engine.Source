@@ -24,7 +24,7 @@ public sealed class TranscriptionService : ITranscriptionService
 {
     // One options instance for both directions, so a reader and a writer cannot disagree about casing. Default
     // JsonSerializerOptions against a web-cased document silently produces a zeroed record.
-    private static readonly JsonSerializerOptions ConfigJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ConfigJsonOptions = JsonSerializerOptions.Web;
 
     private const int MaxTitleChars = 200;
     private const int MaxPageSize = 200;
@@ -156,7 +156,7 @@ public sealed class TranscriptionService : ITranscriptionService
 
     /// <inheritdoc />
     /// <remarks>
-    ///     A live session ends through the registry's single termination path, never by signalling a batch source it
+    ///     A live session ends through the registry's single termination path, never by signaling a batch source it
     ///     does not own, and delete reaches this method first so the lanes stop before the row is removed.
     ///     <c>EndAsync</c> is called unconditionally, not only when the session reads as live: <c>IsLive</c> flips
     ///     false as the FIRST step of ending, so a delete arriving mid-teardown would otherwise remove the row while

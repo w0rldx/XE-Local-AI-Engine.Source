@@ -18,15 +18,15 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </remarks>
 internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private const int MinLimit = 1;
 
-    // Model-matrix F18: a bare "no information" made small models refuse general questions for the rest of the conversation.
+    // A bare "no information" makes small models refuse general questions for the rest of the conversation.
     internal const string EmptyResultNote =
         "The knowledge base has no information matching this query. If the question is not about the operator's documents, answer it from your general knowledge.";
 
-    // The live F18 case the empty note never reached: with one document indexed, an unrelated chunk is still rank 1 of the fusion.
+    // The case the empty note never reaches: with one document indexed, an unrelated chunk is still rank 1 of the fusion.
     internal const string RankedResultsNote =
         "These are the closest matches in the knowledge base, ranked, and they may not address the question. If they do not and the question is not about the operator's documents, answer it from your general knowledge.";
 
@@ -109,7 +109,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             documentId = parsed;
         }
 
-        // Live node settings; the default is clamped too, so a hand-edited file with default > max still honours the ceiling.
+        // Live node settings; the default is clamped too, so a hand-edited file with default > max still honors the ceiling.
         var maxLimit = await _runtimeSettings.GetKnowledgeSearchMaxResultsAsync(cancellationToken);
         var limit = Math.Clamp(request.Limit ?? await _runtimeSettings.GetKnowledgeSearchDefaultResultsAsync(cancellationToken), MinLimit, maxLimit);
         if (!KnowledgeCollectionScope.TryNormalize(request.CollectionId, out var collectionId))

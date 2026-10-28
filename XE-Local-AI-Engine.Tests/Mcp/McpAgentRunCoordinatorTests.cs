@@ -17,9 +17,8 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// No parallelism guard: every seam is an NSubstitute fake over a local harness. The McpAgentRunMetrics this builds
-// emits on the process-global XE.Node meter, but the capture suites that listen on it (McpAgentRunMetricsTests and
-// the Telemetry/Invocation ones) hold a bare [NotInParallel] of their own, so an emitter needs none.
+// No parallelism guard: every seam is a fake. Its McpAgentRunMetrics emits on the process-global XE.Node meter, but
+// the suites that capture it (McpAgentRunMetricsTests, Telemetry, Invocation) hold their own [NotInParallel].
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunCoordinatorTests
 {
@@ -112,7 +111,7 @@ public sealed class McpAgentRunCoordinatorTests
         await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
     }
 
-    // I-D11: an over-long task was a generic invalid_request that never named the bound.
+    // An over-long task is a typed task_too_large naming the bound, never a generic invalid_request.
     [Test]
     public async Task StartAsync_WhenTaskExceedsBound_RejectsTaskTooLargeNamingTheBound()
     {
@@ -133,7 +132,7 @@ public sealed class McpAgentRunCoordinatorTests
         await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
     }
 
-    // Q5 / I-D6: a durable run bound by a shared agent name is refused at admission.
+    // A durable run bound by a shared agent name is refused at admission.
     [Test]
     public async Task StartAsync_WhenAgentNameIsAmbiguous_RejectsAmbiguousName()
     {

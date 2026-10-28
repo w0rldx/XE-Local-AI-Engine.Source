@@ -655,7 +655,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
-    ///     The output budget must leave room for the prompt: a budget at or above the context window cannot be honoured
+    ///     The output budget must leave room for the prompt: a budget at or above the context window cannot be honored
     ///     and would silently behave like no budget at all. Absent means context-limited, which is the default.
     /// </summary>
     private static void ValidateOutputBudget(int? maxOutputTokens, int contextTokens)

@@ -16,9 +16,9 @@ interface InstalledModelsTableProps {
 	onResetKind: (modelName: string) => void;
 }
 
-// Full-width presentation of the installed local models. The Type column is now read-only here (effective-kind badge,
+// Full-width presentation of the installed local models. The Type column is read-only here (effective-kind badge,
 // raw capability badges, and a quick reset-to-detected affordance for overridden models) — the editable override
-// Select moved into the per-model details dialog so it no longer crowds the row. Clicking a model name opens that
+// Select lives in the per-model details dialog so it does not crowd the row. Clicking a model name opens that
 // dialog; per-row Set-default and Delete actions stay in the Actions column.
 export function InstalledModelsTable({
 	models,

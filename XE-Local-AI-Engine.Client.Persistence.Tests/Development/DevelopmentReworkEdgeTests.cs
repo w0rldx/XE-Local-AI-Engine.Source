@@ -225,8 +225,8 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 
     /// <summary>
     ///     The withdrawal. An operator-directed row carrying NO reason retracts the instruction the operator wrote
-    ///     earlier in the same dispatch, rather than being skipped as "not an operator row" — which is what the
-    ///     <c>DetailJson != null</c> filter used to make it, leaving an amendment that outranks the requirements and
+    ///     earlier in the same dispatch, rather than being skipped as "not an operator row" — which is what a
+    ///     <c>DetailJson != null</c> filter makes it, leaving an amendment that outranks the requirements and
     ///     disarms the reviewer with no route back out inside the node run that wrote it.
     /// </summary>
     [Test]
@@ -462,7 +462,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
 
     /// <summary>
     ///     A Retry written by the build before this change carries the plain outcome, so it answers the old field and
-    ///     not the new one — the previous behaviour, unchanged, for any task in flight across the upgrade. Graceful
+    ///     not the new one — the previous behavior, unchanged, for any task in flight across the upgrade. Graceful
     ///     degradation by construction rather than by migration, which is why it is pinned rather than fixed.
     /// </summary>
     [Test]

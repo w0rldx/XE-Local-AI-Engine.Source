@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddDevWorkflowNodeRunTelemetry</c> migration: it adds the twelve cost-telemetry columns to
-///     <c>dev_workflow_node_runs</c> on both an upgrade from the preceding migration and a fresh migrate-to-head, drops
-///     them on rollback, adds no index, and leaves no model/snapshot drift.
+///     <c>AddDevWorkflowNodeRunTelemetry</c> adds the twelve cost-telemetry columns to <c>dev_workflow_node_runs</c>
+///     on upgrade and fresh migrate, drops them on rollback, adds no index, and leaves no snapshot drift.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable

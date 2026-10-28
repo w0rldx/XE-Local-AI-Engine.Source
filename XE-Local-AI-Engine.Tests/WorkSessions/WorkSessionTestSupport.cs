@@ -42,7 +42,7 @@ public sealed class WorkSessionHostFixture : IAsyncInitializer, IAsyncDisposable
 
 /// <summary>
 ///     <see cref="WorkSessionHostFixture" /> plus the deterministic capability and default-model stubs the service-level
-///     suites need — the real resolvers probe installed providers, which would make those assertions depend on the box.
+///     suites need — the real resolvers probe installed providers, which would make those assertions depend on the host.
 /// </summary>
 public sealed class WorkSessionServiceHostFixture : IAsyncInitializer, IAsyncDisposable
 {

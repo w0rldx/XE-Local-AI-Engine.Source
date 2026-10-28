@@ -673,7 +673,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
 
 /// <summary>
 ///     A host lifetime a test can actually stop. The substituted one hands out a default CancellationToken, which
-///     can never be cancelled, so shutdown behaviour would silently never be exercised.
+///     can never be cancelled, so shutdown behavior would silently never be exercised.
 /// </summary>
 internal sealed class TestHostLifetime : IHostApplicationLifetime, IDisposable
 {
@@ -745,7 +745,7 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
     {
         if (ProbeGate is { } gate)
         {
-            // Signalled only for a GATED probe, so a test never reads a probe the fixture made during setup as the
+            // Signaled only for a GATED probe, so a test never reads a probe the fixture made during setup as the
             // pass it is waiting for.
             _ = _probeEntered.TrySetResult();
             await gate.Task.WaitAsync(cancellationToken);
@@ -847,7 +847,7 @@ internal sealed class GatedContainerRuntime : IContainerRuntime
 
     /// <summary>
     ///     Fails a removal the way a daemon does when a container will not go. The repo's fake removes whatever it is
-    ///     asked for, so a teardown that did not complete has no other way to be modelled.
+    ///     asked for, so a teardown that did not complete has no other way to be modeled.
     /// </summary>
     public Func<string, Exception?>? RemoveFailure { get; set; }
 

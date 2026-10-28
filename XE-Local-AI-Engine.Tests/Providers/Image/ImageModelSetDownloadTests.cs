@@ -11,13 +11,13 @@ using XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     An image model is a file <b>set</b>, and two behaviours only exist at set level. Progress must be reported
+///     An image model is a file <b>set</b>, and two behaviors only exist at set level. Progress must be reported
 ///     set-relative — forwarding each part's own byte counts unchanged makes the bar fill and snap back to zero once per
 ///     part, which reads as a failed restart. And a part already complete on disk must be reused, because the registry
 ///     entry is only written once the WHOLE set succeeds: without reuse a set that failed on its last part re-downloads
 ///     every earlier part from scratch, which for a multi-part diffusion model is tens of gigabytes of pointless
 ///     transfer. These tests drive both through the public <see cref="HuggingFaceImageModelStore.EnsureModelAsync" />
-///     against a scripted handler, so they pin observable behaviour rather than the private helpers that implement it.
+///     against a scripted handler, so they pin observable behavior rather than the private helpers that implement it.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ImageModelSetDownloadTests
@@ -142,7 +142,7 @@ public sealed class ImageModelSetDownloadTests
     public async Task EnsureModel_WhenTheExistingPartDeclaredNoSize_RedownloadsItBecauseNothingCanVerifyIt()
     {
         // Without a declared size a truncated leftover is indistinguishable from a complete file, so there is nothing to
-        // check against and the part is re-downloaded — the behaviour that predates reuse.
+        // check against and the part is re-downloaded — the behavior that predates reuse.
         using var models = new GgufStoreTestInfrastructure.TempModelsDir();
         using var handler = FileServingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);

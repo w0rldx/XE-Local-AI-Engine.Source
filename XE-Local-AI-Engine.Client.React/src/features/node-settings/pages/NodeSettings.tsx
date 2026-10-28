@@ -213,7 +213,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	const handleFieldChange = <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]): void => {
 		setIsDirty(true);
 		// A switch edited by hand after a preset click wins: the save then carries the booleans and the server stamps the
-		// profile "custom", instead of honouring the preset and discarding the edit.
+		// profile "custom", instead of honoring the preset and discarding the edit.
 		if (isExternalAccessBooleanField(field)) {
 			setPendingPreset(null);
 		}

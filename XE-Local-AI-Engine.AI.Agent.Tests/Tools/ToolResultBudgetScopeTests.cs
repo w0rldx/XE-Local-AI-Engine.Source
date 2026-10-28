@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The per-run tightening of the shared tool-result budget. The configured value is read once when the registries
-///     are built, so a run that needs a smaller ceiling — a work-session step, whose knowledge-base reads return up to
-///     50,000 characters each — can only get one ambiently. Tighten-only, so no run can raise the node's ceiling.
+///     Per-run tightening of the shared tool-result budget, which is read once at registry build: a run needing a
+///     smaller ceiling (a work-session step's 50,000-char knowledge reads) gets it ambiently. Tighten-only.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ToolResultBudgetScopeTests

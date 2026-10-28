@@ -107,7 +107,7 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
     }
 
     // Maps the persisted lowercase backend token to its prebuilt acceleration variant. cpu / unknown / blank → null,
-    // signalling "no GPU device list to query" so the caller skips the probe entirely (no process spawn).
+    // signaling "no GPU device list to query" so the caller skips the probe entirely (no process spawn).
     private static GpuVariant? MapBackendToVariant(string? backend)
     {
         if (string.IsNullOrWhiteSpace(backend))

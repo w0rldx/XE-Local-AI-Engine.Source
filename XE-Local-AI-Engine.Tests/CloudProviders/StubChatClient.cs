@@ -14,10 +14,8 @@ internal sealed class StubChatClient : IChatClient
 
     /// <param name="responseText">Text of the fixed response.</param>
     /// <param name="midStreamGate">
-    ///     Optional hook awaited BETWEEN streamed updates so a test can hold a stream open in-flight (e.g. to force a
-    ///     selection swap while it is enumerating). After awaiting it, the stream checks <see cref="IsDisposed" /> and
-    ///     throws <see cref="ObjectDisposedException" /> if it was disposed underneath the open enumeration — so a
-    ///     use-after-dispose would surface as a real failure. When null (default), streaming completes immediately.
+    ///     Optional hook awaited between streamed updates to hold a stream open; a client disposed meanwhile then
+    ///     throws <see cref="ObjectDisposedException" /> instead of finishing. Null streams immediately.
     /// </param>
     public StubChatClient(string responseText = "ok", Func<Task>? midStreamGate = null)
     {

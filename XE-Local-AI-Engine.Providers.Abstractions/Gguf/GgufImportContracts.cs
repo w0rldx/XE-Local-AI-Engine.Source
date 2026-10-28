@@ -67,7 +67,7 @@ public enum GgufImportWorkload
 /// <summary>Who is asking.</summary>
 /// <remarks>
 ///     The public HTTP import surface accepts exactly one thing — a standalone causal-chat model — and leans on
-///     file-name heuristics as a second line of defence against an operator uploading a projector or adapter under a
+///     file-name heuristics as a second line of defense against an operator uploading a projector or adapter under a
 ///     misleading name. An in-process commit from a local training run needs neither: the engine wrote the file it is
 ///     committing, so the decision is made from the GGUF metadata alone and the name is not evidence of anything.
 /// </remarks>

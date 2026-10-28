@@ -2,21 +2,15 @@ import "./Layout.css";
 
 import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
 import { m } from "framer-motion";
-import { lazy, Suspense } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
-import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { RootErrorComponent } from "@/core/integrations/tanstack-router/RootErrorComponent";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
-import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
+import { HeaderBar, type IHeaderBarProperties } from "@/core/layout/components/HeaderBar/HeaderBar";
 import { isDesktopShell, SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
-import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
-import { CpuFallbackBanner } from "@/features/model-fit/components/CpuFallbackBanner";
-import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
-import { PendingRestartBanner } from "@/features/node-settings/components/PendingRestartBanner";
-import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/RuntimeAcquisitionBanner";
 
 const DevelopmentUi = import.meta.env.DEV
 	? lazy(() => import("@/core/dev-tools/components/DevelopmentUi/DevelopmentUi").then((m) => ({ default: m.DevelopmentUi })))
@@ -35,7 +29,14 @@ function RoutedPage() {
 	);
 }
 
-export function Layout() {
+export interface ILayoutProperties extends IHeaderBarProperties {
+	/** Rendered under the header bar on every page, above the routed content. */
+	banners: ReactNode;
+	/** Rendered after the shell, for floating elements such as status chips and dialogs. */
+	overlay: ReactNode;
+}
+
+export function Layout({ headerStatus, headerActions, drawerActions, banners, overlay }: ILayoutProperties) {
 	const { t } = useTranslation();
 	const sideBarCollapsed = useDesktopNavigationBarStore((state) => state.sidebarState);
 	const setSideBarCollapsed = useDesktopNavigationBarStore((state) => state.actions.setSidebarState);
@@ -86,14 +87,8 @@ export function Layout() {
 					}}
 				>
 					<div className="flex-shrink-0">
-						<HeaderBar />
-						{nodeCapabilities.modelFit ? <CpuFallbackBanner /> : null}
-						<LlamaCppUpdateBanner />
-						{/* First-run runtime acquisition. Mounted here, not on a page, because the download starts at host boot
-						    and the user can be anywhere in the app while it runs. */}
-						<RuntimeAcquisitionBanner />
-						{/* Saved settings the running node applies only after a restart; shown on every page until then. */}
-						<PendingRestartBanner />
+						<HeaderBar headerStatus={headerStatus} headerActions={headerActions} drawerActions={drawerActions} />
+						{banners}
 					</div>
 
 					{/* The routed content is the `main` landmark and the skip link's target. `tabIndex={-1}` makes it
@@ -105,7 +100,7 @@ export function Layout() {
 				</m.div>
 			</div>
 
-			<ChatConnectionStatusChip />
+			{overlay}
 
 			{import.meta.env.DEV && DevelopmentUi && (
 				<Suspense fallback={null}>

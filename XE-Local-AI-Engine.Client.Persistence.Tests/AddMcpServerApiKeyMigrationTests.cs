@@ -3,10 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddMcpServerApiKey</c> creates the inbound MCP credential table with an encrypted <c>material</c> column. The
-///     immediately following <c>HashMcpServerApiKey</c> deletes every row and renames that column to <c>key_hash</c>,
-///     turning the credential from a recoverable secret into a one-way digest — so the schema at the head of the chain
-///     deliberately does NOT match what this migration created, and both ends are pinned here.
+///     <c>AddMcpServerApiKey</c> creates the inbound MCP credential table with an encrypted <c>material</c> column;
+///     <c>HashMcpServerApiKey</c> next empties it and renames that to <c>key_hash</c>, so both ends are pinned.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddMcpServerApiKeyMigrationTests

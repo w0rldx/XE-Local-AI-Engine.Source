@@ -3,8 +3,8 @@ import { IconPlayerPlayFilled, IconPlayerStopFilled } from "@tabler/icons-react"
 import { useTranslation } from "react-i18next";
 
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
-import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
-import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
+import { useVoicePreferencesStore } from "@/features/voice/stores/VoicePreferencesStore";
 
 // Per-message Play/Stop affordance. Rendered inside the assistant turn's action row; it is
 // self-gating, so it returns null unless voice is available (the operator's node gate) AND the user has voice on AND this

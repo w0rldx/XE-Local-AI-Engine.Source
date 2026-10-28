@@ -4,12 +4,9 @@ using System.Text;
 using System.Text.Json.Nodes;
 
 /// <summary>
-///     A hand-authored External Apps catalog document carrying one application, embedded here and shared by every
-///     test that needs a manifest richer than the shipped seed. The shipped seed is empty — the engine ships no
-///     curated application until the XE-owned catalog repository exists — so a fixture is the only place the
-///     manifest features the engine must honour (both <c>dependsOn</c> conditions, a host-gateway extra host,
-///     per-service storage sharing one storage name, an inlined file asset, a capability add-back, every variable
-///     type) can be exercised against the real <c>ExternalAppCatalogValidator</c>.
+///     A hand-authored External Apps catalog document for tests needing more than the empty shipped
+///     seed: <c>dependsOn</c> conditions, a host-gateway extra host, shared storage, an inlined file asset, a
+///     capability add-back and every variable type.
 /// </summary>
 /// <remarks>
 ///     The document is never produced by <c>catalog/external-apps/tools/build_catalog.py</c> and is never shipped;

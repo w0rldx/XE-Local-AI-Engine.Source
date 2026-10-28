@@ -10,7 +10,7 @@ import {
 	isDevWorkflowNodeInProgress,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
-// Colour maps only — the pill itself is the shared StatusBadge, exactly as WorkSessionStatusBadge does it.
+// Color maps only — the pill itself is the shared StatusBadge, exactly as WorkSessionStatusBadge does it.
 
 const runStatusColors: Record<DevWorkflowRunStatus, MantineColor> = {
 	Pending: "gray",
@@ -35,7 +35,7 @@ const nodeStatusColors: Record<DevWorkflowNodeStatus, MantineColor> = {
 	Running: "blue",
 	WaitingForApproval: "orange",
 	// Retries are exhausted or the failure is non-retryable. The run is stopped until a human intervenes, so this
-	// is the loudest colour on the table, not the quietest.
+	// is the loudest color on the table, not the quietest.
 	Blocked: "red",
 	Succeeded: "green",
 	Failed: "red",

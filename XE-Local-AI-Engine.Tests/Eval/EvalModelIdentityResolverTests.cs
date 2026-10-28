@@ -10,10 +10,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Tests for <see cref="EvalModelIdentityResolver" />: the weight-identity source folded into the eval
-///     fingerprint. It prefers the llama.cpp GGUF registry (content hash, else revision+size+download-time), falls back
-///     to the Ollama classification digest, and degrades to the explicit unverified sentinel — a same-name weight swap
-///     always changes the verified token.
+///     <see cref="EvalModelIdentityResolver" />, the eval fingerprint's weight-identity term: the llama.cpp GGUF
+///     registry (content hash, else revision+size+download-time), then the Ollama digest, then the unverified
+///     sentinel. A same-name weight swap always changes the verified token.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class EvalModelIdentityResolverTests

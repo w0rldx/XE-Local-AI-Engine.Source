@@ -323,7 +323,7 @@ export interface ModelOption {
 	// NOT the effort vocabulary — a native model keeps the binary On/Off set, where "on" means "omit the think field
 	// and let the template's built-in reasoning run".
 	isNativeReasoningModel?: boolean;
-	// Whether a model that reasons also honours a GRADED effort level. Splits the two shapes `isReasoningModel` alone
+	// Whether a model that reasons also honors a GRADED effort level. Splits the two shapes `isReasoningModel` alone
 	// conflates for an externally served model: an endpoint that reads `reasoning_effort` gets the graded menu, one
 	// that reasons on its own terms gets the binary On/Off set, because offering it levels it ignores is a menu whose
 	// entries do nothing. Undefined means "not declared" — every non-external provider, whose effort vocabulary is

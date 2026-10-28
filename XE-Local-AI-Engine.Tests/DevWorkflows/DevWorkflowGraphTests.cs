@@ -544,7 +544,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     Ruling D8: a <c>DevTask</c> writes a worktree created under this node's own data root, and its patch reaches
+    ///     A <c>DevTask</c> writes a worktree created under this node's own data root, and its patch reaches
     ///     the operator's repository only through an apply node a gate already stands in front of — so it is a SANDBOX
     ///     write and needs no gate of its own. Saying otherwise would reject this fixture, whose DevTask is the ENTRY
     ///     node and therefore cannot have an upstream gate at all.
@@ -589,7 +589,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     The entry node's own property COUNTS. Initialising the fixpoint to false on the entry erases it, and this
+    ///     The entry node's own property COUNTS. Initializing the fixpoint to false on the entry erases it, and this
     ///     shape — the gate guarding the write IS the entry — would be refused with a 400 naming no real fault.
     /// </summary>
     [Test]
@@ -607,7 +607,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     The same fix for the other invariant: the validation ahead of the gate and the apply is itself the entry
-    ///     node, and it is what assures the apply. Both shapes are valid and both were 400s under a false-initialised
+    ///     node, and it is what assures the apply. Both shapes are valid and both were 400s under a false-initialized
     ///     entry.
     /// </summary>
     [Test]

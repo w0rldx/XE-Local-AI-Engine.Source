@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The "is this a cloud model?" answer the local-model list/details/select endpoints share. Cloud-ness delegates to
-///     the trust resolver and fails CLOSED; the Azure deployment match and connection reads stay best-effort ("no
-///     deployment" / "no connection"), but a genuine cancellation must still propagate.
+///     The "is this a cloud model?" answer of the local-model list/details/select endpoints. Cloud-ness delegates to
+///     the trust resolver and fails CLOSED; Azure deployment and connection reads stay best-effort, but cancellation
+///     still propagates.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CloudModelResolverTests
@@ -122,7 +122,7 @@ public sealed class CloudModelResolverTests
         var resolver = CreateResolver(store);
 
         AssertEx.Equal(128_000, AssertEx.NotNull(await resolver.ResolveContextWindowAsync("azure-gpt")).ContextTokens);
-        // Recognised but undeclared: a window record with a null value, not "not a cloud model".
+        // Recognized but undeclared: a window record with a null value, not "not a cloud model".
         AssertEx.Null(AssertEx.NotNull(await resolver.ResolveContextWindowAsync("azure-mini")).ContextTokens);
         AssertEx.Null(await resolver.ResolveContextWindowAsync("llama-3.gguf"));
     }

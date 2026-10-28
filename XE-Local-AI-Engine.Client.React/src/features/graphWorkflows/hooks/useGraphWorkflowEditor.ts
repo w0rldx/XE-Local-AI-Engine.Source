@@ -1,7 +1,7 @@
 // The graph editor's whole mutable state, in one hook. React Flow is CONTROLLED from here, so the canvas only renders
 // and the config panels mutate through the same handles the canvas does — one source of truth for "what is on screen".
 //
-// Everything derived (`graph`, `issues`, `isDirty`) is memoised off `nodes`/`edges`, so a panel never has to remember
+// Everything derived (`graph`, `issues`, `isDirty`) is memoized off `nodes`/`edges`, so a panel never has to remember
 // to re-run the validator after an edit. Nothing here touches the network: the page owns the queries.
 
 import {
@@ -66,7 +66,7 @@ export interface GraphWorkflowEditorState {
 	readonly edges: readonly GraphWorkflowCanvasEdge[];
 	/** The graph-level `kind` and `chat` block. Part of the graph document, so an edit here dirties the canvas. */
 	readonly settings: GraphWorkflowGraphSettings;
-	/** `canvasToGraph(nodes, edges, settings).graph`, memoised — what a save would send. */
+	/** `canvasToGraph(nodes, edges, settings).graph`, memoized — what a save would send. */
 	readonly graph: GraphWorkflowGraph;
 	/**
 	 * What the LOADED graph carried that the canvas cannot round-trip, plus the conversion's own issues, plus the
@@ -162,7 +162,7 @@ function nextFreePosition(nodes: readonly GraphWorkflowCanvasNode[]): XYPosition
 }
 
 export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined): GraphWorkflowEditorState {
-	// Lazy initialisers, not an effect on `initial`: the page loads a definition by calling `reset`, so a re-render
+	// Lazy initializers, not an effect on `initial`: the page loads a definition by calling `reset`, so a re-render
 	// with the same graph must never throw away the operator's in-progress edits.
 	const [initialCanvas] = useState(() => graphToCanvas(initial));
 	const [nodes, setNodes] = useState<readonly GraphWorkflowCanvasNode[]>(initialCanvas.nodes);

@@ -127,7 +127,7 @@ public sealed class LlamaServerSupervisorOptions
 
     /// <summary>
     ///     Draft tokens proposed per step (<c>--spec-draft-n-max</c>, upstream default 3). <c>0</c> omits the flag.
-    ///     Honoured by external-draft AND <c>draft-mtp</c> modes; <c>ngram-*</c> modes size their drafts from their own
+    ///     Honored by external-draft AND <c>draft-mtp</c> modes; <c>ngram-*</c> modes size their drafts from their own
     ///     <c>--spec-ngram-*</c> knobs instead.
     /// </summary>
     public int SpeculativeDraftMaxTokens { get; init; } = 3;

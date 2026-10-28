@@ -9,10 +9,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the hub-backed knowledge indexing notifier. The end-to-end push is covered by
-///     <see cref="ServerPushHubTests" />; what only a unit test can prove is the failure contract — a transport hiccup
-///     must never propagate into the background ingestion pipeline, and the warning it leaves behind must name the
-///     exception type only, never document content.
+///     The hub-backed knowledge indexing notifier's failure contract (<see cref="ServerPushHubTests" /> covers the
+///     push): a transport hiccup never reaches the background ingestion pipeline, and its warning names the exception
+///     type only, never document content.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeIndexingNotifierTests

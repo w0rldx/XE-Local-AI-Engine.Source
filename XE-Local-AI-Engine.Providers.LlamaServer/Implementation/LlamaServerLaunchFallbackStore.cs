@@ -218,7 +218,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         }
         finally
         {
-            TryDeleteFile(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
         }
     }
 
@@ -280,24 +280,5 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         }
 
         return new FileStream(path, options);
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a temp write; ignore.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort cleanup of a temp write; ignore.
-        }
     }
 }

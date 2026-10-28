@@ -13,11 +13,8 @@ public sealed class NodeUiSmokeE2ETests : XEPooledE2ETestBase
     [Category("Smoke")]
     public async Task Models_Page_Renders_For_Unpaired_Node()
     {
-        // Replaces the former /dashboard smoke test: the Dashboard is a Central-Platform surface and the
-        // default build ships it gated OFF (NodeCapabilities.dashboard === false), so /dashboard redirects
-        // home and has no heading to smoke. Models is the equivalent always-on page — no route guard, and
-        // it renders unconditionally for an unpaired node. The gate itself is covered by
-        // CapabilityGatedSurfacesE2ETests.
+        // The Dashboard is gated OFF by default (covered by CapabilityGatedSurfacesE2ETests), so smoke
+        // Models: always on, no route guard, rendered unconditionally for an unpaired node.
         await Page.GotoAsync($"{NodeAppUrl}/models", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle

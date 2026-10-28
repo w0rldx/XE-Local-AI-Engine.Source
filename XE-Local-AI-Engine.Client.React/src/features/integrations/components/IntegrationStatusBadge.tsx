@@ -4,10 +4,10 @@ import { useTranslation } from "react-i18next";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { IntegrationExecutionStatus, IntegrationSessionStatus } from "@/features/integrations/models/IntegrationModels";
 
-// Colour maps only — the pill itself is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it.
+// Color maps only — the pill itself is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it.
 
 const executionStatusColors: Record<IntegrationExecutionStatus, MantineColor> = {
-	// Admitted but not yet holding the lease. Grey: nothing is running on the GPU for this row yet.
+	// Admitted but not yet holding the lease. Gray: nothing is running on the GPU for this row yet.
 	Accepted: "gray",
 	// Yellow and never a spinner — a queued run is waiting for a lease another run is holding.
 	Queued: "yellow",

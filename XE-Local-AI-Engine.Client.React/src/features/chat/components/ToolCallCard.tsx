@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { resolveToolApprovalMutation } from "@/core/api/generated/@tanstack/react-query.gen";
+import { ToolCategoryBadge } from "@/core/tools/components/ToolCategoryBadge/ToolCategoryBadge";
+import { useToolCatalog } from "@/core/tools/queries/useToolCatalog";
 import { AgentHomePatchApplyDialog } from "@/core/ui/components/AgentHomePatchApplyDialog/AgentHomePatchApplyDialog";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { AskUserQuestionCard } from "@/features/chat/components/AskUserQuestionCard";
@@ -17,8 +19,6 @@ import { WebRequestConsentCard, WebReviewCard } from "@/features/chat/components
 import { agentHomeRunIdWithPatch } from "@/features/chat/models/AgentHomePatchToolResult";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
-import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
-import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
 
 interface ToolCallCardProps {
 	part: ChatToolPart;
@@ -91,7 +91,7 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	const toolCategory = catalogEntry?.category ?? "Unknown";
 	const toolEffectiveApproval = catalogEntry?.effectiveRequiresApproval ?? true;
 	// Whether the node can actually REMEMBER a session-scoped approval. The backend's PER-REQUEST answer wins: the
-	// runner resolves it from the same memo key that would honour the decision, so it also covers the tools the node
+	// runner resolves it from the same memo key that would honor the decision, so it also covers the tools the node
 	// catalog does not carry at all (the MAF skill tools — which is how run_skill_script and imported skills kept
 	// offering a session scope that silently degraded to "Once"). The catalog's tool-identity flag is the fallback for
 	// a request the backend did not resolve (a reconnect replay), and offering the button remains the last resort — the
@@ -201,7 +201,7 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 									{stateLabel}
 								</Badge>
 								{/* No badge while the catalog loads: the first card of a page mounts the catalog query, and badging that
-								    wait as fail-closed Unknown mislabels a known tool (N1). A settled miss still badges Unknown. */}
+								    wait as fail-closed Unknown mislabels a known tool. A settled miss still badges Unknown. */}
 								{catalogQuery.isLoading ? null : (
 									<ToolCategoryBadge category={toolCategory} effectiveRequiresApproval={toolEffectiveApproval} />
 								)}

@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="XE_Local_AI_Engine.Cli.Tests.Categories"/>
+    <Using Include="XE_Local_AI_Engine.Client.Testing.Categories"/>
   </ItemGroup>
 
 </Project>

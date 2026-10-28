@@ -3,10 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>InitialNodeIdentitySchema</c> creates the node's identity database — the ASP.NET Identity tables plus this
-///     node's own refresh-token table. It runs against a SEPARATE migrations-history table
-///     (<c>__EFMigrationsHistory_Identity</c>) from the chat context, and nothing else in this suite had ever exercised
-///     that context, so a break in it would have surfaced only at first launch.
+///     <c>InitialNodeIdentitySchema</c> creates the Identity tables and the refresh-token table, with its own
+///     <c>__EFMigrationsHistory_Identity</c>. Nothing else exercises this context; a break would show at first launch.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class InitialNodeIdentitySchemaMigrationTests

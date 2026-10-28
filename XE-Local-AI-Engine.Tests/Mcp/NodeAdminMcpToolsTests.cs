@@ -198,7 +198,7 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal("model-a", node.DefaultModelName!);
         AssertEx.Equal(2, node.LoadedProcessCount);
         AssertEx.Equal("b7000", runtime.InstalledTag!);
-        // I-D8: the override and source-build runtime were invisible, so an agent would acquire a runtime it did not need.
+        // The override and source-build runtime are visible, so an agent never acquires a runtime it does not need.
         AssertEx.Equal("cuda", runtime.OverrideVariant!);
         AssertEx.True(runtime.InstalledIsSourceBuild);
         AssertEx.Equal("sanitized failure", acquisition.SanitizedError!);
@@ -726,7 +726,7 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal(7, AssertEx.NotNull(updated.Agent).Version);
     }
 
-    // Q5 / I-D6: a name shared by several agents is refused by every name-keyed tool; nothing is updated or deleted.
+    // A name shared by several agents is refused by every name-keyed tool; nothing is updated or deleted.
     [Test]
     public async Task AgentLookupsByName_WhenNameIsShared_ReturnAmbiguousNameAndTouchNothing()
     {

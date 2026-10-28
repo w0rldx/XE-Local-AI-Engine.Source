@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Coverage for the non-Windows Data Protection key-ring encryptor/decryptor and its KEK derivation. Proves the
-///     round-trip, fail-closed-on-wrong-KEK, an end-to-end Protect/Unprotect over an on-disk ring that is genuinely
-///     encrypted at rest, and backward-compatibility with a legacy plaintext key-ring.
+///     Covers the non-Windows Data Protection key-ring encryptor/decryptor and its KEK derivation: round-trip,
+///     fail-closed on a wrong KEK, end-to-end Protect/Unprotect over a ring encrypted at rest, and a legacy plaintext
+///     key-ring.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class NodeDataProtectionKeyRingEncryptionTests

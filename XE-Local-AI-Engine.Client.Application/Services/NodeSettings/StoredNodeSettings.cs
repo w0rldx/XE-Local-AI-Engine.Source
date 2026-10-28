@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-using System.Text.RegularExpressions;
-using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Containers;
-using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -15,7 +12,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     <c>INodeRuntimeSettings</c> (precedence stored &gt; seed &gt; default). <c>NodeSettingsStore.Normalize</c>
 ///     clamps/validates each field; an out-of-range stored value falls back to <see langword="null" /> (re-seeded).
 /// </remarks>
-public sealed partial record StoredNodeSettings
+public sealed record StoredNodeSettings
 {
     public const int DefaultMaxMessageRequestTimeoutSeconds = 600;
 
@@ -333,7 +330,7 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxAgentHomeRunRetentionDays = 365;
 
-    // Chat and agent-run knobs (round 2). Each Default mirrors its options class default, which the shipped appsettings.json does not
+    // Chat and agent-run knobs. Each Default mirrors its options class default, which the shipped appsettings.json does not
     // override; each Min/Max pair sits inside that options class's own validator bounds.
 
     /// <summary>Hardcoded fallback for the tool-loop ceiling; mirrors <c>AgentToolPipelineOptions.MaximumToolIterationsPerRequest</c>.</summary>
@@ -460,7 +457,7 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxSpawnQueueWaitSeconds = 3600;
 
-    // Knowledge, privacy and usage knobs (round 2). Each Default mirrors its options class default, which the shipped appsettings.json
+    // Knowledge, privacy and usage knobs. Each Default mirrors its options class default, which the shipped appsettings.json
     // does not override.
 
     /// <summary>Mirrors <c>KnowledgeBaseOptions.AdaptiveRerankingEnabled</c>.</summary>
@@ -546,7 +543,7 @@ public sealed partial record StoredNodeSettings
     /// <summary>4 TiB.</summary>
     public const long MaxBenchmarkKldCacheMaxBytes = 4L * 1024 * 1024 * 1024 * 1024;
 
-    // Runtime and workspace knobs (round 2). Each Default mirrors its options class default, which the shipped appsettings.json does
+    // Runtime and workspace knobs. Each Default mirrors its options class default, which the shipped appsettings.json does
     // not override; each Min/Max pair sits inside that options class's own validator bounds.
 
     /// <summary>Mirrors <c>StableDiffusionRuntimeOptions.MaxLoadedProcesses</c>.</summary>
@@ -662,7 +659,7 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>
     ///     Node switch for the per-turn tool-relevance offer. Default (absent) is OFF: the filter stays a
-    ///     pass-through, so every offer is byte-identical to the pre-toggle behaviour.
+    ///     pass-through, so every offer is byte-identical to the pre-toggle behavior.
     /// </summary>
     public const bool DefaultToolRelevanceEnabled = false;
 
@@ -702,7 +699,7 @@ public sealed partial record StoredNodeSettings
     /// </summary>
     public const string DefaultUiMode = UiModeAdvanced;
 
-    /// <summary>The <see cref="SandboxSecurityProfile" /> literal for today's behaviour: preferred containment degrades where the host cannot serve it.</summary>
+    /// <summary>The <see cref="SandboxSecurityProfile" /> literal for today's behavior: preferred containment degrades where the host cannot serve it.</summary>
     public const string SandboxSecurityProfileLow = "low";
 
     /// <summary>The <see cref="SandboxSecurityProfile" /> literal that turns every declared containment preference into a precondition (ADR 0020).</summary>
@@ -735,52 +732,6 @@ public sealed partial record StoredNodeSettings
     /// <summary>Tag format gate: a llama.cpp release tag is a literal <c>b</c> followed by one or more digits.</summary>
     public const string RecommendedLlamaCppTagPattern = "^b[0-9]+$";
 
-    [GeneratedRegex(RecommendedLlamaCppTagPattern, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 2000)]
-    private static partial Regex RecommendedTagRegex();
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="tag" /> matches the pinned-tag format (<c>b</c>+digits).
-    /// </summary>
-    public static bool IsValidRecommendedLlamaCppTag(string? tag)
-    {
-        return !string.IsNullOrWhiteSpace(tag) && RecommendedTagRegex().IsMatch(tag);
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="mode" /> is a recognized <c>--spec-type</c> value (or
-    ///     empty/<c>none</c>, i.e. disabled). Delegates to <see cref="SpeculativeDecodingSettings.IsAllowedMode" /> so the
-    ///     accepted set has one authority (the pinned-build-verified list in the provider).
-    /// </summary>
-    public static bool IsValidSpeculativeMode(string? mode)
-    {
-        return SpeculativeDecodingSettings.IsAllowedMode(mode);
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="mode" /> is an EXTERNAL-DRAFT speculative mode — one
-    ///     that runs a second GGUF and so REQUIRES a draft model.
-    /// </summary>
-    /// <remarks>
-    ///     <c>draft-mtp</c> drafts from heads inside the main model and is false here despite the name prefix.
-    ///     Delegates to <see cref="SpeculativeDecodingSettings.ModeRequiresDraftModel" /> so the boundary validator and
-    ///     the save-endpoint cross-field guard share one authority for the classification.
-    /// </remarks>
-    public static bool SpeculativeModeRequiresDraftModel(string? mode)
-    {
-        return SpeculativeDecodingSettings.ModeRequiresDraftModel(mode);
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="value" /> names a container runtime this engine knows
-    ///     (<c>auto</c> or <c>docker</c>, ordinal-ignore-case). Delegates to
-    ///     <see cref="ContainerRuntimeSelectionParser.TryParse" /> so the stored, wire and engine representations of the
-    ///     selection have one authority rather than an allow-list restated per caller.
-    /// </summary>
-    public static bool IsValidContainerRuntimeSelection(string? value)
-    {
-        return ContainerRuntimeSelectionParser.TryParse(value, out _);
-    }
-
     /// <summary>The widest model-name column the node persists (<c>base_model_name</c>, 256).</summary>
     public const int MaxModelNameLength = 256;
 
@@ -789,136 +740,6 @@ public sealed partial record StoredNodeSettings
     public const string ImplausibleModelNameMessage = "Model name must be at most 256 characters and contain no control characters.";
 
     public const string UnknownHuggingFaceDefaultQuantMessage = "Unknown Hugging Face default quant. Use a GGUF quant label such as Q4_K_M or UD-Q4_K_XL.";
-
-    /// <summary>
-    ///     Shape only, never "is it installed": a default is legitimately set before its download. At most
-    ///     <see cref="MaxModelNameLength" /> characters after trimming, and no control characters.
-    /// </summary>
-    public static bool IsPlausibleModelName(string value)
-    {
-        var trimmed = value.Trim();
-        return trimmed.Length <= MaxModelNameLength && !trimmed.Any(char.IsControl);
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="value" /> is one GGUF quant token in its canonical
-    ///     spelling, case aside. The quant parser IS the repo's quant vocabulary.
-    /// </summary>
-    public static bool IsKnownQuant(string value)
-    {
-        var trimmed = value.Trim();
-        return string.Equals(GgufQuantParser.TryParse(trimmed), trimmed, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="type" /> is a recognized KV-cache type (or empty, i.e.
-    ///     "use the node default"). Delegates to <see cref="LlamaServerKvCacheTypes.IsAllowed" /> so the allow-list has
-    ///     one authority shared with the benchmark KV picker.
-    /// </summary>
-    public static bool IsValidKvCacheType(string? type)
-    {
-        return LlamaServerKvCacheTypes.IsAllowed(type);
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="profile" /> is one of the four PERSISTABLE
-    ///     external-access literals: <see cref="ExternalAccessProfileRecommended" />,
-    ///     <see cref="ExternalAccessProfileOffline" />, <see cref="ExternalAccessProfileCustom" />,
-    ///     <see cref="ExternalAccessProfilePending" />.
-    /// </summary>
-    /// <remarks>
-    ///     This is what may be STORED, so <c>NodeSettingsStore.Normalize</c> uses it. The comparison is ordinal (a
-    ///     constant string pattern), so <c>"Offline"</c> is rejected rather than silently accepted.
-    ///     <see langword="null" /> is a state (undecided), not a literal, and is <see langword="false" /> here.
-    /// </remarks>
-    public static bool IsValidExternalAccessProfile(string? profile)
-    {
-        return profile is ExternalAccessProfileRecommended
-            or ExternalAccessProfileOffline
-            or ExternalAccessProfileCustom
-            or ExternalAccessProfilePending;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="profile" /> is a preset a CLIENT may send:
-    ///     <see cref="ExternalAccessProfileRecommended" /> or <see cref="ExternalAccessProfileOffline" />.
-    ///     <see cref="ExternalAccessProfileCustom" /> and <see cref="ExternalAccessProfilePending" /> are engine-written
-    ///     states — the boundary validator rejects them as inputs and the save mapper is their only writer.
-    /// </summary>
-    public static bool IsExternalAccessPreset(string? profile)
-    {
-        return profile is ExternalAccessProfileRecommended or ExternalAccessProfileOffline;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="mode" /> is one of the two navigation modes,
-    ///     <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />.
-    /// </summary>
-    /// <remarks>
-    ///     The comparison is ordinal (a constant string pattern), so <c>"Simple"</c> is rejected rather than silently
-    ///     accepted. <see langword="null" /> is a state (not answered yet), not a literal, and is
-    ///     <see langword="false" /> here. Unlike the external-access profile there is no engine-written third literal:
-    ///     the client may send either value it may store.
-    /// </remarks>
-    public static bool IsValidUiMode(string? mode)
-    {
-        return mode is UiModeSimple or UiModeAdvanced;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="profile" /> is one of the three PERSISTABLE sandbox security profile literals:
-    ///     <see cref="SandboxSecurityProfileLow" />, <see cref="SandboxSecurityProfileHigh" />, <see cref="SandboxSecurityProfilePending" />.
-    /// </summary>
-    /// <remarks>
-    ///     Ordinal, like the external-access literals, so <c>"High"</c> is rejected rather than silently accepted. <see langword="null" /> is
-    ///     a state (undecided), not a literal, and is <see langword="false" /> here.
-    /// </remarks>
-    public static bool IsValidSandboxSecurityProfile(string? profile)
-    {
-        return profile is SandboxSecurityProfileLow or SandboxSecurityProfileHigh or SandboxSecurityProfilePending;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="profile" /> is a profile a CLIENT may send: <see cref="SandboxSecurityProfileLow" />
-    ///     or <see cref="SandboxSecurityProfileHigh" />. <see cref="SandboxSecurityProfilePending" /> is engine-written only.
-    /// </summary>
-    public static bool IsSandboxSecurityProfileChoice(string? profile)
-    {
-        return profile is SandboxSecurityProfileLow or SandboxSecurityProfileHigh;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="effort" /> is a level with a reasoning budget:
-    ///     <c>minimal</c>, <c>low</c>, <c>medium</c> or <c>high</c>.
-    /// </summary>
-    /// <remarks>Ordinal, like the other literals; <c>none</c> is excluded because it sends no budget at all.</remarks>
-    public static bool IsValidDefaultReasoningEffort(string? effort)
-    {
-        return effort is "minimal" or "low" or "medium" or "high";
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="mode" /> is a chat output-cap variant: <c>cap</c> (cap
-    ///     plus notice), <c>notice</c> (notice only, no cap) or <c>off</c>.
-    /// </summary>
-    public static bool IsValidChatOutputCapMode(string? mode)
-    {
-        return mode is ChatOutputCapModeCap or ChatOutputCapModeNotice or ChatOutputCapModeOff;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="channel" /> is one of the three update-channel
-    ///     literals: <c>stable</c>, <c>preview</c> or <c>development</c>.
-    /// </summary>
-    /// <remarks>
-    ///     Delegates to <see cref="AppUpdateChannelNames.TryParse" /> so the literals are declared once, not re-listed
-    ///     here. The comparison is ordinal, so <c>"Stable"</c> is rejected rather than silently accepted.
-    ///     <see langword="null" /> is a state (never chosen), not a literal, and is <see langword="false" /> here.
-    /// </remarks>
-    public static bool IsValidUpdateChannel(string? channel)
-    {
-        return AppUpdateChannelNames.TryParse(channel, out _);
-    }
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
 
@@ -1134,7 +955,7 @@ public sealed partial record StoredNodeSettings
     /// <summary>Whether the node checks for application updates on its own.</summary>
     /// <remarks>
     ///     <see langword="null" /> (absent) reads as <see cref="DefaultAutoCheckApplicationUpdates" /> (on), so an
-    ///     upgraded node keeps today's behaviour. A bool needs no clamping, so <c>NodeSettingsStore.Normalize</c>
+    ///     upgraded node keeps today's behavior. A bool needs no clamping, so <c>NodeSettingsStore.Normalize</c>
     ///     passes it through untouched. The manual check and apply flow never consult it.
     /// </remarks>
     public bool? AutoCheckApplicationUpdates { get; init; }
@@ -1574,7 +1395,7 @@ public sealed partial record StoredNodeSettings
     ///     undecided and backfillable. Read per sandbox create; only the literal <c>high</c> is <c>high</c>, everything else reads as <c>low</c>.
     /// </summary>
     /// <remarks>
-    ///     A TIGHTENING switch stored as a node setting by ADR 0020, which reverses the configuration-only ruling for this one field: it is
+    ///     A TIGHTENING switch stored as a node setting by ADR 0020, an exception to the configuration-only rule for this one field: it is
     ///     writable only through the Operator settings endpoint and is deliberately absent from <c>NodeSettingsAgenticPatch</c> and
     ///     <c>NodeSettingsAgenticView</c>, so no MCP tool or model can lower it. No configuration seed: a fresh node is asked at first run, an
     ///     upgraded node is stamped <c>low</c> by <c>SandboxSecurityProfileBackfillService</c>. Stored as a string for

@@ -607,7 +607,7 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
     [Test]
     public async Task Fingerprint_ChangesWithTheSelectedKvCacheType()
     {
-        // Never inert, never sticky (D13): switching the knob in EITHER direction moves the hash, so axis (b) stales a
+        // Never inert, never sticky: switching the knob in EITHER direction moves the hash, so axis (b) stales a
         // frozen profile explored under the other type and it re-explores before it can replay.
         var path = await CreateModelFileAsync();
         var binaryPath = await CreateBinaryFileAsync();

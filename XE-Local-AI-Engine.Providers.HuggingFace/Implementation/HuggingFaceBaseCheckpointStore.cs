@@ -58,7 +58,7 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
 
-        // Read the metadata AT the requested revision. Labelling the default branch's file list with a pinned revision describes a checkpoint that may not exist: the download then fetches those names
+        // Read the metadata AT the requested revision. Labeling the default branch's file list with a pinned revision describes a checkpoint that may not exist: the download then fetches those names
         // at the pin, and a file the pin does not have (or has at another size) fails mid-transfer rather than at resolve time.
         var detail = await _hubClient.GetRepoAsync(repoId, revision, ct).ConfigureAwait(false)
                      ?? throw new BaseCheckpointNotTrainableException("The base checkpoint repository could not be read from Hugging Face.");
@@ -192,7 +192,7 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
     ///     Decides what a repo file is for, or <see langword="null" /> when fine-tuning does not need it.
     /// </summary>
     /// <remarks>
-    ///     Everything not recognised is skipped on purpose: a base repo commonly also ships ONNX exports, GGUF quants,
+    ///     Everything not recognized is skipped on purpose: a base repo commonly also ships ONNX exports, GGUF quants,
     ///     PyTorch <c>.bin</c> duplicates of the same weights, and images, and downloading those would multiply the
     ///     transfer for nothing.
     /// </remarks>

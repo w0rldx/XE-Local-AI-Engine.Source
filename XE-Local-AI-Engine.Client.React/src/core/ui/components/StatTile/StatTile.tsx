@@ -27,7 +27,7 @@ const variantStyles = {
 	paper: { labelSize: "xs", valueSize: undefined, valueWeight: 600 },
 } as const;
 
-// Standard labelled metric tile: dimmed caption over an emphasised value, in the three frames the app uses.
+// Standard labeled metric tile: dimmed caption over an emphasized value, in the three frames the app uses.
 export function StatTile({ label, value, variant = "plain", exactValue, "data-testid": testId, valueTestId }: StatTileProps) {
 	const style = variantStyles[variant];
 

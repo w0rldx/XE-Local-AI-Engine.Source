@@ -26,7 +26,7 @@ public sealed class PublishingDevWorkflowStoreTests
     /// <summary>
     ///     The bound the wall-clock tests measure "did not hang" against. Deliberately far wider than the collection
     ///     budget they set: a shared runner runs several suites at once, and the claim under test is that the settle returns
-    ///     at all — without the fix it waits on the collector until the test framework kills it, not until this passes.
+    ///     at all — a blocking settle waits on the collector until the test framework kills it, not until this passes.
     /// </summary>
     private static readonly TimeSpan Hang = TimeSpan.FromSeconds(20);
 
@@ -304,7 +304,7 @@ public sealed class PublishingDevWorkflowStoreTests
         AssertEx.Equal(expected: 1, stalled.Calls, "A reset reached after the shared budget expired must not schedule a collection at all.");
 
         // A generous bound, for the same reason the gated tests below use one: the collector stalls for a MINUTE, so
-        // any bounded return is the claim, and a multiple of the 300 ms budget only measures how loaded the box is.
+        // any bounded return is the claim, and a multiple of the 300 ms budget only measures how loaded the host is.
         AssertEx.True(elapsed.Elapsed < Hang,
             $"A route of {resets} resets behind a stalled collector took {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
     }

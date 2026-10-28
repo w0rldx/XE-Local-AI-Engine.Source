@@ -1,4 +1,4 @@
-// Mantine badge colour per training-run lifecycle status. The call site coalesces an unknown status to "gray", so a
+// Mantine badge color per training-run lifecycle status. The call site coalesces an unknown status to "gray", so a
 // status this map has not seen renders neutral rather than blank.
 export const statusColors: Record<string, string> = {
 	Queued: "gray",

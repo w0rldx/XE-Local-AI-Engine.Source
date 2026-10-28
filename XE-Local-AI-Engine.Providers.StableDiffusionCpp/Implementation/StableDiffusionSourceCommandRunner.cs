@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 internal sealed class StableDiffusionSourceCommandRunner : IStableDiffusionSourceCommandRunner
@@ -54,14 +54,14 @@ internal sealed class StableDiffusionSourceCommandRunner : IStableDiffusionSourc
         }
         catch (OperationCanceledException exception) when (!ct.IsCancellationRequested)
         {
-            TryKill(process);
+            ProcessTreeKill.TryKill(process);
             await IgnoreCancellationAsync(stdoutTask).ConfigureAwait(false);
             await IgnoreCancellationAsync(stderrTask).ConfigureAwait(false);
             throw new TimeoutException($"The source-build command '{Path.GetFileName(fileName)}' exceeded its time limit.", exception);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            TryKill(process);
+            ProcessTreeKill.TryKill(process);
             await IgnoreCancellationAsync(stdoutTask).ConfigureAwait(false);
             await IgnoreCancellationAsync(stderrTask).ConfigureAwait(false);
             throw;
@@ -139,22 +139,6 @@ internal sealed class StableDiffusionSourceCommandRunner : IStableDiffusionSourc
         catch (OperationCanceledException)
         {
             // The command token was cancelled and the process tree was killed.
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                _ = process.WaitForExit(milliseconds: 5000);
-            }
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
-        {
-            // Best-effort process-tree cancellation.
         }
     }
 }

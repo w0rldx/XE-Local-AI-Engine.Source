@@ -9,9 +9,8 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Brief test 1, selection half. The rule is short because upstream's asset matrix is short, and the case that
-///     matters most is the one a reader gets wrong: NVIDIA on LINUX selects CPU, because whisper.cpp publishes no Linux
-///     CUDA prebuilt and selecting CUDA would resolve bytes that do not exist.
+///     Backend selection. The rule is short because upstream's asset matrix is short; the case readers get wrong is
+///     NVIDIA on LINUX, which selects CPU because whisper.cpp publishes no Linux CUDA prebuilt.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WhisperBackendSelectorTests
@@ -64,8 +63,8 @@ public sealed class WhisperBackendSelectorTests
     [Test]
     public async Task SelectBackend_WindowsNvidia_ZeroCudaDevices_FallsBackToCpu_AndWarns()
     {
-        // The 2026-09-22 tester box: an NVIDIA GPU whose driver enumerated zero CUDA devices. The cuBLAS whisper-server reported
-        // ready and died on its first request; CPU is served instead and the reason is stated once at Warning.
+        // An NVIDIA GPU whose driver enumerates zero CUDA devices: the cuBLAS whisper-server reports
+        // ready and dies on its first request; CPU is served instead and the reason is stated once at Warning.
         var logger = new RecordingLogger<WhisperBackendSelector>();
         var selector = new WhisperBackendSelector(Profiler(GpuVendor.Nvidia),
             isWindows: true,

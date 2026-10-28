@@ -44,8 +44,8 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task VerifyOllamaAndModelAsync_WhenDefaultModelIsStored_UsesTheStoredValueNotTheAppsettingsSeed()
     {
-        // The reporter used to read Agent:LocalChat:DefaultModel straight from IConfiguration in its constructor, which
-        // meant a stored default model was never consulted — the appsettings seed always won, forever. Here the ONLY
+        // Reading Agent:LocalChat:DefaultModel straight from IConfiguration in the constructor would never consult a
+        // stored default model — the appsettings seed would always win. Here the ONLY
         // installed model is the stored default, so this can only pass if the stored value is what gets resolved.
         await using var context = await CreateContextAsync(nodeSettings: new StoredNodeSettings
         {
@@ -146,8 +146,8 @@ public sealed class CapabilityReporterTests
         var prober = new ModelCapabilityProber(capabilityClient, configuration, timeProvider, NullLogger<ModelCapabilityProber>.Instance);
         // The REAL NodeRuntimeSettings over the same store, so the reporter resolves its default model through the
         // stored > seed precedence exactly as it does in production. LocalChatAgentOptions.DefaultModel defaults to
-        // "qwen3.5:0.8b", the same value these tests put in Ollama:ChatModel, so the seed path is unchanged; what is now
-        // additionally honoured is a StoredNodeSettings.DefaultModelName, which the reporter previously ignored outright.
+        // "qwen3.5:0.8b", the same value these tests put in Ollama:ChatModel, so the seed path is unchanged; what is
+        // additionally honored is a StoredNodeSettings.DefaultModelName.
         var runtimeSettings = new NodeRuntimeSettings(nodeSettingsStore,
             configuration,
             Options.Create(new LocalChatAgentOptions()),

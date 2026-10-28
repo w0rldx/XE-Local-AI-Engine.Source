@@ -27,12 +27,12 @@ public sealed class ModelCatalogBundledLoaderTests
     public void Load_BundledSeedCatalog_DoesNotDeclareAUniformArchFloor()
     {
         // The arch gate is only as good as this column, and a UNIFORM column is the signature of nobody maintaining it.
-        // That is not hypothetical: every one of the 41 entries shipped the same floor, including the Gemma 4 and
-        // Qwen3.5 entries, while a live run on 2026-07-31 proved that floor's build cannot load those architectures at
-        // all. The gate therefore failed OPEN in precisely the case it exists to catch.
+        // A shared floor across every entry, including the Gemma 4 and Qwen3.5 entries, would claim a build that
+        // cannot load those architectures at all, so the gate would fail OPEN in precisely the case it exists to
+        // catch.
         // This test does not, and cannot, assert that any particular floor is CORRECT — that is upstream llama.cpp
         // knowledge. It asserts the weaker, mechanically checkable property that the table is not a single repeated
-        // value, which is what rots silently when a model is added by copying its neighbour.
+        // value, which is what rots silently when a model is added by copying its neighbor.
         var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);
 
         var distinctFloors = document.Models
@@ -50,8 +50,8 @@ public sealed class ModelCatalogBundledLoaderTests
     [Test]
     public void Load_BundledSeedCatalog_CurrentGenerationArchitecturesDeclareAFloorAboveTheOldBaseline()
     {
-        // Measured 2026-07-31: the Gemma 4 and Qwen3.5 families do NOT load on b9692 (an older remediation-banner
-        // build), and do load on b10201. Their floors must stay strictly above the old baseline, or the recommendation surface will once again
+        // Measured: the Gemma 4 and Qwen3.5 families do NOT load on b9692 (an older remediation-banner
+        // build), and do load on b10201. Their floors must stay strictly above the old baseline, or the recommendation surface will
         // offer a user a model their runtime cannot open.
         var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);
 

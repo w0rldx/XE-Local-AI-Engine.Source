@@ -10,10 +10,10 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     The queue's claim and its restart recovery both used to branch "Primary, else it is a Judge" — and the else
-///     dereferenced the judge attempt id. A Fidelity or Comparison item reaching either would throw
+///     The queue's claim and its restart recovery must not branch "Primary, else it is a Judge": the else
+///     dereferences the judge attempt id, so a Fidelity or Comparison item would throw
 ///     <c>InvalidJudgeTransition</c> and stall the single-consumer queue behind an item it could never claim. Both are
-///     now four-arm switches, and this covers every cell of that table.
+///     four-arm switches, and this covers every cell of that table.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
@@ -123,8 +123,8 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     /// <summary>
-    ///     The fidelity projection follows its attempt through every transition. Claiming used to update only the
-    ///     attempt, so a measurement that runs for hours kept reading 'queued' on the run every API projects.
+    ///     The fidelity projection follows its attempt through every transition. A claim that updates only the
+    ///     attempt leaves a measurement that runs for hours reading 'queued' on the run every API projects.
     /// </summary>
     [Test]
     public async Task ClaimNextAsync_Fidelity_ProjectsRunningOnTheRunAndTerminalizesBack()
@@ -157,9 +157,9 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     /// <summary>
-    ///     A comparison is not an event in either run's life. Claiming one used to fall through to the common run
-    ///     version bump on the canonical first run, which invalidated that run's CAS token on every pairwise claim:
-    ///     scoring, deleting or re-measuring it returned VersionConflict throughout a tournament.
+    ///     A comparison is not an event in either run's life. Claiming one must not fall through to the common run
+    ///     version bump on the canonical first run, which invalidates that run's CAS token on every pairwise claim:
+    ///     scoring, deleting or re-measuring it would return VersionConflict throughout a tournament.
     /// </summary>
     [Test]
     public async Task ClaimNextAsync_Comparison_LeavesBothRunsVersionsAlone()
@@ -518,7 +518,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     /// <summary>
-    ///     The fidelity work item used to be inserted at freeze, so a primary that failed or was cancelled left hours
+    ///     The fidelity work item is not inserted at freeze: a primary that failed or was cancelled would leave hours
     ///     of GPU work queued against a run with no answer — the queue would dutifully measure a corpse.
     /// </summary>
     [Test]

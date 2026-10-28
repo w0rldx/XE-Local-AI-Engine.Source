@@ -12,10 +12,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="GgufVariantRecommender" /> tests: per-file quality tier + hardware fit verdict from a single mocked
-///     free-VRAM probe, and the single-recommended-variant selection rule (best quality among Fits, then Tight, then
-///     smallest when nothing fits, then the quality sweet-spot when no probe). The GPU-variant selector and VRAM probe
-///     are mocked — no real hardware.
+///     <see cref="GgufVariantRecommender" /> tests: per-file quality tier and fit verdict from one mocked free-VRAM
+///     probe, and the single recommendation (best quality among Fits, then Tight, then smallest when nothing fits, then
+///     the quality sweet-spot with no probe). No real hardware.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufVariantRecommenderTests

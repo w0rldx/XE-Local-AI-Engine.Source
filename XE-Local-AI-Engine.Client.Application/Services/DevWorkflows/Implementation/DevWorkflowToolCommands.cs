@@ -19,7 +19,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>What the synthesized snapshot answers for the two attempt-identity fields.</summary>
     /// <remarks>

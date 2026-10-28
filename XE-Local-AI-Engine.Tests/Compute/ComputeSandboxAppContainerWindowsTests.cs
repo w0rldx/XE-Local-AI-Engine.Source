@@ -159,7 +159,7 @@ public sealed class ComputeSandboxAppContainerWindowsTests
               print("LOOPBACK DENIED", type(error).__name__)
           """;
 
-    // Appended to the boundary script: what N-60 broke (TEMP folders that do not exist, the trampoline's stderr line) and what the
+    // Appended to the boundary script: the two faults (TEMP folders that do not exist, the trampoline's stderr line) and what the
     // store interpreter with __PYVENV_LAUNCHER__ must keep (the venv prefix, the launcher as sys.executable).
     private static string BuildTempScript(string venvRoot, string launcher) =>
         $$"""

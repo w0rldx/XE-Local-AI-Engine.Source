@@ -19,7 +19,7 @@ public sealed record ExternalAppsOptions
     /// <summary>Whether the feature does anything. Default <see langword="false" />.</summary>
     /// <remarks>
     ///     The module still registers so the composition root has one shape, but the reconciler and the observer
-    ///     return immediately and every service entry point refuses: registration is not the gate, behaviour is.
+    ///     return immediately and every service entry point refuses: registration is not the gate, behavior is.
     /// </remarks>
     public bool Enabled { get; set; }
 
@@ -48,7 +48,7 @@ public sealed record ExternalAppsOptions
     [Range(1, 100_000)]
     public int MaxLogTailLines { get; init; } = 2000;
 
-    /// <summary>How often the state observer asks the daemon what the labelled containers are doing.</summary>
+    /// <summary>How often the state observer asks the daemon what the labeled containers are doing.</summary>
     [Range(5, 3600)]
     public int ObserverIntervalSeconds { get; init; } = 15;
 

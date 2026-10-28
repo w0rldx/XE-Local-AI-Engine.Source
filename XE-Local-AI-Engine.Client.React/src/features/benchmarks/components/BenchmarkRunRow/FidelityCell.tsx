@@ -15,7 +15,7 @@ import type { BenchmarkRunSummary } from "@/features/benchmarks/models/Benchmark
  * KLD rides under it when the project opted in. Display only, and the copy never calls a number good or bad — a lower
  * perplexity is not a better answer, which is exactly why neither figure ranks anything.
  *
- * A KLD measured against something the project no longer expects renders `kld-stale` — a BADGE, never a greyed number.
+ * A KLD measured against something the project no longer expects renders `kld-stale` — a BADGE, never a grayed number.
  * A figure a reader can still see is a figure they will compare, and one taken over a different corpus, chunk count or
  * base model means something different from the one beside it.
  */

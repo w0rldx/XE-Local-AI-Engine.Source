@@ -3,9 +3,9 @@ import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
-import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 
 interface RunningModelsPanelProps {
 	runningModels: readonly RunningModel[];

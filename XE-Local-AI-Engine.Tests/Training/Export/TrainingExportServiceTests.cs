@@ -13,15 +13,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Training.Runs;
 
 /// <summary>
-///     The export pipeline against scripted subprocesses: no venv, no llama.cpp, no GPU. What is pinned here is the
-///     part a live export cannot check cheaply — that a failure is recorded ON the artifact and leaves the finished
-///     run alone, that a runtime with no quantizer says so specifically instead of failing at the subprocess, and
-///     that an architecture this engine cannot serve is rejected before the smoke gate ever runs.
+///     The export pipeline against scripted subprocesses: a failure lands ON the artifact and spares the run, a missing
+///     quantizer is named, and an unservable architecture is rejected before the smoke gate.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TrainingExportServiceTests : IDisposable
@@ -341,7 +338,7 @@ public sealed class TrainingExportServiceTests : IDisposable
         public const string GgufPyDirectory = "/opt/llama.cpp/gguf-py";
 
         private readonly string _adapterDirectory;
-        private readonly CapturingLogger<TrainingExportService> _logger;
+        private readonly RecordingLogger<TrainingExportService> _logger;
         private readonly ServiceProvider _provider;
         private readonly TrainingExportService _service;
         private readonly string _stagedDirectory;
@@ -354,7 +351,7 @@ public sealed class TrainingExportServiceTests : IDisposable
             Guid runId,
             string stagedDirectory,
             string adapterDirectory,
-            CapturingLogger<TrainingExportService> logger)
+            RecordingLogger<TrainingExportService> logger)
         {
             _provider = provider;
             _service = service;
@@ -423,7 +420,7 @@ public sealed class TrainingExportServiceTests : IDisposable
                                   SourceCommit = "abc123"
                               });
 
-            // The quantizer is located by NAME beside the resolved server, so its presence is modelled the way the
+            // The quantizer is located by NAME beside the resolved server, so its presence is modeled the way the
             // product resolves it: a real sibling file, or the absence of one.
             var binDirectory = Path.Combine(owner._root, "llamacpp", "bin");
             _ = Directory.CreateDirectory(binDirectory);
@@ -477,7 +474,7 @@ public sealed class TrainingExportServiceTests : IDisposable
 
             var gate = new GpuWorkGate();
             var spawner = new ScriptedExportSpawner();
-            var logger = new CapturingLogger<TrainingExportService>();
+            var logger = new RecordingLogger<TrainingExportService>();
             var service = new TrainingExportService(provider.GetRequiredService<IServiceScopeFactory>(),
                 new TrainingRunEventBuffer(Options.Create(new TrainingRunEventBufferOptions())),
                 gate,

@@ -28,7 +28,7 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
     // from holding the single llama-server slot to the window while chat waits behind it.
     private const int MaxOutputTokens = 1024;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DefaultMemoryExtractionAgent> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;

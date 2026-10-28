@@ -157,9 +157,8 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_FirstDownloadIntoEmptyDirectory_YieldsExactlyOneCanonicalEntry()
     {
-        // Reproduces the first-download double-registration: the .gguf lands on disk with NO manifest, so the upsert's
-        // load self-heals via a rescan that registers a filename-alias entry — the canonical upsert must then collapse
-        // the alias rather than append a second entry sharing the one file.
+        // First-download double-registration: the .gguf lands with NO manifest, so the upsert's load rescans and adds a
+        // filename-alias entry; the canonical upsert must collapse it, not append a second entry for the one file.
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);

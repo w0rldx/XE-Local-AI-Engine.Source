@@ -393,7 +393,7 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
     /// <remarks>
     ///     Reuse requires a <b>declared</b> size that matches the file exactly. Without a declared size there is nothing
     ///     to check the file against — a truncated leftover would be indistinguishable from a complete one — so the part
-    ///     is re-downloaded, which is the previous behaviour. Length is deliberately the only check: hashing a 13 GB
+    ///     is re-downloaded, which is the previous behavior. Length is deliberately the only check: hashing a 13 GB
     ///     diffusion weight to save re-downloading it would cost a large fraction of the transfer it avoids, and the
     ///     download path still verifies the sha of anything it actually fetches.
     /// </remarks>

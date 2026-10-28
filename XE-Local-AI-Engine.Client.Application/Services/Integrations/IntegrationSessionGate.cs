@@ -10,7 +10,7 @@ using System.Collections.Concurrent;
 ///     Admission bounds the node and the principal but counts nothing per SESSION, so two accepts both reading "no
 ///     execution is active here" would seed the SAME conversation and the first execution would read the second caller's
 ///     input as history — cross-request contamination on an externally reachable surface. The busy read therefore sits
-///     inside the same critical section as the write it authorises. An accept naming no session takes no gate: nothing
+///     inside the same critical section as the write it authorizes. An accept naming no session takes no gate: nothing
 ///     can name a session that does not yet exist. A singleton, since accept and the session service must share it.
 /// </remarks>
 // simplified: a ConcurrentDictionary of semaphores, not a lock manager. The node is single-process and admission is 8

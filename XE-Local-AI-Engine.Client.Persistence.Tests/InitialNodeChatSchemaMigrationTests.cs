@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>InitialNodeChatSchema</c> is the floor every later chat migration alters: a conversation, its transcript, its
-///     tool events, and the tombstones that outlive a purge. Both children cascade off <c>conversations</c>, which is
-///     what makes deleting a conversation actually delete its transcript instead of stranding orphan rows carrying user
-///     content. The columns are pinned as an exact set at this point in the chain, so a later migration that quietly
-///     re-shapes the base tables fails here rather than in whichever suite happens to read them.
+///     <c>InitialNodeChatSchema</c> is the floor later chat migrations alter: conversations, transcript, tool events
+///     and purge tombstones. Both children cascade off <c>conversations</c>, so a delete takes the transcript too.
 /// </summary>
+/// <remarks>
+///     The columns are pinned as an exact set here, so a later migration re-shaping the base tables fails here.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class InitialNodeChatSchemaMigrationTests
 {

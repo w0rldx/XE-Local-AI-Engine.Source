@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The transcription switch gates behaviour, not registration: the routes stay discovered, and a disabled node answers 404
+///     The transcription switch gates behavior, not registration: the routes stay discovered, and a disabled node answers 404
 ///     from request-path middleware placed ahead of local API security.
 /// </summary>
 [Category(TestCategories.Integration)]

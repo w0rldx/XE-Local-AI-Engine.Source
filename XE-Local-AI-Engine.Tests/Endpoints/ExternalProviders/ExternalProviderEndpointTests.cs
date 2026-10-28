@@ -108,9 +108,8 @@ public sealed class ExternalProviderEndpointTests
     [Test]
     public async Task SaveConnection_PassesAnAbsentApiKeyThroughAsAbsent()
     {
-        // The single most important contract on this route. The editor renders a masked placeholder and sends NO key
-        // back, so an endpoint that helpfully normalized the missing field to "" would clear the stored key the first
-        // time an operator renamed a working connection.
+        // The key contract here: the editor shows a masked placeholder and sends NO key back, so normalizing the
+        // missing field to "" would clear the stored key the first time an operator renamed a working connection.
         var administrationService = Substitute.For<IExternalProviderAdministrationService>();
         administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
                              .Returns(new ExternalProviderWriteResult.Committed(CreateConfig(), Changed: true));

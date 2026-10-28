@@ -3,18 +3,17 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Every background <c>provider.CreateChatClient(...)</c> under <c>Client.Application/Services</c> must be
-///     wrapped in <c>.WithProviderTelemetry()</c>, or its provider round emits no gen_ai span at all. The behavioural
-///     tests for the helper exercise it in isolation, so deleting the suffix from any one call site leaves them green
-///     — which is exactly the F14 drift this work package exists to close, recreated one layer up: the interactive
-///     pipeline's single <c>UseOpenTelemetry</c> hop was applied once and nine background sites silently grew around
-///     it. This source scan is the pin: it fails both on a deleted suffix and on a new unwrapped site.
-///     The one allowed exception is <c>ModelRoutingLocalChatClient</c>, whose client is the one
-///     <c>DecorateChatClientPipeline</c> already decorates — wrapping it would emit a second span per round.
-///     Scan mechanics: whole-line comments are stripped first (doc comments and prose cite
-///     <c>provider.CreateChatClient(...)</c> freely), and only occurrences with a leading dot count, so an interface
-///     declaration or implementing signature is not a call site.
+///     Every background <c>provider.CreateChatClient(...)</c> under <c>Client.Application/Services</c> must be wrapped
+///     in <c>.WithProviderTelemetry()</c>, or its round emits no gen_ai span. This source scan fails on a deleted
+///     suffix and on a new unwrapped site.
 /// </summary>
+/// <remarks>
+///     The helper's own tests run it in isolation and stay green either way. The one exception is
+///     <c>ModelRoutingLocalChatClient</c>, whose client <c>DecorateChatClientPipeline</c> already decorates (a wrap
+///     would emit a second span per round). Whole-line comments are stripped first, since prose cites the call freely,
+///     and only occurrences with a leading dot count, so an interface declaration or implementing signature is not a
+///     call site.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ProviderTelemetryWrapGuardTests
 {

@@ -19,7 +19,7 @@ export interface DevWorkflowDevTaskNodePanelProps {
  * panel re-implements none of it: re-hosting the hash-locked evidence chain would fork the one place it is rendered.
  * The workflow's contribution is the pointer and the node's own status.
  *
- * **The approval that authorises an apply is a workflow HumanGate upstream of the integration node, not the
+ * **The approval that authorizes an apply is a workflow HumanGate upstream of the integration node, not the
  * Dev Mode panel** — which is why this links out to evidence rather than to a second approve button.
  */
 export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodePanelProps) {

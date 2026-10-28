@@ -13,18 +13,17 @@ import {
 	benchmarkScoreControl,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
+import { useBenchmarkProject, useBenchmarkRun } from "@/features/benchmarks/queries/useBenchmarks";
 import {
-	useBenchmarkProject,
-	useBenchmarkRun,
 	useBenchmarkRunArtifact,
-	useBenchmarkTaskItems,
 	useCancelBenchmarkRun,
 	useClearBenchmarkRunScore,
 	useDeleteBenchmarkRun,
 	useRejudgeBenchmarkRun,
 	useScoreBenchmarkRun,
 	useSubmitBenchmarkRunReview,
-} from "@/features/benchmarks/queries/useBenchmarks";
+} from "@/features/benchmarks/queries/useBenchmarkRunMutations";
+import { useBenchmarkTaskItems } from "@/features/benchmarks/queries/useBenchmarkTaskItems";
 
 export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 	const { t } = useTranslation();

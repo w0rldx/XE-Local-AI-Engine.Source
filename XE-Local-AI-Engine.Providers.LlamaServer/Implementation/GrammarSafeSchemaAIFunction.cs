@@ -9,7 +9,7 @@ using Microsoft.Extensions.AI;
 ///     function.
 /// </summary>
 /// <remarks>
-///     It exists solely so the OpenAI adapter serialises a compilable <c>tools</c> array, and is created inside
+///     It exists solely so the OpenAI adapter serializes a compilable <c>tools</c> array, and is created inside
 ///     <c>DeferredLlamaServerChatClient</c> on a CLONE of the caller's <see cref="ChatOptions" />, so it is never
 ///     visible to the layers that resolve and execute tools: the function-invocation middleware, its approval
 ///     detection and <c>ApprovalRequiredAIFunction</c>'s outermost-type contract all operate on the caller's own

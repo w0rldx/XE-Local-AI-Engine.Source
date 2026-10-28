@@ -29,10 +29,8 @@ internal static class GenerateEndpoint
             return Results.Empty;
         }
 
-        // keep_alive=0 is Ollama's eviction request — it is how the eject action unloads a model — and real Ollama drops
-        // the model from /api/ps immediately. Mirror that here so an eject is observable in the running-models list —
-        // but only after the injected-failure gate above, so a simulated timeout/404/500 leaves the model loaded, as it
-        // would be on real Ollama.
+        // keep_alive=0 is Ollama's eviction request (eject); real Ollama drops the model from /api/ps immediately.
+        // Mirror that after the injected-failure gate above, so a simulated timeout/404/500 leaves the model loaded.
         if (keepAlive is "0")
         {
             state.RunningModels = state.RunningModels

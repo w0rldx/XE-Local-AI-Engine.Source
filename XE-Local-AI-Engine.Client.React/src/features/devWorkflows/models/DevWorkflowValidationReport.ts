@@ -1,3 +1,5 @@
+import { isRecord } from "@/core/models/JsonRecord";
+
 /**
  * The body of a Tool node's `<nodeKey>-validation.json` artifact.
  *
@@ -93,10 +95,6 @@ export const devWorkflowRunnerNotInstalledCode = "runner_not_installed";
 export function devWorkflowRunnerNotInstalledHint(reason: string | null | undefined): string | null {
 	const prefix = `[${devWorkflowRunnerNotInstalledCode}] `;
 	return reason?.startsWith(prefix) ? reason.slice(prefix.length) : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 /**

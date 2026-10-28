@@ -56,9 +56,9 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
 
         // An empty CUDA root, not an unset one: the probe now falls back to /usr/local/cuda/bin when neither
         // CUDA_HOME nor CUDA_PATH is set, and a gate machine with a real CUDA install would otherwise satisfy the
-        // row this test is about. BOTH variables are pinned — the locator consults CUDA_PATH as well, so a box that
+        // row this test is about. BOTH variables are pinned — the locator consults CUDA_PATH as well, so a host that
         // exports it (NVIDIA's own installers do) would find a real compiler through the one left unpinned. Pinning
-        // both is how "no nvcc anywhere" stays a property of the test, not of the box.
+        // both is how "no nvcc anywhere" stays a property of the test, not of the host.
         using var cudaHome = new EnvironmentScope("CUDA_HOME", temp.Path);
         using var cudaPath = new EnvironmentScope("CUDA_PATH", value: null);
         var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), temp.Path, requiredFreeDiskBytes: 0);
@@ -90,7 +90,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         WriteTool(cudaBin, "nvcc");
 
         // Both pinned for the reason the sibling test above documents: the answer must come from this temp root,
-        // never from whatever the box exports or has installed under /usr/local/cuda.
+        // never from whatever the host exports or has installed under /usr/local/cuda.
         using var cudaHome = new EnvironmentScope("CUDA_HOME", Path.Combine(temp.Path, "cuda"));
         using var cudaPath = new EnvironmentScope("CUDA_PATH", value: null);
 

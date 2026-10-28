@@ -103,7 +103,7 @@ public sealed class NodeChatPartAccumulatorTests
     public void FinalSegment_WhenNoAnswerFollowsTheLastCall_KeepsTheWholeTextAndSnapshotEmitsNoTextPart()
     {
         // The turn ended right after a tool call (or a faulted terminal's persisted text ends before the offset): the
-        // pre-split behaviour holds, so history, previews and memory see the whole text and no narration part exists.
+        // pre-split behavior holds, so history, previews and memory see the whole text and no narration part exists.
         const string interim = "Let me search for that. ";
         var acc = new NodeChatPartAccumulator();
         acc.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 1, contentOffset: interim.Length);
@@ -145,7 +145,7 @@ public sealed class NodeChatPartAccumulatorTests
     [Test]
     public void AccumulateToolPart_ManySmallImages_StopAtThePerMessageCeiling()
     {
-        // Codex review 2026-09-30: the 1 MiB per-image cap alone let 100 images of 900 KiB grow one metadata row past 100 MiB.
+        // The 1 MiB per-image cap alone would let 100 images of 900 KiB grow one metadata row past 100 MiB.
         var acc = new NodeChatPartAccumulator();
         var images = Enumerable.Range(0, NodeChatPartAccumulator.MaxToolImagesPerMessage + 3)
                                .Select(static _ => new DataContent(new byte[16], "image/png"))

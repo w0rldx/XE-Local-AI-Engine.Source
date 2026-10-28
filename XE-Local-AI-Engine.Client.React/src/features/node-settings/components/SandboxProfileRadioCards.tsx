@@ -16,7 +16,7 @@ interface Props {
 	readonly testIdPrefix: string;
 }
 
-// Each radio sits in a box one h3 line tall so it centres on the card title's line, not on the card's top edge.
+// Each radio sits in a box one h3 line tall so it centers on the card title's line, not on the card's top edge.
 const titleLineStyle = {
 	display: "flex",
 	alignItems: "center",

@@ -6,9 +6,9 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
-///     Shared fixtures for the external-provider tests: an in-memory registry and a recording transport, so the whole
-///     production stack (endpoint guard → OpenAI adapter → reasoning rewriting) can be driven end to end and the REAL
-///     wire request inspected, with no network and no encrypted store.
+///     Shared fixtures for external-provider tests: an in-memory registry and a recording transport, so the production
+///     stack (endpoint guard → OpenAI adapter → reasoning rewriting) runs end to end and the REAL wire request is
+///     inspected offline.
 /// </summary>
 internal static class ExternalProviderTestData
 {

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     In-memory <see cref="IIntegrationApiKeyStore" />. Real behaviour rather than a mock because the key service's
+///     In-memory <see cref="IIntegrationApiKeyStore" />. Real behavior rather than a mock because the key service's
 ///     interesting properties — a digest that never round-trips, revocation that keeps the row, many keys sharing a
 ///     principal — are all statements about what the store ends up holding.
 /// </summary>
@@ -222,7 +222,7 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
         return snapshot;
     }
 
-    /// <summary>Repoints a seeded trigger's session policy, which is what decides whether ADR 0008 R4-9(a) judges its agent.</summary>
+    /// <summary>Repoints a seeded trigger's session policy, which decides whether the ADR 0008 agent check judges its agent.</summary>
     public void SetSessionPolicy(Guid triggerId, IntegrationSessionPolicy sessionPolicy)
     {
         var index = _rows.FindIndex(row => row.Id == triggerId);
@@ -256,7 +256,7 @@ internal sealed class FakeIntegrationTriggerStore : IIntegrationTriggerStore
 }
 
 /// <summary>
-///     In-memory <see cref="IIntegrationExecutionStore" />. It reproduces the three behaviours the accept path depends
+///     In-memory <see cref="IIntegrationExecutionStore" />. It reproduces the three behaviors the accept path depends
 ///     on — the revocation re-read, both admission caps, and the <c>(PrincipalId, RequestId)</c> uniqueness — because
 ///     a mock that merely records calls could not tell a correct accept order from a wrong one.
 /// </summary>
@@ -417,7 +417,7 @@ internal sealed class FakeIntegrationExecutionStore : IIntegrationExecutionStore
     /// <summary>Makes the next output append throw, which is the "the database is failing" half of the tool's contract.</summary>
     public bool ThrowOnNextOutputAppend { get; set; }
 
-    /// <summary>Signalled before the output append commits, so a suite can observe what the tool has published so far.</summary>
+    /// <summary>Signaled before the output append commits, so a suite can observe what the tool has published so far.</summary>
     public TaskCompletionSource? BlockOutputAppendUntil { get; set; }
 
     /// <summary>

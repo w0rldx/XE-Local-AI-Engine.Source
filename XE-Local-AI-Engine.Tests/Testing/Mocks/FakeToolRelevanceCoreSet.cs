@@ -3,10 +3,9 @@ namespace XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     Hand-written <see cref="IToolRelevanceCoreSet" /> fake returning a fixed name set (empty by default). The
-///     production implementation composes the node tool catalog, which a runner test has no business standing up; and
-///     with the relevance feature off — the shipped default, and what every byte-identical-offer assertion depends on —
-///     the set is never read at all.
+///     Hand-written <see cref="IToolRelevanceCoreSet" /> fake returning a fixed name set (empty by default). The real
+///     one composes the node tool catalog, which a runner test should not stand up; with relevance off (the shipped
+///     default) it is never read.
 /// </summary>
 internal sealed class FakeToolRelevanceCoreSet : IToolRelevanceCoreSet
 {

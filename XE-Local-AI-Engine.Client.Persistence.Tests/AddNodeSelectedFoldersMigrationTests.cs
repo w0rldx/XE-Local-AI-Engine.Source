@@ -4,10 +4,8 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddNodeSelectedFolders</c> creates the operator's folder grants — the only rows that say which host paths the
-///     product may touch. Two invariants are load-bearing and asserted here: the alias is uniquely indexed (everything
-///     above persistence addresses a grant by alias, so two rows sharing one would make the resolved folder ambiguous),
-///     and the host path is a BLOB because it is encrypted at rest rather than stored as a readable path.
+///     <c>AddNodeSelectedFolders</c> creates the folder grants, the only rows naming host paths the product may touch.
+///     Pinned: a unique alias index (grants are addressed by alias) and the host path as an encrypted BLOB.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddNodeSelectedFoldersMigrationTests

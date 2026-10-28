@@ -12,7 +12,7 @@ import {
 } from "@/features/onboarding/data/TutorialRegistry";
 
 export interface QuickStartReadinessState {
-	/** The installed models, or undefined while the runtime has not reported an available catalogue yet. */
+	/** The installed models, or undefined while the runtime has not reported an available catalog yet. */
 	modelItems: readonly LocalModelResponse[] | undefined;
 	selectedModelName: string | null | undefined;
 	/** The steps the quick-start tour should freeze at activation, given what is installed right now. */
@@ -20,7 +20,7 @@ export interface QuickStartReadinessState {
 }
 
 /**
- * The model-catalogue half of the quick-start tour: which steps are worth showing, and the two signals the tour's
+ * The model-catalog half of the quick-start tour: which steps are worth showing, and the two signals the tour's
  * auto-advance effects watch. Only the quick-start tour varies with readiness; every other tour keeps its full list.
  */
 export function useQuickStartReadiness(isAuthenticated: boolean): QuickStartReadinessState {

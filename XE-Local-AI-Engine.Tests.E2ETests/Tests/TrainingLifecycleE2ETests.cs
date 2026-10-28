@@ -13,10 +13,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>
-///     Tracked, opt-in lifecycle proof over the real E2E host, authenticated HTTP routes, encrypted SQLite stores,
-///     immutable freeze writer, comparison policy and quality policy. External Python/llama.cpp execution and the
-///     final registry move are the only deterministic doubles; every required phase records a verdict and the test
-///     refuses to pass if even one is absent.
+///     Opt-in lifecycle proof over the E2E host, authenticated routes, encrypted stores, immutable freeze writer and
+///     comparison/quality policies. Only external Python/llama.cpp and the registry move are doubles; a phase
+///     without a verdict fails it.
 /// </summary>
 public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
 {

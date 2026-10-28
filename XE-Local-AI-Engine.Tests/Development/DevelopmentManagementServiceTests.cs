@@ -19,9 +19,9 @@ public sealed class DevelopmentManagementServiceTests
     /// <summary>
     ///     The budget is checked before the branch that would spend it, in BOTH states a task can be waiting in.
     ///     <para>
-    ///         <c>ChangesRequested</c> is the one the deterministic gate's failure now leaves a task in, and the check
-    ///         used to live inside the <c>InProgress</c> branch alone — so a task at its cap ran one more full coder
-    ///         attempt, spending its tokens and its duration, and was stood down the tick after on work that could
+    ///         <c>ChangesRequested</c> is the one the deterministic gate's failure leaves a task in, and a check
+    ///         inside the <c>InProgress</c> branch alone would let a task at its cap run one more full coder
+    ///         attempt, spending its tokens and its duration, and be stood down the tick after on work that could
     ///         never have reached a review.
     ///     </para>
     /// </summary>

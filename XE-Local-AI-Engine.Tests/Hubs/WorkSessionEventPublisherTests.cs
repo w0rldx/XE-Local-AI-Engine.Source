@@ -29,7 +29,7 @@ public sealed class WorkSessionEventPublisherTests
         await publisher.PublishAsync(sessionId, sequence: 42, kind);
 
         // Asserted against the literal, not against kind.ToString(): the client switches on these strings, so a
-        // capitalised name would match no arm and silently stop updating the pane — and nothing else would catch it.
+        // capitalized name would match no arm and silently stop updating the pane — and nothing else would catch it.
         await proxy.Received(1)
                    .SendCoreAsync("workSessionChanged",
                        Arg.Is<object?[]>(arguments => arguments.Length == 1

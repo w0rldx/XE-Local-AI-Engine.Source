@@ -524,7 +524,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     ///     The two sides have to agree on ONE identifier: the supervisor keys its load record by the process's
     ///     <c>ProcessKey.ModelName</c>, and the run envelope carries the runner's resolved model name (unprefixed) as
     ///     `served_model_name`. A real repo id with a quant suffix, joined across a case difference, is the shape that
-    ///     would break first if either side ever prefixed or normalised its half.
+    ///     would break first if either side ever prefixed or normalized its half.
     /// </summary>
     [Test]
     public async Task VramAtLoad_JoinsTheServedModelNameToTheLoadKeyForARealRepoId()

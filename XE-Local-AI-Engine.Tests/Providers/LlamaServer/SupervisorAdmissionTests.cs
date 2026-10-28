@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     GPU-load admission at the llama-server supervisor: two concurrent GPU-backed loads serialize their
-///     spawn-through-readiness window through the shared gate (the second does not even launch until the first is
-///     resident), while CPU-only loads bypass the gate entirely and launch concurrently.
+///     GPU-load admission at the llama-server supervisor: concurrent GPU-backed loads serialize spawn-through-readiness
+///     through the shared gate (the second launches only once the first is resident); CPU-only loads bypass it.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SupervisorAdmissionTests

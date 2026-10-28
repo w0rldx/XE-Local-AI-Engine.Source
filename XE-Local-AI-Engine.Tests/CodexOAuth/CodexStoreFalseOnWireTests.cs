@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
@@ -20,7 +18,7 @@ public sealed class CodexStoreFalseOnWireTests
     [Test]
     public async Task CodexResponsesRequest_SerializesStoreFalse_AndOmitsServerStateIds()
     {
-        using var capture = new BodyCapturingHandler();
+        using var capture = new ResponsesBodyCapturingHandler();
         using var httpClient = new HttpClient(capture);
 
         // Build the SAME Responses-backed IChatClient the factory builds (real SDK serialization), wrapped in the
@@ -56,13 +54,13 @@ public sealed class CodexStoreFalseOnWireTests
     /// <summary>
     ///     400-regression: the agent send path sets <see cref="ChatOptions.ModelId" /> to the node's LOCAL model
     ///     (e.g. <c>qwen3:8b</c>). The Codex wrapper must OVERWRITE that with the resolved Codex model id so only a
-    ///     valid Codex model reaches the wire — proving the leaked local name can never be the request model (which was
-    ///     the cause of the live HTTP 400 from chatgpt.com/backend-api/codex/responses).
+    ///     valid Codex model reaches the wire — proving the leaked local name can never be the request model (which
+    ///     chatgpt.com/backend-api/codex/responses answers with HTTP 400).
     /// </summary>
     [Test]
     public async Task CodexResponsesRequest_WhenLocalModelIdSupplied_SerializesPinnedCodexModelOnWire()
     {
-        using var capture = new BodyCapturingHandler();
+        using var capture = new ResponsesBodyCapturingHandler();
         using var httpClient = new HttpClient(capture);
 
         var inner = CodexChatClientConstruction.Build(new Uri("https://chatgpt.com/backend-api/codex"),
@@ -102,7 +100,7 @@ public sealed class CodexStoreFalseOnWireTests
     [Test]
     public async Task CodexResponsesRequest_WhenSystemMessageSupplied_MovesItToInstructions_AndOmitsFromInput()
     {
-        using var capture = new BodyCapturingHandler();
+        using var capture = new ResponsesBodyCapturingHandler();
         using var httpClient = new HttpClient(capture);
 
         var inner = CodexChatClientConstruction.Build(new Uri("https://chatgpt.com/backend-api/codex"),
@@ -140,27 +138,5 @@ public sealed class CodexStoreFalseOnWireTests
                                  item.TryGetProperty("role", out var role)
                                  && string.Equals(role.GetString(), "system", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(hasSystemInput, "the Codex request input must NOT contain a system-role message");
-    }
-
-    /// <summary>Captures the outbound request body and returns a minimal canned Responses reply.</summary>
-    private sealed class BodyCapturingHandler : HttpMessageHandler
-    {
-        public string? RequestBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                RequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            // Minimal Responses-shaped JSON so the SDK gets a 200 with a body to (attempt to) parse.
-            const string CannedResponse =
-                """{"id":"resp_test","object":"response","status":"completed","model":"gpt-5.4","output":[]}""";
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }

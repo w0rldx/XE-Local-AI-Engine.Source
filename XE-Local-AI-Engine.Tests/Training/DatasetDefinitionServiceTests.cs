@@ -53,7 +53,7 @@ public sealed class DatasetDefinitionServiceTests
         AssertEx.Equal(fraction, harness.Saved().HoldoutFraction);
     }
 
-    /// <summary>R7-04: a reranker or embedder teacher used to be saved and could only fail at generation.</summary>
+    /// <summary>A reranker or embedder teacher is refused at save rather than left to fail at generation.</summary>
     [Test]
     [Arguments("gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M")]
     [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M")]

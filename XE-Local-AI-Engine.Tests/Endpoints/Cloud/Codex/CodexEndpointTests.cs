@@ -166,9 +166,8 @@ public sealed class CodexEndpointTests
                 services.AddSingleton(tokenStore ?? Substitute.For<ICodexTokenStore>());
                 services.RemoveAll<ICodexLoginCoordinator>();
                 services.AddSingleton(loginCoordinator ?? Substitute.For<ICodexLoginCoordinator>());
-                // Substitute the active-cloud factory so the logout endpoint's dependency does not drag the real
-                // Codex chat-client / auth-handler chain (which needs an HttpClient the test factory stubs to null)
-                // into endpoint instantiation at host startup.
+                // Substitute the active-cloud factory so the logout endpoint does not pull the real Codex client chain
+                // (it needs an HttpClient the test factory stubs to null) into endpoint activation at host startup.
                 services.RemoveAll<IActiveCloudChatClientFactory>();
                 services.AddSingleton(Substitute.For<IActiveCloudChatClientFactory>());
             }

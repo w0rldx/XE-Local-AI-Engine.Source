@@ -308,7 +308,7 @@ public sealed record BenchmarkRunStartRequest
 
     /// <summary>
     ///     What the group measures. <see cref="BenchmarkRepeatMode.Throughput" /> is the default and the historical
-    ///     behaviour: temperature 0, one fixed seed, so the answer is identical across repeats and only the machine varies.
+    ///     behavior: temperature 0, one fixed seed, so the answer is identical across repeats and only the machine varies.
     /// </summary>
     public BenchmarkRepeatMode RepeatMode { get; init; }
 

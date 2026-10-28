@@ -73,7 +73,7 @@ internal static class AddNodeExternalAppsExtensions
         builder.Services.AddSingleton<IExternalAppStartupReconciler>(static services => services.GetRequiredService<ExternalAppStartupReconciler>());
         builder.Services.AddHostedService(static services => services.GetRequiredService<ExternalAppStartupReconciler>());
 
-        // The pass runs off the readiness path now, so registration order no longer keeps the observer behind it:
+        // The pass runs off the readiness path, so registration order does not keep the observer behind it:
         // a tick that finds the boot pass unfinished skips instead.
         builder.Services.AddHostedService<ExternalAppStateObserver>();
 

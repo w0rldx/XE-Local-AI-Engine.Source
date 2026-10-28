@@ -47,7 +47,7 @@ public sealed record SandboxLaunchDescriptor
     /// <summary>The transient systemd scope the command runs in, or <see langword="null" /> when no named scope was created.</summary>
     /// <remarks>
     ///     It is the KILL AUTHORITY: with a PID namespace in the way the engine cannot see the workload's processes and the pid it holds
-    ///     belongs to <c>setsid</c>, so signalling the cgroup by unit name is the only thing reaching every process, one that detached on
+    ///     belongs to <c>setsid</c>, so signaling the cgroup by unit name is the only thing reaching every process, one that detached on
     ///     purpose included.
     /// </remarks>
     public string? ScopeUnitName { get; init; }

@@ -25,7 +25,7 @@ public sealed class BenchmarkFidelityResponse
     /// </summary>
     /// <remarks>
     ///     When it is <c>kld-stale</c>, the three KLD fields below are NULL and the client renders a badge. They are
-    ///     withheld rather than sent for the client to grey out, because a number a reader can still see is a number
+    ///     withheld rather than sent for the client to gray out, because a number a reader can still see is a number
     ///     they will still compare — and a figure measured over a different corpus, chunk count or base model means
     ///     something different from the one beside it.
     /// </remarks>

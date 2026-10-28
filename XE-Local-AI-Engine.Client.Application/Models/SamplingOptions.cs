@@ -25,7 +25,7 @@ public sealed record SamplingOptions
     /// <remarks>
     ///     Null keeps the effort-derived ceiling (or none), which is what every path but the benchmark freeze wants: the fixed effort
     ///     ladder is a ceiling chosen without knowing the window, whereas a benchmark pins a number and has to replay it exactly. Only
-    ///     honoured on a thinking-capable model whose runtime can enforce a budget.
+    ///     honored on a thinking-capable model whose runtime can enforce a budget.
     /// </remarks>
     public int? ReasoningBudgetTokens { get; init; }
 

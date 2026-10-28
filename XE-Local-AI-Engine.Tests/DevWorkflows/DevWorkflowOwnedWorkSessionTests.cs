@@ -18,9 +18,9 @@ using XE_Local_AI_Engine.Tests.WorkSessions;
 public sealed class DevWorkflowOwnedWorkSessionTests
 {
     /// <summary>
-    ///     The work-session service host, shared by the two refusal suites below: both seed a GUID session of their own
-    ///     and read nothing else back. The first test keeps a private host — it captures a fake stream service the
-    ///     container builds, which is host-level state.
+    ///     The work-session service host shared by the two refusal suites below, which each seed a GUID session of
+    ///     their own and read nothing else back. The first test keeps a private host: it captures a fake stream service
+    ///     the container builds.
     /// </summary>
     [ClassDataSource<WorkSessionServiceHostFixture>(Shared = SharedType.PerClass)]
     public required WorkSessionServiceHostFixture Host { get; init; }

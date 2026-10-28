@@ -30,7 +30,7 @@ public interface IDockerRuntimeClient : IAsyncDisposable
     /// <summary>Ids of every container, running or stopped, carrying ALL of <paramref name="labels" />.</summary>
     /// <remarks>
     ///     Filtered daemon-side rather than listed-then-filtered here, because the difference is a security property and not an
-    ///     optimisation: the caller removes what this returns, so a filter applied after the fact would be one more place a foreign
+    ///     optimization: the caller removes what this returns, so a filter applied after the fact would be one more place a foreign
     ///     container could reach the removal loop.
     /// </remarks>
     Task<IReadOnlyList<string>> ListContainersAsync(IReadOnlyDictionary<string, string> labels, CancellationToken cancellationToken = default);

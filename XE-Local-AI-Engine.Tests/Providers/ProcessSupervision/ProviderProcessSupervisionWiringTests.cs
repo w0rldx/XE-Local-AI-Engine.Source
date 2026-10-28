@@ -87,7 +87,7 @@ public sealed class ProviderProcessSupervisionWiringTests
     /// <remarks>
     ///     A reaper built without one silently falls back to the binaries-root match and misses every BYO orphan.
     ///     The stores are private fields, so they are read reflectively; a rename fails loudly here. The reapers are constructed
-    ///     from their descriptors, never started, so no process is scanned or signalled.
+    ///     from their descriptors, never started, so no process is scanned or signaled.
     /// </remarks>
     [Test]
     [RunOn(OS.Linux)]

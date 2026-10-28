@@ -71,7 +71,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
     /// </summary>
     /// <remarks>
     ///     The node-level policy can still tighten the whole <see cref="ToolCategory.WriteExecute" /> category, which
-    ///     is a deliberate consequence of labelling them honestly rather than hiding the write behind
+    ///     is a deliberate consequence of labeling them honestly rather than hiding the write behind
     ///     <see cref="ToolCategory.ReadLocal" />.
     /// </remarks>
     public bool RequiresApproval => false;

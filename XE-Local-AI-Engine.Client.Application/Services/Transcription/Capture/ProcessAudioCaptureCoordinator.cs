@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 
 using System.Collections.Concurrent;
 
-/// <summary>Why a request to start per-application capture was, or was not, honoured.</summary>
+/// <summary>Why a request to start per-application capture was, or was not, honored.</summary>
 public enum StartProcessCaptureOutcome
 {
     /// <summary>Capture is attached and running.</summary>
@@ -202,7 +202,7 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
                 _cancellation = CancellationTokenSource.CreateLinkedTokenSource(registration.ProducerToken);
 
                 // The handle is published into the dictionary BEFORE Attach, so a stop can land in between and find nothing to
-                // cancel. Honouring _stopRequested here, and returning BEFORE scheduling, is the only ordering with no window.
+                // cancel. Honoring _stopRequested here, and returning BEFORE scheduling, is the only ordering with no window.
                 if (_stopRequested)
                 {
                     CleanUpLocked();

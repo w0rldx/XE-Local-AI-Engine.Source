@@ -8,7 +8,7 @@ import { McpServerForm } from "@/features/mcp/components/McpServerForm";
 import { type McpServerFormValues, maskedEnvValue } from "@/features/mcp/models/McpServerModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
-// react-i18next is deliberately NOT mocked: the suite initialises `src/i18n.ts`, so `t()` resolves against the shipped
+// react-i18next is deliberately NOT mocked: the suite initializes `src/i18n.ts`, so `t()` resolves against the shipped
 // `en` bundle and interpolates. A stub returning the in-code default verbatim would assert "{{index}}" at a user.
 
 afterEach(cleanup);

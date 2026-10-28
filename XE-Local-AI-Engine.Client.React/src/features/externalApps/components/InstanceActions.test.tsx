@@ -178,7 +178,7 @@ describe("InstanceActions", () => {
 		expect(requests).toHaveLength(0);
 	});
 
-	// Same gate on the destructive path: no version means no confirmation dialog either, because it could not be honoured.
+	// Same gate on the destructive path: no version means no confirmation dialog either, because it could not be honored.
 	it("does not open the uninstall confirmation when the row carries no version", async () => {
 		const requests = capture("delete", `external-apps/instances/${instanceId}`, externalAppInstanceSummary());
 		toastMock.error.mockClear();
@@ -196,7 +196,7 @@ describe("InstanceActions", () => {
 		renderActions(externalAppInstance({ status: "Stopped", version: 11 }));
 
 		fireEvent.click(screen.getByTestId("external-app-action-uninstall"));
-		// The friction is the labelled button, verbatim: no typed-name confirmation.
+		// The friction is the labeled button, verbatim: no typed-name confirmation.
 		await waitFor(() => expect(screen.getByTestId("confirm-accept").textContent).toBe("Uninstall and delete data"));
 		fireEvent.click(screen.getByTestId("confirm-accept"));
 

@@ -93,7 +93,7 @@ public sealed class DevWorkflowFixLoopTests
     }
 
     /// <summary>
-    ///     The pinned supersede case, which nothing could reach until the fix loop re-ran a producer: the re-run's
+    ///     The pinned supersede case, which only the fix loop's re-run of a producer reaches: the re-run's
     ///     artifact supersedes its own earlier version, and what a downstream node produced from the version it replaced
     ///     is flagged. Staleness is observed through the event, never through the artifact cursor — an artifact's
     ///     sequence is allocated at insert and a staleness flip never re-stamps it.
@@ -349,7 +349,7 @@ public sealed class DevWorkflowFixLoopTests
 
     /// <summary>
     ///     The byte-identical default: a definition naming no cap keeps today's accounting, where only the target's own
-    ///     attempts and the run-wide budget bound the loop (ruling D9).
+    ///     attempts and the run-wide budget bound the loop.
     /// </summary>
     [Test]
     public async Task AFixLoopWithNoCapKeepsTodaysAccounting()

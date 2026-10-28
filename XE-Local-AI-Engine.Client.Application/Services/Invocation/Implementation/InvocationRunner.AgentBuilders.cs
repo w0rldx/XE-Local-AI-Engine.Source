@@ -224,7 +224,7 @@ public sealed partial class InvocationRunner
     /// <summary>Maps the runtime package onto the inputs the reasoning-effort dispatcher may read.</summary>
     /// <remarks>
     ///     Every field has one named source here, so nothing is invented at the seam, and no IMMUTABLE constraint —
-    ///     approval policy, egress gates, path guards, the sandbox, tool authorisation — is reachable from it.
+    ///     approval policy, egress gates, path guards, the sandbox, tool authorization — is reachable from it.
     /// </remarks>
     private static ReasoningDispatchRequest BuildDispatchRequest(RuntimePackage package, string resolvedModel)
     {
@@ -352,8 +352,8 @@ public sealed partial class InvocationRunner
         bool AttachmentShortened);
 
     /// <summary>
-    ///     Fits the two fixed costs a first message cannot compact away to the launched window: the tool offer (model-matrix
-    ///     F5) and the inlined attachment (F6).
+    ///     Fits the two fixed costs a first message cannot compact away to the launched window: the tool offer
+    ///     and the inlined attachment.
     /// </summary>
     /// <remarks>
     ///     The offer is sized without the attachment, which then shrinks to the room the tools leave. A too-large offer is
@@ -582,7 +582,7 @@ public sealed partial class InvocationRunner
 
         if (result.ExceedsBudget)
         {
-            // Compacting cannot help when the tool offer is what does not fit (model-matrix F5), so the message names it.
+            // Compacting cannot help when the tool offer is what does not fit, so the message names it.
             var toolsAreTheCause = toolBudgetDefinitions.Count > 0
                                    && !_contextBudgeter.Budget(messages, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, package.ResolvedSystemPrompt, [], resolvedModel)
                                                        .ExceedsBudget;

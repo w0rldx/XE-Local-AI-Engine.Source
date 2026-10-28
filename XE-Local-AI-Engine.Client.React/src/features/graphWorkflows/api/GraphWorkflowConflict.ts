@@ -20,7 +20,7 @@ export const graphWorkflowConflictTypes = {
 	 */
 	gateAlreadyDecided: "GraphWorkflowGateAlreadyDecided",
 	/**
-	 * A chat send found the conversation's bound run busy: running, cancelling, parked on a Pause, or a normal chat
+	 * A chat send found the conversation's bound run busy: running, canceling, parked on a Pause, or a normal chat
 	 * reply still streaming. Nothing was persisted; Stop the run or wait.
 	 */
 	runBusy: "GraphWorkflowRunBusy",

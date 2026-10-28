@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
 ///     Says why a chat turn waits for a benchmark or a training job, with a <see cref="TurnNoticeKind.QueuedBehindGpuWork" />
-///     notice (R7-03). It fires only where the turn really waits, never merely because a GPU hold exists.
+///     notice. It fires only where the turn really waits, never merely because a GPU hold exists.
 /// </summary>
 /// <remarks>
 ///     The benchmark queue takes its shared hold on every poll, even with nothing to claim, so the hold alone proves

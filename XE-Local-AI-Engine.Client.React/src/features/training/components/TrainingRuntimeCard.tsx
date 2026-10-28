@@ -64,7 +64,7 @@ export function TrainingRuntimeCard() {
 	const prerequisites = prerequisitesQuery.data;
 	const busy = installing || installMutation.isPending || removeMutation.isPending;
 
-	// Removing an installed runtime deletes a multi-gigabyte install; cancelling one still in flight discards only the
+	// Removing an installed runtime deletes a multi-gigabyte install; canceling one still in flight discards only the
 	// partial download, so only the removal asks first.
 	const handleRemoveOrCancel = async (): Promise<void> => {
 		if (

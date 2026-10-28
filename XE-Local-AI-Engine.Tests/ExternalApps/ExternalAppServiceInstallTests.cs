@@ -85,7 +85,7 @@ public sealed class ExternalAppServiceInstallTests
     }
 
     /// <summary>
-    ///     The empty-catalog gate (rc.3 decision D6): with no catalog entry the preview and the install refuse as not
+    ///     The empty-catalog gate: with no catalog entry the preview and the install refuse as not
     ///     found and write nothing; one refreshed entry admits the install on the same service, with no restart.
     /// </summary>
     [Test]
@@ -515,7 +515,7 @@ public sealed class ExternalAppServiceInstallTests
     }
 
     /// <summary>
-    ///     A health value this engine does not recognise reads as <c>None</c> on a service that DECLARES a
+    ///     A health value this engine does not recognize reads as <c>None</c> on a service that DECLARES a
     ///     healthcheck. That is "not healthy yet", never "healthy": treating the unknown as success would start every
     ///     dependant against a database that has not opened its socket.
     /// </summary>
@@ -610,7 +610,7 @@ public sealed class ExternalAppServiceInstallTests
             raced++;
 
             // Take the port the engine just let go of, then fail the create the way a daemon does when it cannot
-            // bind. The failure translator's re-probe is what recognises this as a lost race.
+            // bind. The failure translator's re-probe is what recognizes this as a lost race.
             harness.Squat(specification.PublishedPorts[0].HostPort!.Value);
             return new DockerRuntimeException("The host port is already allocated.");
         };

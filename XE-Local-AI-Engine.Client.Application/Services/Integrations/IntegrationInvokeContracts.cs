@@ -143,8 +143,8 @@ public static class IntegrationFailureCategories
     public const string QueueTimeout = "queue-timeout";
 
     /// <summary>
-    ///     Historical: rows written before ADR 0008 R6-1, when a caller-managed trigger was refused an agent offering a
-    ///     tool outside <c>ToolCategory.ReadLocal</c>. No longer produced; kept because those rows render it verbatim.
+    ///     Stored on older rows, from when a caller-managed trigger was refused an agent offering a tool outside
+    ///     <c>ToolCategory.ReadLocal</c>. Nothing produces it now; kept because those rows render it verbatim.
     /// </summary>
     public const string SessionPolicy = "session-policy";
 
@@ -167,7 +167,7 @@ public static class IntegrationFailureCategories
 /// <summary>
 ///     One input as it arrives on the wire. <see cref="Json" /> is kept as a <see cref="JsonElement" /> so the raw text
 ///     the caller sent survives into the seed unchanged; the handler takes <c>GetRawText()</c> from it and never
-///     re-serialises.
+///     re-serializes.
 /// </summary>
 public sealed record IntegrationInvokeInput(string? Type, string? Text, string? Label, JsonElement? Json);
 

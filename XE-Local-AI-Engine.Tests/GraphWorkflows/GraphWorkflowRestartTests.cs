@@ -413,7 +413,7 @@ public sealed class GraphWorkflowRestartTests
 
 /// <summary>
 ///     A store whose one in-flight row never stops moving: each read reports a different attempt, so every verdict is
-///     composed from evidence the next commit no longer recognises and nothing is ever reconciled. It stands in for the
+///     composed from evidence the next commit no longer recognizes and nothing is ever reconciled. It stands in for the
 ///     writer recovery cannot outrace, and what it records is the only thing this seam decides — how many passes there
 ///     are, and which of them carries the settlement.
 ///     <para>

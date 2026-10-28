@@ -21,7 +21,7 @@ interface InlineErrorAlertProps extends Pick<AlertProps, "variant" | "mt" | "mb"
 }
 
 // Standard inline error banner: the red Alert with a warning triangle that every feature renders for a failed
-// load, a failed mutation or a rejected submit. Features own the message; this owns the colour, icon and layout
+// load, a failed mutation or a rejected submit. Features own the message; this owns the color, icon and layout
 // so one failure reads the same wherever it surfaces.
 export function InlineErrorAlert({
 	message,

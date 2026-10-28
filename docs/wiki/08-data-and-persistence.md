@@ -34,7 +34,9 @@ XE-Local-AI-Engine.Client.Persistence/
 ├── NodeChatDbContextFactory.cs        # design-time factory (dotnet ef) — uses NullNodeSqliteKeyHolder
 ├── NodeIdentityDbContextFactory.cs    # design-time factory (separate __EFMigrationsHistory_Identity)
 ├── INodeSqliteKeyHolder.cs            # seam: supplies the 32-byte node encryption key
+├── NodeEncryptedColumns.cs           # the one registration of every encrypted column and its AAD
 ├── NodeEncryptionSaveChangesInterceptor.cs  # encrypts BLOB columns on SaveChanges, restores plaintext after
+├── NodeEncryptionMaterializationInterceptor.cs  # decrypts the same columns when an entity is materialized
 ├── Cryptography/
 │   ├── INodeAeadCipher.cs / AesGcmNodeAeadCipher.cs   # the single AES-256-GCM primitive (12B nonce, 16B tag)
 │   └── NodePayloadProtector.cs        # at-rest column protector: nonce‖ciphertext‖tag layout + AAD
@@ -76,10 +78,10 @@ Every at-rest AEAD use delegates to the same AES-GCM primitive (`AesGcmNodeAeadC
 
 `NodeEncryptionSaveChangesInterceptor` (`NodeEncryptionSaveChangesInterceptor.cs`, extends `SaveChangesInterceptor`) is the heart of the scheme:
 
-- On `SavingChanges` / `SavingChangesAsync` it walks the change tracker and **encrypts** the registered plaintext properties in place (`EncryptTrackedPayloads`), remembering the originals.
+- On `SavingChanges` / `SavingChangesAsync` it walks the change tracker and **encrypts** the registered plaintext properties in place (`EncryptTrackedPayloads`, a loop over `NodeEncryptedColumns.Entities`), remembering the originals.
 - On `SavedChanges*` (and on `SaveChangesFailed*`) it **restores** the in-memory plaintext (`RestoreTrackedPayloads`) so the tracked entity instances stay usable after the round-trip and a failed save doesn't leave ciphertext in the graph.
 
-Each entity's encrypted columns are registered explicitly with their AAD identity. From the interceptor source:
+Each entity's encrypted columns are registered explicitly with their AAD identity in one table, `NodeEncryptedColumns`, which both the save interceptor and `NodeEncryptionMaterializationInterceptor` walk. From that table:
 
 | Entity | Encrypted column(s) | AAD (conversationId, recordId, column) |
 |---|---|---|
@@ -108,7 +110,7 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 | Development rows/templates | objectives, task text/criteria, artifact/event payloads, template host paths | project/row-scoped or node-scoped AAD, by entity |
 | `BenchmarkRunReview` | `notes_json` (optional) | (`Guid.Empty`, Id, `benchmark_run_review_notes_json`) — node-scoped; the scores beside the notes are plaintext |
 | Benchmark run artifact blob (file, not a column) | the raw `pythonTests` stdout/stderr bytes | (RunId, ArtifactId, `benchmark_run_artifact_blob`) — written by `BenchmarkRunArtifactBlobStore` through `ManagedEncryptedBlobStore`, off the interceptor path; the `benchmark_run_artifacts` row holds only metadata and the content hash ([Benchmarks](20-benchmarks.md) §5.2.4) |
-| Benchmark task/judge/fidelity/comparison rows, dev-workflow rows, `ExternalAppInstance` | per-entity payload columns | registered in `NodeEncryptionSaveChangesInterceptor` and `NodeEncryptionMaterializationInterceptor`; the column and AAD details are on [Benchmarks](20-benchmarks.md), [Dev Workflows](25-dev-workflows.md) and [External Apps](23-external-apps.md) |
+| Benchmark task/judge/fidelity/comparison rows, dev-workflow rows, `ExternalAppInstance` | per-entity payload columns | registered in `NodeEncryptedColumns`; the column and AAD details are on [Benchmarks](20-benchmarks.md), [Dev Workflows](25-dev-workflows.md) and [External Apps](23-external-apps.md) |
 
 Encrypted columns are mapped as `BLOB` in the entity configurations and model snapshot (e.g. `AgentDefinition.Instructions`/`Description` are `byte[]` → `BLOB`, see `NodeChatDbContextModelSnapshot.cs`). **Golden conversations** carry an encrypted payload too (the `GoldenConversation` entity), which is why eval data is privacy-clean at rest — see [Agent Mode](04-agent-mode.md) for the harvest/eval flow. Node-scoped entities use `Guid.Empty` as the conversation component of the AAD by convention. A companion read-side `NodeEncryptionMaterializationInterceptor` (`NodeEncryptionMaterializationInterceptor.cs`) decrypts the registered columns when entities are materialized from a query, mirroring the save-side interceptor's AAD.
 
@@ -372,7 +374,7 @@ Tests use `NullNodeSqliteKeyHolder` (a fixed zero key) plus a non-encrypting mig
 
 ## Seams & invariants a maintainer must respect
 
-- **Add an encrypted column?** You must register it in `NodeEncryptionSaveChangesInterceptor.EncryptTrackedPayloads` with a stable `(conversationId, recordId, columnName)` AAD, map the property as `byte[]`/`BLOB` in its configuration, and add a negative AAD test. Forgetting the interceptor registration silently stores plaintext.
+- **Add an encrypted column?** You must register it in `NodeEncryptedColumns` (both interceptors walk that one table) with a stable `(conversationId, recordId, columnName)` AAD, map the property as `byte[]`/`BLOB` in its configuration, and add a negative AAD test. Forgetting the interceptor registration silently stores plaintext.
 - **AAD is part of the on-disk format.** Changing the AAD layout or the `"v1"` schema-version string makes existing ciphertext undecryptable. Bump deliberately and provide a backfill (as `EncryptConversationTitle` did).
 - **Migrations are forward-only.** Prefer new nullable/defaulted columns. Any destructive cleanup needs explicit release notes, migration tests, and a rollback caveat because older binaries may not understand the upgraded database.
 - **Two history tables.** When adding identity schema changes, target `NodeIdentityDbContext` (writes to `__EFMigrationsHistory_Identity`), not the chat context.

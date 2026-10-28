@@ -3,14 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     A recording <see cref="IAgentHomeGoalExecutor" /> for the lifecycle tests, which grade orchestration — the
-///     lease, the workspace copy, the patch gate, cancel/owner hardening — and not the inner agent loop.
-///     <para>
-///         The loop ITSELF is graded by <c>AgentHomeGoalExecutorTests</c> against the real executor, the real coder
-///         reader, the real process sandbox and a scripted chat client. This double exists so a lifecycle test does not
-///         have to stand up a model to assert that a lease was released.
-///     </para>
+///     A recording <see cref="IAgentHomeGoalExecutor" /> for the lifecycle tests, which grade orchestration (the lease,
+///     the workspace copy, the patch gate, cancel/owner hardening) and not the inner agent loop.
 /// </summary>
+/// <remarks>
+///     <c>AgentHomeGoalExecutorTests</c> grades the loop against the real executor, coder reader, process sandbox and a
+///     scripted chat client; this double spares a lifecycle test a model just to assert that a lease was released.
+/// </remarks>
 internal sealed class StubAgentHomeGoalExecutor : IAgentHomeGoalExecutor
 {
     private readonly Func<AgentHomeGoalRequest, CancellationToken, Task<AgentHomeGoalOutcome>> _behavior;

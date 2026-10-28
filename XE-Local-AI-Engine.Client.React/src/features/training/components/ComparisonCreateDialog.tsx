@@ -330,7 +330,7 @@ function EvaluationSide({ label, modelName, evaluation, pending, onEvaluate, onR
 	// The server refuses a cancel outside Queued/Running with a 404, and a delete of anything still queued or running
 	// with a 409, so the two controls partition the state machine exactly rather than overlapping on a guess.
 	const active = evaluation != null && isEvaluationActive(evaluation.status);
-	// There is no `Cancelling` status on the wire: cancelling a RUNNING evaluation only signals the executor, which
+	// There is no `Cancelling` status on the wire: canceling a RUNNING evaluation only signals the executor, which
 	// owns the terminal write, so the row keeps reporting `Running` until it settles. The accepted command is local
 	// knowledge, and saying so beats showing an unchanged "Scoring" for the seconds it takes to wind down.
 	const cancelling = active && cancelEvaluation.isSuccess;

@@ -411,7 +411,7 @@ public sealed class GgufDiscoveryTests
     [Test]
     public async Task GgufDiscovery_InspectsGatedRepo_RangeReadUnauthorized_ListsTheFileWithoutHeaderFields()
     {
-        // A gated repo lists its files anonymously, but the header range read answers 401 without an accepted licence.
+        // A gated repo lists its files anonymously, but the header range read answers 401 without an accepted license.
         var detail = $$"""
                        {
                          "id": "{{RepoId}}",

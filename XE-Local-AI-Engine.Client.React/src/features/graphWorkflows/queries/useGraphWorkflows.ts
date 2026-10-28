@@ -230,7 +230,7 @@ export function useGraphWorkflowRunEvents(runId: string | undefined, options: Fe
 }
 
 /**
- * The tools a Tool node may name. Already filtered server-side to the D6 envelope (`ReadLocal` and no composed
+ * The tools a Tool node may name. Already filtered server-side to the runnable envelope (`ReadLocal` and no composed
  * approval), so the picker offers exactly the runnable set and must NEVER re-derive eligibility here.
  */
 export function useGraphWorkflowTools(options: FeedOptions = {}) {
@@ -272,7 +272,7 @@ function cloudProviderOf(model: LocalModelResponse): string | undefined {
 		return "Codex";
 	}
 	if (model.provider === AZURE_FOUNDRY_PROVIDER) {
-		return "Azure Foundry";
+		return "Azure AI Foundry";
 	}
 	if (model.provider === EXTERNAL_PROVIDER && model.declaredLocality !== "local") {
 		return model.externalConnectionName ?? model.externalConnectionId ?? EXTERNAL_PROVIDER;

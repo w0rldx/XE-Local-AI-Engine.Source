@@ -84,10 +84,8 @@ public sealed class QuantLadderTests
     [Test]
     public void QualityRank_NativeFp4_PassesTheRecommendedQualityGate()
     {
-        // The advisor's "Recommended" gate is QualityRank(quant) <= QualityRank(Q4_K_M). An off-ladder label takes the
-        // unknown rank, which sits exactly ONE step past that gate — so while NVFP4/MXFP4 were absent from the ladder a
-        // native-FP4 repo was demoted to "Can run" however much headroom it had. Observed live 2026-07-31 against
-        // tngtech/Qwen3.6-27B-NVFP4-GGUF and s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF.
+        // The "Recommended" gate is QualityRank(quant) <= QualityRank(Q4_K_M); an off-ladder label ranks ONE step
+        // past it, so without NVFP4/MXFP4 on the ladder a native-FP4 repo is demoted to "Can run" regardless.
         var gate = QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant);
 
         AssertEx.True(QuantLadder.QualityRank("NVFP4") <= gate, "NVFP4 must clear the recommended-quality gate.");
@@ -124,7 +122,7 @@ public sealed class QuantLadderTests
     public void BytesPerWeight_NvFp4_MatchesMxFp4NativeDensity()
     {
         // Measured, not theoretical: s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF ships MXFP4 and NVFP4 conversions of the
-        // same model from the same converter at byte-identical sizes (5.45 GB each, sampled 2026-07-31).
+        // same model from the same converter at byte-identical sizes (5.45 GB each).
         AssertEx.Equal(MemoryFitEstimator.BytesPerWeight("MXFP4"), MemoryFitEstimator.BytesPerWeight("NVFP4"));
         AssertEx.True(MemoryFitEstimator.BytesPerWeight("NVFP4") < MemoryFitEstimator.BytesPerWeight("Q4_K_M"),
             "NVFP4 must not fall through to the 4.5bpw unknown-quant default.");
@@ -186,7 +184,7 @@ public sealed class QuantLadderTests
         AssertEx.Equal(QuantLadder.QualityRank("Q4_K_XL"), QuantLadder.CeilingRank("Q4_K_M"));
         AssertEx.True(QuantLadder.QualityRank("MXFP4") < QuantLadder.CeilingRank("Q4_K_M"), "MXFP4 stays above a Q4_K_M ceiling.");
         AssertEx.Equal(QuantLadder.QualityRank("Q8_K_XL"), QuantLadder.CeilingRank("Q8_0"));
-        // A ceiling whose upper neighbour is not an _XL rung is unchanged.
+        // A ceiling whose upper neighbor is not an _XL rung is unchanged.
         AssertEx.Equal(QuantLadder.QualityRank("Q4_K_S"), QuantLadder.CeilingRank("Q4_K_S"));
         AssertEx.Equal(QuantLadder.QualityRank("F32"), QuantLadder.CeilingRank("F32"));
         // An _XL ceiling admits itself only.

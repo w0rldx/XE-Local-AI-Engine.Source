@@ -147,7 +147,7 @@ export function useGraphWorkflowEditorPage(
 	// CONTENT, not object identity. A successful save invalidates the definition, the refetch answers a new version,
 	// and the load-once effect calls `reset` — which mints a fresh `editor.graph` for a document that did not change,
 	// so an identity check erased the very warnings that save had just been told about. `graphWorkflowsEqual`
-	// normalises both sides, so a real edit still drops the stale answer on the next render.
+	// normalizes both sides, so a real edit still drops the stale answer on the next render.
 	const answeredGraph = validated?.graph;
 	const answersThisGraph = useMemo(() => graphWorkflowsEqual(answeredGraph, editor.graph), [answeredGraph, editor.graph]);
 	// Errors only. This is the list the canvas rings, the config panels and the save gate read, so a warning can never

@@ -82,7 +82,7 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
     ///     for a page no assertion touches. <see cref="LaunchFakeAudioBrowserAsync" /> signs in on
     ///     <see cref="FakeAudioPage" /> instead, through the same
     ///     <see cref="XESerialE2ETestBase.SignInWithFormAsync" /> steps. The shared context is left as the harness
-    ///     created it — untouched, not half-initialised.
+    ///     created it — untouched, not half-initialized.
     /// </summary>
     protected override Task SignInAsync() =>
         Task.CompletedTask;
@@ -93,7 +93,7 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
     /// </summary>
     /// <remarks>
     ///     TUnit.Playwright caches one browser per worker under a fixed service key, so the launch options a class
-    ///     passes through its constructor are honoured only for the FIRST class that launches on that worker. Measured
+    ///     passes through its constructor are honored only for the FIRST class that launches on that worker. Measured
     ///     across three serial runs of the two audio suites: whichever class ran second was fed the first one's audio —
     ///     the fixture correlated 0.951 when it ran first and 0 when it ran second, and the tone control 0.76 when
     ///     first and 0.99 when second. A per-class WAV therefore cannot travel through the shared browser at all.

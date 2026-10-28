@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { GenerationMetadata } from "@/features/assist/models/AssistModels";
+import type { GenerationMetadata } from "@/core/assist/models/AssistModels";
 
 // Agent Skills specification name: lowercase letters/digits separated by SINGLE hyphens; no leading, trailing or
 // consecutive hyphens. This is a client-side convenience only — the backend delegates to MAF's own
@@ -111,7 +111,7 @@ export const skillFormSchema = z.object({
 	metadata: z.record(z.string(), z.string()).nullable(),
 	generated: z.boolean(),
 	// Deliberately unvalidated: the provenance block is opaque client-side and must survive submit byte-for-byte, so
-	// modelling it as a z.object() (which strips unknown keys) would quietly drop any field the server adds later.
+	// modeling it as a z.object() (which strips unknown keys) would quietly drop any field the server adds later.
 	generationMetadata: z.custom<GenerationMetadata>().nullable(),
 });
 

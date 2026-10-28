@@ -49,13 +49,13 @@ import {
 	conditionConfigSchema,
 	decisionModelConfigSchema,
 	endConfigSchema,
-	type GraphWorkflowGraphIssue,
 	llmCallConfigSchema,
 	nodeCommonSchema,
 	pauseConfigSchema,
 	startConfigSchema,
 	toolConfigSchema,
-} from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+} from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
+import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
 export interface GraphWorkflowNodeConfigPanelProps {
 	readonly node: GraphWorkflowCanvasNodeData;

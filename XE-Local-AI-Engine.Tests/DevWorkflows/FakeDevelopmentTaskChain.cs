@@ -170,7 +170,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     ///     Makes the deterministic gate FAIL, through the store hops the real runner makes rather than a scripted
     ///     status: <c>StartValidationAsync</c>, then <c>FinalizeValidationAsync</c> at the target
     ///     <see cref="DevelopmentValidationRunner.TargetFor" /> chooses for a failed run. Nothing here decides where
-    ///     that leaves the task — the product does — which is what makes a node run's behaviour afterwards a fact
+    ///     that leaves the task — the product does — which is what makes a node run's behavior afterwards a fact
     ///     about the product.
     ///     <para>
     ///         The gate re-uses the succeeded coder attempt already on the task, exactly as the real one does, so a

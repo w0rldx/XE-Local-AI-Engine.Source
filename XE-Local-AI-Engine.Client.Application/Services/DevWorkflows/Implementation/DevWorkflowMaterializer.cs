@@ -35,7 +35,7 @@ internal sealed class DevWorkflowMaterializer
     private const char CloneSeparator = '#';
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly DevWorkflowOptions _options;
@@ -382,7 +382,7 @@ internal sealed class DevWorkflowMaterializer
         return HasCycle(tasks) ? "The tasks depend on each other in a cycle, so none of them could ever start." : null;
     }
 
-    /// <summary>Depth-first colouring over <c>dependsOn</c>, the same shape the graph's own acyclicity check uses.</summary>
+    /// <summary>Depth-first coloring over <c>dependsOn</c>, the same shape the graph's own acyclicity check uses.</summary>
     private static bool HasCycle(IReadOnlyList<TaskPackageItem> tasks)
     {
         var byId = tasks.ToDictionary(static task => task.Id!, StringComparer.Ordinal);
@@ -414,7 +414,7 @@ internal sealed class DevWorkflowMaterializer
     /// </summary>
     /// <remarks>
     ///     The rewrite works on the stored JSON rather than the parsed projection: the projection keeps only what the
-    ///     runtime routes on, and re-serialising it would silently drop every authoring field the editor put there. So
+    ///     runtime routes on, and re-serializing it would silently drop every authoring field the editor put there. So
     ///     each clone is the template node's own JSON with its key — and any retry target — rewritten.
     /// </remarks>
     private static Expansion Compose(DevWorkflowGraph graph,

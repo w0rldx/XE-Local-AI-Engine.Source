@@ -19,7 +19,7 @@ export interface DevWorkflowApplyReportPanelProps {
  * SEQUENCE and stop at the first refusal — after one, the repository is not in the state the next patch was approved
  * against — so a report can legitimately say "two landed, one refused, one never offered", and every one of those four
  * words has to survive to the screen. The count in the header is therefore always "N of M", never a bare N, and the
- * refused and cancelled rows carry their own detail rather than being collapsed into a failure banner.
+ * refused and canceled rows carry their own detail rather than being collapsed into a failure banner.
  *
  * Zero tasks is a PASS: a decomposition may honestly answer "no work needed". It says so in words rather than
  * rendering an empty list under a green badge.

@@ -252,7 +252,7 @@ public sealed class ActiveCloudChatClientFactoryTests
     {
         // CRITICAL, deterministic proof: hold a streaming enumeration OPEN on the resolved cloud client, then
         // flip the selection (refresh) so the factory swaps the cached client WHILE the stream is live. Under the
-        // pre-fix dispose-on-swap behaviour this would ObjectDispose the in-flight client; the fix (no dispose on
+        // a dispose-on-swap factory this would ObjectDispose the in-flight client; the factory (no dispose on
         // swap) must let the stream complete with no exception.
         using var swapHappened = new SemaphoreSlim(initialCount: 0, maxCount: 1);
         using var resumeStream = new SemaphoreSlim(initialCount: 0, maxCount: 1);

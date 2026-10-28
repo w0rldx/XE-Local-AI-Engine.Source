@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Training.Contracts;
 
-/// <summary>Decides whether a recorded trainer may be signalled through its process group rather than by pid alone.</summary>
+/// <summary>Decides whether a recorded trainer may be signaled through its process group rather than by pid alone.</summary>
 public static class TrainingProcessGroupGuard
 {
     /// <summary>

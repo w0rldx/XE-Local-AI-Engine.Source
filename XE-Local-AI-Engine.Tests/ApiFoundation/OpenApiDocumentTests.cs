@@ -327,8 +327,8 @@ public sealed class OpenApiDocumentTests
             "operationId", "operationKind", "modelName", "phase", "completedBytes", "totalBytes", "startedAtUtc",
             "updatedAtUtc", "errorCode", "sanitizedMessage"
         ]);
-        // `judge` is an OBJECT now, not the flat `judgeStatus` string this used to name: judging moved onto attempts,
-        // so a run's judge state is derived rather than stored. The rest are the members later slices added and that
+        // `judge` is an OBJECT, not a flat `judgeStatus` string: judging lives on attempts,
+        // so a run's judge state is derived rather than stored. The rest are the members that
         // the SPA reads off a summary row — a contract change that dropped one of them would take a column with it.
         AssertSchemaProperties(schemas, "BenchmarkRunSummaryResponse",
         [
@@ -513,7 +513,7 @@ public sealed class OpenApiDocumentTests
     ///     <para>
     ///         The shared fixture runs with the shipped <c>WorkSessions:Enabled: true</c>, so this test asserts the
     ///         surface an ENABLED node publishes. That the same surface survives the feature being switched off — the
-    ///         second half of the design, since registration is unconditional and only behaviour is gated — is
+    ///         second half of the design, since registration is unconditional and only behavior is gated — is
     ///         <see cref="LocalOpenApiDocument_DescribesWorkSessionSurface_WhenTheFeatureIsDisabled" />'s job.
     ///     </para>
     /// </summary>
@@ -544,7 +544,7 @@ public sealed class OpenApiDocumentTests
     /// <summary>
     ///     The half the shared fixture cannot prove: the work-session routes are mapped unconditionally, so a node with
     ///     <c>WorkSessions:Enabled: false</c> publishes exactly the same OpenAPI surface — the generated hey-api client
-    ///     describes every node, not only the ones with the feature on. Behaviour is gated in request-path middleware,
+    ///     describes every node, not only the ones with the feature on. Behavior is gated in request-path middleware,
     ///     which the document never sees.
     /// </summary>
     [Test]
@@ -583,7 +583,7 @@ public sealed class OpenApiDocumentTests
 
     /// <summary>
     ///     External apps ship with <c>ExternalApps:Enabled</c> false, so the interesting half is the disabled node: the
-    ///     routes and the hub are mapped unconditionally and only behaviour is gated, which is what lets one generated
+    ///     routes and the hub are mapped unconditionally and only behavior is gated, which is what lets one generated
     ///     hey-api client describe every node rather than only the ones that had the feature switched on.
     /// </summary>
     [Test]
@@ -896,7 +896,7 @@ public sealed class OpenApiDocumentTests
 
     /// <summary>
     ///     The host writes FastEndpoints ProblemDetails (<c>Errors.UseProblemDetails</c>), so no operation may advertise the
-    ///     FastEndpoints <c>ErrorResponse</c> shape; a sample of the routes that once did now names ProblemDetails.
+    ///     FastEndpoints <c>ErrorResponse</c> shape; a sample of routes is asserted to name ProblemDetails.
     /// </summary>
     [Test]
     public async Task LocalOpenApiDocument_AdvertisesProblemDetailsNeverErrorResponse()
@@ -1127,7 +1127,7 @@ public sealed class OpenApiDocumentTests
             }
         }
 
-        // Non-vacuity floor under the 445 operations measured on 2026-09-18: a document that generated no paths, or a
+        // Non-vacuity floor under the 445 operations measured when set: a document that generated no paths, or a
         // prefix filter that matched none of them, would otherwise pass this with zero offenders.
         AssertEx.True(operations >= 400,
             $"Only {operations} operations were found under /api/local/v1/; refusing a vacuous pass. The document or the path filter is broken.");

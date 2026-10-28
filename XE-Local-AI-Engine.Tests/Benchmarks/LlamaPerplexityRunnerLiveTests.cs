@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The one thing the scripted tests cannot show: that the parser reads what the REAL binary writes, and that a
 ///     killed base phase publishes nothing. Both skip on a host with no llama.cpp runtime or no model to score, which
-///     is every CI machine — the assertions here are for the box the measurement is actually taken on.
+///     is every CI machine — the assertions here are for the host the measurement is actually taken on.
 /// </summary>
 [Category(TestCategories.ExternalInfra)]
 public sealed class LlamaPerplexityRunnerLiveTests : IDisposable
@@ -74,7 +74,7 @@ public sealed class LlamaPerplexityRunnerLiveTests : IDisposable
         }
         finally
         {
-            BenchmarkKldBaseCache.DeleteBestEffort(temp);
+            BestEffortFile.TryDeleteFile(temp);
         }
 
         AssertEx.Null(cache.TryResolveExisting(key), "A killed base phase must publish nothing that resolves as a cached measurement.");
@@ -94,7 +94,7 @@ public sealed class LlamaPerplexityRunnerLiveTests : IDisposable
             throw new SkipTestException("this host has no llama-perplexity beside XE_LLAMACPP_SERVER_PATH to measure with.");
         }
 
-        // The smallest GGUF on a box is usually an embedding model or a vision projector, and llama-perplexity
+        // The smallest GGUF on a host is usually an embedding model or a vision projector, and llama-perplexity
         // asserts rather than refuses on those ("encoder requires n_ubatch >= n_tokens"). Filtered by name because
         // the alternative is reading n_vocab and the architecture out of the header for a test-only choice.
         string[] notScorable = ["projector", "embed", "rerank", "mmproj"];

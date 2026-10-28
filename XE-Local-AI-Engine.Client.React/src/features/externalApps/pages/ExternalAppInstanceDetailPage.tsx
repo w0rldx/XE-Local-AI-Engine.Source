@@ -54,7 +54,7 @@ const EMPTY_VARIABLE_DEFINITIONS: readonly ExternalAppVariableDefinition[] = [];
 /**
  * One installed application.
  *
- * Everything here is driven by the INSTANCE, never the catalog: `instance.manifest` is the sanitised snapshot taken
+ * Everything here is driven by the INSTANCE, never the catalog: `instance.manifest` is the sanitized snapshot taken
  * at install time, tested version included, so an application the catalog dropped still renders completely. No
  * catalog query is mounted on this page.
  *

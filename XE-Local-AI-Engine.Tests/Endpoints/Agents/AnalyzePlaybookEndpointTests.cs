@@ -53,10 +53,8 @@ public sealed class AnalyzePlaybookEndpointTests
     [Test]
     public async Task Analyze_BodyLessPost_IsAcceptedNot415()
     {
-        // Regression for the live 415 ("convert playbook → empty notification"): this route-only POST binds the agent
-        // id from the route, so the hey-api client sends no body — and therefore no Content-Type. The endpoint must
-        // accept that instead of answering 415 Unsupported Media Type. A seeded agent with no feedback yields 200 with
-        // empty items, which proves the request was bound and dispatched rather than rejected at the media-type gate.
+        // A route-only POST binds the agent id from the route, so the hey-api client sends no body and no Content-Type;
+        // it must not get 415. An agent with no feedback yields 200 with empty items, proving it was dispatched.
         var factory = Factory;
         using var client = factory.CreateClient();
 

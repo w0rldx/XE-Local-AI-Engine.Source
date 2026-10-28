@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Real-SQLite concurrency coverage: the per-conversation lock hierarchy plus the unique
-///     <c>(conversation_id, sequence)</c> index must keep sequences distinct under concurrent inserts, keep a delete
-///     from stranding partial rows, and keep the writer's lock map bounded.
+///     Real-SQLite concurrency: the per-conversation lock hierarchy and the unique
+///     <c>(conversation_id, sequence)</c> index keep sequences distinct under concurrent inserts, a delete from
+///     stranding partial rows, and the writer's lock map bounded.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class NodeChatConcurrencyTests : IDisposable

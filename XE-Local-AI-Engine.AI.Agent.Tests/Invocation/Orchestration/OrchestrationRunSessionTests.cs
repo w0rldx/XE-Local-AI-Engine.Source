@@ -1,7 +1,5 @@
-// The streaming-update mapping must surface BOTH a reasoning delta and a visible-text delta when one source
-// update carries both, in order (reasoning first) — previously an update with any reasoning returned early and dropped
-// its visible text. The concrete MAF StreamingRun cannot be faked, so the pure mapping is exercised through the internal
-// static ComposeStreamingUpdates seam that carries the logic (mirrors IdleStreamGuardTests' approach for this class).
+// One source update carrying reasoning and visible text maps to BOTH deltas, reasoning first. MAF's StreamingRun
+// cannot be faked, so the internal static ComposeStreamingUpdates seam is exercised (as IdleStreamGuardTests does).
 
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 

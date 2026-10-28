@@ -1,11 +1,11 @@
 import { Badge, Code, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { toToolDisplayName } from "@/core/tools/models/ToolCatalogModels";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { hasEngineDetail, statusColor } from "@/features/mcp/models/McpStatusModel";
 import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
-import { toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
 
 interface McpServerToolsPanelProps {
 	// The server whose live discovered tools + connection status to show. Null collapses the panel and disables

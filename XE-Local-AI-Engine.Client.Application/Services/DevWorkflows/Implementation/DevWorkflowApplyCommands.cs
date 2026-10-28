@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 internal sealed class DevWorkflowApplyCommands
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevelopmentStore _development;
     private readonly DevWorkflowGraphCache _graphs;
@@ -126,7 +126,7 @@ internal sealed class DevWorkflowApplyCommands
         try
         {
             // On behalf of THIS run, which is what gets past the ownership guard the same method enforces against
-            // every other caller: the gate that authorised this apply is a node of this run.
+            // every other caller: the gate that authorized this apply is a node of this run.
             var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {

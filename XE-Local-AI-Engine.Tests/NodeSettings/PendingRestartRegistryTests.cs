@@ -24,7 +24,7 @@ public sealed class PendingRestartRegistryTests
     [Test]
     public void GetPendingFields_WhenAnUnsetSwitchIsSavedAsItsDefault_IsEmpty()
     {
-        // Tester build 113: the node started with developmentEnabled unset (effective true); saving the page stored true.
+        // A node started with developmentEnabled unset (effective true) whose page save stores true has nothing pending.
         var sut = new PendingRestartRegistry(Boot, Resolve);
 
         AssertEx.Empty(sut.GetPendingFields(Boot with

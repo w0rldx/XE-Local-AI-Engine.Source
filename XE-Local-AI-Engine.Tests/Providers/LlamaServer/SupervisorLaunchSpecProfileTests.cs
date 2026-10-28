@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Keystone coverage for the profile-driven launch-spec seam: the supervisor no longer forces
+///     Keystone coverage for the profile-driven launch-spec seam: the supervisor never forces
 ///     <c>--n-gpu-layers 999</c>. A GPU spawn with no frozen profile emits <c>--fit on</c> + <c>--metrics</c> (auto-fit);
 ///     a replay profile emits its explicit <c>-c/-ngl/-ts/-ot</c> (and matched <c>-ctk/-ctv</c> + <c>--flash-attn</c>)
 ///     verbatim with NO <c>--fit</c> but WITH <c>--metrics</c>, and gets the same one-shot KV-stripped retry an explore
@@ -233,7 +233,7 @@ public sealed class SupervisorLaunchSpecProfileTests
     {
         // draft-mtp drafts from MTP heads in the MAIN model GGUF — there is no second model, so --spec-draft-model must
         // never appear (nor --spec-draft-ngl, which sizes a draft-model load that never happens). --spec-draft-n-max IS
-        // honoured by MTP in the pinned build, so it stays.
+        // honored by MTP in the pinned build, so it stays.
         var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
             speculative: new SpeculativeDecodingSettings("draft-mtp", DraftModelPath: null, DraftMaxTokens: 4, DraftGpuLayers: 16));
 
@@ -450,6 +450,28 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
         AssertEx.Equal("draft-mtp", spec!.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
         AssertEx.False(spec.Arguments.Contains("--spec-draft-model"), "draft-mtp must never emit --spec-draft-model.");
+    }
+
+    [Test]
+    public async Task SpawnPath_WhenDraftModeNamesAMissingDraftFile_FailsNonRetryableWithoutLaunching()
+    {
+        // The default fake store resolves the draft name to a path that does not exist: a deterministic misconfiguration, so the spawn fails before launch.
+        var launcher = new FakeProcessLauncher();
+        var options = new LlamaServerSupervisorOptions
+        {
+            IdleTimeToLive = TimeSpan.FromHours(1),
+            MaxLoadedProcesses = 3,
+            SpeculativeMode = "draft-simple",
+            SpeculativeDraftModelName = "my-draft"
+        };
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            options: options);
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "draft model file was not found");
+        AssertEx.Empty(launcher.Launches);
     }
 
     [Test]

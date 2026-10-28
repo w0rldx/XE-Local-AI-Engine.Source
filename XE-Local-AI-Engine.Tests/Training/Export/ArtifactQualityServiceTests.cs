@@ -254,7 +254,7 @@ public sealed class ArtifactQualityServiceTests
             harness.Service.OverrideAsync(harness.Artifact.Id, harness.Artifact.Version, "not applicable"));
     }
 
-    /// <summary>R7-08: an unlinked run is a dead end, and every step must say how to get out of it.</summary>
+    /// <summary>An unlinked run is a dead end, and every step must say how to get out of it.</summary>
     [Test]
     public async Task Decide_And_Override_OnAnUnlinkedRun_NameTheMissingLinkAndTheFix()
     {

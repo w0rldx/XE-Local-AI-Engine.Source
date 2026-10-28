@@ -237,7 +237,7 @@ export function GraphWorkflowDecisionPanel({
 				})}
 			</Text>
 
-			{/* Q5: the payload is on the wire regardless, and an operator whose downstream node reads
+			{/* The payload is on the wire regardless, and an operator whose downstream node reads
 			    `upstream.review.payload` has no other way to set it — but it is not what a decision usually needs. */}
 			<Button
 				size="xs"

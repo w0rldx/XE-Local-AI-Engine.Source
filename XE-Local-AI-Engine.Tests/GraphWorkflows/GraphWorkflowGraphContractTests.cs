@@ -100,10 +100,9 @@ public sealed class GraphWorkflowGraphContractTests
     }
 
     /// <summary>
-    ///     The cap fires BEFORE a node is read, which is the whole of what it buys: everything the parse does after
-    ///     counting is proportional to how many nodes there are. Only that ordering can produce the cap message here —
-    ///     the last node's kind is one <c>ParseNodes</c> refuses on its own, so a cap checked after the parse would
-    ///     answer with the node's refusal instead.
+    ///     The cap fires BEFORE a node is read; that ordering is all it buys, since the parse's later work scales with
+    ///     node count. The last node's kind is one <c>ParseNodes</c> refuses itself, so a cap checked after the parse
+    ///     would answer with that refusal.
     /// </summary>
     [Test]
     public void ValidateAndCountNodes_OverTheCapWithAMalformedNode_RefusesOnTheCapRatherThanTheNode()

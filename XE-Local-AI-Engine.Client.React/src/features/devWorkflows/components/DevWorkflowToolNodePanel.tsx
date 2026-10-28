@@ -42,7 +42,7 @@ export interface DevWorkflowToolNodePanelProps {
  * - **A report with no command evidence.** Same story from the other side, and the report's own `failureDetail` says
  *   which policy refused it.
  * - **A report whose evidence stops short** (`missing_command_evidence` on a node run whose clock ran out). It is the
- *   commands that DID run, labelled as partial, with the row naming the timeout — not a red gate with no account.
+ *   commands that DID run, labeled as partial, with the row naming the timeout — not a red gate with no account.
  *
  * The raw document stays one click away in the artifacts tab, and an unreadable body falls back to it rather than
  * rendering an empty panel.

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     <see cref="GraphWorkflowIntentService" />: Start-node alias parsing, the normalisation aliases match in, the
+///     <see cref="GraphWorkflowIntentService" />: Start-node alias parsing, the normalization aliases match in, the
 ///     utterance-age refusals, alias routing over Intent-enabled definitions only, and the router graph's run on a
 ///     stepping clock (choice, <c>unknown</c>, timeout).
 /// </summary>

@@ -332,7 +332,7 @@ public sealed class ComputeToolGatewayTests
     {
         // A script doing arithmetic writes almost nothing, so the node-wide allowance — sized for a workspace build —
         // is the wrong number for this jail. The request may only TIGHTEN it, so no capability gate is needed: a
-        // provider that ignores the field is exactly as bounded as it was before.
+        // provider that ignores the field stays exactly as bounded as the node-wide allowance makes it.
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider, new ComputeOptions
         {
@@ -423,7 +423,7 @@ public sealed class ComputeToolGatewayTests
     public async Task ExecuteAsync_WithDefaultOptions_PinsTheThreadCountBelowTheHostCoreCount()
     {
         // The libraries size their pools from the HOST's core count, which is not what the sandbox's CPU quota allows.
-        // The default caps that at four rather than at the box's core count, so a 32-core host does not start 32 BLAS
+        // The default caps that at four rather than at the host's core count, so a 32-core host does not start 32 BLAS
         // threads against a two-core ceiling — and every one of them would also count against PidsLimit.
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
@@ -442,7 +442,7 @@ public sealed class ComputeToolGatewayTests
     public async Task ExecuteAsync_WhenOnlyTheCeilingsAreUnavailable_StillRuns()
     {
         // Resource ceilings bound COST, not reachability: degrading them is visible in the containment log and costs no
-        // advertised guarantee, so they stay capability-gated where egress denial no longer is.
+        // advertised guarantee, so they stay capability-gated where egress denial is not.
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
@@ -520,7 +520,7 @@ public sealed class ComputeToolGatewayTests
         AssertEx.False(rendered.Contains(ToolFailureText.NotRunNotice, StringComparison.Ordinal), "a bad argument is the model's to fix and call again");
     }
 
-    /// <summary>R7-06: a 2 GiB write came back as a bare exit 137 or 143 with no reason.</summary>
+    /// <summary>A 2 GiB write fails with a named reason, never a bare exit 137 or 143.</summary>
     [Test]
     [Arguments(137)]
     [Arguments(143)]
@@ -1052,8 +1052,8 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteDetailedAsync_ValidatesTheRequest_EvenWhenCalledDirectly()
     {
-        // The bypass that motivated moving the checks: a caller reaching the gateway straight past the handler used to
-        // get no validation at all. Both bounds are asserted here because both used to live in the handler.
+        // A caller reaching the gateway straight past the handler is validated too, so both bounds are asserted on
+        // the gateway itself rather than on the handler.
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
@@ -1161,7 +1161,7 @@ public sealed class ComputeToolGatewayTests
     {
         // An architecture test, because the failure it guards is a SECOND copy of the flag appearing on an execution
         // path and then drifting — which is the whole finding this boundary answers. Asserted against the source
-        // rather than against behaviour: a duplicate read is invisible at runtime until the two disagree.
+        // rather than against behavior: a duplicate read is invisible at runtime until the two disagree.
         //
         // The allow-list is short and every entry states why it is not an execution gate. Anything else appearing here is a decision, not a
         // tidy-up: it means some other code decided for itself whether this node may execute Python.
@@ -1180,7 +1180,7 @@ public sealed class ComputeToolGatewayTests
             // repair or remove its venv. Nothing it does runs a script; the gateway still decides that.
             Path.Combine("Services", "ManagedPython", "ManagedPythonStatusService.cs"),
             // Not an execution gate: it withholds run_python from the model's offer while the switch is off, as the web
-            // and custom-tool switches withhold theirs (R4-05). A call that still arrives is refused by the gateway.
+            // and custom-tool switches withhold theirs. A call that still arrives is refused by the gateway.
             Path.Combine("Services", "Chat", "Implementation", "LocalToolOfferProvider.cs"),
             // Not an execution gate: it flags a listed run_python withheld by the switch, for the turn notice.
             Path.Combine("Services", "Agents", "Implementation", "AgentDefinitionResolver.cs")
@@ -1487,8 +1487,8 @@ public sealed class ComputeToolGatewayTests
         {
             KilledSandboxIds.Add(handle.SandboxId);
 
-            // Killing the jail is what discards everything below it — including the scratch the gateway no longer
-            // deletes by hand.
+            // Killing the jail is what discards everything below it — including the scratch the gateway does not
+            // delete by hand.
             if (_jails.Remove(handle.SandboxId, out var jail) && Directory.Exists(jail))
             {
                 Directory.Delete(jail, recursive: true);

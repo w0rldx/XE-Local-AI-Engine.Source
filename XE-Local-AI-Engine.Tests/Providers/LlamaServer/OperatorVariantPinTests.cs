@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The operator variant pin: <see cref="InstalledRuntimeState.OperatorSelected" /> survives the store, an explicit
-///     acquire writes it and an implicit ensure never does or clobbers it, the selector and the startup seed honour it
+///     acquire writes it and an implicit ensure never does or clobbers it, the selector and the startup seed honor it
 ///     below the override, and <see cref="LlamaCppBinaryManager.ClearVariantPinAsync" /> restores the vendor rule.
 /// </summary>
 [Category(TestCategories.Unit)]

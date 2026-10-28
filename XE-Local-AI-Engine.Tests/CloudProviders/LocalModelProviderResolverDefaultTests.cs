@@ -13,9 +13,9 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Proves the post-flip routing default: an UNMAPPED model routes to <c>llamacpp</c> (the shipped default model is a
-///     GGUF), while a model explicitly mapped to <c>ollama</c> still routes to Ollama. This is the routing half of the
-///     "Ollama is now optional" decision — the flipped default only governs truly-unmapped names.
+///     Proves the routing default: an UNMAPPED model routes to <c>llamacpp</c> (the shipped default model is a GGUF),
+///     while a model explicitly mapped to <c>ollama</c> still routes to Ollama. Ollama is optional, and the default
+///     governs only truly-unmapped names.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelProviderResolverDefaultTests

@@ -520,7 +520,7 @@ internal static class GraphWorkflowGraphs
 
     /// <summary>
     ///     The hand-authored shape a Pause quietly breaks: <c>analyze → review → summarize</c>, where <c>summarize</c>
-    ///     is reached ONLY through the pause and so receives the decision document instead of what was analysed. Legal,
+    ///     is reached ONLY through the pause and so receives the decision document instead of what was analyzed. Legal,
     ///     routable, and the one graph the pause-context warning is about.
     /// </summary>
     public const string PauseBetweenTwoAgents = """

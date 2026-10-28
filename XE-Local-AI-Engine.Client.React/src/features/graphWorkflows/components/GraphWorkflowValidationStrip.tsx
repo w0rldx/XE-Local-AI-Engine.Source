@@ -6,7 +6,7 @@
 // subject, an UNKEYED one is a line in a single Alert above them. Client issues and server issues arrive through the
 // same `GraphWorkflowGraphIssue`, so there is one render path, not two.
 //
-// Warnings (F5-2b) arrive as their OWN list and render in their own Alert below the errors: a different colour, a
+// Warnings arrive as their OWN list and render in their own Alert below the errors: a different color, a
 // title that asks rather than refuses, and no claim that the graph cannot be saved — because it can. Only the server
 // raises them; every client rule mirrors a rule that REFUSES a save, so the page never has to sort them out again.
 
@@ -109,7 +109,7 @@ export function GraphWorkflowValidationStrip({
 			) : null}
 			{warnings.keyed.size > 0 || warnings.unkeyed.size > 0 ? (
 				// One Alert for the whole warning half, keyed chips inside it: a warning is not a reason to save less, so it
-				// gets a colour and a title that say "look" rather than "stop", and never the error strip's refusal.
+				// gets a color and a title that say "look" rather than "stop", and never the error strip's refusal.
 				<Alert
 					color="yellow"
 					variant="light"

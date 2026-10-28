@@ -10,9 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behavioral round-trips for the conversation <c>memory_excluded</c> (temporary-chat) flag added by the adaptive-
-///     memory feature: a new conversation inherits its bound agent's <c>DefaultTemporaryChat</c>, and the per-conversation
-///     flag round-trips through the raw-SQL read path. These tests cover persistence and reads; post-run extraction
+///     The conversation <c>memory_excluded</c> (temporary-chat) flag: a new conversation inherits its agent's
+///     <c>DefaultTemporaryChat</c>, and the flag round-trips through the raw-SQL read path. Post-run extraction
 ///     write suppression is outside this suite.
 /// </summary>
 [Category(TestCategories.Integration)]

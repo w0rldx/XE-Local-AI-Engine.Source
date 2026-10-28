@@ -44,7 +44,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     // MAF's own frontmatter cap; AgentSkillService tracks the same value.
     private const int MaxSkillNameLength = 64;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly DraftAdmissionGate _admissionGate;
     private readonly IGgufModelStore _ggufModelStore;

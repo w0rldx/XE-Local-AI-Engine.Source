@@ -7,8 +7,6 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using AcquisitionKind = GgufAcquisitionOperationKind;
-using PreflightKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
 /// <summary>
 ///     Default <see cref="IGgufDownloadCoordinator" />: starts each download on a detached task wired to a per-model
@@ -68,9 +66,9 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private bool RecordInterruptedDownloads()
     {
         foreach (var download in _downloadTransaction.ListInterrupted()
-                                                     .Where(download => _operations.GetNewest(AcquisitionKind.Download, download.ModelName) is null))
+                                                     .Where(download => _operations.GetNewest(GgufAcquisitionOperationKind.Download, download.ModelName) is null))
         {
-            _operations.RecordTerminal(AcquisitionKind.Download,
+            _operations.RecordTerminal(GgufAcquisitionOperationKind.Download,
                 download.ModelName,
                 GgufAcquisitionPhase.Failed,
                 totalBytes: download.TotalBytes,
@@ -111,7 +109,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         timing.ResolveMs = timing.Lap();
         var intent = ToIntent(source);
         var identity = _identityResolver.Resolve(intent);
-        var active = _operations.GetNewest(AcquisitionKind.Download, identity.CanonicalModelName);
+        var active = _operations.GetNewest(GgufAcquisitionOperationKind.Download, identity.CanonicalModelName);
         if (active is not null && IsActive(active.Phase) && _activeSources.TryGetValue(active.OperationId, out var activeSource))
         {
             if (activeSource == source)
@@ -154,7 +152,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 };
             }
 
-            var registration = _operations.Start(AcquisitionKind.Download, reservation.Identity.CanonicalModelName, totalBytes);
+            var registration = _operations.Start(GgufAcquisitionOperationKind.Download, reservation.Identity.CanonicalModelName, totalBytes);
             if (registration.AlreadyInFlight)
             {
                 return new GgufDownloadTicket
@@ -186,14 +184,14 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        return _operations.CancelNewest(AcquisitionKind.Download, modelName);
+        return _operations.CancelNewest(GgufAcquisitionOperationKind.Download, modelName);
     }
 
     public GgufDownloadStatus? GetStatus(string modelName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _ = _interruptedRecorded.Value;
-        return MapStatus(_operations.GetNewest(AcquisitionKind.Download, modelName));
+        return MapStatus(_operations.GetNewest(GgufAcquisitionOperationKind.Download, modelName));
     }
 
     public GgufDownloadStatus? GetStatus(Guid operationId) =>
@@ -204,7 +202,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         _ = _interruptedRecorded.Value;
         // Newest row per model only (the registry lists newest first): a resumed or retried download supersedes the
         // Interrupted or failed row it continues, which would otherwise stay listed beside it until terminal pruning.
-        return _operations.List(AcquisitionKind.Download)
+        return _operations.List(GgufAcquisitionOperationKind.Download)
                           .DistinctBy(static status => status.ModelName, StringComparer.OrdinalIgnoreCase)
                           .Select(MapStatus)
                           .OfType<GgufDownloadStatus>()
@@ -214,7 +212,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private static GgufAcquisitionIntent ToIntent(ResolvedGgufDownload source) =>
         new()
         {
-            OperationKind = PreflightKind.Download,
+            OperationKind = GgufAcquisitionOperationKind.Download,
             ModelBaseName = source.ModelBaseName,
             Quantization = source.CanonicalQuant,
             Projector = source.Projector is null
@@ -289,7 +287,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 throw new GgufAcquisitionConflictException();
             }
 
-            return _operations.RecordTerminal(AcquisitionKind.Download,
+            return _operations.RecordTerminal(GgufAcquisitionOperationKind.Download,
                 modelName,
                 GgufAcquisitionPhase.Completed,
                 totalBytes,
@@ -625,7 +623,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 
     private static GgufDownloadStatus? MapStatus(GgufAcquisitionStatus? status)
     {
-        if (status is null || status.OperationKind != AcquisitionKind.Download)
+        if (status is null || status.OperationKind != GgufAcquisitionOperationKind.Download)
         {
             return null;
         }

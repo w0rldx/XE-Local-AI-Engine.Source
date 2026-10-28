@@ -5,6 +5,7 @@ using System.ClientModel.Primitives;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OpenAI;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;

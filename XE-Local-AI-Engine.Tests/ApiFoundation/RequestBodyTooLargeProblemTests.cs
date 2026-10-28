@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The endpoints' half of the one 413 answer. <c>RequestBodyTooLargeExceptionHandlerTests</c> pins the host's
-///     half against the same writer; between them the two emitters are held to one status, one Content-Type and one
-///     body shape, which is the contract <c>ProducesProblem(413)</c> declares on all six capped routes.
+///     The endpoints' half of the one 413 answer (<c>RequestBodyTooLargeExceptionHandlerTests</c> pins the host's half
+///     on the same writer): one status, Content-Type and body shape, the contract <c>ProducesProblem(413)</c>
+///     declares on all six capped routes.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class RequestBodyTooLargeProblemTests

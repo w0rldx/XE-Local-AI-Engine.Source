@@ -178,10 +178,10 @@ export function deriveChatMessageDisplay({
 	// where the model streamed some text before failing: both the partial content AND the error block show.
 	// StreamingIndicator no longer renders errors (single render site).
 	const errorText = assistantMessage && hasText(message.error) ? message.error?.trim() : undefined;
-	// A user-cancelled turn is a neutral, expected outcome — not a failure. It renders as a subdued
+	// A user-canceled turn is a neutral, expected outcome — not a failure. It renders as a subdued
 	// "Generation stopped" line, never the red error Alert, even when the backend persisted an error string
-	// alongside the cancelled status. Classification is driven purely by the terminal `status`, never by
-	// string-matching the (localized) error text, so it holds for the live cancel, the cancelled stream event,
+	// alongside the canceled status. Classification is driven purely by the terminal `status`, never by
+	// string-matching the (localized) error text, so it holds for the live cancel, the canceled stream event,
 	// and the persisted reload alike.
 	const isCancelled = assistantMessage && message.status === "cancelled";
 	// A work-session step that ended on its own provider-call cap is a bound being spent, not a fault: the tools it

@@ -1,15 +1,16 @@
 namespace XE_Local_AI_Engine.Client
 {
     using System.Diagnostics;
-    using System.Security.Cryptography;
     using Serilog;
     using Serilog.Extensions.Logging;
     using XE_Local_AI_Engine.Client.Common.Extensions;
+    using XE_Local_AI_Engine.Client.DependencyInjection;
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hosting.Vault;
     using XE_Local_AI_Engine.Client.Persistence;
     using XE_Local_AI_Engine.Client.Persistence.Sqlite;
     using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
+    using XE_Local_AI_Engine.Client.Services.Mcp;
     using XE_Local_AI_Engine.Client.Services.NodeSettings;
     using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
     using XE_Local_AI_Engine.Client.Services.Persistence;
@@ -17,6 +18,10 @@ namespace XE_Local_AI_Engine.Client
 
     public sealed partial class Program
     {
+        /// <summary>
+        ///     The host startup sequence, one stage per call. A stage that can end the invocation returns its exit code,
+        ///     and the order of the stages is load-bearing.
+        /// </summary>
         private static async Task<ProgramStartResult> CreateAppCoreAsync(string[] args,
             ProgramAppCustomization? customization,
             OneShotCommandContext? commandContext,
@@ -25,14 +30,178 @@ namespace XE_Local_AI_Engine.Client
             var standardOutput = customization?.StandardOutput ?? Console.Out;
             var standardError = customization?.StandardError ?? Console.Error;
 
+            var launch = await ReadLaunchRequestAsync(args, customization, commandContext, standardOutput, standardError);
+            if (launch.ExitCode is { } launchExitCode)
+            {
+                return Exited(launchExitCode);
+            }
+
+            commandContext?.SetStage(OneShotCommandStage.HostInitialization);
+
+            // Desktop mode comes from XE_LAUNCH_MODE=desktop / --desktop and is implied by a Velopack-managed install, whose stub sets neither, so the install is the opt-in signal.
+            // Resolved once BEFORE the builder, so it can pin the content root, the loopback bind and the HTTPS pipeline. Never consulted on the test path: VelopackLocator THROWS there.
+            var launchMode = customization is null
+                ? DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())
+                : LaunchMode.Headless;
+            var isLocalMode = launchMode.IsLocalMode();
+            var needsLocalData = isLocalMode || launch.SetupRequested || launch.McpKeyRequested;
+            var stableRestartArgs = DesktopLaunch.BuildRestartArguments(args, launchMode, launch.RequestedPort, shellOwned: parentLifetime is not null);
+            var hostArgs = args;
+            if (launch.SetupRequested || launch.McpKeyRequested)
+            {
+                hostArgs = DesktopLaunch.HasExplicitLocalModeArgument(args) ? [.. stableRestartArgs] : [];
+            }
+
+            var builder = CreateHostBuilder(hostArgs, customization, isLocalMode);
+
+            // Resolved in the local-data stage and applied after a locked vault (if any) is unwrapped, so the real host
+            // re-binds the origin the unlock page used.
+            var localData = needsLocalData
+                ? await PrepareLocalDataAsync(builder, launch, standardError)
+                : LocalDataPreparation.External;
+            if (localData.ExitCode is { } localDataExitCode)
+            {
+                return Exited(localDataExitCode);
+            }
+
+            // Held for the process lifetime once acquired in the local-data stage; disposed after the host is built.
+            var instanceLease = localData.InstanceLease;
+            var bindUrl = localData.BindUrl;
+
+            ConfigureHostLogging(builder, localData);
+
+            // Read once: stdin is consumed, and both the locked-vault unlock below and the reset after migrations need it.
+            var resetRequested = DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword);
+            var resetRecoveryCode = resetRequested ? DesktopLaunch.GetRecoveryCode(args) : null;
+
+            // A v2 node.key is the passphrase-wrapped vault (ADR 0018): nothing below may build until it is unwrapped. The lease is
+            // already held, so a second launch exits 4 instead of serving a second unlock page.
+            VaultUnlockOutcome? vaultUnlock = null;
+            if (localData.VaultState == VaultState.Locked)
+            {
+                var attempt = await UnlockLockedVaultAsync(new VaultUnlockRequestContext
+                    {
+                        Args = args,
+                        DataDirectory = localData.DataDirectory!,
+                        BindUrl = bindUrl!,
+                        Builder = builder,
+                        LaunchMode = launchMode,
+                        SetupCommand = launch.SetupCommand,
+                        McpKeyRequested = launch.McpKeyRequested,
+                        ResetRequested = resetRequested,
+                        RecoveryCode = resetRecoveryCode,
+                        StandardOutput = standardOutput,
+                        StandardError = standardError,
+                        ParentLost = parentLifetime?.ParentLost
+                    },
+                    instanceLease);
+                if (attempt.Outcome is null)
+                {
+                    return Exited(attempt.ExitCode!.Value);
+                }
+
+                vaultUnlock = attempt.Outcome;
+                bindUrl = vaultUnlock.BoundUrl ?? bindUrl;
+            }
+
+            var hostBuild = Stopwatch.StartNew();
+            var registration = RegisterHostServices(builder, customization, parentLifetime, bindUrl, isLocalMode, stableRestartArgs);
+            var bridgeEndpoint = registration.BridgeEndpoint;
+
+            var app = builder.Build();
+            Log.Information("Engine host built in {ElapsedMs} ms; applying migrations, then starting hosted services.", hostBuild.ElapsedMilliseconds);
+
+            AttachHostLifetime(app, parentLifetime, instanceLease);
+
+            // The downgrade commands must inspect/export the schema exactly as it is on disk. Run them before the ordinary
+            // startup migration path so invoking a newer binary never changes the database before reporting compatibility.
+            var knowledgeDowngradeCommand = DesktopLaunch.GetKnowledgeDowngradeCommand(args);
+            if (knowledgeDowngradeCommand != KnowledgeDowngradeCommand.None)
+            {
+                var downgradeExitCode = await RunKnowledgeDowngradeCommandAsync(app.Services, knowledgeDowngradeCommand);
+                instanceLease?.Dispose();
+                return Exited(downgradeExitCode);
+            }
+
+            // Loopback-only bind guard, defense-in-depth behind LocalApiSecurityMiddleware: shut down if the server bound a routable address without the
+            // Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch — desktop binds 127.0.0.1, Aspire binds localhost behind the DCP proxy.
+            LoopbackBindGuard.Guard(app,
+                bridgeEndpoint is null
+                    ? []
+                    : new[]
+                    {
+                        bridgeEndpoint.ListenerUrl
+                    });
+
+            if (!needsLocalData)
+            {
+                WarnIgnoredStagedRestore(app.Services);
+            }
+
+            if (!await ApplyStartupMigrationsAsync(app, commandContext, standardError))
+            {
+                instanceLease?.Dispose();
+                return Exited(DatabaseMigrationFailedExitCode);
+            }
+
+            // Local admin password recovery, handled AFTER identity migrations guarantee the tables and Admin role and BEFORE the web host serves, so it runs against the SAME
+            // database the app uses and the single-instance lease has already proved nothing else holds the directory. Resets without the old password, revokes refresh tokens, exits.
+            if (vaultUnlock?.ResetPassword is not null)
+            {
+                await ResetRecoveredAdminPasswordAsync(app.Services, vaultUnlock);
+            }
+
+            if (resetRequested)
+            {
+                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword, resetRecoveryCode, standardOutput);
+                instanceLease?.Dispose();
+                return Exited(resetExitCode);
+            }
+
+            if (await RunSetupAndMcpKeyCommandsAsync(app.Services, launch, args, commandContext, standardOutput, standardError) is { } commandExitCode)
+            {
+                instanceLease?.Dispose();
+                return Exited(commandExitCode);
+            }
+
+            await PrepareToServeAsync(app, bridgeEndpoint, isLocalMode, registration.IsDevelopmentModeEnabled);
+
+            // Desktop mode only: install the console-close graceful-stop triggers and the on-started browser launch. Off the flag this is never reached, so no signal
+            // handler or P/Invoke is installed. The lifecycle is rooted for the app's lifetime through the lifetime token registration and disposes with the host.
+            if (isLocalMode)
+            {
+                // After an unlock the browser is already on the unlock page, on this same origin, and follows to the real host itself.
+                ActivateDesktopLifecycle(app, launchMode, DesktopLaunch.HasNoBrowserFlag(args) || vaultUnlock?.BoundUrl is not null);
+            }
+
+            return new ProgramStartResult
+            {
+                App = app,
+                ExitCode = 0
+            };
+        }
+
+        private static ProgramStartResult Exited(int exitCode) =>
+            new()
+            {
+                App = null,
+                ExitCode = exitCode
+            };
+
+        /// <summary>
+        ///     Answers help, status and malformed arguments before any builder exists, and reads which one-shot command the
+        ///     arguments name.
+        /// </summary>
+        private static async Task<HostLaunchRequest> ReadLaunchRequestAsync(string[] args,
+            ProgramAppCustomization? customization,
+            OneShotCommandContext? commandContext,
+            TextWriter standardOutput,
+            TextWriter standardError)
+        {
             if (DesktopLaunch.HasHelpFlag(args))
             {
                 await WriteHelpAsync(standardOutput);
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = 0
-                };
+                return HostLaunchRequest.Exit(0);
             }
 
             // Status is always a one-shot command, even when a serve flag is also present. It is intentionally handled
@@ -41,36 +210,24 @@ namespace XE_Local_AI_Engine.Client
             {
                 commandContext?.SetStage(OneShotCommandStage.Status);
                 var isManagedInstall = customization is null && VelopackInstall.IsManaged();
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = await StatusCommandAsync(args,
-                        isManagedInstall,
-                        standardOutput,
-                        standardError,
-                        customization?.StatusHttpClientFactory)
-                };
+                return HostLaunchRequest.Exit(await StatusCommandAsync(args,
+                    isManagedInstall,
+                    standardOutput,
+                    standardError,
+                    customization?.StatusHttpClientFactory));
             }
 
             if (!DesktopLaunch.TryGetPort(args, out var requestedPort, out var portError))
             {
                 await standardError.WriteLineAsync(portError);
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = 2
-                };
+                return HostLaunchRequest.Exit(2);
             }
 
             var setupRequested = DesktopLaunch.TryGetSetupCommand(args, out var setupCommand, out var setupError);
             if (setupRequested && setupError is not null)
             {
                 await standardError.WriteLineAsync(setupError);
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = 2
-                };
+                return HostLaunchRequest.Exit(2);
             }
 
             if (setupCommand?.PasswordFromEnvironment == true)
@@ -82,36 +239,26 @@ namespace XE_Local_AI_Engine.Client
             if (mcpKeyRequested && mcpKeyError is not null)
             {
                 await standardError.WriteLineAsync(mcpKeyError);
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = 3
-                };
+                return HostLaunchRequest.Exit(3);
             }
 
             // The maintenance commands are one-shots too, so a busy data directory answers them with 4 like setup and --mcp-key.
             var commandRequested = setupRequested || mcpKeyRequested || DesktopLaunch.TryGetResetAdminPassword(args, out _)
                                    || DesktopLaunch.GetKnowledgeDowngradeCommand(args) != KnowledgeDowngradeCommand.None;
 
-            commandContext?.SetStage(OneShotCommandStage.HostInitialization);
-
-            // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
-            SingleInstanceLease? instanceLease = null;
-
-            // Desktop mode comes from XE_LAUNCH_MODE=desktop / --desktop and is implied by a Velopack-managed install, whose stub sets neither, so the install is the opt-in signal.
-            // Resolved once BEFORE the builder, so it can pin the content root, the loopback bind and the HTTPS pipeline. Never consulted on the test path: VelopackLocator THROWS there.
-            var launchMode = customization is null
-                ? DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())
-                : LaunchMode.Headless;
-            var isLocalMode = launchMode.IsLocalMode();
-            var needsLocalData = isLocalMode || setupRequested || mcpKeyRequested;
-            var stableRestartArgs = DesktopLaunch.BuildRestartArguments(args, launchMode, requestedPort, shellOwned: parentLifetime is not null);
-            var hostArgs = args;
-            if (setupRequested || mcpKeyRequested)
+            return new HostLaunchRequest
             {
-                hostArgs = DesktopLaunch.HasExplicitLocalModeArgument(args) ? [.. stableRestartArgs] : [];
-            }
+                RequestedPort = requestedPort,
+                SetupRequested = setupRequested,
+                SetupCommand = setupCommand,
+                McpKeyRequested = mcpKeyRequested,
+                McpKeyScope = mcpKeyScope,
+                CommandRequested = commandRequested
+            };
+        }
 
+        private static WebApplicationBuilder CreateHostBuilder(string[] hostArgs, ProgramAppCustomization? customization, bool isLocalMode)
+        {
             // A desktop launch starts from an arbitrary working directory, so pin the content root to the executable's own directory, where the shipped appsettings.json and
             // wwwroot live. Windows was masked by its launcher forcing WorkingDirectory; the Linux AppImage has none, so without this startup fails on WorkerNode:NodeName.
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -131,130 +278,125 @@ namespace XE_Local_AI_Engine.Client
                 builder.Configuration.AddInMemoryCollection(configurationOverrides);
             }
 
-            // Resolved in the local-data block below and applied after a locked vault (if any) is unwrapped, so the real host
-            // re-binds the origin the unlock page used.
-            string? desktopDataDirectory = null;
-            UnixFileMode? dataDirectoryNarrowedFrom = null;
-            string? bindUrl = null;
-            var vaultState = VaultState.External;
-            var stagedRestore = NodeDbRestoreApplyResult.None;
-            if (needsLocalData)
-            {
-                // Resolve (and create, owner-only) the per-user data dir up front so both the bind below and the config layer share it.
-                desktopDataDirectory = DesktopBootstrap.ResolveDataDirectoryPath();
-                dataDirectoryNarrowedFrom = DesktopBootstrap.EnsureDirectory(desktopDataDirectory);
+            return builder;
+        }
 
-                // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization, which happens in EnsureLocalDataConfiguration just below: two concurrent instances
-                // sharing this directory would each generate a key and split the DB. Held for the process lifetime and disposed on shutdown; never reached off the desktop flag.
-#pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped below).
-                instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
+        /// <summary>
+        ///     Resolves the per-user data directory, takes its single-instance lease, applies a staged restore, picks the bind
+        ///     URL and layers the local data configuration in. Every refusal logs, flushes, releases the lease and exits.
+        /// </summary>
+        private static async Task<LocalDataPreparation> PrepareLocalDataAsync(WebApplicationBuilder builder, HostLaunchRequest launch, TextWriter standardError)
+        {
+            // Resolve (and create, owner-only) the per-user data dir up front so both the bind below and the config layer share it.
+            var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectoryPath();
+            var dataDirectoryNarrowedFrom = DesktopBootstrap.EnsureDirectory(desktopDataDirectory);
+
+            // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization, which happens in EnsureLocalDataConfiguration just below: two concurrent instances
+            // sharing this directory would each generate a key and split the DB. Held for the process lifetime and disposed on shutdown; never reached off the desktop flag.
+#pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped in AttachHostLifetime).
+            var instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
 #pragma warning restore CA2000
-                if (instanceLease is null)
+            if (instanceLease is null)
+            {
+                Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                StartupLoggerReady = true;
+                Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
+                          + "Close the other instance before starting a new one.", desktopDataDirectory);
+                if (launch.CommandRequested)
                 {
-                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
-                    StartupLoggerReady = true;
-                    Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
-                              + "Close the other instance before starting a new one.", desktopDataDirectory);
-                    if (commandRequested)
-                    {
-                        Log.Error("The engine is already running for this data directory. Use the HTTP path on the running "
-                                  + "instance, or stop it before running this command.");
-                    }
-
-                    await Log.CloseAndFlushAsync();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = commandRequested ? 4 : 1
-                    };
+                    Log.Error("The engine is already running for this data directory. Use the HTTP path on the running "
+                              + "instance, or stop it before running this command.");
                 }
 
-                // A present but unreadable node-settings.json would otherwise start the node on default settings, which looks
-                // like a fresh install (first-run onboarding) while every stored choice is silently ignored. Stop honestly instead.
-                if (await NodeStartupSettings.IsStoredFileUnreadableAsync(desktopDataDirectory, CancellationToken.None))
-                {
-                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
-                    StartupLoggerReady = true;
-                    var hint = NodeStartupSettings.DescribeUnreadableFile(desktopDataDirectory);
-                    Log.Fatal("{NodeSettingsUnreadableHint}", hint);
-                    await standardError.WriteLineAsync(hint);
-                    await Log.CloseAndFlushAsync();
-                    instanceLease.Dispose();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = DataDirectoryUnusableExitCode
-                    };
-                }
-
-                // A staged restore swaps the database file while nothing holds it: the lease is ours, and the key and DB are read only below.
-                stagedRestore = await ApplyStagedDatabaseRestoreAsync(builder.Configuration, desktopDataDirectory);
-                if (stagedRestore.Error is not null)
-                {
-                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
-                    StartupLoggerReady = true;
-                    var hint = DescribeStagedRestoreFailure(stagedRestore);
-                    Log.Fatal("{DatabaseRecoveryHint}", hint);
-                    await standardError.WriteLineAsync(hint);
-                    await Log.CloseAndFlushAsync();
-                    instanceLease.Dispose();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = DatabaseMigrationFailedExitCode
-                    };
-                }
-
-                // Re-bind the remembered loopback port while it is still free, so the browser origin stays stable and localStorage-backed prefs survive between
-                // runs; otherwise take a fresh OS-assigned port. The actually-bound port is read post-bind and persisted for next time.
-                if (requestedPort is { } port)
-                {
-                    if (!DesktopPortStore.IsPortAvailable(port))
-                    {
-                        Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
-                        StartupLoggerReady = true;
-                        Log.Fatal("Port {Port} is already in use; --port does not fall back automatically.", port);
-                        await Log.CloseAndFlushAsync();
-                        instanceLease.Dispose();
-                        return new ProgramStartResult
-                        {
-                            App = null,
-                            ExitCode = 6
-                        };
-                    }
-
-#pragma warning disable S5332 // Local mode intentionally binds plain HTTP exclusively on 127.0.0.1; it never leaves the machine.
-                    bindUrl = $"http://{DesktopLaunch.LoopbackHost}:{port}";
-#pragma warning restore S5332
-                }
-                else
-                {
-                    bindUrl = await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None);
-                }
-
-                // A double-click launch supplies neither the node SQLite connection string nor the operator secret, so fill them from the per-user data directory
-                // BEFORE AddServices reads configuration below. Each key is layered in only when absent, so any value already supplied wins.
-                try
-                {
-                    vaultState = DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
-                }
-                catch (NodeKeyCustodyException custodyException)
-                {
-                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
-                    StartupLoggerReady = true;
-                    // The refusal is the operator's message, printed below; a stack trace is logged only for an underlying cause.
-                    Log.Fatal(custodyException.InnerException, "The node key cannot open the database; startup stopped: {Reason}", custodyException.Message);
-                    await standardError.WriteLineAsync(custodyException.Message);
-                    await Log.CloseAndFlushAsync();
-                    instanceLease.Dispose();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = NodeKeyCustodyExitCode
-                    };
-                }
+                await Log.CloseAndFlushAsync();
+                return LocalDataPreparation.Exit(launch.CommandRequested ? 4 : 1);
             }
 
+            // A present but unreadable node-settings.json would otherwise start the node on default settings, which looks
+            // like a fresh install (first-run onboarding) while every stored choice is silently ignored. Stop honestly instead.
+            if (await NodeStartupSettings.IsStoredFileUnreadableAsync(desktopDataDirectory, CancellationToken.None))
+            {
+                Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                StartupLoggerReady = true;
+                var hint = NodeStartupSettings.DescribeUnreadableFile(desktopDataDirectory);
+                Log.Fatal("{NodeSettingsUnreadableHint}", hint);
+                await standardError.WriteLineAsync(hint);
+                await Log.CloseAndFlushAsync();
+                instanceLease.Dispose();
+                return LocalDataPreparation.Exit(DataDirectoryUnusableExitCode);
+            }
+
+            // A staged restore swaps the database file while nothing holds it: the lease is ours, and the key and DB are read only below.
+            var stagedRestore = await ApplyStagedDatabaseRestoreAsync(builder.Configuration, desktopDataDirectory);
+            if (stagedRestore.Error is not null)
+            {
+                Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                StartupLoggerReady = true;
+                var hint = DescribeStagedRestoreFailure(stagedRestore);
+                Log.Fatal("{DatabaseRecoveryHint}", hint);
+                await standardError.WriteLineAsync(hint);
+                await Log.CloseAndFlushAsync();
+                instanceLease.Dispose();
+                return LocalDataPreparation.Exit(DatabaseMigrationFailedExitCode);
+            }
+
+            // Re-bind the remembered loopback port while it is still free, so the browser origin stays stable and localStorage-backed prefs survive between
+            // runs; otherwise take a fresh OS-assigned port. The actually-bound port is read post-bind and persisted for next time.
+            string bindUrl;
+            if (launch.RequestedPort is { } port)
+            {
+                if (!DesktopPortStore.IsPortAvailable(port))
+                {
+                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                    StartupLoggerReady = true;
+                    Log.Fatal("Port {Port} is already in use; --port does not fall back automatically.", port);
+                    await Log.CloseAndFlushAsync();
+                    instanceLease.Dispose();
+                    return LocalDataPreparation.Exit(6);
+                }
+
+#pragma warning disable S5332 // Local mode intentionally binds plain HTTP exclusively on 127.0.0.1; it never leaves the machine.
+                bindUrl = $"http://{DesktopLaunch.LoopbackHost}:{port}";
+#pragma warning restore S5332
+            }
+            else
+            {
+                bindUrl = await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None);
+            }
+
+            // A double-click launch supplies neither the node SQLite connection string nor the operator secret, so fill them from the per-user data directory
+            // BEFORE AddServices reads configuration. Each key is layered in only when absent, so any value already supplied wins.
+            VaultState vaultState;
+            try
+            {
+                vaultState = DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
+            }
+            catch (NodeKeyCustodyException custodyException)
+            {
+                Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                StartupLoggerReady = true;
+                // The refusal is the operator's message, printed below; a stack trace is logged only for an underlying cause.
+                Log.Fatal(custodyException.InnerException, "The node key cannot open the database; startup stopped: {Reason}", custodyException.Message);
+                await standardError.WriteLineAsync(custodyException.Message);
+                await Log.CloseAndFlushAsync();
+                instanceLease.Dispose();
+                return LocalDataPreparation.Exit(NodeKeyCustodyExitCode);
+            }
+
+            return new LocalDataPreparation
+            {
+                InstanceLease = instanceLease,
+                DataDirectory = desktopDataDirectory,
+                DataDirectoryNarrowedFrom = dataDirectoryNarrowedFrom,
+                BindUrl = bindUrl,
+                VaultState = vaultState,
+                StagedRestore = stagedRestore
+            };
+        }
+
+        /// <summary>Installs the real startup logger and reports what the local-data stage changed on disk.</summary>
+        private static void ConfigureHostLogging(WebApplicationBuilder builder, LocalDataPreparation localData)
+        {
             builder.Logging.ClearProviders();
 
             builder.Host.UseDefaultServiceProvider((context, options) =>
@@ -266,13 +408,14 @@ namespace XE_Local_AI_Engine.Client
 
             Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
             StartupLoggerReady = true;
-            if (dataDirectoryNarrowedFrom is { } previousMode)
+            if (localData.DataDirectoryNarrowedFrom is { } previousMode)
             {
                 Log.Information("Restricted the data directory {DataDirectory} to its owner; its previous mode {PreviousMode} let other users in.",
-                    desktopDataDirectory,
+                    localData.DataDirectory,
                     Convert.ToString((int)previousMode, 8));
             }
 
+            var stagedRestore = localData.StagedRestore;
             if (stagedRestore.Applied)
             {
                 Log.Information("Restored the node database from snapshot {SnapshotName}; the replaced database was kept at {SetAsidePath}.",
@@ -284,73 +427,19 @@ namespace XE_Local_AI_Engine.Client
             {
                 Log.Warning("{RestoreWarning} Marker: {MarkerPath}", stagedRestore.Warning, stagedRestore.MarkerPath);
             }
+        }
 
-            // Read once: stdin is consumed, and both the locked-vault unlock below and the reset after migrations need it.
-            var resetRequested = DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword);
-            var resetRecoveryCode = resetRequested ? DesktopLaunch.GetRecoveryCode(args) : null;
-
-            // A v2 node.key is the passphrase-wrapped vault (ADR 0018): nothing below may build until it is unwrapped. The lease is
-            // already held, so a second launch exits 4 instead of serving a second unlock page.
-            VaultUnlockOutcome? vaultUnlock = null;
-            if (vaultState == VaultState.Locked)
-            {
-                var attempt = await UnlockVaultAsync(new VaultUnlockRequestContext
-                {
-                    Args = args,
-                    DataDirectory = desktopDataDirectory!,
-                    BindUrl = bindUrl!,
-                    Builder = builder,
-                    LaunchMode = launchMode,
-                    SetupCommand = setupCommand,
-                    McpKeyRequested = mcpKeyRequested,
-                    ResetRequested = resetRequested,
-                    RecoveryCode = resetRecoveryCode,
-                    StandardOutput = standardOutput,
-                    StandardError = standardError,
-                    ParentLost = parentLifetime?.ParentLost
-                });
-                if (attempt.Outcome is null)
-                {
-                    instanceLease?.Dispose();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = attempt.ExitCode!.Value
-                    };
-                }
-
-                vaultUnlock = attempt.Outcome;
-                var portRelease = Stopwatch.StartNew();
-                if (vaultUnlock.BoundUrl is { } unlockPageUrl)
-                {
-                    if (!await RebindUnlockPagePortAsync(unlockPageUrl, standardError))
-                    {
-                        CryptographicOperations.ZeroMemory(vaultUnlock.MasterKey);
-                        instanceLease?.Dispose();
-                        return new ProgramStartResult
-                        {
-                            App = null,
-                            ExitCode = UnlockPortLostExitCode
-                        };
-                    }
-
-                    bindUrl = unlockPageUrl;
-                }
-
-                InjectUnlockedSecret(builder.Configuration, vaultUnlock);
-                if (vaultUnlock.UnlockTicket is { } unlockTicket)
-                {
-                    // The password unlock's one-time ticket: NodeRefreshEndpoint trades it for a session once when the stored refresh cookie fails.
-                    builder.Services.AddSingleton(unlockTicket);
-                }
-
-                Log.Information("Vault unlocked; port {Port} free again after {ElapsedMs} ms; building the engine host.",
-                    Uri.TryCreate(bindUrl, UriKind.Absolute, out var boundUri) ? boundUri.Port : 0,
-                    portRelease.ElapsedMilliseconds);
-            }
-
-            var hostBuild = Stopwatch.StartNew();
-
+        /// <summary>
+        ///     Every registration of the host in order: the bind, Aspire defaults, the startup settings, the container bridge,
+        ///     the launch context, the services, app update, trace correlation, the test overrides and the hosted-service timing.
+        /// </summary>
+        private static HostRegistration RegisterHostServices(WebApplicationBuilder builder,
+            ProgramAppCustomization? customization,
+            DesktopParentLifetime? parentLifetime,
+            string? bindUrl,
+            bool isLocalMode,
+            IReadOnlyList<string> stableRestartArgs)
+        {
             if (bindUrl is not null)
             {
                 builder.WebHost.UseUrls(bindUrl);
@@ -432,9 +521,16 @@ namespace XE_Local_AI_Engine.Client
             // After every registration, the test overrides included, so each hosted service's StartAsync is timed.
             HostedServiceStartTiming.Install(builder.Services);
 
-            var app = builder.Build();
-            Log.Information("Engine host built in {ElapsedMs} ms; applying migrations, then starting hosted services.", hostBuild.ElapsedMilliseconds);
+            return new HostRegistration
+            {
+                BridgeEndpoint = bridgeEndpoint,
+                IsDevelopmentModeEnabled = isDevelopmentModeEnabled
+            };
+        }
 
+        /// <summary>Ties the SQLite diagnostics, the desktop parent and the single-instance lease to the built host's lifetime.</summary>
+        private static void AttachHostLifetime(WebApplication app, DesktopParentLifetime? parentLifetime, SingleInstanceLease? instanceLease)
+        {
             // SQLite's own error log and the raw-open pragma failures reach this host's logger until it stops. The native hook is process-global and
             // registered once; see docs/wiki/08-data-and-persistence.md ("Connection pragmas").
             var sqliteDiagnostics = NodeSqliteDiagnostics.Attach(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(NodeSqliteDiagnostics).FullName!),
@@ -452,36 +548,14 @@ namespace XE_Local_AI_Engine.Client
             {
                 app.Lifetime.ApplicationStopped.Register(instanceLease.Dispose);
             }
+        }
 
-            // The downgrade commands must inspect/export the schema exactly as it is on disk. Run them before the ordinary
-            // startup migration path so invoking a newer binary never changes the database before reporting compatibility.
-            var knowledgeDowngradeCommand = DesktopLaunch.GetKnowledgeDowngradeCommand(args);
-            if (knowledgeDowngradeCommand != KnowledgeDowngradeCommand.None)
-            {
-                var downgradeExitCode = await RunKnowledgeDowngradeCommandAsync(app.Services, knowledgeDowngradeCommand);
-                instanceLease?.Dispose();
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = downgradeExitCode
-                };
-            }
-
-            // Loopback-only bind guard, defense-in-depth behind LocalApiSecurityMiddleware: shut down if the server bound a routable address without the
-            // Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch — desktop binds 127.0.0.1, Aspire binds localhost behind the DCP proxy.
-            LoopbackBindGuard.Guard(app,
-                bridgeEndpoint is null
-                    ? []
-                    : new[]
-                    {
-                        bridgeEndpoint.ListenerUrl
-                    });
-
-            if (!needsLocalData)
-            {
-                WarnIgnoredStagedRestore(app.Services);
-            }
-
+        /// <summary>
+        ///     The startup migration pass. Returns <c>false</c> after a database failure was logged, reported with its
+        ///     recovery hint and flushed; any other failure propagates.
+        /// </summary>
+        private static async Task<bool> ApplyStartupMigrationsAsync(WebApplication app, OneShotCommandContext? commandContext, TextWriter standardError)
+        {
             try
             {
                 // Split around the migration pass on purpose, and written IMMEDIATELY after the node-chat pass. See
@@ -498,6 +572,7 @@ namespace XE_Local_AI_Engine.Client
                 await ApplyNodeIdentityMigrationsAsync(app.Services);
                 _ = LogStartupPhase("identity migrations", phaseStart);
                 Log.Information("Database migrations applied.");
+                return true;
             }
             catch (Exception migrationException) when (IsDatabaseFailure(migrationException))
             {
@@ -506,72 +581,52 @@ namespace XE_Local_AI_Engine.Client
                 Log.Error(migrationException, "Database migrations failed to apply.");
                 await ReportDatabaseRecoveryAsync(app, migrationException, standardError);
                 await Log.CloseAndFlushAsync();
-                instanceLease?.Dispose();
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = DatabaseMigrationFailedExitCode
-                };
+                return false;
             }
+        }
 
-            // Local admin password recovery, handled AFTER identity migrations guarantee the tables and Admin role and BEFORE the web host serves, so it runs against the SAME
-            // database the app uses and the single-instance lease has already proved nothing else holds the directory. Resets without the old password, revokes refresh tokens, exits.
-            if (vaultUnlock?.ResetPassword is not null)
-            {
-                await ResetRecoveredAdminPasswordAsync(app.Services, vaultUnlock);
-            }
-
-            if (resetRequested)
-            {
-                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword, resetRecoveryCode, standardOutput);
-                instanceLease?.Dispose();
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = resetExitCode
-                };
-            }
-
-            if (setupRequested)
+        /// <summary>
+        ///     Runs <c>--setup</c> and <c>--mcp-key</c> against the migrated database. Returns the exit code that ends the
+        ///     invocation, or <c>null</c> when the host goes on to serve.
+        /// </summary>
+        private static async Task<int?> RunSetupAndMcpKeyCommandsAsync(IServiceProvider services,
+            HostLaunchRequest launch,
+            string[] args,
+            OneShotCommandContext? commandContext,
+            TextWriter standardOutput,
+            TextWriter standardError)
+        {
+            if (launch.SetupRequested)
             {
                 commandContext?.SetStage(OneShotCommandStage.Handler);
-                var setupExitCode = await SetupCommandAsync(app.Services, setupCommand!, standardOutput, standardError);
+                var setupExitCode = await SetupCommandAsync(services, launch.SetupCommand!, standardOutput, standardError);
                 if (setupExitCode != 0)
                 {
-                    instanceLease?.Dispose();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = setupExitCode
-                    };
+                    return setupExitCode;
                 }
             }
 
-            if (mcpKeyRequested)
+            if (launch.McpKeyRequested)
             {
                 commandContext?.SetStage(OneShotCommandStage.Handler);
-                var mcpKeyExitCode = await McpKeyCommandAsync(app.Services, mcpKeyScope!.Value, standardOutput, standardError);
+                var mcpKeyExitCode = await McpKeyCommandAsync(services, launch.McpKeyScope!.Value, standardOutput, standardError);
                 if (mcpKeyExitCode != 0)
                 {
-                    instanceLease?.Dispose();
-                    return new ProgramStartResult
-                    {
-                        App = null,
-                        ExitCode = mcpKeyExitCode
-                    };
+                    return mcpKeyExitCode;
                 }
             }
 
-            if ((setupRequested || mcpKeyRequested) && !DesktopLaunch.HasExplicitLocalModeArgument(args))
+            if ((launch.SetupRequested || launch.McpKeyRequested) && !DesktopLaunch.HasExplicitLocalModeArgument(args))
             {
-                instanceLease?.Dispose();
-                return new ProgramStartResult
-                {
-                    App = null,
-                    ExitCode = 0
-                };
+                return 0;
             }
 
+            return null;
+        }
+
+        /// <summary>Recovers what the last run left behind, then builds the request pipeline.</summary>
+        private static async Task PrepareToServeAsync(WebApplication app, ResolvedContainerBridgeEndpoint? bridgeEndpoint, bool isLocalMode, bool isDevelopmentModeEnabled)
+        {
             var recoveryStart = Stopwatch.GetTimestamp();
             await RecoverInterruptedNodeChatMessagesAsync(app.Services);
             recoveryStart = LogStartupPhase("interrupted-message recovery", recoveryStart);
@@ -581,21 +636,66 @@ namespace XE_Local_AI_Engine.Client
 
             ConfigureRequestPipeline(app, bridgeEndpoint, isLocalMode, isDevelopmentModeEnabled);
             _ = LogStartupPhase("request pipeline", recoveryStart);
+        }
 
-            // Desktop mode only: install the console-close graceful-stop triggers and the on-started browser launch. Off the flag this is never reached, so no signal
-            // handler or P/Invoke is installed. The lifecycle is rooted for the app's lifetime through the lifetime token registration and disposes with the host.
-            if (isLocalMode)
-            {
-                // After an unlock the browser is already on the unlock page, on this same origin, and follows to the real host itself.
-                ActivateDesktopLifecycle(app, launchMode, DesktopLaunch.HasNoBrowserFlag(args) || vaultUnlock?.BoundUrl is not null);
-            }
+        /// <summary>What <see cref="ReadLaunchRequestAsync" /> read from the arguments, or the exit code that already answered them.</summary>
+        private sealed class HostLaunchRequest
+        {
+            public int? ExitCode { get; private init; }
 
+            public int? RequestedPort { get; init; }
 
-            return new ProgramStartResult
-            {
-                App = app,
-                ExitCode = 0
-            };
+            public bool SetupRequested { get; init; }
+
+            public SetupCommand? SetupCommand { get; init; }
+
+            public bool McpKeyRequested { get; init; }
+
+            public McpServerApiKeyScope? McpKeyScope { get; init; }
+
+            /// <summary>A one-shot command was named, so a busy data directory answers with exit 4 instead of 1.</summary>
+            public bool CommandRequested { get; init; }
+
+            public static HostLaunchRequest Exit(int exitCode) =>
+                new()
+                {
+                    ExitCode = exitCode
+                };
+        }
+
+        /// <summary>What <see cref="RegisterHostServices" /> resolved that the pipeline needs.</summary>
+        private sealed class HostRegistration
+        {
+            public required ResolvedContainerBridgeEndpoint? BridgeEndpoint { get; init; }
+
+            public required bool IsDevelopmentModeEnabled { get; init; }
+        }
+
+        /// <summary>What <see cref="PrepareLocalDataAsync" /> resolved, or the exit code of its refusal.</summary>
+        private sealed class LocalDataPreparation
+        {
+            /// <summary>No local data directory: the configuration supplies the database and the operator secret.</summary>
+            public static readonly LocalDataPreparation External = new();
+
+            public int? ExitCode { get; private init; }
+
+            public SingleInstanceLease? InstanceLease { get; init; }
+
+            public string? DataDirectory { get; init; }
+
+            public UnixFileMode? DataDirectoryNarrowedFrom { get; init; }
+
+            public string? BindUrl { get; init; }
+
+            public VaultState VaultState { get; init; } = VaultState.External;
+
+            public NodeDbRestoreApplyResult StagedRestore { get; init; } = NodeDbRestoreApplyResult.None;
+
+            public static LocalDataPreparation Exit(int exitCode) =>
+                new()
+                {
+                    ExitCode = exitCode
+                };
         }
     }
 }

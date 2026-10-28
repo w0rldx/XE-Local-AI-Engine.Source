@@ -5,7 +5,7 @@ import { Code, Group, Text } from "@mantine/core";
  *
  * The backend emits `[some_code] Sentence…` for failures it diagnosed itself, and a bare sentence
  * for everything else. Both render; only the first gets a code chip. Parsing rather than adding a
- * second wire field keeps this a display concern — an unrecognised shape degrades to plain prose.
+ * second wire field keeps this a display concern — an unrecognized shape degrades to plain prose.
  */
 function splitTerminalReason(reason: string): { code: string | null; message: string } {
 	const match = /^\[([a-z0-9_]+)]\s*(.*)$/s.exec(reason);

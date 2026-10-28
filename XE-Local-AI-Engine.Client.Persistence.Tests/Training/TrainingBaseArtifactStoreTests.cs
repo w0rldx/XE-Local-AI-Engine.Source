@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     Exercises the base-artifact store against the real SQLite schema, which is where the
-///     <c>ux_training_base_artifacts_repo_revision</c> unique index actually lives — the retry behaviour it forces
+///     <c>ux_training_base_artifacts_repo_revision</c> unique index actually lives — the retry behavior it forces
 ///     cannot be observed against an in-memory substitute.
 /// </summary>
 [Category(TestCategories.Integration)]

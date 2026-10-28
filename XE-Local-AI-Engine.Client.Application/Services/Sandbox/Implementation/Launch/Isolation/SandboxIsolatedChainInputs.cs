@@ -65,7 +65,7 @@ internal sealed record SandboxIsolatedChainInputs
     /// <summary>Variables the CALLER asked the command to run with, emitted after the fixed allow-list so they override it.</summary>
     /// <remarks>
     ///     The chain is <c>--clearenv</c> plus an allow-list, so a caller's <c>SandboxCommandRequest.Environment</c>, which the
-    ///     non-isolated path honours, would otherwise be silently dropped the moment a sandbox opted into isolation. A variable that
+    ///     non-isolated path honors, would otherwise be silently dropped the moment a sandbox opted into isolation. A variable that
     ///     quietly stops arriving is a far worse failure than one that is refused.
     /// </remarks>
     public IReadOnlyDictionary<string, string> AdditionalEnvironment { get; init; } =

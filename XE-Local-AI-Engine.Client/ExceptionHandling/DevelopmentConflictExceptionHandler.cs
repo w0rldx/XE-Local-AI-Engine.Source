@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 
 /// <summary>
 ///     The Development family's 409s, in one place instead of once per endpoint.
@@ -36,8 +37,8 @@ public sealed class DevelopmentConflictExceptionHandler : IExceptionHandler
 
         _logger.LogWarning(exception,
             "Handled Development conflict exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
-            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
+            LogValueSanitizer.Sanitize(httpContext.Request.Method),
+            LogValueSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status409Conflict,
             ProblemDetailsExtensions.ResolveTraceId(httpContext),
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",

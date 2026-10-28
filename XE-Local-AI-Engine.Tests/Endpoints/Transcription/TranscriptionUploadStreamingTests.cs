@@ -30,9 +30,9 @@ public static class FrameworkTempSentinel
     ///     <para>
     ///         Named per OS PROCESS, because <c>[NotInParallel]</c> — keyed or bare — only serializes tests that one
     ///         process's own execution engine scheduled. The runner gives each namespace a process of its own and runs
-    ///         several at once, all sharing the box's temp root, so a fixed path here lets a sibling process's spill
+    ///         several at once, all sharing the host's temp root, so a fixed path here lets a sibling process's spill
     ///         land in the directory this one is asserting is empty. The prefix stays so the directory is still
-    ///         recognisable as this suite's, and <see cref="Restore" /> still deletes the one it made.
+    ///         recognizable as this suite's, and <see cref="Restore" /> still deletes the one it made.
     ///     </para>
     /// </summary>
     public static string Directory { get; } =

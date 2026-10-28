@@ -205,7 +205,7 @@ export function useStartProcessCapture() {
 	});
 }
 
-// The transcription model catalogue with this machine's installed flags and any download in flight. It polls itself while
+// The transcription model catalog with this machine's installed flags and any download in flight. It polls itself while
 // a weight transfer is running: the poll condition lives in the data, so making it a caller parameter would have every
 // consumer mirror the same derivation.
 export function useTranscriptionModels() {
@@ -258,9 +258,9 @@ export function useStartTranscriptionModelDownload() {
 	});
 }
 
-// Stops an in-flight transfer. Idempotent server-side — cancelling one that just finished reports no change rather
+// Stops an in-flight transfer. Idempotent server-side — canceling one that just finished reports no change rather
 // than failing, which is precisely the case that leaves the node holding a VAD file and a weight it did not have a
-// moment ago. Both the catalogue and the runtime status are therefore re-read; the row states itself from the first.
+// moment ago. Both the catalog and the runtime status are therefore re-read; the row states itself from the first.
 export function useCancelTranscriptionModelDownload() {
 	const queryClient = useQueryClient();
 
@@ -277,8 +277,8 @@ export function useCancelTranscriptionModelDownload() {
 }
 
 // Pins the operator's model choice, or clears it with a null so the node falls back to the hardware recommendation.
-// The node persists the id and answers 400 for one outside the catalogue; it never refuses because the runtime is
-// busy — the pick takes effect the next time the server spawns, so both the catalogue AND the runtime card's
+// The node persists the id and answers 400 for one outside the catalog; it never refuses because the runtime is
+// busy — the pick takes effect the next time the server spawns, so both the catalog AND the runtime card's
 // "Model:" line are invalidated.
 export function useSelectTranscriptionModel() {
 	const queryClient = useQueryClient();

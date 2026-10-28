@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Verifies the <c>AddVramAtLoadTelemetry</c> migration: it adds the two nullable VRAM columns to
-///     <c>dev_workflow_node_runs</c> on an upgrade and on a fresh migrate-to-head, drops both on rollback without
-///     disturbing the columns that preceded them, and leaves no model/snapshot drift.
+///     <c>AddVramAtLoadTelemetry</c> adds the two nullable VRAM columns to <c>dev_workflow_node_runs</c> on upgrade
+///     and fresh migrate, drops both on rollback without disturbing earlier columns, and leaves no snapshot drift.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
@@ -93,7 +92,7 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
         AssertEx.False(columns.Contains(AdmittedColumn), "Rolling back one migration should drop the admitted-VRAM column.");
 
         // SQLite rebuilds a table to drop a column, so a rollback rebuilds from the PRECEDING migration's model — which
-        // is exactly how a sibling slice's columns get silently lost. Pin the neighbours this migration sits beside.
+        // is exactly how a sibling slice's columns get silently lost. Pin the neighbors this migration sits beside.
         AssertEx.True(columns.Contains("model_readiness_ms"), "Rolling back the VRAM migration must not disturb the column that immediately preceded it.");
         AssertEx.True(columns.Contains("agent_turn_ms"), "Rolling back the VRAM migration must not disturb the cost columns that preceded it.");
         AssertEx.True(columns.Contains("work_session_steps"), "Rolling back the VRAM migration must not disturb the cost columns that preceded it.");

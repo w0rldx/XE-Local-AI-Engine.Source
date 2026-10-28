@@ -10,14 +10,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint integration tests for the model-fit / advisor local API. Covers: 401 on every route without a bearer
-///     token; reachability with an operator token; the latest endpoint's explicit cache-miss state (hasCache:false, 200,
-///     never a 404); the refresh endpoint's template guard (a random scheduled-job id is rejected, not executed);
-///     redaction (the latest response carries no raw output / stderr / diagnostics keys); the new advisor management
-///     routes (hardware-profile, gguf/browse, running, llamacpp/version, hf-token presence) returning their sanitized
-///     shapes; and the security invariant that the hf-token endpoints NEVER echo the token value. These run against the
-///     real DI host with an empty DB (the scheduler is not started in the test host).
+///     Model-fit / advisor local API over the real DI host with an empty DB (no scheduler): 401 without a bearer,
+///     reachability with an operator token, and the hf-token endpoints NEVER echoing the token value.
 /// </summary>
+/// <remarks>
+///     Also: latest's explicit cache-miss state (hasCache:false, 200, never 404); the refresh template guard (a random
+///     scheduled-job id is rejected, not executed); latest carries no raw output / stderr / diagnostics keys; and the
+///     advisor routes (hardware-profile, gguf/browse, running, llamacpp/version, hf-token presence) are sanitized.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class ModelFitEndpointTests
 {

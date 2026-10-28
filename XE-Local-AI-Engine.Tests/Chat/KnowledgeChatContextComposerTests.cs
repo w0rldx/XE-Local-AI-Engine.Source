@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The knowledge-chat composer assembles the synthetic plain-chat context block from a knowledge-base search result
-///     and projects the provenance of the inlined hits into the turn's sources. It fences each hit as
-///     untrusted DATA, caps the combined text to a character budget dropping the lowest-scored hits first, and never
-///     leaks chunk body text into the sources projection.
+///     The knowledge-chat composer turns a search result into the plain-chat context block and sources: each hit is
+///     fenced as untrusted DATA, the text is capped to a budget dropping lowest-scored hits first, and chunk bodies
+///     never reach sources.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeChatContextComposerTests
@@ -190,7 +189,7 @@ public sealed class KnowledgeChatContextComposerTests
     [Test]
     public void WeakMatchNotice_KeepsTheGeneralKnowledgeEscape()
     {
-        // Model-matrix F18: without it small models refuse general questions for the rest of the conversation.
+        // Without it, small models refuse general questions for the rest of the conversation.
         AssertEx.Contains(KnowledgeChatContextComposer.WeakMatchNotice, "general question may still be answered from your own knowledge");
     }
 }

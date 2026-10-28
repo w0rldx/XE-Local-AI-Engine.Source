@@ -56,7 +56,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         AssertEx.NotNull(persistence);
         AssertEx.NotNull(restartRecovery);
         AssertEx.NotNull(timeProvider);
-        // Registered, or a thin run envelope silently stays booked under "unknown" (R5-07); lazy, so resolving it builds nothing yet.
+        // Registered, or a thin run envelope silently stays booked under "unknown"; lazy, so resolving it builds nothing yet.
         AssertEx.NotNull(provider.GetService<Lazy<IUsageProviderResolver>>());
         AssertEx.NotEqual(firstContextId, secondContextId, "Registered writer should resolve a fresh NodeChatDbContext for each persistence operation.");
     }
@@ -97,7 +97,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         AssertEx.Null(localChatHubRegistration);
     }
 
-    /// <summary>F16: the Aspire integration's shared-cache string reaches no consumer; every reader of the key gets a private cache.</summary>
+    /// <summary>The Aspire integration's shared-cache string reaches no consumer; every reader of the key gets a private cache.</summary>
     [Test]
     public async Task AddServices_RewritesASharedCacheNodeConnectionStringToAPrivateCache()
     {

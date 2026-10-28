@@ -102,7 +102,7 @@ describe("CaptureControls", () => {
 		expect(screen.getByTestId("transcription-capture-error").textContent).toContain("The shared screen came back without audio.");
 	});
 
-	// B2: a node that falls behind buffers and catches up; the operator sees by how much instead of a stopped session.
+	// A node that falls behind buffers and catches up; the operator sees by how much instead of a stopped session.
 	it("says how far behind the transcription is while capturing", () => {
 		renderControls({ state: "capturing", bufferedMs: 4200 });
 
@@ -110,7 +110,7 @@ describe("CaptureControls", () => {
 		expect(screen.queryByTestId("transcription-capture-error")).toBeNull();
 	});
 
-	// N-35: a running session this page does not capture (another browser, or a reload) gets Stop and the readouts
+	// A running session this page does not capture (another browser, or a reload) gets Stop and the readouts
 	// beside Start, which resumes capture after a reload.
 	it("offers stop and the readouts beside start for a session captured elsewhere", () => {
 		const { onStop, onStart } = renderControls({ capturedElsewhere: true, elapsedMs: 47_000, bufferedMs: 2100 });
@@ -142,7 +142,7 @@ describe("CaptureControls", () => {
 		expect(screen.queryByTestId("transcription-capture-behind")).toBeNull();
 	});
 
-	// B2: Stop drains the whole backlog. The finalizing control counts it down; Cancel stays as the escape hatch.
+	// Stop drains the whole backlog. The finalizing control counts it down; Cancel stays as the escape hatch.
 	it("counts down the backlog a stop is draining", () => {
 		const { onCancel } = renderControls({ state: "stopping", bufferedMs: 12_001 });
 
@@ -151,7 +151,7 @@ describe("CaptureControls", () => {
 		expect(onCancel).toHaveBeenCalledTimes(1);
 	});
 
-	// A3: the first live start can spend a minute on the runtime download and model load. The line says which.
+	// The first live start can spend a minute on the runtime download and model load. The line says which.
 	it.each([
 		{ runtimeState: "stopped" as const, expected: "Preparing the transcription runtime… this can take a minute on first use" },
 		{ runtimeState: "starting" as const, expected: "Loading the model…" },
@@ -241,7 +241,7 @@ describe("CaptureControls", () => {
 		);
 	});
 
-	// M2: a dead transport is the one thing that stops capture on its own, and the string says so.
+	// A dead transport is the one thing that stops capture on its own, and the string says so.
 	it("names a lost connection as the reason capture stopped", () => {
 		renderControls({ error: "disconnected" });
 

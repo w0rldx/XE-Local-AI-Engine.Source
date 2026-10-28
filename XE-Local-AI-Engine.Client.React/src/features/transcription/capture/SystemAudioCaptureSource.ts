@@ -88,7 +88,7 @@ export class SystemAudioCaptureSource implements CaptureSource {
 function toDisplayCaptureError(error: unknown): CaptureError {
 	const name = error instanceof Error ? error.name : "";
 	const message = error instanceof Error ? error.message : String(error);
-	// A cancelled picker and a blocked one are the same `NotAllowedError`; both are the user declining to share.
+	// A canceled picker and a blocked one are the same `NotAllowedError`; both are the user declining to share.
 	if (name === "NotAllowedError" || name === "SecurityError") {
 		return new CaptureError("permission-denied", `Screen sharing was refused: ${message}`);
 	}

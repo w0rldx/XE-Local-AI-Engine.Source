@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>EncryptConversationTitle</c> is a data migration, not a schema one: it <b>destroys</b> every existing
-///     plaintext title before widening the column to a BLOB, because a migration has no access to the node key and so
-///     cannot encrypt what it finds. Losing the titles is the deliberate trade — leaving them would leave user content
-///     readable at rest in a column the product now treats as ciphertext — and
-///     <c>NodeChatTitleEncryptionBackfillService</c> re-derives them from each conversation's first user message at the
-///     next startup. The conversation itself must survive; only its title is cleared.
+///     <c>EncryptConversationTitle</c> is a data migration: it <b>destroys</b> every plaintext title before widening
+///     the column to a BLOB, because a migration has no node key to encrypt with. The conversation must survive.
 /// </summary>
+/// <remarks>
+///     Leaving the titles would leave user content readable in a column treated as ciphertext;
+///     <c>NodeChatTitleEncryptionBackfillService</c> re-derives them from each first user message at next startup.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class EncryptConversationTitleMigrationTests
 {

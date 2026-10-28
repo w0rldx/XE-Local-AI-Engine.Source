@@ -38,7 +38,7 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public void BuildState_CudaCompanionSetIncomplete_NamesTheRepair_NotAMissingRuntime()
     {
-        // The Windows tester's CUDA dir without its companion DLLs: installed, not "No llama.cpp runtime is installed yet".
+        // A Windows CUDA dir without its companion DLLs: installed, not "No llama.cpp runtime is installed yet".
         var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia),
             GpuVariant.Cuda,
             LlamaDeviceInventory.CompanionLibrariesIncomplete(GpuVariant.Cuda));
@@ -82,8 +82,8 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public void BuildState_OnWindows_ZeroDevices_DropsTheWslVulkanWording_AndPointsAtTheDriver()
     {
-        // The Linux text told a Windows tester to install a Vulkan ICD and update a Linux driver series, neither of
-        // which applies. The reason code ("zero_devices") is unchanged.
+        // On Windows the text must not ask for a Vulkan ICD or a Linux driver series, neither of
+        // which applies. The reason code stays "zero_devices".
         var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, LlamaDeviceInventory.Empty(GpuVariant.Cuda), isWindows: true);
 
         AssertEx.True(state.CpuFallback);
@@ -151,10 +151,10 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public void BuildState_UndeterminedReason_NamesTheOverrideCause_AndAssertsNoSingleCause()
     {
-        // Regression pin for a wrong diagnosis measured on Windows 11 2026-08-03. The most reachable route to
+        // Regression pin for a wrong diagnosis seen on Windows 11. The most reachable route to
         // "undetermined" is an XE_LLAMACPP_SERVER_PATH override that LlamaCppBinaryManager deliberately refuses because
-        // it exposes no GPU device — NOT a timeout, NOT a failed start, and NOT a wedged driver. The old text asserted
-        // all three and sent the operator to diagnose a healthy driver.
+        // it exposes no GPU device — NOT a timeout, NOT a failed start, and NOT a wedged driver. Text asserting
+        // all three would send the operator to diagnose a healthy driver.
         var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, LlamaDeviceInventory.Unknown(GpuVariant.Cuda));
 
         var undetermined = AssertEx.NotNull(state.BackendUndeterminedReason);
@@ -163,7 +163,7 @@ public sealed class RuntimeDeviceAuditServiceTests
         AssertEx.True(undetermined.Contains("XE_LLAMACPP_SERVER_PATH", StringComparison.Ordinal),
             "the undetermined reason must name the override, which is the most reachable cause");
 
-        // The negative control: it must no longer assert a cause it cannot know.
+        // The negative control: it must not assert a cause it cannot know.
         AssertEx.False(undetermined.Contains("wedged", StringComparison.OrdinalIgnoreCase),
             "the undetermined reason must not blame a wedged driver as though it were the known cause");
         AssertEx.False(undetermined.Contains("the probe timed out or the binary could not be started", StringComparison.Ordinal),
@@ -243,7 +243,7 @@ public sealed class RuntimeDeviceAuditServiceTests
 
         var effective = await service.GetEffectiveProfileAsync(forceRefreshProfile: false, CancellationToken.None);
 
-        // Unknown is not a proven fallback, so the raw profile stands (unchanged behaviour for an indeterminate probe).
+        // Unknown is not a proven fallback, so the raw profile stands (unchanged behavior for an indeterminate probe).
         AssertEx.Equal(raw.VramBytes, effective.VramBytes);
         AssertEx.Equal(raw.AvailableRamBytes, effective.AvailableRamBytes);
         await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
@@ -299,7 +299,7 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public async Task GetAudit_HealthyBackend_LogsItOnce_NotOnAnIdenticalSecondAudit()
     {
-        // A healthy audit used to be silent, so a tester could not tell from the log that the warm-up ran at all.
+        // A healthy audit is logged once, so the log shows that the warm-up ran at all.
         var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
         probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
         var profiler = Substitute.For<IHardwareProfiler>();
@@ -494,8 +494,8 @@ public sealed class RuntimeDeviceAuditServiceTests
     [Test]
     public async Task GetAudit_PrebuiltInstallBumpsSignal_InvalidatesTheCpuFallbackMemo()
     {
-        // The Windows tester bug: an audit taken mid-download saw zero devices and memoized "CPU fallback", then the
-        // prebuilt install that followed bumped no stamp, so the banner never cleared. NotifyBinaryChanged is that bump.
+        // An audit taken mid-download sees zero devices and memoizes "CPU fallback"; the prebuilt install that
+        // follows must bump a stamp or the banner never clears. NotifyBinaryChanged is that bump.
         var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
         probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(LlamaDeviceInventory.Empty(GpuVariant.Cuda)),

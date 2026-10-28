@@ -116,7 +116,7 @@ public sealed class LlamaCppReleaseResult
 ///     no-live-data <see cref="LlamaCppReleaseResult" /> rather than throwing into the caller's happy path, so the
 ///     3-tier resolve (live, then cached <c>installed-runtime.json</c>, then pins) can fall through. Conditional
 ///     <c>If-None-Match</c> requests are used, a <c>304</c> reusing the cached parse for free against the
-///     unauthenticated rate limit, and <c>Retry-After</c>/<c>x-ratelimit-reset</c> are honoured on a rate limit.
+///     unauthenticated rate limit, and <c>Retry-After</c>/<c>x-ratelimit-reset</c> are honored on a rate limit.
 /// </remarks>
 public interface ILlamaCppReleaseCatalog
 {

@@ -26,7 +26,7 @@ public sealed class DevelopmentProfileSummary
     /// </summary>
     /// <remarks>
     ///     Deliberately lenient, unlike <c>DevelopmentCommandProfileCatalog.ResolveStored</c>: that method is the
-    ///     execution gate and must reject a profile the catalog no longer honours, while this one only labels a row
+    ///     execution gate and must reject a profile the catalog no longer honors, while this one only labels a row
     ///     in a list. A strict read-only projection would take the whole project list down the moment the code-owned
     ///     catalog drifted, hiding the drift behind an outage instead of surfacing it where it matters — at the start
     ///     of an attempt.

@@ -1,3 +1,4 @@
+import { isRecord } from "@/core/models/JsonRecord";
 import themeConfigurationJson from "@/theme/theme.json";
 
 const defaultPrimaryScale = [
@@ -63,10 +64,6 @@ export interface ThemeConfiguration {
 			xl: number;
 		};
 	};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 function readString(value: unknown, fallback: string): string {

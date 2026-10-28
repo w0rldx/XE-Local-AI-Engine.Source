@@ -7,11 +7,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the public capability seam a caller outside this provider needs in order to settle a launch vector BEFORE
-///     any process exists — it has to be able to reject a KV cache type the selected binary does not accept rather than
-///     discover it as a failed spawn. The answers come from the same probed manifest the launch path already gates on,
-///     and neither the manifest nor the resolved binary (which carries a filesystem path) crosses the boundary.
+///     Covers the public capability seam that lets a caller outside this provider settle a launch vector before any
+///     process exists, rejecting a KV cache type the binary does not accept instead of failing the spawn.
 /// </summary>
+/// <remarks>Answers come from the probed manifest; neither it nor the binary's filesystem path leaks out.</remarks>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerLaunchCapabilityInspectorTests
 {

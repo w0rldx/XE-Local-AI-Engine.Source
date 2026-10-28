@@ -158,7 +158,7 @@ public sealed class DockerDaemonEndpointResolverTests
     [Arguments(null)]
     public void Resolve_ThroughOptions_AndThroughAPlainString_AgreeForTheSameConfiguredValue(string? configuredEndpoint)
     {
-        // The generalisation's whole obligation. Two overloads over one discovery order is fine; two discovery orders
+        // The generalization's whole obligation. Two overloads over one discovery order is fine; two discovery orders
         // is how one consumer silently reaches a different daemon than the other, which is exactly the substitution
         // the daemon attestation exists to surface.
         var environment = new Dictionary<string, string>(StringComparer.Ordinal)

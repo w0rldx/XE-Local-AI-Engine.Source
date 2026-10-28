@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     Maps a caller's sandbox-namespace path onto the container path and the host path that name the same bytes, and rejects anything
 ///     that escapes the workspace mount.
@@ -44,7 +46,7 @@ internal static class DockerSandboxPaths
     /// <summary>Canonicalises a sandbox path into the HOST path backing it — the mount source, not the container path.</summary>
     /// <remarks>
     ///     Containment is proven twice, once in the container namespace and again on the host after
-    ///     <see cref="Path.GetFullPath(string)" />, because the two normalisations need not agree about a component the host filesystem
+    ///     <see cref="Path.GetFullPath(string)" />, because the two normalizations need not agree about a component the host filesystem
     ///     treats specially.
     /// </remarks>
     internal static string ResolveHostPath(string workspaceRoot, string mountTarget, string sandboxPath)
@@ -60,7 +62,7 @@ internal static class DockerSandboxPaths
             ? canonicalRoot
             : Path.GetFullPath(Path.Combine(canonicalRoot, relative.Replace(PosixSeparator, Path.DirectorySeparatorChar)));
 
-        if (!IsUnderHostRoot(canonicalRoot, combined))
+        if (!PathContainment.IsRootOrUnderCanonical(combined, canonicalRoot))
         {
             throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' escapes the workspace mount and is rejected.");
         }
@@ -70,7 +72,7 @@ internal static class DockerSandboxPaths
 
     /// <summary>
     ///     Collapses <c>.</c> and <c>..</c> in a POSIX path and returns it rooted. A <c>..</c> that would climb above
-    ///     the root is dropped rather than honoured, matching <see cref="Path.GetFullPath(string)" /> — which is why
+    ///     the root is dropped rather than honored, matching <see cref="Path.GetFullPath(string)" /> — which is why
     ///     the containment check afterwards is the control, not this method.
     /// </summary>
     internal static string NormalizePosix(string path)
@@ -98,14 +100,6 @@ internal static class DockerSandboxPaths
         }
 
         return PosixSeparator + string.Join(PosixSeparator, segments);
-    }
-
-    /// <summary>Whether <paramref name="candidate" /> is <paramref name="root" /> itself or lives under it.</summary>
-    internal static bool IsUnderHostRoot(string root, string candidate)
-    {
-        var prefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
-        return string.Equals(candidate, root, StringComparison.Ordinal)
-               || candidate.StartsWith(prefix, StringComparison.Ordinal);
     }
 
     private static bool IsUnderPosixRoot(string root, string candidate)

@@ -106,8 +106,8 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            TryDelete(_statePath);
-            TryDelete(_desiredPath);
+            BestEffortFile.TryDeleteFile(_statePath);
+            BestEffortFile.TryDeleteFile(_desiredPath);
         }
         finally
         {
@@ -263,7 +263,7 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
         }
         finally
         {
-            TryDelete(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
         }
     }
 
@@ -289,18 +289,6 @@ public sealed class StableDiffusionInstalledRuntimeStore : IStableDiffusionInsta
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort temp cleanup.
         }
     }
 

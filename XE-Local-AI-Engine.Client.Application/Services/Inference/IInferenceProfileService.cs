@@ -30,7 +30,7 @@ public interface IInferenceProfileService
     ///     for this call only; nothing about it is persisted.
     /// </summary>
     /// <param name="contextTokens">
-    ///     <see langword="null" /> for the default hardware-tier behaviour; a value is silently capped by the model's
+    ///     <see langword="null" /> for the default hardware-tier behavior; a value is silently capped by the model's
     ///     train ceiling, so <see cref="InferenceProfileView.CtxSize" /> is the effective window.
     /// </param>
     /// <remarks>

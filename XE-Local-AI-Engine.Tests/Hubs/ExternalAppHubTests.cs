@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 /// <summary>
 ///     The subscription side of the instance hub. <see cref="IExternalAppService.ListEventsAsync" /> is the replay
 ///     authority — literally the same member the events endpoint pages — so what these cases pin is the ORDER of the
-///     join and the read, the watermark the replay honours, and that nothing reaches a group before the instance is
+///     join and the read, the watermark the replay honors, and that nothing reaches a group before the instance is
 ///     known to exist.
 /// </summary>
 [Category(TestCategories.Integration)]

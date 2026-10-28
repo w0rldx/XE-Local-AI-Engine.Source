@@ -12,7 +12,7 @@
 
 /*
  * Mantine draws an unchecked radio with a dark-4 border on a dark-6 fill, which on a dark-6 card is close to
- * invisible. dark-2 is the dimmed text colour, so the circle reads as a control without looking selected.
+ * invisible. dark-2 is the dimmed text color, so the circle reads as a control without looking selected.
  */
 
 .radio:not(:checked, :disabled, [data-error]),

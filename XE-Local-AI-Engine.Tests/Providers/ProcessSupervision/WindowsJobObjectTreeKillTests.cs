@@ -16,7 +16,7 @@ using OS = TUnit.Core.Enums.OS;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The Job Object is the ONLY orphan defence on Windows — there is no <c>setsid</c>/pgid fallback there — so the
+///         The Job Object is the ONLY orphan defense on Windows — there is no <c>setsid</c>/pgid fallback there — so the
 ///         failure it prevents is a runtime server such as <c>llama-server.exe</c> holding 8-14 GB of VRAM and a loopback port forever.
 ///     </para>
 ///     <para>

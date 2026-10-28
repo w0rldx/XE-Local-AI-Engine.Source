@@ -10,7 +10,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 
 // Server state for skill import + bundled resources. Import is deliberately TWO calls: `preview` writes nothing and
-// returns a report plus a token; `commit` persists exactly the materialised payload behind that token, so the report
+// returns a report plus a token; `commit` persists exactly the materialized payload behind that token, so the report
 // the operator approved is the payload that lands (no preview→persist re-fetch, no TOCTOU).
 
 /** Dry run. Writes nothing on the node; returns the report (candidates, refused scripts, conflicts, problems). */

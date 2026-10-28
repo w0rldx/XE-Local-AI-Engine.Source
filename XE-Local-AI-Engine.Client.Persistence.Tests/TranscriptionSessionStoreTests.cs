@@ -11,10 +11,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Behaviour of <see cref="TranscriptionSessionStore" /> against a real on-disk SQLite file with the real node
-///     encryption interceptors. The cipher is never substituted: what these assert is that the round trip through it
-///     works, that the list pages and orders the way the session list depends on, that deleting a session takes its
-///     transcript with it, and that the unique <c>(session_id, seq)</c> index rejects a repeated sequence.
+///     <see cref="TranscriptionSessionStore" /> on a real SQLite file with the real, never-substituted encryption
+///     interceptors: the cipher round trip, list paging and order, delete cascading to the transcript, and the unique
+///     <c>(session_id, seq)</c> index rejecting a repeated sequence.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TranscriptionSessionStoreTests : IDisposable

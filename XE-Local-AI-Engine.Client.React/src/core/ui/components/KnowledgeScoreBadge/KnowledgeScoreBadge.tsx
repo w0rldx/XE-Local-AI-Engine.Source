@@ -11,7 +11,7 @@ interface KnowledgeScoreBadgeProps {
 
 // Names which kind of score a knowledge hit carries instead of showing a bare number: a fused RRF value (≈0.01–0.06)
 // and a raw cross-encoder relevance (unbounded, e.g. −11…+7) share one field but no scale, and neither is a
-// probability. The badge says the kind; the raw number sits in a kind-labelled tooltip for the operator who wants it.
+// probability. The badge says the kind; the raw number sits in a kind-labeled tooltip for the operator who wants it.
 // Fusion needs three decimals to tell hits apart, rerank two. Shared by the knowledge search panel and the chat
 // sources strip, so it lives in core rather than in either feature.
 export function KnowledgeScoreBadge({ score, scoreKind, size }: KnowledgeScoreBadgeProps) {

@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     End-to-end executor behaviour against a scripted trainer: no GPU, no venv, no real subprocess. What is pinned
+///     End-to-end executor behavior against a scripted trainer: no GPU, no venv, no real subprocess. What is pinned
 ///     here is the part a live 1-epoch run cannot check cheaply — that the launch receipt is durable before any output
 ///     is read, that a silent trainer is killed rather than waited on forever, that a cooperative stop lands as
 ///     Cancelled rather than Failed, and that the decrypted dataset is swept on every terminal path.
@@ -418,9 +418,9 @@ public sealed class TrainingRunExecutorTests : IDisposable
                 workspace,
                 cancellations,
                 new FakeNodeDataDirectory(owner._root),
-                // Short bounds so the watchdog's real behaviour is exercised in milliseconds rather than minutes.
+                // Short bounds so the watchdog's real behavior is exercised in milliseconds rather than minutes.
                 // Short bounds, but they are measured on `clock` — a manual clock only a test moves. A watchdog on the
-                // system clock raced every OTHER test in this file on the box's scheduling jitter: a consume starved
+                // system clock raced every OTHER test in this file on the host's scheduling jitter: a consume starved
                 // past 200 ms was killed as "silent" and the run landed Failed for the watchdog's reason rather than
                 // the one under assertion. Frozen, the watchdog provably cannot fire unless a test advances the clock.
                 Options.Create(new TrainingRunQueueOptions
@@ -478,7 +478,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
         ///     <para>
         ///         The advance REPEATS rather than being assumed to land. A window wider than the watchdog's poll
         ///         interval crosses several due instants, and the watchdog re-arms at each;
-        ///         <see cref="ManualTimeProvider.Advance" /> honours a re-arm only if it lands before the scan that
+        ///         <see cref="ManualTimeProvider.Advance" /> honors a re-arm only if it lands before the scan that
         ///         finds nothing armed and sets the clock to the target. A continuation that reads the clock before
         ///         that scan but arms after it is due BEYOND where the clock stopped, with nothing left to move it —
         ///         and the run would then hang rather than fail, the worst shape a test can take in CI. One more

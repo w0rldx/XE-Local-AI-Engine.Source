@@ -143,7 +143,7 @@ export function developmentProjectPollInterval(query: { state: { data?: Developm
 }
 
 /**
- * The work item a workflow-driven task's run belongs to (Y3).
+ * The work item a workflow-driven task's run belongs to.
  *
  * A Dev Mode task carries only `workflowRunId`, and the workflow detail route is keyed by WORK ITEM — so a deep link
  * back to the run needs the one thing the run-detail endpoint already answers alongside everything else it returns.

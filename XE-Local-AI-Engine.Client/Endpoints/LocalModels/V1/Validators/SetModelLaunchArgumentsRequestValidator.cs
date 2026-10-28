@@ -28,7 +28,7 @@ public sealed class SetModelLaunchArgumentsRequestValidator : Validator<SetModel
 
     public SetModelLaunchArgumentsRequestValidator()
     {
-        // Both halves carry the endpoint's behaviour across: a failure goes to the GENERAL error field rather than the
+        // Both halves carry the endpoint's behavior across: a failure goes to the GENERAL error field rather than the
         // field it came from, and the cascade stops at the first failing rule, as returning after the first AddError did.
         ClassLevelCascadeMode = CascadeMode.Stop;
 

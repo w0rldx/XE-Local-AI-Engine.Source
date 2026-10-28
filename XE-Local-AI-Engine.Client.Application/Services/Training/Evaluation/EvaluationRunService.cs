@@ -131,7 +131,7 @@ public sealed class EvaluationRunService : IEvaluationRunService
             return false;
         }
 
-        // A running evaluation is signalled, never terminalized here: the executor owns the terminal write, so
+        // A running evaluation is signaled, never terminalized here: the executor owns the terminal write, so
         // cancelling from two places would race the work item.
         if (_cancellations.Cancel(evaluationId))
         {

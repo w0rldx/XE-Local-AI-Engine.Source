@@ -9,7 +9,7 @@ using Microsoft.Extensions.AI;
 /// <remarks>
 ///     The LAST-RESORT branch of reasoning detection, for a server that surfaced no reasoning channel of its own and
 ///     emits raw thinking inline in <c>content</c>, which would otherwise be rendered as the answer and replayed as
-///     history. Only a LEADING block is recognised, and only one: an interior <c>&lt;think&gt;</c> is far more likely
+///     history. Only a LEADING block is recognized, and only one: an interior <c>&lt;think&gt;</c> is far more likely
 ///     a model quoting markup, and stripping it would delete part of a legitimate answer. A streaming state machine,
 ///     buffering at most the length of the tag being matched; stateful and single-consumer, one instance per response.
 /// </remarks>

@@ -12,11 +12,10 @@ using System.Reflection;
 ///         two seconds.
 ///     </para>
 ///     <para>
-///         The solution used to be named <c>XE-Local-AI-Engine.slnx</c> exactly, because the command catalog hardcoded
-///         that literal file name in a <c>Solution</c> constant and would not build anything else. That constraint is
-///         gone: the build target is now carried by the project's <c>DevelopmentCommandProfile</c>, so a test binds
+///         The solution is deliberately not named <c>XE-Local-AI-Engine.slnx</c>: the build target is carried by the
+///         project's <c>DevelopmentCommandProfile</c> rather than a hardcoded file name, so a test binds
 ///         <see cref="SolutionPath" /> into a <c>dotnet-slnx</c> profile via
-///         <c>DevelopmentCommandProfileCatalog.Materialize</c>. The name is deliberately synthetic now, so a fixture
+///         <c>DevelopmentCommandProfileCatalog.Materialize</c>. The synthetic name means a fixture
 ///         that only passes because it impersonates this repository cannot go unnoticed.
 ///     </para>
 ///     <para>

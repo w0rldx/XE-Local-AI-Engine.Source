@@ -733,7 +733,7 @@ describe("external access", () => {
 
 	it("sends booleans only when a switch is edited after a preset click", () => {
 		// Offline node -> click Recommended -> turn provisioning back off. Sending the profile too would let the server
-		// honour the preset and discard the operator's switch, which is the failing case this branch exists to prevent.
+		// honor the preset and discard the operator's switch, which is the failing case this branch exists to prevent.
 		const offlineBaseline = {
 			...baseline,
 			externalAccessProfile: "offline",

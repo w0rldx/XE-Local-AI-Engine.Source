@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.ClientModel;
 using System.ClientModel.Primitives;
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OpenAI;
@@ -11,20 +9,20 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Reasoning-off must actually reach llama.cpp. The Ollama <c>think:false</c> the factory writes is
-///     dropped by the MEAI OpenAI adapter, so <see cref="DeferredLlamaServerChatClient.ApplyThinkingSwitch" /> injects
-///     <c>chat_template_kwargs.enable_thinking=false</c> via <c>ChatCompletionOptions.Patch</c> (through
-///     <see cref="ChatOptions.RawRepresentationFactory" />) so it rides the wire. These tests assemble the REAL MEAI
-///     OpenAI chat pipeline over a request-capturing transport and assert the serialized body: the switch is present ONLY
-///     when the disable-thinking marker is set, and every other request is byte-identical (no <c>chat_template_kwargs</c>).
+///     Reasoning-off must reach llama.cpp. The MEAI OpenAI adapter drops the Ollama <c>think:false</c>, so
+///     <see cref="DeferredLlamaServerChatClient.ApplyThinkingSwitch" /> injects <c>enable_thinking=false</c> into
+///     <c>chat_template_kwargs</c> via <c>ChatCompletionOptions.Patch</c> on the raw representation.
 /// </summary>
+/// <remarks>
+///     Graded on the REAL pipeline's body: the switch appears ONLY under the disable-thinking marker.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class DeferredLlamaServerThinkingSwitchTests
 {
     [Test]
     public async Task ApplyThinkingSwitch_MarkerPresent_InjectsEnableThinkingFalseIntoWireBody()
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -54,7 +52,7 @@ public sealed class DeferredLlamaServerThinkingSwitchTests
     [Test]
     public async Task ApplyThinkingSwitch_MarkerAbsent_BodyHasNoChatTemplateKwargs()
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(http);
 
@@ -82,29 +80,5 @@ public sealed class DeferredLlamaServerThinkingSwitchTests
         };
         var client = new OpenAIClient(new ApiKeyCredential("ignored"), options);
         return client.GetChatClient("test-model").AsIChatClient();
-    }
-
-    /// <summary>Captures the outbound request body and returns a canned OpenAI chat completion so no network is hit.</summary>
-    private sealed class CapturingHandler : HttpMessageHandler
-    {
-        private const string CannedCompletion =
-            "{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"test-model\","
-            + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],"
-            + "\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}";
-
-        public string? CapturedBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedCompletion, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }

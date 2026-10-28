@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 /// <summary>
 ///     Validates a model selection. A blank or absent id is VALID and clears the override, so the node falls back to
 ///     the hardware recommendation — that is a real request, not a missing field. A non-blank id must resolve in the
-///     catalogue.
+///     catalog.
 /// </summary>
 public sealed class SelectTranscriptionModelRequestValidator : Validator<SelectTranscriptionModelRequest>
 {

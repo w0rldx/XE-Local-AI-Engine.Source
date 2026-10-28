@@ -73,14 +73,14 @@ describe("PageHeader", () => {
 		);
 
 		// Mantine's Group emits `wrap` as the --group-wrap custom property, so this asserts the rendered flex
-		// behaviour rather than the prop we passed.
+		// behavior rather than the prop we passed.
 		const titleRow = screen.getByTestId("page-header-title-row");
 		expect(titleRow.style.getPropertyValue("--group-wrap")).toBe("nowrap");
 		expect(titleRow.contains(screen.getByTestId("page-icon"))).toBe(true);
 		expect(titleRow.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
 	});
 
-	// Centred against a wrapped two- or three-line title, the icon floated beside the middle line; top-aligned in a box
+	// Centered against a wrapped two- or three-line title, the icon floated beside the middle line; top-aligned in a box
 	// one title line tall it stays on the first line.
 	it("aligns the icon with the first line of a wrapping title", () => {
 		renderWithProviders(<PageHeader title="Agents" icon={<svg />} />);

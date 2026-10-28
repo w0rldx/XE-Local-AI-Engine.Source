@@ -60,7 +60,7 @@ internal readonly record struct GraphWorkflowRunOutcome(
 internal static class GraphWorkflowStateMachine
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>The bound on a terminal reason, run row and node-run row alike. One constant, so the two cannot drift.</summary>
     internal const int MaxTerminalReason = 512;
@@ -370,7 +370,7 @@ internal static class GraphWorkflowStateMachine
     ///     Read STRUCTURALLY, off <c>output.decision</c>, rather than by comparing the stored text against
     ///     <see cref="PauseOutputJson" />: that writes the minimal routing document a pre-flight check evaluates,
     ///     while the composed document a real run stores carries <c>attempt</c>, <c>branch</c> and the answer's own
-    ///     <c>comment</c> and <c>payload</c> beside it, so a byte comparison would recognise the first and miss every one of the second.
+    ///     <c>comment</c> and <c>payload</c> beside it, so a byte comparison would recognize the first and miss every one of the second.
     ///     Matched case-sensitively against the enum NAME; output that does not parse, or carries no decision, is no answer.
     /// </remarks>
     public static GraphWorkflowDecisionKind? DecisionOf(string? outputJson)

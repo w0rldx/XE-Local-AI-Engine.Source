@@ -374,7 +374,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
         }
 
         // Step 5. The structural floor. Unreachable today given gate 2, kept because the registry PRE-WRAP — not the
-        // policy — is the last line of defence and can change independently of it. Never unwrapped.
+        // policy — is the last line of defense and can change independently of it. Never unwrapped.
         if (function is ApprovalRequiredAIFunction)
         {
             return "approval-gated";

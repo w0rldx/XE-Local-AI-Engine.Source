@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Models;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -21,7 +20,7 @@ public sealed class BackgroundModelLocalityGuardTests
     {
         var trust = Substitute.For<IModelTrustResolver>();
         trust.ResolveAsync(modelName, Arg.Any<CancellationToken>()).Returns(locality);
-        var logger = new CapturingLogger<BackgroundModelLocalityGuardTests>();
+        var logger = new RecordingLogger<BackgroundModelLocalityGuardTests>();
 
         var allowed = await BackgroundModelLocalityGuard.AllowAsync(modelName, "MemoryExtractionModelName", trust, logger, CancellationToken.None);
 
@@ -36,7 +35,7 @@ public sealed class BackgroundModelLocalityGuardTests
     {
         var trust = Substitute.For<IModelTrustResolver>();
         trust.ResolveAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Local);
-        var logger = new CapturingLogger<BackgroundModelLocalityGuardTests>();
+        var logger = new RecordingLogger<BackgroundModelLocalityGuardTests>();
 
         var allowed = await BackgroundModelLocalityGuard.AllowAsync("qwen3:8b", "PlaybookEvalModelName", trust, logger, CancellationToken.None);
 

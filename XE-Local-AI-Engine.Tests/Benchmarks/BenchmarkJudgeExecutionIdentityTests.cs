@@ -7,10 +7,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The rank-cohort key is what decides whether two judgings are comparable, so it is fail-closed by construction:
-///     an execution this node cannot fully describe gets no key at all. These cases are built from production-shaped
-///     receipts and environment captures rather than hand-written identity records, because the completeness rule is
-///     about what the real capture path does and does not guarantee.
+///     The rank-cohort key decides which judgings are comparable, so it is fail-closed: an execution not fully
+///     describable gets no key. Cases use production-shaped receipts and captures, as completeness is what the real
+///     capture path guarantees.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkJudgeExecutionIdentityTests

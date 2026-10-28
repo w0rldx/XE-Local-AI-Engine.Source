@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         pins it, that it asks for the network mode its policy says it should, that a kill really removes the
 ///         container, and that a copy whose destination escapes the workspace is refused on this side of the mount.
 ///         What does NOT belong here is anything whose subject is the daemon or the kernel — whether a flag was
-///         honoured, whether egress is really blocked, whether a uid maps. Those read back through a fake that echoes
+///         honored, whether egress is really blocked, whether a uid maps. Those read back through a fake that echoes
 ///         the request, which would make the assertion circular, and they stay in
 ///         <see cref="DockerSandboxRealDaemonTests" />.
 ///     </para>
@@ -83,7 +83,7 @@ public sealed class DockerSandboxFakeServerTests
         // Everything else the hardening contract requires still holds under BOTH postures; only egress moved.
         // It reads the echoed HostConfig, so what it proves is that the provider still SENDS the full set — the
         // half that would otherwise have been lost when this case left the real-daemon suite. Whether the daemon
-        // honours it stays with RealDaemon_CreatedContainer_ReadsBackEveryHardeningGuarantee.
+        // honors it stays with RealDaemon_CreatedContainer_ReadsBackEveryHardeningGuarantee.
         AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, daemonIsRootless: false));
     }
 

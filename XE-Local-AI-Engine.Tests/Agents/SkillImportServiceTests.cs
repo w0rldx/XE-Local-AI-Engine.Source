@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the two-phase contract itself: the preview writes nothing, the commit refuses without an explicit
-///     acknowledgement, imported skills land disabled and marked imported, conflicts default to skipping, and the
-///     GitHub source never leaves its host allowlist. No test here touches the network.
+///     Pins the two-phase contract: preview writes nothing, commit needs an explicit acknowledgement, imports land
+///     disabled and marked imported, conflicts default to skip, and GitHub stays on its host allowlist. No test
+///     touches the network.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SkillImportServiceTests
@@ -33,7 +33,7 @@ public sealed class SkillImportServiceTests
         AssertEx.Equal("MIT", skill.License);
         AssertEx.Equal("any", skill.Compatibility);
 
-        // A sequence and a space-delimited scalar are the same thing to the specification; normalising once here is
+        // A sequence and a space-delimited scalar are the same thing to the specification; normalizing once here is
         // what keeps every downstream consumer from having to know the frontmatter had a choice.
         AssertEx.Equal("Read Write", skill.AllowedTools);
         AssertEx.Equal("someone", AssertEx.NotNull(skill.Metadata)["author"]);
@@ -87,7 +87,7 @@ public sealed class SkillImportServiceTests
         var preview = await harness.Service.PreviewArchiveAsync(archive);
         var skill = preview.Skills.Single();
 
-        // The reader refuses anchors by design; the report must say so on a labelled row, not show a blank one.
+        // The reader refuses anchors by design; the report must say so on a labeled row, not show a blank one.
         AssertEx.Equal("SKILL.md", skill.Name);
         AssertEx.False(skill.CanImport);
         AssertEx.Contains(skill.Problems.Single(), "anchors", StringComparison.Ordinal);
@@ -284,7 +284,7 @@ public sealed class SkillImportServiceTests
         using var harness = new SkillImportHarness();
         var preview = await harness.Service.PreviewMarkdownAsync(SkillImportFixtures.SkillMarkdown("pdf-tools"));
 
-        // Phase 2 replays the materialised payload only. A name the operator never saw cannot be smuggled in, and the
+        // Phase 2 replays the materialized payload only. A name the operator never saw cannot be smuggled in, and the
         // whole commit is refused before anything is written rather than partially applied.
         await AssertEx.ThrowsAsync<SkillImportException>(() =>
             harness.Service.CommitAsync(new SkillImportCommitRequest

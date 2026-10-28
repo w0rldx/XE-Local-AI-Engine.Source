@@ -178,7 +178,7 @@ describe("ModelSelectorCard", () => {
 		expect(await screen.findByTestId("chat-model-selector-option-gpt-4o")).toBeTruthy();
 
 		// The Azure group label (with its count suffix) and its dedicated egress cue are present.
-		expect(screen.getByText(/Cloud \(Azure Foundry\)/)).toBeTruthy();
+		expect(screen.getByText(/Cloud \(Azure AI Foundry\)/)).toBeTruthy();
 		const azureEgress = await screen.findByTestId("chat-model-selector-cloud-egress-gpt-4o");
 		expect(azureEgress.textContent).toContain("Sent to Azure");
 	});

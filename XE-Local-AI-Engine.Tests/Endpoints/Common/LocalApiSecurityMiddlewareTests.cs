@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the loopback-only enforcement added to <see cref="LocalApiSecurityMiddleware" />. The
-///     integration surface (host/origin) is covered by <c>LocalApiSecurityTests</c>; these drive the middleware directly
-///     so the transport peer address can be set — something the in-memory TestServer cannot express (it presents a null
-///     peer).
+///     Loopback-only enforcement in <see cref="LocalApiSecurityMiddleware" />, driven directly so the transport peer
+///     address can be set; the in-memory TestServer presents a null peer. Host/origin coverage lives in
+///     <c>LocalApiSecurityTests</c>.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalApiSecurityMiddlewareTests

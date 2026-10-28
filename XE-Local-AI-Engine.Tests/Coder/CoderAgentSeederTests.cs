@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Seeder behavior against the real wired DI graph + encrypted SQLite: the first boot seeds exactly one
-///     "Coder (read-only)" row carrying the three v1 tool names (all approvals false, Seeded provenance), and a second
-///     boot is a no-op (idempotent by slug).
+///     Seeding against the real DI graph + encrypted SQLite: the first boot seeds exactly one "Coder (read-only)" row
+///     with the three v1 tool names (all approvals false, Seeded provenance), and a second boot is a no-op (idempotent
+///     by slug).
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class CoderAgentSeederTests

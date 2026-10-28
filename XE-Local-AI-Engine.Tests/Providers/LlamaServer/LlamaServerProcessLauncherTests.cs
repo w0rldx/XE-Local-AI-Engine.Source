@@ -30,8 +30,8 @@ public sealed class LlamaServerProcessLauncherTests
     [Arguments("slot print_timing: id  0 | task 7 | prompt eval time = 812.44 ms")]
     public void TryPromoteServingLine_MatchesSlotLinesWithAndWithoutTheVerbosityPrefix(string line)
     {
-        // Under -lv llama.cpp prefixes every line with "<elapsed> <level>"; the shipped tester log carries that shape,
-        // and a bare-prefix match alone never fired on it.
+        // Under -lv llama.cpp prefixes every line with "<elapsed> <level>"; a real log carries that shape,
+        // and a bare-prefix match alone never fires on it.
         var lastPromoted = -LlamaServerProcessLauncher.PromotedLineIntervalMilliseconds;
 
         AssertEx.True(LlamaServerProcessLauncher.TryPromoteServingLine(line, nowMilliseconds: 0, ref lastPromoted));

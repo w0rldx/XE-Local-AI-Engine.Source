@@ -40,7 +40,7 @@ import {
 } from "@/features/development/queries/useDevelopment";
 
 export interface DevelopmentPageControllerOptions {
-	/** From the route's optional `?project=` / `?task=` (X8). Both seed the INITIAL selection and nothing else. */
+	/** From the route's optional `?project=` / `?task=`. Both seed the INITIAL selection and nothing else. */
 	readonly initialProjectId?: string;
 	readonly initialTaskId?: string;
 }
@@ -115,7 +115,7 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
-	// The run that owns this task (Y3): its work item for the deep link, and its STATUS for who may apply.
+	// The run that owns this task: its work item for the deep link, and its STATUS for who may apply.
 	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, nodeCapabilities.devWorkflows);
 	// A terminal run can never answer another gate — `DecideAsync` refuses anything that is not WaitingForApproval or
 	// Blocked, and the dispatcher does not tick a terminal run at all. So a workflow whose run has ENDED cannot apply

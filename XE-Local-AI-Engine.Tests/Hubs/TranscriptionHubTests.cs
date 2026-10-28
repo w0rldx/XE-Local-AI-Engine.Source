@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The live transcription hub's own contract: what a subscriber is handed, what a frame must look like to be
-///     forwarded, and what a connection's departure means. Everything behind it — the registry, the service — is
-///     substituted, because what is under test is the hub's refusals and its watermark arithmetic.
+///     The live transcription hub's own contract: what a subscriber is handed, which frames are forwarded, and what a
+///     departing connection means. The registry and service are substituted; under test are the hub's refusals and
+///     watermark arithmetic.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TranscriptionHubTests
@@ -471,7 +471,7 @@ public sealed class TranscriptionHubTests
     }
 
     /// <summary>
-    ///     A service that actually PAGES — it honours the watermark and the limit it is called with. A substitute that
+    ///     A service that actually PAGES — it honors the watermark and the limit it is called with. A substitute that
     ///     answers the same rows whatever it is asked cannot see a gap, which is the whole point of the cursor test.
     /// </summary>
     private static ITranscriptionService PagingSessions(IReadOnlyList<TranscriptSegmentView> all)

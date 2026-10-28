@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The seed turn. The property that matters is the fence: a JSON input arrives over an API from outside the node,
-///     and so does its label, so both must sit inside one untrusted-content boundary that the author of that content
-///     cannot close from within.
+///     The seed turn. What matters is the fence: a JSON input and its label both arrive over an API from outside the
+///     node, so both sit inside one untrusted-content boundary that the content's author cannot close from within.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class IntegrationSeedComposerTests

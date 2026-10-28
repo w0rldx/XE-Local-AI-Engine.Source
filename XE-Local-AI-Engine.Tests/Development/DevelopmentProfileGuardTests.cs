@@ -97,7 +97,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
     }
 
     /// <summary>
-    ///     The test-write policy, stated as the behaviour that matters: adding tests is allowed, removing or weakening
+    ///     The test-write policy, stated as the behavior that matters: adding tests is allowed, removing or weakening
     ///     an existing one is
     ///     not. The "added" case is not a formality — the change types are mapped words rather than git's status
     ///     letters, and comparing against the letters silently rejects every new test instead.

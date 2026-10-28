@@ -13,12 +13,12 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
-///     The vector-normalization backfill rescales every stored chunk vector to unit L2 length in place. Because cosine is
-///     scale-invariant this changes no ranking; it only enables the dot-product scoring path. These tests assert the core
-///     pass normalizes non-zero rows (and leaves zero rows exactly zero), is idempotent, is resumable across small
-///     batches, is a no-op on an empty database, and that the hosted service flips the in-memory latch and sets the
-///     durable marker so a second run skips the work but still latches.
+///     The vector-normalization backfill rescales stored chunk vectors to unit L2 length in place.
 /// </summary>
+/// <remarks>
+///     Cosine is scale-invariant, so no ranking changes. Pinned: zero rows stay zero, idempotent, resumable, no-op
+///     when empty; the hosted service flips the latch and sets the durable marker, so a rerun skips but latches.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposable
 {

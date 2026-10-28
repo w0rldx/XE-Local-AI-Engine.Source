@@ -193,7 +193,7 @@ XE-Local-AI-Engine.Client.Application/Services/Interaction/UserQuestionParser.cs
 XE-Local-AI-Engine.Client.Application/Services/Memory/Implementation/DefaultMemoryExtractionAgent.cs|ExtractionCandidate
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/ModelCatalogContracts.cs|ModelCatalogEntry
 XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderMapStore.cs|ProviderMapMutationReceipt
-XE-Local-AI-Engine.Client.Application/Services/Models/InstalledModelCoordination.cs|InstalledModelSnapshot
+XE-Local-AI-Engine.Client.Application/Services/Models/InstalledModelCoordinationModels.cs|InstalledModelSnapshot
 XE-Local-AI-Engine.Client.Application/Services/Models/Implementation/LocalModelDeletionCoordinator.cs|DeletionAliasMapping
 XE-Local-AI-Engine.Client.Application/Services/WorkSessions/Tools/Implementation/WorkPlanOperationRequest.cs|WorkPlanOperationRequest
 XE-Local-AI-Engine.Client.Persistence/Stores/ModelProviderMapRecord.cs|ModelProviderMapRecord
@@ -226,7 +226,7 @@ XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/KvCache
 XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/RuntimeDeviceAuditService.cs|DeviceAuditComputation
 XE-Local-AI-Engine.Client.Application/Services/Chat/ModelIdentity.cs|ModelIdentity
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/EntraDeviceCodeSignInCoordinator.cs|DeviceCodeFlowHandle
-XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/PkceGenerator.cs|PkcePair
+XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/PkcePair.cs|PkcePair
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/ResolvedCustomHeader.cs|ResolvedCustomHeader
 XE-Local-AI-Engine.Client.Application/Services/Development/DevelopmentEvidenceServiceModels.cs|DevelopmentArtifactWith
 XE-Local-AI-Engine.Client.Application/Services/Development/Implementation/DevelopmentWorkspaceProvider.cs|ConfigurationFile

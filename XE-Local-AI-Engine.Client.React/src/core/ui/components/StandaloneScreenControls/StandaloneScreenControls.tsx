@@ -8,7 +8,7 @@ import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeMo
 /**
  * Theme and language controls on screens rendered outside the authenticated app shell. Pinned top-right on roomy
  * viewports; on a compact one (phone width, or phone landscape) they sit in the flow as a right-aligned row above the
- * page, because pinned they covered the centred title.
+ * page, because pinned they covered the centered title.
  */
 export function StandaloneScreenControls() {
 	const { width, height } = useWindowDimensions();

@@ -255,7 +255,7 @@ public sealed class GraphWorkflowCancelTests
     /// <summary>
     ///     The hot-loop fix, seen from the dispatcher. The entry lives until a poll SEES the turn land, so a cancelling
     ///     drain reaches the stop on every tick until then — and a lane answering yes each time would be counted as a
-    ///     written transition, re-signalled, and would spin the run for the whole duration of the model turn.
+    ///     written transition, re-signaled, and would spin the run for the whole duration of the model turn.
     /// </summary>
     [Test]
     public async Task TheDrain_DoesNotSpinWhileAnAgentTurnIsStillWindingDown()

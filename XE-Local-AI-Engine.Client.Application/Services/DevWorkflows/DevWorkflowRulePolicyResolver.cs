@@ -8,13 +8,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <remarks>
 ///     The predicate is stated here once: both axes must match, an EMPTY axis matches everything, and every match is
 ///     applied. Resolution is recorded on every node type; the bodies are injected by two,
-///     <c>DevWorkflowAgentExecutor.ComposeObjectiveAsync</c> and <c>DevWorkflowDevTaskExecutor</c>.
+///     <c>DevWorkflowObjectiveComposer.ComposeAsync</c> and <c>DevWorkflowDevTaskExecutor</c>.
 ///     See docs/wiki/25-dev-workflows.md ("Policy injection").
 /// </remarks>
 public static class DevWorkflowRulePolicyResolver
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     The rule sets that apply, in the order they are injected. The caller's list is already name-ordered by the
@@ -79,7 +79,7 @@ public static class DevWorkflowRulePolicyResolver
         }
     }
 
-    /// <summary>A stored scope with each axis normalised to a list, or NULL when the column cannot be read at all.</summary>
+    /// <summary>A stored scope with each axis normalized to a list, or NULL when the column cannot be read at all.</summary>
     /// <remarks>
     ///     The two states are kept apart because the safe answer differs by caller: the resolver treats an unreadable
     ///     scope as matching NOTHING, a read model renders it as empty axes.
@@ -120,7 +120,7 @@ public static class DevWorkflowRulePolicyResolver
         return projectMatches && nodeTypeMatches;
     }
 
-    /// <summary>The stored document, whose axes may be absent — <see cref="ReadScope" /> is what normalises them.</summary>
+    /// <summary>The stored document, whose axes may be absent — <see cref="ReadScope" /> is what normalizes them.</summary>
     private sealed record StoredScope(IReadOnlyList<Guid>? ProjectIds, IReadOnlyList<string>? NodeTypes);
 }
 

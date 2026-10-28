@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
@@ -148,7 +149,7 @@ internal sealed class InstalledGgufDeletionStore : IInstalledGgufDeletionStore
             throw new IOException("An installed model member is unavailable or changed.");
         }
 
-        var hash = await GgufAcquisitionSidecar.ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
+        var hash = await FileSha256.ComputeAsync(path, cancellationToken).ConfigureAwait(false);
         if (!string.Equals(hash, member.Sha256, StringComparison.Ordinal))
         {
             throw new IOException("An installed model member is unavailable or changed.");

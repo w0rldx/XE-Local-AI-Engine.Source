@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
@@ -97,7 +98,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     private readonly TimeProvider _timeProvider;
     private int _disposed;
 
-    // Optional so tests can construct the provider directly; DI injects them. A null one means hardened host behaviour: real
+    // Optional so tests can construct the provider directly; DI injects them. A null one means hardened host behavior: real
     // launcher and marker store, and previews OFF.
     public ProcessSandboxRuntimeProvider(IOptions<LocalContainerOptions> copyOptions,
         TimeProvider timeProvider,
@@ -898,8 +899,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// <returns>The marker id, or <see langword="null" /> when the store could not record it.</returns>
     /// <remarks>
     ///     It carries no pid — there is no child yet — which is what makes it safe to write this early: the reaper's
-    ///     group-signalling path refuses a marker without one, so a pending marker can only ever protect the scope,
-    ///     never authorise a kill.
+    ///     group-signaling path refuses a marker without one, so a pending marker can only ever protect the scope,
+    ///     never authorize a kill.
     /// </remarks>
     private string? PreRegisterProcessMarker(JailState state, SandboxLaunchDescriptor launch)
     {
@@ -966,7 +967,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 var processId = process.Id;
 
                 // The pid-reuse guard is only as good as the start time recorded alongside it; without one, record no
-                // pid at all rather than a group id the reaper could not verify before signalling.
+                // pid at all rather than a group id the reaper could not verify before signaling.
                 if (new LinuxSandboxProcessGroupKiller(_timeProvider).GetProcessStartTicks(processId) is { } startTicks)
                 {
                     processGroupId = processId;
@@ -1403,7 +1404,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 var toAppend = data;
                 if (lineBytes > remaining)
                 {
-                    toAppend = TruncateToUtf8ByteBudget(data, remaining);
+                    toAppend = Utf8Truncation.TruncateToUtf8ByteBudget(data, remaining);
                     _capped = true;
                 }
 
@@ -1429,34 +1430,6 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             {
                 return _builder.ToString();
             }
-        }
-
-        // Returns the longest prefix of value whose UTF-8 encoding is <= budget bytes, never splitting a rune.
-        private static string TruncateToUtf8ByteBudget(string value, int budget)
-        {
-            if (budget <= 0)
-            {
-                return string.Empty;
-            }
-
-            var used = 0;
-            var enumerator = value.EnumerateRunes();
-            var lastCharIndex = 0;
-            var charIndex = 0;
-            foreach (var rune in enumerator)
-            {
-                var runeBytes = rune.Utf8SequenceLength;
-                if (used + runeBytes > budget)
-                {
-                    break;
-                }
-
-                used += runeBytes;
-                charIndex += rune.Utf16SequenceLength;
-                lastCharIndex = charIndex;
-            }
-
-            return value[..lastCharIndex];
         }
     }
 

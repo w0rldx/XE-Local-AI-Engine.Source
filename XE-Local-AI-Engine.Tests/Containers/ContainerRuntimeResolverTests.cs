@@ -416,7 +416,7 @@ public sealed class ContainerRuntimeResolverTests
     [Test]
     public async Task ANamedPipeTimeout_ReadsAsStartDockerRatherThanACheckThatDidNotComplete()
     {
-        // The Windows tester's stopped Docker Desktop: the npipe transport's TimeoutException, classified by the real
+        // A stopped Docker Desktop on Windows: the npipe transport's TimeoutException, classified by the real
         // client, must compose into the "nothing answered" prose rather than the catch-all "could not be used".
         await using var production = new DockerDotNetRuntimeClient(new DockerDaemonEndpoint
             {

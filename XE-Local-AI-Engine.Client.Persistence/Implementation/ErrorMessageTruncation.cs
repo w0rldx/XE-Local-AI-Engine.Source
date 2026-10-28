@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 /// <summary>
 ///     Clamps a failure message to the training tables' declared <c>error_message</c>/<c>smoke_reason</c> column
-///     length, normalising a blank message to <c>null</c>. Shared by every training store so the cap stays one number.
+///     length, normalizing a blank message to <c>null</c>. Shared by every training store so the cap stays one number.
 /// </summary>
 internal static class ErrorMessageTruncation
 {

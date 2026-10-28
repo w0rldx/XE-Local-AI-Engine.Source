@@ -4,7 +4,7 @@
 // emitting PCM, so `synthesize` queues an utterance and yields nothing. For a language hint it prefers an on-device
 // (`localService`) OS voice. An unmatched legacy voice id safely falls through to that language/default selection.
 
-import type { AudioChunk, TtsProvider, TtsProviderId, VoiceSynthesisOptions } from "@/features/voice/TtsProvider";
+import type { AudioChunk, TtsProvider, TtsProviderId, VoiceSynthesisOptions } from "@/features/voice/models/TtsProvider";
 
 /** Minimal speech-engine surface; the real `speechSynthesis` and test fakes both satisfy it. */
 export interface SpeechSynthesisLike {

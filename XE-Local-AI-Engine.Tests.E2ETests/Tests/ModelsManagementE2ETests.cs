@@ -107,7 +107,7 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
             Name = $"View {modelName} details"
         }).ClickAsync();
 
-        // Switch to the Type tab and choose "Embedding" via the override Select (aria-labelled per model).
+        // Switch to the Type tab and choose "Embedding" via the override Select (aria-labeled per model).
         await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
         {
             Name = "Type"
@@ -166,7 +166,7 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
                 Timeout = 10_000
             });
 
-        // The decode fix means the DELETE must succeed (200), not 400 "Invalid model identifier". Reaching the
+        // With the name decoded the DELETE must succeed (200), not 400 "Invalid model identifier". Reaching the
         // endpoint with a decoded, valid name IS the regression this leg guards.
         await Assert.That(deleteResponse.Status).IsEqualTo(200);
 

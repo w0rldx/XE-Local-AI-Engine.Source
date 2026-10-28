@@ -16,7 +16,7 @@ public sealed class DockerDotNetRuntimeClientClassifyTests
     public async Task ATimeout_DirectOrWrapped_IsDaemonUnreachable()
     {
         // The npipe transport throws TimeoutException when no listener takes its connect; that is "start Docker",
-        // not the catch-all "could not be used" the tester saw.
+        // not the catch-all "could not be used".
         await using var client = ClientFor("unix:///xe-classify-tests.sock");
         Exception[] failures =
         [

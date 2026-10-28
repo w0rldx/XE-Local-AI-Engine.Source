@@ -14,7 +14,7 @@ internal sealed class LocalModelProxyApiKeyService : ILocalModelProxyApiKeyServi
 {
     /// <summary>
     ///     Scheme marker. Makes a leaked key greppable and instantly attributable to this product's model proxy, lets
-    ///     secret scanners recognise it, and distinguishes it from both the node's JWTs and the MCP key (<c>xemcp_</c>)
+    ///     secret scanners recognize it, and distinguishes it from both the node's JWTs and the MCP key (<c>xemcp_</c>)
     ///     on the same origin.
     /// </summary>
     private const string KeyScheme = "xeprx_";

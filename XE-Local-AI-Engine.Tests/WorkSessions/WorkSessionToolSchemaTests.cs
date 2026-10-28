@@ -41,9 +41,8 @@ public sealed class WorkSessionToolSchemaTests
     [Test]
     public void EverySchema_StaysInsideTheLlamaGrammarRepetitionBound()
     {
-        // A Research session offers these four on top of ask_user, the clock and three knowledge tools, and llama-server
-        // compiles the WHOLE array into one GBNF grammar with a shared ceiling. A bound over the limit here would kill
-        // the turn before inference with a sampler error that reads nothing like a schema problem.
+        // A Research session offers these four plus ask_user, the clock and three knowledge tools, compiled into ONE
+        // GBNF grammar with a shared ceiling; an over-limit bound kills the turn with a misleading sampler error.
         foreach (var descriptor in WorkSessionToolCatalog.Descriptors)
         {
             using var document = JsonDocument.Parse(descriptor.ParameterSchema!);

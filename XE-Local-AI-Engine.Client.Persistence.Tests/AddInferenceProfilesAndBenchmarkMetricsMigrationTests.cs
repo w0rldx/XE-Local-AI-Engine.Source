@@ -5,9 +5,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     <c>AddInferenceProfilesAndBenchmarkMetrics</c> creates the frozen-launch-args store and widens
-///     <c>model_fit_benchmarks</c> with the measurements that justify a freeze. The unique index is the load-bearing
-///     part: one profile per (machine, model, role, backend), so a second explore on the same box replays or replaces
-///     the existing profile instead of silently accumulating rivals that spawn would then pick between arbitrarily.
+///     <c>model_fit_benchmarks</c>. Its unique index allows one profile per (machine, model, role, backend), so a
+///     re-explore replaces rather than accumulates rivals.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests

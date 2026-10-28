@@ -185,7 +185,7 @@
 	display: block;
 	width: 100%;
 
-	/* No horizontal padding — matches .control; avatar centred via .user-row justify-content */
+	/* No horizontal padding — matches .control; avatar centered via .user-row justify-content */
 	padding: var(--mantine-spacing-xs) 0;
 	color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
 	border-radius: var(--mantine-radius-sm);
@@ -292,7 +292,7 @@
 /* ── Active route highlight ─────────────────────────────────────────────── */
 
 /* Applied to a flat item on its own route, and to a group parent whose active child route is open.
-   Uses the theme primary "light" pair so it tracks the active accent in both colour schemes. */
+   Uses the theme primary "light" pair so it tracks the active accent in both color schemes. */
 
 .control-active,
 .control-active:hover {

@@ -15,8 +15,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class ConcreteStoreConstructionArchitectureTests
 {
-    // Non-vacuity floor for the source scan, set under the count measured across the two production projects on
-    // 2026-09-21 so ordinary file churn is not brittle. It only has to catch a scan that walked nothing.
+    // Non-vacuity floor for the source scan, set under the count measured across the two production projects,
+    // so ordinary file churn is not brittle. It only has to catch a scan that walked nothing.
     private const int ScannedProductionFileFloor = 1500;
 
     /// <summary>The concrete store types this rule fences, and the one file each may be named in.</summary>

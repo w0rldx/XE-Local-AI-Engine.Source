@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 /// <summary>Configuration for development workflows.</summary>
 /// <remarks>
-///     <see cref="Enabled" /> gates <em>behaviour</em>, never registration — the same posture work sessions hold: a
+///     <see cref="Enabled" /> gates <em>behavior</em>, never registration — the same posture work sessions hold: a
 ///     disabled node has to answer legibly rather than 500 out of an empty container. What each option bounds:
 ///     docs/wiki/25-dev-workflows.md ("Limits and options").
 /// </remarks>

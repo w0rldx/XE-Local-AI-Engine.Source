@@ -27,7 +27,7 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
 
     // Cache the serializer options statically (CA1869). Web defaults serialize the payload as camelCase {role,text},
     // matching PlaybookEvalService's InputTurn parse.
-    private static readonly JsonSerializerOptions InputTurnsSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions InputTurnsSerializerOptions = JsonSerializerOptions.Web;
     private readonly IAgentDefinitionStore _agentDefinitionStore;
     private readonly IGoldenConversationService _conversationService;
     private readonly IGoldenConversationStore _goldenStore;

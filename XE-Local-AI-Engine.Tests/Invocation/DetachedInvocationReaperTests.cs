@@ -129,7 +129,7 @@ public sealed class DetachedInvocationReaperTests
         await reaper.ReapAsync(CancellationToken.None);
         runner.DidNotReceive().CancelDetached(Arg.Any<Guid>());
 
-        // The operator turns reaping on mid-run. No restart, no new reaper — the very next tick must honour it.
+        // The operator turns reaping on mid-run. No restart, no new reaper — the very next tick must honor it.
         runtimeSettings.GetDetachedGraceSecondsAsync(Arg.Any<CancellationToken>()).Returns(300);
         await reaper.ReapAsync(CancellationToken.None);
 

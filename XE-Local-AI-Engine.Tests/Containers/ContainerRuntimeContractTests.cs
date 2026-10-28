@@ -40,9 +40,9 @@ public enum ContainerRuntimeUnderTest
 ///     </para>
 ///     <para>
 ///         The post-guard half is the refusals the daemon itself makes on state it holds — an image that was never
-///         pulled, a network that was never created, a name already taken. Those used to be uncontracted, asserted
-///         only against the in-memory fake's own promise, because the production side had no daemon to answer them.
-///         It has one now: the <c>FakeServer</c> arm puts a <c>FakeDockerServer</c> behind the real client, so the
+///         pulled, a network that was never created, a name already taken. Asserted only against the in-memory fake's
+///         own promise they would stay uncontracted, so the production side gets a daemon to answer them:
+///         the <c>FakeServer</c> arm puts a <c>FakeDockerServer</c> behind the real client, so the
 ///         fake's lies and a daemon's 404s and 409s are pinned to each other. <c>DockerClient</c> takes no rows in
 ///         that half — a socket that does not exist cannot answer — and <c>FakeServer</c> takes none in the pre-wire
 ///         half, where starting a server to test a guard that fires before any HTTP call is pure overhead.

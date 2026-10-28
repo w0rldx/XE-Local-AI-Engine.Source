@@ -305,7 +305,7 @@ public sealed class WhisperServerTranscriberTests
     [Test]
     public async Task Transcribe_WhenTheDaemonDiedMidRequest_SurfacesTheSupervisorsExitVerdict()
     {
-        // The 2026-09-22 tester box: whisper-server reported ready, then died on the first /inference and the client saw a
+        // whisper-server reports ready, then dies on the first /inference and the client sees a
         // connection reset. The supervisor's "process exited" verdict replaces "could not be reached", keeping the reset as cause.
         await using var harness = new TranscriberHarness(static _ => throw new HttpRequestException("An existing connection was forcibly closed by the remote host."));
         harness.Supervisor.RequestFailureVerdict = new WhisperRuntimeException("The transcription runtime process exited (exit code -1073740791).");

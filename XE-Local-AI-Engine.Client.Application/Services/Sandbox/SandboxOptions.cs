@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     There is intentionally NO execution-capable default: an unset provider leaves the candidate set unconstrained and resolution lands
 ///     on the deterministic fake outside Production, while startup validation rejects an unset provider IN Production, so a stripped config
 ///     never silently grants the host-command-executing backend. The key CONSTRAINS rather than names: the workload's own
-///     <see cref="SandboxRequirements" /> decide whether the named backend may serve it, and naming one that cannot honour the declaration
+///     <see cref="SandboxRequirements" /> decide whether the named backend may serve it, and naming one that cannot honor the declaration
 ///     throws <see cref="SandboxCapabilityNotSupportedException" /> at startup with the unmet axis, never a quiet reinterpretation.
 /// </remarks>
 public sealed class SandboxOptions

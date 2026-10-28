@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The per-turn event queue is bounded on two axes and never makes a producer wait. These tests pin what that
 ///     costs and what it must never cost: an overflow drops and resynchronizes the WHOLE stream (never a silent
-///     per-event drop, which could lose an approval the turn is parked on), and <c>Detach</c> — the fix for a
+///     per-event drop, which could lose an approval the turn is parked on), and <c>Detach</c> — the guard against a
 ///     disconnected browser leaving six producers writing into a queue nobody reads — makes writes inert WITHOUT
 ///     completing the queue, because the pump reads a write fault as a persistence fault and would terminalize the
 ///     assistant row Failed.
@@ -161,7 +161,7 @@ public sealed class ChatStreamEventSinkTests
         await sink.WriteAsync(Delta("after-detach"), cancelled.Token);
 
         // And the queue itself must NOT be completed — a ChannelClosedException reaching the pump reads exactly like
-        // a persistence fault, which is the bug this ordering exists to prevent.
+        // a persistence fault, which is the failure this ordering exists to prevent.
         using var readCancellation = new CancellationTokenSource();
         var drain = Task.Run(async () =>
         {

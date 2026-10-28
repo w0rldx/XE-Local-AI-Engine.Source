@@ -16,7 +16,7 @@ using System.Runtime.CompilerServices;
 internal static class IdleStreamGuard
 {
     /// <summary>
-    ///     How long a provider asked to stop is given to honour cancellation — separately for its stuck
+    ///     How long a provider asked to stop is given to honor cancellation — separately for its stuck
     ///     <c>MoveNextAsync</c> to unwind and for a <c>DisposeAsync</c> to complete — before it is abandoned.
     /// </summary>
     /// <remarks>

@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 ///     of the tool this turn is certain to be refused whatever its arguments.
 /// </summary>
 /// <remarks>
-///     Asking a person to approve a call the node will refuse anyway is noise (N-67), so an agent turn whose preflight refuses gets
+///     Asking a person to approve a call the node will refuse anyway is noise, so an agent turn whose preflight refuses gets
 ///     the tool without its approval wrap, and a call answers with the refusal and never reaches the handler.
 /// </remarks>
 internal interface IClientLocalToolPreflight

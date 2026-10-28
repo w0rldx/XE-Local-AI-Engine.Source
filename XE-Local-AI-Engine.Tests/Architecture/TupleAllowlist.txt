@@ -34,7 +34,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/DevWorkflows/DevWorkflowReconcileTes
 XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentPersistenceTestSupport.cs|2
 XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentReworkEdgeTests.cs|2
 XE-Local-AI-Engine.Client.Persistence.Tests/ExternalApps/ExternalAppInstanceStoreTests.cs|5
-XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/CanvasWorkflowImportReadTests.cs|4
+XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/CanvasWorkflowImportReadTests.cs|2
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowSteeringStoreTests.cs|2
 XE-Local-AI-Engine.Client.Persistence.Tests/Integrations/IntegrationExecutionStoreTests.cs|2
 XE-Local-AI-Engine.Client.Persistence.Tests/Integrations/IntegrationSessionStoreTests.cs|2
@@ -112,7 +112,7 @@ XE-Local-AI-Engine.Tests/Chat/ConversationMaintenanceHarness.cs|2
 XE-Local-AI-Engine.Tests/Chat/ConversationStateReducerTests.cs|18
 XE-Local-AI-Engine.Tests/Chat/NodeChatPersistenceServiceTests.cs|11
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|6
-XE-Local-AI-Engine.Tests/Chat/NodeChatStreamServiceTests.cs|4
+XE-Local-AI-Engine.Tests/Chat/NodeChatStreamServiceTestSupport.cs|4
 XE-Local-AI-Engine.Tests/CodexOAuth/CodexOAuthTokenEndpointResilienceTests.cs|2
 XE-Local-AI-Engine.Tests/ContainerSandbox/DockerDaemonPreflightServiceTests.cs|2
 XE-Local-AI-Engine.Tests/ContainerSandbox/DockerSandboxMountBrokerTests.cs|2
@@ -212,7 +212,8 @@ XE-Local-AI-Engine.Tests/Invocation/BudgetedApprovalReplayTests.cs|1
 XE-Local-AI-Engine.Tests/Invocation/ConversationContextBudgeterTests.cs|4
 XE-Local-AI-Engine.Tests/Invocation/InvocationAttachmentMetricsTests.cs|2
 XE-Local-AI-Engine.Tests/Invocation/InvocationReasoningControlTests.cs|2
-XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTests.cs|26
+XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTestSupport.cs|9
+XE-Local-AI-Engine.Tests/Invocation/InvocationRunnerTests.cs|17
 XE-Local-AI-Engine.Tests/Invocation/LlamaTokenEstimatorCalibrationServiceTests.cs|2
 XE-Local-AI-Engine.Tests/Invocation/ToolApprovalCoordinatorTests.cs|2
 XE-Local-AI-Engine.Tests/Mcp/McpAgentRunMetricsTests.cs|3
@@ -275,7 +276,6 @@ XE-Local-AI-Engine.Tests/Training/Export/TrainedModelSmokeGateTests.cs|8
 XE-Local-AI-Engine.Tests/Training/Runs/TrainingRunStartupReaperTests.cs|3
 XE-Local-AI-Engine.Tests/Transcription/LiveSegmenterGoldenTests.cs|2
 XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSegmenterTests.cs|3
-XE-Local-AI-Engine.Tests/Transcription/LiveTranscriptionSessionRegistryTests.cs|2
 XE-Local-AI-Engine.Tests/Transcription/ProcessAudioCaptureCoordinatorTests.cs|2
 XE-Local-AI-Engine.Tests/Transcription/ProcessAudioCaptureTests.cs|3
 XE-Local-AI-Engine.Tests/Transcription/RecordedWhisperTranscriber.cs|3

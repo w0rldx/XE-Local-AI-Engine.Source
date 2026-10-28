@@ -17,9 +17,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     What a promotion is allowed to commit, and what it must carry when it does. The lineage assertions are the
-///     point: a registry entry with no derived-from is indistinguishable from an import, and the question "what was
-///     this model trained on" becomes unanswerable the moment the run row is deleted.
+///     What a promotion may commit and must carry. The lineage assertions are the point: an entry with no derived-from
+///     is indistinguishable from an import, and "what was this model trained on" becomes unanswerable once the run
+///     row is deleted.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ArtifactPromotionServiceTests : IDisposable
@@ -133,7 +133,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         AssertEx.Contains(failure.Message, "already registered", StringComparison.Ordinal);
     }
 
-    /// <summary>R7-08: an unlinked run can never get a quality decision, so promote names the link, not the decision.</summary>
+    /// <summary>An unlinked run can never get a quality decision, so promote names the link, not the decision.</summary>
     [Test]
     public async Task Promote_WithoutQualityDecisionOnAnUnlinkedRun_NamesTheMissingLink()
     {

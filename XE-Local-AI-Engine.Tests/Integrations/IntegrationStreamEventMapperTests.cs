@@ -193,7 +193,7 @@ public sealed class IntegrationStreamEventMapperTests
         await using var context = new MapperContext();
 
         // The clock never moves: an elapsed-only condition would withhold this delta forever, and every fake-clock test
-        // in this file would then be measuring the bug rather than the behaviour.
+        // in this file would then be measuring the bug rather than the behavior.
         context.Raise("first token", InvocationStatus.Running);
 
         AssertEx.Equal(expected: 1, (await context.EventsAsync()).Count);

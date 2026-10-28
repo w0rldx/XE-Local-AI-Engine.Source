@@ -79,7 +79,7 @@ function DevWorkflowGraphViewInner({ run, graph: provided, selectedNodeRunId, on
 				nodes={nodes}
 				edges={graph.edges}
 				nodeTypes={canvasNodeTypes}
-				// React Flow's default minZoom of 0.5 clamps the initial fitView: a five-rank chain in a ~280px centre
+				// React Flow's default minZoom of 0.5 clamps the initial fitView: a five-rank chain in a ~280px center
 				// pane needs ~0.2, so the graph opened clipped with Zoom Out already disabled and no way back.
 				minZoom={0.1}
 				nodesDraggable={false}

@@ -173,7 +173,7 @@ export function toIntegrationExecution(
 		sessionId: dto.sessionId,
 		status: dto.status,
 		receivedAtUtc: dto.receivedAtUtc,
-		// A run cancelled or failed before it took the lease never started, so both of these are legitimately absent
+		// A run canceled or failed before it took the lease never started, so both of these are legitimately absent
 		// and render as a dash rather than as an error.
 		startedAtUtc: dto.startedAtUtc ?? null,
 		endedAtUtc: dto.endedAtUtc ?? null,

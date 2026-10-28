@@ -33,7 +33,7 @@ public sealed class NodeAgentMcpTools
 {
     /// <summary>
     ///     How often a synchronous run reports that it is still generating. An MCP client aborts a call that produces neither a
-    ///     response nor a progress notification inside its idle window, and a long local generation used to report nothing (I-D15).
+    ///     response nor a progress notification inside its idle window, and a long local generation produces neither on its own.
     /// </summary>
     internal static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(15);
 
@@ -244,7 +244,7 @@ public sealed class NodeAgentMcpTools
             ? ResultExpiredCode
             : McpAgentToolResponseMapper.ToExternalValue(run.Status);
         // The poll itself succeeded: a run that FAILED, or whose result expired, reports its code inside run.metadata, never at the
-        // top level, or the filter would mark a correct status answer isError and a client would retry the poll (review 2026-09-30).
+        // top level, or the filter would mark a correct status answer isError and a client would retry the poll.
         var displayMessage = run.PayloadExpired
             ? "The retained result for this request has expired."
             : run.DisplayMessage ?? "Run found.";
@@ -270,7 +270,7 @@ public sealed class NodeAgentMcpTools
     {
         if (!TryParseRequestId(request_id, out var requestId))
         {
-            // Status and failure_code agree, as in get_agent_run: a malformed id is an invalid request, not a missing run (I-D9).
+            // Status and failure_code agree, as in get_agent_run: a malformed id is an invalid request, not a missing run.
             return new McpAgentRunCancelResponse
             {
                 Status = InvalidRequestCode,
@@ -436,7 +436,7 @@ public sealed class NodeAgentMcpTools
             }
         }
 
-        // The final progress tells the truth: a declined or failed run never reports "Completed." (I-D14).
+        // The final progress tells the truth: a declined or failed run never reports "Completed."
         progress.Report(new ProgressNotificationValue
         {
             Progress = 1f,

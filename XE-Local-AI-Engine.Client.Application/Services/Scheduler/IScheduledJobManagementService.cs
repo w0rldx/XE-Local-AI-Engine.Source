@@ -100,7 +100,7 @@ public interface IScheduledJobManagementService
     ///     <c>CancellationRequestedAtUtc</c> and interrupts the matching Quartz fire.
     /// </summary>
     /// <remarks>
-    ///     The handler's <see cref="CancellationToken" /> is signalled, and the dispatcher records the terminal
+    ///     The handler's <see cref="CancellationToken" /> is signaled, and the dispatcher records the terminal
     ///     <c>Cancelled</c> state once the handler observes it. The returned <see cref="RunCancellationOutcome" /> says
     ///     whether the run was missing, already terminal, actively interrupted, or marked but not currently running.
     /// </remarks>

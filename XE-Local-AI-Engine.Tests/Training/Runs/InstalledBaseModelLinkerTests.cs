@@ -35,7 +35,7 @@ public sealed class InstalledBaseModelLinkerTests
         AssertEx.Equal("Qwen/Qwen2.5-0.5B-Instruct-GGUF:Q8_0", suggestions[1].ModelName);
     }
 
-    /// <summary>R7-05: a promoted tuned model carries its base's repo id and was auto-linked as the next run's base.</summary>
+    /// <summary>A promoted tuned model carries its base's repo id, yet is never auto-linked as the next run's base.</summary>
     [Test]
     public async Task Resolve_WithoutExplicitName_NeverPicksAPromotedTrainedModel()
     {

@@ -42,7 +42,7 @@ public sealed record ApplicationManifest(
     /// <remarks>
     ///     Variable defaults, inlined file bodies and the raw fetched document would reach the node log through one
     ///     downstream structured log of a snapshot; <c>ExternalAppCatalogRecordPrintingTests</c> asserts no manifest
-    ///     content can appear. On a sealed record whose base is <c>object</c> the compiler recognises only
+    ///     content can appear. On a sealed record whose base is <c>object</c> the compiler recognizes only
     ///     <c>private bool PrintMembers(StringBuilder)</c>, never <c>protected override</c>, which is why CA1822,
     ///     S2325, S1172 and IDE0060 are suppressed: every fix they offer restores the printing <c>ToString()</c>.
     /// </remarks>
@@ -89,7 +89,7 @@ public sealed record ApplicationStorage(string Name, string ContainerPath);
 /// <summary>
 ///     A catalog-shipped read-only asset inlined into the catalog document so the online catalog stays a single
 ///     fetch. <see cref="Sha256" /> is the lowercase-hex hash of the <em>decoded</em>
-///     <see cref="ContentBase64" /> bytes, verified when the engine materialises the file.
+///     <see cref="ContentBase64" /> bytes, verified when the engine materializes the file.
 /// </summary>
 public sealed record ApplicationFile(string Source, string ContainerPath, string Sha256, string ContentBase64);
 
@@ -205,7 +205,7 @@ public sealed record ExternalAppCatalogSnapshot(
     /// <remarks>
     ///     Variable defaults, inlined file bodies and the raw fetched document would reach the node log through one
     ///     downstream structured log of a snapshot; <c>ExternalAppCatalogRecordPrintingTests</c> asserts no manifest
-    ///     content can appear. On a sealed record whose base is <c>object</c> the compiler recognises only
+    ///     content can appear. On a sealed record whose base is <c>object</c> the compiler recognizes only
     ///     <c>private bool PrintMembers(StringBuilder)</c>, never <c>protected override</c>, which is why CA1822,
     ///     S2325, S1172 and IDE0060 are suppressed: every fix they offer restores the printing <c>ToString()</c>.
     /// </remarks>

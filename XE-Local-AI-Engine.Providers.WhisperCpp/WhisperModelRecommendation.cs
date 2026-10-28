@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 /// </summary>
 /// <remarks>
 ///     That is what keeps the rule a table test rather than something only a live machine can exercise. <b>It selects a ROW, not a tier:</b>
-///     three catalogue rows share <see cref="WhisperModelTier.LargeTurbo" />, so "the largest tier that fits" names no single row. The
+///     three catalog rows share <see cref="WhisperModelTier.LargeTurbo" />, so "the largest tier that fits" names no single row. The
 ///     walk keeps the LAST entry in <see cref="WhisperModelCatalog.Models" /> whose approximate footprint times
 ///     <see cref="HeadroomFactor" /> fits the budget, and <see cref="WhisperModelEntry.Tier" /> is consulted for exactly one thing, the
 ///     CPU ceiling. Footprint and budget always come from the same column: a VRAM figure is never weighed against a RAM budget.
@@ -19,7 +19,7 @@ public static class WhisperModelRecommendation
     public const double HeadroomFactor = 1.25;
 
     /// <summary>
-    ///     Returns the largest catalogue row that fits <paramref name="profile" /> for <paramref name="backend" />, or
+    ///     Returns the largest catalog row that fits <paramref name="profile" /> for <paramref name="backend" />, or
     ///     the smallest row when nothing fits. Never <see langword="null" />: a node with too little memory is still
     ///     offered the entry-level model rather than nothing at all.
     /// </summary>

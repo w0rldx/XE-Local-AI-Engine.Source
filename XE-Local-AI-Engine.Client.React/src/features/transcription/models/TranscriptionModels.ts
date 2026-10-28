@@ -230,7 +230,7 @@ export type ProcessCaptureBlockedReason = (typeof processCaptureBlockedReasons)[
  *
  * The 400 and 409 bodies are `{ reason, message }`, not ProblemDetails, so the shared axios interceptor parks the
  * whole body on `apiProblemDetails` — the same shape `unsupportedContainerDetail` reads. Only the three reasons this
- * endpoint documents are recognised: an unknown one falls back to the generic refusal rather than inventing a key
+ * endpoint documents are recognized: an unknown one falls back to the generic refusal rather than inventing a key
  * that no locale has.
  */
 export function processCaptureBlockedReason(error: unknown): ProcessCaptureBlockedReason | null {
@@ -262,7 +262,7 @@ export function isSessionTranscribingRefusal(error: unknown): boolean {
 export interface UnsupportedContainerDetail {
 	supportedContainers: readonly string[];
 	ffmpegRequired: boolean;
-	/** What the node found, named as the extension the operator uploaded (ogg, m4a, webm); null when unrecognised. */
+	/** What the node found, named as the extension the operator uploaded (ogg, m4a, webm); null when unrecognized. */
 	detectedContainer: string | null;
 }
 

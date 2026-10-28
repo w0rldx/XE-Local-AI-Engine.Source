@@ -43,7 +43,7 @@ public sealed class ContainerRuntimeRecordPrintingTests
     }
 
     /// <summary>
-    ///     R2-7 by enumeration rather than by inspection: any record in this namespace that carries an environment map
+    ///     By enumeration rather than by inspection: any record in this namespace that carries an environment map
     ///     must suppress its printer the same way. The check is what keeps the rule true for records a later slice
     ///     adds, since nothing else in the tree would notice a new one.
     /// </summary>

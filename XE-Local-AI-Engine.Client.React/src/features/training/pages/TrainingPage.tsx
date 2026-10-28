@@ -6,8 +6,8 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { BaseArtifactManager } from "@/features/training/components/BaseArtifactManager";
 import { TrainingRunList } from "@/features/training/components/TrainingRunList";
-import { TrainingRunWizard } from "@/features/training/components/TrainingRunWizard";
 import { TrainingRuntimeCard } from "@/features/training/components/TrainingRuntimeCard";
+import { TrainingRunWizard } from "@/features/training/components/TrainingRunWizard";
 
 /**
  * Fine-tuning page: the two prerequisites a run needs (the pinned Python runtime and a downloaded base checkpoint),

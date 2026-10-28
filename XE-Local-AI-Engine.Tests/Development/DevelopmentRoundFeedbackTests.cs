@@ -49,7 +49,7 @@ public sealed class DevelopmentRoundFeedbackTests
 
     /// <summary>
     ///     An ordinary Dev Mode rework round is told what the reviewer actually found, not that it found something.
-    ///     The fixed sentence alone left the same hole the workflow's routed change requests had.
+    ///     The fixed sentence alone would leave the same hole a routed workflow change request must not leave.
     /// </summary>
     [Test]
     public void AReviewersChangeRequestCarriesItsFindingsIntoTheNextRoundsPrompt()
@@ -173,8 +173,8 @@ public sealed class DevelopmentRoundFeedbackTests
 
     /// <summary>
     ///     A rework round is told WHICH files the shared workspace already carries, not only that such files exist.
-    ///     Live on 2026-09-04 a coder reverted a file an earlier attempt had created, reported it, and lost the whole
-    ///     attempt to changed_file_manifest_mismatch: it had the rule and not the data, and each attempt is a fresh
+    ///     Without the list, a coder can revert a file an earlier attempt created, report it, and lose the whole
+    ///     attempt to changed_file_manifest_mismatch: it has the rule and not the data, and each attempt is a fresh
     ///     conversation that cannot remember the round before it.
     /// </summary>
     [Test]

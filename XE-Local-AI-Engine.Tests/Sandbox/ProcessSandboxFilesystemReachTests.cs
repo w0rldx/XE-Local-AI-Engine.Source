@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         would get wrong.
 ///     </para>
 ///     <para>
-///         <b>These tests assert the real behaviour, including where it is weaker than the name suggests.</b> A test
+///         <b>These tests assert the real behavior, including where it is weaker than the name suggests.</b> A test
 ///         that documents a limit is worth more than no test: if the product later gains a filesystem boundary for
 ///         this mode, this class goes red and whoever changed it has to come and update the claim rather than leave
 ///         a stale one standing. Nothing here is destructive — each probe writes one marker file into a temporary

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The app-update endpoints are desktop-mode only. The default test host runs in non-desktop mode, so
 ///     both routes must be ABSENT (the FastEndpoints filter excludes <c>IDesktopOnlyEndpoint</c> off the
 ///     desktop flag) — the route is never mapped, so a POST to an unmapped path is rejected by routing (404 / 405,
-///     since the SPA fallback only handles GET) and a GET answers a bare 404: the SPA shell no longer serves the API
+///     since the SPA fallback only handles GET) and a GET answers a bare 404: the SPA shell does not serve the API
 ///     prefix, because the middleware after <c>UseRouting</c> detaches it there (see <c>SpaFallbackMarker</c> in
 ///     <c>SpaHostingPipelineExtensions</c>). Either way the request never reaches an app-update endpoint, and never gets a JSON
 ///     endpoint response.

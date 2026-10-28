@@ -84,8 +84,8 @@ public sealed class LlamaServerRerankerResilienceTests
     public void DefaultClient_KeepsItsPipeline_ForTheIdempotentCatalogAndDownloadGets()
     {
         // The deliberate KEEP. The release catalog and the binary manager still take the shared default client, where a
-        // retried GET costs a second read and never a second side effect — this pins that the fix above narrowed the
-        // strip to the reranker instead of disabling resilience for the whole provider stack.
+        // retried GET costs a second read and never a second side effect — this pins that the strip above is narrowed
+        // to the reranker instead of disabling resilience for the whole provider stack.
         using var provider = BuildProvider().Provider;
 
         var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(Options.DefaultName);
@@ -104,10 +104,10 @@ public sealed class LlamaServerRerankerResilienceTests
         }
     }
 
-    private static (ServiceProvider Provider, AttemptCountingHandler Upstream) BuildProvider()
+    private static (ServiceProvider Provider, UnavailableHttpMessageHandler Upstream) BuildProvider()
     {
         var services = new ServiceCollection();
-        var handler = new AttemptCountingHandler();
+        var handler = new UnavailableHttpMessageHandler();
 
         // Mirror ServiceDefaults' Aspire branch: a global standard handler on every client, registered BEFORE the
         // production registration so the latter's RemoveAllResilienceHandlers strips it, exactly as in production.
@@ -129,20 +129,5 @@ public sealed class LlamaServerRerankerResilienceTests
         });
 
         return (services.BuildServiceProvider(), handler);
-    }
-
-    /// <summary>Stands in for a rerank-role llama-server that answers every attempt with a retryable failure, and counts them.</summary>
-    private sealed class AttemptCountingHandler : HttpMessageHandler
-    {
-        private int _attempts;
-
-        public int Attempts => Volatile.Read(ref _attempts);
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            _ = Interlocked.Increment(ref _attempts);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        }
     }
 }

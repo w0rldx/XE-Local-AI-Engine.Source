@@ -50,7 +50,7 @@ public sealed class SandboxedMcpStdioTransportTests
     [Test]
     public void BuildTransport_ForAPrivilegedHostStdioServer_KeepsTheHostLaunch()
     {
-        // Unchanged behaviour, now as an explicit per-server grant rather than as the only behaviour there is.
+        // Unchanged behavior, now as an explicit per-server grant rather than as the only behavior there is.
         var transport = CreateFactory().BuildTransport(StdioRecord(McpTrustTier.PrivilegedHost));
 
         AssertEx.True(transport is StdioClientTransport,
@@ -523,7 +523,7 @@ public sealed class SandboxedMcpStdioTransportTests
     [Arguments(0x8000809Bu, "exit code 0x8000809B", "could not find or read the application DLL")]
     public async Task Handshake_WhenTheServerExitsNonZeroWithoutStderr_NamesTheExitCodeInHexAndTheSandboxWarnings(uint exitCode, string expectedCode, string? expectedHint)
     {
-        // N-3, N-16, N-17 and the 0x8000809B row (.NET host cannot read the app DLL): a child that cannot start dies silently; the exit code,
+        // The 0x8000809B row is the .NET host failing to read the app DLL: a child that cannot start dies silently; the exit code,
         // its meaning and MXC's warnings say why. A code with no known meaning gets no hint.
         var directory = CreateBindableDirectory("jail-path-");
         try
@@ -797,7 +797,7 @@ public sealed class SandboxedMcpStdioTransportTests
     [Arguments("AppData/Local/Microsoft/WindowsApps-lookalike")]
     public void ResolveReadOnlyTrees_ForATreeBeneathASubtreeDeniedStore_IsRefused(string relative)
     {
-        // A folder inside a credential store is still the store: the round-5 tester read key4.db through a Firefox Profiles grant.
+        // A folder inside a credential store is still the store: a Firefox Profiles grant must not expose key4.db.
         var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
         try
         {

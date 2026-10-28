@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the persistence-availability fallback decorator: a working persisted-cache credential is used as-is; a
-///     <see cref="CredentialUnavailableException" /> triggers exactly one rebuild without persistence options
-///     (never unencrypted-on-disk), and the fallback decision sticks for later calls.
+///     Covers the persistence fallback decorator: a working persisted-cache credential is used as-is; a
+///     <see cref="CredentialUnavailableException" /> triggers exactly one rebuild without persistence options (never
+///     unencrypted-on-disk), and the fallback sticks for later calls.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class EntraPersistenceFallbackCredentialTests

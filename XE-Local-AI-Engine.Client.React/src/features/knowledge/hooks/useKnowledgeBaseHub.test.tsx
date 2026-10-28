@@ -91,7 +91,7 @@ describe("useKnowledgeBaseHub", () => {
 	});
 
 	it("leaves the cached row alone when the status arrives as a raw enum number", () => {
-		// The pre-fix wire shape. Writing a number into the row would render an unlabelled pill, so the guard is right to
+		// The pre-fix wire shape. Writing a number into the row would render an unlabeled pill, so the guard is right to
 		// skip it — the fix is the server sending the name, which the test above pins.
 		const { queryClient, wrapper } = harness();
 		renderHook(() => useKnowledgeBaseHub(), { wrapper });

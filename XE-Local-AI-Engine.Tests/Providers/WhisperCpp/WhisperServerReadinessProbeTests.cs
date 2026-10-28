@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Readiness is the health route and nothing else. The case that earns this class is the 503: the server answers
-///     it while a model is loading, including for the whole of an in-place model switch, so a 503 has to keep the loop
-///     polling rather than read as a failure the way any other non-success would.
+///     Readiness is the health route and nothing else. The 503 earns this class: the server answers it while a model
+///     loads, including an in-place model switch, so a 503 keeps the loop polling instead of failing.
 /// </summary>
 /// <remarks>
 ///     The probe's poll pause and both deadlines run on a <see cref="ManualTimeProvider" />: a test moves the clock past

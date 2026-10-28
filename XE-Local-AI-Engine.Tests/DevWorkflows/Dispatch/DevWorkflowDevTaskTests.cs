@@ -695,9 +695,9 @@ public sealed class DevWorkflowDevTaskTests
     /// <summary>
     ///     The rejection is answered ONCE, however many of its own attempts the node spends getting there.
     ///     <para>
-    ///         The one ask used to be keyed on the target's own attempt, and a transient failure between the change
+    ///         The one ask is not keyed on the target's own attempt: a transient failure between the change
     ///         request and the round it asked for moves that attempt while the same rejection is still on the input. So
-    ///         the rework round arrived back at <c>AwaitingApply</c> under a key nothing had written, and the node asked
+    ///         the rework round would reach <c>AwaitingApply</c> under a key nothing wrote, and the node would ask
     ///         for the SAME rejection to be implemented again — a second coder round against work a reviewer had just
     ///         approved, spending a review round each time until the task ran out of them and its approved patch was
     ///         discarded.
@@ -1180,7 +1180,7 @@ public sealed class DevWorkflowDevTaskTests
             "the dispatch writes the injection and the settle writes the clear, once each — the settle is ticked repeatedly.");
 
         // The manual round an operator starts on the task the workflow left behind, driven through the store directly
-        // because no workflow is asking for it any more. It is the round the stale policy used to govern.
+        // because no workflow is asking for it any more. It is the round a stale policy would govern.
         var awaiting = await development.GetTaskAsync(taskId);
         var reworking = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand
         {
@@ -1270,11 +1270,11 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     FU2-3, the load-bearing half: the operator's reason for retrying a BLOCKED implementation node reaches the
+    ///     The load-bearing half: the operator's reason for retrying a BLOCKED implementation node reaches the
     ///     coder round the retry starts, through the task's own change request — which is the one channel Dev Mode
-    ///     composes a coder prompt out of. Observed live on 2026-09-02 as the opposite: a workspace policy refusal
-    ///     blocked the node, the operator retried it saying exactly what to do differently, and the next round was
-    ///     handed the same three fields the refused one was.
+    ///     composes a coder prompt out of. Without it, a workspace policy refusal blocks the node, the operator
+    ///     retries it saying exactly what to do differently, and the next round is handed the same three fields the
+    ///     refused one was.
     ///     <para>
     ///         And asked ONCE. The reason stays on the node run's inputs for the life of the attempt, so without the
     ///         ledger operation id behind it every poll tick would ask for another round.

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
 ///     FastEndpoints handler to cancel an in-flight GGUF download (POST model-fit/download/cancel): thin transport over
-///     <see cref="IGgufDownloadCoordinator" />, signalling the download's cancellation token by model name.
+///     <see cref="IGgufDownloadCoordinator" />, signaling the download's cancellation token by model name.
 /// </summary>
 /// <remarks>
 ///     Cancellation is cooperative (the GGUF store stops at the next byte/await boundary) and idempotent: a download

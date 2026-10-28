@@ -20,7 +20,7 @@ internal interface IAgentHomeExecutionLeaseManager
     /// <remarks>
     ///     For a caller that must leave an in-flight run alone rather than run alongside it — the run-retention
     ///     sweep. The answer is a snapshot and can change the instant it is read, so it is a refusal signal only:
-    ///     "held" must stop a destructive action, while "not held" is never a licence to assume exclusivity. Anything
+    ///     "held" must stop a destructive action, while "not held" is never a license to assume exclusivity. Anything
     ///     needing that takes <see cref="TryAcquire" />.
     /// </remarks>
     bool IsHeld(AgentHomeExecutionLeaseKey key);

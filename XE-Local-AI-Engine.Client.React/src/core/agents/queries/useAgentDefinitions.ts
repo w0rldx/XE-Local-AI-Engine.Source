@@ -1,0 +1,116 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { toAgentDefinition, toAgentDefinitions } from "@/core/agents/models/AgentDefinitionMappers";
+import type { XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest } from "@/core/api/generated";
+import {
+	createAgentDefinitionMutation,
+	deleteAgentDefinitionMutation,
+	getDefaultAssistantToolOfferOptions,
+	getToolCapableModelsOptions,
+	listAgentDefinitionsOptions,
+	updateAgentDefinitionMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+
+// Server state for the agent-management surface. Reads use the generated hey-api `*Options()` (which wire the shared
+// axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the optional-field
+// generated response into the stricter domain view-model. The
+// create/update/delete mutations keep their domain-friendly call signatures (the page/form pass domain values) and
+// dispatch into the generated `{ path, body }` envelope, then invalidate the definitions list on success.
+
+// Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
+export const agentDefinitionsQueryIds = {
+	list: "listAgentDefinitions",
+	defaultAssistantToolOffer: "getDefaultAssistantToolOffer",
+} as const;
+
+/** Builds the partial generated-query-key filter that matches every cached variant of one agent-definition endpoint. */
+export function agentDefinitionsInvalidationKey(operationId: string): readonly [{ _id: string }] {
+	return [{ _id: operationId }];
+}
+
+export function useAgentDefinitions() {
+	return useQuery({
+		...listAgentDefinitionsOptions(),
+		select: toAgentDefinitions,
+	});
+}
+
+// Tool-capable model names. Empty list means "capability source not available" and is treated by the page as
+// "do not enforce" so the surface keeps working before the node populates the capability. The generated response
+// carries `{ models?: string[] }`; the select maps it to the bare `string[]` the page consumes.
+export function useToolCapableModels() {
+	return useQuery({
+		...getToolCapableModelsOptions(),
+		select: (data) => data.models ?? [],
+	});
+}
+
+// The tool names a chat turn offers the seeded Default Assistant on `modelProfile` (blank = the node's local default),
+// as the server computes them: capability, trust boundary and node switches included. Only fetched while `enabled`.
+export function useDefaultAssistantToolOffer(modelProfile: string | null, enabled: boolean) {
+	const modelName = modelProfile?.trim() ? modelProfile : null;
+	return useQuery({
+		...getDefaultAssistantToolOfferOptions({ query: { modelName } }),
+		select: (data) => data.toolNames ?? [],
+		enabled,
+		// The offer follows node switches that can change in another tab; never show a cached pre-switch answer on open.
+		refetchOnMount: "always",
+	});
+}
+
+function invalidateList(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
+	return queryClient.invalidateQueries({
+		queryKey: agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.list),
+	});
+}
+
+// Create keeps the domain save-request variable (built by toSaveAgentDefinitionRequest at the page) and dispatches
+// it into the generated mutationFn's `{ body }` envelope. Returns the mapped created definition (the POST response
+// body is the bare AgentDefinitionResponse) so the page can react to it.
+export function useCreateAgentDefinition() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (request: XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest) => {
+			const options = createAgentDefinitionMutation();
+			const data = await options.mutationFn?.({ body: request }, undefined as never);
+			return data ? toAgentDefinition(data) : undefined;
+		},
+		onSuccess: () => invalidateList(queryClient),
+	});
+}
+
+export interface UpdateAgentDefinitionVariables {
+	id: string;
+	request: XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest;
+}
+
+// Update keeps the domain `{ id, request }` variable and dispatches it into the generated `{ path, body }` envelope
+// (the wire path param is `agentDefinitionId`). The generated client serializes the path itself, so no hand
+// encoding is needed. Returns the mapped updated definition (bare AgentDefinitionResponse body).
+export function useUpdateAgentDefinition() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async ({ id, request }: UpdateAgentDefinitionVariables) => {
+			const options = updateAgentDefinitionMutation();
+			const data = await options.mutationFn?.({ path: { agentDefinitionId: id }, body: request }, undefined as never);
+			return data ? toAgentDefinition(data) : undefined;
+		},
+		onSuccess: () => invalidateList(queryClient),
+	});
+}
+
+// Delete keeps the domain id variable and dispatches it into the generated `{ path }` envelope (wire path param
+// `agentDefinitionId`).
+export function useDeleteAgentDefinition() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (id: string) => {
+			const options = deleteAgentDefinitionMutation();
+			await options.mutationFn?.({ path: { agentDefinitionId: id } }, undefined as never);
+		},
+		onSuccess: () => invalidateList(queryClient),
+	});
+}

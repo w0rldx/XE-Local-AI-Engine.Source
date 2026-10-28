@@ -733,7 +733,7 @@ public static partial class ExternalAppCatalogValidator
             }
             else
             {
-                // Every entry materialises at {instanceDir}/files/{service}/{source} as a regular file, so two entries
+                // Every entry materializes at {instanceDir}/files/{service}/{source} as a regular file, so two entries
                 // sharing a source — or nesting under one — collide: the later body silently wins over the earlier.
                 var clash = acceptedSources.Find(other => IsSameOrNested(file.Source, other));
                 if (clash is null)
@@ -787,7 +787,7 @@ public static partial class ExternalAppCatalogValidator
         if (file.ContentBase64 is null)
         {
             // The contract types the body non-nullable, so a missing member survives deserialization as a null the
-            // engine dereferences at materialisation; coercing to "" would validate it against the sha256 of no bytes.
+            // engine dereferences at materialization; coercing to "" would validate it against the sha256 of no bytes.
             errors.Add($"{path}.contentBase64 is required (use \"\" for an empty file).");
             return;
         }

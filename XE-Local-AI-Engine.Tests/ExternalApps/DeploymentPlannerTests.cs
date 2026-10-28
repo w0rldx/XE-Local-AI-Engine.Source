@@ -435,7 +435,7 @@ public sealed class DeploymentPlannerTests
     }
 
     /// <summary>
-    ///     The planner's built-in names and the catalog validator's recognised list are written as literals in two
+    ///     The planner's built-in names and the catalog validator's recognized list are written as literals in two
     ///     files. This is the assertion that keeps them from drifting apart, which would let a manifest validate and
     ///     then fail to plan.
     /// </summary>

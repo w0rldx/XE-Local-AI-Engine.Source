@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Owns the journaled directory-and-state transaction used to adopt a managed image runtime.</summary>
@@ -105,16 +105,16 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         var failed = Path.Combine(backendRoot, $".failed-{descriptor.ResolvedCommit}-{descriptor.BuildId:N}");
         CreateOwnerOnlyDirectory(RuntimeRoot);
         CreateOwnerOnlyDirectory(backendRoot);
-        TryDeleteDirectory(staging);
-        TryDeleteDirectory(backup);
-        TryDeleteDirectory(failed);
+        BestEffortFile.TryDeleteDirectory(staging);
+        BestEffortFile.TryDeleteDirectory(backup);
+        BestEffortFile.TryDeleteDirectory(failed);
         Directory.Move(buildDir, staging);
         try
         {
             HardenManagedTree(staging);
             var stagedServer = Path.GetFullPath(Path.Combine(staging, relativeServer));
             ValidateAdoptedServer(staging, stagedServer);
-            var digest = await ComputeSha256Async(stagedServer, ct).ConfigureAwait(false);
+            var digest = await FileSha256.ComputeAsync(stagedServer, ct).ConfigureAwait(false);
             var finalServer = Path.GetFullPath(Path.Combine(destination, relativeServer));
             var state = new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Active,
                 descriptor.Backend,
@@ -176,7 +176,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         }
         catch
         {
-            TryDeleteDirectory(staging);
+            BestEffortFile.TryDeleteDirectory(staging);
             throw;
         }
     }
@@ -332,7 +332,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
                 return false;
             }
 
-            var actualSha = await ComputeSha256Async(serverPath, ct).ConfigureAwait(false);
+            var actualSha = await FileSha256.ComputeAsync(serverPath, ct).ConfigureAwait(false);
             return string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception exception) when (exception is IOException
@@ -426,12 +426,6 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         return installRoot;
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-    }
-
     private static void HardenManagedTree(string root)
     {
         if (OperatingSystem.IsWindows())
@@ -476,21 +470,6 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         return string.Equals(Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar),
             Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; the caller reports the primary operation.
-        }
     }
 
     private static void DeleteDirectoryStrict(string path)

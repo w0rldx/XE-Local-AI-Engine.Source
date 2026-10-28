@@ -232,7 +232,7 @@ describe("IntegrationExecutionsPage", () => {
 		await expectChipSendsStatuses("All", undefined);
 	});
 
-	// D-3: everything in flight in one click. The endpoint takes a repeated `status`, so this is one server-side
+	// Everything in flight in one click. The endpoint takes a repeated `status`, so this is one server-side
 	// question — the browser never unions three separately-paged reads.
 	it("sends the three in-flight states together for the Active chip", async () => {
 		renderPage();
@@ -339,7 +339,7 @@ describe("IntegrationExecutionsPage", () => {
 		expect(screen.queryByTestId("integration-execution-category-exec-completed")).toBeNull();
 	});
 
-	// D-2: the response now carries `totalCount`, so the page states the real size of the filtered table instead of
+	// The response now carries `totalCount`, so the page states the real size of the filtered table instead of
 	// describing a window it could not number.
 	it("shows the server's total and asks for the first page by default", () => {
 		executionHooksMock.useIntegrationExecutions.mockReturnValue(makeListQuery(executions, 412));

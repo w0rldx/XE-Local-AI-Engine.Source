@@ -42,7 +42,7 @@ export function PageHeader({
 				 * /benchmarks at 390px). The icon is held at its intrinsic size and the title is the part allowed to
 				 * shrink, so a long title wraps or truncates INSIDE the row instead of breaking it apart. The icon box is
 				 * one title line tall and top-aligned, so a wrapped title keeps the icon on its first line rather than
-				 * centred against the whole block.
+				 * centered against the whole block.
 				 */}
 				<Group gap="xs" align="flex-start" wrap="nowrap" data-testid="page-header-title-row">
 					{icon ? (

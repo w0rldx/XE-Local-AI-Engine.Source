@@ -644,7 +644,7 @@ public sealed class DevWorkflowRunServiceTests
 
     /// <summary>
     ///     An operation id names one ACT, so a lifecycle replay is a replay of its OWN verb or it is nothing. Reused
-    ///     across verbs it used to answer success for a cancel that never happened, while the run carried on.
+    ///     across verbs it would answer success for a cancel that never happened, while the run carried on.
     /// </summary>
     [Test]
     public async Task ReusingALifecycleOperationIdOnADifferentVerb_IsRefused()
@@ -839,7 +839,7 @@ public sealed class DevWorkflowRunServiceTests
     }
 
     /// <summary>
-    ///     The owner surface, honouring the token it is handed and refusing one nominated session. Hand-written rather
+    ///     The owner surface, honoring the token it is handed and refusing one nominated session. Hand-written rather
     ///     than substituted because the interface is internal to the Application assembly, which is not exposed to
     ///     Castle's proxy generator.
     /// </summary>

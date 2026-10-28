@@ -6,13 +6,13 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Loads the ACTUAL embedded <c>external-apps-catalog.seed.json</c> resource (not a synthetic fixture), so a
-///     content error in the shipped catalog fails here rather than at the first install, and proves the
-///     degrade-to-empty path a missing resource takes: the node must come up bundled-empty with a loud Error, never
-///     throw out of the DI graph. The shipped seed itself declares no application today, which is why the
-///     missing-resource case asserts the Error log and not merely an empty catalog: the two are otherwise
-///     indistinguishable.
+///     Loads the ACTUAL embedded <c>external-apps-catalog.seed.json</c>, so a content error in the shipped seed fails
+///     here rather than at first install, and proves a missing resource degrades to bundled-empty with a loud Error.
 /// </summary>
+/// <remarks>
+///     It must never throw out of the DI graph. The shipped seed declares no application today, so that case asserts
+///     the Error log, not merely an empty catalog: the two are otherwise indistinguishable.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ExternalAppCatalogBundledLoaderTests
 {

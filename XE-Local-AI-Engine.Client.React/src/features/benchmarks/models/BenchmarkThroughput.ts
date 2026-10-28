@@ -100,7 +100,7 @@ const finite = (value: number | null): value is number => value !== null && Numb
 
 /**
  * Throughput spread per repeat cohort, keyed by {@link benchmarkRepeatCohortKey}. Only SUCCEEDED, non-warm-up runs are
- * counted: a failed or cancelled run has no measurement to average, and a warm-up is the first-launch cost the repeats
+ * counted: a failed or canceled run has no measurement to average, and a warm-up is the first-launch cost the repeats
  * after it were meant not to pay — including it would report the spread of the thing being controlled for.
  */
 export function benchmarkRepeatStats(runs: readonly BenchmarkRunSummary[]): Map<string, BenchmarkRepeatStats> {

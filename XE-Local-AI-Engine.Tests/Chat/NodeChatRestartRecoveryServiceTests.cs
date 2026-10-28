@@ -534,7 +534,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     [Test]
     public async Task RecoverInterruptedMessagesAsync_BackfillsAStoppedTurnWithTheModelFromItsEncryptedMetadata()
     {
-        // R5-07: the SQL backfill wrote model_name '' because the model lives in the encrypted metadata; it is now read per row.
+        // The model lives in the encrypted metadata, so a plain SQL backfill would write model_name ''; it is read per row.
         const string Model = "stopped-model.gguf";
         await using var provider = await BuildProviderAsync("restart-recovery-envelope-model.sqlite");
         var persistence = CreatePersistenceService(provider);

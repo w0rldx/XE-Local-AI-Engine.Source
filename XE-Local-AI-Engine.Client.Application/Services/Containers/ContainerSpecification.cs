@@ -4,7 +4,7 @@ using System.Text;
 
 /// <summary>
 ///     How the engine restarts an application container. Two values, and the omission is the point: a runtime able to
-///     express Docker's <c>always</c> would let a later caller invent a restart policy ADR 0010 did not authorise.
+///     express Docker's <c>always</c> would let a later caller invent a restart policy ADR 0010 did not authorize.
 /// </summary>
 public enum ContainerRestartMode
 {
@@ -83,7 +83,7 @@ public sealed record ContainerSpecification
     /// <summary>Memory ceiling in bytes; <c>0</c> means unlimited, and V1 always passes <c>0</c>.</summary>
     /// <remarks>
     ///     The manifest's memory figures are admission-gate inputs, not per-container limits. The field stays so a
-    ///     later ruling needs no contract change and so the read-back verifier can assert the zero.
+    ///     later per-container limit needs no contract change and so the read-back verifier can assert the zero.
     /// </remarks>
     public required long MemoryBytes { get; init; }
 
@@ -113,7 +113,7 @@ public sealed record ContainerSpecification
     ///     <c>Environment</c> holds values decrypted from the instance's variables, an admin password among them, and
     ///     one structured log of a specification would write it to the node log;
     ///     <c>ContainerRuntimeRecordPrintingTests</c> asserts a known secret cannot appear. On a sealed record based on
-    ///     <c>object</c> the compiler recognises only <c>private bool PrintMembers(StringBuilder)</c>, never
+    ///     <c>object</c> the compiler recognizes only <c>private bool PrintMembers(StringBuilder)</c>, never
     ///     <c>protected override</c> — hence CA1822, S2325, S1172 and IDE0060: every fix restores that printer.
     /// </remarks>
 #pragma warning disable CA1822, S2325, S1172, IDE0060

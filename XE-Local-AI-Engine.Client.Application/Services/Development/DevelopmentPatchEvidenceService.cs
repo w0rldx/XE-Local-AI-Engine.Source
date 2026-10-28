@@ -32,7 +32,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     /// <summary>More Git commands than any export runs, each bounded by the attempt cap; a stage older than that many caps is no live export's.</summary>
     private const int MaxCommandsPerStage = 8;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly DevelopmentOptions _options;
 

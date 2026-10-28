@@ -251,7 +251,7 @@ public sealed class ResolveToolApprovalRequest
     ///     How long an APPROVE lasts. An omitted or null scope is <see cref="ApprovalScope.Once" />.
     /// </summary>
     /// <remarks>
-    ///     <see cref="ApprovalScope.Session" /> is honoured only for the read-only skill tools on a locally authored
+    ///     <see cref="ApprovalScope.Session" /> is honored only for the read-only skill tools on a locally authored
     ///     skill: the runner decides, and silently falls back to <see cref="ApprovalScope.Once" /> for anything else.
     ///     Ignored entirely on a deny.
     /// </remarks>

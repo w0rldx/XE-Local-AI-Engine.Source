@@ -213,7 +213,7 @@ describe("ExternalAppCatalogPage", () => {
 		expect(screen.queryByTestId("external-app-catalog-refresh-failure")).toBeNull();
 	});
 
-	// Decision D6: an empty catalog reads as "off" with the way to turn it on, not as a bare empty list, and the
+	// An empty catalog reads as "off" with the way to turn it on, not as a bare empty list, and the
 	// runtime card is not the next step there. Refresh stays, because it is how the gate lifts.
 	it("shows the enable card instead of the runtime card for an empty catalog", async () => {
 		server.use(...baseRoutes(externalAppCatalog({ applications: [], restartRequired: true })));
@@ -259,7 +259,7 @@ describe("ExternalAppCatalogPage", () => {
 		expect(screen.queryByTestId("external-app-runtime-card")).toBeNull();
 	});
 
-	// Codex round 2 (P3): a populated start whose bridge never opened, then a refresh to empty. The state is "empty now"
+	// A populated start whose bridge never opened, then a refresh to empty. The state is "empty now"
 	// and clears on the next refresh that lists an application: it claims no missing online catalog, asks for no
 	// restart, and shows no listener warning because no listener is open.
 	it("explains a catalog emptied after a populated start without claiming a missing catalog or a restart", async () => {

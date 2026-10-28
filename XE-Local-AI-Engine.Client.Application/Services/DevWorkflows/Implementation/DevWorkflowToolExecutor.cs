@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ConcurrentDictionary<Guid, InFlight> _inflight = new();
@@ -252,7 +252,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     public async Task<bool> StopAsync(Guid nodeRunId)
     {
         // simplified: the run waits up to one sweep (DevWorkflowOptions.SweepSeconds) to notice a stopped pass landed,
-        // since signalling from its continuation needs the dispatcher, which takes THIS type. Fix: a settable signal.
+        // since signaling from its continuation needs the dispatcher, which takes THIS type. Fix: a settable signal.
         if (!_inflight.TryGetValue(nodeRunId, out var flight) || flight.Cancellation.IsCancellationRequested)
         {
             return false;

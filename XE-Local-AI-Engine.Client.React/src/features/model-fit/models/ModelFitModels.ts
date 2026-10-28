@@ -70,7 +70,7 @@ export interface ModelFitRecommendation {
 	// True when the authors ran this catalog model through their live scenario checks. Display-only; false for a row
 	// with no catalog match.
 	readonly tested: boolean;
-	// True when the Hugging Face repository is gated (licence acceptance and a token are needed to download).
+	// True when the Hugging Face repository is gated (license acceptance and a token are needed to download).
 	readonly isGated: boolean;
 	// Stable curated-catalog entry id backing this row, or null when the row has no catalog match.
 	readonly catalogId: string | null;

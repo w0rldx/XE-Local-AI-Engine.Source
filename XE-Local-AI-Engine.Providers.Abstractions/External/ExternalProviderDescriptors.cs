@@ -70,7 +70,7 @@ public sealed record ExternalProviderModelDescriptor
     public bool SupportsReasoning { get; init; }
 
     /// <summary>
-    ///     Whether the endpoint honours a top-level <c>reasoning_effort</c> body field. Independent of
+    ///     Whether the endpoint honors a top-level <c>reasoning_effort</c> body field. Independent of
     ///     <see cref="SupportsReasoning" /> in principle, but only read alongside it: a model that reasons without a
     ///     graded switch gets binary on/off semantics and no effort field on the wire.
     /// </summary>

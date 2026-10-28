@@ -15,9 +15,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     Brief tests 1 (the tampered byte) and 5 (the fail-closed override). The repo has no shared HTTP-handler fake, so
-///     these drive a hand-written <see cref="HttpMessageHandler" /> serving a real in-memory archive — no network, no
-///     real binary, and the OS/arch test constructor keeps asset selection deterministic on any host.
+///     The tampered-byte and fail-closed-override cases, driven by a hand-written <see cref="HttpMessageHandler" />
+///     serving a real in-memory archive: no network, no real binary, and the OS/arch test constructor keeps asset
+///     selection deterministic on any host.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WhisperCppBinaryManagerTests
@@ -27,7 +27,7 @@ public sealed class WhisperCppBinaryManagerTests
     {
         using var cache = new TempCacheDir();
         // Bytes that cannot match the pinned digest: forced corruption on every attempt.
-        using var handler = new CountingHandler(static () => new HttpResponseMessage(HttpStatusCode.OK)
+        using var handler = new CountingHttpMessageHandler(static () => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
@@ -54,7 +54,7 @@ public sealed class WhisperCppBinaryManagerTests
         var archive = BuildTarGz(pin.ServerRelativePath, "fake-whisper-server");
         archive[^1] ^= 0xFF;
 
-        using var handler = new CountingHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
+        using var handler = new CountingHttpMessageHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(archive)
         });
@@ -114,7 +114,7 @@ public sealed class WhisperCppBinaryManagerTests
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "fake-whisper-server");
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http, cache.Path, WhisperCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
@@ -140,7 +140,7 @@ public sealed class WhisperCppBinaryManagerTests
             Backend = WhisperBackend.Cuda
         };
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("An active override must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http, cache.Path, WhisperCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, overrideOptions);
@@ -165,7 +165,7 @@ public sealed class WhisperCppBinaryManagerTests
             Backend = WhisperBackend.Cuda
         };
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("A broken override must not fall through to a download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http, cache.Path, WhisperCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, overrideOptions);
@@ -187,7 +187,7 @@ public sealed class WhisperCppBinaryManagerTests
         await File.WriteAllTextAsync(byoPath, "operator-built-whisper-server");
         File.SetUnixFileMode(byoPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("A broken override must not fall through to a download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http,
@@ -223,7 +223,7 @@ public sealed class WhisperCppBinaryManagerTests
             DateTimeOffset.UtcNow,
             "The managed runtime binary failed integrity verification."));
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("A tombstoned managed record must never fall back to a prebuilt."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http,
@@ -255,7 +255,7 @@ public sealed class WhisperCppBinaryManagerTests
             ServerSha256: new string('a', 64),
             DateTimeOffset.UtcNow));
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("A managed record must never fall back to a prebuilt."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http,
@@ -289,7 +289,7 @@ public sealed class WhisperCppBinaryManagerTests
         var signal = new WhisperManagedSourceBuildSignal();
         signal.SetActive(WhisperBackend.Cuda);
 
-        using var handler = new CountingHandler(static () =>
+        using var handler = new CountingHttpMessageHandler(static () =>
             throw new InvalidOperationException("A managed record must never fall back to a prebuilt."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http,
@@ -332,24 +332,6 @@ public sealed class WhisperCppBinaryManagerTests
             }
 
         return payload.ToArray();
-    }
-
-    private sealed class CountingHandler : HttpMessageHandler
-    {
-        private readonly Func<HttpResponseMessage> _responder;
-
-        public CountingHandler(Func<HttpResponseMessage> responder)
-        {
-            _responder = responder;
-        }
-
-        public int CallCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return Task.FromResult(_responder());
-        }
     }
 
     /// <summary>

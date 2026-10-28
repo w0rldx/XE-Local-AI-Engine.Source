@@ -38,7 +38,7 @@ internal static class KnowledgeChatContextComposer
     ///     Added after the preamble when the search reports a weak reranked match; the excerpts stay.
     /// </summary>
     /// <remarks>
-    ///     It keeps the general-knowledge escape the tool notes carry (model-matrix F18): a bare "the documents hold
+    ///     It keeps the general-knowledge escape the tool notes carry: a bare "the documents hold
     ///     nothing" made small models refuse general questions.
     /// </remarks>
     public const string WeakMatchNotice =

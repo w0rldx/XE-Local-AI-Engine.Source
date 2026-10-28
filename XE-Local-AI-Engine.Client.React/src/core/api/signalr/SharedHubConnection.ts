@@ -253,7 +253,7 @@ export function acquireHubConnection(hubPath: string): SharedHubHandle {
 		entries.set(hubPath, entry);
 	}
 	entry.refCount += 1;
-	// A re-acquire during the linger window keeps the live connection: cancel the pending stop. (Even un-cancelled,
+	// A re-acquire during the linger window keeps the live connection: cancel the pending stop. (Even un-canceled,
 	// the deferred stop's refcount re-check would no-op — clearing just avoids the dangling timer.)
 	if (entry.lingerTimer !== undefined) {
 		clearTimeout(entry.lingerTimer);

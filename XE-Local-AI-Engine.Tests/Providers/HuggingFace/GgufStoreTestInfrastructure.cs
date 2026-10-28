@@ -43,11 +43,9 @@ internal static class GgufStoreTestInfrastructure
         IFreeSpaceProbe probe,
         HuggingFaceOptions options)
     {
-        // Default resolve probe: a bare 200 with no X-Linked-Etag → the client falls back to the byte response's own
-        // X-Linked-Etag, preserving the pre-Xet test semantics. Xet-path tests pass an explicit resolve client below.
-        // CA2000: this client wraps an in-memory fake handler (no sockets/unmanaged resource) and lives for the test's
-        // duration as a field of the returned download client — GC-reclaimed at test end; disposing it here would break it.
-#pragma warning disable CA2000 // Lives as a field of the returned download client.
+        // Default resolve probe: a bare 200 with no X-Linked-Etag, so the client falls back to the byte response's own
+        // X-Linked-Etag. Xet-path tests pass an explicit resolve client below.
+#pragma warning disable CA2000 // In-memory fake owned by the returned download client; disposing it here breaks it.
         var resolveHttp = new HttpClient(new ScriptedHandler(static (_, _) => new HttpResponseMessage()));
 #pragma warning restore CA2000
         return DownloadClient(http, resolveHttp, tokenStore, probe, options);

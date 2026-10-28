@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // AgentSelectorCard is purely presentational — it receives agentOptions as a prop and does NOT call
-// useAgentDefinitions internally. Tests pass the derived list directly, mirroring Chat.tsx behaviour.
+// useAgentDefinitions internally. Tests pass the derived list directly, mirroring Chat.tsx behavior.
 // It is the single merged agent control: picking an agent calls onSelectAgent(id) (which enables agent mode at
 // the call site); picking the Default Assistant row calls onSelectAgent("") (which disables it).
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";

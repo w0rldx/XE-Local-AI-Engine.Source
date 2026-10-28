@@ -110,9 +110,8 @@ public sealed class AddMcpServersMigrationTests : IDisposable
 
     private static async Task<bool> UniqueIndexOnNameExistsAsync(SqliteConnection connection)
     {
-        // EF emits the unique index over name as IX_mcp_servers_name on a single column; confirm it is present, marked
-        // unique by index_list, and covers exactly the name column. PRAGMA index_list takes no parameters, so this
-        // stays free of string interpolation.
+        // EF emits the unique name index as IX_mcp_servers_name; confirm index_list marks it unique over exactly the
+        // name column. PRAGMA index_list takes no parameters, so this stays free of string interpolation.
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA index_list('mcp_servers');";
         await using var reader = await command.ExecuteReaderAsync();

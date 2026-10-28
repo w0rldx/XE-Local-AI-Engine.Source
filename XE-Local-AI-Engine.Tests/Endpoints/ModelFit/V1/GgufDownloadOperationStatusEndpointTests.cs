@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

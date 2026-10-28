@@ -48,7 +48,7 @@ export function toAgentRunView(dto: AgentHomeRunDto): AgentRunView {
 	};
 }
 
-/** Mantine badge colour per outcome. Green only for a run that finished on its own terms. */
+/** Mantine badge color per outcome. Green only for a run that finished on its own terms. */
 export function agentRunOutcomeColor(outcome: string): string {
 	switch (outcome) {
 		case "Completed":

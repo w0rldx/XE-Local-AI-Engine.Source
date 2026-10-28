@@ -30,7 +30,7 @@ public sealed record ContainerSandboxOptions
     ///     engine's own effective UID is the one that can use an engine-generated bind mount, while a rootless daemon maps container UID 0
     ///     to the invoking user and every other UID into the subordinate range, which owns nothing of ours
     ///     (<c>ResolvedContainerIdentity</c> carries the measured evidence). Set it only for a daemon neither rule describes; an explicit
-    ///     value wins over both. Zero is honoured ONLY against a daemon verified rootless, being host root otherwise.
+    ///     value wins over both. Zero is honored ONLY against a daemon verified rootless, being host root otherwise.
     /// </remarks>
     [Range(0, int.MaxValue)]
     public int? UserId { get; init; }
@@ -57,7 +57,7 @@ public sealed record ContainerSandboxOptions
     /// <summary>Absolute in-container path of the bounded <c>tmpfs</c> at the toolchain's fixed temporary directory.</summary>
     /// <remarks>
     ///     Neither a convenience nor redundant with <see cref="ScratchMountTarget" />: the .NET runtime backs a NAMED mutex with
-    ///     shared-memory files under <c>/tmp/.dotnet/shm/…</c>, a compile-time constant in the CoreCLR PAL that honours no <c>TMPDIR</c>,
+    ///     shared-memory files under <c>/tmp/.dotnet/shm/…</c>, a compile-time constant in the CoreCLR PAL that honors no <c>TMPDIR</c>,
     ///     by design, a global mutex needing a location every process agrees on. The <c>dotnet</c> CLI takes such a mutex on its first
     ///     invocation, so with a read-only root and no writable <c>/tmp</c> every command fails <c>EROFS</c> before doing any work —
     ///     measured. It must be at <c>/tmp</c> itself, the PAL needing the PARENT writable for its <c>mkdtemp</c>-and-rename.

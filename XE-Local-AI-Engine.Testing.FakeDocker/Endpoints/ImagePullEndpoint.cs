@@ -6,13 +6,13 @@ using Microsoft.AspNetCore.Http;
 /// <summary>
 ///     <c>POST /images/create?fromImage=&amp;tag=</c>. Streams the scripted progress lines as newline-delimited JSON,
 ///     exactly as the daemon does, and makes the image present when the stream carried no error.
-///     <para>
-///         The client splits a digest-pinned reference at <c>@sha256:</c> and sends the halves as
-///         <c>fromImage=busybox</c> and <c>tag=sha256:…</c>, so the reference is rejoined here with <c>@</c> when the
-///         tag is a digest and with <c>:</c> otherwise. Rejoining it wrongly would leave the image present under a
-///         name no later <c>ImageExistsAsync</c> asks for.
-///     </para>
 /// </summary>
+/// <remarks>
+///     The client splits a digest-pinned reference at <c>@sha256:</c> and sends the halves as
+///     <c>fromImage=busybox</c> and <c>tag=sha256:…</c>, so the reference is rejoined here with <c>@</c> when the
+///     tag is a digest and with <c>:</c> otherwise. Rejoining it wrongly would leave the image present under a
+///     name no later <c>ImageExistsAsync</c> asks for.
+/// </remarks>
 internal static class ImagePullEndpoint
 {
     public static async Task HandleAsync(HttpContext context, FakeDockerState state)

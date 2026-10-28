@@ -117,7 +117,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
             var rented = ArrayPool<byte>.Shared.Rent(DrainChunkBytes);
             try
             {
-                // CaptureAsync initialises and starts the audio client itself and throws "Already recording" if StartRecording
+                // CaptureAsync initializes and starts the audio client itself and throws "Already recording" if StartRecording
                 // ran first; its own finally stops and resets the client, so there is nothing left for this method to stop.
                 await foreach (var buffer in recorder.CaptureAsync(cancellationToken))
                 {
@@ -199,7 +199,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
         catch (ArgumentException exception)
         {
             // The process exited between enumeration and lookup. Normal, not an error: the row still names a pid
-            // the operator may recognise, and starting capture against it will fail with its own message.
+            // the operator may recognize, and starting capture against it will fail with its own message.
             _logger.LogDebug(exception, "Process {ProcessId} holds an audio session but could not be resolved.", processId);
             return $"PID {processId}";
         }

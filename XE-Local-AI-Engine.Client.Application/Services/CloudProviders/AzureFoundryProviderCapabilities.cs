@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 
 /// <summary>

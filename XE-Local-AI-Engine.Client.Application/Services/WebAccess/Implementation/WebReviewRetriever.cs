@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 /// </remarks>
 public sealed class WebReviewRetriever
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private readonly WebFetchService _fetchService;
     private readonly ILogger<WebReviewRetriever> _logger;
@@ -24,7 +24,7 @@ public sealed class WebReviewRetriever
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>What <see cref="RetrieveAsync" /> would send (normalised URL or trimmed query); null when it would refuse before sending.</summary>
+    /// <summary>What <see cref="RetrieveAsync" /> would send (normalized URL or trimmed query); null when it would refuse before sending.</summary>
     internal static WebReviewPreview? DescribeRequest(FunctionCallContent call)
     {
         ArgumentNullException.ThrowIfNull(call);

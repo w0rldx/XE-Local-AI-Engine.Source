@@ -6,15 +6,15 @@ import { useBenchmarkRunActions } from "@/features/benchmarks/hooks/useBenchmark
 import { useBenchmarkRunSelection } from "@/features/benchmarks/hooks/useBenchmarkRunSelection";
 import { benchmarkRunEstimate, medianBenchmarkRunDurationMs } from "@/features/benchmarks/models/BenchmarkRunEstimate";
 import { leafBenchmarkTaskItems } from "@/features/benchmarks/models/BenchmarkTaskItems";
+import { useBenchmarkCells } from "@/features/benchmarks/queries/useBenchmarkCells";
 import {
-	useBenchmarkCells,
 	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
 	useBenchmarkRunDetails,
 	useBenchmarkRuns,
-	useBenchmarkTaskItems,
 } from "@/features/benchmarks/queries/useBenchmarks";
+import { useBenchmarkTaskItems } from "@/features/benchmarks/queries/useBenchmarkTaskItems";
 
 export interface BenchmarksPageProps {
 	readonly baseModelName?: string;

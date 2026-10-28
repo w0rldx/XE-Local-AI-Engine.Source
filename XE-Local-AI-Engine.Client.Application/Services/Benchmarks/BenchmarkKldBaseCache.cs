@@ -113,23 +113,6 @@ public sealed class BenchmarkKldBaseCache
         File.WriteAllText(Path.Combine(_root, key.SidecarFileName), key.CanonicalJson);
     }
 
-    public static void DeleteBestEffort(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // A leftover temp file is swept by the next retention pass. Failing the measurement over it would turn a
-            // tidying problem into a lost result.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Same.
-        }
-    }
-
     /// <summary>
     ///     Evicts whole least-recently-used files until the cache fits under <paramref name="maximumBytes" />. A file
     ///     whose lease is held is never evicted, and neither is one <paramref name="inUseDigests" /> names — a
@@ -164,8 +147,8 @@ public sealed class BenchmarkKldBaseCache
             }
 
             total -= file.Length;
-            DeleteBestEffort(file.FullName);
-            DeleteBestEffort(Path.Combine(_root, string.Concat(shortDigest, ".json")));
+            BestEffortFile.TryDeleteFile(file.FullName);
+            BestEffortFile.TryDeleteFile(Path.Combine(_root, string.Concat(shortDigest, ".json")));
         }
 
         return total;
@@ -181,7 +164,7 @@ public sealed class BenchmarkKldBaseCache
 
         foreach (var file in Directory.EnumerateFiles(_root).Where(static path => !path.EndsWith(".lock", StringComparison.Ordinal)))
         {
-            DeleteBestEffort(file);
+            BestEffortFile.TryDeleteFile(file);
         }
     }
 

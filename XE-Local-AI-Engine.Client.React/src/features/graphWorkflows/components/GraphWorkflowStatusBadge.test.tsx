@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-// Two closed vocabularies drive these pills, and both fail SILENTLY when they drift: a member with no colour renders
+// Two closed vocabularies drive these pills, and both fail SILENTLY when they drift: a member with no color renders
 // an uncoloured badge, a member with no label renders its own wire token. Both are asserted here against the
-// vocabulary arrays themselves, so adding a status without a colour or a German string is a red test rather than a
+// vocabulary arrays themselves, so adding a status without a color or a German string is a red test rather than a
 // pill an operator has to interpret.
 
 import { cleanup, screen } from "@testing-library/react";
@@ -26,9 +26,9 @@ function hasSpinner(element: HTMLElement): boolean {
 	return element.querySelector('[class*="Loader"]') !== null;
 }
 
-// The colour the operator is meant to read, per member. Mantine writes the resolved colour into the pill's inline
+// The color the operator is meant to read, per member. Mantine writes the resolved color into the pill's inline
 // custom properties, so this asserts the component's own map rather than restating it: a member the component left
-// out would render no colour at all, and a member coloured differently fails on the name.
+// out would render no color at all, and a member colored differently fails on the name.
 const expectedRunColors: Record<GraphWorkflowRunStatus, string> = {
 	Pending: "gray",
 	Running: "blue",

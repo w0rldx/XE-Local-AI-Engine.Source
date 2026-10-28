@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 ///     no orphan survives a supervisor stop or crash. Every native call is reached only on Windows, the launcher
 ///     guarding with <see cref="OperatingSystem.IsWindows" />. <strong>Operator-verification flag:</strong> a
 ///     Linux build cannot exercise the Win32 path; <c>WindowsJobObjectTreeKillTests</c> proves it on a Windows host, and
-///     real tree-kill behaviour MUST be verified on Windows 11.
+///     real tree-kill behavior MUST be verified on Windows 11.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 public sealed partial class WindowsJobObjectProcessHandle : IProcessTreeHandle

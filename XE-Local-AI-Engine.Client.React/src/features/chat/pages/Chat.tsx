@@ -39,10 +39,10 @@ import { adoptWebContentAutoAcceptDraft, forgetWebContentAutoAccept } from "@/fe
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
-import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
-import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+import { useVoicePlayback } from "@/features/voice/hooks/useVoicePlayback";
+import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 
-/* eslint-disable react-doctor/no-giant-component -- This page is the chat orchestrator: conversation CRUD plus the prop assembly ChatDisplayShell needs in one place. The race-coupled send/regenerate/resume/cancel loops now live in useChatStreamController; transport, model, agent and revision-selection lifecycles live in their own modules. */
+/* eslint-disable react-doctor/no-giant-component -- This page is the chat orchestrator: conversation CRUD plus the prop assembly ChatDisplayShell needs in one place. The race-coupled send/regenerate/resume/cancel loops live in useChatStreamController; transport, model, agent and revision-selection lifecycles live in their own modules. */
 
 // Fallback for the cache updaters below when they run before the list query has landed: an empty list with no known
 // message-size limit (which simply means the composer runs no size pre-check until the real fetch arrives).
@@ -59,7 +59,7 @@ export interface ChatSetupDownload {
 export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownload?: ChatSetupDownload } = {}) {
 	const { t } = useTranslation();
 	// Owner-embedded mode (a work session pinning its own conversation). `/chat` passes no scope and every branch
-	// below falls back to the exact behaviour it had before the prop existed.
+	// below falls back to the exact behavior it had before the prop existed.
 	const isScoped = scope !== undefined;
 	const { confirm } = useConfirm();
 	const queryClient = useQueryClient();

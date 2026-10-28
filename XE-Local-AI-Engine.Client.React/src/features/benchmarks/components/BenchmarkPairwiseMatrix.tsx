@@ -31,7 +31,7 @@ function VerdictCell({ comparison, runAId }: { comparison: BenchmarkComparison |
 	// in both columns — which is what makes a disagreement between the two columns visible as a disagreement.
 	const winner = comparison.verdict === "tie" ? null : comparison.verdict === "a" ? runAId : comparison.runBId;
 	// A verdict over a cut-off answer graded a fragment. It still counts in the fit, so the flag is the only thing
-	// that stops the reader taking it for a judgement of the whole answer.
+	// that stops the reader taking it for a judgment of the whole answer.
 	const truncated = comparison.answerATruncated || comparison.answerBTruncated;
 	return (
 		<Group gap={4} wrap="nowrap">

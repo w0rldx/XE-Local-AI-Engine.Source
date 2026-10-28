@@ -203,7 +203,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.False(dispatcher.HasApprovalSubscribers, "The approval handler must be detached once the stream ends.");
     }
 
-    /// <summary>R7-03: a turn queued behind a benchmark measurement on the invocation slot carried no reason.</summary>
+    /// <summary>A turn queued behind a benchmark measurement on the invocation slot says why it waits.</summary>
     [Test]
     public async Task RegenerateAsync_QueuedBehindABenchmarkMeasurement_SaysSo()
     {
@@ -475,7 +475,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenTheRunsSearchToolReturnsHits_RecordsThemAsTheVariantsSources()
     {
-        // W2-04 parity with the send path: hits the rerun's search tool returned land on the regenerated variant.
+        // Parity with the send path: hits the rerun's search tool returned land on the regenerated variant.
         await using var provider = await BuildProviderAsync("regeneration-kb-tool-sources.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
@@ -1447,7 +1447,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenTheBoundAgentDefinitionIsGone_EmitsOneAgentUnavailableNotice()
     {
-        // R4-01 send/regenerate parity: a rerun of a conversation whose bound agent was deleted says so.
+        // Send/regenerate parity: a rerun of a conversation whose bound agent was deleted says so.
         await using var provider = await BuildProviderAsync("regeneration-agent-unavailable.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var agentDefinitionId = Guid.NewGuid();
@@ -1927,7 +1927,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
     {
         // Send-path parity: the operator's node-level "Maximum message request timeout" (900s here) must bound a
-        // regenerated turn too. Before the fix the package carried a null timeout block and the builder's own default
+        // regenerated turn too. A null timeout block in the package would let the builder's own default
         // cut long reruns off with FailureCategory=Timeout. 900 is deliberately NOT the default, so this still fails
         // if the wiring is dropped. Tool-call/stream-idle keep their defaults.
         await using var provider = await BuildProviderAsync("regeneration-node-timeout.sqlite");
@@ -2606,7 +2606,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenTheConversationIsCompacted_SendsTheSynopsisInPlaceOfTheCoveredHistory()
     {
-        // The regenerate path ignored the conversation's compaction synopsis entirely and re-sent every covered
+        // The regenerate path must not ignore the conversation's compaction synopsis and re-send every covered
         // message verbatim — the exact context the synopsis exists to replace, and a context-window blow-up on a
         // conversation that was compacted precisely because it no longer fit.
         await using var provider = await BuildProviderAsync("regeneration-compaction.sqlite");
@@ -2854,9 +2854,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WithASelectedPathSwitch_DoesNotSendTheSynopsisTheSwitchCleared()
     {
         // Persisting a request-supplied selection CLEARS the conversation's compaction synopsis (the synopsis was built
-        // on the previously-selected path). The conversation DTO used to be read BEFORE that write, so the rerun still
-        // spliced the now-deleted synopsis in and dropped the very messages it claimed to cover — the branch switch
-        // silently rewrote the model's view of the conversation.
+        // on the previously-selected path). Reading the conversation DTO BEFORE that write would make the rerun
+        // splice the now-deleted synopsis in and drop the very messages it claims to cover — the branch switch
+        // would silently rewrite the model's view of the conversation.
         await using var provider = await BuildProviderAsync("regeneration-compaction-path-switch.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
@@ -3424,8 +3424,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // A SignalR disconnect cancels ONLY the client cancellationToken (the SSE forward loop), never the
         // run/pump. The run must keep going on the unlinked runCancellation and the variant must persist Completed —
-        // never Cancelled/Interrupted from the client connection dropping. This is the send-path shape the regenerate
-        // path previously lacked (it linked the run CTS to the client token and cancelled it unconditionally).
+        // never Cancelled/Interrupted from the client connection dropping. This matches the send path; linking
+        // the run CTS to the client token would cancel it unconditionally.
         await using var provider = await BuildProviderAsync("regeneration-client-cancel.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
@@ -3503,7 +3503,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     public async Task RegenerateAsync_WhenUserCancelsThroughRegistry_TerminalizesVariantCancelled()
     {
         // Regression guard: a genuine user Stop (routed through the cancellation registry) must still cancel
-        // the run — the fix preserves user-cancel while decoupling the run from the client connection.
+        // the run — user-cancel is kept while the run is decoupled from the client connection.
         await using var provider = await BuildProviderAsync("regeneration-user-cancel.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
@@ -3793,8 +3793,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     // ChatTurnResolver resolves capabilities through the shared IModelCapabilityResolver, so these tests compose the
-    // real one over the same substituted collaborators they used to hand the turn resolver directly — the routing
-    // decision under test is unchanged, it just lives in one place now.
+    // real one over the same substituted collaborators — the routing
+    // decision under test lives in one place.
     private static IModelCapabilityResolver CreateModelCapabilityResolver(IModelClassificationService? classification = null,
         ILocalModelProviderResolver? providerResolver = null,
         IGgufModelCapabilityResolver? gguf = null,

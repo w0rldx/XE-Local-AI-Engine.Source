@@ -55,7 +55,7 @@ function processesRoute(processes: readonly { pid: number; name: string; hasAudi
 	return jsonRoute("get", "transcription/capture/processes", { supported: true, processes });
 }
 
-// The dialog also reads the weight catalogue, to say up front when this node has no model at all rather than letting
+// The dialog also reads the weight catalog, to say up front when this node has no model at all rather than letting
 // the operator pick a file and discover it from the runtime's own exception after the upload.
 function modelsRoute(installed: boolean) {
 	return jsonRoute("get", "transcription/models", {
@@ -367,7 +367,7 @@ describe("NewTranscriptionSessionDialog", () => {
 	});
 
 	// WASAPI captures the target process AND its descendants — there is no "only this application" mode — so the
-	// copy states the one behaviour instead of the dialog offering a scope the platform does not have.
+	// copy states the one behavior instead of the dialog offering a scope the platform does not have.
 	it("says the application's child processes are captured too", async () => {
 		server.use(runtimeRoute(true));
 		renderDialog();
@@ -377,7 +377,7 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(screen.getByText("Captures this application and its child processes.")).toBeDefined();
 	});
 
-	// M1: `lastSourceKind` is persisted but the option list is not, so a box that stopped reporting support — or a
+	// `lastSourceKind` is persisted but the option list is not, so a box that stopped reporting support — or a
 	// runtime read that has not answered — used to leave the SegmentedControl on a value absent from its own data:
 	// nothing highlighted, an empty picker, and Create disabled with nothing explaining why.
 	it("falls back to a visible source when the remembered one is no longer offered", async () => {
@@ -400,7 +400,7 @@ describe("NewTranscriptionSessionDialog", () => {
 		expect(screen.queryByTestId("new-transcription-session-process")).toBeNull();
 	});
 
-	// M3: the application the operator picked can exit while the dialog is open. A refresh then returns a list it is
+	// The application the operator picked can exit while the dialog is open. A refresh then returns a list it is
 	// not in, and a stored pid would leave a blank Select over a live selection — creating the row against a process
 	// nobody can capture, which only fails much later, at Start.
 	it("drops the chosen application when a refresh no longer lists it", async () => {
@@ -445,7 +445,7 @@ describe("NewTranscriptionSessionDialog", () => {
 	});
 
 	// A fresh node has no weights, and the runtime only says so as a raw exception once the recording has already
-	// been uploaded. The catalogue answers it before any of that, so the dialog names it and points at the fix.
+	// been uploaded. The catalog answers it before any of that, so the dialog names it and points at the fix.
 	it("warns that no transcription model is installed and names where to get one", async () => {
 		server.use(modelsRoute(false));
 		renderDialog();

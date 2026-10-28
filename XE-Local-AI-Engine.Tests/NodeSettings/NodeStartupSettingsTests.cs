@@ -60,7 +60,7 @@ public sealed class NodeStartupSettingsTests : IDisposable
         AssertEx.True(sut.ExternalAppsAwaitingCatalog);
     }
 
-    /// <summary>Rc.3 decision D6: the bridge flag needs the switch AND a catalog that lists an application at startup.</summary>
+    /// <summary>The bridge flag needs the switch AND a catalog that lists an application at startup.</summary>
     [Test]
     public void Read_WhenTheSwitchIsOnAndTheCachedCatalogListsAnApplication_StartsExternalApps()
     {

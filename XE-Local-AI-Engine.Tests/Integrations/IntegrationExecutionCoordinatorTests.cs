@@ -974,7 +974,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     [Test]
     public async Task StartAsync_WhenTheWholeSweepKeepsFailing_FailsHostStartRatherThanServingWithWedgedRows()
     {
-        // The sweep used to swallow this and start anyway, leaving every interrupted row non-terminal AND still
+        // The sweep must not swallow this and start anyway, leaving every interrupted row non-terminal AND still
         // counted against its principal's cap. McpAgentRunRecoveryService's shape: log critical, rethrow, let the
         // supervisor restart.
         using var harness = new Harness();
@@ -1088,7 +1088,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     public async Task Run_WhenTheDefinitionTurnsIntoAnOrchestratorBetweenTheTwoReads_RefusesItBeforeTheRunner()
     {
         // The resolver re-reads the definition through its own fresh query, so the Kind the package is BUILT from is
-        // not the Kind the step-1 guard judged. An operator switching the definition mid-flight used to slip through
+        // not the Kind the step-1 guard judged. An operator switching the definition mid-flight must not slip through
         // that window and get a Completed result from an orchestrator that ran no participant at all.
         using var harness = new Harness
         {
@@ -1108,8 +1108,8 @@ public sealed class IntegrationExecutionCoordinatorTests
     [Test]
     public async Task Finish_WhenRepeatedCancelsDriftTheVersionAcrossTheRetries_StillLandsExactlyOneCancelledTerminal()
     {
-        // Every cancel used to re-stamp the durable marker under a fresh version. Two of them landing between the
-        // coordinator's lost CAS and its ONE retry exhausted the budget, the false was dropped, and the row stayed
+        // A cancel that re-stamps the durable marker under a fresh version lets two of them landing between the
+        // coordinator's lost CAS and its ONE retry exhaust the budget, drop the false, and leave the row
         // Running forever with its admission slot held.
         using var harness = new Harness
         {

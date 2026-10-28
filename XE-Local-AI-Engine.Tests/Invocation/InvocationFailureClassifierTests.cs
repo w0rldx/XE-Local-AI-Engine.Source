@@ -85,7 +85,7 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal("The provider rate-limited this request, retry after 12.", classification.Message);
     }
 
-    // R5-05: a work session step that reaches its cap is a designed stop, not a context-window overflow.
+    // A work session step that reaches its cap is a designed stop, not a context-window overflow.
     [Test]
     [Arguments(true)]
     [Arguments(false)]
@@ -261,7 +261,7 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal(expectedMessage, classification.Message);
     }
 
-    // The 2026-10-26 enterprise gateway samples: a wrong base path, the wrong API surface, backend RBAC, an expired token, and an
+    // Enterprise gateway samples: a wrong base path, the wrong API surface, backend RBAC, an expired token, and an
     // "unsupported operation" body read under any status (shown under 400, 404 and 500). Other apim_policy_error faults stay plain server errors.
     [Test]
     [Arguments(500, "APIM policy error", """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""",
@@ -326,7 +326,7 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal($"{ServerErrorMessage} ({longMessage[..300].TrimEnd()})", classification.Message);
     }
 
-    /// <summary>R2-05: a model server that died mid-stream is named, with the resend that reloads it, never the raw framework text.</summary>
+    /// <summary>A model server that died mid-stream is named, with the resend that reloads it, never the raw framework text.</summary>
     [Test]
     public void MapFailure_ResponseEndedMidStream_NamesTheExitedServerAndTheResend()
     {

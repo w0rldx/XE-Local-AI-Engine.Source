@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Automation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -25,7 +26,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     Maps the single-message domain validation exceptions to a 400 whose body is byte-identical to the
-///     <c>AddError(exception.Message) + Send.ErrorsAsync()</c> pair the endpoints used to write by hand.
+///     <c>AddError(exception.Message) + Send.ErrorsAsync()</c> pair an endpoint would otherwise write by hand.
 /// </summary>
 /// <remarks>
 ///     <see cref="FastEndpointsProblemWriter" /> owns that reproduction; new single-message validation exceptions
@@ -78,8 +79,8 @@ public sealed class DomainValidationExceptionHandler : IExceptionHandler
 
         _logger.LogWarning(exception,
             "Handled domain validation exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
-            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
+            LogValueSanitizer.Sanitize(httpContext.Request.Method),
+            LogValueSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status400BadRequest,
             ProblemDetailsExtensions.ResolveTraceId(httpContext),
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",

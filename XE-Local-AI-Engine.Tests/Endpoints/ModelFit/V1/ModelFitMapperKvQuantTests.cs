@@ -7,10 +7,8 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Mapper tests for the advisory quantized-KV fields on the latest-recommendations projection. The advisory rides
-///     the persisted diagnostics blob (<c>kv_quant*</c> keys) and is extracted like the other catalog-lane fields; a
-///     blob without the keys (explore row / pre-advisory snapshot) must yield all-null advisory fields, and the row's
-///     primary fit fields must never be affected by the advisory's presence.
+///     The advisory quantized-KV fields, read from the diagnostics blob's <c>kv_quant*</c> keys like other catalog-lane
+///     fields: a blob without them yields all-null advisory fields, and the primary fit fields never depend on them.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelFitMapperKvQuantTests

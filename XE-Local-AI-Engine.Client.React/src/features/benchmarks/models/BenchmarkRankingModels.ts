@@ -119,7 +119,7 @@ export const isBenchmarkRunIncomplete = (run: Pick<BenchmarkRunSummary, "primary
 
 /**
  * The base model a row belongs to, for DISPLAY. The server key is lowercased for Hugging Face models so two casings of
- * one repo cannot split a group; this keeps the operator's own capitalisation for the header by deriving it from the
+ * one repo cannot split a group; this keeps the operator's own capitalization for the header by deriving it from the
  * run's name instead. Grouping still keys off {@link BenchmarkRunSummary.modelGroupKey} — never off this.
  */
 export function benchmarkBaseModelLabel(modelName: string): string {

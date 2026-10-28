@@ -431,7 +431,7 @@ public sealed partial class InvocationRunner
                 continue;
             }
 
-            // ask_user rides the approval seam for its BLOCKING behaviour, not a risk verdict (AskUserToolHandler): its round-trip collects an ANSWER
+            // ask_user rides the approval seam for its BLOCKING behavior, not a risk verdict (AskUserToolHandler): its round-trip collects an ANSWER
             // and then always approves, so the framework executes the tool and the handler returns that answer. Every other tool keeps the approve/deny path.
             if (ToolApprovalCoordinator.IsUserQuestionRequest(approvalRequest))
             {
@@ -463,7 +463,7 @@ public sealed partial class InvocationRunner
         loop.CurrentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
     }
 
-    // N-85: a denied tool leaves the offer for the rest of this turn, so the model cannot request it again and then invent its result; the next turn
+    // A denied tool leaves the offer for the rest of this turn, so the model cannot request it again and then invent its result; the next turn
     // offers it again. The MAF skill tools stay: their approval is per skill, and one denied skill must not hide the others.
     private static void WithholdDeniedTool(SingleAgentLoop loop, ToolApprovalRequestContent approvalRequest)
     {
@@ -497,8 +497,8 @@ public sealed partial class InvocationRunner
     // plus a user nudge, with thinking off for the rest of the turn.
     private static void ArmReasoningToolCallReprompt(SingleAgentLoop loop, List<AgentResponseUpdate> segmentUpdates, StreamState stream)
     {
-        // The folded segment keeps every executed call and result but no reasoning, so the unparsed call is not replayed. A nudge recovered
-        // the bare 9B 5/5 at b10201 (.tmp/model-matrix-data/phase2/track-1b/probe-summary.txt).
+        // The folded segment keeps every executed call and result but no reasoning, so the unparsed call is not replayed. The nudge recovers
+        // a small thinking model that wrote its call into the reasoning.
         loop.ReasoningToolCallReprompted = true;
         foreach (var folded in segmentUpdates.ToAgentResponse().Messages)
         {
@@ -528,7 +528,7 @@ public sealed partial class InvocationRunner
         ChatOutputCap outputCap,
         CancellationToken invocationToken)
     {
-        // A thinking model leaks its deliberation into the answer with thinking off too (LFM2.5 at effort none, model-matrix W3),
+        // A thinking model leaks its deliberation into the answer with thinking off too (LFM2.5 at effort none, for one),
         // so its round is checked whether or not the reasoning channel carried anything.
         if ((package.SupportsThinking || stream.ReasoningBuilder.Length > loop.FinalRoundReasoningStart) && !invocationToken.IsCancellationRequested
                                                                                                          && await ReclassifyLeakedThinkTextAsync(transport, stream, loop.FinalRoundContentStart,
@@ -580,7 +580,7 @@ public sealed partial class InvocationRunner
         && stream.ReasoningBuilder.ToString(reasoningStart, stream.ReasoningBuilder.Length - reasoningStart).Contains("<tool_call>", StringComparison.Ordinal);
 
     // Strict: the whole trimmed round is one or more <tool_call> blocks and nothing else, so an answer that explains the syntax is untouched.
-    // The last block may be unclosed: a model that stops mid-call (F-13) leaves only markup all the same.
+    // The last block may be unclosed: a model that stops mid-call leaves only markup all the same.
     private static bool AnswerIsOnlyToolCallMarkup(StreamState stream, int contentStart)
     {
         const string OpenTag = "<tool_call>";
@@ -616,8 +616,8 @@ public sealed partial class InvocationRunner
     ///     the terminal message persists them.
     /// </summary>
     /// <remarks>
-    ///     Only residue at the start of the answer: the text before a stray <c>&lt;/think&gt;</c> (Qwen3.5 9B, F19), or for a
-    ///     thinking model a whole <c>&lt;think&gt;…&lt;/think&gt;</c> block that opens the answer (Qwen3.5 0.8B, V2). A block after
+    ///     Only residue at the start of the answer: the text before a stray <c>&lt;/think&gt;</c> (Qwen3.5 9B), or for a
+    ///     thinking model a whole <c>&lt;think&gt;…&lt;/think&gt;</c> block that opens the answer (Qwen3.5 0.8B). A block after
     ///     answer text is quoted markup and stays, tags included. The live stream showed it as the answer; the terminal event
     ///     replaces it. Text that would leave no answer stays the answer, tags dropped. For a model that cannot think, a close
     ///     tag after its own open tag is quoted markup and stays. Returns whether answer text remains, or null.
@@ -721,7 +721,7 @@ public sealed partial class InvocationRunner
     /// </remarks>
     private readonly record struct RequestedToolCall(string Name, object? Arguments, string? SerializedArguments);
 
-    /// <summary>The single-agent loop's state across segments and updates: what RunSingleAgentAsync held as locals before the split.</summary>
+    /// <summary>The single-agent loop's state across segments and updates, shared by RunSingleAgentAsync's helpers.</summary>
     private sealed class SingleAgentLoop
     {
         public required InvocationAgentContext AgentContext { get; init; }

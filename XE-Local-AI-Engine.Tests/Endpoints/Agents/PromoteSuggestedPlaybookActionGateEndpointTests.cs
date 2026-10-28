@@ -213,7 +213,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         var service = serviceProvider.GetRequiredService<IPlaybookActionService>();
         var current = AssertEx.NotNull(await service.GetByIdAsync(actionId));
 
-        // The eval gate recomputes the fingerprint over the current behaviour-affecting context, so a fabricated
+        // The eval gate recomputes the fingerprint over the current behavior-affecting context, so a fabricated
         // passing eval must carry a matching fingerprint (computed from the SAME services/model the gate reads) to reach
         // the cap check rather than being blocked as stale.
         var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId));

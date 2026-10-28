@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class DevWorkflowNodeRunTests
 {
     /// <summary>
-    ///     T-14: a retry bumps the attempt in place — still one row per (run, node key) — and the history the schema no
-    ///     longer holds is reconstructible from the event log, which is what makes that trade honest.
+    ///     A retry bumps the attempt in place — still one row per (run, node key) — and the history the schema does
+    ///     not hold is reconstructible from the event log, which is what makes that trade honest.
     /// </summary>
     [Test]
     public async Task RetryingANode_BumpsTheAttemptInPlaceAndLeavesTheHistoryInTheEventLog()
@@ -87,7 +87,7 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
-    ///     FU2-3: an operator's Retry is allowed AT the cap and buys ONE more attempt, so it raises the row's own cap
+    ///     An operator's Retry is allowed AT the cap and buys ONE more attempt, so it raises the row's own cap
     ///     alongside the attempt it spends. Without it the row reads "attempt 4 of 3" — the runtime claiming it broke
     ///     its own budget where a person granted one more try — and the retry policy's cap check refuses the very
     ///     attempt that was just bought.
@@ -286,7 +286,7 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(expected: 2, nodeRun.Attempt);
     }
 
-    /// <summary>T-15: one decision per attempt, several over a node-run's life, and a replayed operation reads its own body back.</summary>
+    /// <summary>One decision per attempt, several over a node-run's life, and a replayed operation reads its own body back.</summary>
     [Test]
     public async Task Decisions_AreOnePerAttemptAndReplayReturnsTheRecordedBody()
     {

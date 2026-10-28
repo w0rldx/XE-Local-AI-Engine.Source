@@ -52,7 +52,7 @@ public sealed class SandboxProviderRegistrationTests
 
     /// <summary>
     ///     Pins today's shipped configuration, which sets only <c>AgentHome:Sandbox:Provider</c>: Development Mode
-    ///     still runs on <c>process</c>, so introducing the seam changed no runtime behaviour.
+    ///     still runs on <c>process</c>, so introducing the seam changed no runtime behavior.
     /// </summary>
     [Test]
     public async Task Container_WhenOnlyTheAgentSectionIsConfigured_RunsDevelopmentOnThatProvider()

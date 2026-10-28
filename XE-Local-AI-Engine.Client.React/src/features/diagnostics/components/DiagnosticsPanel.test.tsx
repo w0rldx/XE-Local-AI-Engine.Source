@@ -3,8 +3,8 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
-import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
@@ -31,11 +31,11 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: fixtures.confirm }),
 }));
 
-vi.mock("@/features/diagnostics/BuildSnapshot", () => ({
+vi.mock("@/features/diagnostics/models/BuildSnapshot", () => ({
 	captureSnapshot: (...args: unknown[]) => fixtures.captureSnapshot(...args),
 }));
 
-vi.mock("@/features/diagnostics/SupportBundle", () => ({
+vi.mock("@/features/diagnostics/api/SupportBundle", () => ({
 	exportSupportBundle: (...args: unknown[]) => fixtures.exportSupportBundle(...args),
 }));
 
@@ -43,7 +43,7 @@ vi.mock("@/features/diagnostics/queries/useNodeInfo", () => ({
 	useNodeInfo: () => ({ data: fixtures.nodeInfo }),
 }));
 
-vi.mock("@/features/diagnostics/UseSnapshots", () => ({
+vi.mock("@/features/diagnostics/queries/useSnapshots", () => ({
 	useSnapshots: () => ({ data: fixtures.snapshots, isLoading: fixtures.isLoading, isError: fixtures.isError }),
 	useDeleteSnapshot: () => ({ mutate: fixtures.deleteMutate, isPending: false, variables: undefined }),
 	useClearSnapshots: () => ({ mutate: fixtures.clearMutate, isPending: false }),
@@ -170,7 +170,7 @@ describe("DiagnosticsPanel", () => {
 		expect(fixtures.importMutate.mock.calls[0]?.[0]).toBe(file);
 	});
 
-	// The Import button is the labelled control; the input behind it is display:none and only opens the OS picker, so
+	// The Import button is the labeled control; the input behind it is display:none and only opens the OS picker, so
 	// it belongs out of the accessibility tree rather than in it as a nameless file field.
 	it("keeps the hidden import input out of the accessibility tree", () => {
 		const { container } = renderPanel(<DiagnosticsPanel />);

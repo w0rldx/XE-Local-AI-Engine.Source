@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     A single non-fatal, in-turn notice for an invocation: a behaviour the runner would otherwise only log
+///     A single non-fatal, in-turn notice for an invocation: a behavior the runner would otherwise only log
 ///     server-side is instead surfaced to the chat client as a sanitized, structured notice.
 /// </summary>
 /// <remarks>
@@ -73,8 +73,8 @@ public enum TurnNoticeKind
     ///     and use them by calling <c>list_tools</c>.
     /// </summary>
     /// <remarks>
-    ///     Counts only — the notice never names a tool. Hiding a tool is a context-budget optimisation and never an
-    ///     authorisation change: a held-back tool the model names still executes under exactly the same approval rules.
+    ///     Counts only — the notice never names a tool. Hiding a tool is a context-budget optimization and never an
+    ///     authorization change: a held-back tool the model names still executes under exactly the same approval rules.
     /// </remarks>
     ToolsFiltered = 6,
 

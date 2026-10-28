@@ -63,7 +63,7 @@ public sealed class ModelLaunchArgumentsValidationTests
     /// </summary>
     /// <remarks>
     ///     This is the assertion a <c>Validator&lt;T&gt;</c> is most likely to break: FluentValidation collects every
-    ///     failing rule unless the class-level cascade is set to stop at the first, and the cascade honours
+    ///     failing rule unless the class-level cascade is set to stop at the first, and the cascade honors
     ///     DECLARATION order, which nothing but this test holds to the handler's. Every case below breaks at least
     ///     two rules — the second pins length-before-reserved, the one boundary that lies between two rules on the
     ///     same property, where a reordering leaves no other trace.

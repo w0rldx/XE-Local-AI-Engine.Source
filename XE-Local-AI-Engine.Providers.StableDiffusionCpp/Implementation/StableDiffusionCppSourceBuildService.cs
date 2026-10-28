@@ -500,7 +500,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
         finally
         {
-            TryDeleteDirectory(WorkRoot);
+            BestEffortFile.TryDeleteDirectory(WorkRoot);
         }
     }
 
@@ -656,7 +656,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
         if (File.Exists(MarkerPath) || Directory.Exists(WorkRoot))
         {
-            TryDeleteDirectory(WorkRoot);
+            BestEffortFile.TryDeleteDirectory(WorkRoot);
             lock (_stateLock)
             {
                 _phase = StableDiffusionCppSourceBuildPhase.Failed;
@@ -678,7 +678,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
 
     private void PrepareWorkTree()
     {
-        TryDeleteDirectory(WorkRoot);
+        BestEffortFile.TryDeleteDirectory(WorkRoot);
         StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(BuildRoot);
         StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(WorkRoot);
     }
@@ -788,21 +788,6 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
     private static IReadOnlyList<string> GitArguments(params string[] arguments)
     {
         return [.. GitHardeningArguments, .. arguments];
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup; the caller reports the primary operation.
-        }
     }
 
     private sealed record BuildCompletion

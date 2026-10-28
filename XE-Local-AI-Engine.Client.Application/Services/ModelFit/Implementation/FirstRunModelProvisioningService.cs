@@ -207,7 +207,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _ = Task.Run(() => RuntimeDeviceAuditWarmup.WarmAsync(_deviceAudit, variant, _logger, ct), CancellationToken.None);
 
         // Download the default GGUF through the coordinator's detached path, so progress/cancel AND the llamacpp model_provider_map
-        // write happen through the SAME code as an operator-initiated download (FRR-2), under the canonical {repo:quant} identity.
+        // write happen through the SAME code as an operator-initiated download, under the canonical {repo:quant} identity.
         var request = new GgufModelRequest
         {
             RepoId = repoId.Trim(),

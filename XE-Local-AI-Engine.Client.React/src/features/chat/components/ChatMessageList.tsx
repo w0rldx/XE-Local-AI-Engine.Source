@@ -104,7 +104,7 @@ export function ChatMessageList({
 			(messages ?? conversation?.messages ?? [])
 				// Keep failed turns even though they have no content/reasoning: they carry an `error` that must
 				// survive reload (rendered as an error block inside the bubble, with a regenerate affordance).
-				// Keep cancelled turns for the same reason: a user-cancelled turn with no partial output still
+				// Keep canceled turns for the same reason: a user-canceled turn with no partial output still
 				// renders its neutral "Generation stopped" line so the stop is honestly reflected on reload.
 				.filter(
 					(message) =>

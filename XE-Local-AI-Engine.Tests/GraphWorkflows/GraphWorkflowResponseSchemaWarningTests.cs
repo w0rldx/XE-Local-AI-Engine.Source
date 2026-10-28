@@ -102,7 +102,7 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     /// <summary>
     ///     The same catch, reached by the route an author can actually take. A model pin carrying an internal newline is
     ///     well-formed JSON and the parser has no rule against it, so it reaches the resolver — where the map read
-    ///     lease's key normalisation rejects it. Nothing about that is the graph's fault, and it must not 500 the
+    ///     lease's key normalization rejects it. Nothing about that is the graph's fault, and it must not 500 the
     ///     editor's probe.
     /// </summary>
     [Test]
@@ -303,8 +303,8 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     }
 
     /// <summary>
-    ///     The tester's case: an invalid graph used to throw before any warning ran, so the editor saw the error and never learnt the
-    ///     pinned model was missing too. Validate reports both lists; it still refuses the graph.
+    ///     An invalid graph must not throw before any warning runs, or the editor sees the error and never learns the
+    ///     pinned model is missing too. Validate reports both lists; it still refuses the graph.
     /// </summary>
     [Test]
     public async Task ValidateAsync_WhenTheGraphHasErrorsAndAnUninstalledPin_ReportsTheErrorsAndTheWarning()

@@ -81,7 +81,7 @@ internal sealed partial class IntegrationExecutionCoordinator
 
             context.Version = row.Version;
 
-            // The re-read is this path's own first look at the row, so it honours a marker the caller's outcome
+            // The re-read is this path's own first look at the row, so it honors a marker the caller's outcome
             // predates before it ever attempts a CAS.
             var (marked, markedCategory, markedSummary) = HonourStopMarker(row, status, failureCategory, failureSummary);
             _ = await TerminalizeAsync(context, NonTerminalStatuses, marked, markedCategory, markedSummary);
@@ -99,7 +99,7 @@ internal sealed partial class IntegrationExecutionCoordinator
     /// <remarks>
     ///     A lost CAS or a throw abandons the reservation: an unresolved one is not a hole readers tolerate but a stall that
     ///     parks every reader on this execution until the entry is evicted. Whoever's CAS returns <see langword="true" /> owns the
-    ///     terminal artefacts — the published event and the one kind-3 audit row — so a queued cancel cannot produce two cancelled
+    ///     terminal artifacts — the published event and the one kind-3 audit row — so a queued cancel cannot produce two cancelled
     ///     events and two audit rows. The retries are bounded rather than single because each cancel bumps the row's version
     ///     without terminalizing it, and every reload re-runs <see cref="HonourStopMarker" />.
     /// </remarks>
@@ -140,7 +140,7 @@ internal sealed partial class IntegrationExecutionCoordinator
     /// <remarks>
     ///     A <c>Completed</c> outcome is the one exception and is left alone: its assistant turn is persisted and its
     ///     <c>external.output</c> payloads are committed, so a row reading <c>Cancelled</c> over them would contradict
-    ///     every artefact the caller can read. The cancel endpoint's 202 says the stop was REQUESTED, never that it
+    ///     every artifact the caller can read. The cancel endpoint's 202 says the stop was REQUESTED, never that it
     ///     arrived in time.
     /// </remarks>
     private static TerminalOutcome HonourStopMarker(IntegrationExecutionSnapshot row,

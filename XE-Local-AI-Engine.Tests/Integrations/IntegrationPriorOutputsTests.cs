@@ -87,7 +87,7 @@ public sealed class IntegrationPriorOutputsTests
     {
         var newestFirst = Enumerable.Range(start: 1, count: 8).Reverse().Select(index => Envelope(index, padding: 200)).ToArray();
 
-        // The budget bounds the WHOLE message, so the room the entries used to get is now named as such: this test is
+        // The budget bounds the WHOLE message, so the room left for the entries is named as such: this test is
         // about which envelopes survive a tight budget, not about the wrapper's cost.
         var composed = AssertEx.NotNull(IntegrationPriorOutputsComposer.Compose(newestFirst,
             IntegrationPriorOutputsComposer.FixedOverheadBytes + 700,
@@ -137,10 +137,10 @@ public sealed class IntegrationPriorOutputsTests
     [Test]
     public void TheWholeComposedMessage_FitsTheBudget_NotJustItsEntries()
     {
-        // The exact shape that used to overflow: eight padded envelopes against a 700-byte budget. Before the fix the
-        // budget bounded the rendered entries alone, so the preamble, the fence's markers and metadata, and the
-        // truncation notice — around 500 bytes of wrapper — were spent on top of it and the composed message came back
-        // at roughly 1,200 bytes for a 700-byte option.
+        // The shape that overflows when only the entries are budgeted: eight padded envelopes, a 700-byte budget.
+        // Bounding the rendered entries alone spends the preamble, the fence's markers and metadata, and the truncation
+        // notice — around 500 bytes of wrapper — on top of it, so the composed message comes back at about 1,200 bytes
+        // for a 700-byte option.
         var newestFirst = Enumerable.Range(start: 1, count: 8).Reverse().Select(index => Envelope(index, padding: 200)).ToArray();
         const int Budget = 700;
 
@@ -246,7 +246,7 @@ public sealed class IntegrationPriorOutputsTests
     [Test]
     public async Task EightPriorExecutionsWithOneOutputEach_ReplayAllEight()
     {
-        // ADR 0008 R4-9(b) promises the last 8. The CURRENT execution occupies one row of the page, so a page of exactly
+        // ADR 0008 promises the last 8. The CURRENT execution occupies one row of the page, so a page of exactly
         // MaxPayloads returns seven prior ones and the eighth is lost.
         using var harness = new Harness();
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);

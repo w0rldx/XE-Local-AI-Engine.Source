@@ -276,7 +276,7 @@ public sealed class CanvasWorkflowImportReadTests
         await using var context = interceptor is null
             ? AgentDefinitionTestContextFactory.Create(probe.DatabasePath, keyHolder)
             : AgentDefinitionTestContextFactory.Create(probe.DatabasePath, keyHolder, interceptor);
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<CanvasWorkflowImportReadTests>();
         var snapshot = await CanvasWorkflowImport.ReadAsync(context, logger);
         var store = new GraphWorkflowStore(context, TimeProvider.System);
         var definitions = new GraphWorkflowDefinitionService(store,
@@ -313,50 +313,11 @@ public sealed class CanvasWorkflowImportReadTests
         return id;
     }
 
-    private static async Task<(CanvasWorkflowImportSnapshot Snapshot, RecordingLogger Logger)> ReadAsync(MigrationSchemaProbe probe)
+    private static async Task<(CanvasWorkflowImportSnapshot Snapshot, RecordingLogger<CanvasWorkflowImportReadTests> Logger)> ReadAsync(MigrationSchemaProbe probe)
     {
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<CanvasWorkflowImportReadTests>();
         using var keyHolder = new NullNodeSqliteKeyHolder();
         await using var dbContext = AgentDefinitionTestContextFactory.CreateForMigration(probe.DatabasePath, keyHolder);
         return (await CanvasWorkflowImport.ReadAsync(dbContext, logger), logger);
-    }
-
-    /// <summary>Records the rendered message of every entry, so the log assertions above can name what an operator reads.</summary>
-    private sealed class RecordingLogger : ILogger
-    {
-        private readonly List<(LogLevel Level, string Message)> _entries = [];
-
-        public bool HasEntry(LogLevel level, string fragment)
-        {
-            lock (_entries)
-            {
-                return _entries.Any(entry => entry.Level == level && entry.Message.Contains(fragment, StringComparison.Ordinal));
-            }
-        }
-
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull =>
-            NullScope.Instance;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-
-            lock (_entries)
-            {
-                _entries.Add((logLevel, formatter(state, exception)));
-            }
-        }
-
-        private sealed class NullScope : IDisposable
-        {
-            public static NullScope Instance { get; } = new();
-
-            public void Dispose()
-            {
-            }
-        }
     }
 }

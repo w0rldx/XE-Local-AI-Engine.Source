@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal sealed class DevWorkflowRetryPolicy
 {
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     The failure classes another attempt can answer. The three that are absent are absent on evidence: a
@@ -72,7 +72,7 @@ internal sealed class DevWorkflowRetryPolicy
 
     /// <summary>
     ///     Whether a re-attempt's delay has passed. Answers <see langword="true" /> for every node run that never asked
-    ///     for one, which is almost all of them, and forgets the entry once it has been honoured.
+    ///     for one, which is almost all of them, and forgets the entry once it has been honored.
     /// </summary>
     public bool IsReady(Guid nodeRunId)
     {
@@ -546,7 +546,7 @@ internal sealed class DevWorkflowRetryPolicy
             IncrementAttempt = true,
             ClearWorkSession = true,
             Outcome = outcome,
-            // The run-wide budget travels WITH the write, so the store re-checks it under the writer lock instead of trusting the caller's earlier read (FU3-4). Inert on a
+            // The run-wide budget travels WITH the write, so the store re-checks it under the writer lock instead of trusting the caller's earlier read. Inert on a
             // reset inside a route: those go through the route's own transaction, which admits the whole cascade once rather than each reset separately.
             MaxTotalAttempts = _options.MaxTotalAttempts
         }, delayUntil);
@@ -652,7 +652,7 @@ internal sealed class DevWorkflowRetryPolicy
     /// </summary>
     /// <remarks>
     ///     Restating it lets restart recovery count only <c>Σ(Attempt − 1)</c> and hand an interrupted row the slot a
-    ///     recorded-but-unapplied <c>Retry</c> had reserved (FU3-4). One definition, three callers: this policy, the
+    ///     recorded-but-unapplied <c>Retry</c> had reserved. One definition, three callers: this policy, the
     ///     reconciler, and — in its own SQL — the store's transactional admission.
     /// </remarks>
     internal static int Promised(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns, IReadOnlyList<DevWorkflowDecisionSnapshot> decisions) =>

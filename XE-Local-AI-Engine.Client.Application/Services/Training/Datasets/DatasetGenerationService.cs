@@ -18,7 +18,7 @@ public interface IDatasetGenerationService
     Task<TrainingDatasetRecord> StartAsync(Guid definitionId, long expectedDefinitionVersion, string name, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Requests cancellation: a queued dataset is terminalized directly, while a generating one is signalled
+    ///     Requests cancellation: a queued dataset is terminalized directly, while a generating one is signaled
     ///     through the executor's registry so it stops cooperatively and is still recorded as cancelled.
     /// </summary>
     /// <returns><see langword="false" /> for an unknown dataset or one whose work item is already terminal.</returns>
@@ -77,7 +77,7 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
             return false;
         }
 
-        // A running generation is signalled, never terminalized here: the executor owns the cooperative stop and the
+        // A running generation is signaled, never terminalized here: the executor owns the cooperative stop and the
         // terminal write, so cancelling from two places would race the work item.
         if (_cancellations.Cancel(datasetId))
         {

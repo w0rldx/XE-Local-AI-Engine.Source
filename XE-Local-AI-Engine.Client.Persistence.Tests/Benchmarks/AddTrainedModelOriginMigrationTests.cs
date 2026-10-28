@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     The <c>trained</c> origin has to be admitted by BOTH the hand-written EF converter pair on
-///     <c>BenchmarkRunConfiguration</c> and the database CHECK constraint. Missing either one turns the first benchmark
-///     run of a locally trained model into a throw at save time.
+///     The <c>trained</c> origin must be admitted by BOTH the hand-written EF converter pair on
+///     <c>BenchmarkRunConfiguration</c> and the database CHECK constraint; missing either makes the first benchmark run
+///     of a locally trained model throw at save.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddTrainedModelOriginMigrationTests : IDisposable

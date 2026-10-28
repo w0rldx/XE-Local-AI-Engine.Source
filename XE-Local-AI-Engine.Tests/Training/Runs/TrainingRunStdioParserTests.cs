@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The trainer's stdout is not clean: unsloth prints banners at import, torch warns freely, and both streams are
-///     merged into one. These pin that the parser reads protocol out of that noise and never mistakes noise for
-///     protocol — a banner misread as an event would reset the inactivity watchdog on a wedged run.
+///     The trainer's stdout is noisy (unsloth import banners, torch warnings, merged streams); the parser reads
+///     protocol out of it and never mistakes noise for protocol: a misread banner would reset a wedged run's watchdog.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class TrainingRunStdioParserTests

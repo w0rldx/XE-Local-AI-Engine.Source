@@ -129,8 +129,9 @@ brackets (`!=` excludes; combine properties inside one bracket, `[(Category=Unit
 --treenode-filter '/*/*/*/*[Category!=ExternalInfra]'
 ```
 
-Write the constant, never the string: `[Category(TestCategories.Unit)]`. Each test project declares its own
-`Categories/TestCategories.cs` and imports it globally from the project file, so the attribute needs no `using`.
+Write the constant, never the string: `[Category(TestCategories.Unit)]`. `TestCategories` lives in
+`XE-Local-AI-Engine.Client.Testing/Categories/TestCategories.cs`; each test project imports it globally from its project
+file (a project without a reference to Client.Testing links the file), so the attribute needs no `using`.
 One trap the compiler will not tell you about: `System.ComponentModel` declares a `CategoryAttribute` too, and a
 file-scoped `using` of that namespace silently wins over TUnit's — the class then carries no category at all while
 the source still reads correctly. A file that imports that namespace therefore also aliases

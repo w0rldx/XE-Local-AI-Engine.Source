@@ -130,7 +130,7 @@ public sealed class LlamaCppRuntimeEndpointTests
         await catalog.ReceivedWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    // The tester's phantom banner: the startup check runs BEFORE first-run provisioning writes installed-runtime.json,
+    // A phantom update banner: the startup check runs BEFORE first-run provisioning writes installed-runtime.json,
     // caching updateAvailable=true against installedTag=null, and the SPA's mount query passes no ?refresh.
     [Test]
     public async Task RuntimeStatus_WhenCachedSnapshotPredatesTheInstalledTag_RecomputesWithoutRefresh()

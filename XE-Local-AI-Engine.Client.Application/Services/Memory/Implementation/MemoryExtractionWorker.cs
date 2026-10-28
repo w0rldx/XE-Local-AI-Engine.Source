@@ -73,7 +73,7 @@ public sealed class MemoryExtractionWorker : BackgroundService
                 }
                 else
                 {
-                    // The reader signalled readiness but nothing was there (the writer completed between the wait and the
+                    // The reader signaled readiness but nothing was there (the writer completed between the wait and the
                     // read). Release the slot just taken so it is not leaked, then loop to re-observe writer completion.
                     ReleaseConcurrency();
                 }

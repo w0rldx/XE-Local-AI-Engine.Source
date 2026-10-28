@@ -26,7 +26,7 @@ public sealed class SessionApprovalEligibilityTests
         AssertEx.True(SessionApprovalEligibility.IsToolEligible(LoadSkillToolName, isFixedCustomTool: false));
         AssertEx.True(SessionApprovalEligibility.IsToolEligible(ReadSkillResourceToolName, isFixedCustomTool: false));
 
-        // The tools the card used to offer session scope for while the node silently treated the decision as "Once":
+        // Tools the card must not offer session scope for, since the node would silently treat the decision as "Once":
         // an MCP tool, the agent-home runner, a plain built-in, and run_skill_script (hard-excluded by design).
         AssertEx.False(SessionApprovalEligibility.IsToolEligible("mcp__filesystem__read_file", isFixedCustomTool: false));
         AssertEx.False(SessionApprovalEligibility.IsToolEligible("run_in_agent_home", isFixedCustomTool: false));
@@ -40,7 +40,7 @@ public sealed class SessionApprovalEligibilityTests
     public void IsToolEligible_ForACustomTool_TurnsOnFixedModeOnly()
     {
         // A Fixed custom tool runs a verbatim, operator-authored invocation, so one grant is bounded; a Parameterized
-        // one is once-or-deny because a single click must not authorise open-ended, model-chosen execution. The
+        // one is once-or-deny because a single click must not authorize open-ended, model-chosen execution. The
         // isFixedCustomTool flag is consulted ONLY for a custom__ name — the skill answer must not depend on it.
         AssertEx.True(SessionApprovalEligibility.IsToolEligible("custom__deploy", isFixedCustomTool: true));
         AssertEx.False(SessionApprovalEligibility.IsToolEligible("custom__deploy", isFixedCustomTool: false));

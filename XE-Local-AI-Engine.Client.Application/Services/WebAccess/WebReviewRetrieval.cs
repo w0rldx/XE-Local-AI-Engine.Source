@@ -9,7 +9,7 @@ using System.Text.Json;
 /// </remarks>
 internal sealed class WebReviewRetrieval
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     public required string ModelText { get; init; }
 

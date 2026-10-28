@@ -49,7 +49,7 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // Singleton, like both seams it composes.
         builder.Services.AddSingleton<ToolCatalogService>();
         // The single-named-tool invocation seam, next to the catalog it reads. Registration is UNCONDITIONAL — a feature flag gates
-        // behaviour, never registration — so no later caller reasons about another module's flag. Singleton, like every seam it composes.
+        // behavior, never registration — so no later caller reasons about another module's flag. Singleton, like every seam it composes.
         builder.Services.AddSingleton<IToolInvocationService, ToolInvocationService>();
         // The always-on tool names a relevance filter may never hide: the work-session state tools plus every approval-bearing built-in
         // from the catalog above. Composed here because both inputs are node-side; the agent assembly consumes only the name set.

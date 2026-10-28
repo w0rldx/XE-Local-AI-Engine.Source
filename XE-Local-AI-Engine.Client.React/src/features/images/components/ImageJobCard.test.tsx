@@ -99,7 +99,7 @@ function renderCard(view = job(), onEdit?: (source: ImageEditSource) => void) {
 
 describe("ImageJobCard generation timeline", () => {
 	beforeEach(() => {
-		// jsdom does not implement matchMedia; MantineProvider reads it to resolve the colour scheme on mount.
+		// jsdom does not implement matchMedia; MantineProvider reads it to resolve the color scheme on mount.
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({

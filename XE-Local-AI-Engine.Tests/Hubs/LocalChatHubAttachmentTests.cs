@@ -13,17 +13,15 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The attach/detach seam, which unit tests of the tracker and the reaper structurally cannot see: they drive
-///     Attach and Dispose directly, so they pass no matter when the hub actually releases.
-///     <para>
-///         <c>NodeChatStreamService.SendMessageCoreAsync</c>
-///         awaits its pump and runner tasks in the <c>finally</c> AFTER its SSE loop exits, so the enumerable the hub
-///         wraps does not complete until the whole run is over — often minutes after the browser has gone. Releasing the
-///         attachment from the wrapper's own <c>finally</c> therefore recorded the detach only once the run had already
-///         terminalized, so the reaper never once saw a detached run and the disconnect grace was silently dead in
-///         production while every unit test stayed green.
-///     </para>
+///     The attach/detach seam, which unit tests of the tracker and the reaper cannot see: they drive Attach and
+///     Dispose directly, so they pass no matter when the hub actually releases.
 /// </summary>
+/// <remarks>
+///     <c>NodeChatStreamService.SendMessageCoreAsync</c> awaits its pump and runner tasks in the <c>finally</c> AFTER
+///     its SSE loop exits, so the wrapped enumerable completes only when the run is over, often minutes after the
+///     browser left. Releasing from the wrapper's own <c>finally</c> would record the detach only after the run
+///     terminalized, so the reaper would never see a detached run and the disconnect grace would be dead.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class LocalChatHubAttachmentTests
 {

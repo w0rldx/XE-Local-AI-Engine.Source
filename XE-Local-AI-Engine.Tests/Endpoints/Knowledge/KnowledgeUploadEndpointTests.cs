@@ -13,10 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint tests for the knowledge upload admission decision: a deduplicated upload whose existing document is
-///     still Pending (never ingested — e.g. a prior upload the full queue rejected with 503) RETRIES admission instead of
-///     reporting success while the document stays stranded; a dedupe hit that is already Indexed is left alone; and a
-///     fresh upload the bounded queue cannot admit returns the retryable 503 + Retry-After busy response.
+///     Upload admission: a dedupe hit still Pending (never ingested, e.g. after a 503) RETRIES admission
+///     rather than reporting success; an Indexed hit is left alone; a fresh upload the full queue rejects gets a
+///     retryable 503 + Retry-After.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeUploadEndpointTests
@@ -57,7 +56,7 @@ public sealed class KnowledgeUploadEndpointTests
         AssertEx.Empty(dispatcher.Enqueued);
     }
 
-    /// <summary>R3-04: a knowledge upload past the cap answered "malformed form data"; it is the shared 413 naming the cap.</summary>
+    /// <summary>A knowledge upload past the cap is the shared 413 naming the cap, not "malformed form data".</summary>
     [Test]
     public async Task Upload_PastTheSizeCap_Returns413NamingTheCap()
     {

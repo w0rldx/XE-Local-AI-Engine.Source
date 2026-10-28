@@ -39,7 +39,7 @@ public static class ReasoningEffortSignals
     /// <summary>Score at or below which the turn resolves to <see cref="ReasoningTier.Fast" />.</summary>
     private const int FastScoreThreshold = -1;
 
-    // Folded to upper case ONCE at class initialisation (CA1308: never normalize to lower case). Written here in
+    // Folded to upper case ONCE at class initialization (CA1308: never normalize to lower case). Written here in
     // lower case only because that is how a reader recognizes them.
     private static readonly string[] DeepPhrasesUpper = ToUpper([
         // en

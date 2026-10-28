@@ -8,12 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Proves a succeeded job records the seed the runtime actually drew, not the request's random sentinel.
-///     <para>
-///         A job submitted with <c>seed = -1</c> asks the runtime to pick one. Before this write-back the row kept
-///         <c>-1</c> forever, so the seed that produced the image was lost and the result could never be reproduced —
-///         live-observed in the viewer, which showed "Seed -1" for every randomly-seeded image.
-///     </para>
+///     Proves a succeeded job records the seed the runtime actually drew, not the request's random sentinel: a job
+///     submitted with <c>seed = -1</c> must not keep <c>-1</c>, or the seed that produced the image is lost and the
+///     result can never be reproduced.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ImageJobSeedWriteBackTests : IDisposable

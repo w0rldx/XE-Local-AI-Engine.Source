@@ -401,7 +401,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         try
         {
             var connection = dbContext.Database.GetDbConnection();
-            // The driver does not abort a running statement on cancellation; sqlite3_interrupt does, and VACUUM INTO honours it.
+            // The driver does not abort a running statement on cancellation; sqlite3_interrupt does, and VACUUM INTO honors it.
             await using var interrupt = cancellationToken.Register(static state => raw.sqlite3_interrupt(((SqliteConnection)state!).Handle), connection);
             await using var command = connection.CreateCommand();
             // VACUUM INTO takes no bind parameters (SQLite rejects a parameterized target path), so the destination must be an

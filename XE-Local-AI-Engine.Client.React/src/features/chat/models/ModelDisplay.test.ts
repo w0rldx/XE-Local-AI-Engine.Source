@@ -105,7 +105,7 @@ describe("deriveModelDisplay", () => {
 			"OpenAI Codex",
 		);
 		expect(deriveModelDisplay(option({ value: "gpt-4o", provider: "AzureFoundry", isCloud: true }), "").secondary).toBe(
-			"Azure Foundry",
+			"Azure AI Foundry",
 		);
 	});
 

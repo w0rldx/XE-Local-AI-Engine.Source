@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 ///     hot path — so it is fully unit-testable by faking <see cref="IGpuVendorProbe" /> and the cached signal.
 /// </summary>
 /// <remarks>
-///     The rule: a signalled source build or operator pin (<see cref="ICudaManagedBuildSignal" />) wins; otherwise NVIDIA to
+///     The rule: a signaled source build or operator pin (<see cref="ICudaManagedBuildSignal" />) wins; otherwise NVIDIA to
 ///     CUDA where <see cref="LlamaCppReleasePins.HasPin" /> finds a CUDA prebuilt for the host and Vulkan elsewhere; AMD and
 ///     Intel to Vulkan; none or unknown to CPU. An active operator override short-circuits the vendor probe entirely, and
 ///     the override path is never validated here — that is the binary manager's single responsibility, as is

@@ -3,14 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddLaunchPolicyFingerprintAndBenchmarkResources</c> splits the single "free VRAM" figure into the two
-///     measurements that actually decide a spawn — what the whole device has free, and what this process is budgeted —
-///     and binds every profile to the launch-policy fingerprint it was frozen under. A profile frozen before the
-///     fingerprint existed cannot be shown to still match the policy that produced it, so the migration
-///     <b>invalidates</b> it: status goes Stale and the benchmark that justified the freeze is unbound. Replaying such
-///     a profile verbatim is exactly the failure this trades away, so the invalidation — not just the new columns — is
-///     what this suite pins.
+///     <c>AddLaunchPolicyFingerprintAndBenchmarkResources</c> splits "free VRAM" into what the device has free and what
+///     this process is budgeted, and binds every profile to the launch-policy fingerprint it was frozen under.
 /// </summary>
+/// <remarks>
+///     A profile frozen before the fingerprint existed cannot be shown to match its policy, so the migration
+///     <b>invalidates</b> it: status goes Stale and its justifying benchmark is unbound. Replaying it verbatim is the
+///     failure this trades away, so the invalidation, not just the new columns, is what this suite pins.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTests
 {

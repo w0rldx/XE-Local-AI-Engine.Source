@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 
 /// <summary>
 ///     Default <see cref="IWhisperModelDownloadCoordinator" />: runs each download on a detached task, records
-///     sanitized progress in an in-memory registry keyed by catalogue id, and always lands it in an observable
+///     sanitized progress in an in-memory registry keyed by catalog id, and always lands it in an observable
 ///     terminal phase the operator UI can poll.
 /// </summary>
 /// <remarks>

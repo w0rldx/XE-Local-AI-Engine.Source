@@ -5,7 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+import type { ToolCatalogEntry } from "@/core/tools/models/ToolCatalogModels";
 import { ToolsPage } from "@/features/tools/pages/ToolsPage";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -13,7 +13,7 @@ const { useToolCatalogMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),
 }));
 
-vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+vi.mock("@/core/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: useToolCatalogMock,
 }));
 

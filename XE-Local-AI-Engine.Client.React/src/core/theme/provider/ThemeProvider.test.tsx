@@ -82,7 +82,7 @@ describe("ThemeProvider table scroll affordance", () => {
 	});
 });
 
-// Reads the CSS-variable block MantineProvider injects for one colour scheme. The provider renders the variables
+// Reads the CSS-variable block MantineProvider injects for one color scheme. The provider renders the variables
 // as real <style> text (one rule per scheme selector), so this is the shipped value, not the resolver's input.
 function readColorSchemeVariables(scheme: "light" | "dark"): string {
 	const selector = `:root[data-mantine-color-scheme="${scheme}"]`;

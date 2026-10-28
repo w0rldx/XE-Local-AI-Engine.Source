@@ -113,7 +113,7 @@ public sealed class LocalRuntimeWarmer
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel, LoadingDetail(resolvedModel));
         if (GpuWorkHolderNotice.ForModelLoad(_gpuWorkGate, invocationId) is { } gpuWorkNotice)
         {
-            // The load waits for the exclusive job (R7-03); without this the loading state carries no reason.
+            // The load waits for the exclusive job; without this the loading state carries no reason.
             await dispatcher.ReportTurnNoticeAsync(gpuWorkNotice);
         }
 

@@ -3,10 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddDevelopmentModeFoundation</c> creates the five Development Mode tables. The two filtered UNIQUE indexes are
-///     the load-bearing part and cannot be reconstructed from the entity model: one active attempt per task, and one
-///     event per (project, operation, phase) — the idempotency key that makes a retried operation a no-op instead of a
-///     duplicated ledger entry.
+///     <c>AddDevelopmentModeFoundation</c> creates the five Development Mode tables. Its two filtered UNIQUE indexes
+///     are not derivable from the model: one active attempt per task, one event per (project, operation, phase).
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddDevelopmentModeFoundationMigrationTests

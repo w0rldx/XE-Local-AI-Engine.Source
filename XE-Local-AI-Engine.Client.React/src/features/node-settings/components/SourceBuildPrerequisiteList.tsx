@@ -6,7 +6,7 @@ import type { LlamaCppSourceBuildPrerequisiteItem } from "@/features/node-settin
 import { sourceBuildPrerequisiteDiagnostic } from "@/features/node-settings/models/SourceBuildModels";
 
 // The toolchain checklist the three source-build cards render identically: one row per probe, with the tool's own
-// version banner kept as a diagnostic and the backend's English availability prose dropped in favour of a localized
+// version banner kept as a diagnostic and the backend's English availability prose dropped in favor of a localized
 // Available / Missing. Each card keeps its OWN i18n subtree (the runtime names differ in the surrounding copy), so
 // the prefix is a prop rather than a shared namespace — the markup is what is shared, not the strings.
 

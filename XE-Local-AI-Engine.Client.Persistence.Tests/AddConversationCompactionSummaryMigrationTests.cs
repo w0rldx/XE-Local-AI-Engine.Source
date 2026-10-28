@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddConversationCompactionSummary</c> adds the three columns that make compaction non-destructive: the
-///     encrypted summary blob, the sequence it covers up to, and when it was written. All three are needed together —
-///     a summary without its watermark cannot be resumed from, so the reader would re-send the full history.
+///     <c>AddConversationCompactionSummary</c> adds what makes compaction non-destructive: the encrypted summary, the
+///     sequence it covers, and when it was written. Without the watermark the reader re-sends the full history.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddConversationCompactionSummaryMigrationTests

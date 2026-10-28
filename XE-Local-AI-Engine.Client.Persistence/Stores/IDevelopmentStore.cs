@@ -558,7 +558,7 @@ public interface IDevelopmentStore
     /// </summary>
     /// <remarks>
     ///     Decomposition gives every implementation child its own task inside the project the run was already
-    ///     authorised against. Idempotent on <see cref="DevelopmentCreateTaskCommand.OperationId" /> like every other
+    ///     authorized against. Idempotent on <see cref="DevelopmentCreateTaskCommand.OperationId" /> like every other
     ///     Development mutation, which is what makes it safe to call before the pointer to the new task is written: a
     ///     caller that crashes in between re-asks with the same operation identity and is handed the SAME task rather
     ///     than orphaning it and creating another.

@@ -64,8 +64,8 @@ describe("restoreNodeAuthSession", () => {
 		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
 	});
 
-	// F-02: a rate-limited refresh signed the operator out although the refresh cookie was still valid.
-	// R1-02: a refresh still rate limited after its Retry-After wait sent the boot to the crash screen; it goes to login now.
+	// A rate-limited refresh does not sign the operator out while the refresh cookie is still valid.
+	// A refresh still rate limited after its Retry-After wait sends the boot to login, not to the crash screen.
 	it("keeps the session and answers rate-limited when refresh stays rate limited", async () => {
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old", expiresAtUtc: "2026-05-25T12:00:00Z" });
 		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false });
@@ -101,7 +101,7 @@ describe("restoreNodeAuthSession", () => {
 		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(2);
 	});
 
-	// N-86: the vault hand-over's port gap is a transport error on the status read; it is retried, not thrown to the
+	// The vault hand-over's port gap is a transport error on the status read; it is retried, not thrown to the
 	// route's error boundary.
 	it("rides out a network error on the status read during the vault hand-over", async () => {
 		vi.useFakeTimers();

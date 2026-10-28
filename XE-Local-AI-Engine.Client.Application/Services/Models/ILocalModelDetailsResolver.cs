@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///     The five-way routing — Codex cloud id, external OpenAI-compatible id, Azure Foundry deployment, GGUF served by llama.cpp,
 ///     Ollama-served model — is a decision, so it lives here rather than in the endpoint, which is left to map one
 ///     <see cref="LocalModelDetailsResolution" /> onto the wire response. <para> The branch order is a PRIORITY, not an arbitrary sequence:
-///     the cloud/external ids are recognised by shape before anything probes a local runtime, because probing the Ollama daemon's <c>/api/show</c>
+///     the cloud/external ids are recognized by shape before anything probes a local runtime, because probing the Ollama daemon's <c>/api/show</c>
 ///     for an id it has never heard of answers 500, and a cloud model's only detail is its declared context window. </para>
 /// </remarks>
 public interface ILocalModelDetailsResolver

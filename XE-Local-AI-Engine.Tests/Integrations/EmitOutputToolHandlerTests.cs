@@ -186,7 +186,7 @@ public sealed class EmitOutputToolHandlerTests
     public async Task WhenTheReserveRefuses_NothingIsPublishedAndTheSequenceIsAbandoned()
     {
         // The store's in-transaction reserve refusing is unreachable through the pre-check on a healthy node; it is the
-        // defence-in-depth half, and it must still resolve its reservation.
+        // defense-in-depth half, and it must still resolve its reservation.
         using var fixture = new Fixture(maxOutputBytesPerExecution: 40, preCheckCap: 1_000_000);
         using var scope = AgentRunConversationContext.BeginScope(fixture.ConversationId);
 

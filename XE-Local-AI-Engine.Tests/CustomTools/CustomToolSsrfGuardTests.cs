@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     SSRF guard: every private/reserved/metadata range is denied (on the PARSED address), IPv4-mapped IPv6 is
-///     re-tested as v4, decimal/octal/hex host literals are rejected, the scheme/userinfo rules hold, and the pinned
-///     connect callback denies a hostname that resolves to a loopback address (the DNS-rebind pin).
+///     SSRF guard: private/reserved/metadata ranges are denied by PARSED address, IPv4-mapped IPv6 is re-tested as v4,
+///     decimal/octal/hex literals and bad scheme/userinfo fail, and the pinned connect callback blocks DNS rebinding to
+///     loopback.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CustomToolSsrfGuardTests

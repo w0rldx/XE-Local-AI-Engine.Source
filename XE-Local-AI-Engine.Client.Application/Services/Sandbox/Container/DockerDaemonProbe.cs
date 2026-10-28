@@ -110,7 +110,7 @@ internal sealed record DockerDaemonProbeOutcome
 /// </remarks>
 internal static class DockerDaemonProbe
 {
-    /// <summary>Serialises the compare-and-write half of the transaction, process-wide, and nothing else.</summary>
+    /// <summary>Serializes the compare-and-write half of the transaction, process-wide, and nothing else.</summary>
     /// <remarks>
     ///     The attestation store locks one operation at a time, which is not the same thing: two first-use probes on independent schedules
     ///     against one shared pin can both read it absent, each approve whichever daemon answered, and each write over the other, so

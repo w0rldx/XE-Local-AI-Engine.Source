@@ -161,7 +161,7 @@ describe("BenchmarkPairwiseMatrix", () => {
 	});
 
 	// A verdict over a cut-off answer graded a fragment. It still counts in the fit, so the flag is the only thing
-	// stopping the reader from taking it for a judgement of the whole answer.
+	// stopping the reader from taking it for a judgment of the whole answer.
 	it("flags a verdict that compared a truncated answer", async () => {
 		comparisonsMock.mockResolvedValue(wire([comparison({ answerBTruncated: true })]));
 		renderWithProviders(<BenchmarkPairwiseMatrix projectId="p1" />);

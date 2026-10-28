@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The namespaced external-model identity is the routing key AND a validation boundary: it is parsed on the chat
-///     path, written into the provider map (case-insensitive) and into the tool-capable allow-list (ordinal), so its
-///     grammar and its ONE canonical spelling are what keep those stores agreeing. These tests pin both.
+///     The external-model id is the routing key AND a validation boundary: parsed on the chat path, stored in the
+///     provider map (case-insensitive) and tool-capable allow-list (ordinal); its grammar and ONE canonical spelling
+///     keep them agreeing.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalModelIdTests

@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 /// <remarks>See <c>docs/wiki/04-agent-mode.md</c> ("Capacity gate &amp; sub-agent spawn") for the four admission passes.</remarks>
 public sealed class CapacityService : ICapacityService
 {
-    // Caller-facing reasons. A rejection names the requested and the loaded models (operator decision: model names
+    // Caller-facing reasons. A rejection names the requested and the loaded models (model names
     // are safe to show and are what makes "pick a loaded model" actionable), never a path or a budget figure.
     private const long Mib = 1024 * 1024;
     private const string ReasonAllow = "Capacity available.";
@@ -97,12 +97,7 @@ public sealed class CapacityService : ICapacityService
         // node-default selection, because RuntimeChatClient re-selects per send: an active Codex session must not exempt a spawn naming a local model.
         if (_cloudFactory.IsCloudProviderSelected(modelName))
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.Allow,
-                Reason = ReasonAllowCloud,
-                OllamaEvictionWarning = false
-            };
+            return Unbudgeted(CapacityVerdict.Allow, ReasonAllowCloud);
         }
 
         var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct);
@@ -110,12 +105,7 @@ public sealed class CapacityService : ICapacityService
         var isLlamaServer = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
         if (isLlamaServer && _externalEndpoints.Resolve(modelName, role) is not null)
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.Allow,
-                Reason = ReasonAllowExternal,
-                OllamaEvictionWarning = false
-            };
+            return Unbudgeted(CapacityVerdict.Allow, ReasonAllowExternal);
         }
 
         // An operator-registered external model runs on someone else's hardware: no process, no weights, no RAM or VRAM here, and the byte-budget path
@@ -123,12 +113,7 @@ public sealed class CapacityService : ICapacityService
         if (string.Equals(providerName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
             || ExternalModelId.HasExternalScheme(modelName))
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.Allow,
-                Reason = ReasonAllowExternal,
-                OllamaEvictionWarning = false
-            };
+            return Unbudgeted(CapacityVerdict.Allow, ReasonAllowExternal);
         }
 
         // Warm the device audit OUTSIDE the ledger gate: its bounded, cached --list-devices probe would otherwise serialize every capacity decision behind a
@@ -145,12 +130,7 @@ public sealed class CapacityService : ICapacityService
         // Already running for this (model, role): serialize on that process; no fit math, no second load.
         if (running.Contains(new RunningKey(modelName, role)))
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.QueueSameModel,
-                Reason = ReasonQueueSameModel,
-                OllamaEvictionWarning = false
-            };
+            return Unbudgeted(CapacityVerdict.QueueSameModel, ReasonQueueSameModel);
         }
 
         var launchSnapshot = isLlamaServer
@@ -166,12 +146,7 @@ public sealed class CapacityService : ICapacityService
         // leaked lease whose process exited also lands here: the next ensure relaunches on that admission with no fresh budget check, under "Model is loading".
         if (launchSnapshot.HasRequestedKey)
         {
-            return new CapacityDecision
-            {
-                Verdict = CapacityVerdict.QueueSameModel,
-                Reason = ReasonQueueSameModelLoading,
-                OllamaEvictionWarning = false
-            };
+            return Unbudgeted(CapacityVerdict.QueueSameModel, ReasonQueueSameModelLoading);
         }
 
         // Pooled roles (embedder, reranker, decision) are spawned below every caller; the embedder is booked but never refused on budget.
@@ -201,11 +176,7 @@ public sealed class CapacityService : ICapacityService
 
         // Process-count headroom mirrors the supervisor's chat-model cap: companions (embedder, reranker) hold their own slots, so only chat-class keys count.
         // A pooled role and the supervisor's own chat admission skip it: at the cap the supervisor evicts within the class or refuses the launch itself.
-        var activeProcessKeys = running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
-                                       .Concat(launchSnapshot.AdmittedKeys)
-                                       .Where(static key => key.Role is not (ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision))
-                                       .ToHashSet();
-        if (!isPooledRole && !request.SupervisorEnforcesProcessCap && activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
+        if (!isPooledRole && !request.SupervisorEnforcesProcessCap && CountChatClassProcesses(running, launchSnapshot) + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
             return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
@@ -215,24 +186,10 @@ public sealed class CapacityService : ICapacityService
                                    || isLlamaServer
                                    && role == ModelRole.Chat
                                    && _supervisorOptions.Speculative.RequiresExternalDraftModel;
-        var fits = true;
-        while (!FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
+        var fits = TryFitByDownTier(request, profile, hasUnmeasuredGpuLoad, ref footprint, out var requiredWindowRefused);
+        if (requiredWindowRefused)
         {
-            if (!request.AllowAdmissionDownTier || !_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
-            {
-                fits = false;
-                break;
-            }
-
-            // A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the reservation
-            // would under-book the window that process actually allocates.
-            if (request.RequiredContextTokens is { } required
-                && downTiered.Admission?.Allocation.ProcessContextTokens < required)
-            {
-                return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
-            }
-
-            footprint = downTiered;
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         if (!fits && !neverReject)
@@ -265,6 +222,59 @@ public sealed class CapacityService : ICapacityService
         return neverReject
             ? AllowOverBudget(modelName, role, reservation, ollamaWarning)
             : Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+    }
+
+    /// <summary>A decision that books no budget: a cloud or external model, or a launch that joins one already running or loading.</summary>
+    private static CapacityDecision Unbudgeted(CapacityVerdict verdict, string reason) =>
+        new()
+        {
+            Verdict = verdict,
+            Reason = reason,
+            OllamaEvictionWarning = false
+        };
+
+    /// <summary>
+    ///     The chat-class processes running or admitted: companions (embedder, reranker, decision) hold their own slots, so only these count against
+    ///     the supervisor's chat-model cap.
+    /// </summary>
+    private static int CountChatClassProcesses(IReadOnlySet<RunningKey> running, ProcessLaunchAdmissionSnapshot launchSnapshot) =>
+        running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
+               .Concat(launchSnapshot.AdmittedKeys)
+               .Where(static key => key.Role is not (ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision))
+               .ToHashSet()
+               .Count;
+
+    /// <summary>Steps <paramref name="footprint" /> down admission tiers until it fits the budget, when the request allows it.</summary>
+    /// <remarks>
+    ///     A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the
+    ///     reservation would under-book the window that process actually allocates. That case sets <paramref name="requiredWindowRefused" />.
+    /// </remarks>
+    /// <returns>Whether the final footprint fits.</returns>
+    private bool TryFitByDownTier(CapacityRequest request,
+        HardwareProfile profile,
+        bool hasUnmeasuredGpuLoad,
+        ref ModelFootprint footprint,
+        out bool requiredWindowRefused)
+    {
+        requiredWindowRefused = false;
+        while (!FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
+        {
+            if (!request.AllowAdmissionDownTier || !_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
+            {
+                return false;
+            }
+
+            if (request.RequiredContextTokens is { } required
+                && downTiered.Admission?.Allocation.ProcessContextTokens < required)
+            {
+                requiredWindowRefused = true;
+                return false;
+            }
+
+            footprint = downTiered;
+        }
+
+        return true;
     }
 
     /// <summary>The in-budget Allow; a pooled role's admission is logged at Debug, since its spawn happens below every caller and is otherwise silent.</summary>
@@ -407,7 +417,7 @@ public sealed class CapacityService : ICapacityService
 
     /// <summary>The running <c>(model, role)</c> keys for the relevant local provider, or an explicit unknown state when the probe fails.</summary>
     /// <remarks>
-    ///     llama.cpp reads the supervisor's per-process health rows; Ollama reads its running-models snapshot, where role is not modelled, so every
+    ///     llama.cpp reads the supervisor's per-process health rows; Ollama reads its running-models snapshot, where role is not modeled, so every
     ///     running model counts as a Chat process — the only role a sub-agent chat spawn competes with. A probe failure preserves the uncertainty:
     ///     CPU and free-VRAM decisions still have authoritative byte baselines, while the non-NVIDIA total-VRAM fallback must reject, because it
     ///     cannot establish whether unledgered residents already consume that total.

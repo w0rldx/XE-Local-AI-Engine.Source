@@ -5,9 +5,8 @@ using System.Net.Http.Json;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The three Operator-gated credential endpoints. The load-bearing assertions are that the plaintext appears
-///     exactly once — never on a list — and that a revoke keeps the row, because execution and audit history reference
-///     the credential's prefix.
+///     The three Operator-gated credential endpoints. The load-bearing assertions: the plaintext appears exactly once,
+///     never on a list, and a revoke keeps the row, because execution and audit history reference its prefix.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class IntegrationApiKeyEndpointTests

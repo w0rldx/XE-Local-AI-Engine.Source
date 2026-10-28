@@ -177,7 +177,7 @@ describe("DevelopmentContainerRuntimePanel", () => {
 
 	it("states that container-backed execution is not yet in use under the process provider", () => {
 		// Honesty check on the container-runtime banner. Without this line an operator reading a green banner would
-		// reasonably conclude their Development Mode runs are already containerised. Under the process provider —
+		// reasonably conclude their Development Mode runs are already containerized. Under the process provider —
 		// the default, since the container provider is opt-in — they are not.
 		renderPanel(
 			containerRuntime({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }),

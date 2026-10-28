@@ -22,7 +22,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     private readonly string _remediation;
 
     /// <summary>
-    ///     The non-Windows form: recognises only this node's own distinctive decryption exception, so an
+    ///     The non-Windows form: recognizes only this node's own distinctive decryption exception, so an
     ///     unrelated <see cref="IKey.CreateEncryptor" /> failure is left to the framework rather than masked as a KEK
     ///     problem.
     /// </summary>
@@ -41,7 +41,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     ///     Hardcoding <see cref="NodeDataProtectionKeyRingDecryptionException" />, which only the non-Windows encryptor
     ///     throws, made the DPAPI branch inert and left Windows failing open: an unreadable DPAPI ring orphaned every
     ///     <c>*.enc</c> credential with no hard failure and no log line. The decoration is orthogonal to how keys are
-    ///     encrypted, because it wraps the RESOLVER. See <see cref="ForDpapiRing" /> for what that branch recognises.
+    ///     encrypted, because it wraps the RESOLVER. See <see cref="ForDpapiRing" /> for what that branch recognizes.
     /// </remarks>
     private NodeDataProtectionKeyRingFailClosedKeyResolver(IDefaultKeyResolver inner,
         Func<Exception, bool> isRingDecryptionFailure,
@@ -53,12 +53,12 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     }
 
     /// <summary>
-    ///     The Windows DPAPI form: recognises a <see cref="CryptographicException" /> anywhere in the failure chain,
+    ///     The Windows DPAPI form: recognizes a <see cref="CryptographicException" /> anywhere in the failure chain,
     ///     which is what <c>ProtectedData.Unprotect</c> raises when the blob cannot be unwrapped for the current user.
     /// </summary>
     /// <remarks>
     ///     Broader than the non-Windows classifier, and it can afford to be: EVERY key in this ring is DPAPI-wrapped by <c>ProtectKeysWithDpapi</c> and unwrapped
-    ///     lazily by the very call this decorator probes, so a cryptographic failure materialising a key IS a ring-unwrap failure; matching a framework-internal
+    ///     lazily by the very call this decorator probes, so a cryptographic failure materializing a key IS a ring-unwrap failure; matching a framework-internal
     ///     exception type would bind this to a shape the framework does not promise. The remediation is not shared text because there is no secret to restore: a
     ///     CurrentUser blob is bound to the account, so the recoveries are to run as it or to accept the loss and delete the ring.
     /// </remarks>
@@ -73,14 +73,14 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
 
     /// <summary>
     ///     Defers to the inner resolver and intervenes only when it has already decided to regenerate AND a non-revoked
-    ///     key failed to materialise with a failure this scheme's classifier recognises.
+    ///     key failed to materialize with a failure this scheme's classifier recognizes.
     /// </summary>
     /// <remarks>
     ///     Deliberately conservative, so the resolved-default hot path is untouched. A legacy PLAINTEXT key decrypts
     ///     without invoking any decryptor and never produces a classified failure, so it keeps reading; a
     ///     correctly-decryptable key yields a usable default and is likewise untouched; a genuine first-run or empty
     ///     ring has no failing key and regenerates as before; and a ring whose keys all decrypt but have merely EXPIRED
-    ///     regenerates as before too, because no key fails to materialise.
+    ///     regenerates as before too, because no key fails to materialize.
     /// </remarks>
     public DefaultKeyResolution ResolveDefaultKeyPolicy(DateTimeOffset now, IEnumerable<IKey> allKeys)
     {
@@ -117,7 +117,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     }
 
     // Probes a key by materializing its encryptor, which unwraps the at-rest key material. True only for a failure this scheme's
-    // classifier recognises; success, or one the inner resolver already accounted for, returns false so probing continues unmasked.
+    // classifier recognizes; success, or one the inner resolver already accounted for, returns false so probing continues unmasked.
     private bool TryDetectKeyRingDecryptionFailure(IKey key, out Exception failure)
     {
         try

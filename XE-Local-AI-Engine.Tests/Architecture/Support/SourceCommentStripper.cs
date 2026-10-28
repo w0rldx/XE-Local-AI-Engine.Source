@@ -8,7 +8,7 @@ using System.Text;
 ///         This exists because the obvious implementation is wrong. Replacing <c>//[^\r\n]*</c> with a regex also
 ///         erases everything after a <c>//</c> that lives INSIDE a string literal — a single
 ///         <c>"https://localhost"</c> silently swallows the rest of that line, and a banned reference that happened
-///         to sit after it on the same line passes a guard that never saw it. The scanner below recognises a comment
+///         to sit after it on the same line passes a guard that never saw it. The scanner below recognizes a comment
 ///         delimiter only while it is in code, so a string's content can never start a comment.
 ///     </para>
 ///     <para>
@@ -18,7 +18,7 @@ using System.Text;
 ///         fixes comment recognition only; only <see cref="StripCommentsAndLiterals" /> makes a caller string-blind.
 ///     </para>
 ///     <para>
-///         Recognised forms: regular <c>"..."</c>, char <c>'...'</c>, verbatim <c>@"..."</c>, raw <c>"""..."""</c>
+///         Recognized forms: regular <c>"..."</c>, char <c>'...'</c>, verbatim <c>@"..."</c>, raw <c>"""..."""</c>
 ///         with any delimiter length, and their interpolated variants. An interpolation hole is the one part of a
 ///         string that is not opaque — it is real code, so the scanner recurses into it and strips comments there
 ///         too — up to the first top-level <c>:</c>, after which the rest of the hole is a format specifier and is
@@ -73,7 +73,7 @@ internal static class SourceCommentStripper
     /// <summary>
     ///     A single left-to-right pass. Every position belongs to exactly one state: code, a line comment, a block
     ///     comment, the content of a string or char literal, or the format text of an interpolation hole. Comment
-    ///     delimiters are recognised in the code state only.
+    ///     delimiters are recognized in the code state only.
     /// </summary>
     private sealed class Scanner
     {

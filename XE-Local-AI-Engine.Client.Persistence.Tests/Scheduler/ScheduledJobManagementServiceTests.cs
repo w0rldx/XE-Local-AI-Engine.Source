@@ -186,7 +186,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Empty(await service.ListJobsAsync());
     }
 
-    /// <summary>An update used to store the row and delete the live trigger before Quartz refused the new end.</summary>
+    /// <summary>An update Quartz refuses for its new end keeps the stored row and the live trigger.</summary>
     [Test]
     [Arguments(ScheduleKind.Cron)]
     [Arguments(ScheduleKind.SimpleInterval)]
@@ -244,7 +244,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Equal(ScheduleKind.OneShot, record.ScheduleKind);
     }
 
-    /// <summary>A well-formed id of an agent that does not exist used to be stored and then fail every fire.</summary>
+    /// <summary>A well-formed id of an agent that does not exist is refused, not stored to fail every fire.</summary>
     [Test]
     public async Task CreateJobAsync_ForRunAgentWithAnUnknownAgent_ThrowsValidationAndStoresNothing()
     {
@@ -730,8 +730,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var record = await service.CreateJobAsync(ManualInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        // Simulate the namespace-move regression: rewrite the persisted JOB_CLASS_NAME to a type that no longer exists,
-        // exactly as an install upgraded across the dispatch-job move would have on disk.
+        // Simulate a moved job type: rewrite the persisted JOB_CLASS_NAME to a type that no longer exists,
+        // exactly as an install upgraded across a job-type move has it on disk.
         await CorruptJobClassNameAsync(dbPath, record.Id,
             "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
@@ -924,8 +924,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     [Test]
     public async Task SetEnabledAsync_WhenTemplateNotRegistered_ThrowsAndLeavesJobDisabledAndUnscheduled()
     {
-        // Regression: the template check used to run AFTER the durable Enabled flag was flipped, leaving a job that
-        // read as enabled but was never scheduled. The definition is written straight to the store (CreateJobAsync
+        // Regression: the template check runs BEFORE the durable Enabled flag flips, so no job reads as enabled
+        // without being scheduled. The definition is written straight to the store (CreateJobAsync
         // would reject the unknown template) so only SetEnabledAsync is under test.
         var dbPath = GetDatabasePath("enable-unknown-template.sqlite");
         await MigrateAsync(dbPath);

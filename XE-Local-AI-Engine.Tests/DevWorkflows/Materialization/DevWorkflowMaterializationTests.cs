@@ -461,7 +461,7 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     Ruling D12: the zero-task path writes one already-succeeded row per validation node in the template, rather
+    ///     The zero-task path writes one already-succeeded row per validation node in the template, rather
     ///     than exempting the apply downstream from having to find one.
     ///     <para>
     ///         Without the row an apply node's runtime pre-check asks about a template key that has no row at all,
@@ -818,9 +818,9 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     What the node behind the join gets to READ. The materializer used to delete the decomposition's own edge
-    ///     into the join, which took the decomposition off every path back from it — so the verification agent inherited
-    ///     the clones' validation reports and nothing else, and said so itself in the live run before returning "not
+    ///     What the node behind the join gets to READ. The materializer keeps the decomposition's own edge into the
+    ///     join: deleting it takes the decomposition off every path back from it — so the verification agent would get
+    ///     the clones' validation reports and nothing else, and would say so itself before returning "not
     ///     yet". Kept, that edge carries the task package; the seed's <c>planapproval → verify</c> edge carries the plan
     ///     the walk cannot reach past the decomposition that consumed it.
     /// </summary>

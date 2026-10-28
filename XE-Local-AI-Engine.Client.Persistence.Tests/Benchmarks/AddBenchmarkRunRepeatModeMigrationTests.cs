@@ -4,12 +4,12 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     <c>AddBenchmarkRunRepeatMode</c> records what a repeat group measures plus the two sampling inputs that make an
-///     answer-variance group readable without decrypting a snapshot. The default matters in two directions: every run
-///     recorded before this WAS a throughput repeat, so <c>repeat_mode</c> is backfilled truthfully, while the seed and
-///     the temperature stay NULL — knowable is not the same as recorded, and only recorded belongs in a measurement
-///     table. The rollback test guards the usual SQLite trap: dropping a column rebuilds the table from this
-///     migration's target model, so a stale Down deletes columns it never mentions.
+///     answer-variance group readable without decrypting a snapshot.
 /// </summary>
+/// <remarks>
+///     Older runs WERE throughput repeats, so <c>repeat_mode</c> backfills truthfully; seed and temperature stay NULL.
+///     Rollback: SQLite rebuilds the table from the target model, so a stale Down drops columns it never mentions.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class AddBenchmarkRunRepeatModeMigrationTests
 {

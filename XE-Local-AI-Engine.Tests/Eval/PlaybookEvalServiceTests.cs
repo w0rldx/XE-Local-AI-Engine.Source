@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Eval gate orchestration over a SEEDED golden set via fake runner + fake judge (no Ollama). The fake runner keys
-///     its output on whether the system prompt contains the candidate behaviour, so a test can stage a regression by
+///     its output on whether the system prompt contains the candidate behavior, so a test can stage a regression by
 ///     scripting the judge to fail the candidate output but pass the baseline output.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -178,7 +178,7 @@ public sealed class PlaybookEvalServiceTests
         _ = await service.RunEvalAsync(agentId, actionId);
 
         // The candidate prompt (the higher-priority system prompt the runner saw) places the LOW-priority candidate
-        // behaviour BEFORE the enabled one, matching post-promotion injection order.
+        // behavior BEFORE the enabled one, matching post-promotion injection order.
         var candidatePrompt = captureRunner.CandidatePrompt;
         AssertEx.NotNull(candidatePrompt, "A run with golden cases must compose a candidate prompt.");
         var candidateIndex = candidatePrompt!.IndexOf(CandidateBehavior, StringComparison.Ordinal);
@@ -235,7 +235,7 @@ public sealed class PlaybookEvalServiceTests
         var goldenCase = JudgeCase(agentId);
 
         // Baseline AND candidate fail every case → zero regressions (regression needs a prior baseline pass) but
-        // zero candidate passes. The absolute quality floor must block this; on no-regression alone it used to "pass".
+        // zero candidate passes. The absolute quality floor must block this; on no-regression alone it would "pass".
         var judge = new FakePlaybookEvalJudge((_, _) => false);
         var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out _);
 
@@ -278,8 +278,8 @@ public sealed class PlaybookEvalServiceTests
         var agentId = Guid.NewGuid();
         var actionId = Guid.NewGuid();
 
-        // A `[null]` row previously threw a NullReferenceException that escaped the per-case loop and aborted the whole
-        // run. It must now degrade to an explicit failed case while the other valid case is still evaluated.
+        // A `[null]` row must not throw a NullReferenceException that escapes the per-case loop and aborts the whole
+        // run. It degrades to an explicit failed case while the other valid case is still evaluated.
         var nullTurnCase = CaseWithTurns(agentId, "[null]");
         var validCase = JudgeCase(agentId);
         var service = CreateService(agentId, actionId, [nullTurnCase, validCase], new FakePlaybookEvalJudge((_, _) => true), out _, out _);
@@ -566,7 +566,7 @@ public sealed class PlaybookEvalServiceTests
     }
 
     /// <summary>
-    ///     Scripted runner: returns "candidate output" when the system prompt contains the candidate behaviour,
+    ///     Scripted runner: returns "candidate output" when the system prompt contains the candidate behavior,
     ///     else "baseline output". No Ollama.
     /// </summary>
     private sealed class FakePlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
@@ -585,7 +585,7 @@ public sealed class PlaybookEvalServiceTests
     }
 
     /// <summary>
-    ///     Captures the candidate system prompt (the one containing the candidate behaviour) so a test can assert
+    ///     Captures the candidate system prompt (the one containing the candidate behavior) so a test can assert
     ///     composition order. No Ollama.
     /// </summary>
     private sealed class CapturingEvalAgentRunner : IPlaybookEvalAgentRunner

@@ -50,9 +50,8 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public void TryResolve_NonApprovalHandler_ResolvesBudgetedToolResult_NotApprovalWrapped()
     {
-        // The coder read tools are RequiresApproval=false, so they must resolve to a plain (non-approval) executable.
-        // The executable is now the shared BudgetedToolResultAIFunction backstop (which delegates name/schema to the
-        // inner MetadataToolFunction), never an ApprovalRequiredAIFunction. This mirrors how the coder handlers resolve.
+        // Coder read tools are RequiresApproval=false, so they resolve to the shared BudgetedToolResultAIFunction
+        // backstop over the inner MetadataToolFunction, never an ApprovalRequiredAIFunction, as coder handlers do.
         var registry = new ClientLocalToolRegistry([new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false)],
             PipelineOptions());
 

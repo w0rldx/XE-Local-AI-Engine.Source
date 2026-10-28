@@ -1,5 +1,5 @@
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
+import { useActiveGgufDownloads } from "@/core/model-downloads/queries/useGgufDownload";
 
 // Headless global reconciler mounted once in App.tsx (inside TanStackQueryProvider, inside the
 // auth-gated region) so the GgufBrowseStore stays in sync with backend download state on every

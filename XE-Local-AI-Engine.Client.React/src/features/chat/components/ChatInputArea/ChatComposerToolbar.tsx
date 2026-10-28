@@ -365,7 +365,7 @@ export function ChatComposerToolbar({
 					/>
 				) : null}
 				{workflowSelector}
-				{/* The ActionIcon below IS the labelled control; FileButton's own input is display:none and exists only to
+				{/* The ActionIcon below IS the labeled control; FileButton's own input is display:none and exists only to
 				    open the OS picker. Marked hidden so it is not reported as an unnamed form control. */}
 				{attachmentControlsAvailable ? (
 					<FileButton

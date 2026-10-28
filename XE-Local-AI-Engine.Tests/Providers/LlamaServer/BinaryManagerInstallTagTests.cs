@@ -617,7 +617,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task EnsureBinary_WhenSameVariantRecordIsOlderThanThePin_RecordsThePinnedRuntime()
     {
-        // N-71: a record left from before a pin bump must follow the pinned runtime the ensure served, or the status
+        // A record left from before a pin bump must follow the pinned runtime the ensure served, or the status
         // surface keeps reporting the old tag and an update after the new binary is already in use.
         var (state, pin) = await EnsureOverRecordOnlineAsync(operatorSelected: false);
 

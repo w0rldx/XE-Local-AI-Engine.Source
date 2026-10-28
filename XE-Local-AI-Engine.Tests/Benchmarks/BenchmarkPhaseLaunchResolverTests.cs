@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Freeze stamps the launch-identity scheme it computed the intended identity under, once, and never recomputes it.
-///     That stamp is what lets a later build tell "this hash is comparable to mine" from "this hash was computed by a
-///     scheme I no longer run" without re-projecting anything from the executing box's conditions.
+///     Freeze stamps the launch-identity scheme of the intended identity once and never recomputes it, so a later
+///     build tells a comparable hash from one computed by a scheme it no longer runs without re-projecting the
+///     executing box's conditions.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkPhaseLaunchResolverTests

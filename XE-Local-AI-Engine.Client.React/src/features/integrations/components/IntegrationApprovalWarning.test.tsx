@@ -118,7 +118,7 @@ describe("IntegrationApprovalWarning", () => {
 		expect(screen.getByTestId("integration-approval-warning")).toBeTruthy();
 	});
 
-	// D-6: ask_user is approval-gated — that is how the call reaches a human — but an unattended run does NOT stop on
+	// Ask_user is approval-gated — that is how the call reaches a human — but an unattended run does NOT stop on
 	// it; the coordinator stashes a "not answered" result and the turn continues. Warning about it named a tool that
 	// would not have failed the run.
 	it("says nothing about a tool an unattended run continues past, even though it is approval-gated", () => {
@@ -131,7 +131,7 @@ describe("IntegrationApprovalWarning", () => {
 		expect(screen.queryByTestId("integration-approval-warning")).toBeNull();
 	});
 
-	// The per-agent override cannot turn a continuing tool into a failing one either: the behaviour is the runtime's,
+	// The per-agent override cannot turn a continuing tool into a failing one either: the behavior is the runtime's,
 	// not the approval flag's.
 	it("keeps a continuing tool out of the warning even when the agent tightens it", () => {
 		renderWarning(
@@ -148,7 +148,7 @@ describe("IntegrationApprovalWarning", () => {
 		expect(named).not.toContain("ask_user");
 	});
 
-	// An unrecognised behaviour string must not open the gate: a tool that fails an unattended run is approval-gated
+	// An unrecognized behavior string must not open the gate: a tool that fails an unattended run is approval-gated
 	// by construction, so the compose below it still catches it.
 	it("still warns for an approval-gated tool whose behaviour value this client does not know", () => {
 		renderWarning(

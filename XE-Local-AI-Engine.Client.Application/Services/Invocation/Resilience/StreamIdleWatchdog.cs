@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 internal static class StreamIdleWatchdog
 {
     /// <summary>
-    ///     How long a provider asked to stop is given to honour cancellation — for its stuck <c>MoveNextAsync</c> to
+    ///     How long a provider asked to stop is given to honor cancellation — for its stuck <c>MoveNextAsync</c> to
     ///     unwind and, separately, for a <c>DisposeAsync</c> to complete — before the enumerator is abandoned.
     /// </summary>
     /// <remarks>
@@ -192,7 +192,7 @@ internal static class StreamIdleWatchdog
         {
             try
             {
-                // WaitAsync is the wall-clock bound: its timer fires whether or not the provider honours cancellation, at
+                // WaitAsync is the wall-clock bound: its timer fires whether or not the provider honors cancellation, at
                 // one timer registration per pull. A chunk or a provider fault inside the window returns or rethrows.
                 var moved = await moveTask.WaitAsync(deadline.Timeout, deadline.Clock, cancellationToken);
                 return new PullOutcome(moved ? PullStatus.Advanced : PullStatus.Completed, DisposalHandedOff: false);

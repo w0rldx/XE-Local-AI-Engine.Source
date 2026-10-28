@@ -98,7 +98,7 @@ public sealed class ToolApprovalCoordinatorTests
         await GrantSessionApprovalAsync(coordinator, dispatcher, SkillPackage(conversationId, version: 257));
         await GrantSessionApprovalAsync(coordinator, dispatcher, SkillPackage(conversationId, version: 257));
 
-        // An entry that made it in before the cap is still honoured — overflow only ever ADDS prompts.
+        // An entry that made it in before the cap is still honored — overflow only ever ADDS prompts.
         var remembered = await coordinator.RequestToolApprovalAsync(SkillPackage(conversationId, version: 1).Build(),
             SkillApprovalRequest(),
             NoSlotPark(),
@@ -451,7 +451,7 @@ public sealed class ToolApprovalCoordinatorTests
         AssertEx.Contains(result, UntrustedContentFraming.UntrustedTrustLabel);
         await AssertAuditedAsync(auditRecorder, WebFetchToolDefinition.ToolName, ApprovalDecisions.Approve);
 
-        // Session scope asked for, never honoured: the next review of the same tool parks again.
+        // Session scope asked for, never honored: the next review of the same tool parks again.
         var second = ReviewAsync(coordinator, RuntimePackageBuilder.Valid().Build(), WebRequest(WebFetchToolDefinition.ToolName, new
         {
             url = WebReviewTestServer.PageUrl

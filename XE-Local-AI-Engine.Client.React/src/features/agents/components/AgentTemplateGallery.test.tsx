@@ -73,9 +73,9 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listAgentTemplatesQueryKey: vi.fn(() => [{ _id: "listAgentTemplates" }]),
 }));
 
+import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/core/agents/queries/useAgentDefinitions";
 import { listAgentTemplatesQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
 import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
-import { agentDefinitionsInvalidationKey, agentDefinitionsQueryIds } from "@/features/agents/queries/useAgentDefinitions";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function installJsdomEnvironmentMocks(): void {

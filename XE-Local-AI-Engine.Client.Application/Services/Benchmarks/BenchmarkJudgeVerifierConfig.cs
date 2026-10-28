@@ -48,7 +48,7 @@ public static class BenchmarkJudgeVerifierConfig
 
     /// <summary>
     ///     The parsed spec for a criterion, or <see langword="null" /> when the criterion is graded by the model.
-    ///     Throws when the kind is unknown, reserved, or its config cannot be honoured.
+    ///     Throws when the kind is unknown, reserved, or its config cannot be honored.
     /// </summary>
     public static BenchmarkVerifierSpec? Parse(string? kind, string? configJson)
     {

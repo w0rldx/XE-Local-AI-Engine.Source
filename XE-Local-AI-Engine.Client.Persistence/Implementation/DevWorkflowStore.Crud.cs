@@ -53,7 +53,7 @@ public sealed partial class DevWorkflowStore
         }
 
         // Re-read and re-applied when the row moves underneath this edit: the RUNTIME is the version token's other writer, a dispatcher tick moving the item to
-        // Active mid-PATCH is correct behaviour on disjoint fields (status is absent from this command by design), and past three tries the caller gets a 409.
+        // Active mid-PATCH is correct behavior on disjoint fields (status is absent from this command by design), and past three tries the caller gets a 409.
         const int maxAttempts = 3;
         var attempt = 0;
         while (true)

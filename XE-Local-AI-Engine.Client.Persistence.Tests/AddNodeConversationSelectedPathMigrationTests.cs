@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddNodeConversationSelectedPath</c> adds the per-conversation branch selection that the chat UI replays a
-///     thread from. A conversation without the column falls back to the newest leaf, so losing it silently changes
-///     which messages a reopened thread shows.
+///     <c>AddNodeConversationSelectedPath</c> adds the per-conversation branch selection the chat UI replays a thread
+///     from. Without it a conversation falls back to the newest leaf, silently changing what a reopened thread shows.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddNodeConversationSelectedPathMigrationTests

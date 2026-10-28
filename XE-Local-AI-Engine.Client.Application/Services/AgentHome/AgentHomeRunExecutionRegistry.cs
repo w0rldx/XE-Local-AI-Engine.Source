@@ -33,7 +33,7 @@ internal sealed class AgentHomeRunExecutionRegistry
     /// </summary>
     /// <remarks>
     ///     A refusal signal only, like the execution lease's <c>IsHeld</c>: the answer is a snapshot, so "executing"
-    ///     must stop a removal while "not executing" is never a licence to assume exclusivity. Registration happens
+    ///     must stop a removal while "not executing" is never a license to assume exclusivity. Registration happens
     ///     before the run directory is created, which is what makes the snapshot safe for a removal — see
     ///     <c>AgentHomeRunDeleteService</c>.
     /// </remarks>

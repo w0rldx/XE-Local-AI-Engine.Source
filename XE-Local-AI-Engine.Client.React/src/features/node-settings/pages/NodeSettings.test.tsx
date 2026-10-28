@@ -133,7 +133,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 // The recommended-reranker download progress reuses the shared GgufDownload feed (SignalR hub + cancel mutation).
 // Stub it so these page tests stay isolated and never open a real hub connection; the reranker download flow has its
 // own dedicated test in NodeSettingsFieldsCard.test.tsx.
-vi.mock("@/features/models/queries/useGgufDownload", () => ({
+vi.mock("@/core/model-downloads/queries/useGgufDownload", () => ({
 	useActiveGgufDownloads: () => new Map(),
 	useCancelGgufDownload: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
 }));
@@ -226,8 +226,8 @@ function guardBlocks(nextPathname: string): boolean {
 }
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { useGgufBrowseStore } from "@/core/model-downloads/stores/GgufBrowseStore";
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
 import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
@@ -831,7 +831,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(screen.queryByTestId("node-settings-section-runtime")).toBeNull();
 	});
 
-	// D4: the interface mode and the node voice fields are draft fields now — no instant PUT.
+	// The interface mode and the node voice fields are draft fields — no instant PUT.
 	it("saves the interface mode through the save bar and seeds the shared query the nav reads", async () => {
 		// A server that keeps what it was sent, so the post-save refetch agrees with the seeded cache.
 		let storedMode = "advanced";
@@ -1400,7 +1400,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		renderPage("privacy");
 		await screen.findByDisplayValue("Offline / Manual");
 
-		// Pick Recommended, then turn provisioning back off by hand. Sending the profile too would let the server honour
+		// Pick Recommended, then turn provisioning back off by hand. Sending the profile too would let the server honor
 		// the preset and discard the operator's switch.
 		fireEvent.click(screen.getByTestId("node-settings-external-access-profile"));
 		// Scoped to this select's own listbox: "Recommended" also appears in the llama.cpp runtime card.

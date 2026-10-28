@@ -1,15 +1,15 @@
 import { Alert, Button, CloseButton, Group, Loader, Progress, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload } from "@tabler/icons-react";
-import type { TFunction } from "i18next";
 import { useQueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
-import type { RateTrackedProgress } from "@/features/models/hooks/useDownloadRateEstimates";
-import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
+import type { RateTrackedProgress } from "@/core/model-downloads/hooks/useDownloadRateEstimates";
+import { useDownloadRateEstimates } from "@/core/model-downloads/hooks/useDownloadRateEstimates";
+import { formatDownloadEta, humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
 import { useRuntimeAcquisitionHub } from "@/features/node-settings/hooks/useRuntimeAcquisitionHub";
 import { type LlamaCppVariant, llamaCppVariants } from "@/features/node-settings/models/LocalRuntimeModels";
 import {

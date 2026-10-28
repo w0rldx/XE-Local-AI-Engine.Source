@@ -596,9 +596,8 @@ public sealed class CloudSettingsEndpointTests
     [Test]
     public async Task SaveCloudSettings_WhenAuthModeIsUnrecognized_ReturnsValidationProblem()
     {
-        // The request-level validator rejects an unparseable AuthMode outright (before the endpoint ever runs), so
-        // CloudSettingsEndpointDtoMapper.ParseAuthMode's ApiKey fallback is unreachable via this route in practice —
-        // it exists only as a defensive default for direct mapper use.
+        // The request validator rejects an unparseable AuthMode first, so the ApiKey fallback in
+        // CloudSettingsEndpointDtoMapper.ParseAuthMode is unreachable here; it is a default for direct mapper use.
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
         await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
@@ -745,7 +744,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenFreshSecretHeaderIsBlank_ReturnsValidationProblem()
     {
         // No stored config at all: a brand-new secret header sent with a blank value has nothing to merge against and
-        // must be rejected as a 400 (previously threw ArgumentException in CloudCredentialStore.ValidateConfig -> 500).
+        // must be rejected as a 400, never an ArgumentException out of CloudCredentialStore.ValidateConfig -> 500.
         await AssertSaveRejectedAsync(new SaveAzureFoundryHeaderRequest
         {
             Name = "X-Api-Token",

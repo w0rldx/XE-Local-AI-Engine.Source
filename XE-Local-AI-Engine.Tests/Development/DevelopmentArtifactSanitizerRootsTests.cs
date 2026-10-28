@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Artifact sanitisation when the command that produced the output ran somewhere other than the host.
+///     Artifact sanitization when the command that produced the output ran somewhere other than the host.
 ///     <para>
 ///         The criterion these assert is a REACHABILITY one, taken literally: read a real failing-build report and
 ///         confirm the file and the line are still legible. Asserting that redaction "ran" would pass against output in
@@ -53,7 +53,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     public void Sanitize_WithHostRootsOnly_KeepsTheLeafButLosesTheRepositoryRelativePrefix()
     {
         // Container-internal paths never match a host root, so the targeted pass is a silent no-op here and the
-        // GENERIC pattern handles the diagnostic instead. That used to swallow it whole; it now keeps the trailing
+        // GENERIC pattern handles the diagnostic instead. It never swallows it whole; it keeps the trailing
         // segments, so the file and line survive even on the degraded path — this is the remedy, and asserting
         // it here is what stops the two passes from being confused for one another.
         var sanitized = DevelopmentArtifactSanitizer.Sanitize(Evidence(ContainerBuildReport),
@@ -120,10 +120,9 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
 
     /// <summary>
     ///     A principal is named by whatever follows a home-directory CONTAINER, and that is not always the second
-    ///     segment — so a purely positional "destroy the first two" rule leaks at other depths. Both of these were
-    ///     verified to leak before the container anchor was added, and both are reachable on the box this engine is
-    ///     developed on: WSL2 mounts the Windows profile at <c>/mnt/c/Users/&lt;user&gt;</c> (principal FOURTH), and the
-    ///     rootless Docker socket lives under <c>/run/user/&lt;uid&gt;</c> (principal THIRD).
+    ///     segment — so a purely positional "destroy the first two" rule leaks at other depths. Both of these leak
+    ///     under a positional rule, and both are reachable on a WSL2 development host: WSL2 mounts the Windows
+    ///     profile at <c>/mnt/c/Users/&lt;user&gt;</c> (principal FOURTH), and the rootless Docker socket lives under <c>/run/user/&lt;uid&gt;</c> (principal THIRD).
     /// </summary>
     [Test]
     public void Sanitize_RedactsThePrincipalAtAnyDepth_NotJustTheSecondSegment()
@@ -172,7 +171,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     }
 
     /// <summary>
-    ///     FU4-1: a prompt is ENGINE-authored text, so it redacts rather than rejecting. Both inputs here are shapes a
+    ///     A prompt is ENGINE-authored text, so it redacts rather than rejecting. Both inputs here are shapes a
     ///     real coder prompt carries — the workspace's carried-file list names paths, and a rework brief quotes the
     ///     gate's own complaint, which quotes a failing test name — and each on its own clears the secret scanner's
     ///     keyword-free entropy fallback. Rejecting on a match would lose the prompt of exactly the attempts whose
@@ -240,7 +239,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     ///         The earlier <c>(?&lt;!\*\*)</c> lookbehind was a leak for exactly this: it exempted every '/'
     ///         after '**', so <c>**/home/alice/private</c> in repository output or model prose crossed the boundary
     ///         <see cref="DevelopmentCloudContextBuilder" /> uses to reach a cloud provider. A lookbehind can only
-    ///         recognise a shape; <c>SanitizePromptText</c> knows the strings.
+    ///         recognize a shape; <c>SanitizePromptText</c> knows the strings.
     ///     </para>
     /// </summary>
     [Test]
@@ -254,7 +253,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         AssertEx.False(single.Contains("/etc/shadow", StringComparison.Ordinal), single);
         AssertEx.Contains(single, "[REDACTED:development-path]");
 
-        // The leak itself: the shape that used to ride the lookbehind out to a cloud provider.
+        // The leak itself: the shape that would ride the lookbehind out to a cloud provider.
         var doubled = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/home/alice/private", profile.ProtectedPaths, RepositoryRoot);
 
         AssertEx.False(doubled.Contains("/home/alice", StringComparison.Ordinal), doubled);

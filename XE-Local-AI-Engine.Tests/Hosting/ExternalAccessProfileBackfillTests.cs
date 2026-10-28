@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The one-time upgrade backfill for the external-access profile. A node that already completed setup and predates
-///     the profile — i.e. carries none of its four members — keeps today's behaviour (<c>recommended</c>, all three
+///     the profile — i.e. carries none of its four members — keeps today's behavior (<c>recommended</c>, all three
 ///     switches on); a fresh install, a node mid-decision and a node holding switches of its own are left for the
 ///     operator to answer; and an unreadable settings file leaves the profile UNDECIDED rather than silently re-enabling
 ///     outbound checks that were turned off.
@@ -103,7 +103,7 @@ public sealed class ExternalAccessProfileBackfillTests
     }
 
     // The three below are the operator-opt-out guard: the legacy install this backfill exists for carries NO
-    // external-access member, so a record with a switch of its own — with or without a profile the normaliser kept —
+    // external-access member, so a record with a switch of its own — with or without a profile the normalizer kept —
     // must be left alone rather than backfilled to all-true. Driven against the REAL NodeSettingsStore because the
     // junk-profile case only exists once NodeSettingsStore.NormalizeExternalAccessProfile has run over a real file.
     [Test]
@@ -124,7 +124,7 @@ public sealed class ExternalAccessProfileBackfillTests
     [Test]
     public async Task NodeWithAJunkProfileAndExplicitSwitches_KeepsItsSwitchesAndStaysUndecided()
     {
-        // "Offline" is unrecognised — the comparison is ordinal — so the normaliser hands the backfill "pending" beside
+        // "Offline" is unrecognised — the comparison is ordinal — so the normalizer hands the backfill "pending" beside
         // three false switches. Pending IS undecided: the gated services keep waiting and nothing is stamped.
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-junk-profile",
             """
@@ -170,7 +170,7 @@ public sealed class ExternalAccessProfileBackfillTests
         AssertEx.Null(store.Current.AutoProvisionFirstRunModel);
     }
 
-    // Driven against the REAL NodeSettingsStore over a hand-corrupted file, because the behaviour under test is the
+    // Driven against the REAL NodeSettingsStore over a hand-corrupted file, because the behavior under test is the
     // difference between the tolerant and the strict read and a double is readable by definition.
     [Test]
     public async Task NodeWhoseSettingsFileIsUnreadable_WritesNothing_AndWarnsOnce()

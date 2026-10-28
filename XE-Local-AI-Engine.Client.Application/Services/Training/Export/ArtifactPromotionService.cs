@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Export;
 
-using System.Security.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
@@ -98,7 +98,7 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
 
         await EnsureInstalledBaseAsync(artifact, cancellationToken);
 
-        var currentDigest = await ComputeSha256Async(artifact.Path, cancellationToken);
+        var currentDigest = await FileSha256.ComputeAsync(artifact.Path, cancellationToken);
         if (!string.Equals(currentDigest, artifact.Sha256, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(currentDigest, decision.ArtifactSha256, StringComparison.OrdinalIgnoreCase))
         {
@@ -196,12 +196,6 @@ public sealed class ArtifactPromotionService : IArtifactPromotionService
         }
 
         return receipt.RegistryEntry.ModelName;
-    }
-
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
     }
 
     private async Task EnsureInstalledBaseAsync(TrainingArtifactRecord artifact, CancellationToken cancellationToken)

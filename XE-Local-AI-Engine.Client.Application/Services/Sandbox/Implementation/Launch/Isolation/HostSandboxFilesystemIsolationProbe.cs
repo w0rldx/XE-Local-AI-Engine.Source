@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Measures whether this host can really run a command with the host filesystem absent from its mount namespace, by RUNNING the
@@ -420,22 +421,10 @@ internal static class HostSandboxFilesystemIsolationProbe
 
         public void Dispose()
         {
-            TryDeleteFile(HomeCanaryPath);
+            BestEffortFile.TryDeleteFile(HomeCanaryPath);
             try
             {
                 Directory.Delete(_root, recursive: true);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Best-effort probe cleanup.
-            }
-        }
-
-        private static void TryDeleteFile(string path)
-        {
-            try
-            {
-                File.Delete(path);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {

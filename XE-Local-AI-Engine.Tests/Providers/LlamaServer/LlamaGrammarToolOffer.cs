@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.ClientModel;
 using System.ClientModel.Primitives;
-using System.Net;
-using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -95,7 +93,7 @@ internal static class LlamaGrammarToolOffer
         ChatOptions? options,
         CancellationToken cancellationToken = default)
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(BuildDefaultClientOptions(), http);
 
@@ -116,7 +114,7 @@ internal static class LlamaGrammarToolOffer
         ChatOptions? options,
         CancellationToken cancellationToken = default)
     {
-        using var handler = new CapturingHandler();
+        using var handler = new ChatCompletionCapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var chat = BuildOpenAiChatClient(LlamaServerOpenAIAdapterFactory.BuildClientOptions(new Uri("http://127.0.0.1:1/v1"), TimeSpan.FromSeconds(30)),
             http);
@@ -141,29 +139,5 @@ internal static class LlamaGrammarToolOffer
         options.Transport = new HttpClientPipelineTransport(http);
         var client = new OpenAIClient(new ApiKeyCredential("ignored"), options);
         return client.GetChatClient("test-model").AsIChatClient();
-    }
-
-    /// <summary>Captures the outbound request body and returns a canned OpenAI chat completion so no network is hit.</summary>
-    private sealed class CapturingHandler : HttpMessageHandler
-    {
-        private const string CannedCompletion =
-            "{\"id\":\"c\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"test-model\","
-            + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],"
-            + "\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}";
-
-        public string? CapturedBody { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            if (request.Content is not null)
-            {
-                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
-            }
-
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent(CannedCompletion, Encoding.UTF8, "application/json")
-            };
-        }
     }
 }

@@ -70,7 +70,7 @@ function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAl
 // The durable launch evidence of one run's PRIMARY side: what the freeze intended, what the provider reported after
 // readiness, and
 // the environment captured just before the spawn. The judge's own evidence belongs to its attempt and is not
-// projected onto the run. Nothing here is a judgement — differences are shown, not interpreted.
+// projected onto the run. Nothing here is a judgment — differences are shown, not interpreted.
 // The evidence objects sit behind a collapsed accordion because a runtime-bundle listing runs to hundreds of rows.
 export function BenchmarkLaunchEvidencePanel({ run }: { run: BenchmarkRunDetail }) {
 	const { t } = useTranslation();

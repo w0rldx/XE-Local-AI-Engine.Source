@@ -404,7 +404,7 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
     public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>
-    ///     False when a budget WAS pinned and the frozen model cannot honour it — it does not reason, or its chat
+    ///     False when a budget WAS pinned and the frozen model cannot honor it — it does not reason, or its chat
     ///     template renders no reasoning end marker, so llama-server would accept the cap and ignore it.
     /// </summary>
     /// <remarks>

@@ -79,7 +79,7 @@ vi.mock("@/features/assist/components/AssistActions", () => ({
 }));
 
 import type { XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest } from "@/core/api/generated";
-import type { GenerationMetadata } from "@/features/assist/models/AssistModels";
+import type { GenerationMetadata } from "@/core/assist/models/AssistModels";
 import type { Skill } from "@/features/skills/models/SkillModels";
 import { SkillsPage } from "@/features/skills/pages/SkillsPage";
 import { useSkillManagementStore } from "@/features/skills/stores/SkillManagementStore";

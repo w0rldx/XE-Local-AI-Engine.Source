@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Turns a <c>run_in_agent_home</c> goal into real work: a BOUNDED nested agent loop over the same
@@ -529,7 +530,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             }
             finally
             {
-                TryDeleteStagingFile(stagingPath);
+                // The staging copy is in the host temp dir and carries only what the model just wrote.
+                BestEffortFile.TryDeleteFile(stagingPath);
             }
 
             if (!_writtenFiles.Contains(confined.RelativePath, StringComparer.Ordinal))
@@ -562,7 +564,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
             }
 
             // No allow-list, by design: the confinement AgentHome promises is the jail, the scrubbed environment and the
-            // egress denial, not a command catalogue. What IS pinned is the CWD — always the workspace copy.
+            // egress denial, not a command catalog. What IS pinned is the CWD — always the workspace copy.
             var executionId = string.Create(CultureInfo.InvariantCulture, $"{_request.RunId}-cmd-{Interlocked.Increment(ref _commandCounter)}");
             var commandTimeout = TimeSpan.FromSeconds(_executor._options.CommandTimeoutSeconds);
 
@@ -710,18 +712,6 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         {
             _ = Interlocked.Increment(ref _refusedCalls);
             return message;
-        }
-
-        private static void TryDeleteStagingFile(string path)
-        {
-            try
-            {
-                File.Delete(path);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Best-effort: the staging copy is in the host temp dir and carries only what the model just wrote.
-            }
         }
 
         // Returns the longest prefix whose UTF-8 encoding fits the budget, never splitting a rune.

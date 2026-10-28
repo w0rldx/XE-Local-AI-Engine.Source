@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     <para>
 ///         The RUNTIME gate is shared/exclusive: ordinary ensures take it shared, so one role's stalled reuse liveness
-///         probe (up to <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeTimeout" />) no longer head-of-line
+///         probe (up to <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeTimeout" />) never head-of-line
 ///         blocks another role's ensure — the workload that makes this matter is background knowledge-base indexing
 ///         alongside chat. Both exclusion directions against an operator runtime mutation are preserved: a mutation
 ///         waits for in-flight ensures (covered here) and ensures wait for a held mutation lease (covered by

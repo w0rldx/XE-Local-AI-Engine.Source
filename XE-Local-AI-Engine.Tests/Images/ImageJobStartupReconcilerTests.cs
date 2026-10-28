@@ -15,12 +15,12 @@ using XE_Local_AI_Engine.Client.Services.Images.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Behavioural tests for the image-job startup reconciler: jobs a previous process left Queued/Generating are
-///     terminalized to Failed with the content-free interrupted reason (no auto-retry) and a status event is pushed;
-///     terminal jobs are untouched; an empty store no-ops; a store failure never blocks startup. Runs against the real
-///     EF/sqlite <see cref="ImageJobStore" /> so the non-terminal query and the prompt-ciphertext-preserving update are
-///     covered end-to-end.
+///     Image-job startup reconciler: leftover Queued/Generating jobs fail with the content-free
+///     interrupted reason (no auto-retry) plus a status event; terminal jobs are untouched; an empty store no-ops;
+///     a store failure never blocks startup.
 /// </summary>
+/// <remarks>Runs on the real EF/sqlite <see cref="ImageJobStore" /> so the non-terminal query and the
+///     prompt-ciphertext-preserving update are covered end-to-end.</remarks>
 [Category(TestCategories.Integration)]
 public sealed class ImageJobStartupReconcilerTests : IDisposable
 {

@@ -14,13 +14,13 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the
-///     serve-and-disclose behavior: a document whose catalog status is NOT <c>Indexed</c> (a pending re-index or a
-///     failed re-ingest) still has its last-known-good chunks returned, but every hit carries the disclosure fields
-///     (<see cref="KnowledgeSearchHit.DocumentStatus" /> + <see cref="KnowledgeSearchHit.ServingLastKnownGood" />)
-///     so a consumer never treats potentially-stale content as freshly indexed. The embedding arm is intentionally
-///     degraded (no provider) and reranking is off, so the fused order is the lexical (FTS) order.
+///     The real <see cref="KnowledgeSearchService" /> serves a non-<c>Indexed</c> document's last-known-good chunks,
+///     but every hit carries <see cref="KnowledgeSearchHit.DocumentStatus" /> and
+///     <see cref="KnowledgeSearchHit.ServingLastKnownGood" />, so stale content is never taken as freshly indexed.
 /// </summary>
+/// <remarks>
+///     The embedding arm is degraded (no provider) and reranking is off, so the fused order is the lexical (FTS) order.
+/// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class KnowledgeSearchDisclosureTests : IDisposable
 {

@@ -82,10 +82,10 @@ public sealed class CodexOAuthTokenEndpointResilienceTests
         }
     }
 
-    private static (ServiceProvider Provider, AttemptCountingHandler Upstream) BuildProvider()
+    private static (ServiceProvider Provider, UnavailableHttpMessageHandler Upstream) BuildProvider()
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
-        var handler = new AttemptCountingHandler();
+        var handler = new UnavailableHttpMessageHandler();
 
         // Mirror ServiceDefaults' Aspire branch: a global standard handler on every client, registered BEFORE the
         // production registration so the latter's RemoveAllResilienceHandlers strips it, exactly as in production.
@@ -107,20 +107,5 @@ public sealed class CodexOAuthTokenEndpointResilienceTests
         });
 
         return (builder.Services.BuildServiceProvider(), handler);
-    }
-
-    /// <summary>Stands in for a token endpoint that answers every attempt with a retryable failure, and counts them.</summary>
-    private sealed class AttemptCountingHandler : HttpMessageHandler
-    {
-        private int _attempts;
-
-        public int Attempts => Volatile.Read(ref _attempts);
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            _ = Interlocked.Increment(ref _attempts);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        }
     }
 }

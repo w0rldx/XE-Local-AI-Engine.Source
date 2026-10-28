@@ -27,7 +27,7 @@ public sealed class DevWorkflowEventPublisherTests
         await publisher.PublishAsync(runId, sequence: 42, kind);
 
         // Asserted against the literal, not against kind.ToString(): the client switches on these strings, so a
-        // capitalised name would match no arm and silently stop updating the view — and nothing else would catch it.
+        // capitalized name would match no arm and silently stop updating the view — and nothing else would catch it.
         await proxy.Received(1)
                    .SendCoreAsync("devWorkflowChanged",
                        Arg.Is<object?[]>(arguments => arguments.Length == 1

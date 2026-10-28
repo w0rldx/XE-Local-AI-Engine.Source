@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type {
-	XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse,
 	XeLocalAiEngineClientEndpointsTrainingV1TrainingDefinitionResponse,
+	XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse,
 } from "@/core/api/generated";
 import type { DatasetGenerationProgress, TrainingDataset } from "@/features/training/models/TrainingModels";
 import {

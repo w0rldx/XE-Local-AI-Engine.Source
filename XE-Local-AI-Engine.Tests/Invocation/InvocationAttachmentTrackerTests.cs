@@ -6,10 +6,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The tracker answers one question — "does this run still have somebody watching it?" — and two consumers depend
-///     on the answer: the disconnect reaper and the runner's park deadline. The load-bearing property is that a run
-///     which NEVER attached is invisible to both, so a scheduled or platform run is neither reaped nor stripped of its
-///     park budget.
+///     The tracker answers "does this run still have somebody watching it?" for the disconnect reaper and the runner's
+///     park deadline. A run that NEVER attached, such as a scheduled or platform run, is invisible to both.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class InvocationAttachmentTrackerTests

@@ -3,10 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>DropCanvasWorkflows</c> removes the last schema trace of Open Canvas, whose saved rows the one-shot import
-///     carries into Graph Workflows before this migration runs. A drop migration is the easy one to get wrong twice —
-///     reintroducing the table, or leaving it in place while believing it gone — so this pins BOTH ends: present at the
-///     migration before it, absent at the head of the chain.
+///     <c>DropCanvasWorkflows</c> removes the last schema trace of Open Canvas, whose rows the one-shot import moves
+///     into Graph Workflows first. A drop is easy to get wrong both ways, so BOTH ends are pinned: present before it,
+///     absent at head.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class DropCanvasWorkflowsMigrationTests

@@ -7,10 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
 /// <summary>
-///     Proves that <see cref="ContextExpansionService.ExpandBatchAsync" /> (one query per document instead of one
-///     per hit) returns byte-for-byte the same rows and order as calling <see cref="ContextExpansionService.ExpandAsync(Guid, int, int, CancellationToken)" />
-///     for each anchor individually — including same-document anchors with overlapping windows, an anchor at the lower
-///     boundary, an anchor whose window runs past the last chunk, and anchors spanning multiple documents.
+///     <see cref="ContextExpansionService.ExpandBatchAsync" /> (one query per document) returns byte-for-byte the rows
+///     and order of <see cref="ContextExpansionService.ExpandAsync(Guid, int, int, CancellationToken)" />
+///     per anchor, including overlapping same-document windows, both chunk boundaries, and multiple documents.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ContextExpansionServiceTests : IDisposable

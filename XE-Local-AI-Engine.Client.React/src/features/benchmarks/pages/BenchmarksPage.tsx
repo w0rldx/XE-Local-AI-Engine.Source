@@ -1,5 +1,5 @@
+import { useAgentDefinitions } from "@/core/agents/queries/useAgentDefinitions";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
-import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { BenchmarkPageDialogs } from "@/features/benchmarks/components/BenchmarkPageDialogs";
 import { BenchmarkProjectEditorDialog } from "@/features/benchmarks/components/BenchmarkProjectEditorDialog";
 import { BenchmarkProjectWorkspace } from "@/features/benchmarks/components/BenchmarkProjectWorkspace";

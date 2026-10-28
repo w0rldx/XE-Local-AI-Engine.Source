@@ -236,7 +236,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         // Decision C-b on the store's own read: a corrupt blob on a CURRENT fit must not fail the run list or the cell
         // table (a 500 on every Benchmarks page); it ranks as if no fit were published and says so once per read.
         await using var context = await CreateSchemaAsync("ranking-corrupt.sqlite");
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<BenchmarkStore>();
         var store = new BenchmarkStore(context, TimeProvider.System, logger);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
@@ -254,10 +254,10 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         }
 
         AssertEx.True(cells.Cells.All(static cell => cell.Quality is null), "No cell takes a quality from an unreadable fit.");
-        AssertEx.True(logger.Warnings.Count >= 2, "Each read warns.");
-        AssertEx.True(logger.Warnings.All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)
+        AssertEx.True(Warnings(logger).Count >= 2, "Each read warns.");
+        AssertEx.True(Warnings(logger).All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)
                                                      && message.Contains(project.Id.ToString(), StringComparison.Ordinal)));
-        AssertEx.False(logger.Warnings.Any(static message => message.Contains("secret-blob", StringComparison.Ordinal)),
+        AssertEx.False(Warnings(logger).Any(static message => message.Contains("secret-blob", StringComparison.Ordinal)),
             "The Warning must not carry blob content.");
     }
 
@@ -267,7 +267,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         // The fitter never writes either, but a blob that does must not fail the run list or the cell table with an
         // ArgumentException from ToDictionary. Same rule as the listing and the exports: skip null, first entry wins.
         await using var context = await CreateSchemaAsync("ranking-duplicate.sqlite");
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<BenchmarkStore>();
         var store = new BenchmarkStore(context, TimeProvider.System, logger);
         var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2);
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
@@ -277,7 +277,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         var fit = AssertEx.NotNull(await store.GetActivePairwiseFitAsync(project.Id));
 
         var ranked = await store.ListAllRunsAsync(project.Id);
-        AssertEx.Equal(expected: 1, logger.Warnings.Count, "One read of a defective blob warns once.");
+        AssertEx.Equal(expected: 1, Warnings(logger).Count, "One read of a defective blob warns once.");
         var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10);
         var cells = await store.ListCellsAsync(project.Id);
 
@@ -292,7 +292,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         }
 
         AssertEx.True(cells.Cells.Any(static cell => cell.Quality is not null), "The cell table still ranks from the normalized fit.");
-        AssertEx.True(logger.Warnings.All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)));
+        AssertEx.True(Warnings(logger).All(message => message.Contains(fit.Id.ToString(), StringComparison.Ordinal)));
     }
 
     /// <summary>A blob the fitter cannot write: a null element, then <paramref name="first" /> twice (70, then 10).</summary>
@@ -415,8 +415,8 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     [Test]
     public async Task GetPairwiseCohortAsync_CarriesEachRunsTaskItemAndCell()
     {
-        // R7-02: every candidate used to carry a null case and an empty hash, so a suite's runs formed one group and
-        // were paired across items. The cohort must carry what each run was asked and which model answered.
+        // A candidate with a null case and an empty hash puts a suite's runs in one group, paired across items.
+        // The cohort must carry what each run was asked and which model answered.
         await using var context = await CreateSchemaAsync("cohort-task-identity.sqlite");
         var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
         var (project, _, runs) = await SeedCohortAsync(store, runCount: 2);
@@ -620,25 +620,6 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
             RequestedContextTokens = 4096
         };
 
-    /// <summary>Keeps the formatted Warnings, which is all the corrupt-blob test asserts on.</summary>
-    private sealed class RecordingLogger : ILogger<BenchmarkStore>
-    {
-        public List<string> Warnings { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull =>
-            null;
-
-        public bool IsEnabled(LogLevel logLevel) =>
-            true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-            if (logLevel == LogLevel.Warning)
-            {
-                Warnings.Add(formatter(state, exception));
-            }
-        }
-    }
+    private static List<string> Warnings(RecordingLogger<BenchmarkStore> logger) =>
+        [.. logger.Entries.Where(static entry => entry.Level == LogLevel.Warning).Select(static entry => entry.Message)];
 }

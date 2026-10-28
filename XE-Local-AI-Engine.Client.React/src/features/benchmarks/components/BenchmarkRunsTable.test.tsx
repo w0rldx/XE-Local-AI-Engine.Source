@@ -78,7 +78,7 @@ describe("BenchmarkRunsTable", () => {
 		expect(screen.queryByTestId("benchmark-rank-exclusion-ranked")).toBeNull();
 	});
 
-	// A cancelled judging is not a failed one — the operator only has to re-judge it, and the chip must say so rather
+	// A canceled judging is not a failed one — the operator only has to re-judge it, and the chip must say so rather
 	// than accusing the judge of failing.
 	it("distinguishes a cancelled judging from a failed one", () => {
 		renderTable([
@@ -314,7 +314,7 @@ describe("BenchmarkRunsTable", () => {
 
 // Fidelity separates two quants of one model by a number. The rules the cell has to keep: print
 // enough decimals for the separation to survive, and never render a KLD figure that was measured against something the
-// project no longer expects — that one is a badge, not a greyed-out number.
+// project no longer expects — that one is a badge, not a grayed-out number.
 describe("BenchmarkRunsTable fidelity column", () => {
 	afterEach(cleanup);
 

@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Testing.Mocks;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     An <see cref="IAgentHomeRunLogger" /> that records what it was asked to write and puts nothing on disk, for the
-///     tests whose subject is the thing being logged rather than the logging. The real file-writing logger and its
-///     redaction contract are graded by <c>AgentHomeRunLoggerTests</c>.
+///     An <see cref="IAgentHomeRunLogger" /> that records what it was asked to write and puts nothing on disk, for
+///     tests whose subject is what gets logged. <c>AgentHomeRunLoggerTests</c> grades the real logger and its redaction.
 /// </summary>
 internal sealed class NoOpAgentHomeRunLogger : IAgentHomeRunLogger
 {

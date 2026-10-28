@@ -62,7 +62,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         ArgumentNullException.ThrowIfNull(candidates);
 
         // Disabled gate: no embedding model configured => the lexical ranker is the effective ranker. No embedding
-        // client is constructed and Ollama is never touched (the "lexical stays default" / CI behaviour).
+        // client is constructed and Ollama is never touched (the "lexical stays default" / CI behavior).
         var model = _options.EmbeddingModelName;
         if (string.IsNullOrWhiteSpace(model))
         {

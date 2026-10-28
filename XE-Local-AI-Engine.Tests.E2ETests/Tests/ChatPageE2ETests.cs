@@ -95,7 +95,7 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
         // NOTE: chat-capability-notice is NOT a permanent fixture — ChatDisplayShell.tsx:61 renders
         // it only when `disabledNotice` is set (Chat.tsx: streamError | conversations load error |
         // remote view-only conversation). With a clean local conversation and no error it is absent,
-        // so asserting its visibility here is incorrect and order-dependent (it previously passed only
+        // so asserting its visibility here is incorrect and order-dependent (it can pass only
         // by coincidental transient error state under PerTestSession DB reuse). Do not assert it.
 
         // Chat textarea is focusable.

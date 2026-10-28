@@ -133,7 +133,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         AssertEx.Null(recorded.KldMean, "A perplexity-only pass measured no divergence, so it reports none.");
         AssertEx.Null(recorded.BaseLogitsDigest, "And it therefore carries no comparability digest to gate on.");
 
-        // The reduced evidence block, labelled as reduced: llama-perplexity has no readiness probe, so there is no
+        // The reduced evidence block, labeled as reduced: llama-perplexity has no readiness probe, so there is no
         // launch receipt, and storing this under the receipt's shape would let a UI present it as complete evidence.
         var receipt = Encoding.UTF8.GetString(recorded.ReceiptJson.Span);
         AssertEx.True(receipt.Contains("\"kind\":\"fidelity-evidence\"", StringComparison.Ordinal), $"The evidence must say what it is; got {receipt}.");
@@ -143,8 +143,8 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     [Test]
     public async Task Execute_MeasuringKldFromScratch_ReservesForTheBaseModelFirstAndTheQuantSecond()
     {
-        // The reservation used to be sized ONCE, off the quant, and then held across a base-logit pass that loads a
-        // model routinely larger than it — an over-admission that OOMs on exactly the box where the base is the big
+        // A reservation sized ONCE, off the quant, and held across a base-logit pass that loads a
+        // model routinely larger than it is an over-admission that OOMs on exactly the host where the base is the big
         // one. The two phases never overlap, so each reserves for the model it actually loads.
         var harness = new Harness(_root, kind: "kld");
         harness.ScriptedOutputs.Enqueue(BasePhaseOutput);

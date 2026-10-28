@@ -115,7 +115,7 @@ public sealed class TranscriptionServiceTests
         AssertEx.Equal(2, reread.Segments.Count);
     }
 
-    // A file VAD finds no speech in (the Windows crash of the tester round) is one call and a completed, empty session.
+    // A file VAD finds no speech in (a Windows whisper-server crash case) is one call and a completed, empty session.
     [Test]
     public async Task TranscribeFile_SilentAudio_CompletesWithNoSegmentsAndNoLanguageInOneCall()
     {
@@ -282,7 +282,7 @@ public sealed class TranscriptionServiceTests
         AssertEx.Equal("audio/flac", harness.Transcriber.LastContentType);
     }
 
-    // N-72: utterances parted by long silences must not be merged by the runtime into one segment.
+    // Utterances parted by long silences must not be merged by the runtime into one segment.
     [Test]
     public async Task TranscribeFile_WavWithLongSilences_SendsOneRequestPerRegionAndOffsetsTheSegments()
     {

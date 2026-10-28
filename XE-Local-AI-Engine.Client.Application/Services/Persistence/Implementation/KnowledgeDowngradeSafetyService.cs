@@ -80,7 +80,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         {
             var preflight = await PreflightArtifactAsync(destinationPath, cancellationToken);
             var bytes = new FileInfo(destinationPath).Length;
-            var sha256 = await HashFileAsync(destinationPath, cancellationToken);
+            var sha256 = await FileSha256.ComputeAsync(destinationPath, cancellationToken);
             return new KnowledgeDowngradeExportResult
             {
                 ArtifactPath = destinationPath,
@@ -91,7 +91,7 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         }
         catch
         {
-            TryDeleteIncompleteArtifact(destinationPath);
+            BestEffortFile.TryDeleteFile(destinationPath);
             throw;
         }
     }
@@ -264,34 +264,12 @@ public sealed class KnowledgeDowngradeSafetyService : IKnowledgeDowngradeSafetyS
         }
         catch
         {
-            TryDeleteIncompleteArtifact(destinationPath);
+            BestEffortFile.TryDeleteFile(destinationPath);
             throw;
         }
         finally
         {
             await dbContext.Database.CloseConnectionAsync();
-        }
-    }
-
-    private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
-    }
-
-    private static void TryDeleteIncompleteArtifact(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-            // Preserve the original export/hash exception. A partial artifact is never returned as successful.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Preserve the original export/hash exception. A partial artifact is never returned as successful.
         }
     }
 }

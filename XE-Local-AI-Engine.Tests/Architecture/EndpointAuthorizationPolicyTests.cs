@@ -18,7 +18,7 @@ using EndpointDefinition = FastEndpoints.EndpointDefinition;
 ///     FastEndpoints' own <c>AnonymousVerbs</c>/<c>PreBuiltUserPolicies</c> bookkeeping, because those can diverge
 ///     from what is enforced: <c>Options(Action&lt;RouteHandlerBuilder&gt;)</c> lets an endpoint's
 ///     <c>Configure()</c> attach <see cref="IAllowAnonymous" /> straight onto the route without touching
-///     <c>AnonymousVerbs</c>, and ASP.NET Core honours it over any policy also present.
+///     <c>AnonymousVerbs</c>, and ASP.NET Core honors it over any policy also present.
 ///     <para>
 ///         The global <c>Endpoints.Configurator</c> in <c>Program.cs</c> is what makes a forgotten
 ///         <c>Policies()</c> call harmless. Four hundred and forty-six of the endpoints also call it themselves,

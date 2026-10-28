@@ -34,7 +34,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     The profile these fixtures bind. Their repositories are a single <c>README.md</c>, so the generic profile
     ///     is the one that honestly describes them; the tests here exercise path confinement, patch guards and
     ///     evidence export, none of which depend on which build commands the profile carries. The gate's actual
-    ///     build/test behaviour is covered in <c>DevelopmentValidationReviewAndApplyTests</c> against a real solution.
+    ///     build/test behavior is covered in <c>DevelopmentValidationReviewAndApplyTests</c> against a real solution.
     /// </summary>
     private static readonly DevelopmentCommandProfile GenericProfile =
         DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
@@ -400,7 +400,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     name. A credential-bearing entry is PRUNED, so its bytes are never read in the first place.
     ///     <para>
     ///         This asserts the wiring end to end through a prepared workspace, which is why it needs the process
-    ///         sandbox provider and therefore Linux. The survey behaviour itself is OS-independent and covered on every
+    ///         sandbox provider and therefore Linux. The survey behavior itself is OS-independent and covered on every
     ///         host by <see cref="Workspace.WorkspaceFileScannerTests" />.
     ///     </para>
     /// </summary>
@@ -550,7 +550,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     The round is budgeted against the window the model is REALLY serving, and reserves a quarter of it.
     ///     <para>
     ///         A window invented as <c>2 × maxOutputTokens</c> with <c>maxOutputTokens</c> reserved out of it leaves
-    ///         exactly <c>0.7 × maxOutputTokens</c> of input budget for every model alive. Measured 2026-09-02 against
+    ///         exactly <c>0.7 × maxOutputTokens</c> of input budget for every model alive. Measured against
     ///         <c>unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL</c> served with <c>-c 65536</c>: a routed rework round of ~24,267
     ///         estimated input tokens is refused against that "effective window" of 22,937 before the provider is called.
     ///     </para>
@@ -581,7 +581,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(Served / 4, budget.ReservedOutputTokenFloor, "a quarter of the window is reserved for the answer, not the whole configured maximum.");
         AssertEx.Equal<int?>(Served / 4, options.MaxOutputTokens, "the reserve and the round's own output ceiling are the same number by construction.");
 
-        // What the fix is FOR, in the terms the budgeter computes: window x 0.85 (the estimator's safety factor,
+        // What the budget is FOR, in the terms the budgeter computes: window x 0.85 (the estimator's safety factor,
         // uncalibrated) less the reserve. 39,321 tokens of input budget against the 22,937 that refused the measured round.
         AssertEx.True((int)(Served * 0.85) - budget.ReservedOutputTokenFloor > 24_267,
             "the measured rework round must fit: brief + policy + routed feedback + tool schemas.");
@@ -641,12 +641,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     The output budget is a WHOLE-ATTEMPT ceiling measured against a CUMULATIVE usage report, so it has to be
     ///     derived the way the input ceiling already was — per-call budget times the round count.
     ///     <para>
-    ///         This test previously rejected <c>maxOutputTokens + 1</c>, which pinned the defect rather than the rule:
+    ///         Rejecting <c>maxOutputTokens + 1</c> would pin a defect rather than the rule:
     ///         <c>MaxOutputTokens</c> is what the provider enforces on <em>each</em> round, while
-    ///         <c>ToChatResponse().Usage</c> sums <em>every</em> round. Any tool loop whose rounds together out-talked
-    ///         one round's budget was failed for exceeding a limit no call had exceeded. Reproduced live on
-    ///         2026-07-31 against <c>unsloth/Ornith-1.0-9B-GGUF:Q4_K_M</c>: a coder attempt reported 33k cumulative
-    ///         output tokens under a 32768 per-call budget and its completed work was discarded.
+    ///         <c>ToChatResponse().Usage</c> sums <em>every</em> round. Any tool loop whose rounds together out-talk
+    ///         one round's budget would fail for exceeding a limit no call had exceeded. Against
+    ///         <c>unsloth/Ornith-1.0-9B-GGUF:Q4_K_M</c> a coder attempt reports 33k cumulative
+    ///         output tokens under a 32768 per-call budget, and its completed work would be discarded.
     ///     </para>
     /// </summary>
     [Test]
@@ -1137,8 +1137,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     A replace ref in the task's own repository made <c>HEAD^{tree}</c> carry the planted gitlink, so the tree
-    ///     compare saw none. The export no longer reads the task's refs at all.
+    ///     A replace ref in the task's own repository can make <c>HEAD^{tree}</c> carry the planted gitlink, so the
+    ///     tree compare would see none. The export does not read the task's refs at all.
     /// </summary>
     [Test]
     public async Task EvidenceExport_WhenATaskReplaceRefCoversTheGitlink_StillRefusesIt()
@@ -1382,7 +1382,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         _ = store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command => command.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.CoderSubmission),
             Arg.Any<CancellationToken>());
 
-        // FU4-1: what the model was TOLD is a record of its own. It is stamped with the base commit but with no
+        // What the model was TOLD is a record of its own. It is stamped with the base commit but with no
         // subject hash, because the subject this attempt is about to produce does not exist when the prompt is built.
         var prompt = attached.Single(command => command.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.Prompt);
         AssertEx.Equal(result.BaseCommit, prompt.BaseCommit);
@@ -1397,9 +1397,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     FU4-1: the prompt survives an attempt that fails. This is the case the whole item exists for — a run that
+    ///     The prompt survives an attempt that fails. This is the case the prompt record exists for — a run that
     ///     times out, exhausts its tool loop or loses its evidence check reaches none of the five success-path
-    ///     artifact writes, so before this the attempts an operator most needed to explain were the ones that left
+    ///     artifact writes, so without it the attempts an operator most needs to explain would be the ones that leave
     ///     nothing at all behind. The submission mismatch here is only the cheapest way to make an attempt fail
     ///     downstream of the model call.
     /// </summary>
@@ -1458,10 +1458,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     FU4-1 review MED-2: the timed-out attempt is the one whose prompt an operator most needs, so the write must
-    ///     not run on the deadline that cancelled it. It did at first — the prompt was persisted under the attempt's
-    ///     own linked token, so a cancellation around the write threw, the best-effort catch swallowed it, and the
-    ///     case the feature was built for left nothing. <c>TerminalizeAttemptAsync</c> already used
+    ///     The timed-out attempt is the one whose prompt an operator most needs, so the write must not run on the
+    ///     deadline that cancelled it. Persisted under the attempt's own linked token, a cancellation around the
+    ///     write would throw, the best-effort catch would swallow it, and the case the prompt record exists for
+    ///     would leave nothing. <c>TerminalizeAttemptAsync</c> uses
     ///     <see cref="CancellationToken.None" /> on the failure path for exactly this reason.
     /// </summary>
     [Test]
@@ -1489,7 +1489,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         blob.WriteAsync(snapshot.ProjectId, Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
-                // The real blob store honours its token. Substituting that here is what makes the test fail when the
+                // The real blob store honors its token. Substituting that here is what makes the test fail when the
                 // prompt write is handed the attempt's deadline instead of CancellationToken.None.
                 call.ArgAt<CancellationToken>(3).ThrowIfCancellationRequested();
                 return new DevelopmentArtifactBlobWriteResult
@@ -1554,7 +1554,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertCancellationRecorded(store, hostStopping);
     }
 
-    /// <summary>The reviewer's half of the same rule: F-47 was found on a reviewer attempt.</summary>
+    /// <summary>The reviewer's half of the same rule: a reviewer attempt is held to it too.</summary>
     [Test]
     [Arguments(true)]
     [Arguments(false)]
@@ -1586,9 +1586,9 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     A test-write refusal reaches the operator in the POLICY's own words. It used to be replaced by "violated
-    ///     a workspace security policy", so a workflow node spent its whole retry budget — roughly ten minutes of real
-    ///     model time, live — without ever telling anyone which rule it broke or what to change. The failure-code prefix
+    ///     A test-write refusal reaches the operator in the POLICY's own words. Replaced by "violated a workspace
+    ///     security policy", it would let a workflow node spend its whole retry budget — minutes of real
+    ///     model time — without ever telling anyone which rule it broke or what to change. The failure-code prefix
     ///     rides along so the workflow lane can class it as a policy refusal rather than as a provider error.
     /// </summary>
     [Test]
@@ -1635,12 +1635,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
-    ///     FU3-1: a later attempt is told what the shared workspace already carries, and reporting a carried path it
+    ///     A later attempt is told what the shared workspace already carries, and reporting a carried path it
     ///     returned to the base commit is accepted.
     ///     <para>
-    ///         Live on 2026-09-04 a coder reverted a file an earlier attempt had created, listed it in changedFiles
-    ///         because it had touched it, and lost the whole attempt to changed_file_manifest_mismatch. Its mental model
-    ///         was "changed in this attempt"; the contract is "differs from the base commit at submission time". Naming
+    ///         A coder that reverts a file an earlier attempt created lists it in changedFiles because it touched
+    ///         it, and would lose the whole attempt to changed_file_manifest_mismatch. Its mental model
+    ///         is "changed in this attempt"; the contract is "differs from the base commit at submission time". Naming
     ///         the carried files closes the gap in the prompt, and forgiving exactly this one direction closes it in the
     ///         check — the manifest artifact is derived from git, never from the submission.
     ///     </para>
@@ -1657,8 +1657,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Contains(second.Prompt, "Files in this shared workspace that already differ from the base commit");
         AssertEx.Contains(second.Prompt, "README.md");
 
-        // get_diff has to SHOW the work the prompt points at. It diffed against the index until 2026-09-04, and the
-        // index equals the worktree from the moment an attempt starts, so it answered "nothing" for every carried file.
+        // get_diff has to SHOW the work the prompt points at. It does not diff against the index: the index
+        // equals the worktree from the moment an attempt starts, so it would answer "nothing" for every carried file.
         AssertEx.Contains(second.DiffAtStart, "--- a/README.md");
         AssertEx.Contains(second.DiffAtStart, "+changed");
     }
@@ -1774,10 +1774,10 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     managed workspace therefore inherits whatever sits above the node's data directory unless something stops
     ///     the walk.
     ///     <para>
-    ///         Reproduced live on 2026-07-31: running from a source checkout puts the data root inside this
-    ///         repository, so a registered repository's <c>dotnet restore</c> picked up <em>this</em> repository's
-    ///         Central Package Management and failed <c>NU1008</c> for a package it declares legally inline. The
-    ///         validation gate was measuring the host's build configuration.
+    ///         Running from a source checkout puts the data root inside this
+    ///         repository, so a registered repository's <c>dotnet restore</c> would pick up <em>this</em> repository's
+    ///         Central Package Management and fail <c>NU1008</c> for a package it declares legally inline. The
+    ///         validation gate would be measuring the host's build configuration.
     ///     </para>
     ///     <para>
     ///         The barrier must sit one level ABOVE the workspace, never inside it: a file inside would show up as an

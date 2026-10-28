@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     once is a token every later reader has to understand. It lives beside <see cref="IGraphWorkflowStore" /> for the
 ///     same reason <c>DevWorkflowEventTypes</c> lives beside its own store — the writer of the column and the
 ///     vocabulary of the column are one file apart. <see cref="RunWaiting" /> and the two <c>gate.*</c> tokens ship
-///     unwritten, so the pause node that produces them adds behaviour rather than contract.
+///     unwritten, so the pause node that produces them adds behavior rather than contract.
 /// </remarks>
 public static class GraphWorkflowEventTypes
 {

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
 ///     Cancels generation. Mirrors the training-run cancel: a queued dataset is terminalized, a generating one is
-///     signalled through the executor's registry, and an unknown or already-finished dataset is a 404.
+///     signaled through the executor's registry, and an unknown or already-finished dataset is a 404.
 /// </summary>
 public sealed class CancelTrainingDatasetEndpoint : Endpoint<CancelTrainingDatasetRequest>
 {

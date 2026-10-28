@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The external provider's surface as the node's routing, catalog and lifecycle code sees it: one multiplexer
-///     serving every connection, declarations rather than probes, and a lifecycle split where the operations the node
-///     genuinely cannot perform refuse LOUDLY while the ones a background service calls generically stay inert.
+///     The external provider as routing, catalog and lifecycle code see it: one multiplexer for all connections,
+///     declarations not probes; lifecycle operations the node cannot perform refuse LOUDLY, generic background calls
+///     stay inert.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ExternalOpenAiModelProviderTests

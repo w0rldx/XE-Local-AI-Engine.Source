@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Tests.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The third-party import routes (<c>skills/import/preview</c>, <c>skills/import</c>) and the bundled-resource
-///     routes, over the full DI graph. The invariants asserted here are the feature's security boundary: a preview
-///     writes nothing, an unacknowledged import writes nothing, an imported skill lands disabled with Imported
-///     provenance, a resource list carries no content, and a report token is single-use.
+///     Skill import and bundled-resource routes pin the security boundary: a preview or unacknowledged import writes
+///     nothing, an import lands disabled with Imported provenance, a resource list carries no content, and a report
+///     token is single-use.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class SkillImportEndpointTests

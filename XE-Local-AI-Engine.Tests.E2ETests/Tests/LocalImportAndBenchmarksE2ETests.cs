@@ -4,9 +4,9 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-level smoke coverage for the two desktop surfaces introduced together: local GGUF import and
-///     benchmark model comparison. Provider-heavy copy and generation behavior remains covered by the backend
-///     transaction suites; these tests prove the authenticated desktop SPA exposes the shipped routes and dialogs.
+///     Browser smoke coverage for local GGUF import and benchmark model comparison. Provider-heavy copy and
+///     generation stay with the backend transaction suites; these tests prove the SPA exposes the routes and
+///     dialogs.
 /// </summary>
 [Category("Page")]
 public sealed class LocalImportAndBenchmarksE2ETests : XEPooledE2ETestBase

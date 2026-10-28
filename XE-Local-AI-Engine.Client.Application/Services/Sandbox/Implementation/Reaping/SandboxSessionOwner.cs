@@ -10,14 +10,14 @@ using System.Text.Json;
 /// </summary>
 /// <remarks>
 ///     Markers alone cannot do it: they are written only for a process-group or scope-unit launch, so Windows writes none, and on both
-///     platforms the session root itself is removed only by <c>Dispose</c>, which a killed engine never runs (N-64).
+///     platforms the session root itself is removed only by <c>Dispose</c>, which a killed engine never runs.
 /// </remarks>
 internal sealed class SandboxSessionOwner
 {
     /// <summary>The file name inside a session root.</summary>
     public const string FileName = "owner.json";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     public required int ProcessId { get; init; }
 

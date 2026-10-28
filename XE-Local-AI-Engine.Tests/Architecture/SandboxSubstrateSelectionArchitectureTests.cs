@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The replacement for a compile error, and the honest cost of ADR 0007.
 ///     <para>
-///         "Docker cannot be wired into AgentHome" used to be an absent <c>implements</c> clause. Under ADR 0007
+///         "Docker cannot be wired into AgentHome" is not an absent <c>implements</c> clause. Under ADR 0007
 ///         Decision 4 it is this file: an enumeration of every requirements constant this engine owns, each asserted
 ///         against the EXACT set of backends allowed to serve it. A compile error cannot be skipped, disabled or made
 ///         flaky and a test can — so this test is written to be the least flaky kind there is. It touches no daemon, no
@@ -158,8 +158,8 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
     ///     "the host can impose ceilings" and "this role is given ceilings" are different facts, and only the second is
     ///     worth reporting.
     ///     <para>
-    ///         EVERY declaration asks now. <c>run_python</c> was the only one until 2026-08-25, and the follow-up that
-    ///         changed it is the reason this test asserts the whole set rather than a count: a declaration that stops
+    ///         EVERY declaration asks, not only <c>run_python</c>, which is why this test asserts the whole set
+    ///         rather than a count: a declaration that stops
     ///         asking is a role that silently becomes unbounded, which is exactly the state the isolation panel was
     ///         built to make visible, and it must not be reachable by deleting one line.
     ///     </para>
@@ -260,13 +260,13 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
     }
 
     /// <summary>
-    ///     The half of the ceilings guarantee that used to be unreachable from this file, because it constructs no
+    ///     The half of the ceilings guarantee this file cannot reach directly, because it constructs no
     ///     consumer: every create site derives its <c>SandboxCreateRequest.ResourceLimits</c> from
     ///     <see cref="SandboxResourceCeilings.Resolve" /> WITH ITS OWN DECLARATION, so "the request agrees with the
     ///     declaration" is a property of one pure function rather than of five call sites. This asserts that function
     ///     over every declaration and both sides of the capability gate; each site's own test then asserts it calls it.
     ///     <para>
-    ///         It also asserts WHICH set each declaration gets, which is the half that matters since 2026-08-25: a
+    ///         It also asserts WHICH set each declaration gets, which is the half that matters: a
     ///         toolchain role handed <c>run_python</c>'s numbers does not build slowly, it fails
     ///         (<see cref="SandboxToolchainLimits" />), and nothing else in the tree would catch the profile being
     ///         changed on one constant.

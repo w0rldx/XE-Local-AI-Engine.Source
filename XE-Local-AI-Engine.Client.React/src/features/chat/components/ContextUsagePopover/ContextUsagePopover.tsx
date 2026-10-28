@@ -222,7 +222,7 @@ interface ContextUsagePopoverProps {
 }
 
 // The composer's context badge as a popover trigger: the last provider round's breakdown, or before the first response
-// a labelled estimate of the fixed parts for the selected model and agent.
+// a labeled estimate of the fixed parts for the selected model and agent.
 export function ContextUsagePopover({ usage, modelName, agentId, useLocalTools }: ContextUsagePopoverProps) {
 	const { t } = useTranslation();
 	const [opened, setOpened] = useState(false);

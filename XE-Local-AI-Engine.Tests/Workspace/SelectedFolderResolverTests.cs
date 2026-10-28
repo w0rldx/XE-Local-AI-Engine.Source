@@ -161,8 +161,8 @@ public sealed class SelectedFolderResolverTests : IDisposable
     {
         var resolver = CreateResolver();
 
-        // "not-a-guid" is NOT the right fixture for this any more: it is a well-formed ALIAS, so it now reaches the
-        // alias lookup and comes back not-found. A value that can be neither is what still proves the input rejection.
+        // "not-a-guid" is NOT the right fixture for this: it is a well-formed ALIAS, so it reaches the
+        // alias lookup and comes back not-found. A value that can be neither is what proves the input rejection.
         var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("Not A Guid!"),
             "A value that is neither a GUID nor a well-formed alias should be rejected.");
 
@@ -173,10 +173,10 @@ public sealed class SelectedFolderResolverTests : IDisposable
     [Test]
     public async Task ResolveAsync_WithKnownAlias_ReturnsTrustedHostPath()
     {
-        // THE live-round regression (round 2, D2). run_in_agent_home's schema advertises "alias OR GUID" and Node
-        // Settings only ever shows the operator an alias, but ResolveAsync used to Guid.TryParse and throw, so every
-        // alias a model sent was rejected as "not a valid identifier" and only an opaque GUID — which no tool result
-        // ever reveals to the model — could be made to work.
+        // REGRESSION: run_in_agent_home's schema advertises "alias OR GUID" and Node Settings only ever shows the
+        // operator an alias, so ResolveAsync resolves an alias; a bare Guid.TryParse would reject every alias a model
+        // sends as "not a valid identifier", and only an opaque GUID — which no tool result ever reveals to the
+        // model — would work.
         var resolver = CreateResolver();
         var reference = await resolver.RegisterAsync(new SelectedFolderRegistration
         {

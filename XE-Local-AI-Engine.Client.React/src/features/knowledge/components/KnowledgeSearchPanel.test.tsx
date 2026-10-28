@@ -126,7 +126,7 @@ describe("KnowledgeSearchPanel score kind", () => {
 		cleanup();
 	});
 
-	// Formatting and localisation live in KnowledgeScoreBadge.test.tsx; this only proves each hit renders its kind.
+	// Formatting and localization live in KnowledgeScoreBadge.test.tsx; this only proves each hit renders its kind.
 	it("renders a score-kind badge per hit instead of a bare number", () => {
 		renderWithProviders(
 			<KnowledgeSearchPanel

@@ -2,8 +2,8 @@ import { Button, Group, Loader, Progress, Stack, Text } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatDownloadEta, humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
 import type { ImageModelDownloadView } from "@/features/images/models/ImageModels";
-import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 export interface DownloadRowProps {
 	modelName: string;

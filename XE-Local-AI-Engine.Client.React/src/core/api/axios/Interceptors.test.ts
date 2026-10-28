@@ -50,7 +50,7 @@ function unauthorizedError(config: InternalAxiosRequestConfig): AxiosError {
 
 describe("form-data content-type interceptor", () => {
 	// Regression guard for the skill-import 415: the instance defaults Content-Type to application/json, and axios
-	// re-serialises a FormData body to JSON whenever that header is present — silently downgrading multipart uploads
+	// re-serializes a FormData body to JSON whenever that header is present — silently downgrading multipart uploads
 	// to a JSON body the multipart-only endpoints reject. The interceptor drops the header for FormData only.
 	it("drops the JSON default content-type for a FormData body", async () => {
 		let observed: unknown;
@@ -231,7 +231,7 @@ describe("auth axios interceptors", () => {
 		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/login", search: { redirect: "/" } });
 	});
 
-	// F-02: a rate-limited refresh is not a sign-out; the refresh cookie is still valid.
+	// A rate-limited refresh is not a sign-out; the refresh cookie is still valid.
 	it("keeps local auth and stays put when refresh is rate limited", async () => {
 		const instance = axios.create({
 			adapter: async (config) => {

@@ -67,19 +67,77 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             return ConversationBudgetResult.Unchanged(messages, estimatedBefore, fixedOverhead, effectiveBudget);
         }
 
-        var count = messages.Count;
-        var working = new ChatMessage[count];
-        var perMessageTokens = new int[count];
-        var turnOf = new int[count];
-        var dropped = new bool[count];
+        var state = Measure(messages, divisor, estimatedBefore, effectiveBudget, out var maxTurn);
 
+        // Approval correlation records outlive the turn window — each replayed decision is its own User message, so a many-tool turn puts its resolved rounds far
+        // outside the keep window — and the validator fails the invocation on a request without its response, or a resolved response without the result it produced.
+        var approvals = BuildApprovalGroups(messages);
+
+        // Floor of 2 even against a mis-set config: the approval-replay path splits one in-flight round across two turns, the assistant tool-call and its request
+        // in turn M and the replayed User decision in turn M+1, so protecting one turn could drop M; the setting is read per pass, never captured.
+        var keepCount = Math.Max(2, _runtimeSettings.GetContextBudgetRecentTurnKeepCount());
+
+        // Turns with an index at or above this threshold are the protected recent window: always kept, never modified.
+        // A non-positive threshold means every turn is within the keep window (nothing is droppable).
+        var protectedFrom = maxTurn - keepCount + 1;
+
+        var toolResultsTruncated = TruncateHistoricalToolResults(state, protectedFrom);
+
+        // Pinning is per message, not per turn, so the surrounding history still trims.
+        DropOldestTurns(state, protectedFrom, approvals.Pinned);
+        EvictApprovalGroups(state, approvals, protectedFrom);
+
+        // Passes 4 and 5 are the last-resort reclaims, reached ONLY because Passes 1-3 left the round over budget — which, once Pass 3 evicted everything
+        // historical, means the PROTECTED window itself does not fit. Both work on SURVIVORS only and stop the moment it fits; the alternative is the hard stop.
+
+        // The LAST surviving message is exempt from both: it is the in-flight round the model is producing against (the pending tool result, or the
+        // approval decision just replayed) and the one thing the next provider call cannot be asked to work without.
+        var lastSurvivor = Array.LastIndexOf(state.Dropped, false);
+        var reasoningStripped = _options.StripProtectedReasoning ? StripReasoning(state, lastSurvivor) : 0;
+        var protectedResultsExcerpted = _options.ExcerptProtectedToolResults ? ExcerptProtectedToolResults(state, lastSurvivor, protectedFrom) : 0;
+
+        var survivors = new List<ChatMessage>(state.Working.Length - state.MessagesDropped);
+        for (var i = 0; i < state.Working.Length; i++)
+        {
+            if (!state.Dropped[i])
+            {
+                survivors.Add(state.Working[i]);
+            }
+        }
+
+        // Measured on the MATERIALIZED survivor list rather than the running total, which five passes add to, subtract from and rewrite. Re-estimating the exact
+        // list about to be sent is what makes EstimatedTokensAfter — and the ExceedsBudget hard stop derived from it — a statement about the payload.
+        var estimatedAfter = _estimator.EstimateTokensWithDivisor(survivors, divisor);
+
+        return new ConversationBudgetResult
+        {
+            Messages = survivors,
+            Trimmed = state.MessagesDropped > 0 || toolResultsTruncated > 0 || reasoningStripped > 0 || protectedResultsExcerpted > 0,
+            MessagesDropped = state.MessagesDropped,
+            ToolResultsTruncated = toolResultsTruncated,
+            ReasoningStrippedCount = reasoningStripped,
+            ProtectedResultsExcerptedCount = protectedResultsExcerpted,
+            CharsTruncated = state.CharsTruncated,
+            EstimatedTokensBefore = estimatedBefore,
+            EstimatedTokensAfter = estimatedAfter,
+            ExceedsBudget = estimatedAfter > effectiveBudget,
+            FixedOverheadTokens = fixedOverhead,
+            EffectiveBudgetTokens = effectiveBudget
+        };
+    }
+
+    /// <summary>Estimates every message and assigns it a turn: a turn starts at each User message after the first.</summary>
+    private BudgetState Measure(IReadOnlyList<ChatMessage> messages, int divisor, int estimatedBefore, int effectiveBudget, out int maxTurn)
+    {
+        var count = messages.Count;
+        var state = new BudgetState(count, divisor, estimatedBefore, effectiveBudget);
         var turn = 0;
         var sawUser = false;
         for (var i = 0; i < count; i++)
         {
             var message = messages[i];
-            working[i] = message;
-            perMessageTokens[i] = _estimator.EstimateTokensWithDivisor(message, divisor);
+            state.Working[i] = message;
+            state.Tokens[i] = _estimator.EstimateTokensWithDivisor(message, divisor);
 
             if (message.Role == ChatRole.User)
             {
@@ -91,191 +149,147 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 sawUser = true;
             }
 
-            turnOf[i] = turn;
+            state.TurnOf[i] = turn;
         }
 
-        var maxTurn = turn;
+        maxTurn = turn;
+        return state;
+    }
 
-        // Approval correlation records outlive the turn window — each replayed decision is its own User message, so a many-tool turn puts its resolved rounds far
-        // outside the keep window — and the validator fails the invocation on a request without its response, or a resolved response without the result it produced.
-        var approvals = BuildApprovalGroups(messages);
-
-        // Pinning is per message, not per turn, so the surrounding history still trims.
-        var pinned = approvals.Pinned;
-
-        // Floor of 2 even against a mis-set config: the approval-replay path splits one in-flight round across two turns, the assistant tool-call and its request
-        // in turn M and the replayed User decision in turn M+1, so protecting one turn could drop M; the setting is read per pass, never captured.
-        var keepCount = Math.Max(2, _runtimeSettings.GetContextBudgetRecentTurnKeepCount());
-
-        // Turns with an index at or above this threshold are the protected recent window: always kept, never modified.
-        // A non-positive threshold means every turn is within the keep window (nothing is droppable).
-        var protectedFrom = maxTurn - keepCount + 1;
-
-        var currentEstimate = estimatedBefore;
-
-        // Pass 1: shorten oversized historical tool results (oldest first) before any whole turn is dropped.
-        var toolResultsTruncated = 0;
-        var charsTruncated = 0;
-        for (var i = 0; i < count && currentEstimate > effectiveBudget; i++)
+    /// <summary>Pass 1: shortens oversized historical tool results (oldest first) before any whole turn is dropped.</summary>
+    private int TruncateHistoricalToolResults(BudgetState state, int protectedFrom)
+    {
+        var truncatedCount = 0;
+        for (var i = 0; i < state.Working.Length && state.OverBudget; i++)
         {
-            if (turnOf[i] >= protectedFrom || working[i].Role == ChatRole.System)
+            if (state.TurnOf[i] >= protectedFrom || state.Working[i].Role == ChatRole.System)
             {
                 continue;
             }
 
-            if (!TryTruncateToolResult(working[i], out var truncated, out var omitted))
+            if (!TryTruncateToolResult(state.Working[i], out var truncated, out var omitted))
             {
                 continue;
             }
 
-            working[i] = truncated;
-            var newTokens = _estimator.EstimateTokensWithDivisor(truncated, divisor);
-            currentEstimate += newTokens - perMessageTokens[i];
-            perMessageTokens[i] = newTokens;
-            toolResultsTruncated++;
-            charsTruncated += omitted;
+            Replace(state, i, truncated);
+            truncatedCount++;
+            state.CharsTruncated += omitted;
         }
 
-        // Pass 2: drop the oldest droppable turns whole; system messages stay pinned even inside a dropped turn.
-        var messagesDropped = 0;
-        for (var t = 0; t < protectedFrom && currentEstimate > effectiveBudget; t++)
+        return truncatedCount;
+    }
+
+    /// <summary>Pass 2: drops the oldest droppable turns whole; system messages stay pinned even inside a dropped turn.</summary>
+    private static void DropOldestTurns(BudgetState state, int protectedFrom, bool[]? pinned)
+    {
+        for (var t = 0; t < protectedFrom && state.OverBudget; t++)
         {
-            for (var i = 0; i < count; i++)
+            for (var i = 0; i < state.Working.Length; i++)
             {
-                if (dropped[i] || turnOf[i] != t || working[i].Role == ChatRole.System || (pinned is not null && pinned[i]))
+                if (state.Dropped[i] || state.TurnOf[i] != t || state.Working[i].Role == ChatRole.System || (pinned is not null && pinned[i]))
                 {
                     continue;
                 }
 
-                dropped[i] = true;
-                currentEstimate -= perMessageTokens[i];
-                messagesDropped++;
+                state.Drop(i);
             }
         }
+    }
 
-        // Pass 3: the approval pins are a correlation guarantee, not a reservation — left permanent they accumulate until the pinned set alone exceeds the budget and
-        // the hard stop rejects every later turn. A group (request, decision, the results it produced) is evicted atomically, oldest first; an in-flight one never is.
-        for (var g = 0; g < approvals.Groups.Count && currentEstimate > effectiveBudget; g++)
+    /// <summary>Pass 3: evicts complete approval groups (request, decision, the results it produced) atomically, oldest first.</summary>
+    /// <remarks>
+    ///     The approval pins are a correlation guarantee, not a reservation — left permanent they accumulate until the pinned set alone exceeds the
+    ///     budget and the hard stop rejects every later turn. An in-flight group is never evicted.
+    /// </remarks>
+    private static void EvictApprovalGroups(BudgetState state, ApprovalCorrelation approvals, int protectedFrom)
+    {
+        for (var g = 0; g < approvals.Groups.Count && state.OverBudget; g++)
         {
             var group = approvals.Groups[g];
-            if (!group.Complete || !IsEvictable(group, turnOf, working, dropped, protectedFrom))
+            if (!group.Complete || !IsEvictable(group, state.TurnOf, state.Working, state.Dropped, protectedFrom))
             {
                 continue;
             }
 
             foreach (var i in group.MessageIndices)
             {
-                dropped[i] = true;
-                currentEstimate -= perMessageTokens[i];
-                messagesDropped++;
+                state.Drop(i);
             }
         }
+    }
 
-        // Passes 4 and 5 are the last-resort reclaims, reached ONLY because Passes 1-3 left the round over budget — which, once Pass 3 evicted everything
-        // historical, means the PROTECTED window itself does not fit. Both work on SURVIVORS only and stop the moment it fits; the alternative is the hard stop.
-        var lastSurvivor = -1;
-
-        // The LAST surviving message is exempt from both: it is the in-flight round the model is producing against — the pending tool result,
-        // or the approval decision just replayed — and the one thing the next provider call cannot be asked to work without.
-        for (var i = count - 1; i >= 0; i--)
+    /// <summary>Pass 4: strips the model's own superseded reasoning, oldest first, only while still over budget; system messages are excluded.</summary>
+    /// <remarks>
+    ///     Reasoning is dead scratch-pad text once a later round supersedes it and neither the approval validator nor the tool-call correlation
+    ///     inspects it, so removing it orphans nothing.
+    /// </remarks>
+    private int StripReasoning(BudgetState state, int lastSurvivor)
+    {
+        var strippedCount = 0;
+        for (var i = 0; i < state.Working.Length && state.OverBudget; i++)
         {
-            if (!dropped[i])
+            if (state.Dropped[i] || i == lastSurvivor || state.Working[i].Role == ChatRole.System)
             {
-                lastSurvivor = i;
-                break;
+                continue;
             }
-        }
 
-        // Pass 4: strip the model's own superseded reasoning, oldest first, only while still over budget. Reasoning is dead scratch-pad text once a later round
-        // supersedes it and neither the approval validator nor the tool-call correlation inspects it, so removing it orphans nothing; system messages are excluded.
-        var reasoningStripped = 0;
-        if (_options.StripProtectedReasoning)
-        {
-            for (var i = 0; i < count && currentEstimate > effectiveBudget; i++)
+            if (!TryStripReasoning(state.Working[i], out var stripped, out var emptied))
             {
-                if (dropped[i] || i == lastSurvivor || working[i].Role == ChatRole.System)
-                {
-                    continue;
-                }
-
-                if (!TryStripReasoning(working[i], out var stripped, out var emptied))
-                {
-                    continue;
-                }
-
-                reasoningStripped++;
-
-                // A reasoning-ONLY message has nothing left to say once its reasoning is gone. Sending an empty message
-                // is a shape some providers reject outright and none can use, so it goes whole.
-                if (emptied)
-                {
-                    dropped[i] = true;
-                    currentEstimate -= perMessageTokens[i];
-                    messagesDropped++;
-                    continue;
-                }
-
-                working[i] = stripped;
-                var strippedTokens = _estimator.EstimateTokensWithDivisor(stripped, divisor);
-                currentEstimate += strippedTokens - perMessageTokens[i];
-                perMessageTokens[i] = strippedTokens;
+                continue;
             }
-        }
 
-        // Pass 5: excerpt tool results inside the PROTECTED window — the one pass that shortens content the current round is actively working with, hence opt-in.
-        // Restricted there because Pass 1 has already visited every historical message; excerpting preserves the CallId the validator matches on.
-        var protectedResultsExcerpted = 0;
-        if (_options.ExcerptProtectedToolResults)
-        {
-            for (var i = 0; i < count && currentEstimate > effectiveBudget; i++)
+            strippedCount++;
+
+            // A reasoning-ONLY message has nothing left to say once its reasoning is gone. Sending an empty message
+            // is a shape some providers reject outright and none can use, so it goes whole.
+            if (emptied)
             {
-                if (dropped[i] || i == lastSurvivor || turnOf[i] < protectedFrom || working[i].Role == ChatRole.System)
-                {
-                    continue;
-                }
-
-                if (!TryTruncateToolResult(working[i], out var excerpted, out var protectedOmitted))
-                {
-                    continue;
-                }
-
-                working[i] = excerpted;
-                var excerptedTokens = _estimator.EstimateTokensWithDivisor(excerpted, divisor);
-                currentEstimate += excerptedTokens - perMessageTokens[i];
-                perMessageTokens[i] = excerptedTokens;
-                protectedResultsExcerpted++;
-                charsTruncated += protectedOmitted;
+                state.Drop(i);
+                continue;
             }
+
+            Replace(state, i, stripped);
         }
 
-        var survivors = new List<ChatMessage>(count - messagesDropped);
-        for (var i = 0; i < count; i++)
+        return strippedCount;
+    }
+
+    /// <summary>Pass 5: excerpts tool results inside the PROTECTED window, the one pass that shortens content the current round works with.</summary>
+    /// <remarks>
+    ///     Hence opt-in. Restricted to that window because Pass 1 has already visited every historical message; excerpting preserves the CallId the
+    ///     validator matches on.
+    /// </remarks>
+    private int ExcerptProtectedToolResults(BudgetState state, int lastSurvivor, int protectedFrom)
+    {
+        var excerptedCount = 0;
+        for (var i = 0; i < state.Working.Length && state.OverBudget; i++)
         {
-            if (!dropped[i])
+            if (state.Dropped[i] || i == lastSurvivor || state.TurnOf[i] < protectedFrom || state.Working[i].Role == ChatRole.System)
             {
-                survivors.Add(working[i]);
+                continue;
             }
+
+            if (!TryTruncateToolResult(state.Working[i], out var excerpted, out var omitted))
+            {
+                continue;
+            }
+
+            Replace(state, i, excerpted);
+            excerptedCount++;
+            state.CharsTruncated += omitted;
         }
 
-        // Measured on the MATERIALIZED survivor list rather than the running total, which five passes add to, subtract from and rewrite. Re-estimating the exact
-        // list about to be sent is what makes EstimatedTokensAfter — and the ExceedsBudget hard stop derived from it — a statement about the payload.
-        var estimatedAfter = _estimator.EstimateTokensWithDivisor(survivors, divisor);
+        return excerptedCount;
+    }
 
-        return new ConversationBudgetResult
-        {
-            Messages = survivors,
-            Trimmed = messagesDropped > 0 || toolResultsTruncated > 0 || reasoningStripped > 0 || protectedResultsExcerpted > 0,
-            MessagesDropped = messagesDropped,
-            ToolResultsTruncated = toolResultsTruncated,
-            ReasoningStrippedCount = reasoningStripped,
-            ProtectedResultsExcerptedCount = protectedResultsExcerpted,
-            CharsTruncated = charsTruncated,
-            EstimatedTokensBefore = estimatedBefore,
-            EstimatedTokensAfter = estimatedAfter,
-            ExceedsBudget = estimatedAfter > effectiveBudget,
-            FixedOverheadTokens = fixedOverhead,
-            EffectiveBudgetTokens = effectiveBudget
-        };
+    /// <summary>Swaps in a rewritten message and moves the running estimate by its token difference.</summary>
+    private void Replace(BudgetState state, int index, ChatMessage rewritten)
+    {
+        state.Working[index] = rewritten;
+        var newTokens = _estimator.EstimateTokensWithDivisor(rewritten, state.Divisor);
+        state.Estimate += newTokens - state.Tokens[index];
+        state.Tokens[index] = newTokens;
     }
 
     /// <summary>
@@ -727,4 +741,46 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     private readonly record struct ApprovalKey(string? RequestId, ToolCallContent? ToolCall);
+
+    /// <summary>The per-message working set the passes share: current messages, their estimates, turns and drops, plus the running estimate.</summary>
+    private sealed class BudgetState
+    {
+        internal BudgetState(int count, int divisor, int estimate, int budget)
+        {
+            Working = new ChatMessage[count];
+            Tokens = new int[count];
+            TurnOf = new int[count];
+            Dropped = new bool[count];
+            Divisor = divisor;
+            Estimate = estimate;
+            Budget = budget;
+        }
+
+        internal ChatMessage[] Working { get; }
+
+        internal int[] Tokens { get; }
+
+        internal int[] TurnOf { get; }
+
+        internal bool[] Dropped { get; }
+
+        internal int Divisor { get; }
+
+        internal int Budget { get; }
+
+        internal int Estimate { get; set; }
+
+        internal int MessagesDropped { get; private set; }
+
+        internal int CharsTruncated { get; set; }
+
+        internal bool OverBudget => Estimate > Budget;
+
+        internal void Drop(int index)
+        {
+            Dropped[index] = true;
+            Estimate -= Tokens[index];
+            MessagesDropped++;
+        }
+    }
 }

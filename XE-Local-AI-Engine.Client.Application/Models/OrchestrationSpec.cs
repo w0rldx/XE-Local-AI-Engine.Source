@@ -68,7 +68,7 @@ public sealed record OrchestrationSpecParticipant
     /// <remarks>
     ///     Resolved per participant from the same lookup as <see cref="SupportsThinking" />, so a participant pinned to a non-enforcing
     ///     model does not carry a cap the server ignores. Not folded into the config hash: it is derived from <see cref="ModelId" />, which
-    ///     already participates. Init-only with no initializer like its neighbours — every producer sets it explicitly, and it is read only
+    ///     already participates. Init-only with no initializer like its neighbors — every producer sets it explicitly, and it is read only
     ///     when <see cref="SupportsThinking" /> is true.
     /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; }

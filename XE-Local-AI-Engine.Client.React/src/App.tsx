@@ -8,7 +8,7 @@ import { router } from "@/core/integrations/tanstack-router/Router";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { GgufDownloadPoller } from "@/features/models/components/GgufDownloadPoller";
-import { ClientAiRuntimeProvider } from "@/features/voice/ClientAiRuntimeProvider";
+import { ClientAiRuntimeProvider } from "@/features/voice/components/ClientAiRuntimeProvider";
 
 export function App() {
 	return (

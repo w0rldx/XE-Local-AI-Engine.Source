@@ -24,7 +24,7 @@ public sealed record SandboxHandle
 
     /// <summary>The isolation the provider ACTUALLY DELIVERED for this sandbox — not what the create request asked for.</summary>
     /// <remarks>
-    ///     A caller whose behaviour depends on a filesystem boundary must branch on this rather than on its own request: the request is a
+    ///     A caller whose behavior depends on a filesystem boundary must branch on this rather than on its own request: the request is a
     ///     preference a provider may refuse, and the two only agree because the process provider rejects an unmeetable one fail-closed.
     ///     Reading it off the handle makes "did I get the boundary?" a fact about the sandbox in hand, not an inference about the host.
     ///     <see cref="SandboxIsolationMode.None" /> is the default, so a provider that does not isolate reports the honest answer without

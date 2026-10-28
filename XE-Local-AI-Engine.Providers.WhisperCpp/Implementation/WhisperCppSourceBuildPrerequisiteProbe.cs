@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -223,7 +224,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                TryKill(process);
+                ProcessTreeKill.TryKill(process);
                 await IgnoreCancellationAsync(outputTask).ConfigureAwait(false);
                 await IgnoreCancellationAsync(errorTask).ConfigureAwait(false);
                 return new WhisperCppSourceBuildPrerequisiteItem
@@ -235,7 +236,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                TryKill(process);
+                ProcessTreeKill.TryKill(process);
                 await IgnoreCancellationAsync(outputTask).ConfigureAwait(false);
                 await IgnoreCancellationAsync(errorTask).ConfigureAwait(false);
                 throw;
@@ -286,22 +287,6 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
             {
                 output.Append(buffer.AsSpan(0, Math.Min(read, remaining)));
             }
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                _ = process.WaitForExit(milliseconds: 5000);
-            }
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
-        {
-            // Best-effort bounded probe cleanup.
         }
     }
 }

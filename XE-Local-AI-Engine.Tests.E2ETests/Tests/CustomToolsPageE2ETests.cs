@@ -26,7 +26,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         reads node-global state or a node-wide empty state.
 ///     </para>
 ///     <para>
-///         On the acknowledgement gate: the shipped behaviour is that the footer Save button is DISABLED until the
+///         On the acknowledgement gate: the shipped behavior is that the footer Save button is DISABLED until the
 ///         checkbox is ticked (<c>CustomToolsPage</c> gates it on <c>isAcknowledged</c>), so the in-form
 ///         "You must acknowledge this to save." message is unreachable through the footer. The test therefore asserts
 ///         the gate that actually ships — disabled → enabled → disabled again, with zero create requests issued —

@@ -109,7 +109,7 @@ public sealed record GraphWorkflowGraph(
 ///     members, and a typed union of the eight would land in the generated client as an unusable discriminated schema
 ///     while buying nothing — the runtime's parser refuses a member on the wrong kind, and it reads the stored
 ///     document rather than this projection. <see cref="Label" /> is nullable and is NOT filled in on the way out: a
-///     node that named none is labelled by its key, and writing the key back would change the round-tripped bytes.
+///     node that named none is labeled by its key, and writing the key back would change the round-tripped bytes.
 /// </remarks>
 public sealed record GraphWorkflowGraphNode(
     string Key,

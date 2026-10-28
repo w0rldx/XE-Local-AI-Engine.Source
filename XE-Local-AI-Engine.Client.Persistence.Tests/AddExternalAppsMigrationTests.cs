@@ -3,9 +3,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Schema coverage for <c>AddExternalApps</c>: the two tables it creates, the column types the encrypted and the
-///     plaintext columns must have, the two indexes, and that its <c>Down</c> takes exactly those two tables away
-///     again. Also the fence for the catalog cache being a file, so no third table exists.
+///     Schema coverage for <c>AddExternalApps</c>: its two tables, the encrypted and plaintext column types, the two
+///     indexes, and a <c>Down</c> that removes exactly those tables. The catalog cache is a file, so no third table.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddExternalAppsMigrationTests
@@ -50,7 +49,7 @@ public sealed class AddExternalAppsMigrationTests
         AssertEx.True(await probe.ForeignKeyExistsAsync("external_app_instance_events", "instance_id", "external_app_instances"),
             "Declared for parity with integration_execution_events, and enforced at runtime: the node connection sets Foreign Keys=True and PRAGMA foreign_keys=ON.");
 
-        // No unique index on application_id: decision D13 keeps the schema N:1 and the one-per-application rule is the
+        // No unique index on application_id: the schema stays N:1 and the one-per-application rule is the
         // install gate's. A unique index added here would turn a race into a 500 instead of the 409 the gate answers.
         AssertEx.False(await probe.IndexExistsAsync("external_app_instances", "ux_external_app_instances_application", unique: true, "application_id"));
     }

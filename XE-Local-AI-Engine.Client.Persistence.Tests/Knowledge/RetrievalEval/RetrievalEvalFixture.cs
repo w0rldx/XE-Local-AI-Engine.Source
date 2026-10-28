@@ -327,7 +327,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
 
     // The repository-import shape of one file, as KnowledgeRepositoryImportService builds it. Where that service skips an
-    // unsupported extension, this throws: a labelled document silently left out of the index would bias every metric.
+    // unsupported extension, this throws: a labeled document silently left out of the index would bias every metric.
     private static async Task<Guid> AddAsRepositoryFileAsync(IKnowledgeDocumentBlobStore blobStore,
         DocumentTextExtractor extractor,
         string sourcePath,

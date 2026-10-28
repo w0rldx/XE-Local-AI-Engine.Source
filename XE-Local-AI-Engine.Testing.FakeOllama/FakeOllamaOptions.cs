@@ -9,12 +9,10 @@ public sealed record FakeOllamaOptions
     public Func<ChatRequest, IAsyncEnumerable<string>>? ChatTokenScript { get; init; }
 
     /// <summary>
-    ///     Optional script invoked before the text-token path on every chat request.
-    ///     Receives the full message list; return a <see cref="FakeOllamaToolCall" /> to emit an
-    ///     Ollama <c>tool_calls</c> wire chunk instead of text tokens, or <c>null</c> to fall
-    ///     through to the normal <see cref="ChatTokenScript" /> / echo path.
-    ///     On the second call (after the engine has appended a tool-result message) return
-    ///     <c>null</c> so the final text reply streams normally.
+    ///     Optional script run before the text-token path on every chat request, given the full
+    ///     message list. Return a <see cref="FakeOllamaToolCall" /> to emit an Ollama
+    ///     <c>tool_calls</c> chunk instead of text tokens, or <c>null</c> for the normal
+    ///     <see cref="ChatTokenScript" /> / echo path, as on the call after a tool result.
     /// </summary>
     public Func<IReadOnlyList<Message>, FakeOllamaToolCall?>? ToolCallScript { get; init; }
 

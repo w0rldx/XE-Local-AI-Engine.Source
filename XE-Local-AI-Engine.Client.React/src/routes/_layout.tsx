@@ -1,8 +1,8 @@
 import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
 
+import { AppLayout } from "@/AppLayout";
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { ensureAuthenticated } from "@/core/auth/utils/EnsureAuthenticated";
-import { Layout } from "@/core/layout/components/Layout/Layout";
 import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 
 export const Route = createFileRoute("/_layout")({
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_layout")({
 	// stamped a token, on top of the still-unanswered `/external-access` chooser.
 	component: (): React.ReactElement | null => (
 		<OnboardingProvider>
-			<Layout />
+			<AppLayout />
 		</OnboardingProvider>
 	),
 });

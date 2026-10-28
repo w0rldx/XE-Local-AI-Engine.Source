@@ -127,9 +127,8 @@ public sealed class RunningModelSnapshotMappingTests
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
 
-        // keep_alive=0 is issued via an empty-prompt generate (POST /api/generate); unloading a model that is not "loaded"
-        // in the fake runtime is still a no-op success (idempotent). The decoded model name reaching the service is covered
-        // by the endpoint tests; here we prove the graceful unload route is exercised.
+        // keep_alive=0 goes through an empty-prompt POST /api/generate; unloading a model the fake runtime has not
+        // loaded is an idempotent success. Endpoint tests cover the decoded name; this proves the unload route runs.
         await modelService.UnloadModelAsync("llama3:8b", CancellationToken.None);
 
         AssertEx.Contains(server.RecordedRequests, request => request.Method == "POST" && request.Path == "/api/generate");

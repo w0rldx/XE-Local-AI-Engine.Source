@@ -76,11 +76,10 @@ public sealed class EvaluationRunServiceTests
     }
 
     /// <summary>
-    ///     The three ways a cancel can land, which is what the operator surface offers and refuses the control on. A
-    ///     QUEUED evaluation is terminalized by the request itself; a RUNNING one is only signalled, because the
-    ///     executor owns the terminal write and cancelling from two places would race the work item; anything already
-    ///     terminal answers false, which the endpoint turns into the 404 that keeps the control off a finished row.
+    ///     The three ways a cancel can land: a QUEUED evaluation is terminalized by the request; a RUNNING one is only
+    ///     signaled, since the executor owns the terminal write; a terminal one answers false (the endpoint's 404).
     /// </summary>
+    /// <remarks>Two cancellers would race the work item; the 404 keeps the control off a finished row.</remarks>
     [Test]
     public async Task Cancel_TerminalizesAQueuedEvaluation_SignalsARunningOne_AndRefusesATerminalOne()
     {

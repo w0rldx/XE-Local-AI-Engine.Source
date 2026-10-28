@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
 ///     Serialized against the rest of the module: every test applies the whole migration set against a real SQLite
-///     file, and a starved run used to be cancelled mid-apply by the old wall-clock attempt budget.
+///     file, and a starved run must not be cancelled mid-apply by a wall-clock attempt budget.
 /// </summary>
 [NotInParallel]
 [Category(TestCategories.Integration)]

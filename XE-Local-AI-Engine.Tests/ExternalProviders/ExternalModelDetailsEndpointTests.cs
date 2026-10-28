@@ -14,9 +14,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The model-details endpoint's external branch: declarations, not a probe.
 /// </summary>
 /// <remarks>
-///     Details are a local-runtime concept, so before this branch an <c>ext:</c> id would have been routed to the
+///     Details are a local-runtime concept, so without this branch an <c>ext:</c> id would be routed to the
 ///     default provider and probed against Ollama's <c>/api/show</c> — a 500 for a model the local runtime has never
-///     seen, which is the same failure the Codex and Azure branches were added to prevent. The one detail an external
+///     seen, which is the same failure the Codex and Azure branches prevent. The one detail an external
 ///     model genuinely has is the window its operator declared, and the chat context meter reads it.
 /// </remarks>
 [Category(TestCategories.Integration)]

@@ -4,10 +4,9 @@ import { cleanup, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, describe, expect, it } from "vitest";
 
-import de from "@/locales/de.json";
-
+import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
 import { RunningModelsPanel } from "@/features/loaded-models/components/RunningModelsPanel";
-import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
+import de from "@/locales/de.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function renderPanel(model: RunningModel): void {

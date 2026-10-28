@@ -5,16 +5,16 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Fallback-path coverage for the authorization-code flow's MSAL persistent-cache registration. Unlike the
-///     device-code / interactive-browser fallbacks (which wrap Azure.Identity's <c>DeviceCodeCredential</c> /
-///     <c>InteractiveBrowserCredential</c> — sealed-shaped SDK types with no seam to force a persistence failure
-///     without a live tenant), this class calls the real MSAL persistence API directly, so the test below drives the
-///     REAL code path end-to-end rather than faking anything: it must never throw regardless of whether THIS
-///     machine's keyring/Secret-Service/DPAPI actually works, which is exactly the contract
-///     <see cref="EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync" /> promises. On a
-///     Secret-Service-less Linux host (e.g. a CI runner) this genuinely exercises the persistence-unavailable
-///     branch; on a host with a working keyring it exercises the happy path.
+///     Fallback-path coverage for the authorization-code flow's MSAL persistent-cache registration:
+///     <see cref="EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync" /> must never throw, whether
+///     or not this machine's keyring, Secret Service or DPAPI works.
 /// </summary>
+/// <remarks>
+///     Unlike the device-code / interactive-browser fallbacks, which wrap sealed-shaped Azure.Identity credentials with
+///     no seam to force a persistence failure, this class calls the real MSAL persistence API, so the test drives the
+///     REAL code path without fakes. A Secret-Service-less Linux host (e.g. a CI runner) exercises the
+///     persistence-unavailable branch; a host with a working keyring exercises the happy path.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class EntraAuthCodeConfidentialClientFactoryTests : IDisposable
 {

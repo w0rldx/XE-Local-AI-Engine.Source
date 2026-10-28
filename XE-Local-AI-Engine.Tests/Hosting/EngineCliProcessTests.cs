@@ -86,10 +86,8 @@ public sealed class EngineCliProcessTests : IDisposable
     {
         Directory.CreateDirectory(_root);
 
-        // A port number obtained by binding :0 and releasing is only a candidate — another process on
-        // the box can claim it before this child binds it, and the engine then exits with
-        // PortInUseExitCode. Retry on that signal with a fresh candidate rather than trusting the
-        // released port. The port-is-honoured property below still asserts the exact winning number.
+        // A port from binding :0 is only a candidate: another process can claim it first and the engine exits with
+        // PortInUseExitCode, so retry with a fresh one. The port-is-honored check below asserts the exact winner.
         var serving = await LoopbackPort.BindWithRetryAsync(async candidate =>
         {
             var started = StartServing(["--setup", "--mcp-only", "--port", candidate.ToString(CultureInfo.InvariantCulture)]);
@@ -520,7 +518,7 @@ public sealed class EngineCliProcessTests : IDisposable
     [Test]
     public async Task Serve_WhenASettingIsOutOfRange_ExitsThirteenAndNamesItOnTheLastStderrLine()
     {
-        // N-84: a value outside a ValidateOnStart range used to fall through to the generic crash handler after the unlock.
+        // A value outside a ValidateOnStart range must not fall through to the generic crash handler after the unlock.
         Directory.CreateDirectory(_root);
         await SetupLockedVaultAsync();
 
@@ -663,8 +661,8 @@ public sealed class EngineCliProcessTests : IDisposable
         string? standardInput = null,
         IReadOnlyDictionary<string, string>? environment = null)
     {
-        // 90 s, not 30: a real `--setup` measures 14-15 s idle at width 1 and timed out twice at 30 s on a shared 4-core
-        // CI runner under four parallel groups with coverage (2026-10-18). Every caller still asserts exit code and output.
+        // 90 s, not 30: a real `--setup` measures 14-15 s idle at width 1 and can exceed 30 s on a shared 4-core
+        // CI runner under four parallel groups with coverage. Every caller still asserts exit code and output.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         using var process = new Process
         {

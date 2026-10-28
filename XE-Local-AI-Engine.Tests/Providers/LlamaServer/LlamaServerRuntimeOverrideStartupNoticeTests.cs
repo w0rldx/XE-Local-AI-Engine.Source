@@ -7,10 +7,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the bring-your-own llama-server startup notice. The rule it encodes is asymmetric on purpose: an
-///     active override skips SHA verification and must therefore be loud, while an unset override must produce
-///     byte-identical (silent) startup output, so a normal pinned-acquisition deploy is not changed by this service
-///     existing.
+///     The bring-your-own llama-server startup notice is asymmetric on purpose: an active override skips SHA
+///     verification and must be loud, while an unset override leaves startup output byte-identical (silent).
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerRuntimeOverrideStartupNoticeTests

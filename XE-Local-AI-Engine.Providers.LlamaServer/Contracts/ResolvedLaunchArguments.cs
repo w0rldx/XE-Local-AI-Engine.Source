@@ -62,7 +62,7 @@ public sealed record ResolvedLaunchArguments
     /// <param name="contextTokensOverride">
     ///     An optional operator-supplied context window for this explore only (see
     ///     <see cref="ExploreContextTokensOverride" />). Omitted/<see langword="null" /> is the default hardware-tier
-    ///     behaviour.
+    ///     behavior.
     /// </param>
     public static ResolvedLaunchArguments Explore(int? contextTokensOverride = null)
     {

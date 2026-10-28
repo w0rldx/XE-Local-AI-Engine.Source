@@ -103,9 +103,8 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                 Name = "Development Mode"
             })).ToBeVisibleAsync();
 
-            // The project form no longer takes a free-text repository root: d88237b8 ("Enable repository-bound
-            // Development Mode by default") replaced it with a Select over repositories registered up front, so
-            // the repository has to be registered through the dialog before it can be picked.
+            // The project form takes no free-text repository root, only a Select over repositories registered
+            // up front, so the repository has to be registered through the dialog before it can be picked.
             await RegisterRepositoryAsync(repositoryRoot);
 
             await Page.GetByLabel("Project objective").FillAsync("Exercise the complete local Development workflow");

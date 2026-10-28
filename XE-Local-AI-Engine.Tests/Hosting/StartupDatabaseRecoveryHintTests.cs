@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;

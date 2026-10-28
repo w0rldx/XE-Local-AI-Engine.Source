@@ -32,7 +32,7 @@ public interface ILlamaServerLaunchPolicy
     /// <remarks>
     ///     A CPU build emits none of a GPU profile's replay args, so without this such a spawn carries neither a
     ///     context window nor thread counts and runs at llama.cpp's own defaults. It supplies exactly the two things a
-    ///     CPU build can honour — the replay's own context and the CPU thread policy — never touches the KV-cache and
+    ///     CPU build can honor — the replay's own context and the CPU thread policy — never touches the KV-cache and
     ///     flash-attention vector, and requests no context for an explore-mode argument set, which pins none.
     /// </remarks>
     LlamaServerLaunchPlan ResolveCpuReplayPlan(ResolvedLaunchArguments resolved);

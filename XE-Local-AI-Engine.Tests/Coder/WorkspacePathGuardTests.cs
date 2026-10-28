@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Confinement coverage for <see cref="WorkspacePathGuard" />: every model path is either confined to a
-///     workspace-relative subpath of <c>/agent-home/workspace/selected</c> or rejected fail-closed. Traversal,
-///     absolute, drive-qualified, extended/device, and control-char paths are rejected; legitimate relative paths
-///     resolve under the root.
+///     <see cref="WorkspacePathGuard" /> confines every model path under <c>/agent-home/workspace/selected</c> or
+///     rejects it fail-closed: traversal, absolute, drive-qualified, extended/device and control-char paths are
+///     rejected; legitimate relative paths resolve under the root.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WorkspacePathGuardTests

@@ -34,9 +34,8 @@ public sealed class GraphWorkflowInlineExecutorTests
     }
 
     /// <summary>
-    ///     <c>Parallel</c> and <c>Condition</c> pass their predecessor's <c>output</c> through VERBATIM. Without it a
-    ///     Condition's own out-edges — which are evaluated against its own document — would inspect an empty object and
-    ///     never fire, which is the defect this rule exists to fix.
+    ///     <c>Parallel</c> and <c>Condition</c> pass their predecessor's <c>output</c> through VERBATIM; otherwise a
+    ///     Condition's own out-edges, evaluated against its own document, would inspect an empty object and never fire.
     /// </summary>
     [Test]
     public async Task ParallelAndCondition_PassTheirPredecessorsOutputThroughVerbatim()

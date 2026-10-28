@@ -11,9 +11,8 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The single durable dataset-generation consumer, driven directly through <c>ExecuteAsync</c> with a scripted
-///     store. The load-bearing assertion is host survival: the CLAIM is a database call that can fail transiently, and
-///     an exception escaping <c>ExecuteAsync</c> stops the whole host under the default
+///     The dataset-generation consumer, driven through <c>ExecuteAsync</c> with a scripted store. It pins host
+///     survival: the CLAIM can fail transiently, and an escaping exception stops the host under
 ///     <c>BackgroundServiceExceptionBehavior.StopHost</c>.
 /// </summary>
 [Category(TestCategories.Unit)]

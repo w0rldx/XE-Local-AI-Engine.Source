@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         The container-runtime layer and External Apps live in the same assembly, so nothing stops a bridge type
 ///         from reaching straight into an instance store, a manifest or a deployment plan — it would compile. The
-///         operator ruling says it must not: the bridge is a runtime-layer facility that External Apps happens to be
+///         rule says it must not: the bridge is a runtime-layer facility that External Apps happens to be
 ///         the first user of, and a bridge that knows what an external application IS cannot later serve anything
 ///         else. The token seam is the whole shape of the rule — <c>IContainerBridgeTokenVerifier</c> lives under
 ///         Containers, its one implementation under ExternalApps, and the dependency points that way only.
@@ -24,8 +24,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         explaining which feature is its first user documents the seam rather than crossing it, and a guard that
 ///         banned the prose too would be answered by deleting the explanation instead of the dependency. String
 ///         literals stay visible: a banned name in one still describes a coupling, and the shared stripper is what
-///         makes that distinction safe — the regex this file used to carry read a <c>//</c> inside a URL literal as
-///         a comment start and erased every reference that followed it on that line.
+///         makes that distinction safe — a plain regex reads a <c>//</c> inside a URL literal as
+///         a comment start and erases every reference that follows it on that line.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]

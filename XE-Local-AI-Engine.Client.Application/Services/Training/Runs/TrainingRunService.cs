@@ -26,7 +26,7 @@ public interface ITrainingRunService
     Task<TrainingRunRecord?> GetAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Requests cancellation. A queued run is terminalized directly; a running one is signalled through the
+    ///     Requests cancellation. A queued run is terminalized directly; a running one is signaled through the
     ///     executor's registry so the trainer can stop cooperatively and still be recorded as cancelled.
     /// </summary>
     Task<bool> CancelAsync(Guid runId, CancellationToken cancellationToken = default);
@@ -121,7 +121,7 @@ public sealed class TrainingRunService : ITrainingRunService
             return false;
         }
 
-        // A running trainer is signalled, never terminalized here: the executor owns the process-group SIGTERM, the
+        // A running trainer is signaled, never terminalized here: the executor owns the process-group SIGTERM, the
         // cooperative stop and the terminal write, so cancelling from two places would race the work item.
         if (_cancellations.Cancel(runId))
         {

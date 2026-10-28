@@ -256,7 +256,7 @@ public sealed class AgentToolPipelinePolicyTests
         AssertEx.Equal(expected: 2, snapshot.ProviderCalls);
     }
 
-    // F-74: a 7B model emitted 1,584 calls (1,582 identical) in ONE response. The iteration cap counts round-trips, so
+    // A 7B model can emit 1,500+ calls, nearly all identical, in ONE response. The iteration cap counts round-trips, so
     // only the per-response ceiling below the loop bounds it; every executed call must still be paired with its result.
     [Test]
     [Arguments(false)]
@@ -428,14 +428,14 @@ public sealed class AgentToolPipelinePolicyTests
     }
 
     /// <summary>
-    ///     Exactly ONE span in the assembled pipeline may claim <c>gen_ai.operation.name = execute_tool</c> for a given
-    ///     tool call, and it is MEAI's: <c>FunctionInvokingChatClient</c> starts an <c>execute_tool {name}</c> activity
-    ///     on the <see cref="ActivitySource" /> it takes from the client below it (the pipeline's
-    ///     <c>OpenTelemetryChatClient</c>, source "Microsoft.Extensions.AI"). The repo's own
-    ///     <c>AgentRun.ToolCall*</c> pair observes the same call on the Agent source and must stay out of that
-    ///     convention — otherwise a backend filtering on the attribute counts every tool execution twice. The
-    ///     per-client test cannot see this: it needs the whole decorated pipeline and both sources listening.
+    ///     Exactly ONE span in the pipeline claims <c>gen_ai.operation.name = execute_tool</c> for a tool call:
+    ///     MEAI's <c>execute_tool {name}</c>, which <c>FunctionInvokingChatClient</c> starts on the
+    ///     <see cref="ActivitySource" /> of the client below it (<c>OpenTelemetryChatClient</c>).
     /// </summary>
+    /// <remarks>
+    ///     The repo's <c>AgentRun.ToolCall*</c> pair, on the Agent source, stays out of that convention, or a backend
+    ///     filtering on it counts every tool execution twice; only the whole pipeline with both sources shows this.
+    /// </remarks>
     [Test]
     public async Task ToolCall_ClaimsTheExecuteToolOperationNameExactlyOnceAcrossTheWholePipeline()
     {

@@ -55,12 +55,11 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
         AssertEx.True(exception.Message.Contains("zero-result", StringComparison.Ordinal));
     }
 
-    // Bare, not keyed, and on the method rather than the class: the benchmark samples process-wide state
-    // (Process.WorkingSet64 and GC.GetTotalMemory high-water marks) and reports an end-to-end p95 that
-    // XE_RAG_CAPACITY_ENFORCE_P95=1 turns into an assertion. A sibling test allocating or burning CPU beside it moves
-    // both numbers, so the guard has to mean "nothing else while this runs". The four XE_RAG_CAPACITY_* variables are
-    // read only, never written, so keying on them would protect nothing.
+    // The benchmark samples process-wide memory high-water marks and a p95 that XE_RAG_CAPACITY_ENFORCE_P95=1 asserts;
+    // a sibling test allocating or burning CPU beside it moves both numbers, so nothing else may run meanwhile.
     [Test]
+    // Bare, not keyed, and on the method rather than the class: the XE_RAG_CAPACITY_* variables are only read, never
+    // written, so keying on them would protect nothing.
     [NotInParallel]
     public async Task SmokeProfile_RealFtsVectorFusionAndHydration_ReportsCorrectnessAndCapacityMetrics()
     {

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
 ///     One-time upgrade backfill for the sandbox security profile: a node whose operator has already been through first-run
-///     onboarding and carries no profile is stamped <c>low</c>, today's behaviour, so an upgraded node is never asked.
+///     onboarding and carries no profile is stamped <c>low</c>, today's behavior, so an upgraded node is never asked.
 /// </summary>
 /// <remarks>
 ///     The discriminator is <see cref="UiModeBackfillService" />'s, deliberately: an administrator exists AND the external-access

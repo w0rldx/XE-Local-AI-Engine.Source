@@ -21,11 +21,11 @@ public sealed class FakeDockerContainerRouteTests
     ///     Replaces <c>RealDaemon_RestartPolicy_ReadsBackAsUnlessStoppedOrNo</c> (the UnlessStopped half).
     ///     <para>
     ///         What this falsifies is the WIRE ROUND TRIP: the request builder, the JSON, and the inspect mapper,
-    ///         end to end over a real socket. What it cannot falsify is whether a daemon honoured any of it — the
+    ///         end to end over a real socket. What it cannot falsify is whether a daemon honored any of it — the
     ///         fake echoes the create body back, so a builder and a mapper that are wrong in the same way would
     ///         agree with each other here. Enforcement is
     ///         <c>DockerSandboxRealDaemonTests.RealDaemon_CreatedContainer_ReadsBackEveryHardeningGuarantee</c>
-    ///         and its neighbours; do not delete those as duplicates of this.
+    ///         and its neighbors; do not delete those as duplicates of this.
     ///     </para>
     /// </summary>
     [Test]

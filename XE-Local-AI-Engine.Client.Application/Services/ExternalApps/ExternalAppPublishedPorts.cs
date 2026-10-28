@@ -12,7 +12,7 @@ public static class ExternalAppPublishedPorts
     /// <summary>The value the store seeds and the value an instance with nothing published carries.</summary>
     public const string Empty = "{}";
 
-    /// <summary>Serialises the observed bindings. Ordinal key order, so two equal port sets serialise identically.</summary>
+    /// <summary>Serializes the observed bindings. Ordinal key order, so two equal port sets serialize identically.</summary>
     public static string Serialize(IReadOnlyList<ExternalAppPublishedPort> ports)
     {
         ArgumentNullException.ThrowIfNull(ports);

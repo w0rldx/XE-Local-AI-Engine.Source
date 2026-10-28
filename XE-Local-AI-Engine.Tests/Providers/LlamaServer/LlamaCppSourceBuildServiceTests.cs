@@ -116,8 +116,8 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     /// <summary>
-    ///     R1-03: a graceful host stop cancels the build, and its cleanup removed the work tree with the progress marker, so
-    ///     the next start showed plain Idle. The stop now leaves a record the next start reports as interrupted.
+    ///     A graceful host stop cancels the build; its cleanup must not remove the progress marker with the work tree, or
+    ///     the next start shows plain Idle. The stop leaves a record the next start reports as interrupted.
     /// </summary>
     [Test]
     [RunOn(OS.Linux)]
@@ -543,7 +543,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         WriteScript(Path.Combine(stubs, "git"),
             $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
 
-        // The stub emits all three targets, so the assertion below proves the quantizer travelled through the staged →
+        // The stub emits all three targets, so the assertion below proves the quantizer traveled through the staged →
         // adopted swap with the server, not merely that cmake was asked for it.
         WriteScript(Path.Combine(stubs, "cmake"),
             $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params llama-quantize llama-perplexity; do printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");

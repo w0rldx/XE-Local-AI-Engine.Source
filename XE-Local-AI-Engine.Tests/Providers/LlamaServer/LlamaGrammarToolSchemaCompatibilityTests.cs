@@ -360,7 +360,7 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
     public void RequiresSanitizing_FindsABoundNestedUnderArraysAndObjects_AndClearsAnAllSafeTree()
     {
         // The scan descends through BOTH enumerator kinds (object properties and array items). This pins its result
-        // across the foreach rewrite of what used to be a boxing LINQ Any.
+        // for the foreach scan, which avoids a boxing LINQ Any.
         const string nested = """
                               {
                                 "type": "object",

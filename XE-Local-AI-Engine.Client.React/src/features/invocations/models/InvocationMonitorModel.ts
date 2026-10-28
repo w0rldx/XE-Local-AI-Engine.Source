@@ -163,7 +163,7 @@ export function sortInvocationHistory(history: InvocationHistoryDto[]): Invocati
 	return history.toSorted((left, right) => new Date(right.completedAt).getTime() - new Date(left.completedAt).getTime());
 }
 
-// UX-12: the fields a plain-language summary needs. Both InvocationCurrentDto (active runs) and InvocationHistoryDto
+// The fields a plain-language summary needs. Both InvocationCurrentDto (active runs) and InvocationHistoryDto
 // (terminal runs) are assignable to this shape — the fields that only exist on the current run (pendingToolCallCount,
 // hasPendingApproval, hasPendingQuestion) are optional here so a history row can be summarized too.
 export interface InvocationSummaryInput {
@@ -212,7 +212,7 @@ function summaryDurationMs(run: InvocationSummaryInput): number | null {
 }
 
 /**
- * UX-12: renders one localized, human-readable sentence describing an invocation run (verb from status, duration,
+ * Renders one localized, human-readable sentence describing an invocation run (verb from status, duration,
  * model, streamed chunk counts, a tool/approval note, and an error note on failure). Pure i18n interpolation so it is
  * unit-testable; the caller passes its `t`. Works for both the active current run and terminal history rows.
  */

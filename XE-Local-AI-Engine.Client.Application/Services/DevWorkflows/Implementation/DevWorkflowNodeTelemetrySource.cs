@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetrySource
 {
     /// <summary>camelCase, matching the supervisor that wrote these rows.</summary>
-    private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ConsumptionJsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>
     ///     The step-event types that carry a consumption record. Scoped rather than "every event with a detail",

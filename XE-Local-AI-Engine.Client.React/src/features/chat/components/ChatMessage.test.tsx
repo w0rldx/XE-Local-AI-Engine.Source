@@ -274,7 +274,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("includes the reasoning label segment in the attribution row when reasoningEffort is present", () => {
-		// The test environment runs without full i18n initialisation: t() returns fallback strings, and
+		// The test environment runs without full i18n initialization: t() returns fallback strings, and
 		// variable interpolation inside fallbacks is not performed. The outer fallback for the reasoning
 		// label is "Reasoning: {{effort}}" — its presence proves the segment was rendered.
 		renderWithProviders(
@@ -501,7 +501,7 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-menu-user-1")).toBeNull();
 	});
 
-	// U7: the per-turn throughput line follows its own switch (the UI mode, decided by the shell), not the tokens/sec toggle.
+	// The per-turn throughput line follows its own switch (the UI mode, decided by the shell), not the tokens/sec toggle.
 	it.each([
 		[true, true],
 		[false, false],
@@ -606,7 +606,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("keeps a cancelled turn neutral even when the backend persisted an error string alongside it", () => {
-		// Classification is driven by the terminal `status`, never by the (localized) error text — so a cancelled
+		// Classification is driven by the terminal `status`, never by the (localized) error text — so a canceled
 		// run that carries a backend error string still renders the neutral stop, not the red failure alert.
 		renderWithProviders(
 			<ChatMessage message={assistantMessage({ content: "", status: "cancelled", error: "The operation was canceled." })} />,

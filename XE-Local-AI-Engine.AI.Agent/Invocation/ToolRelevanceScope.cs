@@ -30,7 +30,7 @@ public static class ToolRelevanceScope
     ///     reference-equality pass-through and suppresses the <c>list_tools</c> append.
     /// </param>
     /// <param name="coreNames">The node's always-on tool names, from <c>IToolRelevanceCoreSet</c>.</param>
-    /// <param name="fittedOffer">Set only when the full offer does not fit the launched window (model-matrix F5).</param>
+    /// <param name="fittedOffer">Set only when the full offer does not fit the launched window.</param>
     public static IDisposable BeginScope(bool active, IReadOnlySet<string> coreNames, FittedToolOffer? fittedOffer = null)
     {
         ArgumentNullException.ThrowIfNull(coreNames);

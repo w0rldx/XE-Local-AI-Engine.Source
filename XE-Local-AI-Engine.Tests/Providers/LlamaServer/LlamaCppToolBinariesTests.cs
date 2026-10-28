@@ -5,9 +5,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Covers the by-name resolution of the llama.cpp helper executables that sit beside <c>llama-server</c>. They are
-///     located on disk rather than recorded, so the regression to guard is a resolver that reports a helper present when
-///     the file is not there (the fidelity/export paths would then spawn a missing binary) or absent when it is.
+///     By-name resolution of the llama.cpp helper executables beside <c>llama-server</c>. They are located on disk,
+///     so the resolver must never report a helper present when the file is missing (fidelity/export would spawn it)
+///     or absent when it is there.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaCppToolBinariesTests

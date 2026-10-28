@@ -156,14 +156,14 @@ describe("BenchmarkProjectForm", () => {
 		["a blank core task", { coreTask: "   " }, "Core task is required."],
 		["a non-positive context", { contextTokens: 0 }, "Context must be positive."],
 		["no agent", { agentDefinitionId: "" }, "Select an agent."],
-		// A budget at or above the window can never be honoured; it would silently behave like no budget at all.
+		// A budget at or above the window can never be honored; it would silently behave like no budget at all.
 		[
 			"an output budget at the context window",
 			{ maxOutputTokens: 4096 },
 			"Max output tokens must be between 1 and the requested context.",
 		],
 		["a zero output budget", { maxOutputTokens: 0 }, "Max output tokens must be between 1 and the requested context."],
-		// The floor stops a typo from cancelling every run before the model warms; the ceiling stops a runaway run
+		// The floor stops a typo from canceling every run before the model warms; the ceiling stops a runaway run
 		// from owning the queue for a day.
 		[
 			"a generation timeout below the floor",

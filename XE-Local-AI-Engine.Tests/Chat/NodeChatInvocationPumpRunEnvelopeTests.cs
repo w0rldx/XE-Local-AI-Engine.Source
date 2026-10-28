@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// The durable run ledger: NodeChatInvocationPump no longer writes the envelope itself — it hands the
+// The durable run ledger: NodeChatInvocationPump does not write the envelope itself — it hands the
 // content-free envelope metadata INTO the terminalize persistence request so the row is written atomically with the
 // terminal message row. These tests pin the pump's field mapping onto that request and that the result reflects the
 // persisted winning status; the atomic write itself (agent id, winning status, idempotency) is covered by the
@@ -486,7 +486,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             Arg.Any<CancellationToken>());
     }
 
-    // R5-07: a work session step the supervisor stopped ends here, and its envelope was booked under provider "unknown".
+    // A work session step the supervisor stopped ends here, booked under its model's provider, never "unknown".
     [Test]
     public async Task TerminalizeInterruptedAsync_AttributesTheEnvelopeToTheProviderOfTheRequestedModel()
     {

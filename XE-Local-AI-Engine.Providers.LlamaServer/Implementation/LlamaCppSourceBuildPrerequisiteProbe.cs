@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     Each tool item spawns the tool with a version or probe argument, bounded, tree-killed and degrading rather than
-///     throwing, modelled on <see cref="ProcessGpuVendorProbe" />; the NVIDIA-GPU item reuses
+///     throwing, modeled on <see cref="ProcessGpuVendorProbe" />; the NVIDIA-GPU item reuses
 ///     <see cref="IGpuVendorProbe" />; the free-disk item checks the build cache root's drive; non-Linux short-circuits
 ///     to one unsatisfied OS item. The probe touches no command with host-derived data and surfaces only sanitized
 ///     detail strings — a trimmed first version line or a fixed reason — never an absolute path, URL or secret.

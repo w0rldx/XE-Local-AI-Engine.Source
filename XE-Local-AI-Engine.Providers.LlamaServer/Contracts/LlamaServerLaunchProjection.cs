@@ -202,25 +202,28 @@ public sealed record LlamaServerLaunchProjection
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
-        var autoFit = false;
-        var metrics = false;
-        var jinja = false;
-        var cpuMoe = false;
-        int? contextTokens = null;
-        int? gpuLayers = null;
-        string? tensorSplit = null;
-        string? overrideTensor = null;
-        string? kvCacheTypeK = null;
-        string? kvCacheTypeV = null;
-        string? flashAttention = null;
-        int? threads = null;
-        int? threadsBatch = null;
-        int? batchSize = null;
-        int? ubatchSize = null;
-        var parallel = 1;
-        int? cacheReuse = null;
-        var cacheRamMiB = 0;
-        string? pooling = null;
+        var projection = new LlamaServerLaunchProjection
+        {
+            AutoFit = false,
+            Metrics = false,
+            ContextTokens = null,
+            GpuLayers = null,
+            TensorSplit = null,
+            OverrideTensor = null,
+            CpuMoe = false,
+            KvCacheTypeK = null,
+            KvCacheTypeV = null,
+            FlashAttentionMode = FlashAttentionAuto,
+            Threads = null,
+            ThreadsBatch = null,
+            BatchSize = null,
+            UbatchSize = null,
+            Parallel = 1,
+            CacheReuse = null,
+            CacheRamMiB = 0,
+            Jinja = false,
+            Pooling = null
+        };
 
         var index = 0;
         while (index < arguments.Count)
@@ -230,13 +233,13 @@ public sealed record LlamaServerLaunchProjection
             switch (argument)
             {
                 case "--jinja":
-                    jinja = true;
+                    projection = projection with { Jinja = true };
                     continue;
                 case "--metrics":
-                    metrics = true;
+                    projection = projection with { Metrics = true };
                     continue;
                 case "--cpu-moe" or "-cmoe":
-                    cpuMoe = true;
+                    projection = projection with { CpuMoe = true };
                     continue;
             }
 
@@ -259,122 +262,42 @@ public sealed record LlamaServerLaunchProjection
                 return null;
             }
 
-            switch (argument)
+            if (WithValueFlag(projection, argument, value) is not { } next)
             {
-                case "--fit":
-                    autoFit = string.Equals(value, "on", StringComparison.Ordinal);
-                    break;
-                case "-c" or "--ctx-size":
-                    if (!TryParseInt(value, out contextTokens))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "-ngl" or "--n-gpu-layers":
-                    if (!TryParseInt(value, out gpuLayers))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "-ts" or "--tensor-split":
-                    tensorSplit = NullIfBlank(value);
-                    break;
-                case "-ot" or "--override-tensor":
-                    overrideTensor = NullIfBlank(value);
-                    break;
-                case "-ctk" or "--cache-type-k":
-                    kvCacheTypeK = NullIfBlank(value);
-                    break;
-                case "-ctv" or "--cache-type-v":
-                    kvCacheTypeV = NullIfBlank(value);
-                    break;
-                case "-fa" or "--flash-attn":
-                    flashAttention = NullIfBlank(value);
-                    break;
-                case "-t" or "--threads":
-                    if (!TryParseInt(value, out threads))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "-tb" or "--threads-batch":
-                    if (!TryParseInt(value, out threadsBatch))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "-b" or "--batch-size":
-                    if (!TryParseInt(value, out batchSize))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "-ub" or "--ubatch-size":
-                    if (!TryParseInt(value, out ubatchSize))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "--parallel" or "-np":
-                    if (!TryParseInt(value, out var parsedParallel) || parsedParallel is null)
-                    {
-                        return null;
-                    }
-
-                    parallel = parsedParallel.Value;
-                    break;
-                case "--cache-reuse":
-                    if (!TryParseInt(value, out cacheReuse))
-                    {
-                        return null;
-                    }
-
-                    break;
-                case "--cache-ram":
-                    if (!TryParseInt(value, out var parsedCacheRam) || parsedCacheRam is null)
-                    {
-                        return null;
-                    }
-
-                    cacheRamMiB = parsedCacheRam.Value;
-                    break;
-                case "--pooling":
-                    pooling = NullIfBlank(value);
-                    break;
-                default:
-                    break;
+                return null;
             }
+
+            projection = next;
         }
 
-        return new LlamaServerLaunchProjection
-        {
-            AutoFit = autoFit,
-            Metrics = metrics,
-            ContextTokens = contextTokens,
-            GpuLayers = gpuLayers,
-            TensorSplit = tensorSplit,
-            OverrideTensor = overrideTensor,
-            CpuMoe = cpuMoe,
-            KvCacheTypeK = kvCacheTypeK,
-            KvCacheTypeV = kvCacheTypeV,
-            FlashAttentionMode = flashAttention ?? FlashAttentionAuto,
-            Threads = threads,
-            ThreadsBatch = threadsBatch,
-            BatchSize = batchSize,
-            UbatchSize = ubatchSize,
-            Parallel = parallel,
-            CacheReuse = cacheReuse is > 0 ? cacheReuse : null,
-            CacheRamMiB = cacheRamMiB,
-            Jinja = jinja,
-            Pooling = pooling
-        };
+        return projection with { CacheReuse = projection.CacheReuse is > 0 ? projection.CacheReuse : null };
     }
+
+    /// <summary>
+    ///     <paramref name="projection" /> with one allow-listed value flag applied, or null when its value does not parse. A later spelling of
+    ///     the same flag wins, as it does on the llama-server command line.
+    /// </summary>
+    private static LlamaServerLaunchProjection? WithValueFlag(LlamaServerLaunchProjection projection, string argument, string value) =>
+        argument switch
+        {
+            "--fit" => projection with { AutoFit = string.Equals(value, "on", StringComparison.Ordinal) },
+            "-c" or "--ctx-size" => TryParseInt(value, out var contextTokens) ? projection with { ContextTokens = contextTokens } : null,
+            "-ngl" or "--n-gpu-layers" => TryParseInt(value, out var gpuLayers) ? projection with { GpuLayers = gpuLayers } : null,
+            "-ts" or "--tensor-split" => projection with { TensorSplit = NullIfBlank(value) },
+            "-ot" or "--override-tensor" => projection with { OverrideTensor = NullIfBlank(value) },
+            "-ctk" or "--cache-type-k" => projection with { KvCacheTypeK = NullIfBlank(value) },
+            "-ctv" or "--cache-type-v" => projection with { KvCacheTypeV = NullIfBlank(value) },
+            "-fa" or "--flash-attn" => projection with { FlashAttentionMode = NullIfBlank(value) ?? FlashAttentionAuto },
+            "-t" or "--threads" => TryParseInt(value, out var threads) ? projection with { Threads = threads } : null,
+            "-tb" or "--threads-batch" => TryParseInt(value, out var threadsBatch) ? projection with { ThreadsBatch = threadsBatch } : null,
+            "-b" or "--batch-size" => TryParseInt(value, out var batchSize) ? projection with { BatchSize = batchSize } : null,
+            "-ub" or "--ubatch-size" => TryParseInt(value, out var ubatchSize) ? projection with { UbatchSize = ubatchSize } : null,
+            "--parallel" or "-np" => TryParseInt(value, out var parallel) && parallel is { } slots ? projection with { Parallel = slots } : null,
+            "--cache-reuse" => TryParseInt(value, out var cacheReuse) ? projection with { CacheReuse = cacheReuse } : null,
+            "--cache-ram" => TryParseInt(value, out var cacheRam) && cacheRam is { } cacheRamMiB ? projection with { CacheRamMiB = cacheRamMiB } : null,
+            "--pooling" => projection with { Pooling = NullIfBlank(value) },
+            _ => projection
+        };
 
     /// <summary>
     ///     The deterministic identity of this launch shape: lowercase SHA-256 hex over the canonical JSON above. Two

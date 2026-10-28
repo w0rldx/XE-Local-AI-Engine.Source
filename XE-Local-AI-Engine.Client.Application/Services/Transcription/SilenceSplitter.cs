@@ -13,7 +13,7 @@ using System.Runtime.InteropServices;
 ///     clip of repeated phrases parted by long pauses comes back as one or two segments; no request field changes that.
 ///     Regions tile the clip with no hole: a cut sits in the middle of a gap, so audio below the threshold is still sent,
 ///     never dropped. Accepted ceiling: a fixed level threshold, so a recording whose background noise is louder than it
-///     is never cut and keeps the single-request behaviour.
+///     is never cut and keeps the single-request behavior.
 /// </remarks>
 public static class SilenceSplitter
 {
@@ -26,7 +26,7 @@ public static class SilenceSplitter
     /// <summary>A silent run must last at least this long to separate two regions.</summary>
     public const int MinGapMs = 1_500;
 
-    /// <summary>A speech run shorter than this (a click, a breath) is joined to its neighbour rather than cut out alone.</summary>
+    /// <summary>A speech run shorter than this (a click, a breath) is joined to its neighbor rather than cut out alone.</summary>
     public const int MinSpeechMs = 300;
 
     private const int MinGapFrames = MinGapMs / FrameMs;

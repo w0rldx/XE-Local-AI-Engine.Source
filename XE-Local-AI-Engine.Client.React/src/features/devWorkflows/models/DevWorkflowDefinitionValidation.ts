@@ -208,7 +208,7 @@ function augmentedEdges(
  * `DevWorkflowGraph.Assured`, and the one dataflow both `GRAPH-C4-2` and `GRAPH-C4-3` ask.
  *
  * `Assured(v) = P(v) || Combine(inbound of v)` with `Combine(∅) = false`, so an entry node evaluates to `P(entry)` and
- * is NOT initialised false — a definition whose entry IS the gate, or IS the validation, is a valid shape. `Combine` is
+ * is NOT initialized false — a definition whose entry IS the gate, or IS the validation, is a valid shape. `Combine` is
  * keyed on `joinPolicy`: OR for `All` (every branch completes, so one carrying the property is enough) and AND for
  * `Any` (only one branch may have run). Keying it on node TYPE rejects `feature-development-v1`.
  */
@@ -332,7 +332,7 @@ function deadGateEdges(
 }
 
 /**
- * True when the graph has a cycle. Iterative depth-first with a colour map, because a workflow authored by hand can
+ * True when the graph has a cycle. Iterative depth-first with a color map, because a workflow authored by hand can
  * be deep and a recursive walk would put an editor bug on the stack rather than in the issue list.
  */
 function hasCycle(nodeKeys: readonly string[], successors: ReadonlyMap<string, readonly string[]>): boolean {

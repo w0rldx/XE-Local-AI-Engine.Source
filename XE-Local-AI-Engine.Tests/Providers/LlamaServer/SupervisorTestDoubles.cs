@@ -91,7 +91,7 @@ internal sealed class FakeProcessHandle : IProcessTreeHandle
 
     public void TreeKill()
     {
-        // Runs BEFORE the exit is signalled, so a test can hold a teardown open and observe the supervisor's state
+        // Runs BEFORE the exit is signaled, so a test can hold a teardown open and observe the supervisor's state
         // mid-removal.
         _onTreeKill?.Invoke();
         Interlocked.Exchange(ref _killed, value: 1);

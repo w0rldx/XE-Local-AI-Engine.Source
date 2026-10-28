@@ -40,7 +40,7 @@ public sealed record AzureFoundrySettingsResponse
 
     /// <summary>
     ///     Custom request headers on this connection. Secret header values are never returned (Value is null); presence
-    ///     is signalled by <see cref="AzureFoundryHeaderDto.HasStoredValue" />.
+    ///     is signaled by <see cref="AzureFoundryHeaderDto.HasStoredValue" />.
     /// </summary>
     public IReadOnlyList<AzureFoundryHeaderDto> Headers { get; init; } = [];
 

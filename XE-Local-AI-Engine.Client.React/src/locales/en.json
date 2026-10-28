@@ -682,11 +682,11 @@
 						"title": "Follow indexing"
 					},
 					"knowledgeOverview": {
-						"content": "The Knowledge Base keeps document ingestion and retrieval local to this node.",
+						"content": "The knowledge base keeps document ingestion and retrieval local to this node.",
 						"title": "Ground chat in your documents"
 					},
 					"knowledgeSearch": {
-						"content": "Search indexed content here before opting to use the Knowledge Base in Chat.",
+						"content": "Search indexed content here before opting to use the knowledge base in Chat.",
 						"title": "Test retrieval"
 					},
 					"knowledgeUpload": {
@@ -2325,7 +2325,7 @@
 				"cloudEgressCue": "Sent to OpenAI",
 				"cloudEgressCueAzure": "Sent to Azure",
 				"cloudGroup": "Cloud (Codex)",
-				"cloudGroupAzure": "Cloud (Azure Foundry)",
+				"cloudGroupAzure": "Cloud (Azure AI Foundry)",
 				"externalEgressCueCloud": "Sent to {{name}}",
 				"externalEgressCueLocal": "Local network",
 				"externalGroup": "External · {{name}}",

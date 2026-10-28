@@ -19,7 +19,7 @@ using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistenc
 ///     agent-facing sandbox exists, which is what lets that sandbox be created with no egress at all.
 ///     <para>
 ///         Two properties carry the design and both are asserted as facts about the create requests rather than as
-///         behaviour of a build: the warm sandbox is a SECOND sandbox under its own attach key (one sandbox cannot have
+///         behavior of a build: the warm sandbox is a SECOND sandbox under its own attach key (one sandbox cannot have
 ///         network for one command and not the next — <see cref="SandboxNetworkPolicy" /> is fixed at create), and it
 ///         does not outlive <c>PrepareAsync</c>.
 ///     </para>

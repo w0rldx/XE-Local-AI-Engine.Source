@@ -29,7 +29,7 @@ internal static class DevWorkflowContractMapper
     /// <summary>The stored graph document as the wire shape.</summary>
     /// <remarks>
     ///     Defaults are filled in the same way the runtime's parser fills them, so the rendered graph says what the
-    ///     dispatcher will actually do: an unnamed node is labelled by its key, and an absent edge list is no edges
+    ///     dispatcher will actually do: an unnamed node is labeled by its key, and an absent edge list is no edges
     ///     rather than null.
     /// </remarks>
     public static DevWorkflowGraph ToWireGraph(string graphJson)

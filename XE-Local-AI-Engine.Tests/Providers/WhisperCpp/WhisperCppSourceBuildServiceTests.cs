@@ -228,7 +228,7 @@ public sealed class WhisperCppSourceBuildServiceTests
     public async Task PostBuild_OriginRunpath_ReachesAdoption()
     {
         // The positive control for the test above: with the same scripted tree and an $ORIGIN-relative runpath the
-        // build runs all the way through adoption, so a "fails before adoption" result cannot be an artefact of the
+        // build runs all the way through adoption, so a "fails before adoption" result cannot be an artifact of the
         // harness never getting that far.
         using var cache = new TempDirectory();
         using var harness = new Harness(cache.Path);

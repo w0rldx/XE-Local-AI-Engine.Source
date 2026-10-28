@@ -200,7 +200,7 @@ public sealed partial class NodeAdminMcpTools
 
     private const string AmbiguousNameMessage = "Several saved agents share this name. Use the agent id instead.";
 
-    // Q5: names are not unique, so a name that matches several agents is refused instead of acting on the first row (I-D6).
+    // Names are not unique, so a name that matches several agents is refused instead of acting on the first row.
     private async Task<AgentLookup> FindAgentAsync(string key, CancellationToken cancellationToken)
     {
         try

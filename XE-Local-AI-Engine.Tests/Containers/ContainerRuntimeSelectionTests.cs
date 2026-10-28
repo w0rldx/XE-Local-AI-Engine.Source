@@ -37,7 +37,7 @@ public sealed class ContainerRuntimeSelectionTests
     [Arguments("1")]
     public void TryParse_RejectsNullBlankAndUnknownAndStillYieldsAuto(string? value)
     {
-        // Both halves matter. The false is what lets an API validator return 400 on a value it does not recognise;
+        // Both halves matter. The false is what lets an API validator return 400 on a value it does not recognize;
         // the Auto is what stops a caller that ignores the result from acting on an uninitialised selection. A stored
         // "0" is rejected on purpose: numbers are what the enum would have persisted as, and reading them back would
         // re-introduce the silent renumbering the string spelling exists to prevent.

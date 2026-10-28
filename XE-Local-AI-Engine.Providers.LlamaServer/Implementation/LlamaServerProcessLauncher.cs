@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 ///     the job handle terminates the whole tree; on Linux it starts a new session and process group (<c>setsid</c>),
 ///     so <c>kill(-pgid)</c> on teardown reaps every descendant, and no cross-OS native call leaks because each path
 ///     is reached only under its own OS guard. Its stdout and stderr are redirected and forwarded line by line to the
-///     app logger, which is what makes GPU-offload behaviour diagnosable, and draining them cannot stall the child.
+///     app logger, which is what makes GPU-offload behavior diagnosable, and draining them cannot stall the child.
 /// </remarks>
 internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 {

@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
@@ -34,7 +34,7 @@ internal static class GgufAcquisitionSidecar
         string weightPath,
         string modelsDirectory,
         CancellationToken cancellationToken) =>
-        ReadValidAsync(sidecarPath, weightPath, modelsDirectory, ComputeSha256Async, cancellationToken);
+        ReadValidAsync(sidecarPath, weightPath, modelsDirectory, FileSha256.ComputeAsync, cancellationToken);
 
     /// <summary>
     ///     Validates the sidecar against member digests supplied by the caller instead of hashing the members itself.
@@ -259,13 +259,6 @@ internal static class GgufAcquisitionSidecar
         {
             RegistryRevision = GgufRegistryRevision.ComputeV1(entry, modelsDirectory)
         };
-    }
-
-    public static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>

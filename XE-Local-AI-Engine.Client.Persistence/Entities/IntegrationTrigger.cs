@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     A named, externally addressable entry point that invokes one saved agent (ADR 0008). Modelled on
+///     A named, externally addressable entry point that invokes one saved agent (ADR 0008). Modeled on
 ///     <see cref="ScheduledJobDefinition" />.
 /// </summary>
 /// <remarks>

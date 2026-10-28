@@ -3,9 +3,9 @@ import { IconVolume, IconVolumeOff } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
-import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
-import { useWebSpeechVoices } from "@/features/voice/WebSpeechVoiceCatalog";
+import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
+import { useWebSpeechVoices } from "@/features/voice/models/WebSpeechVoiceCatalog";
+import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/stores/VoicePreferencesStore";
 
 // Composer voice controls: on/off toggle + (when on) a settings menu with the voice-profile picker, autoplay switch,
 // and speaking-rate slider. Self-gates on the runtime context `enabled` flag (the operator's node setting) so it

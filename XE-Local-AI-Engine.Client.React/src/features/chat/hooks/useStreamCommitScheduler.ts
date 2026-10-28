@@ -4,7 +4,7 @@ export interface StreamCommitScheduler<TState> {
 	// Record the latest pending state and ensure a single requestAnimationFrame flush is queued. Repeated calls
 	// within one frame collapse to one commit; when `merge` is supplied the states are folded rather than replaced.
 	schedule: (state: TState) => void;
-	// Commit the latest pending state immediately, cancelling any queued frame. No-op when nothing is pending.
+	// Commit the latest pending state immediately, canceling any queued frame. No-op when nothing is pending.
 	// Use this for terminal/error events so completion is never left waiting on the next frame.
 	flush: () => void;
 	// Drop any pending state without committing (aborted/deleted turn, or component unmount).

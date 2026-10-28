@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
     private readonly Lock _gate = new();
     private readonly int _maxEventCount;
     private readonly int _maxUtf8Bytes;

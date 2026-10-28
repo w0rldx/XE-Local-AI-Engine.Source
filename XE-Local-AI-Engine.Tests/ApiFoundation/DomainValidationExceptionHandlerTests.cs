@@ -48,7 +48,7 @@ public sealed class DomainValidationExceptionHandlerTests
         });
 
         // The global handler's body: a random job id resolves to no definition, so the trigger throws
-        // ScheduledJobValidationException out of HandleAsync (the endpoint no longer catches it).
+        // ScheduledJobValidationException out of HandleAsync (the endpoint does not catch it).
         var global = await PostAsync(new
         {
             scheduledJobId = Guid.NewGuid()

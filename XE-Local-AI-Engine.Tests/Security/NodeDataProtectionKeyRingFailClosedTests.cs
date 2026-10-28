@@ -54,7 +54,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedTests
     [Test]
     public void NonWindowsRing_StaysNarrowAndDoesNotClaimAPlainCryptographicFailure()
     {
-        // The non-Windows classifier recognises only this node's own decryption exception, so an unrelated cryptographic
+        // The non-Windows classifier recognizes only this node's own decryption exception, so an unrelated cryptographic
         // failure is still left to the framework's own handling rather than reported as a KEK problem.
         var resolver = NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(isWindows: false)(new FakeInnerResolver(shouldGenerateNewKey: true));
 
@@ -147,7 +147,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedTests
     /// <summary>
     ///     The guard that keeps a fail-closed startup change from ever bricking a correct install: if Data Protection
     ///     stops registering its resolver by implementation type there is no inner instance to construct, so the
-    ///     framework's pre-existing behaviour stands rather than the host failing to start.
+    ///     framework's pre-existing behavior stands rather than the host failing to start.
     /// </summary>
     [Test]
     public void Decorate_WhenTheFrameworkStopsRegisteringByImplementationType_LeavesTheRegistrationAlone()
@@ -203,7 +203,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedTests
         }
     }
 
-    /// <summary>A ring key whose encryptor materialisation either succeeds or raises the supplied failure.</summary>
+    /// <summary>A ring key whose encryptor materialization either succeeds or raises the supplied failure.</summary>
     private sealed class FakeKey : IKey
     {
         private readonly Exception? _failure;

@@ -91,9 +91,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     A mis-spelled disposition is a correction, not the end of the attempt. Thrown, it terminalized the whole
-    ///     reviewer round and cost the DevTask node one of its three attempts — three times in a row on 2026-09-02,
-    ///     from a model that had approved the same subject correctly minutes earlier.
+    ///     A mis-spelled disposition is a correction, not the end of the attempt. Thrown, it would end the whole
+    ///     reviewer round and cost the DevTask node one of its three attempts, even from a model that had approved the
+    ///     same subject correctly minutes earlier.
     /// </summary>
     [Test]
     public async Task ReviewerModel_WithAMisSpelledDisposition_CorrectsTheModelInsteadOfLosingTheAttempt()
@@ -256,8 +256,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     A gitignored file never reaches the patch, so neither the write policy nor the reviewer sees it, yet the
-    ///     validation commands used to run beside it. They now run in a fresh tree that is the base plus the patch alone.
+    ///     A gitignored file never reaches the patch, so neither the write policy nor the reviewer sees it, and the
+    ///     validation commands do not run beside it: they run in a fresh tree that is the base plus the patch alone.
     /// </summary>
     [Test]
     public async Task Validation_RunsInAFreshTreeOfTheBasePlusThePatchAlone()
@@ -674,9 +674,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>()
                                                                                      .PreviewAsync(seed.TaskId, Binding(seed, repository)));
 
-        // FU4-1, and asserted on the ChangesRequested path on purpose: the reviewer's prompt is written before the
+        // Asserted on the ChangesRequested path on purpose: the reviewer's prompt is written before the
         // model is called, so it is there whatever the model then decides. It is the only system record of what the
-        // reviewer was told; every earlier claim about it was quoted back by the model itself.
+        // reviewer was told; any other account of it is quoted back by the model itself.
         var prompts = (await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListArtifactsAsync(seed.TaskId))
                       .Where(static artifact => artifact.Kind == Client.Persistence.Entities.DevelopmentArtifactKind.Prompt)
                       .ToArray();
@@ -751,9 +751,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     /// <summary>
     ///     Command evidence is machine-generated build/test output, so it redacts rather than rejecting. Both inputs
     ///     here are shapes that ordinary `dotnet build` / `dotnet test` output really produces: an absolute output
-    ///     path, and a long descriptive test-method name. Each on its own used to clear the secret scanner's
-    ///     keyword-free entropy fallback and make the whole validation report unpersistable — which meant the gate
-    ///     could neither pass nor cleanly fail on this repository once the real command profile was enabled.
+    ///     path, and a long descriptive test-method name. Each on its own clears the secret scanner's keyword-free
+    ///     entropy fallback, so rejecting would make the whole validation report unpersistable — and the gate could
+    ///     neither pass nor cleanly fail on this repository under the real command profile.
     /// </summary>
     [Test]
     public async Task ArtifactSanitizer_ForCommandEvidence_RedactsInsteadOfRejectingOrdinaryBuildOutput()
@@ -941,11 +941,11 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     The validation list is no longer a <c>DevelopmentOptions</c> setting — it is per-profile and code-owned, so
+    ///     The validation list is not a <c>DevelopmentOptions</c> setting — it is per-profile and code-owned, so
     ///     what the gate runs on any install is whatever <c>DevelopmentCommandProfileCatalog</c> materializes. This
-    ///     pins that content, per profile, and it is the regression guard for the false-green defect fixed in
-    ///     <c>18fa1d3e</c>: before that fix the shipped list was <c>git_diff_check</c> alone, so a patch that did not
-    ///     compile — or compiled and failed its tests — reached <c>InReview</c> and could be applied.
+    ///     pins that content, per profile, and it is the regression guard for a false green: with
+    ///     <c>git_diff_check</c> alone on the list, a patch that does not
+    ///     compile — or compiles and fails its tests — reaches <c>InReview</c> and can be applied.
     ///     <para>
     ///         Shrinking either dotnet profile's list re-opens exactly that defect. Dropping
     ///         <c>dotnet_test_release_no_build</c> makes a failing test invisible; dropping
@@ -985,7 +985,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(ExpectedDotnetValidationProfile, string.Join(',', commands.Select(static command => command.CommandId)));
         AssertEx.True(commands.All(static command => command.Completed && command.ExitCode == 0), DescribeValidation(commands, report));
 
-        // The gate no longer just knows the test command exited zero, it knows what the suite did. The
+        // The gate knows more than that the test command exited zero: it knows what the suite did. The
         // fixture has exactly one test, and it ran.
         var outcome = TestOutcome(commands);
         AssertEx.True(outcome.Parsed);
@@ -1311,7 +1311,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     ///     <para>
     ///         The throw is real rather than injected: a repository binding whose identity hash does not match the
     ///         persisted one is refused by <c>DevelopmentWorkspaceProvider.PrepareAsync</c> every single time, which is
-    ///         exactly the deterministic fault the bound exists for. The loop is bounded so the old behaviour exhausts
+    ///         exactly the deterministic fault the bound exists for. The loop is bounded so an unbounded retry exhausts
     ///         the ticks and fails the count instead of hanging.
     ///     </para>
     /// </summary>
@@ -1485,7 +1485,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests);
 
         // 10 minutes because MaxAttemptDurationSeconds still bounds the validation run AS A WHOLE (and, with the
-        // task's MaxDurationSeconds, is the smaller of the two that wins). Per-command timeouts no longer come from
+        // task's MaxDurationSeconds, is the smaller of the two that wins). Per-command timeouts do not come from
         // here at all — they are carried by each profile command. The synthetic solution restores, builds and tests
         // in a couple of seconds; the headroom is for a cold NuGet fallback resolve on a loaded machine.
         await using var provider = await BuildProviderAsync(new WritingCoderModel(librarySource, DevelopmentSyntheticSolutionRepository.LibrarySourcePath),
@@ -1643,7 +1643,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <param name="maxAttemptDurationSeconds">
-    ///     The attempt cap, and the ceiling on a whole validation run. It is no longer the per-command timeout: each
+    ///     The attempt cap, and the ceiling on a whole validation run. It is not the per-command timeout: each
     ///     command carries its own budget on the project's command profile. Restore, build and test on the synthetic
     ///     solution need more headroom than a lone `git diff --check` does, so the tests that bind a
     ///     <c>dotnet-slnx</c> profile raise both this and the task's own <c>MaxDurationSeconds</c> — the validation

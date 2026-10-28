@@ -15,7 +15,7 @@ export const SCHEMA_VERSION = 1;
 /** Whether a snapshot was produced automatically by an error or manually by the user. */
 export type SnapshotKind = "error" | "manual";
 
-/** Which collector observed the error. Drives dedup attribution and UI labelling. */
+/** Which collector observed the error. Drives dedup attribution and UI labeling. */
 export type ErrorSource = "boundary" | "uncaught" | "unhandledrejection" | "reporting" | "manual";
 
 /** The three FE transports, each of which carries a W3C `traceparent`. */

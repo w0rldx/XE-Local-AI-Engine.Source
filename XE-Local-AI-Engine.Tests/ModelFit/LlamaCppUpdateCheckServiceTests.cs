@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Unit tests for the one-shot startup update check (<see cref="LlamaCppUpdateCheckService" />). Drives the check
-///     directly (no startup delay) and asserts it sets <c>updateAvailable</c> only when a NEWER recommended tag is
-///     resolvable, and degrades to an <c>isOffline</c> snapshot — never throwing — when the catalog has no live data.
+///     The one-shot startup update check (<see cref="LlamaCppUpdateCheckService" />), driven directly: it sets
+///     <c>updateAvailable</c> only when a NEWER recommended tag resolves, and degrades to an <c>isOffline</c> snapshot,
+///     never throwing, when the catalog has no live data.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaCppUpdateCheckServiceTests

@@ -2,7 +2,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNodeSettingsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -22,7 +22,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	useNavigate: () => navigateMock,
 }));
 
-vi.mock("@/core/layout/components/Layout/Layout", () => ({ Layout: () => null }));
+vi.mock("@/AppLayout", () => ({ AppLayout: () => null }));
 
 import { Route as LayoutRoute } from "@/routes/_layout";
 

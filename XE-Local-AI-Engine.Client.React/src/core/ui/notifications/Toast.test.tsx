@@ -73,7 +73,7 @@ describe("toast", () => {
 
 	// Regression guard: callers derive a toast message from a server failure, and ApiError deliberately resolves its
 	// message to "" when the response carried no detail, message or title. Passed straight through, Mantine renders a
-	// coloured, iconed, dismissable notification containing no text at all — a signal that says nothing.
+	// colored, iconed, dismissable notification containing no text at all — a signal that says nothing.
 	it("substitutes a generic message rather than firing an empty error toast", () => {
 		toast.error("");
 

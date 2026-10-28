@@ -130,7 +130,7 @@ public sealed class GraphWorkflowConditionTests
 
     /// <summary>
     ///     Through a double, 9007199254740992 and 9007199254740993 are the same value: an ordering over ids, byte
-    ///     counts or timestamps past 2^53 would answer on a rounding artefact rather than on the numbers an author
+    ///     counts or timestamps past 2^53 would answer on a rounding artifact rather than on the numbers an author
     ///     wrote.
     /// </summary>
     [Test]

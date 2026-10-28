@@ -21,7 +21,7 @@ const keyPrefix = "pages.externalApps.events";
  * The feed pages FORWARD: `afterSequence` is an exclusive LOWER bound, so "load more" advances it to the last
  * sequence returned and appends. Decreasing it would repeat the page just read.
  *
- * Events are content-free by design, so a row is a sequence, a time and a translated kind — and an unrecognised kind
+ * Events are content-free by design, so a row is a sequence, a time and a translated kind — and an unrecognized kind
  * renders `events.kind.unknown` rather than putting a raw identifier from a newer server in front of an operator.
  */
 export function InstanceEventsList({ instanceId, "data-testid": testId }: InstanceEventsListProps) {

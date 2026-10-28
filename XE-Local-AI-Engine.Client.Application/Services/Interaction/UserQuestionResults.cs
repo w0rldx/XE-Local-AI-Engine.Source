@@ -29,7 +29,7 @@ internal static class UserQuestionResults
     /// </remarks>
     public const string UnattendedReason = "unattended";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private const string ProceedInstruction =
         "Continue with your own best judgement and state plainly which assumption you made.";

@@ -18,8 +18,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins that a dataset generates against the definition body it PINNED at creation. Editing a definition between a
-///     dataset's creation and its generation used to swap the teacher, the tool snapshot and the instructions while the
-///     dataset still claimed the older <c>DefinitionVersion</c>.
+///     dataset's creation and its generation must not swap the teacher, the tool snapshot and the instructions while the
+///     dataset still claims the older <c>DefinitionVersion</c>.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class DatasetGenerationExecutorTests
@@ -235,7 +235,7 @@ public sealed class DatasetGenerationExecutorTests
     [Test]
     public async Task OperatorCancel_DuringTheFailedCommit_PublishesNoFailedEvent()
     {
-        // Codex-found: a cancel landing inside the store commit left a live "Failed" event over a stored Cancelled.
+        // A cancel landing inside the store commit must not leave a live "Failed" event over a stored Cancelled.
         var store = Substitute.For<ITrainingDatasetStore>();
         var registry = new TrainingRunCancellationRegistry();
         var dataset = Dataset(Body("teacher.gguf", "instructions", "tool"));

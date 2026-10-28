@@ -250,7 +250,7 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 
 		const attempts = screen.getByTestId("gw-node-config-attempts") as HTMLInputElement;
 		expect(attempts.value).toBe("");
-		// 3 for an Agent (F-1), shown as the placeholder because "unset" and "3" are different documents.
+		// 3 for an Agent, shown as the placeholder because "unset" and "3" are different documents.
 		expect(attempts.placeholder).toBe("3");
 
 		fireEvent.change(attempts, { target: { value: "5" } });

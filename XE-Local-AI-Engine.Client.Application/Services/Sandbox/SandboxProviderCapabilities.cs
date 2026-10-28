@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>Provider-neutral capability flags advertised by an <see cref="ISandboxRuntimeProvider" />.</summary>
 /// <remarks>
-///     AgentHome reads these to gate optional behaviour — read-only mounts, network policy, resource limits — and to skip operations a
+///     AgentHome reads these to gate optional behavior — read-only mounts, network policy, resource limits — and to skip operations a
 ///     provider cannot serve. No provider SDK informs this enum.
 /// </remarks>
 [Flags]

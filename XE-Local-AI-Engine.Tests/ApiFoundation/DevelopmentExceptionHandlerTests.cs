@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins what the Development area got when its exception mapping moved out of every endpoint and into the global
-///     chain: a missing entity is still the surface's bodyless 404, and the two Development conflicts still write the
-///     exact <c>AddError(message) + Send.ErrorsAsync(statusCode: 409)</c> body their endpoints used to write by hand.
+///     Pins the Development area's exception mapping in the global chain: a missing entity is the surface's
+///     bodyless 404, and the two Development conflicts write the exact
+///     <c>AddError(message) + Send.ErrorsAsync(statusCode: 409)</c> body.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class DevelopmentExceptionHandlerTests
@@ -23,7 +23,7 @@ public sealed class DevelopmentExceptionHandlerTests
 
     /// <summary>
     ///     End to end over a real route: the store raises <see cref="DevelopmentNotFoundException" /> for an id that
-    ///     does not exist, no endpoint catches it any more, and the answer is still an empty-bodied 404.
+    ///     does not exist, no endpoint catches it, and the answer is an empty-bodied 404.
     /// </summary>
     [Test]
     public async Task GetProject_ForAnIdThatDoesNotExist_StillAnswersABodylessNotFound()

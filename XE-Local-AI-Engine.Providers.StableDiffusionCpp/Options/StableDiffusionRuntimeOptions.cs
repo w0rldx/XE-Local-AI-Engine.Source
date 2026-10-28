@@ -81,7 +81,7 @@ public sealed class StableDiffusionRuntimeOptions
     ///     A flat budget is only safe for the family it was measured on: SD1.5 is ~2 GB and loads in seconds, while the Qwen-Image 2.1 set is a
     ///     4.2 GB DiT plus a 0.7 GB VAE plus a 5.0 GB Qwen3-VL-8B encoder — around 10 GB, the encoder pinned to CPU — so a flat two
     ///     minutes would fail it on first launch with a readiness timeout that looks like a broken model rather than an impatient budget.
-    ///     Deliberately pessimistic: over-waiting costs nothing on the happy path, readiness being signalled the moment the socket opens,
+    ///     Deliberately pessimistic: over-waiting costs nothing on the happy path, readiness being signaled the moment the socket opens,
     ///     whereas under-waiting kills a load that was going to succeed.
     /// </remarks>
     public long ReadinessLoadBytesPerSecond { get; set; } = 40L * 1024 * 1024;

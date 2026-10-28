@@ -500,7 +500,7 @@ describe("NodeSettingsFieldsCard — restart-required badge", () => {
 	it("does not mark a field that is read live on every call", () => {
 		renderCard({ section: "chat" });
 
-		// toolCapableModels is re-read per invocation (OrchestrationResolver) — labelling it would be a lie.
+		// toolCapableModels is re-read per invocation (OrchestrationResolver) — labeling it would be a lie.
 		expect(screen.queryByTestId("node-settings-restart-badge-toolCapableModels")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-enableTools")).toBeNull();
 		cleanup();
@@ -712,7 +712,7 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 		expect(
 			screen.getByText("Allowed range: 1–1440 minutes. The network timeout for one chat request to llama-server."),
 		).toBeTruthy();
-		// The real i18next instance (initialised in setup) holds the shipped bundles; react-i18next is mocked above.
+		// The real i18next instance (initialized in setup) holds the shipped bundles; react-i18next is mocked above.
 		const cpuReserveKey = "pages.nodeSettings.fields.llamaCpuThreadReserve.description";
 		const cpuReserveEn = i18next.getFixedT("en")(cpuReserveKey);
 		expect(cpuReserveEn).toBe(

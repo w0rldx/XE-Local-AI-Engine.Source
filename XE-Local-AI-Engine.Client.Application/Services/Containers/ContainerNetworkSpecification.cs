@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Containers;
 
-/// <summary>The engine-created bridge network one application instance runs on: one per instance, labelled with the owner, the install and the instance id.</summary>
+/// <summary>The engine-created bridge network one application instance runs on: one per instance, labeled with the owner, the install and the instance id.</summary>
 /// <remarks>
 ///     The labels are not bookkeeping. A name conflict is resolved by inspecting the existing network and reusing it
 ///     only when its labels prove it is this instance's own, so a crash between create and record does not leave the

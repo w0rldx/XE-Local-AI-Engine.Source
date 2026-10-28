@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 /// <remarks>
 ///     The analogue of <c>LocalModelProxyForwarder</c> — a request/response contract an external caller owns, deliberately outside FastEndpoints so it never
 ///     reaches the OpenAPI document or the generated React client. <b>There is no 403 on this family:</b> a missing, malformed, unknown or revoked credential
-///     is the authentication handler's 401, and everything authorisation-shaped — a trigger this key may not fire, an execution owned by another integrator,
+///     is the authentication handler's 401, and everything authorization-shaped — a trigger this key may not fire, an execution owned by another integrator,
 ///     an execution under a trigger this key is not scoped to — is a 404 byte-identical to "unknown", because the id is the capability.
 /// </remarks>
 internal sealed class IntegrationApiHandler
@@ -43,7 +43,7 @@ internal sealed class IntegrationApiHandler
 
     private const string SessionClosedCode = "session-closed";
 
-    private static readonly JsonSerializerOptions RequestSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions RequestSerializerOptions = JsonSerializerOptions.Web;
 
     private readonly IntegrationExternalAccess _access;
     private readonly IIntegrationInvocationService _invocations;
@@ -71,7 +71,7 @@ internal sealed class IntegrationApiHandler
     ///     The integrator's own session status.
     /// </summary>
     /// <remarks>
-    ///     Its ENTIRE authorisation decision is <c>IntegrationSessionService.GetForExternalCallerAsync</c>, the shared access helper and nothing else:
+    ///     Its ENTIRE authorization decision is <c>IntegrationSessionService.GetForExternalCallerAsync</c>, the shared access helper and nothing else:
     ///     unknown, owned by another principal, and belonging to a trigger this key's allowlist excludes all come back <see langword="null" /> and map to ONE
     ///     404 with a byte-identical body. No masking is assembled here, because separate <c>if</c>s in a handler are separate chances to return a
     ///     distinguishable answer.
@@ -241,7 +241,7 @@ internal sealed class IntegrationApiHandler
     ///     The live stream, resumable through <c>Last-Event-ID</c>.
     /// </summary>
     /// <remarks>
-    ///     Authorisation runs FIRST and in full — principal and the current key's trigger allowlist, through the one
+    ///     Authorization runs FIRST and in full — principal and the current key's trigger allowlist, through the one
     ///     shared helper — so a caller that may not see this execution gets the masked 404 before any header is
     ///     written, and never a partially written stream.
     /// </remarks>
@@ -394,7 +394,7 @@ internal sealed class IntegrationApiHandler
             return;
         }
 
-        // Authorisation, not a read: the masked cancel must leave no trace at all, so this runs BEFORE the marker is
+        // Authorization, not a read: the masked cancel must leave no trace at all, so this runs BEFORE the marker is
         // stamped.
         var access = await _access.ResolveExecutionAsync(executionId, caller, context.RequestAborted);
         if (access.Outcome == IntegrationAccessOutcome.Masked)
@@ -560,7 +560,7 @@ internal sealed class IntegrationApiHandler
             }
             else if (string.Equals(input.Type, "json", StringComparison.OrdinalIgnoreCase))
             {
-                // The RAW text the caller sent, never a re-serialisation: the seed must carry what was received.
+                // The RAW text the caller sent, never a re-serialization: the seed must carry what was received.
                 mapped.Add(new IntegrationInputDto
                 {
                     Kind = IntegrationInputKinds.Json,

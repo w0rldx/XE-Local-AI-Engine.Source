@@ -31,7 +31,7 @@ public sealed class LlamaServerSystemOneClient : ILlamaServerSystemOneClient
     /// <summary>The longest server error text kept for the node log.</summary>
     private const int MaxDetailLength = 300;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 
     private static readonly TimeSpan TimeoutFloor = TimeSpan.FromSeconds(5);
 

@@ -138,7 +138,7 @@ public sealed class ChatContextEstimateServiceTests
     [Test]
     public async Task Estimate_WithLocalToolsOff_ChargesNoToolsAndNoPreamble()
     {
-        // The send honours the composer's local-tools toggle; with it off the round offers nothing, so neither may the estimate.
+        // The send honors the composer's local-tools toggle; with it off the round offers nothing, so neither may the estimate.
         var harness = new Harness(CreateTool("get_time"), CreateTool("read_file"));
 
         var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest

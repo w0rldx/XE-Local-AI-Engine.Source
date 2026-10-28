@@ -31,7 +31,7 @@ public sealed record PlaybookEvalResult(
     ///     Cached (de)serialization options for the persisted eval result (CA1869). Web defaults so the JSON keys are
     ///     camelCase, matching the panel + the gate that read this column back.
     /// </summary>
-    public static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    public static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
 }
 
 /// <summary>

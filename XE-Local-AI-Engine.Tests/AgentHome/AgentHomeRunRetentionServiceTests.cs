@@ -550,7 +550,7 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             timeProvider,
             logger);
 
-    // The three limits are node settings the sweep reads per sweep; the tests state them on the options object they used to live on.
+    // The three limits are node settings the sweep reads per sweep; the tests state them on an options object and map them across.
     private static StubNodeRuntimeSettings LimitsOf(AgentHomeRunRetentionOptions options) =>
         StubNodeRuntimeSettings.Create()
                                .WithAgentHomeRunRetentionDays(options.RetentionDays)

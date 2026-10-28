@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 /// </summary>
 /// <remarks>
 ///     Engages only above the configured threshold; the model recovers what is held back by calling <c>list_tools</c>.
-///     <b>Hidden is not forbidden</b>: a context budget, never an authorisation boundary — a tool the model was not
+///     <b>Hidden is not forbidden</b>: a context budget, never an authorization boundary — a tool the model was not
 ///     shown still executes under today's wrapper and policy. The hop refuses to filter an array with no
 ///     <see cref="ListToolsFunction" /> instance, so "a hidden tool with no escape hatch" is unreachable.
 ///     See docs/wiki/04-agent-mode.md ("Tool-relevance narrowing").
@@ -136,7 +136,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         // approval-resume send must not resolve blank, fall through mid-turn and strand list_tools on the old binding.
         var query = LastUserText(messages);
 
-        // A window-fitted offer is a cap, not an optimisation: it narrows even with no query to rank by.
+        // A window-fitted offer is a cap, not an optimization: it narrows even with no query to rank by.
         if (string.IsNullOrWhiteSpace(query) && scope.FittedOffer is null && !scope.HasDecision(key))
         {
             return options;
@@ -152,7 +152,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // An optimisation must never fail a turn, and the log carries counts plus the TYPE name only: the exception
+            // An optimization must never fail a turn, and the log carries counts plus the TYPE name only: the exception
             // OBJECT would drag the query and tool descriptions into a sink that renders every inner exception.
             _logger.LogWarning("Tool-relevance selection failed for an array of {ToolCount} tools ({FailureType}); sending the unfiltered offer.",
                 tools.Count,
@@ -164,7 +164,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         // substitute in the clone below, which nothing would ever invoke.
         listTools.Bind(decision);
 
-        // Offered union revealed (inside the budget when fitted), in the INPUT order, so a fixed set always serialises to the
+        // Offered union revealed (inside the budget when fitted), in the INPUT order, so a fixed set always serializes to the
         // same tools array — a stable prompt prefix and one GBNF compilation across the turn's rounds.
         var sent = decision.SentNames();
         var narrowed = options.Clone();
@@ -253,7 +253,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         };
     }
 
-    // Tool AUTHORISATION is never an input here: the core set is a fixed node-wide name set plus the names this
+    // Tool AUTHORIZATION is never an input here: the core set is a fixed node-wide name set plus the names this
     // assembly owns plus what the instructions name. MCP and custom tools are absent and rank like everything else.
     private static bool IsCore(ToolRelevanceState scope, string name, string? instructionText)
     {

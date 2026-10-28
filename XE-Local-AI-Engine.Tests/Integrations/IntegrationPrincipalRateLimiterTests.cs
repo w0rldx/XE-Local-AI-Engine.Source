@@ -6,10 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The per-principal ceiling, driven with no host and no middleware — which is the point of moving fairness out of
-///     the rate-limiting middleware. The load-bearing test is that one principal exhausting its window does NOT refuse
-///     another: the shared per-IP layer cannot provide that on a loopback-only surface, and that gap is why ADR 0008 R5-5
-///     added this layer at all.
+///     The per-principal ceiling, driven with no host and no middleware. One principal exhausting its window does NOT
+///     refuse another: the shared per-IP layer cannot provide that on a loopback-only surface, which is why ADR 0008
+///     adds this layer.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class IntegrationPrincipalRateLimiterTests

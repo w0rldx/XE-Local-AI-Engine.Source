@@ -119,4 +119,31 @@ public sealed class PathContainmentTests
 
         AssertEx.Equal(OperatingSystem.IsWindows(), PathContainment.IsUnderRoot(child, Root));
     }
+
+    /// <summary>
+    ///     The canonical-path gate the sandbox jail, the container workspace and the app confinement share: the root
+    ///     itself is admitted, a name-prefix sibling is not, and nothing is normalized or case-folded on its behalf.
+    /// </summary>
+    [Test]
+    public void IsRootOrUnderCanonical_AdmitsTheRootAndItsDescendantsOnly()
+    {
+        var child = Path.Combine(Root, "workspace", "file.txt");
+
+        AssertEx.True(PathContainment.IsRootOrUnderCanonical(Root, Root));
+        AssertEx.True(PathContainment.IsRootOrUnderCanonical(child, Root));
+        AssertEx.True(PathContainment.IsRootOrUnderCanonical(child, Root + Path.DirectorySeparatorChar));
+        AssertEx.False(PathContainment.IsRootOrUnderCanonical(Root + "-other" + Path.DirectorySeparatorChar + "file.txt", Root));
+        AssertEx.True(PathContainment.IsRootOrUnderCanonical(Path.Combine(Root, "..", "elsewhere"), Root),
+            "An unnormalized '..' is compared as written and is not resolved here; the caller canonicalizes first.");
+        AssertEx.False(PathContainment.IsRootOrUnderCanonical(child.ToUpperInvariant(), Root),
+            "The comparison is ordinal on every platform.");
+    }
+
+    [Test]
+    public void PathsEqual_NormalizesBeforeComparing()
+    {
+        AssertEx.True(PathContainment.PathsEqual(Path.Combine(Root, "build", "..", "bin"), Path.Combine(Root, "bin")));
+        AssertEx.False(PathContainment.PathsEqual(Path.Combine(Root, "bin"), Path.Combine(Root, "bin2")));
+        AssertEx.Equal(OperatingSystem.IsWindows(), PathContainment.PathsEqual(Root.ToUpperInvariant(), Root));
+    }
 }

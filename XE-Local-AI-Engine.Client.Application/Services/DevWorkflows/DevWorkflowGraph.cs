@@ -1101,7 +1101,7 @@ internal sealed class DevWorkflowGraph
             });
     }
 
-    /// <summary>Depth-first colouring: white unvisited, grey on the current path, black finished; a grey hit is a cycle.</summary>
+    /// <summary>Depth-first coloring: white unvisited, gray on the current path, black finished; a gray hit is a cycle.</summary>
     /// <remarks>
     ///     Walked on an EXPLICIT stack rather than by recursion, so a long chain costs heap rather than a frame per
     ///     node: a stack overflow is a process kill nothing can catch, and this parse runs on a thread-pool thread on

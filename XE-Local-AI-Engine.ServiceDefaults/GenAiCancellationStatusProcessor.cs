@@ -35,7 +35,7 @@ public sealed class GenAiCancellationStatusProcessor : BaseProcessor<Activity>
         }
 
         // Cancellation is a normal outcome, not a service error. Keep error.type (semconv cancellation marker) and the
-        // recorded exception event intact; only the status is downgraded so the turn no longer reads as a failure.
+        // recorded exception event intact; only the status is downgraded so the turn does not read as a failure.
         data.SetStatus(ActivityStatusCode.Unset);
     }
 

@@ -34,7 +34,7 @@ public sealed class PreviewSkillImportEndpoint : Endpoint<SkillImportPreviewRequ
         // 415 for lacking a JSON body). All three sources ride the same form: one content type, one binding path.
         Description(builder => builder.Accepts<SkillImportPreviewRequest>("multipart/form-data"));
         // Kestrel's default body cap (30 MB) sits BELOW the configured archive cap, so without this the server would refuse an archive the import pipeline is configured to
-        // accept, with a bare 413 from the host. The import service still caps the bytes it reads: this metadata is only honoured where a body-size feature exists.
+        // accept, with a bare 413 from the host. The import service still caps the bytes it reads: this metadata is only honored where a body-size feature exists.
         Options(builder => builder.WithMetadata(new SkillImportRequestSizeLimit(_maxArchiveBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
     }

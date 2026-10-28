@@ -3,12 +3,12 @@ import { IconAlertTriangle, IconInfoCircle, IconWorldOff } from "@tabler/icons-r
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ToolCategoryBadge } from "@/core/tools/components/ToolCategoryBadge/ToolCategoryBadge";
+import { ToolSourceBadge } from "@/core/tools/components/ToolSourceBadge/ToolSourceBadge";
+import { type ToolCatalogEntry, toToolDisplayName } from "@/core/tools/models/ToolCatalogModels";
+import { useToolCatalog } from "@/core/tools/queries/useToolCatalog";
 import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
-import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
-import { type ToolCatalogEntry, toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
-import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
 
 interface AgentToolSelectorProps {
 	// Selected tool names and the per-tool approval overrides. Both are owned by the parent form.

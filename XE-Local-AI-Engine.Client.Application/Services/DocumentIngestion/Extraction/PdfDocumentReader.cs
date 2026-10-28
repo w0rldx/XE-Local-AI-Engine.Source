@@ -210,7 +210,7 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
         return position;
     }
 
-    // Each run of U+FFFD becomes one space, so unmapped leader dots no longer reach chunks or embeddings.
+    // Each run of U+FFFD becomes one space, so unmapped leader dots never reach chunks or embeddings.
     internal static string CollapseReplacementRuns(string text)
     {
         if (!text.Contains('\uFFFD', StringComparison.Ordinal))

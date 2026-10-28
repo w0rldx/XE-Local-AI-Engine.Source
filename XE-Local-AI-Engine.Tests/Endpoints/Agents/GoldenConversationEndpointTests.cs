@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Golden conversation CRUD endpoints (<c>agents/{id}/golden-conversations</c>). Operator-gated; create
-///     round-trips the typed input turns + assertion through the encrypted store; list returns the <c>{ items }</c>
-///     wrapper; delete is ownership-guarded (cross-agent → 404).
+///     Golden conversation CRUD endpoints (<c>agents/{id}/golden-conversations</c>), Operator-gated: create
+///     round-trips input turns + assertion through the encrypted store, list returns <c>{ items }</c>, delete is
+///     ownership-guarded (cross-agent → 404).
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class GoldenConversationEndpointTests

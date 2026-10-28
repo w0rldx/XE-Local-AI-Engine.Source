@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import {
@@ -31,7 +32,6 @@ import {
 	suggestFamilyForRepo,
 } from "@/features/images/models/ImageModels";
 import { useBrowseImageRepositories, useInspectImageRepository } from "@/features/images/queries/useImageQueries";
-import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 interface ImageModelBrowsePanelProps {
 	// The model names already installed, so a name collision is caught before the download starts rather than by

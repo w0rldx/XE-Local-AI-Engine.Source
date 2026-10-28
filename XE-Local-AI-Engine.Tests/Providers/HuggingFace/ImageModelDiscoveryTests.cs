@@ -213,7 +213,7 @@ public sealed class ImageModelDiscoveryTests
     [Test]
     public async Task ImageDiscovery_InspectRepo_FlagsDiffusersLayoutFiles_WithAMachineReadableReason()
     {
-        // The tester's qwen-image-2.1 import picked transformer/diffusion_pytorch_model.safetensors and sd-server died at
+        // A qwen-image-2.1 import that picks transformer/diffusion_pytorch_model.safetensors makes sd-server die at
         // load. Every Diffusers-shaped file carries the reason, including a bare model.safetensors beside its config.json.
         var detail = """
                      {
@@ -325,7 +325,7 @@ public sealed class ImageModelDiscoveryTests
     [Arguments("VAE/Qwen_Image-VAE.safetensors", ImageModelPartRole.Vae)]
     [Arguments("ae.safetensors", ImageModelPartRole.Vae)]
     // Live-observed on second-state/FLUX.1-schnell-GGUF: the FLUX autoencoder also ships as "ae-f16.gguf", which an
-    // "ae."-prefix rule labelled Diffusion — the operator would then have installed a 0.17 GB VAE as the diffusion part.
+    // "ae."-prefix rule labeled Diffusion — the operator would then have installed a 0.17 GB VAE as the diffusion part.
     [Arguments("ae-f16.gguf", ImageModelPartRole.Vae)]
     [Arguments("flux1-schnell-Q4_0.gguf", ImageModelPartRole.Diffusion)]
     [Arguments("text_encoders/clip_g.safetensors", ImageModelPartRole.ClipG)]

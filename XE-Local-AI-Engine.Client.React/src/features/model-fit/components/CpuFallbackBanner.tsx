@@ -8,7 +8,7 @@ import { useCpuFallbackBannerStore } from "@/features/model-fit/stores/CpuFallba
 // Global "no supported GPU detected — running on CPU" banner, mounted once in the app shell next to the runtime-update
 // banner (its mount is gated on the model-fit capability, which owns the hardware-profile endpoint). Renders only when
 // the backend reports GPU acceleration is unavailable AND the operator has not dismissed the notice. `gpuAccelAvailable`
-// is authoritative: the backend sets it true only when VRAM is known for a recognised NVIDIA/AMD/Intel adapter, so
+// is authoritative: the backend sets it true only when VRAM is known for a recognized NVIDIA/AMD/Intel adapter, so
 // false reliably means inference will run on CPU — including AMD/Intel Windows boxes whose VRAM probe is still a stub.
 export function CpuFallbackBanner() {
 	const { t } = useTranslation();

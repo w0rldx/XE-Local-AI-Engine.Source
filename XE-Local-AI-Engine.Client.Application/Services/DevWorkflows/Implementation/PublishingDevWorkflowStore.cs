@@ -25,7 +25,7 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
     private static readonly TimeSpan DefaultCollectionTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
 
     /// <summary>The telemetry members that are NOT additive across attempts.</summary>
     /// <remarks>
@@ -523,7 +523,7 @@ internal sealed class PublishingDevWorkflowStore : IDevWorkflowStore
     }
 
     /// <summary>
-    ///     The re-attempt write, recognised from the command alone — target <c>Pending</c>, the attempt incremented, a
+    ///     The re-attempt write, recognized from the command alone — target <c>Pending</c>, the attempt incremented, a
     ///     detail to merge into. Both re-attempt write paths build exactly this shape from the same composer, which is
     ///     why one predicate covers them.
     /// </summary>

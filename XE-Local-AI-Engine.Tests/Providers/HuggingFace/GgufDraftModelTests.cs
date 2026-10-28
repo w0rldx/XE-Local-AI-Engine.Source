@@ -4,10 +4,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The draft-model classifier. Every input below is a REAL file/repo name observed on the Hub on
-///     2026-07-31: <c>unsloth/gemma-4-12b-it-GGUF</c> ships its drafters under <c>MTP/</c>, while
-///     <c>unsloth/Qwen3.6-27B-MTP-GGUF</c> and <c>s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF</c> are ordinary chat repos
-///     whose NAMES mention MTP — the classifier must separate the two without a false positive in either direction.
+///     The draft-model classifier over REAL Hub names: <c>unsloth/gemma-4-12b-it-GGUF</c> ships drafters under
+///     <c>MTP/</c>, while <c>unsloth/Qwen3.6-27B-MTP-GGUF</c> and <c>s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF</c> are
+///     chat repos whose NAMES mention MTP.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class GgufDraftModelTests

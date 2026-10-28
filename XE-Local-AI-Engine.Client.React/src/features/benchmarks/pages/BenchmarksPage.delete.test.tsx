@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { delay, http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Deleting a project is a page behaviour, not a component one: the node refuses the delete while any run exists, and
+// Deleting a project is a page behavior, not a component one: the node refuses the delete while any run exists, and
 // the only thing that moves the operator OUT of the deleted project's workspace is the page controller noticing it has
 // left the refreshed list. Both need the real list + detail + controller stack, so this drives the whole page over MSW.
 const { toastErrorMock, toastSuccessMock, hubMock } = vi.hoisted(() => ({

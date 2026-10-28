@@ -2,23 +2,22 @@ import { Stack } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import {
+	type AgentDefinition,
+	type AgentDefinitionFormValues,
+	agentDefinitionFormSchema,
+} from "@/core/agents/models/AgentDefinitionModels";
+import type { OrchestrationTopology } from "@/core/agents/models/OrchestrationTopologyModels";
+import { useDefaultAssistantToolOffer } from "@/core/agents/queries/useAgentDefinitions";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { AgentDefinitionBasicFields } from "@/features/agents/components/AgentDefinitionBasicFields";
 import { AgentDefinitionModelFields } from "@/features/agents/components/AgentDefinitionModelFields";
 import { AgentSkillSelector } from "@/features/agents/components/AgentSkillSelector";
 import { AgentToolSelector } from "@/features/agents/components/AgentToolSelector";
 import { OrchestrationTopologyEditor } from "@/features/agents/components/OrchestrationTopologyEditor";
-import {
-	type AgentDefinition,
-	type AgentDefinitionFormValues,
-	agentDefinitionFormSchema,
-} from "@/features/agents/models/AgentDefinitionModels";
-import type { OrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
-import { useDefaultAssistantToolOffer } from "@/features/agents/queries/useAgentDefinitions";
 
 import type { AgentModelOption } from "./AgentDefinitionForm.types";
-
-import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export type { AgentModelOption } from "./AgentDefinitionForm.types";
 

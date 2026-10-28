@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Boundary tests for the single shared query-length bound. Both the agent tool handler and the HTTP search endpoint
-///     validate through <see cref="KnowledgeQueryLimits" />, so exercising it directly covers the enforced limit at both
-///     sites (the endpoint's <c>HandleAsync</c> calls <see cref="KnowledgeQueryLimits.ExceedsMaxLength" /> verbatim).
+///     Boundary tests for the shared query-length bound. The agent tool handler and the HTTP search endpoint both
+///     validate through <see cref="KnowledgeQueryLimits" />, so this covers both sites (the endpoint's
+///     <c>HandleAsync</c> calls <see cref="KnowledgeQueryLimits.ExceedsMaxLength" /> verbatim).
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeQueryLimitsTests

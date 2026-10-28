@@ -74,8 +74,8 @@ public sealed class TranscriptionHubBinaryFrameTransportTests
         AssertEx.Equal(TranscriptChannel.Mono, bytesChannel);
         AssertEx.Equal(PayloadBase64, Convert.ToBase64String(bytesPcm), "a byte[] frame must arrive unchanged.");
 
-        // The browser's form. A HubException here is the operator decision the slice plan calls out (MessagePack on
-        // both sides), NOT something to work around by reshaping the hub signature.
+        // The browser's form. A HubException here calls for a protocol decision (MessagePack on both sides),
+        // NOT something to work around by reshaping the hub signature.
         await connection.InvokeAsync("PushAudioFrame", sessionId, (int)TranscriptChannel.Mono, PayloadBase64);
 
         var (stringChannel, stringPcm) = Dequeue(frames, "the base64-string invoke must reach the registry: this is the contract the browser client depends on.");

@@ -101,7 +101,7 @@ public enum ExternalAppFailureCategory
     /// <summary>A container the engine expected to be running was found missing or exited.</summary>
     StoppedUnexpectedly,
 
-    /// <summary>Creating, materialising, hashing or deleting something under the instance directory failed.</summary>
+    /// <summary>Creating, materializing, hashing or deleting something under the instance directory failed.</summary>
     StorageError,
 
     /// <summary>The operator cancelled the operation before it completed.</summary>

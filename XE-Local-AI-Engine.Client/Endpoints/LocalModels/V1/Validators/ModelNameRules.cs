@@ -40,7 +40,7 @@ internal static class ModelNameRules
     /// <remarks>
     ///     Decoding here would accept a name no handler ever decodes: <c>ext%3Aconn%2Ffoo</c> fails the grammar as
     ///     written but decodes to a well-formed external id, and the select handler would then store the escaped
-    ///     string and skip the external-registration guard, which does not recognise it as external.
+    ///     string and skip the external-registration guard, which does not recognize it as external.
     /// </remarks>
     public static void AddBodyBoundModelNameRule<TRequest>(this Validator<TRequest> validator,
         Expression<Func<TRequest, string?>> modelName)

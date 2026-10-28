@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations;
 /// <remarks>
 ///     <b>Off by default.</b> With the node setting <c>ToolRelevanceEnabled</c> off the hop is a reference-equality
 ///     pass-through and <c>list_tools</c> is never appended, so every prompt, tool offer and runtime config hash is
-///     byte-identical. The filter is a context budget and never an authorisation boundary: hiding a tool neither
+///     byte-identical. The filter is a context budget and never an authorization boundary: hiding a tool neither
 ///     widens nor narrows what the agent may call. See docs/wiki/04-agent-mode.md ("Tool-relevance narrowing").
 /// </remarks>
 public sealed class ToolRelevanceOptions

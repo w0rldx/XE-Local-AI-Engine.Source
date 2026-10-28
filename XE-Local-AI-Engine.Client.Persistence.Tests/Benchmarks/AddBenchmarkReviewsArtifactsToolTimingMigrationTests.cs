@@ -66,7 +66,7 @@ public sealed class AddBenchmarkReviewsArtifactsToolTimingMigrationTests
                              .Contains("CONSTRAINT \"CK_benchmark_run_reviews_approved_score\" CHECK (state = 'rejected' OR score IS NOT NULL)", StringComparison.Ordinal),
             "The approved-needs-a-score CHECK must be in the stored table definition.");
 
-        // The CHECKs, by behaviour: a pending row, an out-of-range score and an unknown kind are all refused by the schema itself.
+        // The CHECKs, by behavior: a pending row, an out-of-range score and an unknown kind are all refused by the schema itself.
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertReviewAsync(probe, "pending", score: null), "No pending row is ever stored.");
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertReviewAsync(probe, "approved", score: 101));
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertReviewAsync(probe, "approved", score: null), "An approval without a score would rank nothing.");

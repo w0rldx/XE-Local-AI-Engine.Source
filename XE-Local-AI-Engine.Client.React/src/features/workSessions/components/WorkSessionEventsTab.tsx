@@ -59,7 +59,7 @@ function parseConsumption(
  *
  * Both halves are locale-driven. `Intl.NumberFormat` on the active i18next language supplies the decimal separator —
  * hardcoding `toFixed(1)` printed "18.2k" to a German reader, who writes "18,2k" — and the thousands suffix comes from
- * the translation catalogue rather than from this file, so a locale that does not abbreviate with "k" can say so.
+ * the translation catalog rather than from this file, so a locale that does not abbreviate with "k" can say so.
  */
 function formatTokens(value: number, language: string, t: TFunction): string {
 	const rounded = Math.max(0, Math.round(value));

@@ -14,7 +14,7 @@
 // emits none), the editor's "Auto-arrange", and the run view's nodes-only fallback when the run's graph hash no longer
 // matches the definition's.
 //
-// simplified: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
+// simplified: single barycenter pass, no crossing-minimization iterations — swap in dagre if edge crossings become
 // unreadable on real fan-out graphs; this module's signature is the seam.
 
 export const RANK_SPACING_X = 280;
@@ -140,7 +140,7 @@ export function layoutGraphWorkflow(
 			orderByKey.set(node.key, indexInRank);
 			positions.set(node.key, {
 				x: rank * RANK_SPACING_X,
-				// TOP-ALIGNED, not centred. A y that divides by the rank's population moves every node in that rank the
+				// TOP-ALIGNED, not centered. A y that divides by the rank's population moves every node in that rank the
 				// moment another one joins it, so an operator's half-arranged graph would shuffle under them as they add
 				// nodes. Here a node's y depends only on its own index in its rank.
 				y: indexInRank * NODE_SPACING_Y,

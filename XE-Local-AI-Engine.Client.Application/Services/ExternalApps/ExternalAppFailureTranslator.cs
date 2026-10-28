@@ -14,7 +14,7 @@ public enum ExternalAppFailurePhase
     /// <summary>Building the deployment plan: token resolution, ordering, mount collisions.</summary>
     Plan = 1,
 
-    /// <summary>Creating directories and materialising catalog assets.</summary>
+    /// <summary>Creating directories and materializing catalog assets.</summary>
     Storage = 2,
 
     /// <summary>Pulling images.</summary>

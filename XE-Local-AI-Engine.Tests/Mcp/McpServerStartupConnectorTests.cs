@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit tests for the startup MCP connect. The connector moves the first
-///     <see cref="IMcpServerConnectionManager.RefreshAsync(CancellationToken)" /> off the host start path, and its contract is that a
-///     node still starts when no MCP server can be reached or answers: host start never waits on the refresh, and any refresh
-///     failure is logged rather than stopping the node.
+///     The startup MCP connect moves the first
+///     <see cref="IMcpServerConnectionManager.RefreshAsync(CancellationToken)" /> off the host start path, so a node
+///     starts when no MCP server answers: host start never waits on the refresh, and a refresh failure is only logged.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class McpServerStartupConnectorTests

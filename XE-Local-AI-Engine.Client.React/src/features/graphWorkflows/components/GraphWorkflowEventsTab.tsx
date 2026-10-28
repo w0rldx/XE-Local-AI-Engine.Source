@@ -80,7 +80,7 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 			) : null}
 			{events.map((event) => {
 				const eventId = event.id ?? String(event.seq ?? 0);
-				// An unknown token is shown raw rather than mislabelled as a neighbouring event.
+				// An unknown token is shown raw rather than mislabelled as a neighboring event.
 				const known = asGraphWorkflowEventType(event.eventType);
 				const label = known ? t(graphWorkflowEventTypeLabelKey(known), known) : (event.eventType ?? "");
 				return (

@@ -5,10 +5,9 @@ using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http;
 
 /// <summary>
-///     <c>GET /containers/json?all=1&amp;filters=</c>. The label filter arrives as the daemon's nested
-///     <c>{"label":{"key=value":true}}</c> shape, and the status is rendered as the daemon's own prose — the
-///     production client has no exit-code field on this response and parses the number back out of
-///     <c>Exited (137) 3 minutes ago</c>, so prose that only looked plausible would defeat the parser it exists for.
+///     <c>GET /containers/json?all=1&amp;filters=</c>. The label filter arrives in the daemon's nested
+///     <c>{"label":{"key=value":true}}</c> shape, and status is the daemon's own prose: the client parses the exit
+///     code out of <c>Exited (137) 3 minutes ago</c>.
 /// </summary>
 internal static class ContainerListEndpoint
 {

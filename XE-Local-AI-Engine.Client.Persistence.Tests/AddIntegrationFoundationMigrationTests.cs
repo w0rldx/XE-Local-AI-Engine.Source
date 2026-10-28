@@ -4,9 +4,9 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Schema and backfill coverage for <c>AddIntegrationFoundation</c>: the five integration tables, the four columns
-///     the brief's own list does not name (<c>stop_requested_at_utc</c>, <c>output_bytes</c>, <c>principal_id</c> on
-///     three tables) and the conversation-kind backfill that closes the work-session chat-list leak.
+///     Schema and backfill coverage for <c>AddIntegrationFoundation</c>: five tables, four columns the brief omits
+///     (<c>stop_requested_at_utc</c>, <c>output_bytes</c>, <c>principal_id</c> on three tables) and the
+///     conversation-kind backfill hiding work-session chats.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddIntegrationFoundationMigrationTests

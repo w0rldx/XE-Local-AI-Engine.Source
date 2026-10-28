@@ -5,10 +5,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Lifecycle behaviours (Audit-4) added on top of the base supervisor tests: the DETACHED model load
-///     (caller cancellation abandons its wait but the load continues and warms the model for the next send), the
-///     size-aware / limited-retry readiness-timeout classification, and the graceful/force operator eject with bounded
-///     in-flight lease drain.
+///     Supervisor lifecycle: the DETACHED load (caller cancellation abandons the wait, the load still warms the model),
+///     size-aware limited-retry readiness-timeout classification, and graceful/force eject with bounded lease drain.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SupervisorLifecycleTests

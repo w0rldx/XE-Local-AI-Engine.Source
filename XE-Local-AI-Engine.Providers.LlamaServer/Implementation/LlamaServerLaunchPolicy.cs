@@ -83,7 +83,7 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
         var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(GpuVariant.Cpu);
 
         // Explore mode pins no context of its own, so there is nothing to carry over; a replay's frozen -c is the only
-        // context a policy-free CPU spawn can honour.
+        // context a policy-free CPU spawn can honor.
         var requestedContextTokens = resolved.ExploreMode || resolved.CtxSize <= 0
             ? (int?)null
             : resolved.CtxSize;
