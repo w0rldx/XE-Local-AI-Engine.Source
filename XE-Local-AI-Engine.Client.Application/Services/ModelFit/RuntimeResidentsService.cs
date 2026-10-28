@@ -87,7 +87,7 @@ public sealed class RuntimeResidentsService
         }
 
         var activity = _whisperGate.GetSnapshot();
-        var state = (status.State, activity.ActiveTranscriptionCount) switch
+        var state = (status.State, activity.ActiveJobCount) switch
         {
             (WhisperRuntimeState.Starting, _) => RuntimeResidentState.Starting,
             (_, > 0) => RuntimeResidentState.Active,
@@ -99,7 +99,7 @@ public sealed class RuntimeResidentsService
             ModelId = status.LoadedModelId,
             State = state,
             Backend = status.Backend,
-            CanEject = !(activity.MutationReserved || activity.EvictionReserved || activity.ActiveTranscriptionCount != 0 || activity.SpawnReadinessCount != 0)
+            CanEject = !(activity.MutationReserved || activity.EvictionReserved || activity.ActiveJobCount != 0 || activity.SpawnReadinessCount != 0)
         });
     }
 

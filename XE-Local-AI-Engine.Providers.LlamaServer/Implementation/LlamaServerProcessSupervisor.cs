@@ -36,9 +36,6 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     // up is a per-tensor firehose no sink policy makes affordable. Measured line counts: wiki 03, "Spawn attempt sequencing, startup capture and one-shot fallbacks".
     private const string PlacementProbeLogVerbosity = "4";
 
-    /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
-    private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
-
     /// <summary>Poll cadence for observing that in-flight inference leases have drained during a graceful eject.</summary>
     private static readonly TimeSpan LeaseDrainPollInterval = TimeSpan.FromMilliseconds(25);
 

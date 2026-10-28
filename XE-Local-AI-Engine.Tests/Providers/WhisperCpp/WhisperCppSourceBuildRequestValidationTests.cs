@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -20,7 +21,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
         var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
         {
             Backend = WhisperBackend.Cuda,
-            Source = WhisperCppSourceSelection.Official
+            Source = ManagedSourceSelection.Official
         });
 
         AssertEx.Equal(WhisperCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
@@ -39,7 +40,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
             WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
             {
                 Backend = WhisperBackend.Cuda,
-                Source = WhisperCppSourceSelection.Official,
+                Source = ManagedSourceSelection.Official,
                 Commit = new string(c: 'a', count: 40)
             }));
 
@@ -54,7 +55,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
             WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
             {
                 Backend = WhisperBackend.Cuda,
-                Source = WhisperCppSourceSelection.Custom,
+                Source = ManagedSourceSelection.Custom,
                 Repository = "https://github.com/someone/whisper.cpp",
                 AcknowledgeCustomSourceRisk = false
             }));
@@ -76,7 +77,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
             WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
             {
                 Backend = WhisperBackend.Cuda,
-                Source = WhisperCppSourceSelection.Custom,
+                Source = ManagedSourceSelection.Custom,
                 Repository = repository,
                 AcknowledgeCustomSourceRisk = true
             }));
@@ -96,7 +97,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
             WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
             {
                 Backend = WhisperBackend.Cuda,
-                Source = WhisperCppSourceSelection.Custom,
+                Source = ManagedSourceSelection.Custom,
                 Repository = "https://github.com/owner/repo",
                 Commit = commit,
                 AcknowledgeCustomSourceRisk = true
@@ -111,7 +112,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
         var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest
         {
             Backend = WhisperBackend.Cpu,
-            Source = WhisperCppSourceSelection.Custom,
+            Source = ManagedSourceSelection.Custom,
             Repository = "https://github.com/Owner/Repo.git",
             Commit = new string(c: 'A', count: 40),
             AcknowledgeCustomSourceRisk = true

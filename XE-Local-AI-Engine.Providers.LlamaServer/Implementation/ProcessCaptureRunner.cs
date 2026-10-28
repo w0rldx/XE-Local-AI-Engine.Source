@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Captures, rather than streams, a short command's stdout under a caller-supplied scrubbed environment, bounded by
@@ -65,29 +66,13 @@ internal static class ProcessCaptureRunner
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            TryKill(process);
+            ProcessTreeKill.TryKill(process);
             return new ProcessCaptureResult(ExitCode: -1, string.Empty);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            TryKill(process);
+            ProcessTreeKill.TryKill(process);
             throw;
-        }
-    }
-
-    /// <summary>Best-effort tree kill: the process can exit between the check and the kill, or the OS can deny the reap.</summary>
-    public static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best-effort.
         }
     }
 }

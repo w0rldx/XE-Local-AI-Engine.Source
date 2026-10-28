@@ -130,7 +130,7 @@ public sealed class RuntimeResidentsServiceTests
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
-        using var transcription = AssertEx.NotNull(_whisperGate.TryAcquireTranscriptionLease());
+        using var transcription = AssertEx.NotNull(_whisperGate.TryAcquireJobLease());
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
@@ -182,7 +182,7 @@ public sealed class RuntimeResidentsServiceTests
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
         using var lease = AssertEx.NotNull(blocker switch
         {
-            Blocker.JobOrTranscription => _whisperGate.TryAcquireTranscriptionLease(),
+            Blocker.JobOrTranscription => _whisperGate.TryAcquireJobLease(),
             Blocker.SpawnReadiness => _whisperGate.TryAcquireSpawnReadinessLease(),
             Blocker.MutationReservation => _whisperGate.TryAcquireMutationReservation(),
             _ => _whisperGate.TryAcquireEvictionReservation()

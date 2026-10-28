@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Validators;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -37,7 +38,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         var normalized = StableDiffusionCppSourceBuildRequestValidation.Normalize(request.ToContract());
 
         AssertEx.Equal(SdGpuBackend.Vulkan, normalized.Backend);
-        AssertEx.Equal(StableDiffusionCppSourceSelection.Custom, normalized.Source);
+        AssertEx.Equal(ManagedSourceSelection.Custom, normalized.Source);
         AssertEx.Equal("abcdefabcdefabcdefabcdefabcdefabcdefabcd", normalized.Commit);
     }
 
@@ -71,12 +72,12 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
             StartedAtUtc = null,
             CompletedAtUtc = null
         };
-        var installed = new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Invalid,
+        var installed = new ManagedRuntimeState<SdGpuBackend>(ManagedRuntimeValidity.Invalid,
             SdGpuBackend.Cuda,
             "https://github.com/example/fork",
             new string('a', 40),
-            StableDiffusionCppSourceSelection.Custom,
-            StableDiffusionCppSourceRevisionMode.ExplicitCommit,
+            ManagedSourceSelection.Custom,
+            ManagedSourceRevisionMode.ExplicitCommit,
             new string('a', 40),
             "/private/source/path",
             new string('b', 64),
@@ -97,7 +98,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [RunOn(OS.Linux)]
     public async Task StartEndpoint_RuntimeBusy_ReturnsStableConflictShape()
     {
-        var activity = new ImageRuntimeActivitySnapshot
+        var activity = new RuntimeActivitySnapshot
         {
             ActiveJobCount = 2,
             SpawnReadinessCount = 1,
@@ -143,7 +144,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [RunOn(OS.Linux)]
     public async Task StartEndpoint_SourceBuildExceptionDoesNotMisreportPrerequisites()
     {
-        var activity = new ImageRuntimeActivitySnapshot
+        var activity = new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -199,9 +200,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         var descriptor = new StableDiffusionCppSourceBuildDescriptor
         {
             Backend = SdGpuBackend.Vulkan,
-            Source = StableDiffusionCppSourceSelection.Custom,
+            Source = ManagedSourceSelection.Custom,
             Repository = "https://github.com/example/fork",
-            RevisionMode = StableDiffusionCppSourceRevisionMode.DefaultBranch,
+            RevisionMode = ManagedSourceRevisionMode.DefaultBranch,
             RequestedCommit = null,
             ResolvedCommit = new string('a', 40),
             BuildId = Guid.Parse("11111111-1111-4111-8111-111111111111")
@@ -229,7 +230,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [Test]
     public async Task EjectEndpoint_Busy_ReturnsActivityConflictWithoutRetrying()
     {
-        var activity = new ImageRuntimeActivitySnapshot
+        var activity = new RuntimeActivitySnapshot
         {
             ActiveJobCount = 1,
             SpawnReadinessCount = 0,
@@ -248,7 +249,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                       Evicted = false,
                       Activity = activity
                   });
-        var store = Substitute.For<IStableDiffusionInstalledRuntimeStore>();
+        var store = Substitute.For<IManagedRuntimeStore<SdGpuBackend>>();
 
         await using var factory = CreateFactory(service, gate, supervisor, store);
         using var client = factory.CreateClient();
@@ -274,7 +275,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     [Test]
     public async Task CreateImageJobEndpoint_RuntimeMutationActive_ReturnsOperatorSafeConflict()
     {
-        var activity = new ImageRuntimeActivitySnapshot
+        var activity = new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -317,7 +318,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // The SPA branches on managedRuntime being absent to offer the build, so "nothing installed" must arrive as an
         // explicit null and not as a zeroed record.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -342,7 +343,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // gate — so a single read has to prove they are both projected, and the counts are what a mutation refusal
         // later explains itself with.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 2,
             SpawnReadinessCount = 1,
@@ -350,14 +351,14 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
             MutationReserved = true,
             EvictionReserved = false
         });
-        var store = Substitute.For<IStableDiffusionInstalledRuntimeStore>();
+        var store = Substitute.For<IManagedRuntimeStore<SdGpuBackend>>();
         store.ReadAsync(Arg.Any<CancellationToken>())
-             .Returns(new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Active,
+             .Returns(new ManagedRuntimeState<SdGpuBackend>(ManagedRuntimeValidity.Active,
                  SdGpuBackend.Vulkan,
                  "https://github.com/leejet/stable-diffusion.cpp",
                  new string('c', 40),
-                 StableDiffusionCppSourceSelection.Official,
-                 StableDiffusionCppSourceRevisionMode.EnginePinned,
+                 ManagedSourceSelection.Official,
+                 ManagedSourceRevisionMode.EnginePinned,
                  SourceRequestedCommit: null,
                  "/managed/source/path",
                  new string('d', 64),
@@ -393,7 +394,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                .Returns(new StableDiffusionCppSourceBuildRemoveResult
                {
                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,
-                   Activity = new ImageRuntimeActivitySnapshot
+                   Activity = new RuntimeActivitySnapshot
                    {
                        ActiveJobCount = 3,
                        SpawnReadinessCount = 0,
@@ -402,7 +403,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                        EvictionReserved = false
                    }
                });
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -436,7 +437,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                {
                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy
                });
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -472,7 +473,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                {
                    Outcome = outcome
                });
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -502,7 +503,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // route stays a 200 and hands back the status instead of an error the SPA would have to special-case.
         var service = CreateBuildService();
         service.Cancel().Returns(false);
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -535,7 +536,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // Enum.IsDefined rule never runs on this route, and asserting its message here would only pin a body the
         // binder does not produce.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -564,7 +565,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         // The backend travels as a query-string name and comes back on the response, so a binding that silently fell
         // back to the first enum member would report a CPU checklist under a CUDA heading.
         var service = CreateBuildService();
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -621,9 +622,9 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
             CurrentBuild = new StableDiffusionCppSourceBuildDescriptor
             {
                 Backend = SdGpuBackend.Cuda,
-                Source = StableDiffusionCppSourceSelection.Official,
+                Source = ManagedSourceSelection.Official,
                 Repository = "https://github.com/leejet/stable-diffusion.cpp",
-                RevisionMode = StableDiffusionCppSourceRevisionMode.EnginePinned,
+                RevisionMode = ManagedSourceRevisionMode.EnginePinned,
                 RequestedCommit = null,
                 ResolvedCommit = new string('e', 40),
                 BuildId = Guid.Parse("22222222-2222-4222-8222-222222222222")
@@ -631,7 +632,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
             StartedAtUtc = DateTimeOffset.UnixEpoch,
             CompletedAtUtc = null
         });
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -673,7 +674,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                {
                    Outcome = StableDiffusionCppSourceBuildRemoveOutcome.NotInstalled
                });
-        var gate = CreateGate(new ImageRuntimeActivitySnapshot
+        var gate = CreateGate(new RuntimeActivitySnapshot
         {
             ActiveJobCount = 0,
             SpawnReadinessCount = 0,
@@ -757,7 +758,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
         return service;
     }
 
-    private static IImageRuntimeActivityGate CreateGate(ImageRuntimeActivitySnapshot snapshot)
+    private static IImageRuntimeActivityGate CreateGate(RuntimeActivitySnapshot snapshot)
     {
         var gate = Substitute.For<IImageRuntimeActivityGate>();
         gate.GetSnapshot().Returns(snapshot);
@@ -800,7 +801,7 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     private static TestServerWebAppFactory CreateFactory(IStableDiffusionCppSourceBuildService service,
         IImageRuntimeActivityGate gate,
         IImageServerSupervisor? supervisor = null,
-        IStableDiffusionInstalledRuntimeStore? store = null,
+        IManagedRuntimeStore<SdGpuBackend>? store = null,
         IImageJobCoordinator? coordinator = null,
         IStableDiffusionCppSourceBuildPrerequisiteProbe? probe = null)
     {
@@ -815,8 +816,8 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
                 services.AddSingleton(gate);
                 services.RemoveAll<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
                 services.AddSingleton(probe ?? StubProbe());
-                services.RemoveAll<IStableDiffusionInstalledRuntimeStore>();
-                services.AddSingleton(store ?? Substitute.For<IStableDiffusionInstalledRuntimeStore>());
+                services.RemoveAll<IManagedRuntimeStore<SdGpuBackend>>();
+                services.AddSingleton(store ?? Substitute.For<IManagedRuntimeStore<SdGpuBackend>>());
                 if (supervisor is not null)
                 {
                     services.RemoveAll<IImageServerSupervisor>();

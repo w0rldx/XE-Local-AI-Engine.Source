@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Default <see cref="ILlamaCppBinaryManager" />: resolves the pinned prebuilt asset for the host, downloads it
@@ -30,10 +31,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 {
     private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(15);
-
-    /// <summary>The pause before each retry of a publish rename; a rename is tried once more than there are delays.</summary>
-    internal static readonly IReadOnlyList<TimeSpan> PublishRenameRetryDelays =
-        [TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
 
     /// <summary>
     ///     How long a runtime download may go without receiving a single byte before it is abandoned as stalled.
@@ -359,7 +356,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 var stagedServer = ResolveServerPath(stagingDir, pin)
                                    ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
                 await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, stagingDir, stagedServer, reporter, ct).ConfigureAwait(false);
-                await PublishStagedVariantAsync(stagingDir, variantDir, ct).ConfigureAwait(false);
+                await StagedDirectoryPublish.PublishAsync(stagingDir, variantDir, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -763,7 +760,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 var stagedServer = ResolveServerPathForAsset(stagingDir, pin)
                                    ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
                 await EnsureCudartRuntimeAsync(tag, pin, cudartAsset: assetName, variant, stagingDir, stagedServer, reporter, ct).ConfigureAwait(false);
-                await PublishStagedVariantAsync(stagingDir, variantDir, ct).ConfigureAwait(false);
+                await StagedDirectoryPublish.PublishAsync(stagingDir, variantDir, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -1237,7 +1234,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
             catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
             {
-                TryKill(process);
+                ProcessTreeKill.TryKill(process);
                 return false;
             }
 
@@ -1252,25 +1249,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             // A launch failure (missing exec bit, wrong arch, missing GPU runtime) is a failed self-check, not a crash.
             return false;
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Already exited between the check and the kill — nothing to do.
-        }
-        catch (NotSupportedException)
-        {
-            // Platform without tree-kill support — best effort.
         }
     }
 
@@ -1328,7 +1306,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />) or the
     ///     live publisher digest (<see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />) — so both acquisition paths run identical
     ///     verification logic. The caller completes the staged tree (the CUDA cudart pairing), publishes it with
-    ///     <see cref="PublishStagedVariantAsync" /> and deletes the staging dir on failure; nothing is visible at
+    ///     <see cref="StagedDirectoryPublish.PublishAsync" /> and deletes the staging dir on failure; nothing is visible at
     ///     <paramref name="variantDir" /> until then.
     /// </remarks>
     private async Task<string> DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
@@ -1504,74 +1482,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             BestEffortFile.TryDeleteDirectory(stagingDir);
             throw;
         }
-    }
-
-    /// <summary>
-    ///     Atomically moves a COMPLETE staged tree into <paramref name="variantDir" />, replacing any previous content, so a
-    ///     resolve never observes a partial install (a missing server, or a CUDA build without its cudart DLLs).
-    /// </summary>
-    /// <remarks>
-    ///     The old dir is renamed aside, not deleted first, so a failure never leaves a half-deleted or no runtime: a failed move renames it back, then rethrows.
-    ///     Both renames retry on <see cref="PublishRenameRetryDelays" />: on Windows an antivirus or indexer handle on fresh files makes a rename fail with access denied for a moment.
-    ///     The aside is <c>.aside</c>, never <c>.tmp</c>: a rename keeps the old mtime, so the staging sweep's age bound could not protect it.
-    /// </remarks>
-    internal static async Task PublishStagedVariantAsync(string stagingDir, string variantDir, CancellationToken ct,
-        Action<string, string>? move = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
-    {
-        move ??= Directory.Move;
-        delay ??= Task.Delay;
-        Directory.CreateDirectory(Path.GetDirectoryName(variantDir.TrimEnd(Path.DirectorySeparatorChar))!);
-        string? aside = null;
-        if (Directory.Exists(variantDir))
-        {
-            aside = $"{variantDir}.{Guid.NewGuid():N}.aside";
-            await RenameWithRetryAsync(variantDir, aside, move, delay, ct).ConfigureAwait(false);
-        }
-
-        try
-        {
-            await RenameWithRetryAsync(stagingDir, variantDir, move, delay, ct).ConfigureAwait(false);
-        }
-        catch (Exception moveIn) when (aside is not null)
-        {
-            try
-            {
-                move(aside, variantDir);
-            }
-            catch (Exception restore)
-            {
-                // The variant dir is gone; the old tree's location goes to the log with this exception (never to a user-facing message). A later ensure re-acquires.
-                throw new IOException($"Publishing '{variantDir}' failed and restoring its previous contents failed too; they remain at '{aside}'.",
-                    new AggregateException(moveIn, restore));
-            }
-
-            throw;
-        }
-
-        if (aside is not null)
-        {
-            BestEffortFile.TryDeleteDirectory(aside);
-        }
-    }
-
-    // A missing source never appears, so DirectoryNotFoundException fails at once; other IO and access errors get one more try per delay.
-    private static async Task RenameWithRetryAsync(string source, string destination, Action<string, string> move, Func<TimeSpan, CancellationToken, Task> delay,
-        CancellationToken ct)
-    {
-        foreach (var pause in PublishRenameRetryDelays)
-        {
-            try
-            {
-                move(source, destination);
-                return;
-            }
-            catch (Exception ex) when (ex is (IOException or UnauthorizedAccessException) and not DirectoryNotFoundException)
-            {
-                await delay(pause, ct).ConfigureAwait(false);
-            }
-        }
-
-        move(source, destination);
     }
 
     /// <summary>

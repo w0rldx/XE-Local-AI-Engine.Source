@@ -5,11 +5,16 @@ using System.Security.Cryptography;
 /// <summary>The lowercase hex SHA-256 of a file's content, the form every recorded digest in the node uses.</summary>
 public static class FileSha256
 {
-    public static async Task<string> ComputeAsync(string path, CancellationToken cancellationToken)
+    public static async Task<string> ComputeAsync(string path, CancellationToken cancellationToken) =>
+        (await ComputeWithLengthAsync(path, cancellationToken).ConfigureAwait(false)).Sha256;
+
+    /// <summary>The hash and the length from one open stream, so both describe the same file even if the path is replaced.</summary>
+    public static async Task<FileSha256Digest> ComputeWithLengthAsync(string path, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        var sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
+        return new FileSha256Digest(sha256, stream.Length);
     }
 
     /// <summary>Whether the file's SHA-256 equals <paramref name="expectedSha256" />, compared case-insensitively.</summary>

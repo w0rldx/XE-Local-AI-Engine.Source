@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     The restart-time reconciliation of <see cref="LlamaCppSourceBuildService" />: keeps the installed-runtime record
@@ -341,7 +342,7 @@ internal sealed partial class LlamaCppSourceBuildReconciler
         }
         finally
         {
-            ProcessCaptureRunner.TryKill(process);
+            ProcessTreeKill.TryKill(process);
         }
     }
 

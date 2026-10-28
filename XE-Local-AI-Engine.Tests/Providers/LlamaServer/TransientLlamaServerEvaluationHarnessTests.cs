@@ -373,7 +373,8 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                 new FakeVariantSelector(GpuVariant.Cpu),
                 launcher,
                 new FakeHealthProbe(),
-                NullLogger<TransientLlamaServerLauncher>.Instance);
+                NullLogger<TransientLlamaServerLauncher>.Instance,
+                new AdvanceableTimeProvider());
 
             await transient.RunAsync(new TransientLlamaServerRequest
                 {
@@ -431,7 +432,8 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
             variantSelector,
             launcher,
             healthProbe,
-            NullLogger<TransientLlamaServerLauncher>.Instance);
+            NullLogger<TransientLlamaServerLauncher>.Instance,
+            new AdvanceableTimeProvider());
         var harness = new TransientLlamaServerEvaluationHarness(supervisor,
             binaryManager,
             variantSelector,

@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
@@ -78,6 +79,6 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint : Endpoint<StartS
         }
     }
 
-    private Task BlockAsync(string reason, string message, ImageRuntimeActivitySnapshot activity) =>
+    private Task BlockAsync(string reason, string message, RuntimeActivitySnapshot activity) =>
         Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.Blocked(reason, message, activity));
 }

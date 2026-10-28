@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
+namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -13,12 +13,12 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     terminal, askpass, credential helper, system and global config — because a build that blocks on a hidden
 ///     password prompt looks exactly like a build that hung.
 /// </remarks>
-internal static class WhisperSourceProcessHardening
+public static class SourceProcessHardening
 {
     private const string DefaultPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
     private static readonly string[] PreservedVariables = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
 
-    internal static void Configure(ProcessStartInfo startInfo, string isolationRoot)
+    public static void Configure(ProcessStartInfo startInfo, string isolationRoot)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
         ArgumentException.ThrowIfNullOrWhiteSpace(isolationRoot);
@@ -62,7 +62,7 @@ internal static class WhisperSourceProcessHardening
     ///     Closes the child's stdin. A build tool that decides to ask a question then reads end-of-file and fails
     ///     immediately, instead of waiting forever on a prompt nobody can answer.
     /// </summary>
-    internal static void CloseStandardInput(Process process)
+    public static void CloseStandardInput(Process process)
     {
         ArgumentNullException.ThrowIfNull(process);
         process.StandardInput.Close();

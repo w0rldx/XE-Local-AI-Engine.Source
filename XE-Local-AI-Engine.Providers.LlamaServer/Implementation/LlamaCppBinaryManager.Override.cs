@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Operator bring-your-own llama-server override branch of <see cref="LlamaCppBinaryManager" />: when the override is
@@ -229,7 +230,7 @@ public sealed partial class LlamaCppBinaryManager
         }
         finally
         {
-            TryKill(process);
+            ProcessTreeKill.TryKill(process);
         }
     }
 

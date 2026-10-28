@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -16,7 +17,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
 {
     private readonly IWhisperBackendSelector _backendSelector;
     private readonly IWhisperModelDownloadCoordinator _downloadCoordinator;
-    private readonly IWhisperInstalledRuntimeStore _installedRuntimeStore;
+    private readonly IManagedRuntimeStore<WhisperBackend> _installedRuntimeStore;
     private readonly WhisperModelPathResolver _pathResolver;
     private readonly IRuntimeDeviceAudit _runtimeDeviceAudit;
     private readonly IWhisperRuntimeActivityGate _activityGate;
@@ -28,7 +29,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
 
     public TranscriptionRuntimeService(IWhisperServerSupervisor supervisor,
         IWhisperRuntimeActivityGate activityGate,
-        IWhisperInstalledRuntimeStore installedRuntimeStore,
+        IManagedRuntimeStore<WhisperBackend> installedRuntimeStore,
         IWhisperBackendSelector backendSelector,
         IWhisperModelDownloadCoordinator downloadCoordinator,
         WhisperModelPathResolver pathResolver,

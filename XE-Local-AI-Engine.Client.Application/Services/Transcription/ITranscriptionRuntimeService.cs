@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -39,10 +40,10 @@ public sealed record TranscriptionRuntimeView
     public required WhisperRuntimeStatusSnapshot Runtime { get; init; }
 
     /// <summary>What is currently holding the runtime.</summary>
-    public required WhisperRuntimeActivitySnapshot Activity { get; init; }
+    public required RuntimeActivitySnapshot Activity { get; init; }
 
     /// <summary>The managed source-build record, when one exists.</summary>
-    public required WhisperInstalledRuntimeState? ManagedRuntime { get; init; }
+    public required ManagedRuntimeState<WhisperBackend>? ManagedRuntime { get; init; }
 
     /// <summary>The operator's explicit model choice, or <see langword="null" />.</summary>
     public required string? SelectedModelId { get; init; }

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Builds the 409 <see cref="ImageRuntimeBlockedResponse" /> every image-runtime mutation returns when the runtime
@@ -17,7 +17,7 @@ internal static class ImageRuntimeBlockedEndpointSupport
     /// <summary>The reason code the SPA matches to show "wait for running image work" rather than a build error.</summary>
     private const string RuntimeBusyReason = "runtime-busy";
 
-    internal static IResult Blocked(string reason, string message, ImageRuntimeActivitySnapshot activity)
+    internal static IResult Blocked(string reason, string message, RuntimeActivitySnapshot activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
 
@@ -29,6 +29,6 @@ internal static class ImageRuntimeBlockedEndpointSupport
         });
     }
 
-    internal static IResult RuntimeBusy(string message, ImageRuntimeActivitySnapshot activity) =>
+    internal static IResult RuntimeBusy(string message, RuntimeActivitySnapshot activity) =>
         Blocked(RuntimeBusyReason, message, activity);
 }

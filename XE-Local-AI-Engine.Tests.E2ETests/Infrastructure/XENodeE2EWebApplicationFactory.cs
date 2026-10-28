@@ -717,8 +717,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
             _inner.EvictAsync(ct);
 
-        public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
-            _inner.TryAcquireTranscriptionLease(modelId, generation);
+        public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation) =>
+            _inner.TryAcquireJobLease(modelId, generation);
 
         public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
             _inner.ReportRequestFailureAsync(generation, cause, ct);

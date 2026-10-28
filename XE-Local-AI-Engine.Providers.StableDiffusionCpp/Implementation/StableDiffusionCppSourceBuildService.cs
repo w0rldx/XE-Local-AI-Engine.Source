@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Linux-only detached single-flight source build for stable-diffusion.cpp.</summary>
@@ -20,8 +22,8 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
     ];
 
     private readonly string _cacheRoot;
-    private readonly IStableDiffusionManagedSourceBuildSignal _managedSignal;
-    private readonly IStableDiffusionInstalledRuntimeStore _runtimeStore;
+    private readonly IManagedSourceBuildSignal<SdGpuBackend> _managedSignal;
+    private readonly IManagedRuntimeStore<SdGpuBackend> _runtimeStore;
     private readonly IImageRuntimeActivityGate _activityGate;
     private readonly StableDiffusionCppRuntimeAdoption _adoption;
     private readonly ILogger<StableDiffusionCppSourceBuildService> _logger;
@@ -29,7 +31,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
     private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
     private readonly Channel<StableDiffusionCppSourceBuildStatusEvent> _publishQueue;
     private readonly Task _publisherTask;
-    private readonly IStableDiffusionSourceCommandRunner _runner;
+    private readonly ISourceCommandRunner _runner;
     private readonly bool _isLinux;
     private readonly SemaphoreSlim _startGate = new(initialCount: 1, maxCount: 1);
     private readonly Lock _stateLock = new();
@@ -48,24 +50,24 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
     private readonly TimeProvider _timeProvider;
 
     public StableDiffusionCppSourceBuildService(IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-        IStableDiffusionInstalledRuntimeStore runtimeStore,
-        IStableDiffusionManagedSourceBuildSignal managedSignal,
+        IManagedRuntimeStore<SdGpuBackend> runtimeStore,
+        IManagedSourceBuildSignal<SdGpuBackend> managedSignal,
         IImageRuntimeActivityGate activityGate,
         IStableDiffusionCppSourceBuildEventPublisher publisher,
         ILogger<StableDiffusionCppSourceBuildService> logger,
         TimeProvider timeProvider)
-        : this(prerequisiteProbe, runtimeStore, managedSignal, activityGate, publisher, logger, RuntimeCacheDirectory.Resolve(), new StableDiffusionSourceCommandRunner(), timeProvider)
+        : this(prerequisiteProbe, runtimeStore, managedSignal, activityGate, publisher, logger, RuntimeCacheDirectory.Resolve(), new SourceCommandRunner(), timeProvider)
     {
     }
 
     internal StableDiffusionCppSourceBuildService(IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-        IStableDiffusionInstalledRuntimeStore runtimeStore,
-        IStableDiffusionManagedSourceBuildSignal managedSignal,
+        IManagedRuntimeStore<SdGpuBackend> runtimeStore,
+        IManagedSourceBuildSignal<SdGpuBackend> managedSignal,
         IImageRuntimeActivityGate activityGate,
         IStableDiffusionCppSourceBuildEventPublisher publisher,
         ILogger<StableDiffusionCppSourceBuildService> logger,
         string cacheRoot,
-        IStableDiffusionSourceCommandRunner runner,
+        ISourceCommandRunner runner,
         TimeProvider timeProvider,
         bool? isLinux = null)
     {
@@ -164,12 +166,12 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 };
             }
 
-            var revisionMode = normalized.Source == StableDiffusionCppSourceSelection.Official
-                ? StableDiffusionCppSourceRevisionMode.EnginePinned
-                : StableDiffusionCppSourceRevisionMode.ExplicitCommit;
-            if (normalized.Source == StableDiffusionCppSourceSelection.Custom && normalized.Commit is null)
+            var revisionMode = normalized.Source == ManagedSourceSelection.Official
+                ? ManagedSourceRevisionMode.EnginePinned
+                : ManagedSourceRevisionMode.ExplicitCommit;
+            if (normalized.Source == ManagedSourceSelection.Custom && normalized.Commit is null)
             {
-                revisionMode = StableDiffusionCppSourceRevisionMode.DefaultBranch;
+                revisionMode = ManagedSourceRevisionMode.DefaultBranch;
             }
 
             var descriptor = new StableDiffusionCppSourceBuildDescriptor
@@ -179,7 +181,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 Repository = normalized.Repository!,
                 RevisionMode = revisionMode,
                 RequestedCommit = normalized.Commit,
-                ResolvedCommit = revisionMode == StableDiffusionCppSourceRevisionMode.EnginePinned
+                ResolvedCommit = revisionMode == ManagedSourceRevisionMode.EnginePinned
                     ? StableDiffusionReleasePins.PinnedSourceCommitSha
                     : null,
                 BuildId = Guid.NewGuid()
@@ -389,7 +391,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             var buildDir = Path.Combine(WorkRoot, "build");
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Cloning);
-            var requestedCommit = descriptor.RevisionMode == StableDiffusionCppSourceRevisionMode.EnginePinned
+            var requestedCommit = descriptor.RevisionMode == ManagedSourceRevisionMode.EnginePinned
                 ? StableDiffusionReleasePins.PinnedSourceCommitSha
                 : descriptor.RequestedCommit;
             await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
@@ -519,7 +521,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         return ["-S", sourceDir, "-B", buildDir, "-DCMAKE_BUILD_TYPE=Release", .. backendFlags];
     }
 
-    private async Task<StableDiffusionSourceCommandResult> RunRequiredAsync(string fileName,
+    private async Task<SourceCommandResult> RunRequiredAsync(string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeout,
@@ -666,7 +668,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
 
         var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-        if (installed?.Validity == StableDiffusionInstalledRuntimeValidity.Active)
+        if (installed?.Validity == ManagedRuntimeValidity.Active)
         {
             _managedSignal.SetActive(installed.DesiredBackend);
         }
@@ -683,7 +685,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(WorkRoot);
     }
 
-    private void DeleteManagedRuntime(StableDiffusionInstalledRuntimeState installed)
+    private void DeleteManagedRuntime(ManagedRuntimeState<SdGpuBackend> installed)
     {
         var installRoot = GetManagedInstallRoot(installed);
         if (Directory.Exists(installRoot))
@@ -697,7 +699,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
     }
 
-    private string GetManagedInstallRoot(StableDiffusionInstalledRuntimeState installed)
+    private string GetManagedInstallRoot(ManagedRuntimeState<SdGpuBackend> installed)
     {
         if (installed.SourceCommit.Length != 40 || !installed.SourceCommit.All(Uri.IsHexDigit))
         {

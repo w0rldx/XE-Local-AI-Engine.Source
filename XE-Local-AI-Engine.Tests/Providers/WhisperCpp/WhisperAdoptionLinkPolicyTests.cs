@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -49,7 +50,7 @@ public sealed class WhisperAdoptionLinkPolicyTests
         AssertEx.NotNull(new FileInfo(Path.Combine(installedBin, "libwhisper.so")).LinkTarget);
 
         var record = AssertEx.NotNull(await harness.Store.ReadAsync(CancellationToken.None));
-        AssertEx.Equal(WhisperInstalledRuntimeValidity.Active, record.Validity);
+        AssertEx.Equal(ManagedRuntimeValidity.Active, record.Validity);
     }
 
     [Test]
@@ -107,16 +108,16 @@ public sealed class WhisperAdoptionLinkPolicyTests
         {
             _cacheRoot = cacheRoot;
             Store = new WhisperInstalledRuntimeStore(cacheRoot);
-            Adoption = new WhisperCppRuntimeAdoption(cacheRoot, Store, new WhisperManagedSourceBuildSignal(), TimeProvider.System, NullLogger.Instance);
+            Adoption = new WhisperCppRuntimeAdoption(cacheRoot, Store, new ManagedSourceBuildSignal<WhisperBackend>(), TimeProvider.System, NullLogger.Instance);
             // Custom + ExplicitCommit: the runtime store requires an engine-pinned record to carry the pinned
             // release commit exactly, and this fixture's commit is arbitrary on purpose.
             var commit = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("commit")))[..40];
             Descriptor = new WhisperCppSourceBuildDescriptor
             {
                 Backend = WhisperBackend.Cuda,
-                Source = WhisperCppSourceSelection.Custom,
+                Source = ManagedSourceSelection.Custom,
                 Repository = WhisperCppSourceBuildRequestValidation.OfficialRepository,
-                RevisionMode = WhisperCppSourceRevisionMode.ExplicitCommit,
+                RevisionMode = ManagedSourceRevisionMode.ExplicitCommit,
                 RequestedCommit = commit,
                 ResolvedCommit = commit,
                 BuildId = Guid.NewGuid()

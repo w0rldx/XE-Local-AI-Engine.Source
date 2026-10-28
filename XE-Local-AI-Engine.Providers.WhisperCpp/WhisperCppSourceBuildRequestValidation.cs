@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -28,7 +29,7 @@ public static partial class WhisperCppSourceBuildRequestValidation
             throw new WhisperRuntimeException("The source-build backend or source selection is invalid.");
         }
 
-        if (request.Source == WhisperCppSourceSelection.Official)
+        if (request.Source == ManagedSourceSelection.Official)
         {
             if (!string.IsNullOrWhiteSpace(request.Repository)
                 && !string.Equals(request.Repository, OfficialRepository, StringComparison.Ordinal))

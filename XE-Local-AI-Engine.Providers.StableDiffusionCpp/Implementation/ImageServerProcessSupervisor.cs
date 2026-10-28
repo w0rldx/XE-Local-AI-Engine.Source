@@ -2,10 +2,9 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -33,9 +32,6 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// <summary>User-facing reason when the child could not bind the port it was given (another process took it).</summary>
     private const string PortTakenMessage =
         "The image runtime could not bind its local port because another process took it. Try again; the next attempt uses a different port.";
-
-    /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
-    private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
 
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
     private readonly HashSet<int> _allocatedPorts = [];
@@ -505,18 +501,11 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// </remarks>
     private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
     {
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var outcome = await ProcessReadinessRace.RunAsync(handle, token => _readinessProbe.WaitForReadyAsync(baseAddress, budget, token), _timeProvider, ct)
+            .ConfigureAwait(false);
 
-        var readyTask = _readinessProbe.WaitForReadyAsync(baseAddress, budget, linkedCts.Token);
-        var exitTask = WatchForExitAsync(handle, linkedCts.Token);
-
-        var winner = await Task.WhenAny(readyTask, exitTask).ConfigureAwait(false);
-
-        if (winner == exitTask && handle.HasExited)
+        if (outcome == ProcessReadinessOutcome.Exited)
         {
-            await linkedCts.CancelAsync().ConfigureAwait(false);
-            await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
-
             // Without the child's own exit code and last words, every load failure reads as the same fixed sentence and
             // a missing GPU device is indistinguishable from an out-of-memory kill.
             var detail = DescribeExit(handle);
@@ -526,10 +515,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             throw new StableDiffusionRuntimeException((PortBindFailure.IsReportedIn(handle.StderrTail) ? PortTakenMessage : ExitedWhileLoadingMessage) + detail);
         }
 
-        await linkedCts.CancelAsync().ConfigureAwait(false);
-        await SwallowCancellationAsync(exitTask).ConfigureAwait(false);
-
-        if (!await readyTask.ConfigureAwait(false))
+        if (outcome == ProcessReadinessOutcome.TimedOut)
         {
             throw new StableDiffusionRuntimeException("The image runtime did not become ready in time.");
         }
@@ -546,31 +532,6 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             : string.Empty;
         var tail = handle.StderrTail is { } stderrTail ? " Last output: " + stderrTail : string.Empty;
         return code + tail;
-    }
-
-    private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            if (handle.HasExited)
-            {
-                return;
-            }
-
-            await Task.Delay(ProcessExitPollInterval, _timeProvider, ct).ConfigureAwait(false);
-        }
-    }
-
-    private static async Task SwallowCancellationAsync(Task task)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected: this task was cancelled because the other side of the race won.
-        }
     }
 
     private async Task ReapIdleLoopAsync(CancellationToken ct)
@@ -772,7 +733,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// <remarks>
     ///     INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set that bounds the
     ///     loaded-model CAP never counts a daemon on its way out. That cannot hand the next spawn a port the dying child still holds,
-    ///     because <see cref="ReserveFreePort" /> bind-probes every candidate (<see cref="IsPortFree" />) and skips one still bound — the
+    ///     because <see cref="ReserveFreePort" /> bind-probes every candidate (<see cref="LoopbackPort.IsFree" />) and skips one still bound — the
     ///     bind probe was always the real guard, since <c>TreeKill</c> returns before the OS reclaims the socket. See
     ///     docs/wiki/14-image-generation.md ("Daemon leases and the teardown races") for why the resident lease is NOT released here.
     /// </remarks>
@@ -877,7 +838,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
         {
-            if (_allocatedPorts.Contains(port) || !IsPortFree(port))
+            if (_allocatedPorts.Contains(port) || !LoopbackPort.IsFree(port))
             {
                 continue;
             }
@@ -917,20 +878,6 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
-    private static bool IsPortFree(int port)
-    {
-        try
-        {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
-    }
-
     /// <summary>Order-insensitive identity of a weight set: the sorted (role, local path) pairs the launch arguments are built from. Compared, never logged.</summary>
     private static string FingerprintOf(IReadOnlyList<ImageModelPart> parts)
     {
@@ -957,7 +904,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             ImageServerEndpoint endpoint,
             int port,
             DateTimeOffset startedUtc,
-            IImageRuntimeActivityLease residentLease,
+            IRuntimeActivityLease residentLease,
             string partsFingerprint)
         {
             PartsFingerprint = partsFingerprint;
@@ -971,7 +918,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         public IProcessTreeHandle Handle { get; }
 
-        public IImageRuntimeActivityLease ResidentLease { get; }
+        public IRuntimeActivityLease ResidentLease { get; }
 
         /// <summary>The <see cref="FingerprintOf" /> of the weight set this daemon was launched from.</summary>
         public string PartsFingerprint { get; }

@@ -191,7 +191,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var endpoint = await _supervisor.EnsureRunningAsync(modelId, ct).ConfigureAwait(false);
-            if (_supervisor.TryAcquireTranscriptionLease(endpoint.ModelId, endpoint.Generation) is { } lease)
+            if (_supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation) is { } lease)
             {
                 return new LeasedEndpoint(endpoint, lease);
             }

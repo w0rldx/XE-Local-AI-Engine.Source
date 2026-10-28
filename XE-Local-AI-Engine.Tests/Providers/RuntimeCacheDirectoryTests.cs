@@ -106,13 +106,13 @@ public sealed class RuntimeCacheDirectoryTests
         using var images = new StableDiffusionInstalledRuntimeStore();
         using var whisper = new WhisperInstalledRuntimeStore();
         var llamaState = new InstalledRuntimeState("test", "test", new string('a', 64), GpuVariant.Cpu, DateTimeOffset.UtcNow);
-        var imageState = new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Invalid,
+        var imageState = new ManagedRuntimeState<SdGpuBackend>(ManagedRuntimeValidity.Invalid,
             SdGpuBackend.Cpu, StableDiffusionCppSourceBuildRequestValidation.OfficialRepository, StableDiffusionReleasePins.PinnedSourceCommitSha,
-            StableDiffusionCppSourceSelection.Official, StableDiffusionCppSourceRevisionMode.EnginePinned,
+            ManagedSourceSelection.Official, ManagedSourceRevisionMode.EnginePinned,
             null, null, null, DateTimeOffset.UtcNow, "Test tombstone");
-        var whisperState = new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Invalid,
+        var whisperState = new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Invalid,
             WhisperBackend.Cpu, WhisperCppSourceBuildRequestValidation.OfficialRepository, WhisperCppReleasePins.PinnedSourceCommitSha,
-            WhisperCppSourceSelection.Official, WhisperCppSourceRevisionMode.EnginePinned,
+            ManagedSourceSelection.Official, ManagedSourceRevisionMode.EnginePinned,
             null, null, null, DateTimeOffset.UtcNow, "Test tombstone");
         await llama.WriteAsync(llamaState, CancellationToken.None);
         await images.WriteAsync(imageState, CancellationToken.None);
@@ -146,10 +146,10 @@ public sealed class RuntimeCacheDirectoryTests
             Substitute.For<ILlamaServerProcessSupervisor>(), new LlamaCppSourceBuildActivity(),
             Substitute.For<ILlamaCppSourceBuildEventPublisher>(), NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System);
         using var images = new StableDiffusionCppSourceBuildService(Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>(),
-            imageStore, new StableDiffusionManagedSourceBuildSignal(), new ImageRuntimeActivityGate(),
+            imageStore, new ManagedSourceBuildSignal<SdGpuBackend>(), new ImageRuntimeActivityGate(),
             Substitute.For<IStableDiffusionCppSourceBuildEventPublisher>(), NullLogger<StableDiffusionCppSourceBuildService>.Instance, TimeProvider.System);
         using var whisper = new WhisperCppSourceBuildService(Substitute.For<IWhisperCppSourceBuildPrerequisiteProbe>(),
-            whisperStore, new WhisperManagedSourceBuildSignal(), new WhisperRuntimeActivityGate(),
+            whisperStore, new ManagedSourceBuildSignal<WhisperBackend>(), new WhisperRuntimeActivityGate(),
             Substitute.For<IWhisperCppSourceBuildEventPublisher>(), NullLogger<WhisperCppSourceBuildService>.Instance, TimeProvider.System);
         var workDirectories = new[]
                               {

@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.Python;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -51,7 +51,7 @@ public sealed class RequiredMemberSerializationTests
         typeof(ILocalModelProvider).Assembly,
         typeof(IProcessLaunchAdmissionLease).Assembly,
         typeof(WhisperCppReleasePins).Assembly,
-        typeof(IStableDiffusionManagedSourceBuildSignal).Assembly,
+        typeof(SdGpuBackend).Assembly,
         typeof(GgufMetadataReaderServiceCollectionExtensions).Assembly,
         typeof(ITrainingProcessHandle).Assembly,
         typeof(ManagedPythonPins).Assembly,

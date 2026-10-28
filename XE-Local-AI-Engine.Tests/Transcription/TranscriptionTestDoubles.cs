@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -137,9 +138,9 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
         Task.FromResult(new WhisperServerEvictResult
         {
             Evicted = true,
-            Activity = new WhisperRuntimeActivitySnapshot
+            Activity = new RuntimeActivitySnapshot
             {
-                ActiveTranscriptionCount = 0,
+                ActiveJobCount = 0,
                 SpawnReadinessCount = 0,
                 ResidentProcessCount = 0,
                 MutationReserved = false,
@@ -147,7 +148,7 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
             }
         });
 
-    public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
+    public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation) =>
         null;
 
     public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>

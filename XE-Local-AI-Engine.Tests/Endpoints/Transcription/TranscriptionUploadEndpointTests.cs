@@ -298,7 +298,7 @@ public sealed class TranscriptionUploadEndpointTests
         // Once the build lets go, the same session transcribes, and the request's own lease is released on the way out.
         using var accepted = await UploadAsync(factory, client, sessionId, "clip.wav", ReadFixtureWav());
         AssertEx.Equal(HttpStatusCode.OK, accepted.StatusCode, await accepted.Content.ReadAsStringAsync());
-        AssertEx.Equal(expected: 0, gate.GetSnapshot().ActiveTranscriptionCount);
+        AssertEx.Equal(expected: 0, gate.GetSnapshot().ActiveJobCount);
     }
 
     private static byte[] ReadFixtureWav() =>

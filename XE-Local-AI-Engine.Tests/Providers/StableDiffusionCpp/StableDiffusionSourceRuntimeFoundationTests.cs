@@ -8,7 +8,10 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -37,7 +40,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             OSPlatform.Linux,
             Architecture.X64,
             installedRuntimeStore: store,
-            managedSourceSignal: new StableDiffusionManagedSourceBuildSignal());
+            managedSourceSignal: new ManagedSourceBuildSignal<SdGpuBackend>());
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => manager.EnsureBinaryAsync(SdGpuBackend.Cuda, CancellationToken.None));
 
@@ -51,7 +54,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         await store.WriteAsync(State(temp.Path) with
         {
-            Validity = StableDiffusionInstalledRuntimeValidity.Invalid,
+            Validity = ManagedRuntimeValidity.Invalid,
             InvalidReason = "corrupt"
         }, CancellationToken.None);
         using var handler = new CountingHandler();
@@ -62,7 +65,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             OSPlatform.Linux,
             Architecture.X64,
             installedRuntimeStore: store,
-            managedSourceSignal: new StableDiffusionManagedSourceBuildSignal());
+            managedSourceSignal: new ManagedSourceBuildSignal<SdGpuBackend>());
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => manager.EnsureBinaryAsync(SdGpuBackend.Cuda, CancellationToken.None));
 
@@ -86,7 +89,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         await store.WriteAsync(state, CancellationToken.None);
         using var handler = new CountingHandler();
         using var http = new HttpClient(handler);
-        var signal = new StableDiffusionManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<SdGpuBackend>();
         signal.SetActive(SdGpuBackend.Cuda);
         var signalVersion = signal.Version;
         var manager = new StableDiffusionCppBinaryManager(http,
@@ -99,7 +102,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => manager.EnsureBinaryAsync(SdGpuBackend.Cuda, CancellationToken.None));
 
-        AssertEx.Equal(StableDiffusionInstalledRuntimeValidity.Invalid,
+        AssertEx.Equal(ManagedRuntimeValidity.Invalid,
             AssertEx.NotNull(await store.ReadAsync(CancellationToken.None)).Validity);
         AssertEx.Null(signal.ActiveBackend);
         AssertEx.True(signal.Version > signalVersion);
@@ -110,7 +113,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     public async Task Selector_ManagedSelectionPrecedesHardwareProbe()
     {
         var profiler = Substitute.For<IHardwareProfiler>();
-        var signal = new StableDiffusionManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<SdGpuBackend>();
         signal.SetActive(SdGpuBackend.Cuda);
         var selector = new SdGpuBackendSelector(profiler,
             isWindows: false,
@@ -124,102 +127,12 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     }
 
     [Test]
-    public async Task InstalledRuntimeStore_CorruptActiveRecord_ReturnsInvalidDesiredSelectionTombstone()
-    {
-        using var temp = new TempDirectory();
-        using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
-        await store.WriteAsync(State(temp.Path), CancellationToken.None);
-        var statePath = Path.Combine(temp.Path, "stable-diffusion.cpp", "installed-runtime.json");
-        await File.WriteAllTextAsync(statePath, "{broken");
-
-        var recovered = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
-
-        AssertEx.Equal(StableDiffusionInstalledRuntimeValidity.Invalid, recovered.Validity);
-        AssertEx.Equal(SdGpuBackend.Cuda, recovered.DesiredBackend);
-        AssertEx.Equal(StableDiffusionCppSourceSelection.Official, recovered.SourceSelection);
-    }
-
-    [Test]
-    public async Task InstalledRuntimeStore_SemanticallyInvalidEnums_FallBackToDesiredSelectionTombstone()
-    {
-        using var temp = new TempDirectory();
-        using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
-        await store.WriteAsync(State(temp.Path), CancellationToken.None);
-        var statePath = Path.Combine(temp.Path, "stable-diffusion.cpp", "installed-runtime.json");
-        await File.WriteAllTextAsync(statePath,
-            $$"""
-              {
-                "validity": 99,
-                "desiredBackend": 99,
-                "sourceRepository": null,
-                "sourceCommit": "{{StableDiffusionReleasePins.PinnedSourceCommitSha}}",
-                "sourceSelection": 99,
-                "sourceRevisionMode": 99,
-                "installedAtUtc": "{{DateTimeOffset.UtcNow:O}}"
-              }
-              """);
-
-        var recovered = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
-
-        AssertEx.Equal(StableDiffusionInstalledRuntimeValidity.Invalid, recovered.Validity);
-        AssertEx.Equal(SdGpuBackend.Cuda, recovered.DesiredBackend);
-        AssertEx.Equal(StableDiffusionCppSourceSelection.Official, recovered.SourceSelection);
-    }
-
-    [Test]
-    public void ActivityGate_MutationAndEvictionAdmissionsAreAtomic()
-    {
-        var gate = new ImageRuntimeActivityGate();
-        using var job = AssertEx.NotNull(gate.TryAcquireJobLease());
-
-        AssertEx.Null(gate.TryAcquireMutationReservation());
-        AssertEx.Null(gate.TryAcquireEvictionReservation());
-        AssertEx.Equal(expected: 1, gate.GetSnapshot().ActiveJobCount);
-
-        job.Dispose();
-        using var mutation = AssertEx.NotNull(gate.TryAcquireMutationReservation());
-        AssertEx.Null(gate.TryAcquireJobLease());
-        AssertEx.Null(gate.TryAcquireSpawnReadinessLease());
-    }
-
-    [Test]
-    public void ActivityGate_EveryGrantAndRelease_TicksResidency_ARefusalDoesNot()
-    {
-        // The residents read derives Starting and CanEject from these counts, so each change must reach the header.
-        var notifier = new RecordingResidencyChangeNotifier();
-        var gate = new ImageRuntimeActivityGate(notifier);
-        var leases = new[]
-        {
-            AssertEx.NotNull(gate.TryAcquireJobLease()),
-            AssertEx.NotNull(gate.TryAcquireSpawnReadinessLease()),
-            AssertEx.NotNull(gate.TryAcquireResidentProcessLease())
-        };
-        AssertEx.Equal(expected: 3, notifier.Count);
-
-        AssertEx.Null(gate.TryAcquireEvictionReservation());
-        AssertEx.Equal(expected: 3, notifier.Count, "A refused reservation must not tick.");
-
-        foreach (var lease in leases)
-        {
-            lease.Dispose();
-        }
-
-        AssertEx.Equal(expected: 6, notifier.Count);
-        using (AssertEx.NotNull(gate.TryAcquireMutationReservation()))
-        {
-            AssertEx.Equal(expected: 7, notifier.Count);
-        }
-
-        AssertEx.Equal(expected: 8, notifier.Count);
-    }
-
-    [Test]
     public void SourceRequest_OfficialNormalizationIsIdempotentAndPinsCanonicalProvenance()
     {
         var request = new StableDiffusionCppSourceBuildRequest
         {
             Backend = SdGpuBackend.Cuda,
-            Source = StableDiffusionCppSourceSelection.Official
+            Source = ManagedSourceSelection.Official
         };
 
         var once = StableDiffusionCppSourceBuildRequestValidation.Normalize(request);
@@ -253,7 +166,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
             {
                 Backend = SdGpuBackend.Cpu,
-                Source = StableDiffusionCppSourceSelection.Official
+                Source = ManagedSourceSelection.Official
             },
             CancellationToken.None);
 
@@ -272,7 +185,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var request = new StableDiffusionCppSourceBuildRequest
         {
             Backend = SdGpuBackend.Cpu,
-            Source = StableDiffusionCppSourceSelection.Official
+            Source = ManagedSourceSelection.Official
         };
 
         var first = await service.StartAsync(request, CancellationToken.None);
@@ -298,7 +211,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
             {
                 Backend = SdGpuBackend.Cuda,
-                Source = StableDiffusionCppSourceSelection.Official
+                Source = ManagedSourceSelection.Official
             },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
@@ -321,7 +234,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var (_, submoduleArguments) = gitCommands.Single(static command => GitVerb(command.Arguments) == "submodule");
         AssertEx.True(submoduleArguments.TakeLast(4).SequenceEqual(["submodule", "update", "--init", "--recursive"]));
         var installed = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
-        AssertEx.Equal(StableDiffusionInstalledRuntimeValidity.Active, installed.Validity);
+        AssertEx.Equal(ManagedRuntimeValidity.Active, installed.Validity);
         AssertEx.Equal(StableDiffusionReleasePins.PinnedSourceCommitSha, installed.SourceCommit);
         AssertEx.Equal(SdGpuBackend.Cuda, installed.DesiredBackend);
         AssertEx.False(Directory.EnumerateDirectories(Path.GetDirectoryName(installed.SourceBuildPath!)!,
@@ -357,7 +270,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
             {
                 Backend = SdGpuBackend.Cpu,
-                Source = StableDiffusionCppSourceSelection.Custom,
+                Source = ManagedSourceSelection.Custom,
                 Repository = "https://github.com/example/stable-diffusion.cpp",
                 Commit = customCommit,
                 AcknowledgeCustomSourceRisk = true
@@ -407,7 +320,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
             {
                 Backend = SdGpuBackend.Cuda,
-                Source = StableDiffusionCppSourceSelection.Official
+                Source = ManagedSourceSelection.Official
             },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
@@ -433,8 +346,8 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             DesiredBackend = SdGpuBackend.Cpu,
             SourceRepository = "https://github.com/example/stable-diffusion.cpp",
             SourceCommit = previousCommit,
-            SourceSelection = StableDiffusionCppSourceSelection.Custom,
-            SourceRevisionMode = StableDiffusionCppSourceRevisionMode.ExplicitCommit,
+            SourceSelection = ManagedSourceSelection.Custom,
+            SourceRevisionMode = ManagedSourceRevisionMode.ExplicitCommit,
             SourceRequestedCommit = previousCommit,
             SourceBuildPath = previousServerDirectory
         };
@@ -444,7 +357,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var result = await service.StartAsync(new StableDiffusionCppSourceBuildRequest
             {
                 Backend = SdGpuBackend.Cuda,
-                Source = StableDiffusionCppSourceSelection.Official
+                Source = ManagedSourceSelection.Official
             },
             CancellationToken.None);
         await WaitForTerminalAsync(service);
@@ -487,7 +400,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         var buildRoot = Path.Combine(temp.Path, "stable-diffusion.cpp", "source-build");
         Directory.CreateDirectory(buildRoot);
         await File.WriteAllTextAsync(Path.Combine(buildRoot, "adoption-journal.json"),
-            JsonSerializer.Serialize(new StableDiffusionCppAdoptionJournal(buildId,
+            JsonSerializer.Serialize(new ManagedRuntimeAdoptionJournal<SdGpuBackend>(buildId,
                 SdGpuBackend.Cuda,
                 previous.SourceCommit,
                 HadPreviousDestination: true,
@@ -529,7 +442,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             $".failed-{previous.SourceCommit}-{buildId:N}");
         Directory.CreateDirectory(failed);
         await File.WriteAllTextAsync(Path.Combine(failed, "orphan"), "replacement");
-        var journalPath = await WriteJournalAsync(temp.Path, new StableDiffusionCppAdoptionJournal(buildId,
+        var journalPath = await WriteJournalAsync(temp.Path, new ManagedRuntimeAdoptionJournal<SdGpuBackend>(buildId,
             SdGpuBackend.Cuda,
             previous.SourceCommit,
             HadPreviousDestination: true,
@@ -569,7 +482,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         };
         await store.WriteAsync(previous, CancellationToken.None);
         var buildId = Guid.NewGuid();
-        var journalPath = await WriteJournalAsync(temp.Path, new StableDiffusionCppAdoptionJournal(buildId,
+        var journalPath = await WriteJournalAsync(temp.Path, new ManagedRuntimeAdoptionJournal<SdGpuBackend>(buildId,
             SdGpuBackend.Cuda,
             previous.SourceCommit,
             HadPreviousDestination: true,
@@ -593,7 +506,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     public async Task CommandRunner_StreamsOutputBeforeProcessCompletes()
     {
         using var temp = new TempDirectory();
-        var runner = new StableDiffusionSourceCommandRunner();
+        var runner = new SourceCommandRunner();
         var firstLine = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = runner.RunAsync("/bin/sh",
             ["-c", "printf 'first\\n'; sleep 0.2; printf 'second\\n'"],
@@ -622,7 +535,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     public async Task CommandRunner_TimeoutTerminatesHungCommand()
     {
         using var temp = new TempDirectory();
-        var runner = new StableDiffusionSourceCommandRunner();
+        var runner = new SourceCommandRunner();
 
         await AssertEx.ThrowsAsync<TimeoutException>(() => runner.RunAsync("/bin/sh",
             ["-c", "sleep 30"],
@@ -647,7 +560,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             Environment.SetEnvironmentVariable("CUDA_PATH", "/opt/test-cuda-path");
             Environment.SetEnvironmentVariable("XE_SOURCE_BUILD_POISON", "secret");
             using var temp = new TempDirectory();
-            var runner = new StableDiffusionSourceCommandRunner();
+            var runner = new SourceCommandRunner();
 
             var result = await runner.RunAsync("/bin/sh",
                 [
@@ -745,7 +658,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         startInfo.Environment["GITHUB_TOKEN"] = "poison";
         startInfo.Environment["GIT_CONFIG_COUNT"] = "1";
 
-        StableDiffusionSourceProcessHardening.Configure(startInfo, temp.Path);
+        SourceProcessHardening.Configure(startInfo, temp.Path);
 
         AssertEx.Equal("/toolchain/bin", startInfo.Environment["PATH"]);
         AssertEx.Equal("en_US.UTF-8", startInfo.Environment["LANG"]);
@@ -872,7 +785,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         await File.WriteAllTextAsync(Path.Combine(commitRoot, "orphan"), "runtime");
         await store.WriteAsync(state with
         {
-            Validity = StableDiffusionInstalledRuntimeValidity.Invalid,
+            Validity = ManagedRuntimeValidity.Invalid,
             SourceBuildPath = null,
             ServerSha256 = null,
             InvalidReason = "corrupt"
@@ -900,7 +813,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         await File.WriteAllTextAsync(outsideFile, "outside");
         await store.WriteAsync(state with
         {
-            Validity = StableDiffusionInstalledRuntimeValidity.Invalid,
+            Validity = ManagedRuntimeValidity.Invalid,
             SourceBuildPath = outside.Path,
             ServerSha256 = null,
             InvalidReason = "unsafe path"
@@ -916,9 +829,9 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     }
 
     private static StableDiffusionCppSourceBuildService CreateService(string cacheRoot,
-        IStableDiffusionInstalledRuntimeStore store,
+        IManagedRuntimeStore<SdGpuBackend> store,
         IImageRuntimeActivityGate gate,
-        IStableDiffusionSourceCommandRunner runner)
+        ISourceCommandRunner runner)
     {
         var prerequisites = Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
         prerequisites.ProbeAsync(Arg.Any<SdGpuBackend>(), Arg.Any<CancellationToken>())
@@ -929,7 +842,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
                      });
         return new StableDiffusionCppSourceBuildService(prerequisites,
             store,
-            new StableDiffusionManagedSourceBuildSignal(),
+            new ManagedSourceBuildSignal<SdGpuBackend>(),
             gate,
             new NullPublisher(),
             NullLogger<StableDiffusionCppSourceBuildService>.Instance,
@@ -943,14 +856,14 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     private static Task WaitForTerminalAsync(IStableDiffusionCppSourceBuildService service) =>
         AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(5), "the source build never reached a terminal status.");
 
-    private static StableDiffusionInstalledRuntimeState State(string cacheRoot)
+    private static ManagedRuntimeState<SdGpuBackend> State(string cacheRoot)
     {
-        return new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Active,
+        return new ManagedRuntimeState<SdGpuBackend>(ManagedRuntimeValidity.Active,
             SdGpuBackend.Cuda,
             StableDiffusionCppSourceBuildRequestValidation.OfficialRepository,
             StableDiffusionReleasePins.PinnedSourceCommitSha,
-            StableDiffusionCppSourceSelection.Official,
-            StableDiffusionCppSourceRevisionMode.EnginePinned,
+            ManagedSourceSelection.Official,
+            ManagedSourceRevisionMode.EnginePinned,
             SourceRequestedCommit: null,
             Path.Combine(cacheRoot, "stable-diffusion.cpp", "managed", "cuda", StableDiffusionReleasePins.PinnedSourceCommitSha, "build", "bin"),
             new string('a', 64),
@@ -970,7 +883,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
     }
 
-    private static async Task<string> WriteJournalAsync(string cacheRoot, StableDiffusionCppAdoptionJournal journal)
+    private static async Task<string> WriteJournalAsync(string cacheRoot, ManagedRuntimeAdoptionJournal<SdGpuBackend> journal)
     {
         var buildRoot = Path.Combine(cacheRoot, "stable-diffusion.cpp", "source-build");
         Directory.CreateDirectory(buildRoot);
@@ -1027,12 +940,12 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
     }
 
-    private sealed class BlockingRunner : IStableDiffusionSourceCommandRunner
+    private sealed class BlockingRunner : ISourceCommandRunner
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int CallCount { get; private set; }
 
-        public async Task<StableDiffusionSourceCommandResult> RunAsync(string fileName,
+        public async Task<SourceCommandResult> RunAsync(string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
             Action<string> onOutput,
@@ -1043,7 +956,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             CallCount++;
             Started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-            return new StableDiffusionSourceCommandResult
+            return new SourceCommandResult
             {
                 ExitCode = 0,
                 StandardOutput = string.Empty,
@@ -1052,7 +965,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
     }
 
-    private sealed class SuccessfulRunner : IStableDiffusionSourceCommandRunner
+    private sealed class SuccessfulRunner : ISourceCommandRunner
     {
         private readonly string _resolvedCommit;
 
@@ -1063,7 +976,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         public List<(string FileName, IReadOnlyList<string> Arguments)> Commands { get; } = [];
 
-        public async Task<StableDiffusionSourceCommandResult> RunAsync(string fileName,
+        public async Task<SourceCommandResult> RunAsync(string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
             Action<string> onOutput,
@@ -1079,7 +992,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
             if (fileName == "git" && GitVerb(arguments) == "rev-parse")
             {
-                return new StableDiffusionSourceCommandResult
+                return new SourceCommandResult
                 {
                     ExitCode = 0,
                     StandardOutput = _resolvedCommit + Environment.NewLine,
@@ -1119,7 +1032,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
                 }
             }
 
-            return new StableDiffusionSourceCommandResult
+            return new SourceCommandResult
             {
                 ExitCode = 0,
                 StandardOutput = string.Empty,
@@ -1128,22 +1041,22 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         }
     }
 
-    private sealed class FailingWriteStore : IStableDiffusionInstalledRuntimeStore
+    private sealed class FailingWriteStore : IManagedRuntimeStore<SdGpuBackend>
     {
-        private readonly IStableDiffusionInstalledRuntimeStore _inner;
+        private readonly IManagedRuntimeStore<SdGpuBackend> _inner;
         private int _writeCount;
 
-        public FailingWriteStore(IStableDiffusionInstalledRuntimeStore inner)
+        public FailingWriteStore(IManagedRuntimeStore<SdGpuBackend> inner)
         {
             _inner = inner;
         }
 
-        public Task<StableDiffusionInstalledRuntimeState?> ReadAsync(CancellationToken ct)
+        public Task<ManagedRuntimeState<SdGpuBackend>?> ReadAsync(CancellationToken ct)
         {
             return _inner.ReadAsync(ct);
         }
 
-        public async Task WriteAsync(StableDiffusionInstalledRuntimeState state, CancellationToken ct)
+        public async Task WriteAsync(ManagedRuntimeState<SdGpuBackend> state, CancellationToken ct)
         {
             await _inner.WriteAsync(state, ct);
             if (Interlocked.Increment(ref _writeCount) == 1)

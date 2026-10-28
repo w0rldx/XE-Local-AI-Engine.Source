@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -30,12 +31,12 @@ internal static class TranscriptionRuntimeMapper
         };
     }
 
-    public static TranscriptionRuntimeActivityResponse ToResponse(this WhisperRuntimeActivitySnapshot activity)
+    public static TranscriptionRuntimeActivityResponse ToResponse(this RuntimeActivitySnapshot activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
         return new TranscriptionRuntimeActivityResponse
         {
-            ActiveTranscriptionCount = activity.ActiveTranscriptionCount,
+            ActiveTranscriptionCount = activity.ActiveJobCount,
             SpawnReadinessCount = activity.SpawnReadinessCount,
             ResidentProcessCount = activity.ResidentProcessCount,
             MutationReserved = activity.MutationReserved,
@@ -44,25 +45,25 @@ internal static class TranscriptionRuntimeMapper
         };
     }
 
-    public static WhisperInstalledRuntimeResponse ToResponse(this WhisperInstalledRuntimeState state)
+    public static WhisperInstalledRuntimeResponse ToResponse(this ManagedRuntimeState<WhisperBackend> state)
     {
         ArgumentNullException.ThrowIfNull(state);
         return new WhisperInstalledRuntimeResponse
         {
-            Validity = state.Validity == WhisperInstalledRuntimeValidity.Active
+            Validity = state.Validity == ManagedRuntimeValidity.Active
                 ? TranscriptionInstalledRuntimeValidityDto.Active
                 : TranscriptionInstalledRuntimeValidityDto.Invalid,
             DesiredBackend = state.DesiredBackend.ToDto(),
             SourceRepository = state.SourceRepository,
             SourceCommit = state.SourceCommit,
-            SourceSelection = state.SourceSelection == WhisperCppSourceSelection.Official
+            SourceSelection = state.SourceSelection == ManagedSourceSelection.Official
                 ? TranscriptionSourceSelectionDto.Official
                 : TranscriptionSourceSelectionDto.Custom,
             SourceRevisionMode = state.SourceRevisionMode switch
             {
-                WhisperCppSourceRevisionMode.EnginePinned => TranscriptionSourceRevisionModeDto.EnginePinned,
-                WhisperCppSourceRevisionMode.DefaultBranch => TranscriptionSourceRevisionModeDto.DefaultBranch,
-                WhisperCppSourceRevisionMode.ExplicitCommit => TranscriptionSourceRevisionModeDto.ExplicitCommit,
+                ManagedSourceRevisionMode.EnginePinned => TranscriptionSourceRevisionModeDto.EnginePinned,
+                ManagedSourceRevisionMode.DefaultBranch => TranscriptionSourceRevisionModeDto.DefaultBranch,
+                ManagedSourceRevisionMode.ExplicitCommit => TranscriptionSourceRevisionModeDto.ExplicitCommit,
                 _ => throw new ArgumentOutOfRangeException(nameof(state), state.SourceRevisionMode, "Unknown source revision mode.")
             },
             SourceRequestedCommit = state.SourceRequestedCommit,

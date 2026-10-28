@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -38,9 +39,9 @@ public sealed class TranscriptionRuntimeEndpointTests
                     BinarySource = WhisperBinarySource.Pinned,
                     SupportsTranscode = true
                 },
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 1,
                     MutationReserved = false,
@@ -145,12 +146,12 @@ public sealed class TranscriptionRuntimeEndpointTests
         {
             Runtime = StoppedRuntime() with
             {
-                ManagedRuntime = new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
+                ManagedRuntime = new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
                     WhisperBackend.Cuda,
                     WhisperCppSourceBuildRequestValidation.OfficialRepository,
                     WhisperCppReleasePins.PinnedSourceCommitSha,
-                    WhisperCppSourceSelection.Official,
-                    WhisperCppSourceRevisionMode.EnginePinned,
+                    ManagedSourceSelection.Official,
+                    ManagedSourceRevisionMode.EnginePinned,
                     SourceRequestedCommit: null,
                     "/managed/cuda/whisper.cpp/bin",
                     new string(c: 'a', count: 64),
@@ -180,9 +181,9 @@ public sealed class TranscriptionRuntimeEndpointTests
     [Test]
     public async Task Eject_WhileATranscriptionIsRunning_Returns409RuntimeBusyWithTheActivitySnapshot()
     {
-        var busy = new WhisperRuntimeActivitySnapshot
+        var busy = new RuntimeActivitySnapshot
         {
-            ActiveTranscriptionCount = 1,
+            ActiveJobCount = 1,
             SpawnReadinessCount = 0,
             ResidentProcessCount = 1,
             MutationReserved = false,
@@ -221,9 +222,9 @@ public sealed class TranscriptionRuntimeEndpointTests
             EvictResult = new WhisperServerEvictResult
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 0,
                     MutationReserved = false,
@@ -364,9 +365,9 @@ public sealed class TranscriptionRuntimeEndpointTests
                 BinarySource = null,
                 SupportsTranscode = true
             },
-            Activity = new WhisperRuntimeActivitySnapshot
+            Activity = new RuntimeActivitySnapshot
             {
-                ActiveTranscriptionCount = 0,
+                ActiveJobCount = 0,
                 SpawnReadinessCount = 0,
                 ResidentProcessCount = 0,
                 MutationReserved = false,
@@ -389,9 +390,9 @@ public sealed class TranscriptionRuntimeEndpointTests
             new()
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 0,
                     MutationReserved = false,

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Probes for and runs the sibling <c>llama-fit-params</c> utility, returning stdout only. llama.cpp deliberately
@@ -85,7 +86,7 @@ internal sealed class LlamaFitParamsProcessRunner : ILlamaFitParamsRunner
         }
         finally
         {
-            ProcessCaptureRunner.TryKill(process);
+            ProcessTreeKill.TryKill(process);
         }
     }
 

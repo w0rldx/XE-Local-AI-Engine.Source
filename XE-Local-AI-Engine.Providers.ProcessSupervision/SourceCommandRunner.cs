@@ -1,9 +1,8 @@
-namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
+namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 using System.Diagnostics;
 using System.Text;
-using XE_Local_AI_Engine.Providers.ProcessSupervision;
-using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
 ///     Runs one hardened build command, streaming its output line by line and bounding everything it can produce:
@@ -15,12 +14,12 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     <c>-DCMAKE_INSTALL_RPATH=$ORIGIN</c> unescaped and unquoted: escaping it for a shell that does not exist would
 ///     write the wrong value into the binary.
 /// </remarks>
-internal sealed class WhisperSourceCommandRunner : IWhisperSourceCommandRunner
+public sealed class SourceCommandRunner : ISourceCommandRunner
 {
     private const int MaxCapturedChars = 64 * 1024;
     private const int MaxStreamLineChars = 1000;
 
-    public async Task<WhisperSourceCommandResult> RunAsync(string fileName,
+    public async Task<SourceCommandResult> RunAsync(string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         Action<string> onOutput,
@@ -48,9 +47,9 @@ internal sealed class WhisperSourceCommandRunner : IWhisperSourceCommandRunner
             process.StartInfo.ArgumentList.Add(argument);
         }
 
-        WhisperSourceProcessHardening.Configure(process.StartInfo, FindIsolationRoot(workingDirectory));
+        SourceProcessHardening.Configure(process.StartInfo, FindIsolationRoot(workingDirectory));
         process.Start();
-        WhisperSourceProcessHardening.CloseStandardInput(process);
+        SourceProcessHardening.CloseStandardInput(process);
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -77,7 +76,7 @@ internal sealed class WhisperSourceCommandRunner : IWhisperSourceCommandRunner
             throw;
         }
 
-        return new WhisperSourceCommandResult
+        return new SourceCommandResult
         {
             ExitCode = process.ExitCode,
             StandardOutput = stdout.ToString(),

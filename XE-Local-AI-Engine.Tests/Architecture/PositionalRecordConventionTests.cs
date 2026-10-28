@@ -27,7 +27,7 @@ public sealed class PositionalRecordConventionTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "PositionalRecordAllowlist.txt");
 
     /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
-    private const int MaxEntries = 314;
+    private const int MaxEntries = 310;
 
     /// <summary>
     ///     A non-vacuity floor under today's count, the way <see cref="PrimaryConstructorConventionTests" /> sets its

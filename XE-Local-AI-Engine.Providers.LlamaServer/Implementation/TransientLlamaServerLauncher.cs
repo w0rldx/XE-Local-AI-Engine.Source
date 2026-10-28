@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Net;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -12,9 +12,6 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// <inheritdoc />
 internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLauncher
 {
-    /// <summary>How often the readiness race re-checks whether the child died instead of becoming ready.</summary>
-    private static readonly TimeSpan ExitPollInterval = TimeSpan.FromMilliseconds(250);
-
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILlamaServerHealthProbe _healthProbe;
     private readonly ILlamaServerProcessLauncher _launcher;
@@ -22,6 +19,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
 
     // The supervisor's own llama-server store, so the one startup reaper also covers a benchmark or smoke child a hard host kill orphaned.
     private readonly ProcessSpawnReceiptStore _spawnReceipts;
+    private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
 
     public TransientLlamaServerLauncher(ILlamaCppBinaryManager binaryManager,
@@ -29,6 +27,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         ILlamaServerProcessLauncher launcher,
         ILlamaServerHealthProbe healthProbe,
         ILogger<TransientLlamaServerLauncher> logger,
+        TimeProvider timeProvider,
         ProcessSpawnReceiptStore? spawnReceipts = null)
     {
         ArgumentNullException.ThrowIfNull(binaryManager);
@@ -36,11 +35,13 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         ArgumentNullException.ThrowIfNull(launcher);
         ArgumentNullException.ThrowIfNull(healthProbe);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _binaryManager = binaryManager;
         _variantSelector = variantSelector;
         _launcher = launcher;
         _healthProbe = healthProbe;
         _logger = logger;
+        _timeProvider = timeProvider;
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "llama-server", logger);
     }
 
@@ -265,7 +266,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         string? adapterPath,
         CancellationToken ct)
     {
-        var model = await CaptureFileAsync(modelPath, ct).ConfigureAwait(false);
+        var model = await FileSha256.ComputeWithLengthAsync(modelPath, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(adapterPath))
         {
             return new TransientLlamaServerModelProvenance
@@ -279,7 +280,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             };
         }
 
-        var adapter = await CaptureFileAsync(adapterPath, ct).ConfigureAwait(false);
+        var adapter = await FileSha256.ComputeWithLengthAsync(adapterPath, ct).ConfigureAwait(false);
         return new TransientLlamaServerModelProvenance
         {
             ModelId = Path.GetFileName(modelPath),
@@ -290,15 +291,6 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             AdapterSha256 = adapter.Sha256
         };
     }
-
-    private static async Task<FileIdentity> CaptureFileAsync(string path, CancellationToken ct)
-    {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-        var digest = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-        return new FileIdentity(stream.Length, digest);
-    }
-
-    private readonly record struct FileIdentity(long SizeBytes, string Sha256);
 
     /// <summary>
     ///     A port the OS just reported free.
@@ -325,52 +317,22 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         CancellationToken ct,
         string? expectedModelAlias = null)
     {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var readyTask = expectedModelAlias is null
-            ? _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, linked.Token)
-            : _healthProbe.WaitForReadyAndVerifyModelAliasAsync(baseAddress,
-                expectedModelAlias,
-                readinessTimeout,
-                linked.Token);
-        var exitTask = WatchForExitAsync(handle, linked.Token);
-        var winner = await Task.WhenAny(readyTask, exitTask).ConfigureAwait(false);
-        await linked.CancelAsync().ConfigureAwait(false);
-        try
-        {
-            if (winner == exitTask && handle.HasExited)
-            {
-                throw new LlamaRuntimeException("The model runtime exited while loading the model.");
-            }
+        var outcome = await ProcessReadinessRace.RunAsync(handle,
+                token => expectedModelAlias is null
+                    ? _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, token)
+                    : _healthProbe.WaitForReadyAndVerifyModelAliasAsync(baseAddress, expectedModelAlias, readinessTimeout, token),
+                _timeProvider,
+                ct)
+            .ConfigureAwait(false);
 
-            if (!await readyTask.ConfigureAwait(false))
-            {
-                throw new LlamaRuntimeException("The model runtime did not become ready in time.");
-            }
-        }
-        finally
+        if (outcome == ProcessReadinessOutcome.Exited)
         {
-            await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
-            await SwallowCancellationAsync(exitTask).ConfigureAwait(false);
+            throw new LlamaRuntimeException("The model runtime exited while loading the model.");
         }
-    }
 
-    private static async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
-    {
-        while (!handle.HasExited)
+        if (outcome == ProcessReadinessOutcome.TimedOut)
         {
-            await Task.Delay(ExitPollInterval, ct).ConfigureAwait(false);
-        }
-    }
-
-    private static async Task SwallowCancellationAsync(Task task)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            // Both arms are abandoned once the race is decided; only the winner's outcome is reported.
+            throw new LlamaRuntimeException("The model runtime did not become ready in time.");
         }
     }
 }

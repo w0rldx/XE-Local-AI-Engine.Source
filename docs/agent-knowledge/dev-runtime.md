@@ -277,7 +277,7 @@ unmeasurable means. Test against a real second mount (`SeparateMountScratch`). *
 
 **Rule:** every git and CMake child of a managed stable-diffusion.cpp source build redirects stdin and closes it at once
 (the rest of the hardening: wiki 14, "Binary provisioning and managed source builds"). **Prevents:** a build step
-blocking forever on an interactive prompt. **Authority:** `StableDiffusionSourceProcessHardening.CloseStandardInput`.
+blocking forever on an interactive prompt. **Authority:** `SourceProcessHardening.CloseStandardInput`.
 
 ## Windows
 

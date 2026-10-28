@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -67,9 +68,9 @@ public sealed class ApplicationHubWireTests
             CurrentBuild = new StableDiffusionCppSourceBuildDescriptor
             {
                 Backend = SdGpuBackend.Vulkan,
-                Source = StableDiffusionCppSourceSelection.Custom,
+                Source = ManagedSourceSelection.Custom,
                 Repository = "https://github.com/example/fork",
-                RevisionMode = StableDiffusionCppSourceRevisionMode.DefaultBranch,
+                RevisionMode = ManagedSourceRevisionMode.DefaultBranch,
                 RequestedCommit = null,
                 ResolvedCommit = new string('a', 40),
                 BuildId = FirstId

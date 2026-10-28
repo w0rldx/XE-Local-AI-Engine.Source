@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Runs a short-lived llama.cpp command beside the resolved executable so its bundled native libraries resolve.
@@ -70,7 +71,7 @@ internal sealed class LlamaCommandProcessRunner : ILlamaCommandProcessRunner
         }
         finally
         {
-            ProcessCaptureRunner.TryKill(process);
+            ProcessTreeKill.TryKill(process);
         }
     }
 }

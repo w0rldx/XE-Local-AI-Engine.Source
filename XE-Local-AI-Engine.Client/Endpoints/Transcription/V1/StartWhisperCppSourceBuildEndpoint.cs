@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -90,6 +91,6 @@ public sealed class StartWhisperCppSourceBuildEndpoint : Endpoint<StartWhisperCp
         }
     }
 
-    private Task BlockAsync(string reason, string message, WhisperRuntimeActivitySnapshot? activity = null) =>
+    private Task BlockAsync(string reason, string message, RuntimeActivitySnapshot? activity = null) =>
         Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.Blocked(reason, message, activity ?? _whisperRuntime.GetActivitySnapshot()));
 }

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Export;
 
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -691,17 +690,14 @@ public sealed class TrainingExportService : ITrainingExportService
         return path;
     }
 
-    private static async Task<FileDigest> ComputeDigestAsync(string path, CancellationToken cancellationToken)
+    private static async Task<FileSha256Digest> ComputeDigestAsync(string path, CancellationToken cancellationToken)
     {
         if (!File.Exists(path))
         {
             throw new TrainingExportRejectedException("The export finished without writing its output file.");
         }
 
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
-        return new FileDigest(Convert.ToHexStringLower(hash), stream.Length);
+        return await FileSha256.ComputeWithLengthAsync(path, cancellationToken);
     }
 
     private async Task AppendLogAsync(Guid runId, string step, IEnumerable<string> tail)
@@ -775,7 +771,4 @@ public sealed class TrainingExportService : ITrainingExportService
     // The outcome of planning an export: exactly one side is set — a plan the pipeline can run, or the refusal to
     // return to the caller. A refusal happens before any exclusivity is taken, so it has nothing to clean up.
     private sealed record PlanOrRefusal(ExportPlan? Value, TrainingExportStart? Refusal);
-
-    // A produced export file's content digest and size on disk.
-    private sealed record FileDigest(string Sha256, long SizeBytes);
 }

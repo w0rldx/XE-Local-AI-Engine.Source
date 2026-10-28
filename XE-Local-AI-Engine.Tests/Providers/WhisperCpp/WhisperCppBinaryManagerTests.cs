@@ -7,8 +7,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
-using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -211,12 +211,12 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_TombstonedManagedRecord_Throws_NeverFallsBackToPrebuilt()
     {
         using var cache = new TempCacheDir();
-        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Invalid,
+        var store = new StubInstalledRuntimeStore(new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Invalid,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             WhisperCppReleasePins.PinnedSourceCommitSha,
-            WhisperCppSourceSelection.Official,
-            WhisperCppSourceRevisionMode.EnginePinned,
+            ManagedSourceSelection.Official,
+            ManagedSourceRevisionMode.EnginePinned,
             SourceRequestedCommit: null,
             SourceBuildPath: null,
             ServerSha256: null,
@@ -244,12 +244,12 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_ManagedRecordForAnotherBackend_Throws_NeverServesContradictingBytes()
     {
         using var cache = new TempCacheDir();
-        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
+        var store = new StubInstalledRuntimeStore(new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             WhisperCppReleasePins.PinnedSourceCommitSha,
-            WhisperCppSourceSelection.Official,
-            WhisperCppSourceRevisionMode.EnginePinned,
+            ManagedSourceSelection.Official,
+            ManagedSourceRevisionMode.EnginePinned,
             SourceRequestedCommit: null,
             SourceBuildPath: Path.Combine(cache.Path, "managed", "bin"),
             ServerSha256: new string('a', 64),
@@ -276,17 +276,17 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_ManagedRecordWithAMissingBinary_IsTombstonedAndTheSignalCleared()
     {
         using var cache = new TempCacheDir();
-        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
+        var store = new StubInstalledRuntimeStore(new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             WhisperCppReleasePins.PinnedSourceCommitSha,
-            WhisperCppSourceSelection.Official,
-            WhisperCppSourceRevisionMode.EnginePinned,
+            ManagedSourceSelection.Official,
+            ManagedSourceRevisionMode.EnginePinned,
             SourceRequestedCommit: null,
             SourceBuildPath: Path.Combine(cache.Path, "managed", "bin"),
             ServerSha256: new string('a', 64),
             DateTimeOffset.UtcNow));
-        var signal = new WhisperManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<WhisperBackend>();
         signal.SetActive(WhisperBackend.Cuda);
 
         using var handler = new CountingHttpMessageHandler(static () =>
@@ -303,7 +303,7 @@ public sealed class WhisperCppBinaryManagerTests
 
         await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
 
-        AssertEx.Equal(WhisperInstalledRuntimeValidity.Invalid, AssertEx.NotNull(store.LastWritten).Validity,
+        AssertEx.Equal(ManagedRuntimeValidity.Invalid, AssertEx.NotNull(store.LastWritten).Validity,
             "A managed runtime whose binary cannot be validated must be tombstoned, not silently ignored.");
         AssertEx.Null(signal.ActiveBackend,
             "The in-memory signal must stop advertising a runtime the manager has just proven unusable.");
@@ -359,21 +359,21 @@ public sealed class WhisperCppBinaryManagerTests
         }
     }
 
-    private sealed class StubInstalledRuntimeStore : IWhisperInstalledRuntimeStore
+    private sealed class StubInstalledRuntimeStore : IManagedRuntimeStore<WhisperBackend>
     {
-        private WhisperInstalledRuntimeState? _state;
+        private ManagedRuntimeState<WhisperBackend>? _state;
 
-        public StubInstalledRuntimeStore(WhisperInstalledRuntimeState? state)
+        public StubInstalledRuntimeStore(ManagedRuntimeState<WhisperBackend>? state)
         {
             _state = state;
         }
 
-        public WhisperInstalledRuntimeState? LastWritten { get; private set; }
+        public ManagedRuntimeState<WhisperBackend>? LastWritten { get; private set; }
 
-        public Task<WhisperInstalledRuntimeState?> ReadAsync(CancellationToken ct) =>
+        public Task<ManagedRuntimeState<WhisperBackend>?> ReadAsync(CancellationToken ct) =>
             Task.FromResult(_state);
 
-        public Task WriteAsync(WhisperInstalledRuntimeState state, CancellationToken ct)
+        public Task WriteAsync(ManagedRuntimeState<WhisperBackend> state, CancellationToken ct)
         {
             LastWritten = state;
             _state = state;

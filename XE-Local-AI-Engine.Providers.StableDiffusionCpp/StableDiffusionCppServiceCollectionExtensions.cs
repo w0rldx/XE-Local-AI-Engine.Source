@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -41,8 +42,8 @@ public static class StableDiffusionCppServiceCollectionExtensions
         // Residency tick raised by the gate and the supervisor; the Client host replaces this no-op with its hub-backed publisher.
         services.TryAddSingleton<IRuntimeResidencyChangeNotifier, NullRuntimeResidencyChangeNotifier>();
         services.TryAddSingleton<IImageRuntimeActivityGate, ImageRuntimeActivityGate>();
-        services.TryAddSingleton<IStableDiffusionInstalledRuntimeStore, StableDiffusionInstalledRuntimeStore>();
-        services.TryAddSingleton<IStableDiffusionManagedSourceBuildSignal, StableDiffusionManagedSourceBuildSignal>();
+        services.TryAddSingleton<IManagedRuntimeStore<SdGpuBackend>, StableDiffusionInstalledRuntimeStore>();
+        services.TryAddSingleton<IManagedSourceBuildSignal<SdGpuBackend>, ManagedSourceBuildSignal<SdGpuBackend>>();
         services.TryAddSingleton<IStableDiffusionCppSourceBuildPrerequisiteProbe, StableDiffusionCppSourceBuildPrerequisiteProbe>();
         services.TryAddSingleton<IStableDiffusionCppSourceBuildEventPublisher, NullStableDiffusionCppSourceBuildEventPublisher>();
 
@@ -61,7 +62,7 @@ public static class StableDiffusionCppServiceCollectionExtensions
                 sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
                 sp.GetRequiredService<IVulkanDeviceProbe>(),
                 sp.GetRequiredService<ICudaDeviceProbe>(),
-                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>(),
+                sp.GetRequiredService<IManagedSourceBuildSignal<SdGpuBackend>>(),
                 sp.GetService<ILogger<SdGpuBackendSelector>>()));
 
         services.TryAddSingleton<IStableDiffusionBinaryManager>(static sp =>
@@ -69,8 +70,8 @@ public static class StableDiffusionCppServiceCollectionExtensions
                 cacheRoot: null,
                 activeTag: null,
                 sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<IStableDiffusionInstalledRuntimeStore>(),
-                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>(),
+                sp.GetRequiredService<IManagedRuntimeStore<SdGpuBackend>>(),
+                sp.GetRequiredService<IManagedSourceBuildSignal<SdGpuBackend>>(),
                 sp.GetService<ILogger<StableDiffusionCppBinaryManager>>()));
 
         services.TryAddSingleton<IStableDiffusionCppSourceBuildService, StableDiffusionCppSourceBuildService>();

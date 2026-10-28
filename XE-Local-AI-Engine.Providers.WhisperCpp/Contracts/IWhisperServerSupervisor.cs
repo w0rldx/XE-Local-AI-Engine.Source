@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>Lifecycle state of the resident <c>whisper-server</c> daemon.</summary>
 public enum WhisperRuntimeState
 {
@@ -31,7 +33,7 @@ public sealed class WhisperServerEvictResult
 {
     public required bool Evicted { get; init; }
 
-    public required WhisperRuntimeActivitySnapshot Activity { get; init; }
+    public required RuntimeActivitySnapshot Activity { get; init; }
 }
 
 /// <summary>A sanitized snapshot of the runtime for the operator UI. Carries no path, URL, or port.</summary>
@@ -94,7 +96,7 @@ public interface IWhisperServerSupervisor
     ///     no longer serves <paramref name="modelId" /> at <paramref name="generation" />, or is latched for eviction
     ///     or for a model switch.
     /// </summary>
-    IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation);
+    IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation);
 
     /// <summary>
     ///     Reports a transport failure against the daemon at <paramref name="generation" />. If it exited, logs it once, tears it

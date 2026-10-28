@@ -1,23 +1,12 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-public enum StableDiffusionCppSourceSelection
-{
-    Official = 0,
-    Custom = 1
-}
-
-public enum StableDiffusionCppSourceRevisionMode
-{
-    EnginePinned = 0,
-    DefaultBranch = 1,
-    ExplicitCommit = 2
-}
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed record StableDiffusionCppSourceBuildRequest
 {
     public required SdGpuBackend Backend { get; init; }
 
-    public required StableDiffusionCppSourceSelection Source { get; init; }
+    public required ManagedSourceSelection Source { get; init; }
 
     public string? Repository { get; init; }
 
@@ -30,11 +19,11 @@ public sealed record StableDiffusionCppSourceBuildDescriptor
 {
     public required SdGpuBackend Backend { get; init; }
 
-    public required StableDiffusionCppSourceSelection Source { get; init; }
+    public required ManagedSourceSelection Source { get; init; }
 
     public required string Repository { get; init; }
 
-    public required StableDiffusionCppSourceRevisionMode RevisionMode { get; init; }
+    public required ManagedSourceRevisionMode RevisionMode { get; init; }
 
     public required string? RequestedCommit { get; init; }
 
@@ -102,14 +91,14 @@ public sealed class StableDiffusionCppSourceBuildStartResult
 
     public StableDiffusionCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
 
-    public ImageRuntimeActivitySnapshot? Activity { get; init; }
+    public RuntimeActivitySnapshot? Activity { get; init; }
 }
 
 public sealed class StableDiffusionCppSourceBuildRemoveResult
 {
     public required StableDiffusionCppSourceBuildRemoveOutcome Outcome { get; init; }
 
-    public ImageRuntimeActivitySnapshot? Activity { get; init; }
+    public RuntimeActivitySnapshot? Activity { get; init; }
 }
 
 public sealed class StableDiffusionCppSourceBuildStatus

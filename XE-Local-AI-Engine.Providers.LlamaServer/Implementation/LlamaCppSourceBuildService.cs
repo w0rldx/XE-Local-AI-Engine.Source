@@ -801,7 +801,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 return SourceBuildPolicy.DefaultCudaArchitectures;
             }
 
-            return ParseCudaArchitectures(output);
+            return SourceBuildPolicy.ParseCudaArchitectures(output);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -812,43 +812,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _logger.LogDebug(exception, "nvidia-smi compute-capability query failed; building for the default CUDA architectures.");
             return SourceBuildPolicy.DefaultCudaArchitectures;
         }
-    }
-
-    internal static string ParseCudaArchitectures(string output)
-    {
-        var values = new SortedSet<int>();
-        foreach (var line in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var match = ComputeCapabilityRegex().Match(line);
-            if (!match.Success
-                || !int.TryParse(match.Groups["major"].Value, out var major)
-                || !int.TryParse(match.Groups["minor"].Value, out var minor))
-            {
-                return SourceBuildPolicy.DefaultCudaArchitectures;
-            }
-
-            var architecture = major * 10 + minor;
-            if (!IsSupportedCudaArchitecture(architecture))
-            {
-                return SourceBuildPolicy.DefaultCudaArchitectures;
-            }
-
-            values.Add(architecture);
-        }
-
-        return values.Count == 0 ? SourceBuildPolicy.DefaultCudaArchitectures : string.Join(';', values);
-    }
-
-    private static bool IsSupportedCudaArchitecture(int architecture)
-    {
-        return architecture is 50 or 52 or 53
-            or 60 or 61 or 62
-            or 70 or 72 or 75
-            or 80 or 86 or 87 or 89
-            or 90
-            or 100 or 101 or 103
-            or 110
-            or 120 or 121;
     }
 
     [SupportedOSPlatform("linux")]
@@ -1123,9 +1086,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     {
         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
-
-    [GeneratedRegex(@"^(?<major>[0-9]{1,2})\.(?<minor>[0-9])$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex ComputeCapabilityRegex();
 
     [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex FullCommitRegex();

@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -41,14 +43,14 @@ public sealed class WhisperCppSourceBuildServiceTests
         // This is the 409 the operator sees, and the snapshot is what lets the UI say WHAT to wait for.
         using var cache = new TempDirectory();
         using var harness = new Harness(cache.Path);
-        using var transcription = harness.ActivityGate.TryAcquireTranscriptionLease();
+        using var transcription = harness.ActivityGate.TryAcquireJobLease();
         AssertEx.NotNull(transcription);
 
         var result = await harness.Service.StartAsync(OfficialCudaRequest, CancellationToken.None);
 
         AssertEx.Equal(WhisperCppSourceBuildStartOutcome.RuntimeBusy, result.Outcome);
         var activity = AssertEx.NotNull(result.Activity);
-        AssertEx.Equal(expected: 1, activity.ActiveTranscriptionCount);
+        AssertEx.Equal(expected: 1, activity.ActiveJobCount);
         AssertEx.True(activity.IsBusy);
         AssertEx.Equal(expected: 0, harness.Runner.Invocations.Count, "A refused start must not run a single command.");
     }
@@ -243,24 +245,10 @@ public sealed class WhisperCppSourceBuildServiceTests
         AssertEx.Equal(WhisperCppSourceBuildPhase.Completed, status.Phase, status.SanitizedError ?? "The build must complete.");
         var installed = AssertEx.NotNull(await harness.Store.ReadAsync(CancellationToken.None),
             "An adopted build writes the installed-runtime record.");
-        AssertEx.Equal(WhisperInstalledRuntimeValidity.Active, installed.Validity);
+        AssertEx.Equal(ManagedRuntimeValidity.Active, installed.Validity);
         AssertEx.Equal(WhisperBackend.Cuda, installed.DesiredBackend);
         AssertEx.True(Directory.Exists(Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", WhisperCppReleasePins.PinnedSourceCommitSha)),
             "The adopted tree must land under the managed install root, keyed by the resolved commit.");
-    }
-
-    [Test]
-    [Arguments("12.0", "120")]
-    [Arguments("8.9", "89")]
-    [Arguments("8.6\n8.9", "86;89")]
-    [Arguments("", "75;86;89;120")]
-    [Arguments("not a capability", "75;86;89;120")]
-    [Arguments("99.9", "75;86;89;120")]
-    public void ParseCudaArchitectures_MapsComputeCapabilitiesAndFallsBackConservatively(string output, string expected)
-    {
-        // An unrecognised or unsupported capability falls back to the conservative set rather than failing the build:
-        // a driver probe that cannot answer is not a reason to refuse to compile.
-        AssertEx.Equal(expected, WhisperCppSourceBuildService.ParseCudaArchitectures(output));
     }
 
     [Test]
@@ -324,7 +312,7 @@ public sealed class WhisperCppSourceBuildServiceTests
         new()
         {
             Backend = WhisperBackend.Cuda,
-            Source = WhisperCppSourceSelection.Official
+            Source = ManagedSourceSelection.Official
         };
 
     private static string Readelf(string entry) =>
@@ -364,7 +352,7 @@ public sealed class WhisperCppSourceBuildServiceTests
             Runner = new ScriptedSourceCommandRunner();
             Service = new WhisperCppSourceBuildService(new AlwaysSatisfiedProbe(),
                 Store,
-                new WhisperManagedSourceBuildSignal(),
+                new ManagedSourceBuildSignal<WhisperBackend>(),
                 ActivityGate,
                 new NullWhisperCppSourceBuildEventPublisher(),
                 NullLogger<WhisperCppSourceBuildService>.Instance,
@@ -395,7 +383,7 @@ public sealed class WhisperCppSourceBuildServiceTests
     ///     Succeeds every command, optionally blocking on one of them and optionally flooding the log, so the service's
     ///     own decisions are what the tests observe.
     /// </summary>
-    private sealed class ScriptedSourceCommandRunner : IWhisperSourceCommandRunner, IDisposable
+    private sealed class ScriptedSourceCommandRunner : ISourceCommandRunner, IDisposable
     {
         private readonly List<string> _invocations = [];
         private readonly Lock _gate = new();
@@ -440,7 +428,7 @@ public sealed class WhisperCppSourceBuildServiceTests
         public void Dispose() =>
             _block.Dispose();
 
-        public async Task<WhisperSourceCommandResult> RunAsync(string fileName,
+        public async Task<SourceCommandResult> RunAsync(string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
             Action<string> onOutput,
@@ -487,7 +475,7 @@ public sealed class WhisperCppSourceBuildServiceTests
                 stdout = string.Empty;
             }
 
-            return new WhisperSourceCommandResult
+            return new SourceCommandResult
             {
                 ExitCode = 0,
                 StandardOutput = stdout,

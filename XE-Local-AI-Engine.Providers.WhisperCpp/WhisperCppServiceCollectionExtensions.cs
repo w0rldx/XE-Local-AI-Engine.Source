@@ -45,8 +45,8 @@ public static class WhisperCppServiceCollectionExtensions
         // Residency tick raised by the gate and the supervisor; the Client host replaces this no-op with its hub-backed publisher.
         services.TryAddSingleton<IRuntimeResidencyChangeNotifier, NullRuntimeResidencyChangeNotifier>();
         services.TryAddSingleton<IWhisperRuntimeActivityGate, WhisperRuntimeActivityGate>();
-        services.TryAddSingleton<IWhisperInstalledRuntimeStore, WhisperInstalledRuntimeStore>();
-        services.TryAddSingleton<IWhisperManagedSourceBuildSignal, WhisperManagedSourceBuildSignal>();
+        services.TryAddSingleton<IManagedRuntimeStore<WhisperBackend>, WhisperInstalledRuntimeStore>();
+        services.TryAddSingleton<IManagedSourceBuildSignal<WhisperBackend>, ManagedSourceBuildSignal<WhisperBackend>>();
 
         services.AddHttpClient(BinaryHttpClientName);
 
@@ -64,7 +64,7 @@ public static class WhisperCppServiceCollectionExtensions
         services.TryAddSingleton<IWhisperBackendSelector>(static sp =>
             new WhisperBackendSelector(sp.GetRequiredService<IHardwareProfiler>(),
                 sp.GetRequiredService<WhisperServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<IWhisperManagedSourceBuildSignal>(),
+                sp.GetRequiredService<IManagedSourceBuildSignal<WhisperBackend>>(),
                 sp.GetRequiredService<ICudaDeviceProbe>(),
                 sp.GetRequiredService<WhisperCudaFailureSignal>(),
                 sp.GetService<ILogger<WhisperBackendSelector>>()));
@@ -74,8 +74,8 @@ public static class WhisperCppServiceCollectionExtensions
                 cacheRoot: null,
                 activeTag: null,
                 sp.GetRequiredService<WhisperServerRuntimeOverrideOptions>(),
-                sp.GetRequiredService<IWhisperInstalledRuntimeStore>(),
-                sp.GetRequiredService<IWhisperManagedSourceBuildSignal>(),
+                sp.GetRequiredService<IManagedRuntimeStore<WhisperBackend>>(),
+                sp.GetRequiredService<IManagedSourceBuildSignal<WhisperBackend>>(),
                 sp.GetService<ILogger<WhisperCppBinaryManager>>()));
 
         services.AddChildProcessOutputTails();

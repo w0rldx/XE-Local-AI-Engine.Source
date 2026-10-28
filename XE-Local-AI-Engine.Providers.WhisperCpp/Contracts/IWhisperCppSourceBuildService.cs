@@ -1,26 +1,21 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>One managed source build, as it was resolved from the operator's request.</summary>
-/// <remarks>
-///     <see cref="WhisperCppSourceSelection" />, <see cref="WhisperCppSourceRevisionMode" /> and
-///     <c>WhisperCppSourceBuildRequest</c> deliberately live in <c>Contracts/WhisperCppSourceSelection.cs</c> instead
-///     of here: <c>WhisperInstalledRuntimeState</c> and its store's validation reference them, and both exist before
-///     this lane does. That is the one place the whisper layout departs from the image-runtime precedent, which keeps
-///     its enums inside the service interface file.
-/// </remarks>
 public sealed record WhisperCppSourceBuildDescriptor
 {
     /// <summary>The acceleration backend being compiled for.</summary>
     public required WhisperBackend Backend { get; init; }
 
     /// <summary>Official or operator-supplied repository.</summary>
-    public required WhisperCppSourceSelection Source { get; init; }
+    public required ManagedSourceSelection Source { get; init; }
 
     /// <summary>The canonical repository URL the build fetches from.</summary>
     public required string Repository { get; init; }
 
     /// <summary>How the revision was chosen.</summary>
-    public required WhisperCppSourceRevisionMode RevisionMode { get; init; }
+    public required ManagedSourceRevisionMode RevisionMode { get; init; }
 
     /// <summary>The commit the operator asked for, when they asked for one.</summary>
     public required string? RequestedCommit { get; init; }
@@ -99,7 +94,7 @@ public sealed class WhisperCppSourceBuildStartResult
 
     public WhisperCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
 
-    public WhisperRuntimeActivitySnapshot? Activity { get; init; }
+    public RuntimeActivitySnapshot? Activity { get; init; }
 }
 
 /// <summary>The answer to a remove request.</summary>
@@ -107,7 +102,7 @@ public sealed class WhisperCppSourceBuildRemoveResult
 {
     public required WhisperCppSourceBuildRemoveOutcome Outcome { get; init; }
 
-    public WhisperRuntimeActivitySnapshot? Activity { get; init; }
+    public RuntimeActivitySnapshot? Activity { get; init; }
 }
 
 /// <summary>

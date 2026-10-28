@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Images.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -665,9 +666,9 @@ public sealed class ImageJobCoordinatorTests
 
         public int ActiveLeaseCount => Volatile.Read(ref _activeLeaseCount);
 
-        public ImageRuntimeActivitySnapshot GetSnapshot()
+        public RuntimeActivitySnapshot GetSnapshot()
         {
-            return new ImageRuntimeActivitySnapshot
+            return new RuntimeActivitySnapshot
             {
                 ActiveJobCount = ActiveLeaseCount,
                 SpawnReadinessCount = 0,
@@ -677,7 +678,7 @@ public sealed class ImageJobCoordinatorTests
             };
         }
 
-        public IImageRuntimeActivityLease? TryAcquireJobLease()
+        public IRuntimeActivityLease? TryAcquireJobLease()
         {
             if (!_admitJobs)
             {
@@ -688,27 +689,27 @@ public sealed class ImageJobCoordinatorTests
             return new Lease(this);
         }
 
-        public IImageRuntimeActivityLease? TryAcquireSpawnReadinessLease()
+        public IRuntimeActivityLease? TryAcquireSpawnReadinessLease()
         {
             throw new NotSupportedException();
         }
 
-        public IImageRuntimeActivityLease? TryAcquireResidentProcessLease()
+        public IRuntimeActivityLease? TryAcquireResidentProcessLease()
         {
             throw new NotSupportedException();
         }
 
-        public IImageRuntimeActivityLease? TryAcquireEvictionReservation()
+        public IRuntimeActivityLease? TryAcquireEvictionReservation()
         {
             throw new NotSupportedException();
         }
 
-        public IImageRuntimeActivityLease? TryAcquireMutationReservation()
+        public IRuntimeActivityLease? TryAcquireMutationReservation()
         {
             throw new NotSupportedException();
         }
 
-        private sealed class Lease : IImageRuntimeActivityLease
+        private sealed class Lease : IRuntimeActivityLease
         {
             private readonly FakeImageRuntimeActivityGate _owner;
             private int _disposed;

@@ -1,8 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Net;
-using System.Net.Sockets;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     The set of localhost ports reserved for <c>llama-server</c> children, allocated from the configured range with a
@@ -40,7 +39,7 @@ internal sealed class LlamaServerPortAllocator
     {
         for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
         {
-            if (_allocatedPorts.Contains(port) || !IsPortFree(port))
+            if (_allocatedPorts.Contains(port) || !LoopbackPort.IsFree(port))
             {
                 continue;
             }
@@ -62,20 +61,5 @@ internal sealed class LlamaServerPortAllocator
     {
         _allocatedPorts.Remove(port);
         _companionPorts.Remove(port);
-    }
-
-    private static bool IsPortFree(int port)
-    {
-        // Probe by binding loopback; collision (another process owns it) means skip-and-retry.
-        try
-        {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
     }
 }

@@ -10,12 +10,13 @@ using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
-using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 
 /// <summary>Builds the <see cref="NodeInfo" /> report shown in the Diagnostics panel and written into the support bundle.</summary>
 public interface INodeInfoService
@@ -204,18 +205,18 @@ public sealed class NodeInfoService : INodeInfoService
     private readonly ILogger<NodeInfoService> _logger;
     private readonly RuntimeResidentsService _residents;
     private readonly INodeSettingsAdministrationService _settings;
-    private readonly IStableDiffusionInstalledRuntimeStore _stableDiffusionRuntimeStore;
+    private readonly IManagedRuntimeStore<SdGpuBackend> _stableDiffusionRuntimeStore;
     private readonly TimeProvider _timeProvider;
     private readonly IOptions<AppUpdateChannelOptions> _updateOptions;
-    private readonly IWhisperInstalledRuntimeStore _whisperRuntimeStore;
+    private readonly IManagedRuntimeStore<WhisperBackend> _whisperRuntimeStore;
 
     public NodeInfoService(IHardwareProfiler hardwareProfiler,
         IRuntimeDeviceAudit deviceAudit,
         ILiveMemorySampler liveMemorySampler,
         IInstalledRuntimeStore llamaRuntimeStore,
         ILlamaServerProcessSupervisor llamaSupervisor,
-        IStableDiffusionInstalledRuntimeStore stableDiffusionRuntimeStore,
-        IWhisperInstalledRuntimeStore whisperRuntimeStore,
+        IManagedRuntimeStore<SdGpuBackend> stableDiffusionRuntimeStore,
+        IManagedRuntimeStore<WhisperBackend> whisperRuntimeStore,
         RuntimeResidentsService residents,
         IGgufModelStore ggufModelStore,
         INodeSettingsAdministrationService settings,
@@ -413,7 +414,7 @@ public sealed class NodeInfoService : INodeInfoService
                 Backend = stableDiffusion.DesiredBackend.ToString(),
                 InstalledAtUtc = stableDiffusion.InstalledAtUtc,
                 SourceCommit = stableDiffusion.SourceCommit,
-                IsValid = stableDiffusion.Validity == StableDiffusionInstalledRuntimeValidity.Active
+                IsValid = stableDiffusion.Validity == ManagedRuntimeValidity.Active
             });
         }
 
@@ -426,7 +427,7 @@ public sealed class NodeInfoService : INodeInfoService
                 Backend = whisper.DesiredBackend.ToString(),
                 InstalledAtUtc = whisper.InstalledAtUtc,
                 SourceCommit = whisper.SourceCommit,
-                IsValid = whisper.Validity == WhisperInstalledRuntimeValidity.Active
+                IsValid = whisper.Validity == ManagedRuntimeValidity.Active
             });
         }
 

@@ -191,13 +191,13 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
                 process.StartInfo.ArgumentList.Add(argument);
             }
 
-            WhisperSourceProcessHardening.Configure(process.StartInfo, isolationRoot);
+            SourceProcessHardening.Configure(process.StartInfo, isolationRoot);
             if (!process.Start())
             {
                 return Missing(fileName, displayName);
             }
 
-            WhisperSourceProcessHardening.CloseStandardInput(process);
+            SourceProcessHardening.CloseStandardInput(process);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(ProbeTimeout);
             var outputTask = ReadBoundedAsync(process.StandardOutput, timeout.Token);

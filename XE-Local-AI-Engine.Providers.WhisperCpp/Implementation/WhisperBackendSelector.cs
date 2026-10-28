@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
@@ -24,13 +25,13 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly bool _isWindows;
     private readonly ILogger<WhisperBackendSelector> _logger;
-    private readonly IWhisperManagedSourceBuildSignal _managedSourceSignal;
+    private readonly IManagedSourceBuildSignal<WhisperBackend> _managedSourceSignal;
     private readonly WhisperServerRuntimeOverrideOptions _overrideOptions;
 
     /// <summary>Creates a selector over the shared hardware profiler, defaulting OS detection to the live host.</summary>
     public WhisperBackendSelector(IHardwareProfiler hardwareProfiler,
         WhisperServerRuntimeOverrideOptions overrideOptions,
-        IWhisperManagedSourceBuildSignal managedSourceSignal,
+        IManagedSourceBuildSignal<WhisperBackend> managedSourceSignal,
         ICudaDeviceProbe cudaDeviceProbe,
         WhisperCudaFailureSignal cudaFailureSignal,
         ILogger<WhisperBackendSelector>? logger = null)
@@ -45,7 +46,7 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
     internal WhisperBackendSelector(IHardwareProfiler hardwareProfiler,
         bool isWindows,
         WhisperServerRuntimeOverrideOptions? overrideOptions = null,
-        IWhisperManagedSourceBuildSignal? managedSourceSignal = null,
+        IManagedSourceBuildSignal<WhisperBackend>? managedSourceSignal = null,
         ICudaDeviceProbe? cudaDeviceProbe = null,
         ILogger<WhisperBackendSelector>? logger = null,
         WhisperCudaFailureSignal? cudaFailureSignal = null)
@@ -53,7 +54,7 @@ public sealed class WhisperBackendSelector : IWhisperBackendSelector
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
         _isWindows = isWindows;
         _overrideOptions = overrideOptions ?? new WhisperServerRuntimeOverrideOptions();
-        _managedSourceSignal = managedSourceSignal ?? new WhisperManagedSourceBuildSignal();
+        _managedSourceSignal = managedSourceSignal ?? new ManagedSourceBuildSignal<WhisperBackend>();
         _cudaDeviceProbe = cudaDeviceProbe ?? new DefaultCudaDeviceProbe(isWindows: false, static () => true);
         _logger = logger ?? NullLogger<WhisperBackendSelector>.Instance;
         _cudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();

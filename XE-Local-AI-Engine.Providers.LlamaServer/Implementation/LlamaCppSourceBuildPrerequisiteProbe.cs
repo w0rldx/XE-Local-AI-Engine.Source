@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Default <see cref="ILlamaCppSourceBuildPrerequisiteProbe" />: reports — never installs — the toolchain an in-app
@@ -244,7 +245,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         }
         finally
         {
-            ProcessCaptureRunner.TryKill(process);
+            ProcessTreeKill.TryKill(process);
         }
     }
 

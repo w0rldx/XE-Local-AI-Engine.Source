@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
@@ -11,7 +12,7 @@ internal static class ImageRuntimeSourceBuildMapper
         return new StableDiffusionCppSourceBuildRequest
         {
             Backend = request.Backend.ToContract(),
-            Source = (StableDiffusionCppSourceSelection)(int)request.Source,
+            Source = (ManagedSourceSelection)(int)request.Source,
             Repository = request.Repository,
             Commit = request.Commit,
             AcknowledgeCustomSourceRisk = request.AcknowledgeCustomSourceRisk
@@ -66,7 +67,7 @@ internal static class ImageRuntimeSourceBuildMapper
         };
     }
 
-    public static ImageRuntimeActivityResponse ToResponse(this ImageRuntimeActivitySnapshot activity)
+    public static ImageRuntimeActivityResponse ToResponse(this RuntimeActivitySnapshot activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
         return new ImageRuntimeActivityResponse
@@ -80,7 +81,7 @@ internal static class ImageRuntimeSourceBuildMapper
         };
     }
 
-    public static StableDiffusionInstalledRuntimeResponse ToResponse(this StableDiffusionInstalledRuntimeState state)
+    public static StableDiffusionInstalledRuntimeResponse ToResponse(this ManagedRuntimeState<SdGpuBackend> state)
     {
         ArgumentNullException.ThrowIfNull(state);
         return new StableDiffusionInstalledRuntimeResponse

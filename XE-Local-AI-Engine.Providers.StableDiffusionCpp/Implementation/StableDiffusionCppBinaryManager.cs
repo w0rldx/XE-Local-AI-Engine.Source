@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
@@ -33,9 +34,9 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     private readonly Architecture _arch;
     private readonly string _cacheRoot;
     private readonly HttpClient _httpClient;
-    private readonly IStableDiffusionInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly IManagedRuntimeStore<SdGpuBackend>? _installedRuntimeStore;
     private readonly ILogger _logger;
-    private readonly IStableDiffusionManagedSourceBuildSignal? _managedSourceSignal;
+    private readonly IManagedSourceBuildSignal<SdGpuBackend>? _managedSourceSignal;
     private readonly OSPlatform _os;
     private readonly StableDiffusionServerRuntimeOverrideOptions? _overrideOptions;
 
@@ -49,8 +50,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         string? cacheRoot = null,
         string? activeTag = null,
         StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
-        IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
-        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null,
+        IManagedRuntimeStore<SdGpuBackend>? installedRuntimeStore = null,
+        IManagedSourceBuildSignal<SdGpuBackend>? managedSourceSignal = null,
         ILogger<StableDiffusionCppBinaryManager>? logger = null)
         : this(httpClient,
             cacheRoot ?? RuntimeCacheDirectory.Resolve(),
@@ -71,8 +72,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         OSPlatform os,
         Architecture arch,
         StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
-        IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
-        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null,
+        IManagedRuntimeStore<SdGpuBackend>? installedRuntimeStore = null,
+        IManagedSourceBuildSignal<SdGpuBackend>? managedSourceSignal = null,
         ILogger? logger = null)
     {
         _logger = logger ?? NullLogger.Instance;
@@ -108,7 +109,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
                 throw new StableDiffusionRuntimeException("The selected managed stable-diffusion.cpp runtime backend is unavailable.");
             }
 
-            if (installed.Validity != StableDiffusionInstalledRuntimeValidity.Active)
+            if (installed.Validity != ManagedRuntimeValidity.Active)
             {
                 throw new StableDiffusionRuntimeException("The recorded managed stable-diffusion.cpp runtime is invalid and must be rebuilt or removed.");
             }
@@ -169,7 +170,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         };
     }
 
-    private async Task<SdBinary?> TryResolveManagedRuntimeAsync(StableDiffusionInstalledRuntimeState state, CancellationToken ct)
+    private async Task<SdBinary?> TryResolveManagedRuntimeAsync(ManagedRuntimeState<SdGpuBackend> state, CancellationToken ct)
     {
         if (state.SourceBuildPath is not { Length: > 0 } buildPath
             || state.ServerSha256 is not { Length: 64 } expectedSha
@@ -213,13 +214,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         }
     }
 
-    private async Task TombstoneAsync(StableDiffusionInstalledRuntimeState state, string reason, CancellationToken ct)
+    private async Task TombstoneAsync(ManagedRuntimeState<SdGpuBackend> state, string reason, CancellationToken ct)
     {
         if (_installedRuntimeStore is not null)
         {
             await _installedRuntimeStore.WriteAsync(state with
             {
-                Validity = StableDiffusionInstalledRuntimeValidity.Invalid,
+                Validity = ManagedRuntimeValidity.Invalid,
                 InvalidReason = reason,
                 SourceBuildPath = null,
                 ServerSha256 = null
@@ -532,21 +533,15 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
 
     private static async Task ExtractArchiveAsync(string archivePath, string backendDir, CancellationToken ct)
     {
-        // Every stable-diffusion.cpp asset is a .zip (unlike llama.cpp's tar.gz on Linux). Extract into a temp sibling
-        // then atomically move into place so a partial extract can't masquerade as a cached install.
+        // Every stable-diffusion.cpp asset is a .zip (unlike llama.cpp's tar.gz on Linux). Extract into a temp sibling, then
+        // publish it swap-aside so neither a partial extract nor a failed publish replaces a cached install.
         var stagingDir = $"{backendDir}.{Guid.NewGuid():N}.tmp";
         Directory.CreateDirectory(stagingDir);
         try
         {
             await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(backendDir.TrimEnd(Path.DirectorySeparatorChar))!);
-            if (Directory.Exists(backendDir))
-            {
-                Directory.Delete(backendDir, recursive: true);
-            }
-
-            Directory.Move(stagingDir, backendDir);
+            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, ct).ConfigureAwait(false);
         }
         finally
         {

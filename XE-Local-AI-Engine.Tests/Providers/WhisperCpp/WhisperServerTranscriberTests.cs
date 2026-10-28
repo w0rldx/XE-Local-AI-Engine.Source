@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -526,9 +527,9 @@ public sealed class WhisperServerTranscriberTests
             Task.FromResult(new WhisperServerEvictResult
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 0,
                     MutationReserved = false,
@@ -536,7 +537,7 @@ public sealed class WhisperServerTranscriberTests
                 }
             });
 
-        public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation)
+        public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation)
         {
             LeaseAttemptCount++;
             if (LeaseAttemptCount <= LeaseRefusals)

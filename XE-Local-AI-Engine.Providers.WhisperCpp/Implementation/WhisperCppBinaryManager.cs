@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 
@@ -37,9 +38,9 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     private readonly WhisperAssetPin? _assetPinOverride;
     private readonly string _cacheRoot;
     private readonly HttpClient _httpClient;
-    private readonly IWhisperInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly IManagedRuntimeStore<WhisperBackend>? _installedRuntimeStore;
     private readonly ILogger _logger;
-    private readonly IWhisperManagedSourceBuildSignal? _managedSourceSignal;
+    private readonly IManagedSourceBuildSignal<WhisperBackend>? _managedSourceSignal;
     private readonly OSPlatform _os;
     private readonly WhisperServerRuntimeOverrideOptions? _overrideOptions;
 
@@ -52,8 +53,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         string? cacheRoot = null,
         string? activeTag = null,
         WhisperServerRuntimeOverrideOptions? overrideOptions = null,
-        IWhisperInstalledRuntimeStore? installedRuntimeStore = null,
-        IWhisperManagedSourceBuildSignal? managedSourceSignal = null,
+        IManagedRuntimeStore<WhisperBackend>? installedRuntimeStore = null,
+        IManagedSourceBuildSignal<WhisperBackend>? managedSourceSignal = null,
         ILogger<WhisperCppBinaryManager>? logger = null)
         : this(httpClient,
             cacheRoot ?? RuntimeCacheDirectory.Resolve(),
@@ -84,8 +85,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         OSPlatform os,
         Architecture arch,
         WhisperServerRuntimeOverrideOptions? overrideOptions = null,
-        IWhisperInstalledRuntimeStore? installedRuntimeStore = null,
-        IWhisperManagedSourceBuildSignal? managedSourceSignal = null,
+        IManagedRuntimeStore<WhisperBackend>? installedRuntimeStore = null,
+        IManagedSourceBuildSignal<WhisperBackend>? managedSourceSignal = null,
         WhisperAssetPin? assetPinOverride = null,
         ILogger? logger = null)
     {
@@ -125,7 +126,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
                 throw new WhisperRuntimeException("The selected managed whisper.cpp runtime backend is unavailable.");
             }
 
-            if (installed.Validity != WhisperInstalledRuntimeValidity.Active)
+            if (installed.Validity != ManagedRuntimeValidity.Active)
             {
                 throw new WhisperRuntimeException("The recorded managed whisper.cpp runtime is invalid and must be rebuilt or removed.");
             }
@@ -199,7 +200,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         return Path.Combine(RuntimeCacheDirectory.Resolve(), "whisper.cpp");
     }
 
-    private async Task<WhisperBinary?> TryResolveManagedRuntimeAsync(WhisperInstalledRuntimeState state, CancellationToken ct)
+    private async Task<WhisperBinary?> TryResolveManagedRuntimeAsync(ManagedRuntimeState<WhisperBackend> state, CancellationToken ct)
     {
         if (state.SourceBuildPath is not { Length: > 0 } buildPath
             || state.ServerSha256 is not { Length: 64 } expectedSha
@@ -243,13 +244,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         }
     }
 
-    private async Task TombstoneAsync(WhisperInstalledRuntimeState state, string reason, CancellationToken ct)
+    private async Task TombstoneAsync(ManagedRuntimeState<WhisperBackend> state, string reason, CancellationToken ct)
     {
         if (_installedRuntimeStore is not null)
         {
             await _installedRuntimeStore.WriteAsync(state with
             {
-                Validity = WhisperInstalledRuntimeValidity.Invalid,
+                Validity = ManagedRuntimeValidity.Invalid,
                 InvalidReason = reason,
                 SourceBuildPath = null,
                 ServerSha256 = null
@@ -456,8 +457,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     }
 
     /// <summary>
-    ///     Extracts into a temp sibling then atomically moves it into place, so a partial extract can never masquerade
-    ///     as a cached install.
+    ///     Extracts into a temp sibling then publishes it through <see cref="StagedDirectoryPublish" />, so a partial extract
+    ///     can never masquerade as a cached install and a failed publish keeps the previous runtime.
     /// </summary>
     /// <remarks>
     ///     Dispatches on the archive kind because whisper.cpp ships zip on Windows and tar.gz on Linux — unlike
@@ -486,13 +487,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
                     throw new WhisperRuntimeException("The pinned whisper.cpp asset declares an unknown archive format.");
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(backendDir.TrimEnd(Path.DirectorySeparatorChar))!);
-            if (Directory.Exists(backendDir))
-            {
-                Directory.Delete(backendDir, recursive: true);
-            }
-
-            Directory.Move(stagingDir, backendDir);
+            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, ct).ConfigureAwait(false);
         }
         finally
         {

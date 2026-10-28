@@ -813,8 +813,9 @@ public sealed class LayerDependencyTests
     [Test]
     public void StableDiffusionCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        // 90, down from 100: its process handles, scanner, reaper and stderr tail moved to Providers.ProcessSupervision.
-        AssertTypesScanned(StableDiffusionCppAssembly, StableDiffusionCppNamespace, 90);
+        // 75: the process handles, scanner, reaper, stderr tail and source-command runner live in Providers.ProcessSupervision,
+        // and the activity gate, runtime store and source-build signal in Providers.Abstractions.
+        AssertTypesScanned(StableDiffusionCppAssembly, StableDiffusionCppNamespace, 75);
 
         AssertNoDependency(StableDiffusionCppAssembly,
             StableDiffusionCppNamespace,
@@ -831,7 +832,9 @@ public sealed class LayerDependencyTests
     [Test]
     public void WhisperCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertTypesScanned(WhisperCppAssembly, WhisperCppNamespace, 90);
+        // 70: the source-command runner lives in Providers.ProcessSupervision, and the activity gate, runtime store and
+        // source-build signal in Providers.Abstractions.
+        AssertTypesScanned(WhisperCppAssembly, WhisperCppNamespace, 70);
 
         AssertNoDependency(WhisperCppAssembly,
             WhisperCppNamespace,

@@ -10,13 +10,16 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -227,10 +230,10 @@ public sealed class NodeInfoServiceTests
 
     private NodeInfoService CreateService()
     {
-        var sdStore = Substitute.For<IStableDiffusionInstalledRuntimeStore>();
-        sdStore.ReadAsync(Arg.Any<CancellationToken>()).Returns((StableDiffusionInstalledRuntimeState?)null);
-        var whisperStore = Substitute.For<IWhisperInstalledRuntimeStore>();
-        whisperStore.ReadAsync(Arg.Any<CancellationToken>()).Returns((WhisperInstalledRuntimeState?)null);
+        var sdStore = Substitute.For<IManagedRuntimeStore<SdGpuBackend>>();
+        sdStore.ReadAsync(Arg.Any<CancellationToken>()).Returns((ManagedRuntimeState<SdGpuBackend>?)null);
+        var whisperStore = Substitute.For<IManagedRuntimeStore<WhisperBackend>>();
+        whisperStore.ReadAsync(Arg.Any<CancellationToken>()).Returns((ManagedRuntimeState<WhisperBackend>?)null);
         var residents = new RuntimeResidentsService(Substitute.For<IImageServerSupervisor>(),
             new ImageRuntimeActivityGate(),
             Substitute.For<IWhisperServerSupervisor>(),

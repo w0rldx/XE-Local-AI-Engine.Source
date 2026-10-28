@@ -233,11 +233,11 @@ public sealed class WhisperServerSupervisorTests
         var stale = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
         await harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None);
 
-        AssertEx.Null(harness.Supervisor.TryAcquireTranscriptionLease(stale.ModelId, stale.Generation),
+        AssertEx.Null(harness.Supervisor.TryAcquireJobLease(stale.ModelId, stale.Generation),
             "A lease for the generation that was replaced must be refused.");
 
         var current = await harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None);
-        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireTranscriptionLease(current.ModelId, current.Generation));
+        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireJobLease(current.ModelId, current.Generation));
     }
 
     [Test]
@@ -248,7 +248,7 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
 
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
-        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireTranscriptionLease(endpoint.ModelId, endpoint.Generation));
+        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation));
 
         var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None));
 
@@ -368,13 +368,13 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
 
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
-        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireTranscriptionLease(endpoint.ModelId, endpoint.Generation));
+        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation));
 
         var result = await harness.Supervisor.EvictAsync(CancellationToken.None);
 
         AssertEx.False(result.Evicted);
         AssertEx.True(result.Activity.IsBusy);
-        AssertEx.Equal(expected: 1, result.Activity.ActiveTranscriptionCount);
+        AssertEx.Equal(expected: 1, result.Activity.ActiveJobCount);
         AssertEx.False(harness.Launcher.Handles.Single().WasTreeKilled);
     }
 

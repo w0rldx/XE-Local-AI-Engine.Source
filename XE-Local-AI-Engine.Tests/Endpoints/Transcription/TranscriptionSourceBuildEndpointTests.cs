@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -72,9 +73,9 @@ public sealed class TranscriptionSourceBuildEndpointTests
             {
                 Outcome = WhisperCppSourceBuildStartOutcome.RuntimeBusy,
                 Prerequisites = null,
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 1,
+                    ActiveJobCount = 1,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 1,
                     MutationReserved = false,
@@ -281,9 +282,9 @@ public sealed class TranscriptionSourceBuildEndpointTests
             RemoveResult = new WhisperCppSourceBuildRemoveResult
             {
                 Outcome = WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 1,
                     MutationReserved = false,
@@ -407,9 +408,9 @@ public sealed class TranscriptionSourceBuildEndpointTests
         new()
         {
             Backend = WhisperBackend.Cuda,
-            Source = WhisperCppSourceSelection.Official,
+            Source = ManagedSourceSelection.Official,
             Repository = WhisperCppSourceBuildRequestValidation.OfficialRepository,
-            RevisionMode = WhisperCppSourceRevisionMode.EnginePinned,
+            RevisionMode = ManagedSourceRevisionMode.EnginePinned,
             RequestedCommit = null,
             ResolvedCommit = WhisperCppReleasePins.PinnedSourceCommitSha,
             BuildId = Guid.NewGuid()

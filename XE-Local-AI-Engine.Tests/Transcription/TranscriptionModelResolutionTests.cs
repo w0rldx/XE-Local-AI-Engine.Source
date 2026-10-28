@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -101,7 +102,7 @@ public sealed class TranscriptionModelResolutionTests : IDisposable
 
         return new TranscriptionRuntimeService(Substitute.For<IWhisperServerSupervisor>(),
             Substitute.For<IWhisperRuntimeActivityGate>(),
-            Substitute.For<IWhisperInstalledRuntimeStore>(),
+            Substitute.For<IManagedRuntimeStore<WhisperBackend>>(),
             backendSelector,
             Substitute.For<IWhisperModelDownloadCoordinator>(),
             pathResolver,

@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
+using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -15,7 +17,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     must not hold a connection open for it. It holds the activity gate's mutation reservation for its whole duration, so an eject or
 ///     a transcription cannot race the tree it is about to replace, and a start attempted while anything holds the runtime is refused
 ///     with <see cref="WhisperCppSourceBuildStartOutcome.RuntimeBusy" /> instead. Every command goes through
-///     <see cref="IWhisperSourceCommandRunner" />, the <c>readelf</c> relocation gate included, so tests drive it without compiling.
+///     <see cref="ISourceCommandRunner" />, the <c>readelf</c> relocation gate included, so tests drive it without compiling.
 /// </remarks>
 public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuildService, IDisposable
 {
@@ -35,13 +37,13 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     private readonly string _cacheRoot;
     private readonly bool _isLinux;
     private readonly ILogger<WhisperCppSourceBuildService> _logger;
-    private readonly IWhisperManagedSourceBuildSignal _managedSignal;
+    private readonly IManagedSourceBuildSignal<WhisperBackend> _managedSignal;
     private readonly IWhisperCppSourceBuildEventPublisher _publisher;
     private readonly Channel<WhisperCppSourceBuildStatusEvent> _publishQueue;
     private readonly Task _publisherTask;
     private readonly IWhisperCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
-    private readonly IWhisperSourceCommandRunner _runner;
-    private readonly IWhisperInstalledRuntimeStore _runtimeStore;
+    private readonly ISourceCommandRunner _runner;
+    private readonly IManagedRuntimeStore<WhisperBackend> _runtimeStore;
     private readonly SemaphoreSlim _startGate = new(initialCount: 1, maxCount: 1);
     private readonly Lock _stateLock = new();
     private Task? _activeBuildTask;
@@ -59,8 +61,8 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     private readonly TimeProvider _timeProvider;
 
     public WhisperCppSourceBuildService(IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-        IWhisperInstalledRuntimeStore runtimeStore,
-        IWhisperManagedSourceBuildSignal managedSignal,
+        IManagedRuntimeStore<WhisperBackend> runtimeStore,
+        IManagedSourceBuildSignal<WhisperBackend> managedSignal,
         IWhisperRuntimeActivityGate activityGate,
         IWhisperCppSourceBuildEventPublisher publisher,
         ILogger<WhisperCppSourceBuildService> logger,
@@ -72,19 +74,19 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             publisher,
             logger,
             RuntimeCacheDirectory.Resolve(),
-            new WhisperSourceCommandRunner(),
+            new SourceCommandRunner(),
             timeProvider)
     {
     }
 
     internal WhisperCppSourceBuildService(IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-        IWhisperInstalledRuntimeStore runtimeStore,
-        IWhisperManagedSourceBuildSignal managedSignal,
+        IManagedRuntimeStore<WhisperBackend> runtimeStore,
+        IManagedSourceBuildSignal<WhisperBackend> managedSignal,
         IWhisperRuntimeActivityGate activityGate,
         IWhisperCppSourceBuildEventPublisher publisher,
         ILogger<WhisperCppSourceBuildService> logger,
         string cacheRoot,
-        IWhisperSourceCommandRunner runner,
+        ISourceCommandRunner runner,
         TimeProvider timeProvider,
         bool? isLinux = null)
     {
@@ -188,12 +190,12 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 };
             }
 
-            var revisionMode = normalized.Source == WhisperCppSourceSelection.Official
-                ? WhisperCppSourceRevisionMode.EnginePinned
-                : WhisperCppSourceRevisionMode.ExplicitCommit;
-            if (normalized.Source == WhisperCppSourceSelection.Custom && normalized.Commit is null)
+            var revisionMode = normalized.Source == ManagedSourceSelection.Official
+                ? ManagedSourceRevisionMode.EnginePinned
+                : ManagedSourceRevisionMode.ExplicitCommit;
+            if (normalized.Source == ManagedSourceSelection.Custom && normalized.Commit is null)
             {
-                revisionMode = WhisperCppSourceRevisionMode.DefaultBranch;
+                revisionMode = ManagedSourceRevisionMode.DefaultBranch;
             }
 
             var descriptor = new WhisperCppSourceBuildDescriptor
@@ -203,7 +205,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 Repository = normalized.Repository!,
                 RevisionMode = revisionMode,
                 RequestedCommit = normalized.Commit,
-                ResolvedCommit = revisionMode == WhisperCppSourceRevisionMode.EnginePinned
+                ResolvedCommit = revisionMode == ManagedSourceRevisionMode.EnginePinned
                     ? WhisperCppReleasePins.PinnedSourceCommitSha
                     : null,
                 BuildId = Guid.NewGuid()
@@ -492,31 +494,6 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         }
     }
 
-    internal static string ParseCudaArchitectures(string output)
-    {
-        var values = new SortedSet<int>();
-        foreach (var line in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var match = ComputeCapabilityRegex().Match(line);
-            if (!match.Success
-                || !int.TryParse(match.Groups["major"].Value, out var major)
-                || !int.TryParse(match.Groups["minor"].Value, out var minor))
-            {
-                return SourceBuildPolicy.DefaultCudaArchitectures;
-            }
-
-            var architecture = (major * 10) + minor;
-            if (!IsSupportedCudaArchitecture(architecture))
-            {
-                return SourceBuildPolicy.DefaultCudaArchitectures;
-            }
-
-            _ = values.Add(architecture);
-        }
-
-        return values.Count == 0 ? SourceBuildPolicy.DefaultCudaArchitectures : string.Join(';', values);
-    }
-
     private async Task<BuildCompletion> RunBuildAsync(WhisperCppSourceBuildDescriptor descriptor, CancellationToken ct)
     {
         try
@@ -527,7 +504,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             var buildDir = Path.Combine(WorkRoot, "build");
 
             SetPhase(WhisperCppSourceBuildPhase.Cloning);
-            var requestedCommit = descriptor.RevisionMode == WhisperCppSourceRevisionMode.EnginePinned
+            var requestedCommit = descriptor.RevisionMode == ManagedSourceRevisionMode.EnginePinned
                 ? WhisperCppReleasePins.PinnedSourceCommitSha
                 : descriptor.RequestedCommit;
             await RunRequiredAsync("git", GitArguments("init", sourceDir), WorkRoot, SourceBuildPolicy.ShortCommandTimeout, captureOutput: false, ct)
@@ -685,7 +662,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                                           captureOutput: true,
                                           ct)
                                       .ConfigureAwait(false);
-            return result.ExitCode == 0 ? ParseCudaArchitectures(result.StandardOutput) : SourceBuildPolicy.DefaultCudaArchitectures;
+            return result.ExitCode == 0 ? SourceBuildPolicy.ParseCudaArchitectures(result.StandardOutput) : SourceBuildPolicy.DefaultCudaArchitectures;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -698,19 +675,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         }
     }
 
-    private static bool IsSupportedCudaArchitecture(int architecture)
-    {
-        return architecture is 50 or 52 or 53
-            or 60 or 61 or 62
-            or 70 or 72 or 75
-            or 80 or 86 or 87 or 89
-            or 90
-            or 100 or 101 or 103
-            or 110
-            or 120 or 121;
-    }
-
-    private async Task<WhisperSourceCommandResult> RunRequiredAsync(string fileName,
+    private async Task<SourceCommandResult> RunRequiredAsync(string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeout,
@@ -862,7 +827,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         // Republishing the signal is the whole reason this runs at host start: the backend selector only trusts a managed runtime once something has set it, so without this an adopted CUDA build
         // stops resolving after a restart and the node silently falls back.
         var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-        if (installed?.Validity == WhisperInstalledRuntimeValidity.Active)
+        if (installed?.Validity == ManagedRuntimeValidity.Active)
         {
             _managedSignal.SetActive(installed.DesiredBackend);
         }
@@ -879,7 +844,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         WhisperCppRuntimeAdoption.CreateOwnerOnlyDirectory(WorkRoot);
     }
 
-    private void DeleteManagedRuntime(WhisperInstalledRuntimeState installed)
+    private void DeleteManagedRuntime(ManagedRuntimeState<WhisperBackend> installed)
     {
         var installRoot = GetManagedInstallRoot(installed);
         if (Directory.Exists(installRoot))
@@ -895,7 +860,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
     // Derived from the record's own commit and backend rather than from its recorded path, so a tampered or
     // tombstoned record can never point a recursive delete outside the managed cache.
-    private string GetManagedInstallRoot(WhisperInstalledRuntimeState installed)
+    private string GetManagedInstallRoot(ManagedRuntimeState<WhisperBackend> installed)
     {
         if (installed.SourceCommit.Length != 40 || !installed.SourceCommit.All(Uri.IsHexDigit))
         {
@@ -947,9 +912,6 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
 
     [GeneratedRegex(@"\((?:RUNPATH|RPATH)\)[^\[]*\[(?<value>[^\]]*)\]", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]
     private static partial Regex RunpathRegex();
-
-    [GeneratedRegex(@"^(?<major>\d+)\.(?<minor>\d+)$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]
-    private static partial Regex ComputeCapabilityRegex();
 
     private sealed record BuildCompletion
     {

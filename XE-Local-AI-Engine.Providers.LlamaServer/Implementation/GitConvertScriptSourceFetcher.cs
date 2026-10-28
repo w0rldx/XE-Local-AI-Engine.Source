@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Production <see cref="IConvertScriptSourceFetcher" />: a depth-1 fetch of a single commit from the canonical
@@ -153,7 +154,7 @@ public sealed class GitConvertScriptSourceFetcher : IConvertScriptSourceFetcher
         }
         finally
         {
-            ProcessCaptureRunner.TryKill(process);
+            ProcessTreeKill.TryKill(process);
         }
     }
 

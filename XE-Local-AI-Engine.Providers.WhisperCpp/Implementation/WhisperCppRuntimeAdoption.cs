@@ -20,14 +20,14 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 internal sealed class WhisperCppRuntimeAdoption
 {
     private readonly string _cacheRoot;
-    private readonly IWhisperInstalledRuntimeStore _runtimeStore;
-    private readonly IWhisperManagedSourceBuildSignal _managedSignal;
+    private readonly IManagedRuntimeStore<WhisperBackend> _runtimeStore;
+    private readonly IManagedSourceBuildSignal<WhisperBackend> _managedSignal;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
 
     public WhisperCppRuntimeAdoption(string cacheRoot,
-        IWhisperInstalledRuntimeStore runtimeStore,
-        IWhisperManagedSourceBuildSignal managedSignal,
+        IManagedRuntimeStore<WhisperBackend> runtimeStore,
+        IManagedSourceBuildSignal<WhisperBackend> managedSignal,
         TimeProvider timeProvider,
         ILogger logger)
     {
@@ -53,11 +53,11 @@ internal sealed class WhisperCppRuntimeAdoption
             return;
         }
 
-        WhisperCppAdoptionJournal journal;
+        ManagedRuntimeAdoptionJournal<WhisperBackend> journal;
         try
         {
             await using var stream = File.OpenRead(JournalPath);
-            journal = await JsonSerializer.DeserializeAsync<WhisperCppAdoptionJournal>(stream, cancellationToken: ct).ConfigureAwait(false)
+            journal = await JsonSerializer.DeserializeAsync<ManagedRuntimeAdoptionJournal<WhisperBackend>>(stream, cancellationToken: ct).ConfigureAwait(false)
                       ?? throw new WhisperRuntimeException("The managed whisper.cpp runtime adoption journal is invalid.");
         }
         catch (JsonException exception)
@@ -143,7 +143,7 @@ internal sealed class WhisperCppRuntimeAdoption
             ValidateAdoptedServer(staging, stagedServer);
             var digest = await FileSha256.ComputeAsync(stagedServer, ct).ConfigureAwait(false);
             var finalServer = Path.GetFullPath(Path.Combine(destination, relativeServer));
-            var state = new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
+            var state = new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
                 descriptor.Backend,
                 descriptor.Repository,
                 descriptor.ResolvedCommit!,
@@ -154,7 +154,7 @@ internal sealed class WhisperCppRuntimeAdoption
                 digest,
                 _timeProvider.GetUtcNow());
             var previousState = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-            var journal = new WhisperCppAdoptionJournal(descriptor.BuildId,
+            var journal = new ManagedRuntimeAdoptionJournal<WhisperBackend>(descriptor.BuildId,
                 descriptor.Backend,
                 descriptor.ResolvedCommit!,
                 Directory.Exists(destination),
@@ -295,7 +295,7 @@ internal sealed class WhisperCppRuntimeAdoption
         }
     }
 
-    private async Task RollbackAsync(WhisperCppAdoptionJournal journal, AdoptionPaths paths)
+    private async Task RollbackAsync(ManagedRuntimeAdoptionJournal<WhisperBackend> journal, AdoptionPaths paths)
     {
         _managedSignal.Clear();
         if (Directory.Exists(paths.Destination))
@@ -329,7 +329,7 @@ internal sealed class WhisperCppRuntimeAdoption
         DeleteFileStrict(JournalPath);
     }
 
-    private async Task WriteJournalAsync(WhisperCppAdoptionJournal journal, CancellationToken ct)
+    private async Task WriteJournalAsync(ManagedRuntimeAdoptionJournal<WhisperBackend> journal, CancellationToken ct)
     {
         CreateOwnerOnlyDirectory(BuildRoot);
         var temporaryPath = JournalPath + ".tmp";
@@ -351,7 +351,7 @@ internal sealed class WhisperCppRuntimeAdoption
         }
     }
 
-    private AdoptionPaths GetPaths(WhisperCppAdoptionJournal journal)
+    private AdoptionPaths GetPaths(ManagedRuntimeAdoptionJournal<WhisperBackend> journal)
     {
         if (journal.NewCommit.Length != 40
             || !journal.NewCommit.All(Uri.IsHexDigit)
@@ -370,7 +370,7 @@ internal sealed class WhisperCppRuntimeAdoption
         if (journal.PreviousState is not null)
         {
             previousInstallRoot = GetManagedInstallRoot(journal.PreviousState);
-            if (!PathsEqual(previousInstallRoot, destination))
+            if (!PathContainment.PathsEqual(previousInstallRoot, destination))
             {
                 retiredPrevious = Path.Combine(Path.GetDirectoryName(previousInstallRoot)!,
                     $".retired-{journal.PreviousState.SourceCommit}-{journal.BuildId:N}");
@@ -404,9 +404,9 @@ internal sealed class WhisperCppRuntimeAdoption
         DeleteFileStrict(JournalPath);
     }
 
-    private static bool RuntimeStatesMatch(WhisperInstalledRuntimeState actual, WhisperInstalledRuntimeState expected)
+    private static bool RuntimeStatesMatch(ManagedRuntimeState<WhisperBackend> actual, ManagedRuntimeState<WhisperBackend> expected)
     {
-        return actual.Validity == WhisperInstalledRuntimeValidity.Active
+        return actual.Validity == ManagedRuntimeValidity.Active
                && actual.DesiredBackend == expected.DesiredBackend
                && string.Equals(actual.SourceRepository, expected.SourceRepository, StringComparison.Ordinal)
                && string.Equals(actual.SourceCommit, expected.SourceCommit, StringComparison.Ordinal)
@@ -417,7 +417,7 @@ internal sealed class WhisperCppRuntimeAdoption
                && string.Equals(actual.ServerSha256, expected.ServerSha256, StringComparison.Ordinal);
     }
 
-    private static async Task<bool> ManagedRuntimeBytesMatchStateAsync(WhisperInstalledRuntimeState state,
+    private static async Task<bool> ManagedRuntimeBytesMatchStateAsync(ManagedRuntimeState<WhisperBackend> state,
         string installRoot,
         CancellationToken ct)
     {
@@ -458,7 +458,7 @@ internal sealed class WhisperCppRuntimeAdoption
         }
     }
 
-    private async Task RestorePreviousStateAsync(WhisperInstalledRuntimeState? previousState)
+    private async Task RestorePreviousStateAsync(ManagedRuntimeState<WhisperBackend>? previousState)
     {
         if (previousState is null)
         {
@@ -468,7 +468,7 @@ internal sealed class WhisperCppRuntimeAdoption
         }
 
         await _runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
-        if (previousState.Validity == WhisperInstalledRuntimeValidity.Active)
+        if (previousState.Validity == ManagedRuntimeValidity.Active)
         {
             _managedSignal.SetActive(previousState.DesiredBackend);
         }
@@ -525,7 +525,7 @@ internal sealed class WhisperCppRuntimeAdoption
         }
     }
 
-    private string GetManagedInstallRoot(WhisperInstalledRuntimeState installed)
+    private string GetManagedInstallRoot(ManagedRuntimeState<WhisperBackend> installed)
     {
         if (installed.SourceCommit.Length != 40 || !installed.SourceCommit.All(Uri.IsHexDigit))
         {
@@ -549,13 +549,6 @@ internal sealed class WhisperCppRuntimeAdoption
             WhisperBackend.Cuda => "cuda",
             _ => "cpu"
         };
-    }
-
-    private static bool PathsEqual(string first, string second)
-    {
-        return string.Equals(Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar),
-            Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     private static void DeleteDirectoryStrict(string path)

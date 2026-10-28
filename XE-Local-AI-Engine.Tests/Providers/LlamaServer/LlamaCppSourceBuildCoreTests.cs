@@ -304,25 +304,6 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
-    public void ParseCudaArchitectures_DeduplicatesAndSortsStrictCapabilities()
-    {
-        AssertEx.Equal("75;89;120", LlamaCppSourceBuildService.ParseCudaArchitectures("8.9\n7.5\n12.0\n8.9\n"));
-    }
-
-    [Test]
-    [Arguments("")]
-    [Arguments("native")]
-    [Arguments("4.9")]
-    [Arguments("8.10")]
-    [Arguments("8.9 extra")]
-    [Arguments("99.9")]
-    [Arguments("999")]
-    public void ParseCudaArchitectures_InvalidOrOutOfBounds_FallsBack(string output)
-    {
-        AssertEx.Equal("75;86;89;120", LlamaCppSourceBuildService.ParseCudaArchitectures(output));
-    }
-
-    [Test]
     public void LegacyPreProvenancePredicate_RequiresExactNormalizedCachePath()
     {
         var cacheRoot = Path.Combine(Path.GetTempPath(), "source-build-predicate-root");

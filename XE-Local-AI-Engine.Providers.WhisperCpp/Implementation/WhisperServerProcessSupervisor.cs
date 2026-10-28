@@ -1,11 +1,10 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
@@ -25,9 +24,6 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 /// </remarks>
 internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor, IAsyncDisposable
 {
-    /// <summary>Poll cadence for noticing that a freshly spawned process exited during its readiness wait.</summary>
-    private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
-
     /// <summary>
     ///     How long a transport failure waits for the daemon's exit to become observable: the connection reset reaches the client while
     ///     the OS is still tearing the crashed process down.
@@ -227,7 +223,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <inheritdoc />
-    public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation)
+    public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
@@ -251,7 +247,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             return null;
         }
 
-        var activityLease = _runtimeActivityGate.TryAcquireTranscriptionLease();
+        var activityLease = _runtimeActivityGate.TryAcquireJobLease();
         if (activityLease is null)
         {
             running.ReleaseTranscription();
@@ -286,7 +282,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, graceCts.Token);
             try
             {
-                await WatchForExitAsync(running.Handle, linkedCts.Token).ConfigureAwait(false);
+                await ProcessReadinessRace.WaitForExitAsync(running.Handle, _timeProvider, linkedCts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -713,52 +709,9 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <summary>The same race, reporting a bool so the model-switch path can respawn instead of failing the caller.</summary>
-    private async Task<bool> WaitForReadyOrExitQuietlyAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct)
-    {
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
-        var readyTask = _readinessProbe.WaitForReadyAsync(baseAddress, budget, linkedCts.Token);
-        var exitTask = WatchForExitAsync(handle, linkedCts.Token);
-
-        var winner = await Task.WhenAny(readyTask, exitTask).ConfigureAwait(false);
-
-        if (winner == exitTask && handle.HasExited)
-        {
-            await linkedCts.CancelAsync().ConfigureAwait(false);
-            await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
-            return false;
-        }
-
-        await linkedCts.CancelAsync().ConfigureAwait(false);
-        await SwallowCancellationAsync(exitTask).ConfigureAwait(false);
-
-        return await readyTask.ConfigureAwait(false);
-    }
-
-    private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            if (handle.HasExited)
-            {
-                return;
-            }
-
-            await Task.Delay(ProcessExitPollInterval, _timeProvider, ct).ConfigureAwait(false);
-        }
-    }
-
-    private static async Task SwallowCancellationAsync(Task task)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected: this side of the race was cancelled because the other side won.
-        }
-    }
+    private async Task<bool> WaitForReadyOrExitQuietlyAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan budget, CancellationToken ct) =>
+        await ProcessReadinessRace.RunAsync(handle, token => _readinessProbe.WaitForReadyAsync(baseAddress, budget, token), _timeProvider, ct)
+            .ConfigureAwait(false) == ProcessReadinessOutcome.Ready;
 
     private async Task ReapIdleLoopAsync(CancellationToken ct)
     {
@@ -953,27 +906,13 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     {
         for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
         {
-            if (IsPortFree(port))
+            if (LoopbackPort.IsFree(port))
             {
                 return port;
             }
         }
 
         throw new WhisperRuntimeException("No free local port is available for the transcription runtime.");
-    }
-
-    private static bool IsPortFree(int port)
-    {
-        try
-        {
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
     }
 
     /// <summary>The single live, registered daemon, its binary, and the state that drives reuse and eviction.</summary>
@@ -997,7 +936,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             WhisperBinary binary,
             int port,
             DateTimeOffset startedUtc,
-            IWhisperRuntimeActivityLease residentLease)
+            IRuntimeActivityLease residentLease)
         {
             _lastLivenessProbeTicks = startedUtc.UtcTicks;
             _lastUsedTicks = startedUtc.UtcTicks;
@@ -1012,7 +951,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 
         public WhisperBinary Binary { get; }
 
-        public IWhisperRuntimeActivityLease ResidentLease { get; }
+        public IRuntimeActivityLease ResidentLease { get; }
 
         public int Port { get; }
 
@@ -1124,12 +1063,12 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     private sealed class WhisperTranscriptionLease : IWhisperTranscriptionLease
     {
         private readonly RunningServer _server;
-        private readonly IWhisperRuntimeActivityLease _activityLease;
+        private readonly IRuntimeActivityLease _activityLease;
         private readonly TimeProvider _timeProvider;
         private int _disposed;
 
         public WhisperTranscriptionLease(RunningServer server,
-            IWhisperRuntimeActivityLease activityLease,
+            IRuntimeActivityLease activityLease,
             TimeProvider timeProvider)
         {
             _server = server;

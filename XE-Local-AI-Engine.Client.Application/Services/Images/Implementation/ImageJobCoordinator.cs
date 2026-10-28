@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -58,7 +59,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
     // Keyed by job id. An in-flight job owns a live CTS; Cancel signals it via the registry.
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _inFlight = new();
-    private readonly ConcurrentDictionary<Guid, IImageRuntimeActivityLease> _runtimeActivityLeases = new();
+    private readonly ConcurrentDictionary<Guid, IRuntimeActivityLease> _runtimeActivityLeases = new();
 
     // Detached run tasks by job id so DisposeAsync can drain them (bounded) after cancelling — giving each run task a
     // chance to persist its terminal state before the process exits.

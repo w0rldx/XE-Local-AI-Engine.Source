@@ -156,13 +156,13 @@ public sealed class StableDiffusionCppSourceBuildPrerequisiteProbe : IStableDiff
                 process.StartInfo.ArgumentList.Add(argument);
             }
 
-            StableDiffusionSourceProcessHardening.Configure(process.StartInfo, isolationRoot);
+            SourceProcessHardening.Configure(process.StartInfo, isolationRoot);
             if (!process.Start())
             {
                 return Missing(fileName, displayName);
             }
 
-            StableDiffusionSourceProcessHardening.CloseStandardInput(process);
+            SourceProcessHardening.CloseStandardInput(process);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(ProbeTimeout);
             var outputTask = ReadBoundedAsync(process.StandardOutput, timeout.Token);

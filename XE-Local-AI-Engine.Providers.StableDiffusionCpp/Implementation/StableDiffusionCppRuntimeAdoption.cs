@@ -10,14 +10,14 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 internal sealed class StableDiffusionCppRuntimeAdoption
 {
     private readonly string _cacheRoot;
-    private readonly IStableDiffusionInstalledRuntimeStore _runtimeStore;
-    private readonly IStableDiffusionManagedSourceBuildSignal _managedSignal;
+    private readonly IManagedRuntimeStore<SdGpuBackend> _runtimeStore;
+    private readonly IManagedSourceBuildSignal<SdGpuBackend> _managedSignal;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
 
     public StableDiffusionCppRuntimeAdoption(string cacheRoot,
-        IStableDiffusionInstalledRuntimeStore runtimeStore,
-        IStableDiffusionManagedSourceBuildSignal managedSignal,
+        IManagedRuntimeStore<SdGpuBackend> runtimeStore,
+        IManagedSourceBuildSignal<SdGpuBackend> managedSignal,
         TimeProvider timeProvider,
         ILogger logger)
     {
@@ -39,11 +39,11 @@ internal sealed class StableDiffusionCppRuntimeAdoption
             return;
         }
 
-        StableDiffusionCppAdoptionJournal journal;
+        ManagedRuntimeAdoptionJournal<SdGpuBackend> journal;
         try
         {
             await using var stream = File.OpenRead(JournalPath);
-            journal = await JsonSerializer.DeserializeAsync<StableDiffusionCppAdoptionJournal>(stream, cancellationToken: ct).ConfigureAwait(false)
+            journal = await JsonSerializer.DeserializeAsync<ManagedRuntimeAdoptionJournal<SdGpuBackend>>(stream, cancellationToken: ct).ConfigureAwait(false)
                       ?? throw new StableDiffusionRuntimeException("The managed image runtime adoption journal is invalid.");
         }
         catch (JsonException exception)
@@ -116,7 +116,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
             ValidateAdoptedServer(staging, stagedServer);
             var digest = await FileSha256.ComputeAsync(stagedServer, ct).ConfigureAwait(false);
             var finalServer = Path.GetFullPath(Path.Combine(destination, relativeServer));
-            var state = new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Active,
+            var state = new ManagedRuntimeState<SdGpuBackend>(ManagedRuntimeValidity.Active,
                 descriptor.Backend,
                 descriptor.Repository,
                 descriptor.ResolvedCommit!,
@@ -127,7 +127,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
                 digest,
                 _timeProvider.GetUtcNow());
             var previousState = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-            var journal = new StableDiffusionCppAdoptionJournal(descriptor.BuildId,
+            var journal = new ManagedRuntimeAdoptionJournal<SdGpuBackend>(descriptor.BuildId,
                 descriptor.Backend,
                 descriptor.ResolvedCommit!,
                 Directory.Exists(destination),
@@ -181,7 +181,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         }
     }
 
-    private async Task RollbackAsync(StableDiffusionCppAdoptionJournal journal, AdoptionPaths paths)
+    private async Task RollbackAsync(ManagedRuntimeAdoptionJournal<SdGpuBackend> journal, AdoptionPaths paths)
     {
         _managedSignal.Clear();
         if (Directory.Exists(paths.Destination))
@@ -215,7 +215,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         DeleteFileStrict(JournalPath);
     }
 
-    private async Task WriteJournalAsync(StableDiffusionCppAdoptionJournal journal, CancellationToken ct)
+    private async Task WriteJournalAsync(ManagedRuntimeAdoptionJournal<SdGpuBackend> journal, CancellationToken ct)
     {
         CreateOwnerOnlyDirectory(BuildRoot);
         var temporaryPath = JournalPath + ".tmp";
@@ -237,7 +237,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         }
     }
 
-    private AdoptionPaths GetPaths(StableDiffusionCppAdoptionJournal journal)
+    private AdoptionPaths GetPaths(ManagedRuntimeAdoptionJournal<SdGpuBackend> journal)
     {
         if (journal.NewCommit.Length != 40
             || !journal.NewCommit.All(Uri.IsHexDigit)
@@ -256,7 +256,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         if (journal.PreviousState is not null)
         {
             previousInstallRoot = GetManagedInstallRoot(journal.PreviousState);
-            if (!PathsEqual(previousInstallRoot, destination))
+            if (!PathContainment.PathsEqual(previousInstallRoot, destination))
             {
                 retiredPrevious = Path.Combine(Path.GetDirectoryName(previousInstallRoot)!,
                     $".retired-{journal.PreviousState.SourceCommit}-{journal.BuildId:N}");
@@ -290,9 +290,9 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         DeleteFileStrict(JournalPath);
     }
 
-    private static bool RuntimeStatesMatch(StableDiffusionInstalledRuntimeState actual, StableDiffusionInstalledRuntimeState expected)
+    private static bool RuntimeStatesMatch(ManagedRuntimeState<SdGpuBackend> actual, ManagedRuntimeState<SdGpuBackend> expected)
     {
-        return actual.Validity == StableDiffusionInstalledRuntimeValidity.Active
+        return actual.Validity == ManagedRuntimeValidity.Active
                && actual.DesiredBackend == expected.DesiredBackend
                && string.Equals(actual.SourceRepository, expected.SourceRepository, StringComparison.Ordinal)
                && string.Equals(actual.SourceCommit, expected.SourceCommit, StringComparison.Ordinal)
@@ -303,7 +303,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
                && string.Equals(actual.ServerSha256, expected.ServerSha256, StringComparison.Ordinal);
     }
 
-    private static async Task<bool> ManagedRuntimeBytesMatchStateAsync(StableDiffusionInstalledRuntimeState state,
+    private static async Task<bool> ManagedRuntimeBytesMatchStateAsync(ManagedRuntimeState<SdGpuBackend> state,
         string installRoot,
         CancellationToken ct)
     {
@@ -344,7 +344,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         }
     }
 
-    private async Task RestorePreviousStateAsync(StableDiffusionInstalledRuntimeState? previousState)
+    private async Task RestorePreviousStateAsync(ManagedRuntimeState<SdGpuBackend>? previousState)
     {
         if (previousState is null)
         {
@@ -354,7 +354,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         }
 
         await _runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
-        if (previousState.Validity == StableDiffusionInstalledRuntimeValidity.Active)
+        if (previousState.Validity == ManagedRuntimeValidity.Active)
         {
             _managedSignal.SetActive(previousState.DesiredBackend);
         }
@@ -409,7 +409,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption
         }
     }
 
-    private string GetManagedInstallRoot(StableDiffusionInstalledRuntimeState installed)
+    private string GetManagedInstallRoot(ManagedRuntimeState<SdGpuBackend> installed)
     {
         if (installed.SourceCommit.Length != 40 || !installed.SourceCommit.All(Uri.IsHexDigit))
         {
@@ -463,13 +463,6 @@ internal sealed class StableDiffusionCppRuntimeAdoption
             SdGpuBackend.Vulkan => "vulkan",
             _ => "cpu"
         };
-    }
-
-    private static bool PathsEqual(string first, string second)
-    {
-        return string.Equals(Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar),
-            Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     private static void DeleteDirectoryStrict(string path)

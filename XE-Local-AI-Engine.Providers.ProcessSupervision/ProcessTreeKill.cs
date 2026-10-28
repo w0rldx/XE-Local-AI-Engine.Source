@@ -9,8 +9,8 @@ public static class ProcessTreeKill
     private const int ExitWaitMilliseconds = 5000;
 
     /// <summary>
-    ///     Best effort: a process that already exited, or that the OS refuses to signal, is left as it is so the
-    ///     caller's own failure keeps propagating.
+    ///     Best effort: a process that already exited, that the OS refuses to signal, that the platform cannot tree-kill,
+    ///     or whose descendants survive the kill is left as it is so the caller's own failure keeps propagating.
     /// </summary>
     public static void TryKill(Process process)
     {
@@ -22,7 +22,7 @@ public static class ProcessTreeKill
                 _ = process.WaitForExit(ExitWaitMilliseconds);
             }
         }
-        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or NotSupportedException or AggregateException)
         {
             // Best-effort bounded cleanup.
         }

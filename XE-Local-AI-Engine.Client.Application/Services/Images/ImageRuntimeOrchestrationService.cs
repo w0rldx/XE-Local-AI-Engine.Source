@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Images;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
@@ -20,13 +21,13 @@ public sealed class ImageRuntimeOrchestrationService
     private readonly IImageRuntimeActivityGate _activityGate;
 
     private readonly IStableDiffusionCppSourceBuildService _buildService;
-    private readonly IStableDiffusionInstalledRuntimeStore _installedRuntimeStore;
+    private readonly IManagedRuntimeStore<SdGpuBackend> _installedRuntimeStore;
     private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
     private readonly IImageServerSupervisor _supervisor;
 
     public ImageRuntimeOrchestrationService(IStableDiffusionCppSourceBuildService buildService,
         IStableDiffusionCppSourceBuildPrerequisiteProbe prerequisiteProbe,
-        IStableDiffusionInstalledRuntimeStore installedRuntimeStore,
+        IManagedRuntimeStore<SdGpuBackend> installedRuntimeStore,
         IImageRuntimeActivityGate activityGate,
         IImageServerSupervisor supervisor)
     {
@@ -43,7 +44,7 @@ public sealed class ImageRuntimeOrchestrationService
     }
 
     /// <summary>The managed-runtime record, or <see langword="null" /> when no managed runtime is installed.</summary>
-    public Task<StableDiffusionInstalledRuntimeState?> ReadInstalledRuntimeAsync(CancellationToken ct)
+    public Task<ManagedRuntimeState<SdGpuBackend>?> ReadInstalledRuntimeAsync(CancellationToken ct)
     {
         return _installedRuntimeStore.ReadAsync(ct);
     }
@@ -52,7 +53,7 @@ public sealed class ImageRuntimeOrchestrationService
     ///     A process-wide snapshot of image-runtime activity, which is what a blocked refusal reports so the operator is
     ///     told what to wait for.
     /// </summary>
-    public ImageRuntimeActivitySnapshot GetActivitySnapshot()
+    public RuntimeActivitySnapshot GetActivitySnapshot()
     {
         return _activityGate.GetSnapshot();
     }

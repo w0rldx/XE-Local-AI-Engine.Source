@@ -117,6 +117,7 @@ public sealed class TransientLlamaServerSpawnReceiptTests : IDisposable
             launcher,
             new FakeHealthProbe(),
             NullLogger<TransientLlamaServerLauncher>.Instance,
+            new AdvanceableTimeProvider(),
             new ProcessSpawnReceiptStore(_root, "llama-server", NullLogger.Instance));
 
     private TransientLlamaServerRequest SmokeRequest() =>

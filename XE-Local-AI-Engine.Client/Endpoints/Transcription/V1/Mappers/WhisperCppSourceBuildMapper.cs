@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -13,8 +14,8 @@ internal static class WhisperCppSourceBuildMapper
         {
             Backend = request.Backend.ToContract(),
             Source = request.Source == TranscriptionSourceSelectionDto.Official
-                ? WhisperCppSourceSelection.Official
-                : WhisperCppSourceSelection.Custom,
+                ? ManagedSourceSelection.Official
+                : ManagedSourceSelection.Custom,
             Repository = request.Repository,
             Commit = request.Commit,
             AcknowledgeCustomSourceRisk = request.AcknowledgeCustomSourceRisk
@@ -75,15 +76,15 @@ internal static class WhisperCppSourceBuildMapper
         {
             BuildId = descriptor.BuildId,
             Backend = descriptor.Backend.ToDto(),
-            Source = descriptor.Source == WhisperCppSourceSelection.Official
+            Source = descriptor.Source == ManagedSourceSelection.Official
                 ? TranscriptionSourceSelectionDto.Official
                 : TranscriptionSourceSelectionDto.Custom,
             Repository = descriptor.Repository,
             RevisionMode = descriptor.RevisionMode switch
             {
-                WhisperCppSourceRevisionMode.EnginePinned => TranscriptionSourceRevisionModeDto.EnginePinned,
-                WhisperCppSourceRevisionMode.DefaultBranch => TranscriptionSourceRevisionModeDto.DefaultBranch,
-                WhisperCppSourceRevisionMode.ExplicitCommit => TranscriptionSourceRevisionModeDto.ExplicitCommit,
+                ManagedSourceRevisionMode.EnginePinned => TranscriptionSourceRevisionModeDto.EnginePinned,
+                ManagedSourceRevisionMode.DefaultBranch => TranscriptionSourceRevisionModeDto.DefaultBranch,
+                ManagedSourceRevisionMode.ExplicitCommit => TranscriptionSourceRevisionModeDto.ExplicitCommit,
                 _ => throw new ArgumentOutOfRangeException(nameof(descriptor), descriptor.RevisionMode, "Unknown source revision mode.")
             },
             RequestedCommit = descriptor.RequestedCommit,

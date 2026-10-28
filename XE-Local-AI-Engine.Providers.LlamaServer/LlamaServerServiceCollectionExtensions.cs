@@ -185,6 +185,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaServerProcessLauncher>(),
                 sp.GetRequiredService<ILlamaServerHealthProbe>(),
                 sp.GetRequiredService<ILogger<TransientLlamaServerLauncher>>(),
+                sp.GetRequiredService<TimeProvider>(),
                 SpawnReceipts(sp)));
         services.TryAddSingleton<ITransientLlamaServerLauncher>(static sp =>
             sp.GetRequiredService<TransientLlamaServerLauncher>());

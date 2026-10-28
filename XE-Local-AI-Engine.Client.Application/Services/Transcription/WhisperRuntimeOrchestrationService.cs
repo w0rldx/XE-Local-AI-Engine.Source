@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -77,14 +78,14 @@ public sealed class WhisperRuntimeOrchestrationService
     ///     A process-wide snapshot of transcription-runtime activity, which is what a runtime-busy refusal reports so
     ///     the operator is told what to wait for.
     /// </summary>
-    public WhisperRuntimeActivitySnapshot GetActivitySnapshot()
+    public RuntimeActivitySnapshot GetActivitySnapshot()
     {
         return _activityGate.GetSnapshot();
     }
 
     /// <summary>A transcription lease, or <see langword="null" /> while a runtime build, removal or eject holds the runtime.</summary>
-    public IWhisperRuntimeActivityLease? TryAcquireTranscriptionLease()
+    public IRuntimeActivityLease? TryAcquireJobLease()
     {
-        return _activityGate.TryAcquireTranscriptionLease();
+        return _activityGate.TryAcquireJobLease();
     }
 }

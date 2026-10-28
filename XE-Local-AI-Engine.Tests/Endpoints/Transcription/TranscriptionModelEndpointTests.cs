@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -404,9 +405,9 @@ public sealed class TranscriptionModelEndpointTests
                     BinarySource = null,
                     SupportsTranscode = true
                 },
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 0,
                     MutationReserved = false,
@@ -425,9 +426,9 @@ public sealed class TranscriptionModelEndpointTests
             Task.FromResult(new WhisperServerEvictResult
             {
                 Evicted = true,
-                Activity = new WhisperRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
-                    ActiveTranscriptionCount = 0,
+                    ActiveJobCount = 0,
                     SpawnReadinessCount = 0,
                     ResidentProcessCount = 0,
                     MutationReserved = false,

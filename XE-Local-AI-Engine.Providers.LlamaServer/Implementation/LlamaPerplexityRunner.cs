@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Diagnostics;
 using System.Text;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>Production <see cref="ILlamaPerplexityRunner" />: one child process, output tail-bounded, tree-killed on cancel.</summary>
 internal sealed class LlamaPerplexityRunner : ILlamaPerplexityRunner
@@ -57,7 +58,7 @@ internal sealed class LlamaPerplexityRunner : ILlamaPerplexityRunner
         {
             // Killing the tree matters here beyond tidiness: a base-logit phase that keeps running would go on writing
             // to the temp file this invocation owns, and the caller is about to delete it.
-            TryKill(process);
+            ProcessTreeKill.TryKill(process);
             throw;
         }
 
@@ -87,25 +88,6 @@ internal sealed class LlamaPerplexityRunner : ILlamaPerplexityRunner
             {
                 _ = output.Remove(0, output.Length - MaximumOutputCharacters);
             }
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // Already gone between the check and the kill. Nothing to clean up.
-        }
-        catch (SystemException)
-        {
-            // The OS refused the kill (permissions, a race with reaping). The invocation is failing either way.
         }
     }
 }

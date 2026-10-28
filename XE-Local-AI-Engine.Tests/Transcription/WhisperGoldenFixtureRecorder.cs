@@ -239,7 +239,7 @@ internal sealed class GoldenRecorderSupervisor : IWhisperServerSupervisor
     public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
         throw new NotSupportedException("The recorder does not own the daemon's lifetime.");
 
-    public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
+    public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation) =>
         new NoOpLease();
 
     public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>

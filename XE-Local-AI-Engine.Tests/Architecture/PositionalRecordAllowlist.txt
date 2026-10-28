@@ -10,7 +10,7 @@
 # wanted), and every group below is a reason why that shape is wrong for those types. Rule and hazards:
 # docs/wiki/16-code-conventions.md.
 
-# --- json-read-back (119) ---------------------------------------------------------
+# --- json-read-back (116) ---------------------------------------------------------
 # Handed to JsonSerializer somewhere: directly, through a generic conduit (a type argument that flows into
 # Deserialize<T> through a generic base class or method), or a [JsonSerializable] entry on a source-generated
 # context. The list is of the forms that count, not of the forms these entries happen to use. A positional record
@@ -86,6 +86,9 @@ XE-Local-AI-Engine.Client/Endpoints/Agents/V1/Dtos/PlaybookActionEndpointDtos.cs
 XE-Local-AI-Engine.Client/Endpoints/DevelopmentWorkflows/V1/Dtos/DevWorkflowContracts.cs|DevWorkflowGraph
 XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/Dtos/GraphWorkflowContracts.cs|GraphWorkflowGraph
 XE-Local-AI-Engine.Client/Hosting/ReadyInfo.cs|ReadyInfo
+XE-Local-AI-Engine.Providers.Abstractions/ManagedRuntimeAdoptionJournal.cs|ManagedRuntimeAdoptionJournal
+XE-Local-AI-Engine.Providers.Abstractions/ManagedRuntimeState.cs|ManagedRuntimeState
+XE-Local-AI-Engine.Providers.Abstractions/ManagedRuntimeStore.cs|DesiredRuntimeState
 XE-Local-AI-Engine.Providers.CodexOAuth/Auth/CodexTokens.cs|CodexTokens
 XE-Local-AI-Engine.Providers.LlamaServer/Contracts/IInstalledRuntimeStore.cs|InstalledRuntimeState
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/GitHubLlamaCppReleaseCatalog.cs|GitHubRelease
@@ -94,13 +97,7 @@ XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerLaunchFallbac
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerNativeClient.cs|EmbeddingResponse
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerNativeClient.cs|RerankResponse
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerRerankerClient.cs|RerankResponse
-XE-Local-AI-Engine.Providers.StableDiffusionCpp/Contracts/IStableDiffusionInstalledRuntimeStore.cs|StableDiffusionInstalledRuntimeState
-XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionCppAdoptionJournal.cs|StableDiffusionCppAdoptionJournal
-XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/StableDiffusionInstalledRuntimeStore.cs|DesiredRuntimeState
 XE-Local-AI-Engine.Providers.Training/Contracts/ITrainingRuntimeService.cs|InstalledTrainingRuntimeState
-XE-Local-AI-Engine.Providers.WhisperCpp/Contracts/IWhisperInstalledRuntimeStore.cs|WhisperInstalledRuntimeState
-XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperCppAdoptionJournal.cs|WhisperCppAdoptionJournal
-XE-Local-AI-Engine.Providers.WhisperCpp/Implementation/WhisperInstalledRuntimeStore.cs|DesiredRuntimeState
 XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaFailureRequest.cs|FakeOllamaFailureRequest
 XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaRequest.cs|FakeOllamaRequest
 XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaScriptRequest.cs|FakeOllamaScriptRequest
@@ -244,7 +241,6 @@ XE-Local-AI-Engine.Client.Application/Services/Sandbox/Fake/FakeSandboxRuntimePr
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|NetworkIsolationProbe
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|ResourceLimitProbe
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Reaping/SandboxMarkerEntry.cs|SandboxMarkerEntry
-XE-Local-AI-Engine.Client.Application/Services/Training/Export/TrainingExportService.cs|FileDigest
 XE-Local-AI-Engine.Client.Application/Services/Training/Export/TrainingExportService.cs|PlanOrRefusal
 XE-Local-AI-Engine.Client.Application/Services/Training/Runs/TrainingOptionDefaultsCalculator.cs|CheckpointFacts
 XE-Local-AI-Engine.Client.Application/Services/Workspace/WorkspaceFileScanner.cs|ScannedDirectory

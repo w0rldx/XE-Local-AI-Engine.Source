@@ -46,7 +46,7 @@ internal static class AddNodeImagesExtensions
         builder.Services.AddStableDiffusionCppImageRuntime();
 
         // The image runtime/source-build endpoints' door onto IStableDiffusionCppSourceBuildService, its prerequisite probe,
-        // IStableDiffusionInstalledRuntimeStore, IImageRuntimeActivityGate and IImageServerSupervisor. Singleton: stateless over their TryAddSingletons.
+        // IManagedRuntimeStore<SdGpuBackend>, IImageRuntimeActivityGate and IImageServerSupervisor. Singleton: stateless over their TryAddSingletons.
         builder.Services.AddSingleton<ImageRuntimeOrchestrationService>();
 
         // Curated image-model catalog (embedded seed). Singleton: the document is immutable and loading it means

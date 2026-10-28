@@ -6,6 +6,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -41,7 +43,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
         startInfo.Environment["HF_TOKEN"] = "poison";
         startInfo.Environment["GIT_CONFIG_COUNT"] = "1";
 
-        WhisperSourceProcessHardening.Configure(startInfo, temp.Path);
+        SourceProcessHardening.Configure(startInfo, temp.Path);
 
         AssertEx.Equal("/toolchain/bin", startInfo.Environment["PATH"]);
         AssertEx.Equal("en_US.UTF-8", startInfo.Environment["LANG"]);
@@ -154,7 +156,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
         using var cache = new TempDirectory();
         using var inner = new WhisperInstalledRuntimeStore(cache.Path);
         var store = new FailingWriteStore(inner);
-        var signal = new WhisperManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<WhisperBackend>();
         var adoption = new WhisperCppRuntimeAdoption(cache.Path, store, signal, TimeProvider.System, NullLogger.Instance);
 
         var previousCommit = new string(c: 'a', count: 40);
@@ -175,7 +177,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
 
         var restored = AssertEx.NotNull(await store.Inner.ReadAsync(CancellationToken.None));
         AssertEx.Equal(previousCommit, restored.SourceCommit);
-        AssertEx.Equal(WhisperInstalledRuntimeValidity.Active, restored.Validity);
+        AssertEx.Equal(ManagedRuntimeValidity.Active, restored.Validity);
         AssertEx.True(Directory.Exists(previousRoot), "The previous managed runtime directory must be back where it was.");
         AssertEx.Equal("previous", await File.ReadAllTextAsync(Path.Combine(previousRoot, "whisper-server")));
         AssertEx.False(Directory.Exists(Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", newCommit)),
@@ -193,7 +195,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
         // record back and drop the journal, rather than leaving an adoption half-declared forever.
         using var cache = new TempDirectory();
         using var store = new WhisperInstalledRuntimeStore(cache.Path);
-        var signal = new WhisperManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<WhisperBackend>();
         var adoption = new WhisperCppRuntimeAdoption(cache.Path, store, signal, TimeProvider.System, NullLogger.Instance);
 
         var previousCommit = new string(c: 'c', count: 40);
@@ -205,7 +207,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
 
         var newCommit = new string(c: 'd', count: 40);
         var newRoot = Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", newCommit);
-        var journal = new WhisperCppAdoptionJournal(Guid.NewGuid(),
+        var journal = new ManagedRuntimeAdoptionJournal<WhisperBackend>(Guid.NewGuid(),
             WhisperBackend.Cuda,
             newCommit,
             HadPreviousDestination: false,
@@ -236,23 +238,23 @@ public sealed class WhisperSourceRuntimeFoundationTests
         return new WhisperCppSourceBuildDescriptor
         {
             Backend = WhisperBackend.Cuda,
-            Source = WhisperCppSourceSelection.Custom,
+            Source = ManagedSourceSelection.Custom,
             Repository = WhisperCppSourceBuildRequestValidation.OfficialRepository,
-            RevisionMode = WhisperCppSourceRevisionMode.ExplicitCommit,
+            RevisionMode = ManagedSourceRevisionMode.ExplicitCommit,
             RequestedCommit = resolvedCommit,
             ResolvedCommit = resolvedCommit,
             BuildId = Guid.NewGuid()
         };
     }
 
-    private static WhisperInstalledRuntimeState State(string commit, string installRoot, string sha)
+    private static ManagedRuntimeState<WhisperBackend> State(string commit, string installRoot, string sha)
     {
-        return new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
+        return new ManagedRuntimeState<WhisperBackend>(ManagedRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             commit,
-            WhisperCppSourceSelection.Custom,
-            WhisperCppSourceRevisionMode.ExplicitCommit,
+            ManagedSourceSelection.Custom,
+            ManagedSourceRevisionMode.ExplicitCommit,
             commit,
             installRoot,
             sha,
@@ -277,7 +279,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 
     /// <summary>Fails exactly one record write, so the adoption's last step is the one that breaks.</summary>
-    private sealed class FailingWriteStore : IWhisperInstalledRuntimeStore
+    private sealed class FailingWriteStore : IManagedRuntimeStore<WhisperBackend>
     {
         public FailingWriteStore(WhisperInstalledRuntimeStore inner)
         {
@@ -288,10 +290,10 @@ public sealed class WhisperSourceRuntimeFoundationTests
 
         public bool FailNextWrite { get; set; }
 
-        public Task<WhisperInstalledRuntimeState?> ReadAsync(CancellationToken ct) =>
+        public Task<ManagedRuntimeState<WhisperBackend>?> ReadAsync(CancellationToken ct) =>
             Inner.ReadAsync(ct);
 
-        public Task WriteAsync(WhisperInstalledRuntimeState state, CancellationToken ct)
+        public Task WriteAsync(ManagedRuntimeState<WhisperBackend> state, CancellationToken ct)
         {
             if (FailNextWrite)
             {

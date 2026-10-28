@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -184,7 +185,7 @@ public sealed class WhisperBackendSelectorTests
     {
         var profiler = Substitute.For<IHardwareProfiler>();
         profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Profile(GpuVendor.Nvidia));
-        var signal = new WhisperManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<WhisperBackend>();
         signal.SetActive(WhisperBackend.Cuda);
         var selector = new WhisperBackendSelector(profiler, isWindows: false, overrideOptions: null, signal);
 
@@ -199,7 +200,7 @@ public sealed class WhisperBackendSelectorTests
     {
         var profiler = Substitute.For<IHardwareProfiler>();
         profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Profile(GpuVendor.Nvidia));
-        var signal = new WhisperManagedSourceBuildSignal();
+        var signal = new ManagedSourceBuildSignal<WhisperBackend>();
         signal.SetActive(WhisperBackend.Cuda);
         signal.Clear();
         var selector = new WhisperBackendSelector(profiler, isWindows: false, overrideOptions: null, signal);

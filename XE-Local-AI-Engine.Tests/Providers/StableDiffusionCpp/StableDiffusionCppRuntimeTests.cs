@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -418,7 +419,7 @@ public sealed class StableDiffusionCppRuntimeTests
             return Task.FromResult(new ImageServerEvictAllResult
             {
                 Evicted = true,
-                Activity = new ImageRuntimeActivitySnapshot
+                Activity = new RuntimeActivitySnapshot
                 {
                     ActiveJobCount = 0,
                     SpawnReadinessCount = 0,

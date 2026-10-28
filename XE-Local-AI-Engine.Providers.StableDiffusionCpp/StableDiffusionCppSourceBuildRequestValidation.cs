@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Strict, idempotent validation for public GitHub source-build requests.</summary>
@@ -16,7 +17,7 @@ public static partial class StableDiffusionCppSourceBuildRequestValidation
             throw new StableDiffusionRuntimeException("The source-build backend or source selection is invalid.");
         }
 
-        if (request.Source == StableDiffusionCppSourceSelection.Official)
+        if (request.Source == ManagedSourceSelection.Official)
         {
             if (!string.IsNullOrWhiteSpace(request.Repository)
                 && !string.Equals(request.Repository, OfficialRepository, StringComparison.Ordinal))

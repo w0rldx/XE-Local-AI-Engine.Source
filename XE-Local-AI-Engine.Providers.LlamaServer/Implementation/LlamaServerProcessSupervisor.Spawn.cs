@@ -1105,61 +1105,25 @@ public sealed partial class LlamaServerProcessSupervisor
     /// </remarks>
     private async Task WaitForReadyOrExitAsync(IProcessTreeHandle handle, Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
-        // Cancel the losing side the instant the other wins, so neither the /health poll nor the exit-watcher is left
-        // running after the race is decided.
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var outcome = await ProcessReadinessRace.RunAsync(handle,
+                token => _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, token),
+                _timeProvider,
+                ct)
+            .ConfigureAwait(false);
 
-        var readyTask = _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, linkedCts.Token);
-        var exitTask = WatchForExitAsync(handle, linkedCts.Token);
-
-        var winner = await Task.WhenAny(readyTask, exitTask).ConfigureAwait(false);
-
-        if (winner == exitTask && handle.HasExited)
+        if (outcome == ProcessReadinessOutcome.Exited)
         {
-            // The child exited before it ever became ready: a deterministic load failure. Stop the abandoned /health
-            // poll and surface a sanitized, non-retryable error (no file paths) so the caller fails fast.
-            await linkedCts.CancelAsync().ConfigureAwait(false);
-            await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
+            // The child exited before it ever became ready: a deterministic load failure. Surface a sanitized,
+            // non-retryable error (no file paths) so the caller fails fast.
             throw NonRetryable("The local model runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
         }
 
-        // Readiness settled first: stop the exit-watcher and honor the existing outcome — a genuine timeout (process
-        // still alive but slow) stays a retryable "did not become ready in time".
-        await linkedCts.CancelAsync().ConfigureAwait(false);
-        await SwallowCancellationAsync(exitTask).ConfigureAwait(false);
-
-        if (!await readyTask.ConfigureAwait(false))
+        // A genuine timeout (process still alive but slow) stays a retryable "did not become ready in time".
+        if (outcome == ProcessReadinessOutcome.TimedOut)
         {
             _logger.LogWarning("llama-server (pid {ProcessId}) did not become ready within {TimeoutSeconds:F0}s.",
                 handle.ProcessId, readinessTimeout.TotalSeconds);
             throw ReadinessTimedOut("The local model runtime did not become ready in time.");
-        }
-    }
-
-    /// <summary>Polls the process's exit flag until it exits or the wait is cancelled (readiness won the race).</summary>
-    private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            if (handle.HasExited)
-            {
-                return;
-            }
-
-            await Task.Delay(ProcessExitPollInterval, _timeProvider, ct).ConfigureAwait(false);
-        }
-    }
-
-    /// <summary>Awaits the losing side of the readiness race, absorbing the cancellation it throws when abandoned.</summary>
-    private static async Task SwallowCancellationAsync(Task task)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected: this task was cancelled because the other side of the race won.
         }
     }
 

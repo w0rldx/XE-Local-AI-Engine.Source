@@ -82,7 +82,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
 
         // Held for the whole request, before the session is touched: a runtime build or removal must refuse the upload
         // with no row change, not let it through to fail the session when the supervisor finds the runtime reserved.
-        await using var runtimeLease = _whisperRuntime.TryAcquireTranscriptionLease();
+        await using var runtimeLease = _whisperRuntime.TryAcquireJobLease();
         if (runtimeLease is null)
         {
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy("The transcription runtime is being built, removed or ejected. Upload the file again once that finishes.",

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     Owns the resident <c>sd-server</c> daemon(s): reuse-or-spawn one process per model, readiness-gate it, and
 ///     tree-kill + restart it on demand.
@@ -12,7 +14,7 @@ public sealed class ImageServerEvictAllResult
 {
     public required bool Evicted { get; init; }
 
-    public required ImageRuntimeActivitySnapshot Activity { get; init; }
+    public required RuntimeActivitySnapshot Activity { get; init; }
 }
 
 public interface IImageServerSupervisor
