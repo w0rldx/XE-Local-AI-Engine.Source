@@ -4,7 +4,7 @@
 
 **What this page covers.** Graph Workflows: operator-authored DAGs of LLM calls, agent turns, tool calls, conditions
 and human pauses, started manually and executed from the database, so a restart loses at most the in-flight work. A
-cycle is refused at save, no agent may edit a definition, and a `Tool` node runs only built-in read-local tools. The
+cycle is refused at save, only the operator saves a definition (a designer model may propose one, §12), and a `Tool` node runs only built-in read-local tools. The
 code spans `Client.Application/Services/GraphWorkflows/`, `Client.Persistence`, the `LocalApiRoutes.GraphWorkflows`
 family with `GraphWorkflowRunHub`, and the React `features/graphWorkflows/` folder.
 
@@ -26,6 +26,7 @@ Open Canvas import. **Skip to** [§3](#3-run-lifecycle) for how a run advances; 
 - [9. The Open Canvas import](#9-the-open-canvas-import)
 - [10. Your first action: a workflow that turns on a light or opens a program](#10-your-first-action-a-workflow-that-turns-on-a-light-or-opens-a-program)
 - [11. Intent routing](#11-intent-routing)
+- [12. The designer: AI-proposed graph edits](#12-the-designer-ai-proposed-graph-edits)
 - [Related pages](#related-pages)
 
 **Graph Workflows** let an operator draw a directed acyclic graph of LLM calls, agent turns, tool calls, conditions and human
@@ -49,7 +50,9 @@ canvases you care about.
 
 **What it is:**
 
-- **Operator-authored.** A definition is a graph the operator drew. Nothing generates one, and no agent may edit one.
+- **Operator-authored.** A definition is a graph the operator drew. Only the operator saves a definition. The designer (§12,
+  [ADR 0022](../adr/0022-ai-proposed-graph-edits.md)) proposes a graph, and the operator accepts it into the canvas and
+  saves; nothing else generates or edits one, and no agent may.
 - **Manually started.** A run begins because a person pressed Start (or a caller posted to the runs route with an
   idempotency key). There is no schedule, no trigger, no event subscription in v1.
 - **Database-as-truth.** `GraphWorkflowDispatcher` re-reads the rows on every tick and writes back through the store.
@@ -215,7 +218,7 @@ Accumulated, per element:
 **Warnings are a second list, and they never refuse.** `GraphWorkflowGraph.Warnings` is computed on the first ask
 rather than during the parse — only the validate endpoint asks, and every dispatcher tick parses — and nothing in it
 reaches `GraphWorkflowValidationException`. A graph that warns **saves, validates as `valid`, and runs**. There are
-two warning kinds in v1, and `Warnings` is their concatenation.
+three warning kinds, and `Warnings` is their concatenation.
 
 The first: a node whose inbound edges **all** leave a `Pause` receives the decision document rather than the
 content that was approved (§4.6). It is keyed on that node rather than on the pause, because that is the node which
@@ -268,6 +271,24 @@ a `$defs` or `definitions` pool is correctly ignored, since the transform never 
 `inputSchema` never warns: nothing compiles it into a grammar, on any runtime. Like every warning it is non-blocking, and the
 editor's validation strip renders it through the same generic channel as the first kind, so neither the DTO nor the
 SPA needed a new shape for it. What it is warning about is §4.2.
+
+The third is the semantic lint (`GraphWorkflowSemanticLint`), three mistakes the parser accepts and a run then trips
+over, found on the parsed graph and keyed on the node that suffers:
+
+- **L1.** A node with `joinPolicy` `All` whose inbound edges all come from mutually exclusive branches of one
+  `Condition` or `DecisionModel`: one inbound edge never fires, so the node is always skipped. Branches count as
+  exclusive only as `Eq` on one path with different values, or `Exists` / `NotExists`; anything else is not guessed at.
+  The advice is `joinPolicy` `Any`.
+- **L2.** An `upstream.<key>` path in `inputBindings`, `argumentBindings` or `resultPath` naming a node with no edge into
+  this one. The `upstream` map holds only immediate predecessors (§4.2a), so the path is missing at run time and the node
+  fails.
+- **L3.** An `input.<segment>…` path whose `<segment>` is not a predecessor key (`input.output.text`) on a node with
+  several predecessors that can succeed together: an `All` join, or an `Any` join not fed only by mutually exclusive
+  branches of one decision node (an `Any` join waits until no sibling can still succeed, §2.3). There `input` is the
+  map of the predecessors' outputs keyed by node key, not one node's output. `input` alone and
+  `input.<predecessorKey>…` are fine.
+
+They warn for every graph, hand-edited ones included, and never block; the designer (§12) treats each as must-fix.
 
 **The service adds warnings about pinned models**, in `GraphWorkflowDefinitionService.WarningsForRuntimeAsync`, because
 only it reaches the model catalog and the node settings. Each judges a node's OWN `model` pin and skips an unpinned
@@ -809,8 +830,8 @@ never silently.
 
 The local-data edge gate of §4.2 applies too, after the unattended check and with the same grants: a cloud or unresolved
 model is refused when a local-data Tool node fed this node over a satisfied edge and `inputBindings` is non-empty.
-Without bindings no upstream reaches the prompt, so the node runs. Bindings are not path-analysed: a binding that only
-reads `run.input` is refused too while such a predecessor exists.
+Without bindings no upstream reaches the prompt, so the node runs. The local-data gate does not path-analyse bindings: a binding that only
+reads `run.input` is refused too while such a predecessor exists. (The `upstream` shape of a binding is checked separately, at save, as warning L2.)
 
 | Config member | Meaning |
 |---|---|
@@ -1166,6 +1187,7 @@ Every route is Operator-gated.
 | `graph-workflows/definitions/{definitionId}/export` | GET the definition as a share file `{ format: "xe-graph-workflow", formatVersion: 1, name, description, graph }`, the graph exactly as the detail read returns it, with `Content-Disposition: attachment; filename="<slug>.graph-workflow.json"`. |
 | `graph-workflows/definitions/import` | POST a share file → 201 with the new definition. A foreign `format` or a `formatVersion` other than 1 is a 400 keyed to that member; the rest is create's path (same parser, tool gate, name rules and 1 MiB cap). |
 | `graph-workflows/tools` | The Tool node picker's feed (§4.3). |
+| `graph-workflows/designer/turn` | POST one designer turn (§12); writes nothing. |
 | `graph-workflows/definitions/{definitionId}/runs` | POST start → 202 with the run id; `requestId` is the idempotency key. |
 | `graph-workflows/runs` | The run list, newest first, `?status=&limit=` with `limit` required and capped at 200. |
 | `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, the run's own resolved `output`, and the **graph this run pinned at start**. No node-run documents — those are a per-node read. DELETE removes a finished run with its node runs and events (`GraphWorkflowPurge`), 204; a live run is 409 `GraphWorkflowRunConflict`, so cancel it first. Nothing else deletes runs: history is kept until the operator deletes it. |
@@ -1846,6 +1868,79 @@ in the page's memory only.
 
 ---
 
+## 12. The designer: AI-proposed graph edits
+
+An **Assistant** tab in the editor lets the operator talk to a model about the workflow on the canvas. A question gets a
+reply; a request for a change gets a reply and a **whole proposed graph**. The designer proposes and writes nothing:
+accepting a proposal changes the working canvas only, and saving stays the operator's ([ADR 0022](../adr/0022-ai-proposed-graph-edits.md)).
+It never starts a run and never sets `allowsActions` or `triggerSources`. Code: `Client.Application/Services/GraphWorkflows/Designer/`
+(`GraphWorkflowDesignerService`), `RunGraphWorkflowDesignerTurnEndpoint`.
+
+**Route.** `POST graph-workflows/designer/turn` (`LocalApiRoutes.GraphWorkflows.DesignerTurn`), Operator policy, the
+graph family's body cap.
+
+| Request member | Notes |
+|---|---|
+| `definitionId` | Optional. Supplies the definition's real `allowsActions` for validation; absent, action tools count as not allowed. |
+| `modelName` | Required; a node-local chat model or a model the cloud path serves. |
+| `messages` | `{ role: user\|assistant, text }`, 1 to 50, the last one the operator's, each up to 8000 characters (`RunGraphWorkflowDesignerTurnRequestValidator`); the whole conversation travels on every turn, so the node cuts a longer `reply` to the same cap. |
+| `graph` | The working graph in the wire shape; may be empty or invalid. Sent even with no nodes, so its `kind` and `chat` settings are kept. |
+| `selectedNodeKey` | Optional focus for "Ask AI" on a node. |
+| `intent` | `auto` (the default; the model decides), `ask` (reply only) or `change` (a proposal is expected). |
+
+The 200 response carries `reply`; `proposal` (a graph, null when the model only replied); `changes`
+(`{ kind: node\|edge, key, change: added\|removed\|modified }`); `validation` (the validate route's shape, errors and
+warnings, null without a proposal); `attempts` (model calls this turn, retries included); and `generationMetadata`
+(model, time, duration, tokens). A proposal with `validation.valid` false is still a 200: the editor shows it and
+cannot accept it.
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | (problem details) | A member is missing or over its cap, the conversation plus the working graph exceeds the drafting prompt budget (checked before the slot is taken), or the model is neither an installed node-local chat model nor a cloud model. |
+| 403 | `CloudLocalDataWithheld` | The model leaves the node and neither its connection's `LocalData` grant nor `AllowCloudModelAccess` admits it. `grant` is `LocalData`; the message names both switches. |
+| 409 | `NodeBusy` | A run or a draft holds the node. Turns never queue. |
+| 413 | (problem details) | Body over the graph family's cap. |
+| 422 | `Unparseable` | The model returned nothing usable, or the generation budget (the node's message-request timeout unless drafting pins one) elapsed. |
+| 502 | `ProviderFailed` | The model provider refused or failed the request. Only its HTTP status is reported or logged, never its body. |
+
+**One turn.**
+
+1. The service checks eligibility with the drafting rule and the cloud gate **before** taking the slot, then takes the
+   `DraftAdmissionGate`. A node-local model resolves through the node's provider resolver with `Transient` residency and
+   the llama.cpp thinking-off marker; any other model goes through the node's routing chat client. The designer is given
+   no tools.
+2. The prompt is a static system prompt (an embedded Markdown resource, pinned by a drift test that names every node
+   kind and config member) plus the config members per kind, the non-action tool catalog (action tools only when the
+   definition allows actions), installed models and agents, the working graph and the selected node.
+3. The model answers a `{ reply, proposal }` envelope through structured output, every member required and nullable
+   (llama.cpp emits required properties first, so optional members would reorder the grammar). The node builds the
+   schema itself (`GraphWorkflowDesignerService.ResponseFormat`): llama.cpp rejects a boolean subschema, so a node's
+   `config` is `object` or null and a condition `value` is a scalar or null, never the `true` a `JsonElement` exports as.
+4. **Fix-up loop.** A proposal goes through `GraphWorkflowGraphContract` and the tool gate under the definition's real
+   `allowsActions`, then the semantic lint (§2.4). Errors and lint findings go back to the model up to two times
+   (`MaxFixUpRetries`); a `change` turn that returned no proposal is nudged once. A proposal still invalid is returned
+   marked invalid; lint findings that survive the retries move from the warnings to the errors of the designer's
+   report, so such a proposal reads invalid and cannot be accepted (the validate and save routes keep them as warnings).
+   A reply-only answer with an empty reply counts as unusable and is retried; a proposal sent without a reply gets a
+   fixed one counting its changes.
+
+**Changes.** `changes` is computed on the **parsed** typed graphs, the working graph against the proposal, so a member
+equal to its parser default, and a moved node, are no change. Nodes and edges are keyed by node key and by edge. A change to the graph-level settings (`kind`, the `chat` block) is
+one `{ kind: graph, key: settings, change: modified }` entry, and the review names each setting that differs.
+
+**Gate.** The workflow and the conversation are node-local data, so a model that leaves the node is admitted only through
+`CloudLocalDataGate` (§4.3, [Security & Privacy](12-security-and-privacy.md)). Nothing falls back to another model.
+Model text is never logged.
+
+**UI.** The editor side pane is **Inspector** and **Assistant** tabs (the narrow drawer carries the same two). A
+selection turns to the Inspector; a reply never takes focus and marks the Assistant tab instead. The editor is in one of
+three states: `editing`; `generating` (every mutator is a no-op and the canvas turns React Flow's editing gestures off);
+`reviewing` (the proposal drawn diff-tagged from `changes`, removed elements ghosted from the working graph, inspectable
+but not mutable). **Accept** is offered only for a valid, non-stale proposal; it replaces the working canvas, keeps the
+saved baseline so the editor is dirty, and offers one **Undo** until the next edit or save. Reject, Cancel and any
+failure return to `editing` with the graph untouched and the message back in the input. A busy node, a refused cloud
+model and unusable output each get their own message. The chat lives in the client's memory; **New chat** clears it.
+
 ## Related pages
 
 - [Architecture Overview](01-architecture-overview.md) — where the module sits in the host.
@@ -1859,3 +1954,4 @@ in the page's memory only.
 - [ADR 0001](../adr/0001-development-mode-restart-recovery.md) — the never-resume-a-stream restart posture §3.5
   applies.
 - [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md) — the tool trust boundary §4.3 rests on.
+- [ADR 0022](../adr/0022-ai-proposed-graph-edits.md) — the designer §12 and the amended operator-authored invariant.

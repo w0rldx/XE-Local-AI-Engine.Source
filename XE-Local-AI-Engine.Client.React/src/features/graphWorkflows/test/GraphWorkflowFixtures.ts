@@ -12,6 +12,8 @@ import type {
 	GraphWorkflowConversationRunResponse,
 	GraphWorkflowDefinitionResponse,
 	GraphWorkflowDefinitionSummaryResponse,
+	GraphWorkflowDesignerChangeResponse,
+	GraphWorkflowDesignerTurnResponse,
 	GraphWorkflowGraph,
 	GraphWorkflowNodeRunResponse,
 	GraphWorkflowNodeRunSummaryResponse,
@@ -541,6 +543,55 @@ export function graphWorkflowTools(overrides: Partial<ListGraphWorkflowToolsResp
 				isAction: false,
 			},
 		],
+		...overrides,
+	};
+}
+
+/**
+ * A designer proposal over {@link eightNodeGraph}: the Tool branch is replaced by an Agent that writes a note, and the
+ * analysis node is relabelled. One of each change kind, for nodes and for edges.
+ */
+export const designerProposal: GraphWorkflowGraph = {
+	...eightNodeGraph,
+	nodes: [
+		...(eightNodeGraph.nodes ?? [])
+			.filter((node) => node.key !== "lookup")
+			.map((node) => (node.key === "analyze" ? { ...node, label: "Analyse the request" } : node)),
+		{
+			key: "note",
+			kind: "Agent",
+			label: "Write a note",
+			position: { x: 120, y: 360 },
+			config: { instructions: "Write a short note about the request." },
+		},
+	],
+	edges: [
+		...(eightNodeGraph.edges ?? []).filter((edge) => edge.key !== "e4" && edge.key !== "e6"),
+		{ key: "e10", from: "check", to: "note", label: "no", sourceHandle: "false", condition: { op: "Ne", value: true } },
+		{ key: "e11", from: "note", to: "fanout" },
+	],
+};
+
+export const designerChanges: GraphWorkflowDesignerChangeResponse[] = [
+	{ kind: "node", key: "analyze", change: "modified" },
+	{ kind: "node", key: "lookup", change: "removed" },
+	{ kind: "node", key: "note", change: "added" },
+	{ kind: "edge", key: "e4", change: "removed" },
+	{ kind: "edge", key: "e6", change: "removed" },
+	{ kind: "edge", key: "e10", change: "added" },
+	{ kind: "edge", key: "e11", change: "added" },
+];
+
+export function designerTurnResponse(
+	overrides: Partial<GraphWorkflowDesignerTurnResponse> = {},
+): GraphWorkflowDesignerTurnResponse {
+	return {
+		reply: "I replaced the file lookup with a note.",
+		proposal: designerProposal,
+		changes: designerChanges,
+		validation: { valid: true, errors: [], warnings: [], nodeCount: 8 },
+		attempts: 1,
+		generationMetadata: { model: "qwen-27b", generatedAtUtc: 0, durationMs: 1200, inputTokens: null, outputTokens: null },
 		...overrides,
 	};
 }

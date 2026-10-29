@@ -81,7 +81,7 @@ internal sealed class GraphWorkflowGraph
     ///     is how a Tool node's <c>toolName</c> written on an Agent node becomes an author-time error rather than a
     ///     setting nothing applies.
     /// </summary>
-    private static readonly Dictionary<GraphWorkflowNodeKind, string[]> ConfigMembers = new()
+    internal static readonly IReadOnlyDictionary<GraphWorkflowNodeKind, string[]> ConfigMembers = new Dictionary<GraphWorkflowNodeKind, string[]>
     {
         [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput", "aliases"],
         [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments"],
@@ -159,6 +159,8 @@ internal sealed class GraphWorkflowGraph
 
     private IReadOnlyList<GraphWorkflowValidationError>? _responseSchemaWarnings;
 
+    private IReadOnlyList<GraphWorkflowValidationError>? _semanticLintWarnings;
+
     private GraphWorkflowGraph(GraphWorkflowDefinitionKind kind,
         GraphWorkflowChatSettings? chat,
         IReadOnlyDictionary<string, GraphWorkflowGraphNode> nodes,
@@ -223,7 +225,7 @@ internal sealed class GraphWorkflowGraph
     ///     graph with warnings saves, validates as valid and runs. Computed on the first ask, because only the
     ///     validate endpoint asks and every dispatcher tick parses.
     /// </remarks>
-    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= [.. PauseContextWarnings(), .. ResponseSchemaWarnings];
+    public IReadOnlyList<GraphWorkflowValidationError> Warnings => _warnings ??= [.. PauseContextWarnings(), .. ResponseSchemaWarnings, .. SemanticLintWarnings];
 
     /// <summary>
     ///     The response-schema half of <see cref="Warnings" />, exposed on its own because it is the half a caller may
@@ -235,6 +237,9 @@ internal sealed class GraphWorkflowGraph
     ///     <c>GraphWorkflowDefinitionService</c> filters these per node instead.
     /// </remarks>
     internal IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings => _responseSchemaWarnings ??= BuildResponseSchemaWarnings();
+
+    /// <summary>The <see cref="GraphWorkflowSemanticLint" /> half of <see cref="Warnings" />, exposed on its own because the workflow designer treats it as must-fix.</summary>
+    internal IReadOnlyList<GraphWorkflowValidationError> SemanticLintWarnings => _semanticLintWarnings ??= GraphWorkflowSemanticLint.Check(this);
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];

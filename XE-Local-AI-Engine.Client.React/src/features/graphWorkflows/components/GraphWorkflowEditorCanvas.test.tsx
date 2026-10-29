@@ -12,6 +12,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowEditorCanvas } from "@/features/graphWorkflows/components/GraphWorkflowEditorCanvas";
+import classes from "@/features/graphWorkflows/components/GraphWorkflowNodes.module.css";
 import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
 import {
 	type GraphWorkflowCanvasEdge,
@@ -20,13 +21,17 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { GRAPH_WORKFLOW_MAX_NODES, type GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
-import { eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import { designerChanges, designerProposal, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // `dropPosition` is what the mocked `screenToFlowPosition` answers: jsdom has no layout and its synthetic drop event
 // carries no usable client coordinates, so the sentinel is how a test tells "dropped where the pointer was" apart from
 // "added at the palette's default slot".
-const flow = vi.hoisted(() => ({ props: undefined as Record<string, unknown> | undefined, dropPosition: { x: 11, y: 22 } }));
+const flow = vi.hoisted(() => ({
+	props: undefined as Record<string, unknown> | undefined,
+	dropPosition: { x: 11, y: 22 },
+	fitView: vi.fn(() => Promise.resolve(true)),
+}));
 
 vi.mock("@xyflow/react", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@xyflow/react")>()),
@@ -34,7 +39,7 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
 	Controls: () => null,
 	Handle: () => null,
 	ReactFlowProvider: ({ children }: { readonly children: React.ReactNode }) => children,
-	useReactFlow: () => ({ screenToFlowPosition: () => flow.dropPosition }),
+	useReactFlow: () => ({ screenToFlowPosition: () => flow.dropPosition, fitView: flow.fitView }),
 	ReactFlow: (props: Record<string, unknown>) => {
 		flow.props = props;
 		// A button, not a div: the drop handlers the canvas passes down would otherwise trip the a11y rules on a static element.
@@ -334,5 +339,98 @@ describe("GraphWorkflowEditorCanvas selection and issues", () => {
 		renderWithProviders(<Harness initial={eightNodeGraph} />);
 
 		expect(flowProps().connectionRadius).toBe(40);
+	});
+});
+
+/** The editor with two buttons that drive it into a designer turn and into review of the fixture proposal. */
+function DesignerHarness() {
+	const editor = useGraphWorkflowEditor(eightNodeGraph);
+	return (
+		<>
+			<button type="button" data-testid="harness-generate" onClick={() => editor.beginGenerating()} />
+			<button
+				type="button"
+				data-testid="harness-propose"
+				onClick={() =>
+					editor.showProposal({
+						proposal: designerProposal,
+						changes: designerChanges,
+						valid: true,
+						errors: [],
+						basis: editor.graph,
+					})
+				}
+			/>
+			<button type="button" data-testid="harness-accept" onClick={() => editor.acceptProposal()} />
+			<button type="button" data-testid="harness-undo" onClick={editor.undoAccept} />
+			<button type="button" data-testid="harness-edit" onClick={() => editor.updateNodeData("start", { label: "Begin" })} />
+			<GraphWorkflowEditorCanvas editor={editor} issues={[]} onSelectNode={() => undefined} onSelectEdge={() => undefined} />
+		</>
+	);
+}
+
+describe("GraphWorkflowEditorCanvas designer states", () => {
+	it("hands React Flow every editing gesture only while editing", () => {
+		renderWithProviders(<DesignerHarness />);
+
+		expect(flowProps().nodesDraggable).toBe(true);
+		expect(flowProps().deleteKeyCode).toEqual(["Delete", "Backspace"]);
+
+		fireEvent.click(screen.getByTestId("harness-generate"));
+
+		expect(flowProps().nodesDraggable).toBe(false);
+		expect(flowProps().nodesConnectable).toBe(false);
+		expect(flowProps().elementsSelectable).toBe(false);
+		expect(flowProps().deleteKeyCode).toBeNull();
+		expect(flowProps().onNodesChange).toBeUndefined();
+		expect(screen.getByTestId<HTMLButtonElement>("graph-workflow-palette-agent").disabled).toBe(true);
+		expect(screen.getByTestId<HTMLButtonElement>("graph-workflow-auto-arrange").disabled).toBe(true);
+
+		fireEvent.click(screen.getByTestId("harness-propose"));
+
+		// Under review the proposal can be inspected, never edited.
+		expect(flowProps().elementsSelectable).toBe(true);
+		expect(flowProps().nodesDraggable).toBe(false);
+		expect(flowProps().deleteKeyCode).toBeNull();
+	});
+
+	it("re-frames the viewport when a proposal is shown, accepted and undone, and never on an ordinary edit", () => {
+		renderWithProviders(<DesignerHarness />);
+		flow.fitView.mockClear();
+
+		fireEvent.click(screen.getByTestId("harness-generate"));
+		expect(flow.fitView).toHaveBeenCalledTimes(0);
+
+		fireEvent.click(screen.getByTestId("harness-propose"));
+		expect(flow.fitView).toHaveBeenCalledTimes(1);
+
+		fireEvent.click(screen.getByTestId("harness-accept"));
+		expect(flow.fitView).toHaveBeenCalledTimes(2);
+
+		fireEvent.click(screen.getByTestId("harness-undo"));
+		expect(flow.fitView).toHaveBeenCalledTimes(3);
+
+		fireEvent.click(screen.getByTestId("harness-edit"));
+		expect(flow.fitView).toHaveBeenCalledTimes(3);
+	});
+
+	it("draws the proposal with each element tagged and styled by its change, and the removed ones ghosted", () => {
+		renderWithProviders(<DesignerHarness />);
+		fireEvent.click(screen.getByTestId("harness-generate"));
+		fireEvent.click(screen.getByTestId("harness-propose"));
+
+		const diffOf = (id: string) => flowNodes().find((node) => node.id === id)?.data["diff"];
+		expect(diffOf("note")).toBe("added");
+		expect(diffOf("analyze")).toBe("modified");
+		// Not in the proposal: drawn from the working graph so the operator sees what goes.
+		expect(diffOf("lookup")).toBe("removed");
+		expect(diffOf("start")).toBeUndefined();
+
+		const classOf = (id: string) => flowEdges().find((edge) => edge.id === id)?.className;
+		expect(classOf("e10")).toBe(classes["edge-added"]);
+		expect(classOf("e4")).toBe(classes["edge-removed"]);
+		expect(classOf("e6")).toBe(classes["edge-removed"]);
+		expect(classOf("e1")).toBeUndefined();
+		expect(flowEdges()).toHaveLength((designerProposal.edges ?? []).length + 2);
 	});
 });

@@ -10,7 +10,7 @@
 // The Agent and Tool bodies live in `config/` for size alone; every other kind is a handful of controls and stays here.
 
 import { Button, Checkbox, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, Textarea, TextInput } from "@mantine/core";
-import { IconTrash } from "@tabler/icons-react";
+import { IconSparkles, IconTrash } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ZodType } from "zod";
@@ -79,6 +79,8 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
 	readonly graphSettings?: GraphWorkflowGraphSettings;
 	readonly readOnly?: boolean;
+	/** Opens the Assistant tab about this node. Absent where there is no assistant, such as the run view. */
+	readonly onAskAssistant?: () => void;
 }
 
 /** The per-field Zod schema for a kind, on top of `nodeCommonSchema`. `Parallel` and `Join` configure nothing. */
@@ -140,6 +142,7 @@ export function GraphWorkflowNodeConfigPanel({
 	decisionModelOptionsReady = true,
 	graphSettings = standardGraphSettings,
 	readOnly = false,
+	onAskAssistant,
 }: GraphWorkflowNodeConfigPanelProps) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
@@ -425,6 +428,17 @@ export function GraphWorkflowNodeConfigPanel({
 				<Text fw={600} data-testid="gw-node-config-kind">
 					{t(`pages.graphWorkflows.nodeKind.${node.kind}`, node.kind)}
 				</Text>
+				{onAskAssistant === undefined ? null : (
+					<Button
+						size="xs"
+						variant="subtle"
+						leftSection={<IconSparkles size={14} />}
+						onClick={onAskAssistant}
+						data-testid="gw-node-config-ask-ai"
+					>
+						{t("pages.graphWorkflows.designer.askAboutNode", "Ask AI")}
+					</Button>
+				)}
 				<Button
 					size="xs"
 					variant="light"

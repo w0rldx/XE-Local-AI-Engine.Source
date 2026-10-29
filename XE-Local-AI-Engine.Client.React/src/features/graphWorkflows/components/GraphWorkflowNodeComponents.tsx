@@ -134,10 +134,18 @@ export function GraphWorkflowNodeCard({ data, selected }: NodeProps<GraphWorkflo
 	const runState = data.runState;
 	// A boolean the CANVAS writes from the issue list, so the card needs no knowledge of the validator.
 	const hasIssue = data["hasIssue"] === true;
+	// A designer proposal under review tags each card it adds, changes or removes; the editor itself never does.
+	const diff = typeof data["diff"] === "string" ? data["diff"] : undefined;
 
 	return (
 		<div
-			className={cx(classes["node"], selected === true && classes["node-selected"], hasIssue && classes["node-issue"])}
+			className={cx(
+				classes["node"],
+				selected === true && classes["node-selected"],
+				hasIssue && classes["node-issue"],
+				diff !== undefined && classes[`node-${diff}`],
+			)}
+			{...(diff === undefined ? {} : { "data-diff": diff })}
 			data-testid={`graph-workflow-node-${data.key}`}
 			data-kind={data.kind}
 			data-has-issue={hasIssue ? "true" : "false"}

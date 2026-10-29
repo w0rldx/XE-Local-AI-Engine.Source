@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Designer;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -65,6 +66,10 @@ internal static class AddNodeGraphWorkflowsExtensions
 
         // Intent routing over the two seams above (docs/wiki/21-graph-workflows.md, "Intent routing").
         builder.Services.AddScoped<GraphWorkflowIntentService>();
+
+        // The workflow designer: proposes graphs and writes nothing. Scoped like the definitions seam it validates through; it
+        // shares drafting's process-wide admission gate (AddNodeDrafting), so a turn never runs beside a run or a draft.
+        builder.Services.AddScoped<IGraphWorkflowDesignerService, GraphWorkflowDesignerService>();
 
         // The chat surface over runs (send, bound-run list, cancel on conversation delete), and the dispatcher's publish outbox
         // pass, which the tick resolves from its own scope.

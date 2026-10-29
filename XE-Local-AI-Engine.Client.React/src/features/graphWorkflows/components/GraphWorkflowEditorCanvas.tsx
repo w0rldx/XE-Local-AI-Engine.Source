@@ -32,7 +32,7 @@ import {
 	ReactFlowProvider,
 	useReactFlow,
 } from "@xyflow/react";
-import { type ReactNode, useCallback, useMemo } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import "@xyflow/react/dist/style.css";
@@ -105,33 +105,53 @@ function GraphWorkflowEditorCanvasInner({
 	toolbar,
 }: GraphWorkflowEditorCanvasProps) {
 	const { t } = useTranslation();
-	const { screenToFlowPosition } = useReactFlow();
+	const { screenToFlowPosition, fitView } = useReactFlow();
+
+	// A proposal shown, accepted or undone is a different graph from the one framed on load, and the old viewport can
+	// leave it off-screen or tiny. Epoch 0 is the load itself, which the `fitView` prop already frames.
+	const viewEpoch = editor.viewEpoch;
+	useEffect(() => {
+		if (viewEpoch > 0) {
+			// Best-effort, as in the run view: fitView rejects when the flow unmounts mid-frame, which is not a page error.
+			fitView().catch(() => undefined);
+		}
+	}, [fitView, viewEpoch]);
 
 	const issueSubjects = useMemo(
 		() => new Set(issues.flatMap((issue) => (issue.subject !== undefined && issue.subject.length > 0 ? [issue.subject] : []))),
 		[issues],
 	);
 
+	const isEditing = editor.mode === "editing";
+	// While a proposal is under review the canvas draws IT, diff-tagged; the working graph stays untouched underneath.
+	const shown = editor.mode === "reviewing" && editor.review !== undefined ? editor.review.canvas : editor;
+
 	// Selection and the issue ring are RENDER state, not editor state: the page owns the selection (it is a search
 	// param) and the issue list is merged from two sources, so neither belongs in the node data the graph is built from.
+	// The issues describe the working graph, so a proposal under review is not ringed with them.
 	const renderNodes = useMemo(
 		() =>
-			editor.nodes.map((node) => ({
+			shown.nodes.map((node) => ({
 				...node,
 				selected: node.id === selectedNodeKey,
-				data: { ...node.data, hasIssue: issueSubjects.has(node.id) },
+				data: { ...node.data, hasIssue: shown === editor && issueSubjects.has(node.id) },
 			})),
-		[editor.nodes, issueSubjects, selectedNodeKey],
+		[editor, shown, issueSubjects, selectedNodeKey],
 	);
 
 	const renderEdges = useMemo(
 		() =>
-			editor.edges.map((edge) => ({
-				...edge,
-				selected: edge.id === selectedEdgeId,
-				...(issueSubjects.has(edge.id) ? { className: classes["edge-issue"] } : {}),
-			})),
-		[editor.edges, issueSubjects, selectedEdgeId],
+			shown.edges.map((edge) => {
+				const diff = edge.data?.["diff"];
+				const className =
+					typeof diff === "string"
+						? classes[`edge-${diff}`]
+						: shown === editor && issueSubjects.has(edge.id)
+							? classes["edge-issue"]
+							: undefined;
+				return { ...edge, selected: edge.id === selectedEdgeId, ...(className === undefined ? {} : { className }) };
+			}),
+		[editor, shown, issueSubjects, selectedEdgeId],
 	);
 
 	const onNodeClick = useCallback(
@@ -216,7 +236,7 @@ function GraphWorkflowEditorCanvasInner({
 									size="xs"
 									variant="light"
 									leftSection={<Icon size={14} />}
-									disabled={!editor.canAddNode}
+									disabled={!editor.canAddNode || !isEditing}
 									onClick={() => editor.addNode(kind)}
 									data-testid={`graph-workflow-palette-${type}`}
 								>
@@ -232,6 +252,7 @@ function GraphWorkflowEditorCanvasInner({
 						variant="default"
 						leftSection={<IconLayoutDistributeVertical size={14} />}
 						onClick={editor.autoArrange}
+						disabled={!isEditing}
 						data-testid="graph-workflow-auto-arrange"
 					>
 						{t("pages.graphWorkflows.editor.autoArrange", "Auto-arrange")}
@@ -260,14 +281,25 @@ function GraphWorkflowEditorCanvasInner({
 					"Drag a node onto the canvas, or click one in the palette. Select a node or a connection and press Delete to remove it.",
 				)}
 			</Text>
-			<Paper withBorder={true} style={{ flex: 1, minHeight: 240 }} data-testid="graph-workflow-canvas">
+			<Paper
+				withBorder={true}
+				// Dimmed while a turn is in flight: the graph it was asked about must not move under it.
+				style={{ flex: 1, minHeight: 240, opacity: editor.mode === "generating" ? 0.55 : 1 }}
+				data-testid="graph-workflow-canvas"
+				data-mode={editor.mode}
+			>
 				<ReactFlow
 					nodes={renderNodes}
 					edges={renderEdges}
 					nodeTypes={nodeTypes}
-					onNodesChange={editor.onNodesChange}
-					onEdgesChange={editor.onEdgesChange}
-					onConnect={editor.onConnect}
+					// The editor drops every change outside `editing` anyway; off here as well, so the canvas does not offer
+					// a gesture it would then ignore. A proposal stays selectable, so its nodes can be inspected.
+					onNodesChange={isEditing ? editor.onNodesChange : undefined}
+					onEdgesChange={isEditing ? editor.onEdgesChange : undefined}
+					onConnect={isEditing ? editor.onConnect : undefined}
+					nodesDraggable={isEditing}
+					nodesConnectable={isEditing}
+					elementsSelectable={editor.mode !== "generating"}
 					onNodeClick={onNodeClick}
 					onEdgeClick={onEdgeClick}
 					onPaneClick={onPaneClick}
@@ -278,7 +310,7 @@ function GraphWorkflowEditorCanvasInner({
 					// land on the dot itself.
 					connectionRadius={40}
 					minZoom={0.1}
-					deleteKeyCode={["Delete", "Backspace"]}
+					deleteKeyCode={isEditing ? ["Delete", "Backspace"] : null}
 					proOptions={{ hideAttribution: true }}
 					data-testid="graph-workflow-canvas-dropzone"
 				>

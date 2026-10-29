@@ -142,7 +142,10 @@ export function useGraphWorkflowEditorPage(
 	const layoutIsUnsaved = (loadedGraph?.nodes ?? []).some((node) => !node.position);
 	// Rename's version bump reloads the canvas, which re-runs the auto-layout on a graph with no stored layout: so there
 	// a position-only difference may pass (an unsaved drag on such a graph is dropped), while a stored layout keeps the clean-canvas rule.
-	const canEditMeta = !editor.isDirty || (layoutIsUnsaved && graphWorkflowsEqualIgnoringPositions(editor.graph, loadedGraph));
+	// Never during a designer turn or review either: the version bump reloads the canvas under the turn.
+	const canEditMeta =
+		editor.mode === "editing" &&
+		(!editor.isDirty || (layoutIsUnsaved && graphWorkflowsEqualIgnoringPositions(editor.graph, loadedGraph)));
 
 	// CONTENT, not object identity. A successful save invalidates the definition, the refetch answers a new version,
 	// and the load-once effect calls `reset` — which mints a fresh `editor.graph` for a document that did not change,
@@ -210,7 +213,8 @@ export function useGraphWorkflowEditorPage(
 			});
 	};
 
-	const canSave = definition?.id !== undefined && editor.isDirty && editor.issues.length === 0;
+	// Only while editing: a save during a designer turn or review would persist a graph the operator is not looking at.
+	const canSave = definition?.id !== undefined && editor.mode === "editing" && editor.isDirty && editor.issues.length === 0;
 	const isSaving = validateMutation.isPending || updateMutation.isPending;
 
 	const saveGraph = async (): Promise<void> => {
@@ -247,6 +251,9 @@ export function useGraphWorkflowEditorPage(
 	// After a 409 the canvas holds edits made against a version that no longer exists. Reload drops the load guard and
 	// refetches; the effect above then resets the canvas onto whatever the other editor saved.
 	const handleReload = (): void => {
+		if (editor.mode !== "editing") {
+			return;
+		}
 		setSaveConflict(false);
 		loadedRef.current = undefined;
 		definitionQuery.refetch().catch(() => undefined);
@@ -260,7 +267,8 @@ export function useGraphWorkflowEditorPage(
 		triggerSources: string[] | null;
 	}): void => {
 		const mode = metaDialog;
-		if (mode === undefined) {
+		// A rename or save-as reloads or replaces the definition, which a designer turn or review must not see happen.
+		if (mode === undefined || editor.mode !== "editing") {
 			return;
 		}
 		const done = (): void => setMetaDialog(undefined);
@@ -408,9 +416,11 @@ export function useGraphWorkflowEditorPage(
 		}
 	}, [editor.nodes]);
 
-	const selectedNode = selection.nodeKey === undefined ? undefined : editor.nodes.find((node) => node.id === selection.nodeKey);
-	const selectedEdge = selectedEdgeId === undefined ? undefined : editor.edges.find((edge) => edge.id === selectedEdgeId);
-	const sourceNode = selectedEdge === undefined ? undefined : editor.nodes.find((node) => node.id === selectedEdge.source)?.data;
+	// While a proposal is under review the Inspector reads the PROPOSAL's elements, the ones the canvas is drawing.
+	const shown = editor.mode === "reviewing" && editor.review !== undefined ? editor.review.canvas : editor;
+	const selectedNode = selection.nodeKey === undefined ? undefined : shown.nodes.find((node) => node.id === selection.nodeKey);
+	const selectedEdge = selectedEdgeId === undefined ? undefined : shown.edges.find((edge) => edge.id === selectedEdgeId);
+	const sourceNode = selectedEdge === undefined ? undefined : shown.nodes.find((node) => node.id === selectedEdge.source)?.data;
 
 	const closeSidePanel = (): void => {
 		setSelectedEdgeId(undefined);

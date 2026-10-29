@@ -3306,6 +3306,38 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 	updatedAtUtc: z.int(),
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerChangeResponse = z.object({
+	kind: z.string(),
+	key: z.string(),
+	change: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorCode = z.enum([
+	"NodeBusy",
+	"Unparseable",
+	"CloudLocalDataWithheld",
+	"ProviderFailed",
+]);
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorResponse = z.object({
+	code: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorCode,
+	message: z.string(),
+	grant: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerGenerationMetadata = z.object({
+	model: z.string(),
+	generatedAtUtc: z.int(),
+	durationMs: z.int(),
+	inputTokens: z.int().nullable(),
+	outputTokens: z.int().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest = z.object({
+	role: z.string().optional(),
+	text: z.string().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondition = z.object({
 	path: z.string().nullish(),
 	op: z.string().optional(),
@@ -3576,6 +3608,15 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToo
 	tools: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse),
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1RunGraphWorkflowDesignerTurnRequest = z.object({
+	definitionId: z.guid().nullish(),
+	modelName: z.string().min(0).max(200).optional(),
+	messages: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest).optional(),
+	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.optional(),
+	selectedNodeKey: z.string().min(0).max(64).nullish(),
+	intent: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest = z.object({
 	requestId: z.guid().min(1),
 	definitionId: z.guid().min(1),
@@ -3626,6 +3667,18 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflo
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	warnings: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerTurnResponse = z.object({
+	reply: z.string(),
+	proposal: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.nullable(),
+	changes: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerChangeResponse),
+	validation: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse.nullable(),
+	attempts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	generationMetadata: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerGenerationMetadata,
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1BrowseImageRepositoriesRequest = z.record(z.string(), z.never());
@@ -11854,6 +11907,15 @@ export const zStartGraphWorkflowRunPath = z.object({
  * Accepted
  */
 export const zStartGraphWorkflowRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse;
+
+export const zRunGraphWorkflowDesignerTurnBody =
+	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1RunGraphWorkflowDesignerTurnRequest;
+
+/**
+ * Success
+ */
+export const zRunGraphWorkflowDesignerTurnResponse =
+	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerTurnResponse;
 
 export const zInvokeGraphWorkflowIntentBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest;
 

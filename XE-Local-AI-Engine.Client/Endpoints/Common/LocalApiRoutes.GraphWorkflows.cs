@@ -41,6 +41,12 @@ public static partial class LocalApiRoutes
         public const string DefinitionsImport = "graph-workflows/definitions/import";
 
         /// <summary>
+        ///     One turn of the workflow designer: a reply and, when a change was asked for, a whole proposed graph, validated
+        ///     and linted. Writes nothing; the operator accepts a proposal into the canvas and saves it.
+        /// </summary>
+        public const string DesignerTurn = "graph-workflows/designer/turn";
+
+        /// <summary>
         ///     The Tool node's picker feed: every tool a Tool node may actually run, already filtered server-side to
         ///     the invocation envelope by the same service the runtime invokes through, so the picker cannot offer a name the
         ///     run would then refuse.

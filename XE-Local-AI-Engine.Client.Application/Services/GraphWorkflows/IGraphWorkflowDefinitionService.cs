@@ -26,6 +26,10 @@ public interface IGraphWorkflowDefinitionService
     /// </remarks>
     Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, CancellationToken cancellationToken = default);
 
+    /// <summary>The same report, with the tool gate judging action tools under <paramref name="allowsActions" /> rather than admitting them.</summary>
+    /// <remarks>For a caller that knows which definition the graph belongs to, as the workflow designer does.</remarks>
+    Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, bool allowsActions, CancellationToken cancellationToken = default);
+
     /// <summary>Validates and stores. Throws <see cref="GraphWorkflowValidationException" /> before reaching the store.</summary>
     Task<GraphWorkflowDefinitionSnapshot> CreateAsync(string name, string? description, string graphJson, CancellationToken cancellationToken = default);
 

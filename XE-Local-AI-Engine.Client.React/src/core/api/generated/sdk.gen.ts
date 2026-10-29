@@ -1204,6 +1204,9 @@ import type {
 	RevokeNodeAuthSessionData,
 	RevokeNodeAuthSessionErrors,
 	RevokeNodeAuthSessionResponses,
+	RunGraphWorkflowDesignerTurnData,
+	RunGraphWorkflowDesignerTurnErrors,
+	RunGraphWorkflowDesignerTurnResponses,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalErrors,
 	RunPlaybookActionEvalResponses,
@@ -1838,6 +1841,7 @@ import {
 	zRevokeLocalModelProxyApiKeyResponse,
 	zRevokeMcpServerApiKeyResponse,
 	zRevokeNodeAuthSessionResponse,
+	zRunGraphWorkflowDesignerTurnResponse,
 	zRunPlaybookActionEvalResponse,
 	zRunTrainingArtifactSmokeResponse,
 	zSaveCloudSettingsResponse,
@@ -7141,6 +7145,32 @@ export const startGraphWorkflowRun = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/graph-workflows/definitions/{definitionId}/runs",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const runGraphWorkflowDesignerTurn = <ThrowOnError extends boolean = true>(
+	options: Options<RunGraphWorkflowDesignerTurnData, ThrowOnError>,
+): RequestResult<RunGraphWorkflowDesignerTurnResponses, RunGraphWorkflowDesignerTurnErrors, ThrowOnError> =>
+	(options.client ?? client).post<RunGraphWorkflowDesignerTurnResponses, RunGraphWorkflowDesignerTurnErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zRunGraphWorkflowDesignerTurnResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/designer/turn",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

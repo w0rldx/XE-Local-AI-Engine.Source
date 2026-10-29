@@ -19,9 +19,16 @@ export interface GraphWorkflowSettingsPopoverProps {
 	readonly settings: GraphWorkflowGraphSettings;
 	readonly onChange: (next: GraphWorkflowGraphSettings) => void;
 	readonly disabled?: boolean;
+	/** Openable but not editable: a designer proposal under review shows its settings here. */
+	readonly readOnly?: boolean;
 }
 
-export function GraphWorkflowSettingsPopover({ settings, onChange, disabled = false }: GraphWorkflowSettingsPopoverProps) {
+export function GraphWorkflowSettingsPopover({
+	settings,
+	onChange,
+	disabled = false,
+	readOnly = false,
+}: GraphWorkflowSettingsPopoverProps) {
 	const { t } = useTranslation();
 	const chat = settings.chat ?? {};
 	return (
@@ -51,6 +58,7 @@ export function GraphWorkflowSettingsPopover({ settings, onChange, disabled = fa
 								label: t(`pages.graphWorkflows.settings.kindOption.${kind}`, kind),
 							}))}
 							onChange={(value) => onChange({ ...settings, kind: narrowGraphWorkflowDefinitionKind(value) })}
+							readOnly={readOnly}
 							data-testid="gw-settings-kind"
 						/>
 						<Text size="xs" c="dimmed">
@@ -65,6 +73,7 @@ export function GraphWorkflowSettingsPopover({ settings, onChange, disabled = fa
 							<Switch
 								label={t("pages.graphWorkflows.settings.acceptsAttachments", "Accepts attachments")}
 								checked={chat.acceptsAttachments ?? graphWorkflowChatDefaults.acceptsAttachments}
+								disabled={readOnly}
 								onChange={(event) =>
 									onChange({ ...settings, chat: { ...chat, acceptsAttachments: event.currentTarget.checked } })
 								}
@@ -73,6 +82,7 @@ export function GraphWorkflowSettingsPopover({ settings, onChange, disabled = fa
 							<Switch
 								label={t("pages.graphWorkflows.settings.requireRerunConfirmation", "Confirm before running again")}
 								checked={chat.requireRerunConfirmation ?? graphWorkflowChatDefaults.requireRerunConfirmation}
+								disabled={readOnly}
 								onChange={(event) =>
 									onChange({ ...settings, chat: { ...chat, requireRerunConfirmation: event.currentTarget.checked } })
 								}

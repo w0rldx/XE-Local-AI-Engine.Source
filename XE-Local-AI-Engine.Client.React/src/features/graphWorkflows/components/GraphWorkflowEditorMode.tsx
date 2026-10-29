@@ -1,13 +1,15 @@
-import { Alert, Button, Drawer, Loader, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconSitemap } from "@tabler/icons-react";
+import { Alert, Box, Button, Drawer, Loader, Paper, Stack, Tabs, Text } from "@mantine/core";
+import { IconAlertTriangle, IconSitemap, IconSparkles } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
+import { GraphWorkflowAssistantPanel } from "@/features/graphWorkflows/components/GraphWorkflowAssistantPanel";
 import { GraphWorkflowDefinitionList } from "@/features/graphWorkflows/components/GraphWorkflowDefinitionList";
 import { GraphWorkflowDefinitionMetaDialog } from "@/features/graphWorkflows/components/GraphWorkflowDefinitionMetaDialog";
+import { GraphWorkflowDesignerReviewBar } from "@/features/graphWorkflows/components/GraphWorkflowDesignerReviewBar";
 import { GraphWorkflowEdgeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowEdgeConfigPanel";
 import { GraphWorkflowEditorCanvas } from "@/features/graphWorkflows/components/GraphWorkflowEditorCanvas";
 import { GraphWorkflowEditorToolbar } from "@/features/graphWorkflows/components/GraphWorkflowEditorToolbar";
@@ -15,6 +17,7 @@ import { GraphWorkflowNodeConfigPanel } from "@/features/graphWorkflows/componen
 import { GraphWorkflowSettingsPopover } from "@/features/graphWorkflows/components/GraphWorkflowSettingsPopover";
 import { GraphWorkflowStartRunDialog } from "@/features/graphWorkflows/components/GraphWorkflowStartRunDialog";
 import { GraphWorkflowValidationStrip } from "@/features/graphWorkflows/components/GraphWorkflowValidationStrip";
+import { useGraphWorkflowDesigner } from "@/features/graphWorkflows/hooks/useGraphWorkflowDesigner";
 import { useGraphWorkflowEditorPage } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditorPage";
 import { graphWorkflowAllowedUrls } from "@/features/graphWorkflows/models/GraphWorkflowExportFormat";
 import type { GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
@@ -74,6 +77,23 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		sourceNode,
 		closeSidePanel,
 	} = useGraphWorkflowEditorPage(selection, onSelectionChange);
+	const designer = useGraphWorkflowDesigner({ editor, definitionId, selectedNodeKey: selection.nodeKey, isNarrow });
+	const isEditing = editor.mode === "editing";
+
+	// Selecting something is a request to look at it: the side pane turns to the Inspector. A reply arriving never turns
+	// it the other way; it marks the Assistant tab instead.
+	const inspectNode = (nodeKey: string | undefined): void => {
+		selectNode(nodeKey);
+		if (nodeKey !== undefined) {
+			designer.setTab("inspector");
+		}
+	};
+	const inspectEdge = (edgeId: string | undefined): void => {
+		selectEdge(edgeId);
+		if (edgeId !== undefined) {
+			designer.setTab("inspector");
+		}
+	};
 
 	// The rail scrolls inside its own column rather than stretching the grid row. Harmless in the stacked narrow mode,
 	// where the column has no height to overflow.
@@ -110,15 +130,31 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				saveGraph().catch(() => undefined);
 			}}
 			onSaveAs={() => setMetaDialog("saveAs")}
+			canSaveAs={isEditing}
 			onStartRun={() => setStartOpened(true)}
 			onExport={handleExport}
 			isExporting={exportMutation.isPending}
 			settings={
-				<GraphWorkflowSettingsPopover
-					settings={editor.settings}
-					onChange={editor.updateSettings}
-					disabled={definition === undefined}
-				/>
+				<>
+					<GraphWorkflowSettingsPopover
+						settings={editor.review?.canvas.settings ?? editor.settings}
+						onChange={editor.updateSettings}
+						disabled={definition === undefined || editor.mode === "generating"}
+						readOnly={!isEditing}
+					/>
+					{/* On a wide screen the tab is always in view; on a narrow one the drawer has to be opened. */}
+					{isNarrow ? (
+						<Button
+							size="xs"
+							variant="default"
+							leftSection={<IconSparkles size={14} />}
+							onClick={() => designer.openAssistant()}
+							data-testid="gw-page-open-assistant"
+						>
+							{t("pages.graphWorkflows.designer.tab", "Assistant")}
+						</Button>
+					) : null}
+				</>
 			}
 		/>
 	);
@@ -140,7 +176,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 								"Someone saved this workflow while you were editing it. Reload to see their version — your edits on this canvas are dropped.",
 							)}
 						</Text>
-						<Button size="xs" variant="light" onClick={handleReload} data-testid="gw-page-reload">
+						<Button size="xs" variant="light" onClick={handleReload} disabled={!isEditing} data-testid="gw-page-reload">
 							{t("pages.graphWorkflows.page.reload", "Reload")}
 						</Button>
 					</Stack>
@@ -156,13 +192,14 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 					data-testid="gw-page-definition-error"
 				/>
 			) : null}
+			<GraphWorkflowDesignerReviewBar editor={editor} onRegenerate={designer.regenerate} />
 			<div style={{ flex: 1, minHeight: 0 }}>
 				<GraphWorkflowEditorCanvas
 					editor={editor}
 					selectedNodeKey={selection.nodeKey}
 					selectedEdgeId={selectedEdgeId}
-					onSelectNode={selectNode}
-					onSelectEdge={selectEdge}
+					onSelectNode={inspectNode}
+					onSelectEdge={inspectEdge}
 					issues={issues}
 					toolbar={toolbar}
 				/>
@@ -172,13 +209,13 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				warnings={serverWarnings}
 				onSelectSubject={(subject) => {
 					if (editor.nodes.some((node) => node.id === subject)) {
-						selectNode(subject);
+						inspectNode(subject);
 						return;
 					}
 					// A server issue can name a key the canvas no longer holds. Selecting nothing is the honest answer;
 					// `selectEdge` on a missing id would open an empty drawer over the canvas.
 					if (editor.edges.some((edge) => edge.id === subject)) {
-						selectEdge(subject);
+						inspectEdge(subject);
 					}
 				}}
 			/>
@@ -210,6 +247,14 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			llmModelOptionsReady={llmModelOptionsQuery.isSuccess}
 			decisionModelOptionsReady={decisionModelOptionsQuery.isSuccess}
 			graphSettings={editor.settings}
+			readOnly={!isEditing}
+			onAskAssistant={() =>
+				designer.openAssistant(
+					t("pages.graphWorkflows.designer.askAboutNodePrompt", "Explain the node “{{key}}” and suggest improvements.", {
+						key: selectedNode.id,
+					}),
+				)
+			}
 		/>
 	) : selectedEdge ? (
 		<GraphWorkflowEdgeConfigPanel
@@ -221,8 +266,54 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				editor.removeEdge(selectedEdge.id);
 				setSelectedEdgeId(undefined);
 			}}
+			readOnly={!isEditing}
 		/>
 	) : null;
+
+	// The same subtree in the wide side column and in the narrow drawer, so the two layouts cannot drift apart.
+	const sidePane =
+		definitionId === undefined ? null : (
+			<Tabs
+				value={designer.tab}
+				onChange={(value) => designer.setTab(value === "assistant" ? "assistant" : "inspector")}
+				data-testid="gw-page-side-tabs"
+			>
+				<Tabs.List grow={true}>
+					<Tabs.Tab value="inspector" data-testid="gw-page-tab-inspector">
+						{t("pages.graphWorkflows.designer.inspectorTab", "Inspector")}
+					</Tabs.Tab>
+					<Tabs.Tab
+						value="assistant"
+						data-testid="gw-page-tab-assistant"
+						rightSection={
+							designer.unread ? (
+								<Box
+									role="img"
+									aria-label={t("pages.graphWorkflows.designer.unread", "New reply")}
+									w={8}
+									h={8}
+									bg="blue.6"
+									style={{ borderRadius: "50%" }}
+									data-testid="gw-page-assistant-unread"
+								/>
+							) : null
+						}
+					>
+						{t("pages.graphWorkflows.designer.tab", "Assistant")}
+					</Tabs.Tab>
+				</Tabs.List>
+				<Tabs.Panel value="inspector" pt="sm">
+					{sidePanel ?? (
+						<Text size="sm" c="dimmed" data-testid="gw-page-inspector-empty">
+							{t("pages.graphWorkflows.designer.inspectorEmpty", "Select a node or a connection to see its settings.")}
+						</Text>
+					)}
+				</Tabs.Panel>
+				<Tabs.Panel value="assistant" pt="sm">
+					<GraphWorkflowAssistantPanel designer={designer} editorMode={editor.mode} selectedNodeKey={selection.nodeKey} />
+				</Tabs.Panel>
+			</Tabs>
+		);
 
 	// With no workflow at all the list's own empty text already says what to do; a second message here only repeats it.
 	const body =
@@ -248,9 +339,9 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				list={definitionList}
 				main={body}
 				side={
-					sidePanel === null ? null : (
+					sidePane === null ? null : (
 						<Paper withBorder={true} p="sm" style={{ minHeight: 0, overflowY: "auto" }} data-testid="gw-page-config-pane">
-							{sidePanel}
+							{sidePane}
 						</Paper>
 					)
 				}
@@ -258,16 +349,20 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				gridTestId="gw-page-editor-grid"
 			/>
 
-			{/* On a narrow viewport the config panel is the same subtree in a drawer — the panel itself is a plain Stack. */}
+			{/* On a narrow viewport the side pane is the same subtree in a drawer, opened by a selection or by the Assistant
+			    button. */}
 			<Drawer
-				opened={isNarrow && sidePanel !== null}
-				onClose={closeSidePanel}
+				opened={isNarrow && sidePane !== null && (sidePanel !== null || designer.paneOpen)}
+				onClose={() => {
+					closeSidePanel();
+					designer.closePane();
+				}}
 				position="right"
 				size="95%"
 				title={t("pages.graphWorkflows.page.configTitle", "Configuration")}
 				attributes={{ content: { "data-testid": "gw-page-config-drawer" } }}
 			>
-				{sidePanel}
+				{sidePane}
 			</Drawer>
 
 			<GraphWorkflowDefinitionMetaDialog

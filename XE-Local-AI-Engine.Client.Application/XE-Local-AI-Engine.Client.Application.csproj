@@ -66,6 +66,9 @@
          suffix; the provider optionally replaces it in-memory with a remote refresh, but the node always has a working,
          validated catalog with zero configuration. -->
     <EmbeddedResource Include="Services\ExternalApps\Catalog\external-apps-catalog.seed.json"/>
+    <!-- The workflow designer's static system prompt: the graph contract and the per-kind semantics, kept as Markdown so it
+         reads as the model reads it. GraphWorkflowDesignerPromptTests pins that it names every node kind. -->
+    <EmbeddedResource Include="Services\GraphWorkflows\Designer\GraphWorkflowDesignerPrompt.md"/>
     <!-- Docker's own default seccomp profile, copied verbatim from the module the daemon itself vendors
          (moby/profiles, tag seccomp/v0.2.3). Embedded rather than materialized to disk: the Engine API takes profile
          CONTENT, not a host path, so a file on disk is not something the daemon would ever open. See

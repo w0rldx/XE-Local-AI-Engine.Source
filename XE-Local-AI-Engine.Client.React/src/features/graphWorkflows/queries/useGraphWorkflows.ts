@@ -30,6 +30,7 @@ import {
 	listGraphWorkflowRunsOptions,
 	listGraphWorkflowToolsOptions,
 	listLocalModelsOptions,
+	runGraphWorkflowDesignerTurnMutation,
 	sendGraphWorkflowChatMessageMutation,
 	startGraphWorkflowRunMutation,
 	steerGraphWorkflowNodeRunMutation,
@@ -404,6 +405,16 @@ export function useDeleteGraphWorkflowDefinition() {
  */
 export function useValidateGraphWorkflowDefinition() {
 	return useMutation(validateGraphWorkflowDefinitionMutation());
+}
+
+/**
+ * One designer turn. It writes nothing on the server, so it invalidates nothing. The caller passes a `signal` with the
+ * body, which aborts the request: the assistant's Cancel. Never retried: a turn holds the node's single draft slot for
+ * seconds to minutes, and the failures a retry would meet again (busy node, refused cloud model) are the operator's to
+ * act on.
+ */
+export function useGraphWorkflowDesignerTurn() {
+	return useMutation({ ...runGraphWorkflowDesignerTurnMutation(), retry: false });
 }
 
 /**

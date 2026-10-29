@@ -12,7 +12,7 @@ import {
 	type OnNodesChange,
 	type XYPosition,
 } from "@xyflow/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
 	canvasToGraph,
@@ -31,11 +31,13 @@ import {
 	pauseContextEdges,
 	renameNodeKey,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { designerProposalCanvas } from "@/features/graphWorkflows/models/GraphWorkflowDesignerModels";
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
 import {
 	asGraphWorkflowDecisionKind,
 	GRAPH_WORKFLOW_MAX_NODES,
 	type GraphWorkflowDecisionKind,
+	type GraphWorkflowDesignerChangeResponse,
 	type GraphWorkflowGraph,
 	type GraphWorkflowNodeKind,
 	toGraphWorkflowDecisionKinds,
@@ -60,6 +62,36 @@ export interface GraphWorkflowEditorNotice {
 }
 
 export type GraphWorkflowRenameOutcome = "ok" | "collision" | "invalid";
+
+/**
+ * `generating`: a designer turn is in flight, so the working graph is frozen. `reviewing`: the canvas shows the proposal
+ * the turn returned, inspectable but not editable, until it is accepted or rejected. Every mutator is a no-op outside
+ * `editing`, so a stray panel or keyboard gesture cannot change the graph the proposal was made against.
+ */
+export type GraphWorkflowEditorMode = "editing" | "generating" | "reviewing";
+
+/** What a designer turn proposed, as {@link GraphWorkflowEditorState.showProposal} takes it. */
+export interface GraphWorkflowProposalInput {
+	readonly proposal: GraphWorkflowGraph;
+	readonly changes: readonly GraphWorkflowDesignerChangeResponse[];
+	readonly valid: boolean;
+	/** The server's validation errors for the proposal, as text; empty when it is valid. */
+	readonly errors: readonly string[];
+	/** The working graph the request was sent with. Accept is refused once the canvas no longer holds it. */
+	readonly basis: GraphWorkflowGraph;
+}
+
+export interface GraphWorkflowEditorReview extends GraphWorkflowProposalInput {
+	/** The proposal as the canvas draws it: diff-tagged, with removed elements ghosted from the working graph. */
+	readonly canvas: ReturnType<typeof designerProposalCanvas>;
+}
+
+interface GraphWorkflowCanvasSnapshot {
+	readonly nodes: readonly GraphWorkflowCanvasNode[];
+	readonly edges: readonly GraphWorkflowCanvasEdge[];
+	readonly settings: GraphWorkflowGraphSettings;
+	readonly loadedIssues: readonly GraphWorkflowGraphIssue[];
+}
 
 export interface GraphWorkflowEditorState {
 	readonly nodes: readonly GraphWorkflowCanvasNode[];
@@ -95,6 +127,31 @@ export interface GraphWorkflowEditorState {
 	/** After a successful save: the baseline moves, the canvas does not. */
 	readonly markSaved: (graph: GraphWorkflowGraph) => void;
 	readonly dismissNotice: () => void;
+	readonly mode: GraphWorkflowEditorMode;
+	readonly review: GraphWorkflowEditorReview | undefined;
+	/** The working graph changed since the proposal's request was sent, so Accept would apply it to another graph. */
+	readonly isReviewStale: boolean;
+	/** One step back to the canvas as it was before the last Accept, until the next edit or save. */
+	readonly canUndoAccept: boolean;
+	/**
+	 * Bumped when the canvas swaps in a whole other graph: a proposal shown, accepted or undone. The canvas re-frames
+	 * the viewport on it; an ordinary edit never moves it.
+	 */
+	readonly viewEpoch: number;
+	/** `editing` → `generating`. `false` when the editor was not editing. */
+	readonly beginGenerating: () => boolean;
+	/** `generating` → `editing`, graph untouched: a cancelled or failed turn, or one that answered without a proposal. */
+	readonly endGenerating: () => void;
+	/** `generating` → `reviewing`. */
+	readonly showProposal: (input: GraphWorkflowProposalInput) => void;
+	/** `reviewing` → `editing`, graph untouched. */
+	readonly rejectProposal: () => void;
+	/**
+	 * `reviewing` → `editing` with the proposal as the working canvas. The saved baseline stays, so the editor is dirty.
+	 * `false` (nothing changes) for an invalid or stale proposal.
+	 */
+	readonly acceptProposal: () => boolean;
+	readonly undoAccept: () => void;
 }
 
 /**
@@ -173,6 +230,26 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	// Held in state, not derived: `graphToCanvas` has already dropped the unreadable `op` and narrowed the unknown kind
 	// by the time anything downstream can look, so the wire document it was read from is the only place this is visible.
 	const [loadedIssues, setLoadedIssues] = useState<readonly GraphWorkflowGraphIssue[]>(() => loadedGraphIssues(initial));
+	const [mode, setModeState] = useState<GraphWorkflowEditorMode>("editing");
+	const [review, setReview] = useState<GraphWorkflowEditorReview | undefined>(undefined);
+	const [undoSnapshot, setUndoSnapshot] = useState<GraphWorkflowCanvasSnapshot | undefined>(undefined);
+	const [viewEpoch, setViewEpoch] = useState(0);
+	// The mutators read the mode through a ref: most of them are stable callbacks, and a closure over the state would
+	// let a gesture through in the render between a transition and the callbacks being rebuilt.
+	const modeRef = useRef<GraphWorkflowEditorMode>("editing");
+	const setMode = useCallback((next: GraphWorkflowEditorMode) => {
+		modeRef.current = next;
+		setModeState(next);
+	}, []);
+
+	/** Whether a mutation may run. Every one that does also ends the Undo offer of the last Accept. */
+	const mayMutate = useCallback((): boolean => {
+		if (modeRef.current !== "editing") {
+			return false;
+		}
+		setUndoSnapshot(undefined);
+		return true;
+	}, []);
 
 	const announce = useCallback((rule: GraphWorkflowEditorNotice["rule"]) => {
 		setLastNotice((previous) => ({ rule, seq: (previous?.seq ?? 0) + 1 }));
@@ -187,10 +264,24 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	);
 
 	const onNodesChange = useCallback<OnNodesChange<GraphWorkflowCanvasNode>>((changes) => {
+		if (modeRef.current !== "editing") {
+			return;
+		}
+		// React Flow reports its own measuring and selection through here too; neither is an edit, and counting them would
+		// withdraw the Undo offer the moment an accepted graph renders.
+		if (changes.some((change) => change.type !== "dimensions" && change.type !== "select")) {
+			setUndoSnapshot(undefined);
+		}
 		setNodes((current) => applyNodeChanges(changes, [...current]));
 	}, []);
 
 	const onEdgesChange = useCallback<OnEdgesChange<GraphWorkflowCanvasEdge>>((changes) => {
+		if (modeRef.current !== "editing") {
+			return;
+		}
+		if (changes.some((change) => change.type !== "select")) {
+			setUndoSnapshot(undefined);
+		}
 		setEdges((current) => applyEdgeChanges(changes, [...current]));
 	}, []);
 
@@ -198,7 +289,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		(connection) => {
 			const source = connection.source;
 			const target = connection.target;
-			if (source.length === 0 || target.length === 0) {
+			if (source.length === 0 || target.length === 0 || !mayMutate()) {
 				return;
 			}
 			const handle = connection.sourceHandle ?? undefined;
@@ -241,11 +332,14 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				announce("pauseContextEdgeAdded");
 			}
 		},
-		[announce, edges, nodes],
+		[announce, edges, mayMutate, nodes],
 	);
 
 	const addNode = useCallback(
 		(kind: GraphWorkflowNodeKind, position?: XYPosition): string | undefined => {
+			if (modeRef.current !== "editing") {
+				return undefined;
+			}
 			if (nodes.length >= GRAPH_WORKFLOW_MAX_NODES) {
 				announce("tooManyNodes");
 				return undefined;
@@ -253,6 +347,7 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 			// The key is minted from the closure because it is this function's RETURN value; the write itself is functional,
 			// like every other mutator here.
 			const key = mintNodeKey(kind, [...nodes.map((node) => node.id), ...edges.map((edge) => edge.id)]);
+			mayMutate();
 			setNodes((current) => [
 				...current,
 				{
@@ -264,11 +359,14 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 			]);
 			return key;
 		},
-		[announce, edges, nodes],
+		[announce, edges, mayMutate, nodes],
 	);
 
 	const updateNodeData = useCallback(
 		(key: string, patch: Partial<GraphWorkflowCanvasNodeData>) => {
+			if (!mayMutate()) {
+				return;
+			}
 			setNodes((current) =>
 				current.map((node) =>
 					node.id === key
@@ -291,48 +389,81 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				);
 			}
 		},
-		[nodes],
+		[mayMutate, nodes],
 	);
 
 	const renameNode = useCallback(
 		(from: string, to: string): GraphWorkflowRenameOutcome => {
+			if (modeRef.current !== "editing") {
+				return "invalid";
+			}
 			const result = renameNodeKey([...nodes], [...edges], from, to);
 			if ("error" in result) {
 				return result.error;
 			}
+			mayMutate();
 			setNodes(result.nodes);
 			setEdges(result.edges);
 			return "ok";
 		},
-		[edges, nodes],
+		[edges, mayMutate, nodes],
 	);
 
-	const updateEdgeData = useCallback((edgeId: string, patch: Partial<GraphWorkflowEdgeData>) => {
-		setEdges((current) =>
-			current.map((edge) => {
-				if (edge.id !== edgeId) {
-					return edge;
-				}
-				const data: GraphWorkflowEdgeData = { ...edge.data, ...patch };
-				const label = data.label ?? "";
-				return { ...edge, data, ...(label.length > 0 ? { label } : { label: undefined }) };
-			}),
-		);
-	}, []);
+	const updateEdgeData = useCallback(
+		(edgeId: string, patch: Partial<GraphWorkflowEdgeData>) => {
+			if (!mayMutate()) {
+				return;
+			}
+			setEdges((current) =>
+				current.map((edge) => {
+					if (edge.id !== edgeId) {
+						return edge;
+					}
+					const data: GraphWorkflowEdgeData = { ...edge.data, ...patch };
+					const label = data.label ?? "";
+					return { ...edge, data, ...(label.length > 0 ? { label } : { label: undefined }) };
+				}),
+			);
+		},
+		[mayMutate],
+	);
 
-	const removeNode = useCallback((key: string) => {
-		setNodes((current) => current.filter((node) => node.id !== key));
-		// The incident edges go with it: leaving them behind would produce `unknownEdgeEndpoint` on every later validate.
-		// Destructured rather than `edge.target`: `CheckEventCurrentTargetInUpdaters` flags any `.target` read inside a
-		// functional updater, and React Flow's edge endpoint happens to share the name of the DOM event property it guards.
-		setEdges((current) => current.filter(({ source, target }) => source !== key && target !== key));
-	}, []);
+	const updateSettings = useCallback(
+		(next: GraphWorkflowGraphSettings) => {
+			if (mayMutate()) {
+				setSettings(next);
+			}
+		},
+		[mayMutate],
+	);
 
-	const removeEdge = useCallback((edgeId: string) => {
-		setEdges((current) => current.filter((edge) => edge.id !== edgeId));
-	}, []);
+	const removeNode = useCallback(
+		(key: string) => {
+			if (!mayMutate()) {
+				return;
+			}
+			setNodes((current) => current.filter((node) => node.id !== key));
+			// The incident edges go with it: leaving them behind would produce `unknownEdgeEndpoint` on every later validate.
+			// Destructured rather than `edge.target`: `CheckEventCurrentTargetInUpdaters` flags any `.target` read inside a
+			// functional updater, and React Flow's edge endpoint happens to share the name of the DOM event property it guards.
+			setEdges((current) => current.filter(({ source, target }) => source !== key && target !== key));
+		},
+		[mayMutate],
+	);
+
+	const removeEdge = useCallback(
+		(edgeId: string) => {
+			if (mayMutate()) {
+				setEdges((current) => current.filter((edge) => edge.id !== edgeId));
+			}
+		},
+		[mayMutate],
+	);
 
 	const autoArrange = useCallback(() => {
+		if (!mayMutate()) {
+			return;
+		}
 		setNodes((current) => {
 			const layout = layoutGraphWorkflow(
 				current.map((node) => ({ key: node.id })),
@@ -345,20 +476,28 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 				return placed === undefined ? node : { ...node, position: { x: placed.x, y: placed.y } };
 			});
 		});
-	}, [edges]);
+	}, [edges, mayMutate]);
 
-	const reset = useCallback((graph: GraphWorkflowGraph) => {
-		const canvas = graphToCanvas(graph);
-		setNodes(canvas.nodes);
-		setEdges(canvas.edges);
-		setSettings(canvas.settings);
-		setBaseline(graph);
-		setLoadedIssues(loadedGraphIssues(graph));
-		setLastNotice(undefined);
-	}, []);
+	const reset = useCallback(
+		(graph: GraphWorkflowGraph) => {
+			const canvas = graphToCanvas(graph);
+			setNodes(canvas.nodes);
+			setEdges(canvas.edges);
+			setSettings(canvas.settings);
+			setBaseline(graph);
+			setLoadedIssues(loadedGraphIssues(graph));
+			setLastNotice(undefined);
+			// A load is a different graph: whatever was proposed or accepted against the old one no longer applies.
+			setReview(undefined);
+			setUndoSnapshot(undefined);
+			setMode("editing");
+		},
+		[setMode],
+	);
 
 	const markSaved = useCallback((graph: GraphWorkflowGraph) => {
 		setBaseline(graph);
+		setUndoSnapshot(undefined);
 		// The save wrote what the canvas holds, so whatever the server had stored that the canvas could not represent went
 		// with it.
 		setLoadedIssues([]);
@@ -367,6 +506,69 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 	const dismissNotice = useCallback(() => {
 		setLastNotice(undefined);
 	}, []);
+
+	const beginGenerating = useCallback((): boolean => {
+		if (modeRef.current !== "editing") {
+			return false;
+		}
+		setMode("generating");
+		return true;
+	}, [setMode]);
+
+	const endGenerating = useCallback(() => {
+		if (modeRef.current === "generating") {
+			setMode("editing");
+		}
+	}, [setMode]);
+
+	const showProposal = useCallback(
+		(input: GraphWorkflowProposalInput) => {
+			if (modeRef.current !== "generating") {
+				return;
+			}
+			setReview({ ...input, canvas: designerProposalCanvas({ nodes, edges }, input.proposal, input.changes) });
+			setMode("reviewing");
+			setViewEpoch((epoch) => epoch + 1);
+		},
+		[edges, nodes, setMode],
+	);
+
+	const rejectProposal = useCallback(() => {
+		if (modeRef.current === "reviewing") {
+			setReview(undefined);
+			setMode("editing");
+		}
+	}, [setMode]);
+
+	const isReviewStale = review !== undefined && !graphWorkflowsEqual(review.basis, conversion.graph);
+
+	const acceptProposal = useCallback((): boolean => {
+		if (modeRef.current !== "reviewing" || review === undefined || !review.valid || isReviewStale) {
+			return false;
+		}
+		setUndoSnapshot({ nodes, edges, settings, loadedIssues });
+		const canvas = graphToCanvas(review.proposal);
+		setNodes(canvas.nodes);
+		setEdges(canvas.edges);
+		setSettings(canvas.settings);
+		setLoadedIssues(loadedGraphIssues(review.proposal));
+		setReview(undefined);
+		setMode("editing");
+		setViewEpoch((epoch) => epoch + 1);
+		return true;
+	}, [edges, isReviewStale, loadedIssues, nodes, review, setMode, settings]);
+
+	const undoAccept = useCallback(() => {
+		if (modeRef.current !== "editing" || undoSnapshot === undefined) {
+			return;
+		}
+		setNodes(undoSnapshot.nodes);
+		setEdges(undoSnapshot.edges);
+		setSettings(undoSnapshot.settings);
+		setLoadedIssues(undoSnapshot.loadedIssues);
+		setUndoSnapshot(undefined);
+		setViewEpoch((epoch) => epoch + 1);
+	}, [undoSnapshot]);
 
 	return {
 		nodes,
@@ -384,12 +586,23 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 		updateNodeData,
 		renameNode,
 		updateEdgeData,
-		updateSettings: setSettings,
+		updateSettings,
 		removeNode,
 		removeEdge,
 		autoArrange,
 		reset,
 		markSaved,
 		dismissNotice,
+		mode,
+		review,
+		isReviewStale,
+		canUndoAccept: undoSnapshot !== undefined,
+		viewEpoch,
+		beginGenerating,
+		endGenerating,
+		showProposal,
+		rejectProposal,
+		acceptProposal,
+		undoAccept,
 	};
 }

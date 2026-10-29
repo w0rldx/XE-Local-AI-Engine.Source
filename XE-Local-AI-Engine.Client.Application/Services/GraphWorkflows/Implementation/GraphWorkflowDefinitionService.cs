@@ -56,16 +56,18 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         _options = options;
     }
 
-    public async Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, CancellationToken cancellationToken = default)
+    // Actions count as allowed: the graph is judged without a definition, and save and start judge the flag itself.
+    public Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, CancellationToken cancellationToken = default) =>
+        ValidateAsync(graphJson, allowsActions: true, cancellationToken);
+
+    public async Task<GraphWorkflowValidationResult> ValidateAsync(string graphJson, bool allowsActions, CancellationToken cancellationToken = default)
     {
         try
         {
             // A graph that parsed may still have something said about it, errors or not, so an author fixing one sees both lists.
             // Warnings ride out only on this path: they never block, so the save and start paths below discard them.
             var errors = new List<GraphWorkflowValidationError>();
-
-            // Actions count as allowed: the graph is judged without a definition, and save and start judge the flag itself.
-            var graph = await ParseCollectingErrorsAsync(graphJson, allowsActions: true, errors, cancellationToken);
+            var graph = await ParseCollectingErrorsAsync(graphJson, allowsActions, errors, cancellationToken);
             var warnings = await WarningsForRuntimeAsync(graph, cancellationToken);
             return errors.Count == 0
                 ? GraphWorkflowValidationResult.ValidWith(warnings)
@@ -161,7 +163,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     /// <summary>The one place the option-bearing half of validation lives.</summary>
     /// <remarks>
     ///     A blank document becomes the same structured refusal every other whole-document failure produces, so
-    ///     <see cref="ValidateAsync" /> can promise never to throw rather than leaking the parser's argument guard. It
+    ///     <see cref="ValidateAsync(string, bool, CancellationToken)" /> can promise never to throw rather than leaking the parser's argument guard. It
     ///     answers the PARSED graph rather than a node count, because two callers want the count and one wants the
     ///     warnings and re-parsing for either would run the rule set twice. The tool gate runs once the structural rules
     ///     passed, beside the per-node errors, so one answer carries both; a config that failed to parse is no tool node.

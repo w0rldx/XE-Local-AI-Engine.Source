@@ -22,6 +22,8 @@ export interface GraphWorkflowEditorToolbarProps {
 	readonly onValidate: () => void;
 	readonly onSave: () => void;
 	readonly onSaveAs: () => void;
+	/** Off while a designer turn runs or a proposal is under review. */
+	readonly canSaveAs?: boolean;
 	readonly onStartRun: () => void;
 	/** Downloads the SAVED definition as a share file; offered only on a clean canvas. */
 	readonly onExport: () => void;
@@ -45,6 +47,7 @@ export function GraphWorkflowEditorToolbar({
 	onValidate,
 	onSave,
 	onSaveAs,
+	canSaveAs = true,
 	onStartRun,
 	onExport,
 	isExporting,
@@ -85,7 +88,13 @@ export function GraphWorkflowEditorToolbar({
 			<Button size="xs" loading={isSaving} disabled={!canSave || isSaving} onClick={onSave} data-testid="gw-page-save">
 				{t("pages.graphWorkflows.page.save", "Save")}
 			</Button>
-			<Button size="xs" variant="default" disabled={!hasDefinition} onClick={onSaveAs} data-testid="gw-page-save-as">
+			<Button
+				size="xs"
+				variant="default"
+				disabled={!hasDefinition || !canSaveAs}
+				onClick={onSaveAs}
+				data-testid="gw-page-save-as"
+			>
 				{t("pages.graphWorkflows.page.saveAs", "Save as…")}
 			</Button>
 			<Button size="xs" variant="light" disabled={!hasDefinition || isDirty} onClick={onStartRun} data-testid="gw-page-start-run">

@@ -178,3 +178,21 @@ describe("GraphWorkflowNodeCard body", () => {
 		expect(screen.getByTestId("graph-workflow-node-analyze").getAttribute("data-has-issue")).toBe("true");
 	});
 });
+
+describe("GraphWorkflowNodeCard designer diff", () => {
+	afterEach(cleanup);
+
+	it.each(["added", "modified", "removed"] as const)("styles a card a proposal marks %s", (diff) => {
+		renderCard(nodeData("Agent", "analyze", { diff }));
+
+		const card = screen.getByTestId("graph-workflow-node-analyze");
+		expect(card.getAttribute("data-diff")).toBe(diff);
+		expect(card.className).toContain(classes[`node-${diff}`]);
+	});
+
+	it("leaves a card no proposal touches unmarked", () => {
+		renderCard(nodeData("Agent", "analyze"));
+
+		expect(screen.getByTestId("graph-workflow-node-analyze").hasAttribute("data-diff")).toBe(false);
+	});
+});

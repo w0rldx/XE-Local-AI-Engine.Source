@@ -82,3 +82,42 @@
 	stroke: var(--mantine-color-red-6);
 	stroke-width: 2;
 }
+
+/* A designer proposal under review: what it adds, changes and removes. A removed card or edge is a ghost of the
+   working graph, drawn beside what replaces it. */
+
+.node-added {
+	border-color: var(--mantine-color-teal-6);
+	box-shadow: 0 0 0 1px var(--mantine-color-teal-6);
+}
+
+.node-modified {
+	border-color: var(--mantine-color-orange-6);
+	box-shadow: 0 0 0 1px var(--mantine-color-orange-6);
+}
+
+.node-removed {
+	opacity: 0.45;
+	border-style: dashed;
+}
+
+/* On the edge's own path: React Flow's `.react-flow__edge-path` sets the stroke there, so a stroke on the wrapping group
+   would not reach it. */
+
+.edge-added path {
+	stroke: var(--mantine-color-teal-6);
+	stroke-width: 2;
+}
+
+.edge-modified path {
+	stroke: var(--mantine-color-orange-6);
+	stroke-width: 2;
+}
+
+.edge-removed {
+	opacity: 0.45;
+}
+
+.edge-removed path {
+	stroke-dasharray: 4 4;
+}

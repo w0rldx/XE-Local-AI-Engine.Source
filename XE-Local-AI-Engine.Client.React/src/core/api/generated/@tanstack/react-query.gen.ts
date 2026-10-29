@@ -410,6 +410,7 @@ import {
 	revokeLocalModelProxyApiKey,
 	revokeMcpServerApiKey,
 	revokeNodeAuthSession,
+	runGraphWorkflowDesignerTurn,
 	runPlaybookActionEval,
 	runTrainingArtifactSmoke,
 	saveCloudSettings,
@@ -1461,6 +1462,9 @@ import type {
 	RevokeMcpServerApiKeyResponse,
 	RevokeNodeAuthSessionData,
 	RevokeNodeAuthSessionResponse,
+	RunGraphWorkflowDesignerTurnData,
+	RunGraphWorkflowDesignerTurnError,
+	RunGraphWorkflowDesignerTurnResponse,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalResponse,
 	RunTrainingArtifactSmokeData,
@@ -6898,6 +6902,30 @@ export const startGraphWorkflowRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startGraphWorkflowRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const runGraphWorkflowDesignerTurnMutation = (
+	options?: Partial<Options<RunGraphWorkflowDesignerTurnData>>,
+): UseMutationOptions<
+	RunGraphWorkflowDesignerTurnResponse,
+	AxiosError<RunGraphWorkflowDesignerTurnError>,
+	Options<RunGraphWorkflowDesignerTurnData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RunGraphWorkflowDesignerTurnResponse,
+		AxiosError<RunGraphWorkflowDesignerTurnError>,
+		Options<RunGraphWorkflowDesignerTurnData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await runGraphWorkflowDesignerTurn({
 				...options,
 				...fnOptions,
 				throwOnError: true,

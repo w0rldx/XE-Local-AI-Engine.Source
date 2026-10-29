@@ -2970,6 +2970,46 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitio
 	updatedAtUtc: number;
 };
 
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerChangeResponse = {
+	kind: string;
+	key: string;
+	change: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorCode =
+	| "NodeBusy"
+	| "Unparseable"
+	| "CloudLocalDataWithheld"
+	| "ProviderFailed";
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorResponse = {
+	code: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorCode;
+	message: string;
+	grant: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerGenerationMetadata = {
+	model: string;
+	generatedAtUtc: number;
+	durationMs: number;
+	inputTokens: number | null;
+	outputTokens: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest = {
+	role?: string;
+	text?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerTurnResponse = {
+	reply: string;
+	proposal: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph | null;
+	changes: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerChangeResponse>;
+	validation: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse | null;
+	attempts: number;
+	generationMetadata: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerGenerationMetadata;
+};
+
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondition = {
 	path?: string | null;
 	op?: string;
@@ -3175,6 +3215,15 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsR
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToolsResponse = {
 	tools: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1RunGraphWorkflowDesignerTurnRequest = {
+	definitionId?: string | null;
+	modelName?: string;
+	messages?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest>;
+	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+	selectedNodeKey?: string | null;
+	intent?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1SendGraphWorkflowChatMessageRequest = {
@@ -14763,6 +14812,44 @@ export type StartGraphWorkflowRunResponses = {
 };
 
 export type StartGraphWorkflowRunResponse = StartGraphWorkflowRunResponses[keyof StartGraphWorkflowRunResponses];
+
+export type RunGraphWorkflowDesignerTurnData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1RunGraphWorkflowDesignerTurnRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/designer/turn";
+};
+
+export type RunGraphWorkflowDesignerTurnErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorResponse;
+	409: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorResponse;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+	422: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorResponse;
+	502: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerErrorResponse;
+};
+
+export type RunGraphWorkflowDesignerTurnError = RunGraphWorkflowDesignerTurnErrors[keyof RunGraphWorkflowDesignerTurnErrors];
+
+export type RunGraphWorkflowDesignerTurnResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerTurnResponse;
+};
+
+export type RunGraphWorkflowDesignerTurnResponse =
+	RunGraphWorkflowDesignerTurnResponses[keyof RunGraphWorkflowDesignerTurnResponses];
 
 export type InvokeGraphWorkflowIntentData = {
 	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest;
