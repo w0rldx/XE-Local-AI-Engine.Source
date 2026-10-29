@@ -314,7 +314,7 @@ This covers how `SelectedFolderResolver.ResolveAsync` accepts a folder GUID or a
    models delegate to sub-agents** (`AllowCloudModelSubAgents`, Node Settings → Privacy, read per call). The
    offer withholds `spawn_subagent` under the same switch; this seam check catches a caller that reached the
    service around the offer. A child keeps its own model's gates.
-3. **Per-root fan-out lease** — `context.TryEnterFanOut()`; a missing context is rejected
+3. **Per-root fan-out lease** — `context.TryEnterFanOut(out lease)`; a missing context is rejected
    conservatively.
 4. **Capacity decision** — `ICapacityService.DecideAsync(modelName, ModelRole.Chat, ct)` returns
    `Allow` / `QueueSameModel` / reject:

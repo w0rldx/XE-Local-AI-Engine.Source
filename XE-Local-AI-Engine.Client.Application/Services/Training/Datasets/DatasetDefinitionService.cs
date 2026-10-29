@@ -15,7 +15,8 @@ public interface IDatasetDefinitionService
 
     Task<TrainingDefinitionRecord> UpdateAsync(Guid definitionId, long expectedVersion, DatasetDefinitionDraft draft, CancellationToken cancellationToken = default);
 
-    Task<TrainingDefinitionRecord?> GetAsync(Guid definitionId, CancellationToken cancellationToken = default);
+    /// <exception cref="TrainingNotFoundException">No definition carries <paramref name="definitionId" />.</exception>
+    Task<TrainingDefinitionRecord> GetAsync(Guid definitionId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<TrainingDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default);
 
@@ -78,8 +79,8 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
         return await _store.UpdateDefinitionAsync(definitionId, expectedVersion, input, cancellationToken);
     }
 
-    public Task<TrainingDefinitionRecord?> GetAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
-        _store.GetDefinitionAsync(definitionId, cancellationToken);
+    public async Task<TrainingDefinitionRecord> GetAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        await _store.GetDefinitionAsync(definitionId, cancellationToken) ?? throw new TrainingNotFoundException("The dataset definition was not found.");
 
     public Task<IReadOnlyList<TrainingDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default) =>
         _store.ListDefinitionsAsync(cancellationToken);

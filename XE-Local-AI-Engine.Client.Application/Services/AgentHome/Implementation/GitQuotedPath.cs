@@ -44,7 +44,7 @@ internal static class GitQuotedPath
     ///     The decoded path, or <see langword="null" /> when the literal is not one git would read: no closing quote
     ///     at the very end, an unknown or dangling escape, an octal escape over one byte, or invalid UTF-8.
     /// </summary>
-    public static string? TryDecode(string path)
+    public static string? DecodeOrNull(string path)
     {
         if (path.Length < 2 || path[0] != '"')
         {
@@ -59,7 +59,7 @@ internal static class GitQuotedPath
             {
                 // Text after the closing quote makes the literal unreadable to git, which then falls back to the raw
                 // bytes; refusing is the only answer that cannot disagree with the name git ends up writing.
-                return index == path.Length - 1 ? TryDecodeUtf8(bytes) : null;
+                return index == path.Length - 1 ? DecodeUtf8OrNull(bytes) : null;
             }
 
             var appended = path[index] == '\\' ? AppendEscape(bytes, path, ref index) : AppendLiteral(bytes, path, ref index);
@@ -156,7 +156,7 @@ internal static class GitQuotedPath
         return true;
     }
 
-    private static string? TryDecodeUtf8(List<byte> bytes)
+    private static string? DecodeUtf8OrNull(List<byte> bytes)
     {
         try
         {

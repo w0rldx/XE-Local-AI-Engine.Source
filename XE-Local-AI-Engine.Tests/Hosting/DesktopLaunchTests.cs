@@ -101,18 +101,36 @@ public sealed class DesktopLaunchTests
         AssertEx.False(DesktopLaunch.TryGetPort(["--port", "0"], out _, out _));
         AssertEx.True(DesktopLaunch.HasNoBrowserFlag(["--NO-BROWSER"]));
 
-        var setupRequested = DesktopLaunch.TryGetSetupCommand(["--setup", "--admin-email=agent@example.test", "--admin-password", "StrongPass123!"],
+        var setupParsed = DesktopLaunch.TryGetSetupCommand(["--setup", "--admin-email=agent@example.test", "--admin-password", "StrongPass123!"],
             static _ => null,
             static () => null,
             out var setup,
             out var setupError);
-        AssertEx.True(setupRequested);
+        AssertEx.True(setupParsed);
         AssertEx.Null(setupError);
         AssertEx.Equal("agent@example.test", AssertEx.NotNull(setup).Email);
 
         AssertEx.True(DesktopLaunch.TryGetMcpKeyScope(["--mcp-key=agentic"], out var scope, out var scopeError));
         AssertEx.Equal(McpServerApiKeyScope.Agentic, scope);
         AssertEx.Null(scopeError);
+    }
+
+    [Test]
+    public void SetupAndMcpKeyParsers_AbsentFlagParsesToNull_MalformedFlagFailsWithAReason()
+    {
+        AssertEx.True(DesktopLaunch.TryGetSetupCommand(["--desktop"], static _ => null, static () => null, out var setup, out var setupError));
+        AssertEx.Null(setup);
+        AssertEx.Null(setupError);
+        AssertEx.True(DesktopLaunch.TryGetMcpKeyScope(["--desktop"], out var scope, out var scopeError));
+        AssertEx.Null(scope);
+        AssertEx.Null(scopeError);
+
+        foreach (var args in new[] { new[] { "--mcp-key" }, new[] { "--mcp-key=read" } })
+        {
+            AssertEx.False(DesktopLaunch.TryGetMcpKeyScope(args, out var malformedScope, out var malformedError));
+            AssertEx.Null(malformedScope);
+            AssertEx.Contains(malformedError, DesktopLaunch.McpKeyArgument);
+        }
     }
 
     [Test]
@@ -153,13 +171,13 @@ public sealed class DesktopLaunchTests
                      }
                  })
         {
-            var requested = DesktopLaunch.TryGetSetupCommand(args,
+            var parsed = DesktopLaunch.TryGetSetupCommand(args,
                 static name => name == DesktopLaunch.AdminEmailEnvironmentVariable ? "fallback@example.test" : null,
                 static () => null,
                 out var command,
                 out var error);
 
-            AssertEx.True(requested);
+            AssertEx.False(parsed);
             AssertEx.Null(command);
             AssertEx.Contains(AssertEx.NotNull(error), DesktopLaunch.AdminEmailArgument);
         }

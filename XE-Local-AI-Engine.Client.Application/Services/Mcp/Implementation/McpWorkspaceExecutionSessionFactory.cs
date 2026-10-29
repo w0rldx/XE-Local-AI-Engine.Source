@@ -74,8 +74,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         // Read once, BEFORE the lease: a failing settings read then has nothing to leak, and the refusal catch below reuses it (ADR 0020).
         var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
         var leaseKey = new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
-        var lease = _leaseManager.TryAcquire(leaseKey);
-        if (lease is null)
+        if (!_leaseManager.TryAcquire(leaseKey, out var lease))
         {
             return _leaseManager.IsPoisoned(leaseKey)
                 ? WorkspacePreparationFailed()

@@ -106,7 +106,7 @@ internal sealed partial class LinuxTrainingProcessHandle : ITrainingProcessHandl
     /// <summary>Sends <paramref name="signal" /> only while the trainer pid still has the receipt's start time.</summary>
     private void SignalIfSameProcess(int target, int signal)
     {
-        if (Receipt.StartTicks > 0 && LinuxTrainingProcessInspector.TryReadStat(Receipt.Pid)?.StartTicks != Receipt.StartTicks)
+        if (Receipt.StartTicks > 0 && LinuxTrainingProcessInspector.ReadStatOrNull(Receipt.Pid)?.StartTicks != Receipt.StartTicks)
         {
             _logger.LogWarning("Trainer pid {Pid} no longer carries its recorded start time; signal {Signal} was not sent.", Receipt.Pid, signal);
             return;

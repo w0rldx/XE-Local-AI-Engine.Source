@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -147,7 +148,7 @@ public sealed class RuntimeChatClientTests
         public bool CloudActive { get; set; }
         public int ProviderNameResolveCount { get; private set; }
 
-        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client)
         {
             client = CloudActive ? _cloudClient : null;
             return CloudActive;
@@ -172,7 +173,7 @@ public sealed class RuntimeChatClientTests
     /// <summary>A selector that is "selected" but throws on build (the unauthenticated-Codex re-auth case).</summary>
     private sealed class ThrowingCloudFactory : IActiveCloudChatClientFactory
     {
-        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client)
         {
             throw new InvalidOperationException("cloud not authenticated");
         }

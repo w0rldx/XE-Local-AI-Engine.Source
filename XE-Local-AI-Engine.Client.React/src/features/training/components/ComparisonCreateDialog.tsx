@@ -298,13 +298,17 @@ export function ComparisonCreateDialog({
 }
 
 /**
- * A 404 from a lifecycle command means the node has already moved past the row the operator clicked: a cancel whose
- * evaluation reached a terminal status first, or a delete of something that is already gone. Both endpoints answer 404
- * for that, and in both cases the command's intent is already satisfied — reporting it as a failure would blame the
- * operator for a stale list. The mutations refetch on settle, so the row corrects itself and nothing needs to be said.
+ * The node has already moved past the row the operator clicked: a delete of something that is gone answers 404, and a
+ * cancel whose evaluation reached a terminal status first answers 409 with the `EvaluationTerminal` code. In both cases
+ * the command's intent is already satisfied — reporting it as a failure would blame the operator for a stale list. The
+ * mutations refetch on settle, so the row corrects itself and nothing needs to be said. Any other 409 is reported.
  */
 function alreadySettled(error: unknown): boolean {
-	return error instanceof ApiError && error.statusCode === 404;
+	if (!(error instanceof ApiError)) {
+		return false;
+	}
+	const code = (error.apiProblemDetails as unknown as { code?: unknown } | undefined)?.code;
+	return error.statusCode === 404 || (error.statusCode === 409 && code === "EvaluationTerminal");
 }
 
 interface EvaluationSideProps {

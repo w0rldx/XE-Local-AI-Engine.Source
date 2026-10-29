@@ -231,10 +231,10 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             CacheHitRate = DeriveCacheHitRate(warmStage.Timings),
             ToolLoopMs = toolLoopMs,
             RawMetrics = afterAll,
-            RequestsProcessingAtLastScrape = LlamaServerMetrics.TryParse(afterAll, LlamaServerMetrics.RequestsProcessing),
-            RequestsDeferredAtLastScrape = LlamaServerMetrics.TryParse(afterAll, LlamaServerMetrics.RequestsDeferred),
-            ContextTokensHighWatermark = LlamaServerMetrics.TryParse(afterAll, LlamaServerMetrics.ContextTokensHighWatermark),
-            AverageBusySlotsPerDecode = LlamaServerMetrics.TryParse(afterAll, LlamaServerMetrics.BusySlotsPerDecode),
+            RequestsProcessingAtLastScrape = LlamaServerMetrics.ParseOrNull(afterAll, LlamaServerMetrics.RequestsProcessing),
+            RequestsDeferredAtLastScrape = LlamaServerMetrics.ParseOrNull(afterAll, LlamaServerMetrics.RequestsDeferred),
+            ContextTokensHighWatermark = LlamaServerMetrics.ParseOrNull(afterAll, LlamaServerMetrics.ContextTokensHighWatermark),
+            AverageBusySlotsPerDecode = LlamaServerMetrics.ParseOrNull(afterAll, LlamaServerMetrics.BusySlotsPerDecode),
             WarmPromptTimings = warmStage.Timings
         };
     }
@@ -659,7 +659,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         {
             firstTokenMs ??= stopwatch.Elapsed.TotalMilliseconds;
             builder.Append(update.Text);
-            timings = LlamaServerGenerationTimings.TryRead(update.RawRepresentation) ?? timings;
+            timings = LlamaServerGenerationTimings.ReadOrNull(update.RawRepresentation) ?? timings;
         }
 
         return new StreamStageResult
@@ -714,13 +714,13 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
     private static double? Delta(string? before, string? after, string metric)
     {
-        var afterValue = LlamaServerMetrics.TryParse(after, metric);
+        var afterValue = LlamaServerMetrics.ParseOrNull(after, metric);
         if (afterValue is null)
         {
             return null;
         }
 
-        var beforeValue = LlamaServerMetrics.TryParse(before, metric) ?? 0d;
+        var beforeValue = LlamaServerMetrics.ParseOrNull(before, metric) ?? 0d;
         var delta = afterValue.Value - beforeValue;
         return delta >= 0 ? delta : afterValue;
     }

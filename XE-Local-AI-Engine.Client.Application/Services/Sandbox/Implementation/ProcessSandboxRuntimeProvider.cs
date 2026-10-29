@@ -1013,7 +1013,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
 
         if (launch.ScopeUnitName is { } unitName
-            && SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation) is { } scopeKiller)
+            && SandboxScopeUnitKiller.CreateOrNull(_launcher.Containment.FilesystemIsolation) is { } scopeKiller)
         {
             try
             {

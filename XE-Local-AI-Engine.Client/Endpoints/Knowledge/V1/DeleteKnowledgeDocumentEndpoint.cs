@@ -31,11 +31,9 @@ public sealed class DeleteKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocument
 
     public override async Task HandleAsync(KnowledgeDocumentRouteRequest req, CancellationToken ct)
     {
-        var deleted = await _purgeService.PurgeAsync(req.DocumentId, ct);
-        if (!deleted)
+        if (!await _purgeService.PurgeAsync(req.DocumentId, ct))
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            throw new KnowledgeDocumentNotFoundException("The knowledge document was not found.");
         }
 
         await Send.NoContentAsync(ct);

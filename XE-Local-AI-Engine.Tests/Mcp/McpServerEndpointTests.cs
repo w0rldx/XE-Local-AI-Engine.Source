@@ -197,7 +197,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((McpServerRecord?)null);
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns<McpServerRecord>(_ => throw new McpServerNotFoundException(id));
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -212,7 +212,6 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(true);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 

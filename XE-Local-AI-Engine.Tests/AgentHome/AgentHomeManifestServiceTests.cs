@@ -205,7 +205,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         await File.WriteAllTextAsync(liveRunLog, "{}\n");
 
         // Owner A's run holds the node from its own flow, so nothing here can borrow it ambiently.
-        using var runningA = await Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner-a", "node-1")));
+        using var runningA = await Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner-a", "node-1"), out var lease) ? lease : null);
         AssertEx.NotNull(runningA, "owner A's run must hold the node lease for this test to mean anything");
 
         await AssertEx.ThrowsAsync<AgentHomeBusyException>(() => service.InitializeAsync(Key("owner-b")));

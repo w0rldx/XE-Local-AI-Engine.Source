@@ -37,7 +37,7 @@ internal sealed class ExternalAppInstanceGate
     ///     Takes the key's gate if it is free, releasing it when the returned lease is disposed. Returns
     ///     <see langword="null" /> immediately when it is held; it never waits.
     /// </summary>
-    public async Task<IDisposable?> TryEnterAsync(string key)
+    public async Task<IDisposable?> EnterOrNullAsync(string key)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 

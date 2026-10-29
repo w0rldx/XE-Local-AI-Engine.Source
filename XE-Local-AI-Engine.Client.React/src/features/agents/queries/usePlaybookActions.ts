@@ -198,8 +198,8 @@ export interface UpdateSuggestedActionVariables {
 	request: SaveSuggestedActionRequestDto;
 }
 
-// Edit a pending Suggested action via the dedicated `/suggested` route (the manual PUT 404s on Analysis
-// provenance). The action stays Suggested; invalidating the list refreshes the Suggested section with the edit.
+// Edit a pending Suggested action via the dedicated `/suggested` route (the manual PUT answers 409 on
+// Analysis provenance). The action stays Suggested; invalidating the list refreshes the Suggested section with the edit.
 export function useUpdateSuggestedAction(agentDefinitionId: string) {
 	const queryClient = useQueryClient();
 

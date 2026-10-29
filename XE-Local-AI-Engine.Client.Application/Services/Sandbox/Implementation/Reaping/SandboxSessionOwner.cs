@@ -46,7 +46,7 @@ internal sealed class SandboxSessionOwner
     }
 
     /// <summary>The record in <paramref name="sessionRoot" />; null when there is none or it cannot be read as one.</summary>
-    public static SandboxSessionOwner? TryReadFrom(string sessionRoot)
+    public static SandboxSessionOwner? ReadFromOrNull(string sessionRoot)
     {
         var path = Path.Combine(sessionRoot, FileName);
         try

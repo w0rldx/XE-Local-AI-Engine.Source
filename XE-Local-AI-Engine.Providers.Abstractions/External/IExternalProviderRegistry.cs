@@ -26,14 +26,14 @@ public interface IExternalProviderRegistry
     ///     A <see langword="null" /> result is the fail-closed signal: callers must treat it as not-routable and
     ///     cloud-locality, never as a benign miss.
     /// </remarks>
-    Task<ExternalProviderModelRegistration?> TryResolveAsync(string modelId, CancellationToken ct);
+    Task<ExternalProviderModelRegistration?> FindRegistrationAsync(string modelId, CancellationToken ct);
 
     /// <summary>
-    ///     The same resolution as <see cref="TryResolveAsync" />, carrying the generation it was read at so the caller
+    ///     The same resolution as <see cref="FindRegistrationAsync" />, carrying the generation it was read at so the caller
     ///     can VERIFY later that the configuration has not moved underneath it. Key-free, for callers that pin or gate
     ///     rather than authenticate.
     /// </summary>
-    Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct);
+    Task<ExternalProviderBinding?> FindBindingAsync(string modelId, CancellationToken ct);
 
     /// <summary>
     ///     The transport's atomic view of one model: endpoint, declared trust, generation and credential, all read out
@@ -41,10 +41,10 @@ public interface IExternalProviderRegistry
     /// </summary>
     /// <remarks>
     ///     This is the ONLY way an API key leaves the registry, and it hands the key out bound to the endpoint it belongs to, never on its
-    ///     own; a consumer that only renders, gates or routes takes <see cref="ListRegistrationsAsync" /> or <see cref="TryResolveAsync" />
+    ///     own; a consumer that only renders, gates or routes takes <see cref="ListRegistrationsAsync" /> or <see cref="FindRegistrationAsync" />
     ///     instead. A keyless connection yields a <see langword="null" /> <see cref="ExternalProviderTransportBinding.ApiKey" />, which is a
     ///     first-class case, not a fallback: a local llama-server rejects nothing, and a bogus bearer token would fail outright on an
     ///     endpoint that does check — so it means "send NO Authorization header", never "send an empty one".
     /// </remarks>
-    Task<ExternalProviderTransportBinding?> TryResolveTransportBindingAsync(string modelId, CancellationToken ct);
+    Task<ExternalProviderTransportBinding?> FindTransportBindingAsync(string modelId, CancellationToken ct);
 }

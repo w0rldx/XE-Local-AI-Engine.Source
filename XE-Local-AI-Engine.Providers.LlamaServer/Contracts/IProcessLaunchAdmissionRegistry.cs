@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>The exact capacity-approved launch identity handed from admission to the detached supervisor spawn.</summary>
 public sealed record ProcessLaunchAdmission
 {
@@ -61,10 +63,11 @@ public interface IProcessLaunchAdmissionRegistry
 
     IProcessLaunchAdmissionLease? Acquire(ProcessLaunchAdmission admission);
 
-    bool TryAcquire(ProcessLaunchAdmission admission, out IProcessLaunchAdmissionLease? lease);
+    bool TryAcquire(ProcessLaunchAdmission admission, [NotNullWhen(true)] out IProcessLaunchAdmissionLease? lease);
 
+    /// <summary>Begins a launch; on success <paramref name="admission" /> is null for a direct launch with no capacity admission.</summary>
     bool TryBeginLaunch(string modelName,
         ModelRole role,
         out ProcessLaunchAdmission? admission,
-        out IProcessLaunchTicket? ticket);
+        [NotNullWhen(true)] out IProcessLaunchTicket? ticket);
 }

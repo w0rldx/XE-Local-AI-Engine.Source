@@ -16,13 +16,13 @@ public static class BenchmarkPairwiseFitScores
 
     /// <summary>The fit's per-run entries in stored order; empty when there is no fit or its blob is unreadable.</summary>
     public static IReadOnlyList<BenchmarkPairwiseScoreEntry> Read(BenchmarkPairwiseFitRecord? fit, ILogger logger) =>
-        fit is null ? [] : TryRead(fit, logger) ?? [];
+        fit is null ? [] : ReadOrNull(fit, logger) ?? [];
 
     /// <summary>
     ///     The fit's per-run entries in stored order, null elements skipped and the first entry kept for a run named twice;
     ///     null when the blob is unreadable. Either defect logs one Warning that names the fit but never carries the blob.
     /// </summary>
-    public static IReadOnlyList<BenchmarkPairwiseScoreEntry>? TryRead(BenchmarkPairwiseFitRecord fit, ILogger logger)
+    public static IReadOnlyList<BenchmarkPairwiseScoreEntry>? ReadOrNull(BenchmarkPairwiseFitRecord fit, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(logger);

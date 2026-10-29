@@ -42,8 +42,8 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
     public Task<IReadOnlyList<IntegrationTriggerSnapshot>> ListAsync(CancellationToken cancellationToken = default) =>
         _triggers.ListAsync(cancellationToken);
 
-    public Task<IntegrationTriggerSnapshot?> GetAsync(Guid triggerId, CancellationToken cancellationToken = default) =>
-        _triggers.GetByIdAsync(triggerId, cancellationToken);
+    public async Task<IntegrationTriggerSnapshot> GetAsync(Guid triggerId, CancellationToken cancellationToken = default) =>
+        await _triggers.GetByIdAsync(triggerId, cancellationToken) ?? throw TriggerNotFound(triggerId);
 
     public async Task<IntegrationTriggerResult> CreateAsync(IntegrationTriggerCreateInput input, CancellationToken cancellationToken = default)
     {
@@ -58,12 +58,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
 
         if (await _triggers.GetByNameAsync(name, cancellationToken) is not null)
         {
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.NameConflict,
-                Trigger = null,
-                Message = NameConflictMessage
-            };
+            return Rejected(IntegrationTriggerOutcome.NameConflict, NameConflictMessage);
         }
 
         try
@@ -83,23 +78,13 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                 },
                 cancellationToken);
 
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.Saved,
-                Trigger = created,
-                Message = null
-            };
+            return new IntegrationTriggerResult.Saved { Trigger = created };
         }
         catch (IntegrationTriggerNameConflictException)
         {
             // The read above is not atomic with the insert. The unique index on the name is what actually decides the
             // race, and the loser must learn it lost as a 409 rather than as a 500.
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.NameConflict,
-                Trigger = null,
-                Message = NameConflictMessage
-            };
+            return Rejected(IntegrationTriggerOutcome.NameConflict, NameConflictMessage);
         }
     }
 
@@ -107,16 +92,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var existing = await _triggers.GetByIdAsync(triggerId, cancellationToken);
-        if (existing is null)
-        {
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.NotFound,
-                Trigger = null,
-                Message = null
-            };
-        }
+        _ = await _triggers.GetByIdAsync(triggerId, cancellationToken) ?? throw TriggerNotFound(triggerId);
 
         var rejection = await RejectTargetAsync(input.TargetKind, input.TargetAgentDefinitionId, input.TargetGraphWorkflowDefinitionId, cancellationToken);
         if (rejection is not null)
@@ -140,32 +116,21 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
             cancellationToken);
         if (!updated)
         {
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.VersionConflict,
-                Trigger = null,
-                Message = "The trigger changed since it was loaded. Reload it and try again."
-            };
+            return Rejected(IntegrationTriggerOutcome.VersionConflict, "The trigger changed since it was loaded. Reload it and try again.");
         }
 
-        var reloaded = await _triggers.GetByIdAsync(triggerId, cancellationToken);
-        return reloaded is null
-            ? new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.NotFound,
-                Trigger = null,
-                Message = null
-            }
-            : new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.Saved,
-                Trigger = reloaded,
-                Message = null
-            };
+        // Deleted between the write and this read: the caller's id no longer names anything.
+        var reloaded = await _triggers.GetByIdAsync(triggerId, cancellationToken) ?? throw TriggerNotFound(triggerId);
+        return new IntegrationTriggerResult.Saved { Trigger = reloaded };
     }
 
-    public Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default) =>
-        _triggers.DeleteAsync(triggerId, cancellationToken);
+    public async Task DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default)
+    {
+        if (!await _triggers.DeleteAsync(triggerId, cancellationToken))
+        {
+            throw TriggerNotFound(triggerId);
+        }
+    }
 
     private static string? NormalizeDescription(string? description) =>
         string.IsNullOrWhiteSpace(description) ? null : description.Trim();
@@ -174,7 +139,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
     ///     The store-backed checks, in one place because both writes need them. Returns the rejection to send, or
     ///     <see langword="null" /> when the target is usable. The validator has already enforced "exactly the id the kind names".
     /// </summary>
-    private async Task<IntegrationTriggerResult?> RejectTargetAsync(IntegrationTargetKind kind,
+    private async Task<IntegrationTriggerResult.Rejected?> RejectTargetAsync(IntegrationTargetKind kind,
         Guid? agentDefinitionId,
         Guid? graphWorkflowDefinitionId,
         CancellationToken cancellationToken)
@@ -187,30 +152,20 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         var definition = await _agents.GetByIdAsync(agentDefinitionId.GetValueOrDefault(), cancellationToken);
         if (definition is null)
         {
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.AgentMissing,
-                Trigger = null,
-                Message = AgentMissingMessage
-            };
+            return Rejected(IntegrationTriggerOutcome.AgentMissing, AgentMissingMessage);
         }
 
         // V1 is scoped to a saved SINGLE agent: the coordinator builds no OrchestrationSpec, so an orchestrator saved here would report Completed having run
         // none of its participants. Refused at save AND re-checked in the coordinator, because a definition's Kind can change after the trigger was written.
         if (definition.Kind != AgentDefinitionKind.Single)
         {
-            return new IntegrationTriggerResult
-            {
-                Outcome = IntegrationTriggerOutcome.TargetKindRejected,
-                Trigger = null,
-                Message = OrchestratorMessage
-            };
+            return Rejected(IntegrationTriggerOutcome.TargetKindRejected, OrchestratorMessage);
         }
 
         return null;
     }
 
-    private async Task<IntegrationTriggerResult?> RejectGraphTargetAsync(Guid definitionId, CancellationToken cancellationToken)
+    private async Task<IntegrationTriggerResult.Rejected?> RejectGraphTargetAsync(Guid definitionId, CancellationToken cancellationToken)
     {
         if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
         {
@@ -228,11 +183,13 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
         }
     }
 
-    private static IntegrationTriggerResult Rejected(IntegrationTriggerOutcome outcome, string message) =>
+    private static IntegrationTriggerResult.Rejected Rejected(IntegrationTriggerOutcome outcome, string message) =>
         new()
         {
             Outcome = outcome,
-            Trigger = null,
             Message = message
         };
+
+    private static IntegrationNotFoundException TriggerNotFound(Guid triggerId) =>
+        new($"Integration trigger {triggerId} was not found.");
 }

@@ -359,7 +359,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         {
             // A folder that exists but has no readable real name (a network share, an unopenable handle) is refused, not dropped: a drop
             // starts a server without its files. A malformed or missing path contributes no tree, and the server fails to start.
-            if (TryLexical(path) is { } lexical && (Directory.Exists(lexical) || File.Exists(lexical)))
+            if (LexicalOrNull(path) is { } lexical && (Directory.Exists(lexical) || File.Exists(lexical)))
             {
                 throw new SandboxCapabilityNotSupportedException($"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{lexical}' into its sandbox, which is "
                                                                  + (OperatingSystem.IsWindows()
@@ -586,14 +586,14 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private static void AddRoot(List<SensitiveHostRoot> roots, string path, bool deniesSubtree, string? allowedBeneath = null)
     {
         // A carve-out that is itself a link (a junction from WindowsApps into Credentials) would move the exception onto its target.
-        var allowed = allowedBeneath is not null && TryLexical(allowedBeneath) is { } lexical
+        var allowed = allowedBeneath is not null && LexicalOrNull(allowedBeneath) is { } lexical
                                                  && string.Equals(Canonicalize(allowedBeneath), lexical, PathComparison)
             ? lexical
             : null;
         foreach (var candidate in new[]
                  {
                      Canonicalize(path),
-                     TryLexical(path)
+                     LexicalOrNull(path)
                  })
         {
             // Equality covers the class too, so a path on the list twice keeps its subtree-denied entry (home = /root on a root account).
@@ -609,7 +609,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         }
     }
 
-    private static string? TryLexical(string path)
+    private static string? LexicalOrNull(string path)
     {
         try
         {

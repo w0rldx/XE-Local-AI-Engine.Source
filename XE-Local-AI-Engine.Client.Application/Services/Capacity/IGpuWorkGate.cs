@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     The node's single admission point for GPU work (ADR 0005 §2).
 /// </summary>
@@ -19,14 +21,14 @@ public interface IGpuWorkGate
     IReadOnlyList<GpuWorkKind> Holders { get; }
 
     /// <summary>
-    ///     Takes the whole node, or returns <see langword="null" /> when any holder — exclusive or shared — exists.
+    ///     Takes the whole node, or returns <see langword="false" /> when any holder — exclusive or shared — exists.
     ///     Disposing the handle releases it; disposing twice is a no-op.
     /// </summary>
-    IDisposable? TryBeginExclusive(GpuWorkKind kind);
+    bool TryBeginExclusive(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle);
 
     /// <summary>
-    ///     Takes a shared hold, or returns <see langword="null" /> while an exclusive holder owns the node. Shared
+    ///     Takes a shared hold, or returns <see langword="false" /> while an exclusive holder owns the node. Shared
     ///     holders coexist. Disposing the handle releases it; disposing twice is a no-op.
     /// </summary>
-    IDisposable? TryBeginShared(GpuWorkKind kind);
+    bool TryBeginShared(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle);
 }

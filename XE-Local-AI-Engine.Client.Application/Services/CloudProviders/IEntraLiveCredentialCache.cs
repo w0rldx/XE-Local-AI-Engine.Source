@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using Azure.Core;
 
 /// <summary>
@@ -15,8 +16,8 @@ using Azure.Core;
 /// </remarks>
 public interface IEntraLiveCredentialCache
 {
-    /// <summary>Returns the cached credential only when <paramref name="key" /> matches the one it was stored under.</summary>
-    TokenCredential? TryGet(string key);
+    /// <summary>Gets the cached credential only when <paramref name="key" /> matches the one it was stored under.</summary>
+    bool TryGet(string key, [NotNullWhen(true)] out TokenCredential? credential);
 
     /// <summary>Replaces the single cached slot.</summary>
     void Store(string key, TokenCredential credential);

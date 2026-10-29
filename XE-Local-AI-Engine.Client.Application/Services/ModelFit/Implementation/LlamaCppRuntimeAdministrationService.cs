@@ -152,9 +152,12 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         var blockedMessage = await FindPrebuiltMutationBlockAsync(variant, cancellationToken);
         if (blockedMessage is not null)
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
-                blockedMessage,
-                _processSupervisor.CountRunningProcesses());
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+                DisplayMessage = blockedMessage,
+                RunningProcessCount = _processSupervisor.CountRunningProcesses()
+            };
         }
 
         try
@@ -166,7 +169,11 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             }
 
             var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
-            return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
+            return new LlamaCppRuntimeMutationResult.Succeeded
+            {
+                Binary = ToView(binary),
+                RecommendedTag = recommendedTag
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -175,7 +182,11 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         catch (LlamaRuntimeException exception)
         {
             _logger.LogWarning(exception, "Ensuring the llama.cpp binary for variant {Variant} failed.", variant);
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, exception.Message);
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.RuntimeFailure,
+                DisplayMessage = exception.Message
+            };
         }
     }
 
@@ -185,21 +196,31 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     {
         if (_overrideOptions.IsActive)
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy, OverrideActiveMessage);
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+                DisplayMessage = OverrideActiveMessage
+            };
         }
 
         if (!StoredNodeSettingsValidation.IsValidRecommendedLlamaCppTag(tag))
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.InvalidRequest,
-                "Tag must be a llama.cpp release tag in the form b<number>.");
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.InvalidRequest,
+                DisplayMessage = "Tag must be a llama.cpp release tag in the form b<number>."
+            };
         }
 
         var canonicalTag = tag.Trim();
         if (await _nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
-                KeepModelWarmBlockedMessage,
-                _processSupervisor.CountRunningProcesses());
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+                DisplayMessage = KeepModelWarmBlockedMessage,
+                RunningProcessCount = _processSupervisor.CountRunningProcesses()
+            };
         }
 
         var selectedVariant = variant ?? await _variantSelector.SelectVariantAsync(cancellationToken);
@@ -209,16 +230,22 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         // An installed source build refuses every prebuilt install, so its 409 must win over the missing-prebuilt answer below.
         if ((await _installedRuntimeStore.ReadAsync(cancellationToken))?.SourceBuildPath is { Length: > 0 })
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
-                SourceBuildInstalledMessage,
-                _processSupervisor.CountRunningProcesses());
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+                DisplayMessage = SourceBuildInstalledMessage,
+                RunningProcessCount = _processSupervisor.CountRunningProcesses()
+            };
         }
 
         // The binary manager refuses this too; answering before the catalog call gives the caller that message, not "no matching asset".
         if (LlamaCppReleasePins.ResolveForAcquisition(os, arch, selectedVariant) is null)
         {
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.RuntimeFailure,
-                LlamaCppReleasePins.MissingPrebuiltMessage(os, arch, selectedVariant));
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.RuntimeFailure,
+                DisplayMessage = LlamaCppReleasePins.MissingPrebuiltMessage(os, arch, selectedVariant)
+            };
         }
 
         try
@@ -230,17 +257,23 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
                 cancellationToken);
             if (asset.Asset is null)
             {
-                return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.InvalidRequest,
-                    "The llama.cpp runtime catalog is unavailable or has no matching asset for the requested tag.");
+                return new LlamaCppRuntimeMutationResult.Rejected
+                {
+                    Failure = LlamaCppRuntimeAdministrationFailure.InvalidRequest,
+                    DisplayMessage = "The llama.cpp runtime catalog is unavailable or has no matching asset for the requested tag."
+                };
             }
 
             var admission = await TryAcquirePrebuiltMutationAsync(ensureVariant: null, cancellationToken);
             await using var lease = admission.Lease;
             if (lease is null || admission.BlockedMessage is not null)
             {
-                return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
-                    admission.BlockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change.",
-                    admission.RunningProcessCount);
+                return new LlamaCppRuntimeMutationResult.Rejected
+                {
+                    Failure = LlamaCppRuntimeAdministrationFailure.Busy,
+                    DisplayMessage = admission.BlockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change.",
+                    RunningProcessCount = admission.RunningProcessCount
+                };
             }
 
             var binary = await _binaryManager.InstallTagAsync(canonicalTag,
@@ -254,7 +287,11 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             _localChatClientCacheInvalidator.ClearClientCache();
             await RefreshSnapshotAsync(canonicalTag, cancellationToken);
             var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
-            return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
+            return new LlamaCppRuntimeMutationResult.Succeeded
+            {
+                Binary = ToView(binary),
+                RecommendedTag = recommendedTag
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -263,7 +300,11 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         catch (LlamaRuntimeException exception)
         {
             _logger.LogWarning(exception, "Installing the llama.cpp runtime for tag {Tag} failed.", canonicalTag);
-            return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, exception.Message);
+            return new LlamaCppRuntimeMutationResult.Rejected
+            {
+                Failure = LlamaCppRuntimeAdministrationFailure.RuntimeFailure,
+                DisplayMessage = exception.Message
+            };
         }
     }
 
@@ -319,7 +360,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             };
         }
 
-        var lease = await _processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
+        var lease = await _processSupervisor.AcquireRuntimeMutationLeaseOrNullAsync(cancellationToken);
         if (lease is null)
         {
             // The gate refuses the lease while any llama-server runs, so name that blocker instead of a generic busy text.

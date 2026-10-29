@@ -63,7 +63,7 @@ public static class TrainingRunStdioParser
     public const int ContractVersion = 1;
 
     /// <summary>Returns the parsed event, or null when the line is banner text rather than protocol.</summary>
-    public static TrainingStdioEvent? TryParse(string? line)
+    public static TrainingStdioEvent? ParseOrNull(string? line)
     {
         var trimmed = line?.Trim();
         if (trimmed is not { Length: > 0 } || trimmed[0] != '{')

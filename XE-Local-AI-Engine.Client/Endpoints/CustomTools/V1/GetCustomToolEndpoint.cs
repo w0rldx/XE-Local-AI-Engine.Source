@@ -25,11 +25,6 @@ public sealed class GetCustomToolEndpoint : EndpointWithoutRequest<CustomToolVie
     {
         var customToolId = Route<Guid>("customToolId");
         var view = await _customToolService.GetByIdAsync(customToolId, ct);
-        if (view is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(view, ct);
     }

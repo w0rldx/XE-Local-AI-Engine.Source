@@ -25,12 +25,6 @@ public sealed class GetEvaluationEndpoint : Endpoint<EvaluationByIdRequest, Eval
     public override async Task HandleAsync(EvaluationByIdRequest req, CancellationToken ct)
     {
         var evaluation = await _evaluations.GetAsync(req.EvaluationId, ct);
-        if (evaluation is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(evaluation.ToResponse(), ct);
     }
 }

@@ -529,4 +529,18 @@ public sealed class CustomToolServiceTests
             }
         };
     }
+
+    [Test]
+    public async Task GetUpdateDelete_WhenTheIdIsUnknown_ThrowNotFound()
+    {
+        var service = BuildService(out var store, out _);
+        var id = Guid.NewGuid();
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(Task.FromResult<CustomToolRecord?>(null));
+        store.UpdateAsync(id, Arg.Any<CustomToolInput>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<CustomToolRecord?>(null));
+        store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(false);
+
+        _ = await AssertEx.ThrowsAsync<CustomToolNotFoundException>(async () => await service.GetByIdAsync(id));
+        _ = await AssertEx.ThrowsAsync<CustomToolNotFoundException>(async () => await service.UpdateAsync(id, ValidCommand()));
+        _ = await AssertEx.ThrowsAsync<CustomToolNotFoundException>(async () => await service.DeleteAsync(id));
+    }
 }

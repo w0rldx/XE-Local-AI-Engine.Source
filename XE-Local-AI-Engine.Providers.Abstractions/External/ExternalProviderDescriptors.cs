@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 /// </summary>
 /// <remarks>
 ///     The key is a secret whose only legitimate consumer is the transport, and it reaches the transport bound to its
-///     own endpoint through <see cref="IExternalProviderRegistry.TryResolveTransportBindingAsync" />, so every
+///     own endpoint through <see cref="IExternalProviderRegistry.FindTransportBindingAsync" />, so every
 ///     catalog/UI/policy consumer of this descriptor is structurally incapable of leaking it.
 /// </remarks>
 public sealed record ExternalProviderConnectionDescriptor

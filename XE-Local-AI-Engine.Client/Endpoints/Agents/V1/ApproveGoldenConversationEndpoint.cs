@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 /// <remarks>
 ///     Ownership-guarded: the service only enables a harvested, currently-disabled case owned by the agent named on
 ///     the route, so one agent's route cannot touch another agent's case. 200 with the updated case; 404 when the case
-///     is missing, already enabled, manual, or belongs to another agent.
+///     is missing or belongs to another agent; 409 when it is manual or already enabled.
 /// </remarks>
 public sealed class ApproveGoldenConversationEndpoint : Endpoint<ApproveGoldenConversationRequest, GoldenConversationResponse>
 {
@@ -29,17 +29,26 @@ public sealed class ApproveGoldenConversationEndpoint : Endpoint<ApproveGoldenCo
     {
         Post(LocalApiRoutes.Agents.GoldenConversationApprove);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ApproveGoldenConversationRequest req, CancellationToken ct)
     {
-        var record = await _goldenConversationService.ApproveHarvestedAsync(req.AgentDefinitionId, req.GoldenConversationId, ct);
-        if (record is null)
+        var result = await _goldenConversationService.ApproveHarvestedAsync(req.AgentDefinitionId, req.GoldenConversationId, ct);
+        if (result is GoldenConversationApproveResult.Approved approved)
         {
-            await Send.NotFoundAsync(ct);
+            await Send.OkAsync(approved.Record.ToResponse(), ct);
             return;
         }
 
-        await Send.OkAsync(record.ToResponse(), ct);
+        // The `outcome` member keeps the refusal machine-readable without matching on the message.
+        var alreadyEnabled = result is GoldenConversationApproveResult.AlreadyEnabled;
+        await Send.ConflictProblemAsync(alreadyEnabled
+                ? "The case is already in the active golden set."
+                : "Only a harvested candidate can be approved; this case was authored manually.",
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["outcome"] = alreadyEnabled ? "AlreadyEnabled" : "NotHarvested"
+            });
     }
 }

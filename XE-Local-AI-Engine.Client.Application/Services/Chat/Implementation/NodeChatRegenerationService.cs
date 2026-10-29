@@ -448,8 +448,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                               // selection, the same precedence as the rerun's package, and it survives reload.
                               ReasoningEffort = resolution.Resolved?.ReasoningEffort ?? reasoningEffort
                           },
-                          cancellationToken)
-                      ?? throw new NodeChatMessageNotFoundException(originalMessageId);
+                          cancellationToken);
 
         return variant.Variant;
     }

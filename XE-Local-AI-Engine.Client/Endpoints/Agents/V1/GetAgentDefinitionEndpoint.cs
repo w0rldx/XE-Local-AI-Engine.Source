@@ -25,11 +25,6 @@ public sealed class GetAgentDefinitionEndpoint : Endpoint<GetAgentDefinitionRequ
     public override async Task HandleAsync(GetAgentDefinitionRequest req, CancellationToken ct)
     {
         var record = await _agentDefinitionService.GetByIdAsync(req.AgentDefinitionId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(record.ToResponse(), ct);
     }

@@ -66,7 +66,7 @@ public static class TrustedBinaryResolver
             }
 
             var candidate = Path.Combine(root, name);
-            if (TryResolveTrusted(candidate, MaximumSymbolicLinkDepth) is { } canonical)
+            if (ResolveTrustedOrNull(candidate, MaximumSymbolicLinkDepth) is { } canonical)
             {
                 return canonical;
             }
@@ -83,7 +83,7 @@ public static class TrustedBinaryResolver
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        return OperatingSystem.IsLinux() && TryResolveTrusted(path, MaximumSymbolicLinkDepth) is not null;
+        return OperatingSystem.IsLinux() && ResolveTrustedOrNull(path, MaximumSymbolicLinkDepth) is not null;
     }
 
     /// <summary>
@@ -91,14 +91,14 @@ public static class TrustedBinaryResolver
     ///     non-writable, executable regular file. Returns the canonical path, or <see langword="null" /> the moment
     ///     one check fails.
     /// </summary>
-    private static string? TryResolveTrusted(string path, int remainingDepth)
+    private static string? ResolveTrustedOrNull(string path, int remainingDepth)
     {
-        if (TryCanonicalizeTrusted(path, remainingDepth) is not { } canonical)
+        if (CanonicalizeTrustedOrNull(path, remainingDepth) is not { } canonical)
         {
             return null;
         }
 
-        var leaf = SandboxUnixMetadata.TryRead(canonical, followSymbolicLinks: true);
+        var leaf = SandboxUnixMetadata.ReadOrNull(canonical, followSymbolicLinks: true);
 
         return leaf is { IsRegularFile: true, HasAnyExecuteBit: true, UserId: 0, IsGroupOrWorldWritable: false }
             ? canonical
@@ -111,10 +111,10 @@ public static class TrustedBinaryResolver
     /// </summary>
     /// <remarks>
     ///     It deliberately says nothing about what the leaf IS. A symlink target is validated through this method rather than through
-    ///     <see cref="TryResolveTrusted" /> because the target of a usr-merge link is a directory, and applying the executable-file rule
+    ///     <see cref="ResolveTrustedOrNull" /> because the target of a usr-merge link is a directory, and applying the executable-file rule
     ///     to it would reject the layout every current distribution ships.
     /// </remarks>
-    private static string? TryCanonicalizeTrusted(string path, int remainingDepth)
+    private static string? CanonicalizeTrustedOrNull(string path, int remainingDepth)
     {
         if (remainingDepth <= 0 || !Path.IsPathRooted(path))
         {
@@ -133,7 +133,7 @@ public static class TrustedBinaryResolver
             }
 
             var next = string.Concat(current, "/", component);
-            var facts = SandboxUnixMetadata.TryRead(next);
+            var facts = SandboxUnixMetadata.ReadOrNull(next);
             if (facts is not { } entry || entry.UserId != 0)
             {
                 // Absent, unreadable, or owned by anyone but root. A helper the engine's own user could replace is not
@@ -146,7 +146,7 @@ public static class TrustedBinaryResolver
                 // The link's own mode bits are 0777 on Linux and carry no information, so the target decides: it is validated by the SAME
                 // rule, recursively, and becomes the path the walk continues from, which is what makes the returned value canonical.
                 var target = ResolveLinkTarget(next);
-                if (target is null || TryCanonicalizeTrusted(target, remainingDepth - 1) is not { } canonicalTarget)
+                if (target is null || CanonicalizeTrustedOrNull(target, remainingDepth - 1) is not { } canonicalTarget)
                 {
                     return null;
                 }

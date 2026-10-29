@@ -31,21 +31,26 @@ public sealed class RunPlaybookActionEvalEndpoint : Endpoint<SuggestedPlaybookAc
         Policies(NodeAuthorizationPolicies.Operator);
         // Route-only POST: no body means no Content-Type, and the default POST "Accepts" metadata (application/json
         // only) would answer 415. Accepting any content-type lets the request through; the ids still bind from the route.
-        Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>());
+        Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>()
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var outcome = await _playbookEvalService.RunEvalAsync(req.AgentDefinitionId, req.ActionId, ct);
-
-        // The service enforced ownership, persisted EvalResult and returned the updated record on the outcome — map it directly. A missing record (no ActionFound,
-        // or the ownership-guarded record returned null) is a 404; no second, unscoped re-fetch.
-        if (!outcome.ActionFound || outcome.Action is null)
+        // The service enforced ownership, persisted EvalResult and returned the updated record on the outcome — map it
+        // directly, with no second, unscoped re-fetch. A missing or cross-agent action throws its not-found (404).
+        switch (await _playbookEvalService.RunEvalAsync(req.AgentDefinitionId, req.ActionId, ct))
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            case PlaybookEvalOutcome.Recorded recorded:
+                await Send.OkAsync(recorded.Action.ToResponse(), ct);
+                return;
+            default:
+                await Send.ConflictProblemAsync("The action is no longer a pending suggestion.",
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = "NotPending"
+                    });
+                return;
         }
-
-        await Send.OkAsync(outcome.Action.ToResponse(), ct);
     }
 }

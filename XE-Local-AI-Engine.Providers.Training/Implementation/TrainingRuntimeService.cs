@@ -692,7 +692,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             throw new TrainingRuntimeException("Verifying the provisioned training runtime failed.");
         }
 
-        var report = TrainingRuntimeProbeParser.TryParse(captured)
+        var report = TrainingRuntimeProbeParser.ParseOrNull(captured)
                      ?? throw new TrainingRuntimeException("The training runtime verification produced no usable result.");
 
         if (report.ContractVersion != TrainingRuntimePins.ProbeContractVersion)

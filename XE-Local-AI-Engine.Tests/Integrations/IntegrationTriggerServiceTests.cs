@@ -32,7 +32,7 @@ public sealed class IntegrationTriggerServiceTests
 
         var result = await harness.Service.CreateAsync(Input(" Sensor-Feed ", agentId, displayName: "  Sensor feed  ", description: "   "));
 
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.True(result is IntegrationTriggerResult.Saved, $"Expected Saved, got {result}.");
         var trigger = AssertEx.NotNull(result.Trigger);
         AssertEx.Equal("sensor-feed", trigger.Name, "The external name is lowercased and trimmed so the UI and a curl command resolve the same row.");
         AssertEx.Equal("Sensor feed", trigger.DisplayName);
@@ -138,7 +138,7 @@ public sealed class IntegrationTriggerServiceTests
 
         var result = await harness.Service.CreateAsync(Input("sensor-feed", agentId, sessionPolicy: IntegrationSessionPolicy.CallerManaged));
 
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.True(result is IntegrationTriggerResult.Saved, $"Expected Saved, got {result}.");
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
         _ = harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(Guid?), default);
         _ = harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(AgentDefinitionRecord)!, default);
@@ -165,7 +165,7 @@ public sealed class IntegrationTriggerServiceTests
                 AcceptedInputKinds = IntegrationInputKinds.Text
             });
 
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.True(result is IntegrationTriggerResult.Saved, $"Expected Saved, got {result}.");
         var updated = AssertEx.NotNull(result.Trigger);
         AssertEx.Equal("sensor-feed", updated.Name, "The external name is not editable: renaming a live trigger is a delete-and-create decision.");
         AssertEx.Equal("Renamed label", updated.DisplayName);
@@ -199,11 +199,11 @@ public sealed class IntegrationTriggerServiceTests
     }
 
     [Test]
-    public async Task UpdateAsync_WithAnUnknownId_ReturnsNotFoundBeforeTouchingTheAgentStore()
+    public async Task UpdateAsync_WithAnUnknownId_ThrowsNotFoundBeforeTouchingTheAgentStore()
     {
         var harness = new Harness();
 
-        var result = await harness.Service.UpdateAsync(Guid.NewGuid(),
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => harness.Service.UpdateAsync(Guid.NewGuid(),
             new IntegrationTriggerUpdateInput
             {
                 ExpectedVersion = 1,
@@ -215,9 +215,7 @@ public sealed class IntegrationTriggerServiceTests
                 TargetGraphWorkflowDefinitionId = null,
                 SessionPolicy = IntegrationSessionPolicy.PerInvocation,
                 AcceptedInputKinds = IntegrationInputKinds.Text
-            });
-
-        AssertEx.Equal(IntegrationTriggerOutcome.NotFound, result.Outcome);
+            }));
     }
 
     [Test]
@@ -242,7 +240,7 @@ public sealed class IntegrationTriggerServiceTests
                 AcceptedInputKinds = IntegrationInputKinds.Text
             });
 
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.True(result is IntegrationTriggerResult.Saved, $"Expected Saved, got {result}.");
         AssertEx.Equal(IntegrationSessionPolicy.CallerManaged, harness.Triggers.Rows.Single().SessionPolicy);
     }
 
@@ -255,9 +253,9 @@ public sealed class IntegrationTriggerServiceTests
 
         AssertEx.Equal(created.Id, AssertEx.NotNull(await harness.Service.GetAsync(created.Id)).Id);
         AssertEx.Equal(expected: 1, (await harness.Service.ListAsync()).Count);
-        AssertEx.True(await harness.Service.DeleteAsync(created.Id));
-        AssertEx.False(await harness.Service.DeleteAsync(created.Id));
-        AssertEx.Null(await harness.Service.GetAsync(created.Id));
+        await harness.Service.DeleteAsync(created.Id);
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => harness.Service.DeleteAsync(created.Id));
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => harness.Service.GetAsync(created.Id));
     }
 
     [Test]
@@ -268,7 +266,7 @@ public sealed class IntegrationTriggerServiceTests
 
         var result = await harness.Service.CreateAsync(GraphInput("lights-on", graphId));
 
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.True(result is IntegrationTriggerResult.Saved, $"Expected Saved, got {result}.");
         var row = AssertEx.NotNull(result.Trigger);
         AssertEx.Equal(IntegrationTargetKind.Graph, row.TargetKind);
         AssertEx.Equal(graphId, row.TargetGraphWorkflowDefinitionId);
@@ -320,7 +318,7 @@ public sealed class IntegrationTriggerServiceTests
             AcceptedInputKinds = IntegrationInputKinds.Text
         });
 
-        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        AssertEx.True(result is IntegrationTriggerResult.Saved, $"Expected Saved, got {result}.");
         var row = AssertEx.NotNull(result.Trigger);
         AssertEx.Equal(IntegrationTargetKind.Graph, row.TargetKind);
         AssertEx.Equal(graphId, row.TargetGraphWorkflowDefinitionId);

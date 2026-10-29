@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
+using System.Diagnostics;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
@@ -28,32 +29,34 @@ public sealed class UpdateLlamaCppRuntimeEndpoint : Endpoint<UpdateLlamaCppRunti
 
     public override async Task HandleAsync(UpdateLlamaCppRuntimeRequest req, CancellationToken ct)
     {
-        if (req.Variant is not null && ModelFitMapper.TryParseVariant(req.Variant) is null)
+        if (req.Variant is not null && ModelFitMapper.ParseVariantOrNull(req.Variant) is null)
         {
             AddError(r => r.Variant, "Variant is not supported.");
             await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 
-        var variant = req.Variant is null ? null : ModelFitMapper.TryParseVariant(req.Variant);
+        var variant = req.Variant is null ? null : ModelFitMapper.ParseVariantOrNull(req.Variant);
         var result = await _administrationService.InstallAsync(req.Tag, variant, ct);
-        if (result.Succeeded)
+        switch (result)
         {
-            await Send.OkAsync(result.Binary!.ToResponse(result.RecommendedTag!), ct);
-            return;
+            case LlamaCppRuntimeMutationResult.Succeeded succeeded:
+                await Send.OkAsync(succeeded.Binary.ToResponse(succeeded.RecommendedTag), ct);
+                return;
+            case LlamaCppRuntimeMutationResult.Rejected { Failure: LlamaCppRuntimeAdministrationFailure.Busy } busy:
+                await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+                {
+                    RunningProcessCount = busy.RunningProcessCount,
+                    Message = busy.DisplayMessage
+                }));
+                return;
+            case LlamaCppRuntimeMutationResult.Rejected rejected:
+                AddError(rejected.DisplayMessage);
+                break;
+            default:
+                throw new UnreachableException($"Unknown llama.cpp runtime result '{result}'.");
         }
 
-        if (result.Failure == LlamaCppRuntimeAdministrationFailure.Busy)
-        {
-            await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
-            {
-                RunningProcessCount = result.RunningProcessCount,
-                Message = result.DisplayMessage!
-            }));
-            return;
-        }
-
-        AddError(result.DisplayMessage ?? "The llama.cpp runtime could not be installed.");
         await Send.ErrorsAsync(cancellation: ct);
     }
 }

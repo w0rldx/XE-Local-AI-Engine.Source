@@ -41,7 +41,7 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
             return response;
         }
 
-        if (TryReadReasoning(response.RawRepresentation as ChatCompletion) is { } reasoning)
+        if (ReadReasoningOrNull(response.RawRepresentation as ChatCompletion) is { } reasoning)
         {
             foreach (var message in response.Messages)
             {
@@ -83,7 +83,7 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
                 continue;
             }
 
-            if (!sawAdapterReasoning && TryReadReasoning(update.RawRepresentation as StreamingChatCompletionUpdate) is { } reasoning)
+            if (!sawAdapterReasoning && ReadReasoningOrNull(update.RawRepresentation as StreamingChatCompletionUpdate) is { } reasoning)
             {
                 sawAnyReasoning = true;
                 update.Contents.Insert(index: 0, new TextReasoningContent(reasoning));
@@ -166,7 +166,7 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
         return rewritten;
     }
 
-    private static string? TryReadReasoning(ChatCompletion? completion)
+    private static string? ReadReasoningOrNull(ChatCompletion? completion)
     {
         if (completion is null)
         {
@@ -179,7 +179,7 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
         return ReadFirstChoiceString(ref completion.Patch, NonStreamingReasoningPath);
     }
 
-    private static string? TryReadReasoning(StreamingChatCompletionUpdate? update)
+    private static string? ReadReasoningOrNull(StreamingChatCompletionUpdate? update)
     {
         if (update is null)
         {

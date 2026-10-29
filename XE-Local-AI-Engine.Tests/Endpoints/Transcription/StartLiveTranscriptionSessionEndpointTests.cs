@@ -122,10 +122,7 @@ public sealed class StartLiveTranscriptionSessionEndpointTests
     {
         using var service = new StubTranscriptionService
         {
-            StartLiveResult = new StartLiveResult
-            {
-                Outcome = StartLiveOutcome.SessionNotFound
-            }
+            StartLiveThrows = new TranscriptionNotFoundException("The transcription session was not found.")
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();

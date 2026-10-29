@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 /// <summary>
@@ -24,7 +25,7 @@ internal static class ApplicationControlBlock
     /// </summary>
     /// <param name="exception">The startup failure.</param>
     /// <param name="fileName">The blocked file's name (no directory), when found.</param>
-    internal static bool TryDescribe(Exception? exception, out string fileName)
+    internal static bool TryDescribe(Exception? exception, [NotNullWhen(true)] out string? fileName)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
@@ -52,7 +53,7 @@ internal static class ApplicationControlBlock
             }
         }
 
-        fileName = string.Empty;
+        fileName = null;
         return false;
     }
 

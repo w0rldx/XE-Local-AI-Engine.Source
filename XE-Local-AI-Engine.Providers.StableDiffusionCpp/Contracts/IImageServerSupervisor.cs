@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -53,11 +54,11 @@ public interface IImageServerSupervisor
     ///     reaper and cap-admission LRU evictor keep it alive while a generation is in flight.
     /// </summary>
     /// <remarks>
-    ///     Returns <see langword="null" /> when no live daemon backs the model — the caller then proceeds leaseless and
+    ///     Returns <see langword="false" /> when no live daemon backs the model — the caller then proceeds leaseless and
     ///     relies on the just-completed <see cref="EnsureRunningAsync" /> plus self-heal. Call immediately after
     ///     <see cref="EnsureRunningAsync" /> and dispose the lease when the job ends (completed / failed / cancelled).
     /// </remarks>
-    IImageServerJobLease? TryAcquireJobLease(string modelName);
+    bool TryAcquireJobLease(string modelName, [NotNullWhen(true)] out IImageServerJobLease? lease);
 
     /// <summary>
     ///     Lists the daemons in the process table from memory alone: no gate, no probe. Cheap enough to poll; may briefly

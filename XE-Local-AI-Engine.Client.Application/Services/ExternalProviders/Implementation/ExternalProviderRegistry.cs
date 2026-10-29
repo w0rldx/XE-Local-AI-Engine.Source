@@ -39,7 +39,7 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     }
 
     /// <inheritdoc />
-    public async Task<ExternalProviderModelRegistration?> TryResolveAsync(string modelId, CancellationToken ct)
+    public async Task<ExternalProviderModelRegistration?> FindRegistrationAsync(string modelId, CancellationToken ct)
     {
         // Canonicalize FIRST: the caller may hold the id in whatever case the provider map (NOCASE) handed back, while
         // the snapshot is keyed by the one canonical spelling the store minted.
@@ -53,13 +53,13 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     }
 
     /// <inheritdoc />
-    public async Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct)
+    public async Task<ExternalProviderBinding?> FindBindingAsync(string modelId, CancellationToken ct)
     {
-        return (await TryResolveTransportBindingAsync(modelId, ct))?.Binding;
+        return (await FindTransportBindingAsync(modelId, ct))?.Binding;
     }
 
     /// <inheritdoc />
-    public async Task<ExternalProviderTransportBinding?> TryResolveTransportBindingAsync(string modelId, CancellationToken ct)
+    public async Task<ExternalProviderTransportBinding?> FindTransportBindingAsync(string modelId, CancellationToken ct)
     {
         if (ExternalModelId.Canonicalize(modelId) is not { } canonical)
         {

@@ -1039,13 +1039,13 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.Empty(provider.SnapshotSandboxPaths(after));
         AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
 
-        Task<IAgentHomeExecutionLease?> contender;
+        Task<bool> contender;
         using (ExecutionContext.SuppressFlow())
         {
-            contender = Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner-a", "node-1")));
+            contender = Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner-a", "node-1"), out _));
         }
 
-        AssertEx.Null(await contender);
+        AssertEx.False(await contender);
         await staged.DisposeAsync();
     }
 

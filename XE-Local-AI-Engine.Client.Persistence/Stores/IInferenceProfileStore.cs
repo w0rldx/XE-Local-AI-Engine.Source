@@ -25,8 +25,8 @@ public interface IInferenceProfileStore
     Task<InferenceProfileRecord> CreateOrUpdateExploredAsync(InferenceProfileInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Transitions the profile with <paramref name="id" /> to <see cref="InferenceProfileStatus.Frozen" />, or
-    ///     returns <c>null</c> when no row has that id or it is not <see cref="InferenceProfileStatus.Explored" />.
+    ///     Transitions the profile with <paramref name="id" /> to <see cref="InferenceProfileStatus.Frozen" />, and says
+    ///     so, or that no row has that id, or that it is not <see cref="InferenceProfileStatus.Explored" />.
     /// </summary>
     /// <remarks>
     ///     Records the justifying <paramref name="benchmarkSnapshotId" />, the global free-VRAM invalidation baseline
@@ -34,7 +34,7 @@ public interface IInferenceProfileStore
     ///     promotion of the snapshot store. Only a row currently in <see cref="InferenceProfileStatus.Explored" /> is
     ///     frozen (the freeze gate): a successful benchmark is the only justification.
     /// </remarks>
-    Task<InferenceProfileRecord?> MarkFrozenAsync(Guid id,
+    Task<InferenceProfileFreezeResult> MarkFrozenAsync(Guid id,
         Guid benchmarkSnapshotId,
         long? globalFreeVramAtFreezeBytes,
         long? processBudgetVramAtFreezeBytes,

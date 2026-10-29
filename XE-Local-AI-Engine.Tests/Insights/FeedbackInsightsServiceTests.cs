@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Insights;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -9,16 +10,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class FeedbackInsightsServiceTests
 {
     [Test]
-    public async Task GetAgentFeedbackInsightsAsync_WhenStoreReturnsNull_ReturnsNull()
+    public async Task GetAgentFeedbackInsightsAsync_WhenStoreReturnsNull_ThrowsNotFound()
     {
         var service = CreateService(out var store, nowUtcMs: 1_000);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(null));
 
-        var result = await service.GetAgentFeedbackInsightsAsync(agentId);
-
-        AssertEx.Null(result, "A missing agent must surface as null (the endpoint maps it to 404).");
+        await AssertEx.ThrowsAsync<AgentDefinitionNotFoundException>(() => service.GetAgentFeedbackInsightsAsync(agentId),
+            "A missing agent throws its not-found (the host maps it to 404).");
     }
 
     [Test]

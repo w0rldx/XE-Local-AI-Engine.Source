@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>Resolves the Docker daemon endpoint this node will talk to, in a fixed, reportable order.</summary>
 /// <remarks>
 ///     Discovery is deliberately shallow: it reads no <c>~/.docker/config.json</c> contexts and does not probe, naming one endpoint and
@@ -125,9 +127,9 @@ internal static class DockerDaemonEndpointResolver
         return new Uri("unix://" + socketPath);
     }
 
-    private static bool TryParseEndpoint(string? raw, out Uri endpoint)
+    private static bool TryParseEndpoint(string? raw, [NotNullWhen(true)] out Uri? endpoint)
     {
-        endpoint = null!;
+        endpoint = null;
         if (string.IsNullOrWhiteSpace(raw))
         {
             return false;

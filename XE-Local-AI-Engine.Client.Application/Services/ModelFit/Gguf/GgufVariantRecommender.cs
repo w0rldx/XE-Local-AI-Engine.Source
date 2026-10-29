@@ -57,7 +57,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
             return [];
         }
 
-        var budgetBytes = await TryResolveFitBudgetAsync(ct);
+        var budgetBytes = await ResolveFitBudgetOrNullAsync(ct);
 
         var tiers = new GgufQuantTier[files.Count];
         var verdicts = new GgufFitVerdict[files.Count];
@@ -96,13 +96,13 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
             return [];
         }
 
-        var budgetBytes = await TryResolveProfileBudgetAsync(ct);
+        var budgetBytes = await ResolveProfileBudgetOrNullAsync(ct);
         return [.. sizesBytes.Select(size => ClassifyFit(size, budgetBytes))];
     }
 
     // The advisor's budget from the memoized effective profile.
     // Any non-cancellation failure degrades to "unknown" (null), so a page read never fails over it.
-    private async Task<long?> TryResolveProfileBudgetAsync(CancellationToken ct)
+    private async Task<long?> ResolveProfileBudgetOrNullAsync(CancellationToken ct)
     {
         try
         {
@@ -139,13 +139,13 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
 
     // Resolve the active backend exactly as the inference profiler does, then probe the process-local budget once, less the knowledge companions' reserve.
     // Any non-cancellation failure degrades to "unknown" (null) — the picker must never 500 over a missing GPU/probe.
-    private async Task<long?> TryResolveFitBudgetAsync(CancellationToken ct)
+    private async Task<long?> ResolveFitBudgetOrNullAsync(CancellationToken ct)
     {
         try
         {
             var variant = await _variantSelector.SelectVariantAsync(ct);
             var backend = InferenceBackends.FromVariant(variant);
-            var budget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
+            var budget = await _processVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(backend, ct);
             if (budget is null)
             {
                 // No process budget (no runtime installed yet): grade against the profile budget the tested-model list uses.

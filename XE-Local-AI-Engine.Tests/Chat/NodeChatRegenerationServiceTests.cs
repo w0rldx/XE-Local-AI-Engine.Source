@@ -211,7 +211,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
         var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
         var gate = new GpuWorkGate();
-        using var benchmark = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.Benchmark));
+        AssertEx.Succeeded(gate.TryBeginShared(GpuWorkKind.Benchmark, out var benchmark));
+        using var benchmarkScope = benchmark;
         var dispatcher = new RegenRecordingDispatcher();
 
         // A benchmark measurement runs under a conversation id no conversation has.
@@ -356,7 +357,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         AssertEx.False(events.Exists(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming), "the model never ran.");
         AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(dispatcher.CurrentInvocation).Status, "the lease's Assigned state reached a terminal.");
-        AssertEx.Null(resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId), "nothing is left to resume into.");
+        AssertEx.False(resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId, out _), "nothing is left to resume into.");
     }
 
     // Seeds a completed user + assistant turn and returns the ids needed to regenerate that assistant answer.
@@ -3807,11 +3808,11 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so these Ollama-routed regen tests keep their
-    // /api/show classification behavior. A llama.cpp-capability test overrides TryResolveAsync explicitly.
+    // /api/show classification behavior. A llama.cpp-capability test overrides ResolveOrNullAsync explicitly.
     private static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities? capabilities = null)
     {
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
-        resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
+        resolver.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
         return resolver;
     }
 

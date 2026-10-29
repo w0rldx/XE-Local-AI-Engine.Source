@@ -24,12 +24,9 @@ public sealed class GetNodeChatConversationEndpoint : Endpoint<GetNodeChatConver
 
     public override async Task HandleAsync(GetNodeChatConversationRequest req, CancellationToken ct)
     {
-        var conversation = await _chatPersistence.GetConversationAsync(req.ConversationId, ct);
-        if (conversation is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        // GetConversationAsync stays a T? lookup for its internal callers; here the caller named the id.
+        var conversation = await _chatPersistence.GetConversationAsync(req.ConversationId, ct)
+                           ?? throw new NodeChatConversationNotFoundException(req.ConversationId);
 
         await Send.OkAsync(conversation.ToResponse(), ct);
     }

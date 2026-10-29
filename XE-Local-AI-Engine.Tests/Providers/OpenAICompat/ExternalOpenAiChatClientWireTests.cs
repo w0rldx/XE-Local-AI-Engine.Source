@@ -326,7 +326,7 @@ public sealed class ExternalOpenAiChatClientWireTests
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
@@ -349,7 +349,7 @@ public sealed class ExternalOpenAiChatClientWireTests
             ExternalProviderTestData.Model());
         using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
@@ -373,7 +373,7 @@ public sealed class ExternalOpenAiChatClientWireTests
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
         using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
@@ -398,7 +398,7 @@ public sealed class ExternalOpenAiChatClientWireTests
             ExternalProviderTestData.Model());
         using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
@@ -424,7 +424,7 @@ public sealed class ExternalOpenAiChatClientWireTests
             ExternalProviderTestData.Model());
         using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
@@ -450,7 +450,7 @@ public sealed class ExternalOpenAiChatClientWireTests
         var variantId = ExternalProviderTestData.ModelId.Replace(ExternalProviderTestData.ConnectionId, "UNSLOTH-BOX", StringComparison.Ordinal);
         using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(variantId,
             pinned.Generation,
             pinned.Locality,
@@ -476,7 +476,7 @@ public sealed class ExternalOpenAiChatClientWireTests
         var variantId = ExternalProviderTestData.ModelId.Replace(ExternalProviderTestData.ConnectionId, "UNSLOTH-BOX", StringComparison.Ordinal);
         using var client = new ExternalOpenAiChatClient(registry, variantId, recorder.CreateHandler);
 
-        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        var pinned = AssertEx.NotNull(await registry.FindBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,

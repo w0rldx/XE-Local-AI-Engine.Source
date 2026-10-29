@@ -46,7 +46,7 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         var backfill = CreateBackfill(store, new StubRepositoryBindings(_repositoryRoot));
         var filled = await backfill.EnsureAsync(created);
 
-        var profile = AssertEx.NotNull(DevelopmentProfileSummary.TryFrom(filled.CommandProfileJson));
+        var profile = AssertEx.NotNull(DevelopmentProfileSummary.FromOrNull(filled.CommandProfileJson));
         AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx, profile.ProfileId);
         AssertEx.Equal("Fixture.slnx", profile.BuildTarget);
         AssertEx.Equal(expected: 64, profile.Digest.Length);
@@ -115,7 +115,7 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         AssertEx.Equal(confirmed, result.CommandProfileJson);
         AssertEx.Equal(created.Version, result.Version);
         AssertEx.Equal(DevelopmentCommandProfileCatalog.GenericGit,
-            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom(result.CommandProfileJson)).ProfileId);
+            AssertEx.NotNull(DevelopmentProfileSummary.FromOrNull(result.CommandProfileJson)).ProfileId);
     }
 
     [Test]
@@ -143,9 +143,9 @@ public sealed class DevelopmentProfileBackfillTests : IDisposable
         AssertEx.Equal(expected: 0, await backfill.BackfillAllAsync());
 
         AssertEx.Equal(DevelopmentCommandProfileCatalog.DotnetSlnx,
-            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(legacy.ProjectId)).CommandProfileJson)).ProfileId);
+            AssertEx.NotNull(DevelopmentProfileSummary.FromOrNull((await store.GetProjectAsync(legacy.ProjectId)).CommandProfileJson)).ProfileId);
         AssertEx.Equal(DevelopmentCommandProfileCatalog.GenericGit,
-            AssertEx.NotNull(DevelopmentProfileSummary.TryFrom((await store.GetProjectAsync(current.ProjectId)).CommandProfileJson)).ProfileId);
+            AssertEx.NotNull(DevelopmentProfileSummary.FromOrNull((await store.GetProjectAsync(current.ProjectId)).CommandProfileJson)).ProfileId);
     }
 
     /// <summary>

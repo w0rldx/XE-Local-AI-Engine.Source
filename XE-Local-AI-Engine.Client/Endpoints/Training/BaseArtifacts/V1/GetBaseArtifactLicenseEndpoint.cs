@@ -33,7 +33,8 @@ public sealed class GetBaseArtifactLicenseEndpoint : Endpoint<BaseArtifactByIdRe
         var license = await _baseArtifactService.GetLicenseAsync(request.ArtifactId, ct);
         if (license is null)
         {
-            // Also the answer while a download is still running: the metadata is written with the terminal Ready state.
+            // A known artifact with no license recorded yet: the metadata is written with the terminal Ready state, so a
+            // running download has none. Not a missing id, so this stays the bodyless 404 the wizard polls past.
             await Send.NotFoundAsync(ct);
             return;
         }

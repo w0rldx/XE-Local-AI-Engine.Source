@@ -53,10 +53,9 @@ public sealed class BaseArtifactView
 public enum BaseArtifactDeleteOutcome
 {
     Deleted = 0,
-    NotFound = 1,
 
     /// <summary>The download is still running. Cancel it first — deleting under it would race the writer.</summary>
-    Downloading = 2
+    Downloading = 1
 }
 
 /// <summary>
@@ -78,14 +77,20 @@ public interface IBaseArtifactService
 
     Task<IReadOnlyList<BaseArtifactView>> ListAsync(CancellationToken ct);
 
-    Task<BaseArtifactView?> GetAsync(Guid artifactId, CancellationToken ct);
+    /// <exception cref="XE_Local_AI_Engine.Client.Persistence.Stores.TrainingNotFoundException">No artifact carries <paramref name="artifactId" />.</exception>
+    Task<BaseArtifactView> GetAsync(Guid artifactId, CancellationToken ct);
 
-    /// <summary>The recorded license metadata, or <see langword="null" /> when the artifact does not exist.</summary>
+    /// <summary>
+    ///     The recorded license metadata, or <see langword="null" /> while none is recorded: it is written with the
+    ///     terminal Ready state, so a running download has none yet.
+    /// </summary>
+    /// <exception cref="XE_Local_AI_Engine.Client.Persistence.Stores.TrainingNotFoundException">No artifact carries <paramref name="artifactId" />.</exception>
     Task<BaseArtifactLicenseView?> GetLicenseAsync(Guid artifactId, CancellationToken ct);
 
     /// <summary>Requests cancellation of an in-flight download. False when nothing is running for that artifact.</summary>
     Task<bool> CancelAsync(Guid artifactId);
 
+    /// <exception cref="XE_Local_AI_Engine.Client.Persistence.Stores.TrainingNotFoundException">No artifact carries <paramref name="artifactId" />.</exception>
     Task<BaseArtifactDeleteOutcome> DeleteAsync(Guid artifactId, CancellationToken ct);
 }
 

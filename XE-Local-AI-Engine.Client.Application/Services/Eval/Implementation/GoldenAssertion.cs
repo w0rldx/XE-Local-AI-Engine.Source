@@ -57,7 +57,7 @@ internal sealed class GoldenAssertion
     ///     Parses the stored assertion JSON, filtering out null/blank phrases. Returns <see langword="null" /> on
     ///     malformed JSON (an assertion we cannot read cannot prove the candidate is good).
     /// </summary>
-    public static GoldenAssertion? TryParse(string assertionJson)
+    public static GoldenAssertion? ParseOrNull(string assertionJson)
     {
         RawAssertion? raw;
         try
@@ -85,7 +85,7 @@ internal sealed class GoldenAssertion
     ///     Classifies a stored assertion string into one of the four <see cref="AssertionParseState" /> values.
     /// </summary>
     /// <remarks>
-    ///     It distinguishes a blank string from a non-blank one that fails to parse, which <see cref="TryParse" />
+    ///     It distinguishes a blank string from a non-blank one that fails to parse, which <see cref="ParseOrNull" />
     ///     collapses by returning null for both, and populates <paramref name="assertion" /> only when valid.
     /// </remarks>
     public static AssertionParseState Classify(string? assertionJson, out GoldenAssertion? assertion)
@@ -97,7 +97,7 @@ internal sealed class GoldenAssertion
             return AssertionParseState.Absent;
         }
 
-        var parsed = TryParse(assertionJson);
+        var parsed = ParseOrNull(assertionJson);
         if (parsed is null)
         {
             return AssertionParseState.Malformed;

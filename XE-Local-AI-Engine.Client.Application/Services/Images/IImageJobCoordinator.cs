@@ -27,12 +27,14 @@ public interface IImageJobCoordinator
     /// <remarks>
     ///     A still-queued job is dropped to <see cref="Client.Persistence.Entities.ImageJobStatus.Cancelled" /> without ever calling the runtime,
     ///     while a generating job's token is cancelled and the runtime performs the queued-cancel or kill+restart. Returns
-    ///     <see langword="false" /> when the job is unknown or already terminal.
+    ///     <see langword="false" /> when the job has already reached a terminal state.
     /// </remarks>
+    /// <exception cref="ImageNotFoundException">No job has that id.</exception>
     Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken);
 
-    /// <summary>Reads one job's current status view, or <see langword="null" /> when unknown.</summary>
-    Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken);
+    /// <summary>Reads one job's current status view.</summary>
+    /// <exception cref="ImageNotFoundException">No job has that id.</exception>
+    Task<ImageJobView> GetAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>Lists one page of persisted jobs (newest first) plus the unpaged total.</summary>
     Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken);
@@ -45,6 +47,7 @@ public interface IImageJobCoordinator
     ///     refused outright (<see cref="ImageJobDeleteOutcome.NotTerminal" />); cancel it first. Mirrors the benchmark
     ///     project delete, which refuses an active run rather than cancelling it on the operator's behalf.
     /// </remarks>
+    /// <exception cref="ImageNotFoundException">No job has that id, or a concurrent delete removed it first.</exception>
     Task<ImageJobDeleteOutcome> DeleteAsync(Guid jobId, CancellationToken cancellationToken);
 
     /// <summary>
@@ -67,9 +70,6 @@ public enum ImageJobDeleteOutcome
 {
     /// <summary>The job, its image rows and its blobs are gone.</summary>
     Deleted,
-
-    /// <summary>No job with that id exists.</summary>
-    NotFound,
 
     /// <summary>The job is still queued or generating; cancel it before deleting it.</summary>
     NotTerminal

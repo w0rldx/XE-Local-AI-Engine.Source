@@ -53,8 +53,10 @@ public sealed partial class DevWorkflowDefinitionSeeder : IHostedService
         {
             // Host is shutting down before startup finished; nothing to seed.
         }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or DbUpdateException)
+        catch (Exception exception) when (exception is InvalidOperationException or DevWorkflowNotFoundException or IOException or TimeoutException or DbUpdateException)
         {
+            // DevWorkflowNotFoundException is named because it is no longer an InvalidOperationException: a template
+            // deleted between the list and the upgrade is a seeding miss, never a failed host start.
             _logger.LogWarning(exception, "Development workflow template seeding failed at startup; the templates may be missing until the next start.");
         }
     }

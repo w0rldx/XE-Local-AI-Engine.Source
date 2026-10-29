@@ -89,21 +89,26 @@ public enum IntegrationAcceptOutcome
 }
 
 /// <summary>
-///     The accept's answer. <see cref="ExecutionId" />, <see cref="SessionId" /> and <see cref="Status" /> are populated
-///     for <see cref="IntegrationAcceptOutcome.Accepted" /> and <see cref="IntegrationAcceptOutcome.Duplicate" /> and
-///     are null otherwise — a rejection tells the caller nothing about rows it does not own.
+///     The accept's answer: <see cref="Admitted" /> for <see cref="IntegrationAcceptOutcome.Accepted" /> and
+///     <see cref="IntegrationAcceptOutcome.Duplicate" />, carrying the row; <see cref="Rejected" /> for every other
+///     outcome, carrying nothing — a rejection tells the caller nothing about rows it does not own.
 /// </summary>
-public sealed class IntegrationAcceptResult
+public abstract record IntegrationAcceptResult
 {
     public required IntegrationAcceptOutcome Outcome { get; init; }
 
-    public required Guid? ExecutionId { get; init; }
-
-    public required Guid? SessionId { get; init; }
-
-    public required IntegrationExecutionStatus? Status { get; init; }
-
     public required string Message { get; init; }
+
+    public sealed record Admitted : IntegrationAcceptResult
+    {
+        public required Guid ExecutionId { get; init; }
+
+        public required Guid SessionId { get; init; }
+
+        public required IntegrationExecutionStatus Status { get; init; }
+    }
+
+    public sealed record Rejected : IntegrationAcceptResult;
 }
 
 /// <summary>

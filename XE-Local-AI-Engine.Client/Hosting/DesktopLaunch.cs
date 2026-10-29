@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
@@ -129,7 +130,7 @@ internal static class DesktopLaunch
         return sanitized;
     }
 
-    internal static bool TryGetPort(string[] args, out int? port, out string? error)
+    internal static bool TryGetPort(string[] args, out int? port, [NotNullWhen(false)] out string? error)
     {
         if (!TryGetOptionValue(args, PortArgument, out var present, out var value))
         {
@@ -157,7 +158,11 @@ internal static class DesktopLaunch
         return true;
     }
 
-    internal static bool TryGetSetupCommand(string[] args, out SetupCommand? command, out string? error) =>
+    /// <summary>
+    ///     Parses <c>--setup</c>. True when the arguments are well-formed: <paramref name="command" /> is the setup to run, or
+    ///     <c>null</c> when <c>--setup</c> is absent. False with <paramref name="error" /> when it is malformed.
+    /// </summary>
+    internal static bool TryGetSetupCommand(string[] args, out SetupCommand? command, [NotNullWhen(false)] out string? error) =>
 #pragma warning disable MA0045 // Func<string?> stdin-reader seam for a synchronous Try-parser whose out parameters forbid an async signature.
         TryGetSetupCommand(args, Environment.GetEnvironmentVariable, static () => Console.In.ReadLine(), out command, out error);
 #pragma warning restore MA0045
@@ -166,7 +171,7 @@ internal static class DesktopLaunch
         Func<string, string?> environmentReader,
         Func<string?> stdinReader,
         out SetupCommand? command,
-        out string? error)
+        [NotNullWhen(false)] out string? error)
     {
         ArgumentNullException.ThrowIfNull(environmentReader);
         ArgumentNullException.ThrowIfNull(stdinReader);
@@ -175,7 +180,7 @@ internal static class DesktopLaunch
         {
             command = null;
             error = null;
-            return false;
+            return true;
         }
 
         var emailParsed = TryGetOptionValue(args, AdminEmailArgument, out var emailPresent, out var email);
@@ -183,7 +188,7 @@ internal static class DesktopLaunch
         {
             command = null;
             error = $"The {AdminEmailArgument} flag requires a value.";
-            return true;
+            return false;
         }
 
         var passwordParsed = TryGetOptionValue(args, AdminPasswordArgument, out var passwordPresent, out var password);
@@ -192,14 +197,14 @@ internal static class DesktopLaunch
         {
             command = null;
             error = $"Use either {AdminPasswordArgument} or {AdminPasswordStdinArgument}, not both.";
-            return true;
+            return false;
         }
 
         if (!passwordParsed)
         {
             command = null;
             error = $"The {AdminPasswordArgument} flag requires a value.";
-            return true;
+            return false;
         }
 
         if (!emailPresent)
@@ -213,7 +218,7 @@ internal static class DesktopLaunch
         {
             command = null;
             error = $"The {SetupArgument} command requires an admin email and password.";
-            return true;
+            return false;
         }
 
         command = new SetupCommand
@@ -226,20 +231,24 @@ internal static class DesktopLaunch
         return true;
     }
 
-    internal static bool TryGetMcpKeyScope(string[] args, out McpServerApiKeyScope? scope, out string? error)
+    /// <summary>
+    ///     Parses <c>--mcp-key</c>. True when the arguments are well-formed: <paramref name="scope" /> is the requested scope,
+    ///     or <c>null</c> when <c>--mcp-key</c> is absent. False with <paramref name="error" /> when it is malformed.
+    /// </summary>
+    internal static bool TryGetMcpKeyScope(string[] args, out McpServerApiKeyScope? scope, [NotNullWhen(false)] out string? error)
     {
         if (!TryGetOptionValue(args, McpKeyArgument, out var present, out var value))
         {
             scope = null;
             error = $"The {McpKeyArgument} flag requires delegate or agentic.";
-            return true;
+            return false;
         }
 
         if (!present)
         {
             scope = null;
             error = null;
-            return false;
+            return true;
         }
 
         if (string.Equals(value, "delegate", StringComparison.OrdinalIgnoreCase))
@@ -258,7 +267,7 @@ internal static class DesktopLaunch
 
         scope = null;
         error = $"The {McpKeyArgument} scope must be delegate or agentic.";
-        return true;
+        return false;
     }
 
     internal static bool TryGetResetAdminPassword(string[] args, out string? newPassword)

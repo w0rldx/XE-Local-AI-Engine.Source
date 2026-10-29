@@ -45,7 +45,7 @@ public sealed class AgentTemplateImportServiceTests
         AssertEx.Null(created.ReasoningEffort, "An imported template should not set a reasoning effort.");
         AssertEx.Null(created.OrchestrationTopologyJson, "A single-kind import should carry no topology.");
 
-        var template = AssertEx.NotNull(catalog.TryGet(slug), "The slug should resolve a catalog template.");
+        AssertEx.Succeeded(catalog.TryGet(slug, out var template), "The slug should resolve a catalog template.");
         AssertEx.Equal(template.Instructions, created.Instructions);
         AssertEx.Equal(template.Name, created.Name);
     }

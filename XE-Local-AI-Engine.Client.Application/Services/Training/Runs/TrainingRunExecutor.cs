@@ -230,7 +230,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         await foreach (var line in handle.ReadOutputAsync(stoppingToken))
         {
             _ = state.Log.AppendLine(line);
-            var parsed = TrainingRunStdioParser.TryParse(line);
+            var parsed = TrainingRunStdioParser.ParseOrNull(line);
             if (parsed is null)
             {
                 // Banner or warning text. Kept in the log tail, but deliberately NOT treated as liveness: a library

@@ -279,9 +279,9 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             throw new GraphWorkflowValidationException(exception.Message, exception);
         }
 
-        // 7. ONE conditional write — status move, decision columns, output and the gate.decided event — losing two ways that are one story: a null answer means the
+        // 7. ONE conditional write — status move, decision columns, output and the gate.decided event — losing two ways that are one story: a decline means the
         // compare-and-set matched no row; an exception means the run's token lost or two operators answered at once. Escaping, that reaches the client as a bare conflict.
-        GraphWorkflowMutationResult? written;
+        GraphWorkflowConditionalWriteResult written;
         try
         {
             written = await _store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand
@@ -301,7 +301,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
             return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, cancellationToken);
         }
 
-        if (written is null)
+        if (written is GraphWorkflowConditionalWriteResult.Declined)
         {
             return await LostTheRaceAsync(runId, nodeKey, operationId, decision, decidedBySubject, payloadJson, cancellationToken);
         }
@@ -375,7 +375,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                 MaxEntries = _options.MaxSteersPerNode
             },
             cancellationToken);
-        if (written is null)
+        if (written is GraphWorkflowConditionalWriteResult.Declined)
         {
             // The append re-checks inside its transaction and declined: answer from what the rows NOW say.
             var current = await _store.GetRunAsync(runId, cancellationToken);

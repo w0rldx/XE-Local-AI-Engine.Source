@@ -32,10 +32,9 @@ public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
     {
         var definition = await _scheduledJobManagementService.GetJobAsync(scheduledJobId, cancellationToken);
 
-        // Template guard: reject a missing job and any job that is not a model-recommendation-check job, so this facade
-        // can fire only model-fit refresh jobs — never an arbitrary scheduled job of another template.
-        if (definition is null
-            || !string.Equals(definition.TemplateId, ModelRecommendationCheckHandler.TemplateIdValue, StringComparison.Ordinal))
+        // Template guard: a missing job already threw ScheduledJobNotFoundException (404); reject any job that is not a
+        // model-recommendation-check job, so this facade can fire only model-fit refresh jobs, never another template's.
+        if (!string.Equals(definition.TemplateId, ModelRecommendationCheckHandler.TemplateIdValue, StringComparison.Ordinal))
         {
             throw new ScheduledJobValidationException("The scheduled job is not a model-recommendation-check job.");
         }

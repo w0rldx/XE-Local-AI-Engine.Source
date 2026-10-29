@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -90,7 +91,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
     }
 
     /// <inheritdoc />
-    public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
+    public bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client)
     {
         var selection = BuildSelection(ResolveSnapshot(), requestedModelId);
         if (selection is null)
@@ -215,7 +216,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
 
         if (hasExplicitModel)
         {
-            var explicitAzure = TryBuildAzureSelection(snapshot.Connection, trimmedRequested);
+            var explicitAzure = BuildAzureSelectionOrNull(snapshot.Connection, trimmedRequested);
             if (explicitAzure is not null)
             {
                 return explicitAzure;
@@ -233,7 +234,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
                 return BuildCodexSelection(snapshot.Session, nodeDefaultCodexModel);
             }
 
-            return TryBuildAzureSelection(snapshot.Connection, snapshot.NodeSettings.DefaultModelName);
+            return BuildAzureSelectionOrNull(snapshot.Connection, snapshot.NodeSettings.DefaultModelName);
         }
 
         // An explicit per-request model that matched no Azure deployment: Codex only when a session is present AND the
@@ -256,7 +257,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
     ///     Shared by the explicit per-request path and the node-default fallback: both resolve to the same shape and
     ///     differ only in which model id is matched.
     /// </remarks>
-    private CloudSelection? TryBuildAzureSelection(StoredAzureFoundryConnection? connection, string? candidateModelId)
+    private CloudSelection? BuildAzureSelectionOrNull(StoredAzureFoundryConnection? connection, string? candidateModelId)
     {
         if (connection is not { Models.Count: > 0 } || string.IsNullOrWhiteSpace(candidateModelId))
         {

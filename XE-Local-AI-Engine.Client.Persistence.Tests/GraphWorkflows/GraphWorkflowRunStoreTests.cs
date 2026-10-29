@@ -619,7 +619,7 @@ public sealed class GraphWorkflowRunStoreTests
             OutputJson = """{"status":"succeeded","output":{"decision":"Approve"}}"""
         });
 
-        AssertEx.NotNull(result, "the row was waiting and undecided, so the conditional write applied.");
+        AssertEx.True(result is GraphWorkflowConditionalWriteResult.Written, "the row was waiting and undecided, so the conditional write applied.");
         var decided = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, decided.Status, "both answers succeed the pause; routing is the edges' job.");
         AssertEx.Equal<GraphWorkflowDecisionKind?>(expected: null, decided.PendingDecisionKind, "it is no longer waiting for anything.");
@@ -660,7 +660,7 @@ public sealed class GraphWorkflowRunStoreTests
 
         var result = await DecideAsync(store, run.Id, Guid.NewGuid());
 
-        AssertEx.Null(result, "the conditional write matched no row, and says so rather than raising.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible }, result, "the conditional write matched no row, and says so rather than raising.");
         var after = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(before.Status, after.Status);
         AssertEx.Equal<Guid?>(before.DecisionOperationId, after.DecisionOperationId);
@@ -700,7 +700,7 @@ public sealed class GraphWorkflowRunStoreTests
 
         var eventsBefore = (await store.ListEventsAsync(run.Id)).Count;
 
-        AssertEx.Null(await DecideAsync(store, run.Id, Guid.NewGuid()), "a run that stopped being live declines the answer.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.RunNotActive }, await DecideAsync(store, run.Id, Guid.NewGuid()), "a run that stopped being live declines the answer.");
 
         var untouched = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, untouched.Status);
@@ -799,7 +799,7 @@ public sealed class GraphWorkflowRunStoreTests
         AssertEx.Equal(cancelling.Sequence, events[^1].Seq, "and the event feed still ends on the sequence the cancel announcement took.");
     }
 
-    private static async Task<GraphWorkflowMutationResult?> DecideAsync(GraphWorkflowStore store, Guid runId, Guid operationId, string nodeKey = "start")
+    private static async Task<GraphWorkflowConditionalWriteResult> DecideAsync(GraphWorkflowStore store, Guid runId, Guid operationId, string nodeKey = "start")
     {
         var nodeRun = await store.GetNodeRunAsync(runId, nodeKey);
         return await store.DecideNodeRunAsync(new DecideGraphWorkflowNodeRunCommand

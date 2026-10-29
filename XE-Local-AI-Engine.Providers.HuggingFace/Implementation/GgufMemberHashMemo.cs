@@ -31,7 +31,7 @@ internal sealed class GgufMemberHashMemo
     internal long Misses { get; private set; }
 
     /// <summary>The remembered digest for an unchanged file, or <see langword="null" /> when it must be hashed.</summary>
-    public string? TryGet(string absolutePath, long length, DateTime lastWriteTimeUtc)
+    public string? Find(string absolutePath, long length, DateTime lastWriteTimeUtc)
     {
         lock (_gate)
         {

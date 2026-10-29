@@ -55,14 +55,12 @@ public sealed class IntegrationTriggerUpdateInput
 }
 
 /// <summary>
-///     What a trigger write decided. Every non-<see cref="Saved" /> value maps to exactly one HTTP status at the
-///     endpoint, which is why the service returns an outcome rather than throwing: none of these is exceptional.
+///     Why a trigger write was refused. Each value maps to exactly one HTTP status at the endpoint, which is why the
+///     service returns an outcome rather than throwing: none of these is exceptional. An unknown trigger id is the one
+///     exception, <see cref="IntegrationNotFoundException" />.
 /// </summary>
 public enum IntegrationTriggerOutcome
 {
-    /// <summary>The row was written; the result carries it.</summary>
-    Saved,
-
     /// <summary>Another trigger already owns the normalized name. 409.</summary>
     NameConflict,
 
@@ -78,21 +76,24 @@ public enum IntegrationTriggerOutcome
     /// <summary>A graph target was saved while graph workflows are turned off on this node. 400.</summary>
     GraphWorkflowsDisabled,
 
-    /// <summary>No row with that id. 404.</summary>
-    NotFound,
-
     /// <summary>The row moved on since the caller read it. 409.</summary>
     VersionConflict
 }
 
-/// <summary><see cref="Trigger" /> is non-null exactly when <see cref="Outcome" /> is <see cref="IntegrationTriggerOutcome.Saved" />.</summary>
-public sealed class IntegrationTriggerResult
+/// <summary>What a trigger write decided: the saved row, or why it was refused.</summary>
+public abstract record IntegrationTriggerResult
 {
-    public required IntegrationTriggerOutcome Outcome { get; init; }
+    public sealed record Saved : IntegrationTriggerResult
+    {
+        public required IntegrationTriggerSnapshot Trigger { get; init; }
+    }
 
-    public required IntegrationTriggerSnapshot? Trigger { get; init; }
+    public sealed record Rejected : IntegrationTriggerResult
+    {
+        public required IntegrationTriggerOutcome Outcome { get; init; }
 
-    public required string? Message { get; init; }
+        public required string Message { get; init; }
+    }
 }
 
 /// <summary>
@@ -103,13 +104,16 @@ public interface IIntegrationTriggerService
 {
     Task<IReadOnlyList<IntegrationTriggerSnapshot>> ListAsync(CancellationToken cancellationToken = default);
 
-    Task<IntegrationTriggerSnapshot?> GetAsync(Guid triggerId, CancellationToken cancellationToken = default);
+    /// <summary>Throws <see cref="IntegrationNotFoundException" /> for an unknown id.</summary>
+    Task<IntegrationTriggerSnapshot> GetAsync(Guid triggerId, CancellationToken cancellationToken = default);
 
     Task<IntegrationTriggerResult> CreateAsync(IntegrationTriggerCreateInput input, CancellationToken cancellationToken = default);
 
+    /// <summary>Throws <see cref="IntegrationNotFoundException" /> for an unknown id.</summary>
     Task<IntegrationTriggerResult> UpdateAsync(Guid triggerId, IntegrationTriggerUpdateInput input, CancellationToken cancellationToken = default);
 
-    Task<bool> DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default);
+    /// <summary>Throws <see cref="IntegrationNotFoundException" /> for an unknown id.</summary>
+    Task DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Normalizes an external trigger name the one way the whole feature agrees on: trimmed and lowercased.

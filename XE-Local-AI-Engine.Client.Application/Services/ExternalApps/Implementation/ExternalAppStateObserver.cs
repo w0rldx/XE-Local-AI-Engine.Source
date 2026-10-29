@@ -211,7 +211,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
             return;
         }
 
-        using var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id));
+        using var lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(row.Id));
         if (lease is null)
         {
             // An operation owns this instance. Its own final write is the newer verdict, and overwriting it from an

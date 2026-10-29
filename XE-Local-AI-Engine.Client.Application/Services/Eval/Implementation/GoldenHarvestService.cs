@@ -58,17 +58,9 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
 
     public async Task<GoldenHarvestOutcome> HarvestAsync(Guid agentId, CancellationToken cancellationToken = default)
     {
-        var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken);
-        if (agent is null)
+        if (await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken) is null)
         {
-            return new GoldenHarvestOutcome
-            {
-                AgentExists = false,
-                ThumbsUpScanned = 0,
-                CreatedCount = 0,
-                DuplicateCount = 0,
-                SkippedCount = 0
-            };
+            throw new AgentDefinitionNotFoundException(agentId);
         }
 
         var sources = await _sourceStore.ListThumbsUpSourcesAsync(agentId, _options.MaxThumbsUpScan, cancellationToken);
@@ -119,7 +111,6 @@ internal sealed class GoldenHarvestService : IGoldenHarvestService
 
         return new GoldenHarvestOutcome
         {
-            AgentExists = true,
             ThumbsUpScanned = sources.Count,
             CreatedCount = created,
             DuplicateCount = duplicate,

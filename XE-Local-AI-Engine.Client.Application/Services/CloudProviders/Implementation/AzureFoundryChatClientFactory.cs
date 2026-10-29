@@ -365,8 +365,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     private TokenCredential BuildDelegatedAuthCodeCredential(StoredAzureFoundryConnection connection)
     {
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
-        var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
-        if (liveCredential is not null)
+        if (_entraLiveCredentialCache is not null && _entraLiveCredentialCache.TryGet(cacheKey, out var liveCredential))
         {
             return liveCredential;
         }
@@ -428,8 +427,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         // Reuse the live, already-authenticated credential the sign-in coordinator cached on success: its MSAL token cache
         // (in-memory always, OS-native encrypted disk when available) holds the refresh token, unlike one rebuilt from the persisted record alone.
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
-        var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
-        if (liveCredential is not null)
+        if (_entraLiveCredentialCache is not null && _entraLiveCredentialCache.TryGet(cacheKey, out var liveCredential))
         {
             return liveCredential;
         }

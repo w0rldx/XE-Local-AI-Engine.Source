@@ -49,7 +49,7 @@ public static class ExternalProviderInvocationPin
             ExternalProviderBinding? binding;
             try
             {
-                binding = await registry.TryResolveBindingAsync(modelId, cancellationToken);
+                binding = await registry.FindBindingAsync(modelId, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

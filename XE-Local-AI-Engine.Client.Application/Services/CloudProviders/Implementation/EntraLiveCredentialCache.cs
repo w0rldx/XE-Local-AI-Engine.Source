@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using Azure.Core;
 
 /// <inheritdoc cref="IEntraLiveCredentialCache" />
@@ -9,13 +10,14 @@ public sealed class EntraLiveCredentialCache : IEntraLiveCredentialCache
     private TokenCredential? _credential;
     private string? _key;
 
-    public TokenCredential? TryGet(string key)
+    public bool TryGet(string key, [NotNullWhen(true)] out TokenCredential? credential)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
         lock (_gate)
         {
-            return string.Equals(_key, key, StringComparison.Ordinal) ? _credential : null;
+            credential = string.Equals(_key, key, StringComparison.Ordinal) ? _credential : null;
+            return credential is not null;
         }
     }
 

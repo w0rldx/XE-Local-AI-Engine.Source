@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Images;
 /// </summary>
 /// <remarks>
 ///     The coordinator picks clean-cancel (queued) against kill-and-restart (generating) internally; a queued or
-///     generating job returns 204, an unknown or already-terminal job 404.
+///     generating job returns 204, an unknown job 404 and an already-terminal one 409.
 /// </remarks>
 public sealed class CancelImageJobEndpoint : Endpoint<ImageJobRouteRequest>
 {
@@ -28,7 +28,9 @@ public sealed class CancelImageJobEndpoint : Endpoint<ImageJobRouteRequest>
         Policies(NodeAuthorizationPolicies.Operator);
         // Route-only POST (job id from the route, no body): override the default application/json-only Accepts so a
         // body-less request is not rejected with 415 (see TriggerScheduledJobEndpoint for the full rationale).
-        Description(x => x.Accepts<ImageJobRouteRequest>());
+        Description(x => x.Accepts<ImageJobRouteRequest>()
+                          .Produces(StatusCodes.Status204NoContent)
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(ImageJobRouteRequest req, CancellationToken ct)
@@ -36,7 +38,7 @@ public sealed class CancelImageJobEndpoint : Endpoint<ImageJobRouteRequest>
         var cancelled = await _coordinator.CancelAsync(req.JobId, ct);
         if (!cancelled)
         {
-            await Send.NotFoundAsync(ct);
+            await Send.ConflictProblemAsync("The job already finished, so there is nothing to cancel.");
             return;
         }
 

@@ -2,7 +2,7 @@
 
 // The two lifecycle controls on an evaluation row. What is pinned here is that the UI partitions the SERVER's state
 // machine rather than a guess at it: cancel is offered only where `CancelEvaluationEndpoint` acts (Queued/Running —
-// anything else answers 404), delete only where `DeleteEvaluationEndpoint` acts (terminal AND unbound — a bound or
+// a terminal one answers 409 `EvaluationTerminal`), delete only where `DeleteEvaluationEndpoint` acts (terminal AND unbound — a bound or
 // still-active evaluation is a 409). The evaluation list query is real and answered by MSW, so "the row is gone"
 // means the refetch after the delete really returned without it, not that a mock forgot it.
 
@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ComparisonCreateDialog } from "@/features/training/components/ComparisonCreateDialog";
-import { localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
+import { domainErrorRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -154,12 +154,17 @@ describe("ComparisonCreateDialog evaluation lifecycle", () => {
 		);
 	});
 
-	it("treats a cancel the node answers 404 as already done, not as a failure", async () => {
-		// `CancelEvaluationEndpoint` answers 404 for an evaluation that is already terminal, and a row can be stale by
-		// the width of the asynchronous Running-cancel window. Blaming the operator for that would be a lie: the
+	it("treats a cancel the node answers EvaluationTerminal as already done, not as a failure", async () => {
+		// `CancelEvaluationEndpoint` answers 409 `EvaluationTerminal` for an evaluation that is already terminal, and a
+		// row can be stale by the width of the asynchronous Running-cancel window. Blaming the operator for that would be a lie: the
 		// evaluation IS canceled. The refetch is the whole remedy, and it is what makes the row tell the truth.
 		const listed = serveEvaluations(evaluationRow({ status: "Running" }));
-		server.use(problemDetailsRoute("post", `training/evaluations/${evaluationId}/cancel`, 404, { detail: "Not Found" }));
+		server.use(
+			domainErrorRoute("post", `training/evaluations/${evaluationId}/cancel`, 409, {
+				code: "EvaluationTerminal",
+				message: "The evaluation run has already finished.",
+			}),
+		);
 		renderDialog();
 
 		fireEvent.click(await screen.findByRole("button", { name: "Cancel evaluation" }));

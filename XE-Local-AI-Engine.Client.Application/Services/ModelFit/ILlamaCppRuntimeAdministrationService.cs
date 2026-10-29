@@ -33,42 +33,29 @@ public sealed class LlamaCppRuntimeStatus
     public required GpuVariant SelectedVariant { get; init; }
 }
 
-public sealed class LlamaCppRuntimeMutationResult
+/// <summary>What an ensure or install did: the binary it left in place, or why it refused.</summary>
+public abstract record LlamaCppRuntimeMutationResult
 {
-    public required bool Succeeded { get; init; }
+    /// <summary>The runtime is in place; the endpoint answers with the binary and the node's recommended tag.</summary>
+    public sealed record Succeeded : LlamaCppRuntimeMutationResult
+    {
+        public required LlamaCppRuntimeBinaryView Binary { get; init; }
 
-    public required LlamaCppRuntimeBinaryView? Binary { get; init; }
+        public required string RecommendedTag { get; init; }
+    }
 
-    public required string? RecommendedTag { get; init; }
+    /// <summary>
+    ///     Nothing changed. <see cref="DisplayMessage" /> is operator-safe; <see cref="RunningProcessCount" /> is set
+    ///     for a <see cref="LlamaCppRuntimeAdministrationFailure.Busy" /> refusal.
+    /// </summary>
+    public sealed record Rejected : LlamaCppRuntimeMutationResult
+    {
+        public required LlamaCppRuntimeAdministrationFailure Failure { get; init; }
 
-    public required LlamaCppRuntimeAdministrationFailure Failure { get; init; }
+        public required string DisplayMessage { get; init; }
 
-    public required string? DisplayMessage { get; init; }
-
-    public int RunningProcessCount { get; init; }
-
-    public static LlamaCppRuntimeMutationResult Success(LlamaCppRuntimeBinaryView binary, string recommendedTag) =>
-        new()
-        {
-            Succeeded = true,
-            Binary = binary,
-            RecommendedTag = recommendedTag,
-            Failure = LlamaCppRuntimeAdministrationFailure.None,
-            DisplayMessage = null
-        };
-
-    public static LlamaCppRuntimeMutationResult Rejected(LlamaCppRuntimeAdministrationFailure failure,
-        string message,
-        int runningProcessCount = 0) =>
-        new()
-        {
-            Succeeded = false,
-            Binary = null,
-            RecommendedTag = null,
-            Failure = failure,
-            DisplayMessage = message,
-            RunningProcessCount = runningProcessCount
-        };
+        public int RunningProcessCount { get; init; }
+    }
 }
 
 public sealed class LlamaCppRuntimeAcquisitionStartResult

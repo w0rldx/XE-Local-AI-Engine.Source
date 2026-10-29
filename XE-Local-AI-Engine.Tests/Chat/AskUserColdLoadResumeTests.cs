@@ -76,11 +76,11 @@ public sealed class AskUserColdLoadResumeTests
         });
 
         // THE COLD-LOAD ENTRY POINT: a reloaded page has no invocation id, only the conversation it reopened.
-        var resolved = registry.TryGetLiveInvocationIdForConversation(conversationId);
-        AssertEx.True(resolved.HasValue, "a reloaded client must be able to find the live run from the conversation alone");
-        AssertEx.Equal(invocationId, resolved!.Value);
+        AssertEx.Succeeded(registry.TryGetLiveInvocationIdForConversation(conversationId, out var resolved),
+            "a reloaded client must be able to find the live run from the conversation alone");
+        AssertEx.Equal(invocationId, resolved);
 
-        var resumeId = resolved.Value;
+        var resumeId = resolved;
         var events = new List<ChatStreamEvent>();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var consumer = Task.Run(async () =>
@@ -122,7 +122,7 @@ public sealed class AskUserColdLoadResumeTests
             evt.RequestId == "question-1" && evt.Answers.Count == 1 && evt.Answers[0].Selected[0] == "OAuth device flow"));
 
         // The slot clears, so a client attaching after the answer is not handed a prompt that has already been resolved.
-        AssertEx.Null(registry.TryGetLiveInvocation(invocationId)?.PendingQuestion);
+        AssertEx.Null(registry.TryGetLiveInvocation(invocationId, out var live) ? live.PendingQuestion : null);
 
         await dispatcher.ReportInvocationCompletedAsync(invocationId);
         await consumer;
@@ -167,9 +167,8 @@ public sealed class AskUserColdLoadResumeTests
             }
         });
 
-        var resolved = registry.TryGetLiveInvocationIdForConversation(conversationId);
-        AssertEx.True(resolved.HasValue, "the reload finds the parked run from the conversation alone");
-        var resumeId = resolved!.Value;
+        AssertEx.Succeeded(registry.TryGetLiveInvocationIdForConversation(conversationId, out var resumeId),
+            "the reload finds the parked run from the conversation alone");
         var events = new List<ChatStreamEvent>();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var consumer = Task.Run(async () =>
@@ -205,16 +204,17 @@ public sealed class AskUserColdLoadResumeTests
         var conversationId = Guid.NewGuid();
         var package = RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithConversationId(conversationId).Build();
 
-        AssertEx.Null(registry.TryGetLiveInvocationIdForConversation(conversationId));
+        AssertEx.False(registry.TryGetLiveInvocationIdForConversation(conversationId, out _));
 
         await using var lease = await dispatcher.ReportInvocationAssignedAsync(package);
-        AssertEx.Equal(invocationId, registry.TryGetLiveInvocationIdForConversation(conversationId)!.Value);
+        AssertEx.Succeeded(registry.TryGetLiveInvocationIdForConversation(conversationId, out var resolved));
+        AssertEx.Equal(invocationId, resolved);
 
         // A DIFFERENT conversation never resolves to this run, or a reload of chat B would hijack chat A's turn.
-        AssertEx.Null(registry.TryGetLiveInvocationIdForConversation(Guid.NewGuid()));
+        AssertEx.False(registry.TryGetLiveInvocationIdForConversation(Guid.NewGuid(), out _));
 
         await dispatcher.ReportInvocationCompletedAsync(invocationId);
-        AssertEx.Null(registry.TryGetLiveInvocationIdForConversation(conversationId));
+        AssertEx.False(registry.TryGetLiveInvocationIdForConversation(conversationId, out _));
     }
 
     private static WorkerEventDispatcher CreateDispatcher(IInvocationRunner runner)

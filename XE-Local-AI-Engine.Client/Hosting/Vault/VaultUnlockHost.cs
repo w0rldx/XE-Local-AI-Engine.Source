@@ -100,9 +100,7 @@ internal static class VaultUnlockHost
             {
                 MasterKey = outcome.MasterKey,
                 BoundUrl = boundUrl.TrimEnd('/'),
-                ResetPassword = outcome.ResetPassword,
-                ResetRecoveryCode = outcome.ResetRecoveryCode,
-                ResetNewRecoveryCode = outcome.ResetNewRecoveryCode,
+                RecoveryReset = outcome.RecoveryReset,
                 UnlockTicket = outcome.UnlockTicket
             };
         }
@@ -222,9 +220,12 @@ internal static class VaultUnlockHost
             return await SucceededAsync(context, unlocked, new VaultUnlockOutcome
             {
                 MasterKey = masterKey,
-                ResetPassword = request.NewPassword,
-                ResetRecoveryCode = request.RecoveryCode,
-                ResetNewRecoveryCode = newRecoveryCode
+                RecoveryReset = new VaultRecoveryReset
+                {
+                    Password = request.NewPassword,
+                    RecoveryCode = request.RecoveryCode,
+                    NewRecoveryCode = newRecoveryCode
+                }
             }, new VaultRecoveryUnlockResponse
             {
                 RecoveryCode = newRecoveryCode
@@ -262,9 +263,9 @@ internal static class VaultUnlockHost
                 statusCode: StatusCodes.Status409Conflict);
         }
 
-        if (ticketValue is not null)
+        if (ticketValue is not null && outcome.UnlockTicket is { } ticket)
         {
-            NodeAuthCookie.AppendUnlockTicket(context.Response, ticketValue, outcome.UnlockTicket!.ExpiresAt.UtcDateTime);
+            NodeAuthCookie.AppendUnlockTicket(context.Response, ticketValue, ticket.ExpiresAt.UtcDateTime);
         }
 
         context.Response.OnCompleted(() =>

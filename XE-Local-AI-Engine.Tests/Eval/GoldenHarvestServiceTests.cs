@@ -25,19 +25,14 @@ public sealed class GoldenHarvestServiceTests
     private static readonly Guid AgentId = Guid.NewGuid();
 
     [Test]
-    public async Task HarvestAsync_WhenAgentUnknown_ReportsAgentMissingWithZeroCounts()
+    public async Task HarvestAsync_WhenAgentUnknown_ThrowsNotFoundAndCreatesNothing()
     {
         var harness = new Harness();
         harness.AgentStore.GetByIdAsync(AgentId, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<AgentDefinitionRecord?>(null));
 
-        var outcome = await harness.Service.HarvestAsync(AgentId);
+        await AssertEx.ThrowsAsync<AgentDefinitionNotFoundException>(() => harness.Service.HarvestAsync(AgentId));
 
-        AssertEx.False(outcome.AgentExists, "An unknown agent should report AgentExists=false.");
-        AssertEx.Equal(expected: 0, outcome.ThumbsUpScanned);
-        AssertEx.Equal(expected: 0, outcome.CreatedCount);
-        AssertEx.Equal(expected: 0, outcome.DuplicateCount);
-        AssertEx.Equal(expected: 0, outcome.SkippedCount);
         await harness.ConversationService.DidNotReceive()
                      .CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>());
     }
@@ -74,7 +69,6 @@ public sealed class GoldenHarvestServiceTests
 
         var outcome = await harness.Service.HarvestAsync(AgentId);
 
-        AssertEx.True(outcome.AgentExists);
         AssertEx.Equal(expected: 1, outcome.ThumbsUpScanned);
         AssertEx.Equal(expected: 1, outcome.CreatedCount);
         AssertEx.Equal(expected: 0, outcome.DuplicateCount);

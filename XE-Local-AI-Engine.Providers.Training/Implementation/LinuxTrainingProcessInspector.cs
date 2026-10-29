@@ -29,7 +29,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
     private readonly TimeProvider _timeProvider;
 
     public LinuxTrainingProcessInspector(TimeProvider timeProvider, ILogger<LinuxTrainingProcessInspector> logger)
-        : this(timeProvider, logger, TryReadStat, Kill)
+        : this(timeProvider, logger, ReadStatOrNull, Kill)
     {
     }
 
@@ -56,7 +56,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
             return null;
         }
 
-        if (TryReadStat(processId) is not { } stat)
+        if (ReadStatOrNull(processId) is not { } stat)
         {
             return null;
         }
@@ -139,7 +139,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         _readStat(processId) is { } stat && stat.StartTicks == expectedStartTicks;
 
     /// <summary>Process-group id (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when gone.</summary>
-    public static TrainingProcessStat? TryReadStat(int processId)
+    public static TrainingProcessStat? ReadStatOrNull(int processId)
     {
         string raw;
         try
@@ -193,7 +193,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         byte[] raw;
         try
         {
-            // Forced sync: same synchronous ITrainingProcessSpawner.Inspect contract as TryReadStat; procfs source.
+            // Forced sync: same synchronous ITrainingProcessSpawner.Inspect contract as ReadStatOrNull; procfs source.
 #pragma warning disable MA0045 // Contract-forced: sync Inspect contract, procfs read.
             raw = File.ReadAllBytes(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/environ"));
 #pragma warning restore MA0045

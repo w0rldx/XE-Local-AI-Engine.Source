@@ -46,7 +46,7 @@ internal static class ConversationToolExchangeMessages
             return new FunctionCallContent(exchange.CallId, exchange.Name);
         }
 
-        return FunctionCallContent.CreateFromParsedArguments(exchange.ArgumentsJson, exchange.CallId, exchange.Name, TryParseArguments);
+        return FunctionCallContent.CreateFromParsedArguments(exchange.ArgumentsJson, exchange.CallId, exchange.Name, ParseArgumentsOrNull);
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ internal static class ConversationToolExchangeMessages
     ///     <see cref="FunctionCallContent.CreateFromParsedArguments{TEncoding}" />, which would otherwise stamp the
     ///     content with a parse <c>Exception</c> and turn a historical record into a live fault.
     /// </summary>
-    private static IDictionary<string, object?>? TryParseArguments(string argumentsJson)
+    private static IDictionary<string, object?>? ParseArgumentsOrNull(string argumentsJson)
     {
         try
         {

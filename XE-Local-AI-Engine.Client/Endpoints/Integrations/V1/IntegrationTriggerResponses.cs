@@ -17,35 +17,30 @@ internal static class IntegrationTriggerResponses
 {
     public static Task SendFailureAsync<TRequest, TResponse>(IValidationErrors errors,
         ResponseSender<TRequest, TResponse> send,
-        IntegrationTriggerResult result,
+        IntegrationTriggerResult.Rejected rejected,
         CancellationToken ct)
         where TRequest : notnull
     {
         ArgumentNullException.ThrowIfNull(errors);
-        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(rejected);
 
-        switch (result.Outcome)
+        errors.AddError(rejected.Message);
+        switch (rejected.Outcome)
         {
-            case IntegrationTriggerOutcome.NotFound:
-                return send.NotFoundAsync(ct);
-
             case IntegrationTriggerOutcome.NameConflict:
             case IntegrationTriggerOutcome.VersionConflict:
-                errors.AddError(result.Message ?? "The trigger could not be saved.");
                 return send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct);
 
             case IntegrationTriggerOutcome.AgentMissing:
             case IntegrationTriggerOutcome.TargetKindRejected:
             case IntegrationTriggerOutcome.GraphWorkflowMissing:
             case IntegrationTriggerOutcome.GraphWorkflowsDisabled:
-                errors.AddError(result.Message ?? "The trigger could not be saved.");
                 return send.ErrorsAsync(cancellation: ct);
 
-            case IntegrationTriggerOutcome.Saved:
             default:
                 // Reached only if a new outcome is added without a branch here, which is a wiring bug rather than a
                 // request the caller can make. Loud beats a silent 200 with no body.
-                throw new InvalidOperationException($"Integration trigger outcome '{result.Outcome}' has no response mapping.");
+                throw new InvalidOperationException($"Integration trigger outcome '{rejected.Outcome}' has no response mapping.");
         }
     }
 }

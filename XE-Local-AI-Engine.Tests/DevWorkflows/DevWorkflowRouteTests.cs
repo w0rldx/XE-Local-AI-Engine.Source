@@ -230,12 +230,12 @@ public sealed class DevWorkflowRouteTests
 
     /// <summary>What the writer emits is what the reader gives back — the round trip both halves of the column live on.</summary>
     [Test]
-    public void TryParseRoute_ReadsBackWhatRouteJsonWrote()
+    public void ParseRouteOrNull_ReadsBackWhatRouteJsonWrote()
     {
         var route = new DevWorkflowRoute(["ship"], ["revise"], ["excused"], "Approve", Truncated: true);
 
         var json = DevWorkflowStateMachine.RouteJson(route);
-        var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute(json));
+        var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.ParseRouteOrNull(json));
 
         AssertEx.Equal(json, DevWorkflowStateMachine.RouteJson(parsed), "the stored document IS the route, so the round trip must be an identity.");
     }
@@ -246,16 +246,16 @@ public sealed class DevWorkflowRouteTests
     ///     hand-edited member must not cost the whole read.
     /// </summary>
     [Test]
-    public void TryParseRoute_OnAPartialDocument_AnswersEmptyListsRatherThanNulls()
+    public void ParseRouteOrNull_OnAPartialDocument_AnswersEmptyListsRatherThanNulls()
     {
-        var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute("""{"gateAnswer":"Approve","truncated":false}"""));
+        var parsed = AssertEx.NotNull(DevWorkflowNodeRunDocuments.ParseRouteOrNull("""{"gateAnswer":"Approve","truncated":false}"""));
 
         AssertEx.Empty(parsed.Satisfied);
         AssertEx.Empty(parsed.Dead);
         AssertEx.Empty(parsed.Waived, "including on a row written before the waived bucket existed.");
         AssertEx.Equal("Approve", parsed.GateAnswer, "and the members the document DID carry survive.");
 
-        var withNull = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute("""{"satisfied":["ship",null],"dead":[]}"""));
+        var withNull = AssertEx.NotNull(DevWorkflowNodeRunDocuments.ParseRouteOrNull("""{"satisfied":["ship",null],"dead":[]}"""));
 
         AssertEx.Equal("ship", string.Join(",", withNull.Satisfied), "a null key is dropped, never shipped into an array of strings.");
     }
@@ -267,8 +267,8 @@ public sealed class DevWorkflowRouteTests
     [Arguments("null")]
     [Arguments("   ")]
     [Arguments(null)]
-    public void TryParseRoute_OnAnUnreadableDocument_AnswersNull(string? routeJson) =>
-        AssertEx.Null(DevWorkflowNodeRunDocuments.TryParseRoute(routeJson));
+    public void ParseRouteOrNull_OnAnUnreadableDocument_AnswersNull(string? routeJson) =>
+        AssertEx.Null(DevWorkflowNodeRunDocuments.ParseRouteOrNull(routeJson));
 
     /// <summary>
     ///     The tool-name array reads back with its truncation marker kept and its null entries dropped, and an

@@ -58,13 +58,8 @@ public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, Ima
             return;
         }
 
+        // The coordinator just persisted the job; an unexpected read miss still throws ImageNotFoundException (404).
         var view = await _coordinator.GetAsync(jobId, ct);
-        if (view is null)
-        {
-            // The coordinator just persisted the job; a null view here means an unexpected read miss.
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(view.ToResponse(), ct);
     }

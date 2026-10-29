@@ -17,7 +17,7 @@ public sealed class PngImageDimensionsTests
     [Test]
     public void TryRead_ValidHeader_ReturnsDeclaredDimensions()
     {
-        var dimensions = PngImageDimensions.TryRead(Header);
+        var dimensions = PngImageDimensions.ReadOrNull(Header);
 
         AssertEx.Equal(new ImageDimensions(Width: 640, Height: 480), dimensions);
     }
@@ -25,7 +25,7 @@ public sealed class PngImageDimensionsTests
     [Test]
     public void TryRead_TruncatedHeader_ReturnsNull()
     {
-        AssertEx.Null(PngImageDimensions.TryRead(Header.AsSpan(0, Header.Length - 1)));
+        AssertEx.Null(PngImageDimensions.ReadOrNull(Header.AsSpan(0, Header.Length - 1)));
     }
 
     [Test]
@@ -33,6 +33,6 @@ public sealed class PngImageDimensionsTests
     {
         byte[] jpegStart = [0xFF, 0xD8, 0xFF, 0xE0, .. new byte[20]];
 
-        AssertEx.Null(PngImageDimensions.TryRead(jpegStart));
+        AssertEx.Null(PngImageDimensions.ReadOrNull(jpegStart));
     }
 }

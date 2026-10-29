@@ -29,8 +29,8 @@ public sealed partial class GraphWorkflowStore
         return [.. nodeRuns.Select(NodeRunSnapshot)];
     }
 
-    public Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
-        TryExecuteMutationAsync(runId,
+    public Task<GraphWorkflowConditionalWriteResult> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
+        ExecuteConditionalMutationAsync(runId,
             GraphWorkflowVersions.Any,
             async run =>
             {
@@ -40,7 +40,7 @@ public sealed partial class GraphWorkflowStore
                                                   cancellationToken);
                 if (nodeRun is null)
                 {
-                    return null;
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.NodeRunNotEligible);
                 }
 
                 nodeRun.PublishedMessageId = messageId;
@@ -58,19 +58,19 @@ public sealed partial class GraphWorkflowStore
             // The stamp moves no run state, so no run-level write needs to lose a race to it: it takes a watermark, not a version.
             bumpVersion: false);
 
-    public Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default)
+    public Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
         EnsureNotBlank(command.Message, nameof(command.Message));
 
-        return TryExecuteMutationAsync(command.RunId,
+        return ExecuteConditionalMutationAsync(command.RunId,
             GraphWorkflowVersions.Any,
             async run =>
             {
                 // Every precondition re-checked against the rows this transaction holds, so a steer racing a cancel, a settle or a second steer declines.
                 if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
                 {
-                    return null;
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.RunNotActive);
                 }
 
                 var nodeRun = await _dbContext.GraphWorkflowNodeRuns
@@ -81,13 +81,18 @@ public sealed partial class GraphWorkflowStore
                                                   cancellationToken);
                 if (nodeRun is null)
                 {
-                    return null;
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.NodeRunNotEligible);
                 }
 
                 var entries = SteeringOf(nodeRun.SteeringJson);
-                if (entries.Count >= command.MaxEntries || entries.Any(entry => entry.OperationId == command.OperationId))
+                if (entries.Any(entry => entry.OperationId == command.OperationId))
                 {
-                    return null;
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.OperationAlreadyRecorded);
+                }
+
+                if (entries.Count >= command.MaxEntries)
+                {
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.SteeringCapReached);
                 }
 
                 nodeRun.SteeringJson = SteeringBytes([
@@ -115,15 +120,15 @@ public sealed partial class GraphWorkflowStore
             bumpVersion: false);
     }
 
-    public Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
-        TryExecuteMutationAsync(runId,
+    public Task<GraphWorkflowConditionalWriteResult> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+        ExecuteConditionalMutationAsync(runId,
             GraphWorkflowVersions.Any,
             async run =>
             {
                 var nodeRun = await _dbContext.GraphWorkflowNodeRuns.SingleOrDefaultAsync(entity => entity.Id == nodeRunId && entity.RunId == run.Id, cancellationToken);
                 if (nodeRun is null || StampSteering(nodeRun, [operationId], applied: false) is not [var entry])
                 {
-                    return null;
+                    return MutationOutcome.Decline(GraphWorkflowWriteDecline.NodeRunNotEligible);
                 }
 
                 nodeRun.UpdatedAtUtc = Now();
@@ -169,13 +174,13 @@ public sealed partial class GraphWorkflowStore
             cancellationToken);
     }
 
-    public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
+    public async Task<GraphWorkflowConditionalWriteResult> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
 
         try
         {
-            return await TryExecuteMutationAsync(command.RunId,
+            return await ExecuteConditionalMutationAsync(command.RunId,
                 command.ExpectedVersion,
                 async run =>
                 {
@@ -183,7 +188,7 @@ public sealed partial class GraphWorkflowStore
                     // this write would land a decision on a run with no tick left to route it. Declined like a lost compare-and-set — same instruction: re-read.
                     if (run.Status is not (GraphWorkflowRunStatus.Running or GraphWorkflowRunStatus.WaitingForApproval))
                     {
-                        return null;
+                        return MutationOutcome.Decline(GraphWorkflowWriteDecline.RunNotActive);
                     }
 
                     // The compare-and-set, expressed as the predicate the row is LOADED by: a row that is no longer
@@ -196,7 +201,7 @@ public sealed partial class GraphWorkflowStore
                                                       cancellationToken);
                     if (nodeRun is null)
                     {
-                        return null;
+                        return MutationOutcome.Decline(GraphWorkflowWriteDecline.NodeRunNotEligible);
                     }
 
                     var now = Now();

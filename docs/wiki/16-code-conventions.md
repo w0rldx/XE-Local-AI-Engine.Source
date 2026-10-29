@@ -381,6 +381,42 @@ that only takes things apart: a tuple as the subject of a `switch`, a deconstruc
 `XE-Local-AI-Engine.Tests/Architecture/TupleAllowlist.txt` grandfathers the test projects per file and is
 shrink-only in both directions, so a test that loses a tuple lowers or deletes its line in the same commit.
 
+### Absence: `T?`, `Try*`, outcome types and not-found exceptions
+
+`T?` is not banned: with `Nullable=enable` and warnings as errors, a caller that ignores a nullable return fails the
+Release build, a check an exception for an expected miss would lose. What is fixed is which shape each case takes.
+
+1. **A lookup where absence is normal returns `T?`** and is named `Find*`/`Get*` (or `*OrDefault`), never `Try*`.
+   Caches, registries and "is there a running turn" stay here, and so does every store lookup.
+2. **`Try*` means `bool Try*(…, [NotNullWhen(true)] out T? x)`**, or `[MaybeNullWhen(false)]` for an unconstrained
+   generic. An error out parameter takes `[NotNullWhen(false)]`. An out parameter is never assigned `null!` or
+   `default!`.
+3. **A mutation that can fail in more than one way returns an outcome type and never null**: an enum when the caller
+   needs no payload (`ImageJobDeleteOutcome`), a closed record hierarchy when it does (`ProviderMapMutationResult`).
+   No generic `Result<T>`. A mutation whose only failure is "not found" may keep `T?`. With rule 4 in place, rule 3
+   covers the business failures that remain: wrong state, conflict, superseded.
+4. **A missing client-supplied id throws.** An Application-service command or read by an id the client supplied throws
+   the domain `*NotFoundException`, and the host maps it to 404. Every such type derives from the abstract
+   `ResourceNotFoundException` (`Client.Persistence/Stores`, itself a `KeyNotFoundException`), and the one
+   `ResourceNotFoundExceptionHandler` answers all of them with the bodyless 404 the endpoints used to send. Endpoints
+   do not write `if (x is null) { await Send.NotFoundAsync(ct); return; }`. A hub has no exception handler, so it
+   keeps its own catch and turns the exception into a `HubException`. The Training and Benchmark families keep their
+   own handlers and wire bodies, and a bare `KeyNotFoundException` still reaches the default 500.
+5. **`!` on a value that can genuinely be null is a defect.** Check it, or change the producing signature so it cannot
+   be null.
+
+`TryMethodConventionTests` (Architecture) holds rules 1 and 2 over the production assemblies, private members
+included: no `Try*` method returns `T?`, `Nullable<T>` or a `Task`/`ValueTask` of one, and every nullable out
+parameter of a `bool Try*` carries `[NotNullWhen]`, `[MaybeNullWhen]` or `[NotNullIfNotNull]`. A `Try*` that means
+"attempt this and swallow the failure" may still return `void`, `bool`, `Task`, an outcome type or an enum. An out
+parameter that is null on success as well (an absent optional flag, a skipped value) has no honest condition; it is
+listed with its reason in `TryOutParameterNullOnSuccessAllowlist.txt` beside the test, and that list is shrink-only.
+
+Before moving an existing exception onto `ResourceNotFoundException`, audit every `catch` and `is` check of its old
+base type it can flow through: a `catch (InvalidOperationException)` that used to see it no longer does, and a
+`KeyNotFoundException` filter now does. `DevWorkflowToolCommands.RunAsync` and `DevWorkflowDefinitionSeeder.StartAsync`
+name `DevWorkflowNotFoundException` in their filters for exactly that reason.
+
 ### `ConfigureAwait` is contextual
 
 `ConfigureAwait(false)` is written in the **library** projects — `Providers.*`, `AI.Agent`, `AI.Contracts` — which

@@ -26,8 +26,7 @@ public sealed class ListNodeChatMessageRevisionsEndpoint : Endpoint<ListNodeChat
         var variants = await _chatPersistence.ListMessageVariantsAsync(req.ConversationId, req.MessageId, ct);
         if (variants.Count == 0)
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            throw new NodeChatMessageNotFoundException(req.MessageId);
         }
 
         var variantGroupId = variants[0].VariantGroupId;

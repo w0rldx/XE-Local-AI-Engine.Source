@@ -239,11 +239,7 @@ public static class ConfigureServices
                .AddExceptionHandler<BenchmarkExceptionHandler>()
                .AddExceptionHandler<GgufImportExceptionHandler>()
                .AddExceptionHandler<GgufDownloadExceptionHandler>()
-               .AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()
-               .AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()
-               .AddExceptionHandler<DevelopmentNotFoundExceptionHandler>()
-               .AddExceptionHandler<GraphWorkflowNotFoundExceptionHandler>()
-               .AddExceptionHandler<ExternalAppNotFoundExceptionHandler>()
+               .AddExceptionHandler<ResourceNotFoundExceptionHandler>()
                .AddExceptionHandler<ContainerRuntimeUnavailableExceptionHandler>()
                .AddExceptionHandler<RequestBodyTooLargeExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();

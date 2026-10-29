@@ -25,9 +25,10 @@ public sealed class RuntimeActivityGateTests
     public void Mutation_RefusedWhileAJobLeaseIsHeld(Runtime runtime)
     {
         var gate = Create(runtime);
-        using var job = AssertEx.NotNull(gate.TryAcquireJobLease());
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var job));
+        using var jobScope = job;
 
-        AssertEx.Null(gate.TryAcquireMutationReservation(),
+        AssertEx.False(gate.TryAcquireMutationReservation(out _),
             "A managed-runtime mutation must not replace bytes out from under an in-flight job.");
         AssertEx.True(gate.GetSnapshot().IsBusy);
         AssertEx.Equal(expected: 1, gate.GetSnapshot().ActiveJobCount);
@@ -41,10 +42,11 @@ public sealed class RuntimeActivityGateTests
         // A resident child still has the binary and the model file open, so replacing them is not safe even with
         // nothing in flight. This is the one thing mutation requires that eviction does not.
         var gate = Create(runtime);
-        using var resident = AssertEx.NotNull(gate.TryAcquireResidentProcessLease());
+        AssertEx.Succeeded(gate.TryAcquireResidentProcessLease(out var resident));
+        using var residentScope = resident;
 
-        AssertEx.Null(gate.TryAcquireMutationReservation());
-        AssertEx.NotNull(gate.TryAcquireEvictionReservation());
+        AssertEx.False(gate.TryAcquireMutationReservation(out _));
+        AssertEx.True(gate.TryAcquireEvictionReservation(out _));
     }
 
     [Test]
@@ -53,9 +55,10 @@ public sealed class RuntimeActivityGateTests
     public void Eviction_RefusedWhileASpawnReadinessLeaseIsHeld(Runtime runtime)
     {
         var gate = Create(runtime);
-        using var spawn = AssertEx.NotNull(gate.TryAcquireSpawnReadinessLease());
+        AssertEx.Succeeded(gate.TryAcquireSpawnReadinessLease(out var spawn));
+        using var spawnScope = spawn;
 
-        AssertEx.Null(gate.TryAcquireEvictionReservation(),
+        AssertEx.False(gate.TryAcquireEvictionReservation(out _),
             "An eject must not race a spawn that is still becoming ready.");
     }
 
@@ -65,9 +68,10 @@ public sealed class RuntimeActivityGateTests
     public void Eviction_RefusedWhileAJobLeaseIsHeld(Runtime runtime)
     {
         var gate = Create(runtime);
-        using var job = AssertEx.NotNull(gate.TryAcquireJobLease());
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var job));
+        using var jobScope = job;
 
-        AssertEx.Null(gate.TryAcquireEvictionReservation());
+        AssertEx.False(gate.TryAcquireEvictionReservation(out _));
     }
 
     [Test]
@@ -76,11 +80,12 @@ public sealed class RuntimeActivityGateTests
     public void JobAndSpawn_RefusedWhileAReservationIsHeld(Runtime runtime)
     {
         var gate = Create(runtime);
-        using var mutation = AssertEx.NotNull(gate.TryAcquireMutationReservation());
+        AssertEx.Succeeded(gate.TryAcquireMutationReservation(out var mutation));
+        using var mutationScope = mutation;
 
-        AssertEx.Null(gate.TryAcquireJobLease(), "A reservation must close the gate to new work.");
-        AssertEx.Null(gate.TryAcquireSpawnReadinessLease());
-        AssertEx.Null(gate.TryAcquireResidentProcessLease());
+        AssertEx.False(gate.TryAcquireJobLease(out _), "A reservation must close the gate to new work.");
+        AssertEx.False(gate.TryAcquireSpawnReadinessLease(out _));
+        AssertEx.False(gate.TryAcquireResidentProcessLease(out _));
     }
 
     [Test]
@@ -90,12 +95,13 @@ public sealed class RuntimeActivityGateTests
     {
         var gate = Create(runtime);
 
-        using (AssertEx.NotNull(gate.TryAcquireEvictionReservation()))
+        AssertEx.Succeeded(gate.TryAcquireEvictionReservation(out var reservation));
+        using (reservation)
         {
-            AssertEx.Null(gate.TryAcquireJobLease());
+            AssertEx.False(gate.TryAcquireJobLease(out _));
         }
 
-        AssertEx.NotNull(gate.TryAcquireJobLease());
+        AssertEx.True(gate.TryAcquireJobLease(out _));
         AssertEx.False(gate.GetSnapshot().EvictionReserved);
     }
 
@@ -106,19 +112,19 @@ public sealed class RuntimeActivityGateTests
     {
         // A double dispose that decremented twice would let a mutation in while real work was still in flight.
         var gate = Create(runtime);
-        var first = AssertEx.NotNull(gate.TryAcquireJobLease());
-        var second = AssertEx.NotNull(gate.TryAcquireJobLease());
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var first));
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var second));
 
         first.Dispose();
         first.Dispose();
 
         AssertEx.Equal(expected: 1, gate.GetSnapshot().ActiveJobCount,
             "A second dispose of the same lease must not release the other one.");
-        AssertEx.Null(gate.TryAcquireMutationReservation());
+        AssertEx.False(gate.TryAcquireMutationReservation(out _));
 
         second.Dispose();
         AssertEx.Equal(expected: 0, gate.GetSnapshot().ActiveJobCount);
-        AssertEx.NotNull(gate.TryAcquireMutationReservation());
+        AssertEx.True(gate.TryAcquireMutationReservation(out _));
     }
 
     [Test]
@@ -127,7 +133,7 @@ public sealed class RuntimeActivityGateTests
     public async Task Leases_ReleaseExactlyOnceOnAsyncDispose(Runtime runtime)
     {
         var gate = Create(runtime);
-        var lease = AssertEx.NotNull(gate.TryAcquireJobLease());
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var lease));
 
         await lease.DisposeAsync();
         await lease.DisposeAsync();
@@ -143,15 +149,13 @@ public sealed class RuntimeActivityGateTests
         // The residents read reports these counts, so the header must hear about each one; a refusal changed nothing.
         var notifier = new RecordingResidencyChangeNotifier();
         var gate = Create(runtime, notifier);
-        var leases = new[]
-        {
-            AssertEx.NotNull(gate.TryAcquireJobLease()),
-            AssertEx.NotNull(gate.TryAcquireSpawnReadinessLease()),
-            AssertEx.NotNull(gate.TryAcquireResidentProcessLease())
-        };
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var job));
+        AssertEx.Succeeded(gate.TryAcquireSpawnReadinessLease(out var spawn));
+        AssertEx.Succeeded(gate.TryAcquireResidentProcessLease(out var resident));
+        var leases = new[] { job, spawn, resident };
         AssertEx.Equal(expected: 3, notifier.Count);
 
-        AssertEx.Null(gate.TryAcquireMutationReservation());
+        AssertEx.False(gate.TryAcquireMutationReservation(out _));
         AssertEx.Equal(expected: 3, notifier.Count, "A refused reservation must not tick.");
 
         foreach (var lease in leases)
@@ -160,7 +164,8 @@ public sealed class RuntimeActivityGateTests
         }
 
         AssertEx.Equal(expected: 6, notifier.Count);
-        using (AssertEx.NotNull(gate.TryAcquireEvictionReservation()))
+        AssertEx.Succeeded(gate.TryAcquireEvictionReservation(out var reservation));
+        using (reservation)
         {
             AssertEx.Equal(expected: 7, notifier.Count);
         }
@@ -196,14 +201,17 @@ public sealed class RuntimeActivityGateTests
         var image = provider.GetRequiredService<IImageRuntimeActivityGate>();
 
         AssertEx.False(ReferenceEquals(whisper, image));
-        using var transcription = AssertEx.NotNull(whisper.TryAcquireJobLease());
-        using (AssertEx.NotNull(image.TryAcquireMutationReservation()))
+        AssertEx.Succeeded(whisper.TryAcquireJobLease(out var transcription));
+        using var transcriptionScope = transcription;
+        AssertEx.Succeeded(image.TryAcquireMutationReservation(out var reservation));
+        using (reservation)
         {
             AssertEx.Equal(expected: 0, image.GetSnapshot().ActiveJobCount);
             AssertEx.False(whisper.GetSnapshot().MutationReserved);
         }
 
-        using var generation = AssertEx.NotNull(image.TryAcquireJobLease());
+        AssertEx.Succeeded(image.TryAcquireJobLease(out var generation));
+        using var generationScope = generation;
         AssertEx.Equal(expected: 1, whisper.GetSnapshot().ActiveJobCount);
         AssertEx.Equal(expected: 1, image.GetSnapshot().ActiveJobCount);
     }

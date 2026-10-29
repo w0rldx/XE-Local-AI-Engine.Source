@@ -32,7 +32,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                     }, CancellationToken.None);
                 await bodyEntered.Task.WaitAsync(TimeSpan.FromSeconds(3));
 
-                var competingMutation = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+                var competingMutation = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
                 await Task.Yield();
                 AssertEx.False(competingMutation.IsCompleted,
                     "A runtime mutation must wait until the evaluation process and its teardown have completed.");
@@ -121,7 +121,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                 var handle = launcher.Handles.Single();
                 AssertEx.True(handle.WasTreeKilled);
                 AssertEx.True(handle.WasDisposed);
-                var mutationLease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+                var mutationLease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
                 AssertEx.NotNull(mutationLease);
                 await (mutationLease ?? throw new InvalidOperationException("The evaluation mutation lease was not released.")).DisposeAsync();
             }
@@ -189,7 +189,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                     CancellationToken.None);
                 await WaitUntilAsync(() => handle.WasTreeKilled);
 
-                var competingMutation = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+                var competingMutation = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
                 await Task.Yield();
                 AssertEx.False(evaluation.IsCompleted);
                 AssertEx.False(competingMutation.IsCompleted);
@@ -238,7 +238,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
                 AssertEx.True(result.Teardown.ExitObservationTimedOut);
                 AssertEx.True(result.Teardown.HandleDisposed);
                 AssertEx.Equal(expected: 0, admission.ActiveTickets);
-                var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+                var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
                 await (lease ?? throw new InvalidOperationException("The mutation gate was not released after bounded exit timeout.")).DisposeAsync();
             }
         }

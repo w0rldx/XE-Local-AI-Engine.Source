@@ -134,7 +134,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     }
 
     [Test]
-    public async Task Approve_WhenManualCase_ReturnsNotFound()
+    public async Task Approve_WhenManualCase_ReturnsConflictNotHarvested()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
@@ -152,7 +152,10 @@ public sealed class HarvestGoldenConversationsEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // The case exists, so this is a wrong-state refusal (409), not a missing-resource one (404).
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("NotHarvested", document.RootElement.GetProperty("outcome").GetString());
     }
 
     [Test]

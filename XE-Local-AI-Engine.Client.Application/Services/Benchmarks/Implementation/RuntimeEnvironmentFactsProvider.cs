@@ -86,7 +86,7 @@ public sealed class RuntimeEnvironmentFactsProvider : IRuntimeEnvironmentFactsPr
                 var audit = await _deviceAudit.GetAuditAsync(forceRefresh: false, ct);
                 return new BenchmarkHardwareFactsV1(RuntimeInformation.OSDescription,
                     RuntimeInformation.OSArchitecture.ToString(),
-                    HostCpuModel.TryRead(),
+                    HostCpuModel.ReadOrNull(),
                     profile.CpuCores,
                     profile.TotalRamBytes,
                     audit.Devices.Select(static device => new BenchmarkGpuFactsV1(device.Name, device.TotalBytes, DriverVersion: null)).ToArray(),

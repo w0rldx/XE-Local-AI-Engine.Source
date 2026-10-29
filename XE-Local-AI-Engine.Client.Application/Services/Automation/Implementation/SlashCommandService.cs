@@ -30,10 +30,10 @@ internal sealed partial class SlashCommandService : ISlashCommandService
         return custom.Select(ToCatalogItem).Append(Ping).OrderBy(item => item.Name, StringComparer.Ordinal).ToArray();
     }
 
-    public async Task<SlashCommandCatalogItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<SlashCommandCatalogItem> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetByIdAsync(id, cancellationToken);
-        return record is null ? null : ToCatalogItem(record);
+        var record = await _store.GetByIdAsync(id, cancellationToken) ?? throw new SlashCommandNotFoundException(id);
+        return ToCatalogItem(record);
     }
 
     public async Task<SlashCommandCatalogItem> CreateAsync(SlashCommandInput input, CancellationToken cancellationToken = default)
@@ -47,13 +47,13 @@ internal sealed partial class SlashCommandService : ISlashCommandService
         }
     }
 
-    public async Task<SlashCommandCatalogItem?> UpdateAsync(Guid id, SlashCommandInput input, CancellationToken cancellationToken = default)
+    public async Task<SlashCommandCatalogItem> UpdateAsync(Guid id, SlashCommandInput input, CancellationToken cancellationToken = default)
     {
         var normalized = Normalize(input);
         try
         {
-            var record = await _store.UpdateAsync(id, normalized, cancellationToken);
-            return record is null ? null : ToCatalogItem(record);
+            var record = await _store.UpdateAsync(id, normalized, cancellationToken) ?? throw new SlashCommandNotFoundException(id);
+            return ToCatalogItem(record);
         }
         catch (SlashCommandNameConflictException exception)
         {
@@ -61,8 +61,13 @@ internal sealed partial class SlashCommandService : ISlashCommandService
         }
     }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default) =>
-        _store.DeleteAsync(id, cancellationToken);
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        if (!await _store.DeleteAsync(id, cancellationToken))
+        {
+            throw new SlashCommandNotFoundException(id);
+        }
+    }
 
     private static SlashCommandInput Normalize(SlashCommandInput input)
     {

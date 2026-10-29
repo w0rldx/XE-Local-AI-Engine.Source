@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     Coordinates exclusive access to one owner-node AgentHome sandbox. Acquisition never queues. Code already running
 ///     inside the same asynchronous owner-node scope may borrow the ambient lease; unrelated callers cannot.
@@ -10,9 +12,9 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 /// </remarks>
 internal interface IAgentHomeExecutionLeaseManager
 {
-    IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key);
+    bool TryAcquire(AgentHomeExecutionLeaseKey key, [NotNullWhen(true)] out IAgentHomeExecutionLease? lease);
 
-    IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key);
+    bool TryAcquireForRecovery(AgentHomeExecutionLeaseKey key, [NotNullWhen(true)] out IAgentHomeExecutionLease? lease);
 
     /// <summary>
     ///     Whether the gate for <paramref name="key" /> is currently taken, WITHOUT taking it.

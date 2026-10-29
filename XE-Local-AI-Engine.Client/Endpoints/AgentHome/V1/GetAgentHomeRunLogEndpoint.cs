@@ -39,12 +39,6 @@ public sealed class GetAgentHomeRunLogEndpoint : Endpoint<AgentHomeRunByIdReques
         ArgumentNullException.ThrowIfNull(req);
 
         var text = await _service.ReadLogAsync(req.RunId, ct);
-        if (text is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(text.ToResponse(), ct);
     }
 }

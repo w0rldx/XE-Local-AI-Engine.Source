@@ -17,10 +17,11 @@ public interface IPlaybookEvalService
     ///     records the result on it.
     /// </summary>
     /// <remarks>
-    ///     <see cref="PlaybookEvalOutcome.ActionFound" /> is <c>false</c>, which the endpoint 404s, when the action is
-    ///     missing, belongs to another agent, is not a pending Suggested or Analysis action, or its owning agent is
-    ///     gone; otherwise <see cref="PlaybookEvalOutcome.Result" /> carries the persisted eval result.
+    ///     The outcome is <see cref="PlaybookEvalOutcome.Recorded" /> with the persisted result, or
+    ///     <see cref="PlaybookEvalOutcome.NotPending" /> when the action is not, or stopped being, a pending suggestion.
     /// </remarks>
+    /// <exception cref="Agents.PlaybookActionNotFoundException">No action of <paramref name="agentId" /> has <paramref name="actionId" />.</exception>
+    /// <exception cref="Agents.AgentDefinitionNotFoundException">The owning agent is gone.</exception>
     Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default);
 }
 
@@ -28,15 +29,18 @@ public interface IPlaybookEvalService
 ///     Result of a <see cref="IPlaybookEvalService.RunEvalAsync" /> call.
 /// </summary>
 /// <remarks>
-///     <see cref="ActionFound" /> distinguishes a 404 from a recorded eval, <see cref="Result" /> carries the
-///     persisted result when one was produced, and <see cref="Action" /> carries the updated action record, now
-///     bearing that result, so the endpoint maps the response directly rather than re-fetching unscoped.
+///     <see cref="Recorded" /> carries the persisted result and the updated action record, now bearing that result, so
+///     the endpoint maps the response directly rather than re-fetching unscoped.
 /// </remarks>
-public sealed class PlaybookEvalOutcome
+public abstract record PlaybookEvalOutcome
 {
-    public required bool ActionFound { get; init; }
+    public sealed record Recorded : PlaybookEvalOutcome
+    {
+        public required PlaybookEvalResult Result { get; init; }
 
-    public required PlaybookEvalResult? Result { get; init; }
+        public required PlaybookActionRecord Action { get; init; }
+    }
 
-    public PlaybookActionRecord? Action { get; init; }
+    /// <summary>The action exists but is not a pending suggestion, so nothing ran or the result was not recorded.</summary>
+    public sealed record NotPending : PlaybookEvalOutcome;
 }

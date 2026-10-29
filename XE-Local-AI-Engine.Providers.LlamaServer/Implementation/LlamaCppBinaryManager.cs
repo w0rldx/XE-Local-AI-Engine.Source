@@ -241,7 +241,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 _managedCudaSignal?.SetActive(installed.Variant);
             }
 
-            var managed = await TryServeManagedSourceBinaryAsync(installed, discardInvalidRecord: true, ct).ConfigureAwait(false);
+            var managed = await ServeManagedSourceBinaryOrNullAsync(installed, discardInvalidRecord: true, ct).ConfigureAwait(false);
             if (managed is not null)
             {
                 return managed;
@@ -259,7 +259,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             ? await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false)
             : ResolveTagOnDisk(variant, installed) ?? throw new LlamaRuntimeNotInstalledException(refusal);
 
-        // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via TryResolveExact: Resolve() would substitute the CPU floor where no GPU prebuilt exists
+        // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via ResolveExactOrNull: Resolve() would substitute the CPU floor where no GPU prebuilt exists
         // — arm64 CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
         var pin = ResolveAcquirablePin(variant);
 
@@ -417,7 +417,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     <c>RecordResolvedRuntimeAsync</c> nor the source-record discard runs), and the live-catalog tier skipped, so
     ///     the answer describes what is installed NOW and can lag a later ensure. It DOES spawn the override's own bounded, tree-killed validation.
     /// </remarks>
-    public async Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
+    public async Task<LlamaBinary?> FindInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
         if (_overrideOptions?.IsActive == true)
         {
@@ -434,7 +434,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             // Full re-validation (path chain + recorded SHA256), but discardInvalidRecord:false — a read-only lookup must
             // not rewrite installed-runtime.json. A record the next Ensure will discard simply reads as "not resolvable".
-            return await TryServeManagedSourceBinaryAsync(installed, discardInvalidRecord: false, ct).ConfigureAwait(false);
+            return await ServeManagedSourceBinaryOrNullAsync(installed, discardInvalidRecord: false, ct).ConfigureAwait(false);
         }
 
         var resolvedTag = ResolveInstalledTag(installed);
@@ -1096,13 +1096,13 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <remarks>Retried exactly once on a transient failure or hash mismatch, mirroring the main archive pipeline.</remarks>
     private async Task DownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter, CancellationToken ct)
     {
-        var firstError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, expectedSize, serverDir, reporter, ct).ConfigureAwait(false);
+        var firstError = await DownloadVerifyFlattenCudartOrErrorAsync(url, assetName, expectedSha256, expectedSize, serverDir, reporter, ct).ConfigureAwait(false);
         if (firstError is null)
         {
             return;
         }
 
-        var secondError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, expectedSize, serverDir, reporter, ct).ConfigureAwait(false);
+        var secondError = await DownloadVerifyFlattenCudartOrErrorAsync(url, assetName, expectedSha256, expectedSize, serverDir, reporter, ct).ConfigureAwait(false);
         if (secondError is null)
         {
             return;
@@ -1114,7 +1114,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             secondError);
     }
 
-    private async Task<Exception?> TryDownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter,
+    private async Task<Exception?> DownloadVerifyFlattenCudartOrErrorAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, AcquisitionReporter? reporter,
         CancellationToken ct)
     {
         var tempArchive = Path.Combine(Path.GetTempPath(), $"llamacpp-cudart-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
@@ -1312,20 +1312,19 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private async Task<string> DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {
-        var (firstStaging, _) = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
+        var (firstStaging, _) = await DownloadVerifyExtractAttemptAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
         if (firstStaging is not null)
         {
             return firstStaging;
         }
 
-        var (secondStaging, secondError) = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
+        var (secondStaging, secondError) = await DownloadVerifyExtractAttemptAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
         if (secondStaging is not null)
         {
             return secondStaging;
         }
 
-        // A null staging dir always carries its error.
-        var error = secondError!;
+        var error = secondError ?? throw new InvalidOperationException("A download attempt without a staging dir must carry its error.");
         throw new LlamaRuntimeException(IsDownloadStall(error)
                 ? DownloadStalledMessage
                 : "The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. Check the network connection and try again.",
@@ -1342,7 +1341,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Runs one download → SHA256 verify → extract pass. Returns the staging dir on success, or the non-fatal
     ///     failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
     /// </summary>
-    private async Task<DownloadAttempt> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir,
+    private async Task<DownloadAttempt> DownloadVerifyExtractAttemptAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir,
         AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {

@@ -193,19 +193,17 @@ public enum StartLiveOutcome
     /// <summary>The session was already live; nothing was registered twice.</summary>
     AlreadyLive = 1,
 
-    /// <summary>The session id is unknown.</summary>
-    SessionNotFound = 2,
-
     /// <summary>The session had already reached a terminal state and cannot be started again.</summary>
-    SessionAlreadyFinished = 3
+    SessionAlreadyFinished = 2
 }
 
 /// <summary>
 ///     The outcome of one live-session start, as data rather than as an exception.
 /// </summary>
 /// <remarks>
-///     An unknown session and a finished one are expected answers a caller maps to a status code, not faults. A
-///     source kind that cannot be captured live is different: it is a malformed request, and it throws.
+///     A finished session is an expected answer a caller maps to a status code, not a fault. An unknown session throws
+///     <see cref="TranscriptionNotFoundException" />, and a source kind that cannot be captured live is a malformed
+///     request, so it throws too.
 /// </remarks>
 public sealed record StartLiveResult
 {
@@ -265,20 +263,17 @@ public sealed class LiveTranscriptionSourceKindException : Exception
     public TranscriptionSourceKind SourceKind { get; }
 }
 
-/// <summary>Which of the four ways a transcript-row edit can end actually happened.</summary>
+/// <summary>
+///     Which of the two ways a transcript-row edit can end actually happened. An unknown session or sequence throws
+///     <see cref="TranscriptionNotFoundException" /> instead.
+/// </summary>
 public enum UpdateTranscriptSegmentOutcome
 {
     /// <summary>The row holds the new text.</summary>
     Updated = 0,
 
-    /// <summary>The session id is unknown.</summary>
-    SessionNotFound = 1,
-
-    /// <summary>The session holds no row with that sequence.</summary>
-    SegmentNotFound = 2,
-
     /// <summary>The session is still transcribing; its transcript is not the operator's to edit yet.</summary>
-    SessionTranscribing = 3
+    SessionTranscribing = 1
 }
 
 /// <summary>The outcome of one transcript-row edit, as data rather than as an exception.</summary>

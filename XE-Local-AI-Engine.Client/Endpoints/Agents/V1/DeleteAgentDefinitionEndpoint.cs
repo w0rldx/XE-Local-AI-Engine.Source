@@ -23,12 +23,7 @@ public sealed class DeleteAgentDefinitionEndpoint : Endpoint<DeleteAgentDefiniti
 
     public override async Task HandleAsync(DeleteAgentDefinitionRequest req, CancellationToken ct)
     {
-        var deleted = await _agentDefinitionService.DeleteAsync(req.AgentDefinitionId, ct);
-        if (!deleted)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _agentDefinitionService.DeleteAsync(req.AgentDefinitionId, ct);
 
         await Send.NoContentAsync(ct);
     }

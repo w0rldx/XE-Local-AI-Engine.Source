@@ -109,10 +109,10 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         var serverDir = await fixture.WritePublishedServerAsync([.. CompleteCompanionSet.Where(dll => dll != missingDll)]);
         var manager = fixture.PinnedManager();
 
-        AssertEx.Null(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.Null(await manager.FindInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
 
         await File.WriteAllTextAsync(Path.Combine(serverDir, missingDll), "fake-cuda-runtime");
-        AssertEx.NotNull(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.NotNull(await manager.FindInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
     }
 
     [Test]
@@ -120,14 +120,14 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     {
         // The companion set is a Windows-CUDA requirement only; a Vulkan build next to no CUDA DLL at all is complete.
         using var cache = new TempDir();
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan));
         var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "vulkan", pin.ServerRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
         await File.WriteAllTextAsync(serverPath, "fake-llama-server");
         using var http = new HttpClient();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Windows, Architecture.X64, TimeProvider.System);
 
-        var binary = AssertEx.NotNull(await manager.TryGetInstalledBinaryAsync(GpuVariant.Vulkan, CancellationToken.None));
+        var binary = AssertEx.NotNull(await manager.FindInstalledBinaryAsync(GpuVariant.Vulkan, CancellationToken.None));
 
         AssertEx.Equal(Path.GetFullPath(serverPath), binary.ServerExecutablePath);
     }
@@ -206,7 +206,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         AssertCompleteCompanionSet(binary.ServerExecutablePath);
         AssertEx.Equal(expected: "fake-cuda-runtime", await File.ReadAllTextAsync(Path.Combine(serverDir, "cudart64_12.dll")));
         AssertEx.Empty(Directory.EnumerateFiles(serverDir, "*.partial"));
-        AssertEx.NotNull(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.NotNull(await manager.FindInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
     }
 
     [Test]
@@ -441,7 +441,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
             _cacheRoot = cacheRoot;
             _tag = tag;
             CudartServed = cudartServed;
-            Pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
+            Pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
             _cudartName = AssertEx.NotNull(LlamaCppReleasePins.DeriveCudartAssetName(Pin.AssetName));
             _cudartArchive = BuildZip([.. (companionDlls ?? CompleteCompanionSet).Select(dll => (dll, "fake-cuda-runtime", false))]);
             MainArchive = BuildZip([(Pin.ServerRelativePath, "#!/bin/sh\necho 'version: b9799'\nexit 0\n", true)]);

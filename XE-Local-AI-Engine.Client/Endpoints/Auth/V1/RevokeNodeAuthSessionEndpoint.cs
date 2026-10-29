@@ -31,11 +31,7 @@ public sealed class RevokeNodeAuthSessionEndpoint : Endpoint<NodeRevokeSessionRe
 
     public override async Task HandleAsync(NodeRevokeSessionRequest req, CancellationToken ct)
     {
-        if (!await _authService.RevokeSessionAsync(User, req.SessionId, ct))
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _authService.RevokeSessionAsync(User, req.SessionId, ct);
 
         if (string.Equals(req.SessionId, User.FindFirst(JwtRegisteredClaimNames.Sid)?.Value, StringComparison.Ordinal))
         {

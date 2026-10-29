@@ -33,10 +33,17 @@ public sealed class DeleteLocalModelEndpoint : Endpoint<DeleteLocalModelRequest,
         // deleting the same decoded name keeps "validated name == deleted name" true. See ModelRouteName.
         var decodedModelName = ModelRouteName.Decode(req.ModelName);
         var result = await _administrationService.DeleteAsync(decodedModelName, ct);
+        if (!result.Succeeded)
+        {
+            // The validator refuses a bad name first; this keeps the service's own refusal a 400 rather than a 200 without a name.
+            AddError(result.DisplayMessage ?? "The model name is not valid.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
 
         await Send.OkAsync(new DeleteLocalModelResponse
         {
-            ModelName = result.ModelName!,
+            ModelName = result.ModelName,
             Deleted = result.Deleted
         }, ct);
     }

@@ -252,12 +252,9 @@ public sealed class IntegrationApiHandlerBodyLimitTests
                 TimeProvider.System,
                 NullLogger<IntegrationSseWriter>.Instance);
             Invocations.AcceptAsync(Arg.Any<IntegrationAcceptRequest>(), Arg.Any<CancellationToken>())
-                       .Returns(new IntegrationAcceptResult
+                       .Returns(new IntegrationAcceptResult.Rejected
                        {
                            Outcome = IntegrationAcceptOutcome.TriggerNotFound,
-                           ExecutionId = null,
-                           SessionId = null,
-                           Status = null,
                            Message = "No such trigger."
                        });
 

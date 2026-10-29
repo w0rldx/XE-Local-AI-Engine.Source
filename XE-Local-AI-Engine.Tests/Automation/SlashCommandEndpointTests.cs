@@ -221,7 +221,7 @@ public sealed class SlashCommandEndpointTests
     {
         var service = Substitute.For<ISlashCommandService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((SlashCommandCatalogItem?)null);
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns<SlashCommandCatalogItem>(_ => throw new SlashCommandNotFoundException(id));
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -238,7 +238,7 @@ public sealed class SlashCommandEndpointTests
     {
         var service = Substitute.For<ISlashCommandService>();
         service.UpdateAsync(Arg.Any<Guid>(), Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>())
-               .Returns<SlashCommandCatalogItem?>(_ => throw new SlashCommandConflictException("duplicate"));
+               .Returns<SlashCommandCatalogItem>(_ => throw new SlashCommandConflictException("duplicate"));
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
         var id = Guid.NewGuid();
@@ -263,7 +263,6 @@ public sealed class SlashCommandEndpointTests
     public async Task DeleteCommand_WhenDeleted_ReturnsNoContent()
     {
         var service = Substitute.For<ISlashCommandService>();
-        service.DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
         var id = Guid.NewGuid();

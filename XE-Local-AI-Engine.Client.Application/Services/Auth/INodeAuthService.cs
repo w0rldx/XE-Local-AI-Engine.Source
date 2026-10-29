@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using System.Security.Claims;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Vault;
 
 public interface INodeAuthService
@@ -33,8 +34,11 @@ public interface INodeAuthService
     /// <summary>The caller's live sessions, most recently used first.</summary>
     Task<IReadOnlyList<NodeAuthSession>> ListSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 
-    /// <summary>Ends one of the caller's own sessions; <see langword="false" /> when the caller owns no session with that id.</summary>
-    Task<bool> RevokeSessionAsync(ClaimsPrincipal principal, string sessionId, CancellationToken cancellationToken);
+    /// <summary>
+    ///     Ends one of the caller's own sessions. Throws <see cref="NodeAuthSessionNotFoundException" /> when the caller
+    ///     owns no live session with that id.
+    /// </summary>
+    Task RevokeSessionAsync(ClaimsPrincipal principal, string sessionId, CancellationToken cancellationToken);
 
     /// <summary>"Sign out everywhere": ends every session of the caller, the current one included, and rotates the security stamp.</summary>
     Task RevokeAllSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
@@ -74,25 +78,29 @@ public sealed class NodeAuthStatus
     public VaultState Vault { get; init; } = VaultState.External;
 }
 
-/// <summary>A token-issuing outcome.</summary>
+/// <summary>A token-issuing outcome: the whole pair, or a failure that carries no part of one.</summary>
 /// <remarks>
-///     <see cref="LockedOutRetryAfterSeconds" /> is set only on a login that Identity refused because the account is
-///     locked out, and carries the whole seconds still left on that lockout (at least one). Every other failure leaves
-///     it <c>null</c>, so the transport cannot accidentally tell a wrong password apart from a locked account.
+///     <see cref="Failed.LockedOutRetryAfterSeconds" /> is set only on a login that Identity refused because the account
+///     is locked out, and carries the whole seconds still left on that lockout (at least one). Every other failure
+///     leaves it <c>null</c>, so the transport cannot accidentally tell a wrong password apart from a locked account.
 /// </remarks>
-public sealed class NodeAuthTokenResult
+public abstract record NodeAuthTokenResult
 {
-    public required bool Succeeded { get; init; }
+    public sealed record Issued : NodeAuthTokenResult
+    {
+        public required string AccessToken { get; init; }
 
-    public required string? AccessToken { get; init; }
+        public required DateTime AccessTokenExpiresAtUtc { get; init; }
 
-    public required DateTime? AccessTokenExpiresAtUtc { get; init; }
+        public required string RefreshToken { get; init; }
 
-    public required string? RefreshToken { get; init; }
+        public required DateTime RefreshTokenExpiresAtUtc { get; init; }
+    }
 
-    public required DateTime? RefreshTokenExpiresAtUtc { get; init; }
-
-    public int? LockedOutRetryAfterSeconds { get; init; }
+    public sealed record Failed : NodeAuthTokenResult
+    {
+        public int? LockedOutRetryAfterSeconds { get; init; }
+    }
 }
 
 public sealed class NodeSetupResult
@@ -127,4 +135,15 @@ public sealed class NodePasswordChangeResult
 
     /// <summary>The rotated vault recovery code after a successful recovery reset; <see langword="null" /> otherwise.</summary>
     public string? RecoveryCode { get; init; }
+}
+
+/// <summary>
+///     Thrown when the caller names a session it does not own: another user's session and an unknown id are the same
+///     answer. <c>ResourceNotFoundExceptionHandler</c> answers it with the bodyless 404.
+/// </summary>
+public sealed class NodeAuthSessionNotFoundException : ResourceNotFoundException
+{
+    public NodeAuthSessionNotFoundException() : base("No session of the caller has that id.")
+    {
+    }
 }

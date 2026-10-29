@@ -235,7 +235,8 @@ public sealed class EngineCliProcessTests : IDisposable
     public async Task MaintenanceCommands_WhenAnotherInstanceHoldsTheDataDirectory_ExitFourLikeEveryCommand()
     {
         Directory.CreateDirectory(_root);
-        using var held = AssertEx.NotNull(SingleInstanceLease.TryAcquire(_root), "The test must hold the data-directory lease.");
+        AssertEx.Succeeded(SingleInstanceLease.TryAcquire(_root, out var held), "The test must hold the data-directory lease.");
+        using var heldScope = held;
 
         var reset = await RunAsync(["--mcp-only", "--reset-admin-password", "another long password"], launchMode: null);
         AssertEx.Equal(expected: 4, reset.ExitCode, reset.CombinedOutput);

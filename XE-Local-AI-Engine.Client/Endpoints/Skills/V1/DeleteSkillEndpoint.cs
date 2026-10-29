@@ -23,12 +23,7 @@ public sealed class DeleteSkillEndpoint : Endpoint<DeleteSkillRequest>
 
     public override async Task HandleAsync(DeleteSkillRequest req, CancellationToken ct)
     {
-        var deleted = await _agentSkillService.DeleteAsync(req.SkillId, ct);
-        if (!deleted)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _agentSkillService.DeleteAsync(req.SkillId, ct);
 
         await Send.NoContentAsync(ct);
     }

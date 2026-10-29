@@ -141,7 +141,7 @@ public sealed class TrainingFootprintEstimatorTests
             await File.WriteAllTextAsync(path,
                 """{"architectures":["LlamaForCausalLM"],"hidden_size":2048,"num_hidden_layers":16,"torch_dtype":"bfloat16"}""");
 
-            var config = AssertEx.NotNull(TrainingFootprintEstimator.TryReadConfig(path), "A well-formed config must parse.");
+            var config = AssertEx.NotNull(TrainingFootprintEstimator.ReadConfigOrNull(path), "A well-formed config must parse.");
 
             AssertEx.Equal(expected: 2048, config.HiddenSize!.Value);
             AssertEx.Equal(expected: 16, config.NumHiddenLayers!.Value);
@@ -150,8 +150,8 @@ public sealed class TrainingFootprintEstimatorTests
             AssertEx.Null(config.IntermediateSize, "An omitted field must stay absent.");
 
             await File.WriteAllTextAsync(path, "{not json");
-            AssertEx.Null(TrainingFootprintEstimator.TryReadConfig(path), "A document that will not parse reports absence.");
-            AssertEx.Null(TrainingFootprintEstimator.TryReadConfig(Path.Combine(directory.FullName, "missing.json")),
+            AssertEx.Null(TrainingFootprintEstimator.ReadConfigOrNull(path), "A document that will not parse reports absence.");
+            AssertEx.Null(TrainingFootprintEstimator.ReadConfigOrNull(Path.Combine(directory.FullName, "missing.json")),
                 "A missing config reports absence rather than throwing.");
         }
         finally

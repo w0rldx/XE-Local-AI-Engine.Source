@@ -101,7 +101,7 @@ public sealed class GgufAcquisitionIdentityResolver
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(quantization);
         var normalized = quantization.Trim().ToUpperInvariant().Replace("UD_", "UD-", StringComparison.Ordinal);
-        var parsed = GgufQuantParser.TryParse($"model-{normalized}.gguf");
+        var parsed = GgufQuantParser.ParseOrNull($"model-{normalized}.gguf");
         if (parsed is null || !string.Equals(parsed, normalized, StringComparison.Ordinal))
         {
             throw new ArgumentException("The quantization is not a repository-owned canonical GGUF quantization.", nameof(quantization));

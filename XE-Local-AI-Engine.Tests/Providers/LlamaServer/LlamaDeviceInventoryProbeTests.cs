@@ -84,7 +84,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         // The resolved binary path does not exist, so the --list-devices launch fails — the probe must report Unknown
         // (ProbeSucceeded false), NOT a determinate empty list, so the audit never mistakes a probe failure for "no GPU".
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+        binaryManager.FindInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(new LlamaBinary
                      {
                          ServerExecutablePath = "/nonexistent/bin/llama-server",
@@ -110,7 +110,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         // had just chosen the Offline / Manual profile. The probe must report "unknown, because nothing is installed"
         // and leave acquisition to the explicit paths. EnsureBinaryAsync is the tripwire: reaching it is the defect.
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+        binaryManager.FindInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(null));
         binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("The device probe must never acquire a runtime."));
@@ -128,7 +128,7 @@ public sealed class LlamaDeviceInventoryProbeTests
     public async Task GetDeviceInventory_InstalledCudaWithIncompleteCompanionSet_IsReportedAsIncomplete_NotMissing()
     {
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
+        binaryManager.FindInstalledBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(null));
         binaryManager.IsCompanionSetIncompleteAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>()).Returns(true);
         var probe = new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance, TimeProvider.System);
@@ -147,7 +147,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         // is memoized, so the probe must re-ask the binary manager every time it got nothing — proven here by the second
         // lookup happening at all (the second call resolves a binary, which is exactly the post-install state).
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+        binaryManager.FindInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(null),
                          Task.FromResult<LlamaBinary?>(new LlamaBinary
                          {
@@ -166,7 +166,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         // The runtime is now resolvable, so the answer is no longer "nothing installed" — this one failed its spawn
         // (the fake path does not exist), which is the ordinary unknown, not the missing-runtime one.
         AssertEx.False(second.RuntimeMissing);
-        await binaryManager.Received(2).TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+        await binaryManager.Received(2).FindInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
         await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
     }
 
@@ -180,7 +180,7 @@ public sealed class LlamaDeviceInventoryProbeTests
         var cacheRoot = Path.Combine(Path.GetTempPath(), "xe-probe-cudart-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
+            var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
             var serverPath = Path.Combine(cacheRoot, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cuda", pin.ServerRelativePath);
             var serverDir = Path.GetDirectoryName(serverPath)!;
             Directory.CreateDirectory(serverDir);
@@ -312,7 +312,7 @@ public sealed class LlamaDeviceInventoryProbeTests
                                                  """);
         File.SetUnixFileMode(serverPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.TryGetInstalledBinaryAsync(GpuVariant.Vulkan, Arg.Any<CancellationToken>())
+        binaryManager.FindInstalledBinaryAsync(GpuVariant.Vulkan, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(new LlamaBinary
                      {
                          ServerExecutablePath = serverPath,

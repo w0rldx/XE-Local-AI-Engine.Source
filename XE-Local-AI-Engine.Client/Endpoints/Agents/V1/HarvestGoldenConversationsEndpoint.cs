@@ -33,11 +33,6 @@ public sealed class HarvestGoldenConversationsEndpoint : Endpoint<HarvestGoldenC
     public override async Task HandleAsync(HarvestGoldenConversationsRequest req, CancellationToken ct)
     {
         var outcome = await _harvestService.HarvestAsync(req.AgentDefinitionId, ct);
-        if (!outcome.AgentExists)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(outcome.ToResponse(), ct);
     }

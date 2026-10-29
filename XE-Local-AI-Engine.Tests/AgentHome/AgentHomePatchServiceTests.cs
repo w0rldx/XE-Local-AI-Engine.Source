@@ -473,7 +473,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     Such a path has to reach <c>TryMapEntry</c> whole and unquoted: C-quoted or cut in half by a tab split
+    ///     Such a path has to reach <c>MapEntryOrNull</c> whole and unquoted: C-quoted or cut in half by a tab split
     ///     it fails its alias parse, and a genuinely changed file goes missing from the run's review surface.
     /// </summary>
     [Test]

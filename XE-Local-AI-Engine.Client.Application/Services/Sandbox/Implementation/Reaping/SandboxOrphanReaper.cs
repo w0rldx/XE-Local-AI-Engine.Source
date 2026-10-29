@@ -99,7 +99,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         var reapedScopes = 0;
         var deletedJails = 0;
 
-        var scopeKiller = _scopeKillerOverride ?? SandboxScopeUnitKiller.TryCreate(_containmentProbe?.Containment.FilesystemIsolation);
+        var scopeKiller = _scopeKillerOverride ?? SandboxScopeUnitKiller.CreateOrNull(_containmentProbe?.Containment.FilesystemIsolation);
         var liveScopeUnits = new HashSet<string>(StringComparer.Ordinal);
         var liveJailPaths = new List<string>();
 
@@ -187,7 +187,7 @@ public sealed class SandboxOrphanReaper : IHostedService
             }
 
             // No owner record proves nothing about who uses the folder (an older build may still run beside this one): never deleted.
-            var dead = SandboxSessionOwner.TryReadFrom(directory.FullName) is { } owner
+            var dead = SandboxSessionOwner.ReadFromOrNull(directory.FullName) is { } owner
                        && !_isOwnerAlive(owner.ProcessId, owner.ProcessStartTimeUtc);
             if (!dead || liveJailPaths.Any(jail => PathContainment.IsUnderRoot(jail, directory.FullName)))
             {

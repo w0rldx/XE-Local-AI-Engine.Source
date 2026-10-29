@@ -41,12 +41,8 @@ public sealed class ListAgentExecutionLogsEndpoint : Endpoint<ListAgentExecution
 
     public override async Task HandleAsync(ListAgentExecutionLogsRequest req, CancellationToken ct)
     {
-        var agent = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct);
-        if (agent is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        // Throws the not-found the host maps to 404, so an unknown agent is not answered with an empty list.
+        _ = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct);
 
         var limit = req.Limit is { } requested && requested > 0 ? Math.Min(requested, MaxPageSize) : DefaultPageSize;
         var offset = req.Offset is { } requestedOffset && requestedOffset > 0 ? requestedOffset : 0;

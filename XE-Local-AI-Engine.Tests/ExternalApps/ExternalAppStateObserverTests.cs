@@ -90,7 +90,7 @@ public sealed class ExternalAppStateObserverTests
         using var observer = harness.CreateObserver();
 
         await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]);
-        using var held = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(harness.InstalledId)));
+        using var held = AssertEx.NotNull(await harness.Gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(harness.InstalledId)));
 
         await observer.PollOnceAsync(CancellationToken.None);
 

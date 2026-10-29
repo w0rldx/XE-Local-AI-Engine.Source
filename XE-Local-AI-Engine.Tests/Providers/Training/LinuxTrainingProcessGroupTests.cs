@@ -180,7 +180,7 @@ public sealed class LinuxTrainingProcessGroupTests
     [Test]
     [RunOn(OS.Linux)]
     public void HostProcessGroupId_MatchesTheHostsOwnProcStat() =>
-        AssertEx.Equal(LinuxTrainingProcessInspector.TryReadStat(Environment.ProcessId)?.Pgid, LinuxTrainingProcessInspector.HostProcessGroupId);
+        AssertEx.Equal(LinuxTrainingProcessInspector.ReadStatOrNull(Environment.ProcessId)?.Pgid, LinuxTrainingProcessInspector.HostProcessGroupId);
 
     [Test]
     [RunOn(OS.Linux)]

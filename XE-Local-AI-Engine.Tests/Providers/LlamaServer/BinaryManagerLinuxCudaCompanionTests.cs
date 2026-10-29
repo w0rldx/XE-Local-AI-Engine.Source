@@ -26,7 +26,7 @@ public sealed class BinaryManagerLinuxCudaCompanionTests
     [Test]
     public void LinuxCudaPin_IsWhatTheFixtureStandsIn()
     {
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
 
         AssertEx.Equal("cudart-" + pin.AssetName, pin.CudartAssetName);
     }
@@ -82,12 +82,12 @@ public sealed class BinaryManagerLinuxCudaCompanionTests
         var serverDir = await fixture.WritePublishedServerAsync([$"libcudart.so.{cudaMajor}", $"libcublas.so.{cudaMajor}"]);
         var manager = fixture.Manager();
 
-        AssertEx.Null(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.Null(await manager.FindInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
         AssertEx.True(await manager.IsCompanionSetIncompleteAsync(GpuVariant.Cuda, CancellationToken.None));
 
         await File.WriteAllTextAsync(Path.Combine(serverDir, $"libcublasLt.so.{cudaMajor}"), "fake-cuda-runtime");
 
-        AssertEx.NotNull(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.NotNull(await manager.FindInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
         AssertEx.False(await manager.IsCompanionSetIncompleteAsync(GpuVariant.Cuda, CancellationToken.None));
         AssertEx.Empty(fixture.RequestedAssets);
     }
@@ -140,7 +140,7 @@ public sealed class BinaryManagerLinuxCudaCompanionTests
         public Fixture(string cacheRoot, string[] companionLibraries)
         {
             _cacheRoot = cacheRoot;
-            var real = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+            var real = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
             _mainArchive = BuildTarGz(OwnerOnly | UnixFileMode.UserExecute, $"{MainTopFolder}/llama-server", $"{MainTopFolder}/libggml-cuda.so");
             _companionArchive = BuildTarGz(OwnerOnly, [.. companionLibraries.Select(library => $"{CompanionTopFolder}/{library}"), $"{CompanionTopFolder}/LICENSE.txt"]);
             Pin = new LlamaCppAssetPin

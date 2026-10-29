@@ -68,7 +68,7 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
         // checked before cloud routing, which an ext: id falls through and would report a hosted endpoint as local.
         if (ExternalModelId.HasExternalScheme(model))
         {
-            if (await _modelTrustResolver.TryResolveExternalAsync(model, cancellationToken) is not { } registration)
+            if (await _modelTrustResolver.FindExternalAsync(model, cancellationToken) is not { } registration)
             {
                 return Unresolved;
             }
@@ -105,7 +105,7 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
         if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
         {
             var ggufCapabilities = await _ggufModelCapabilityResolver
-                .TryResolveAsync(model, cancellationToken);
+                .ResolveOrNullAsync(model, cancellationToken);
             // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL. Vision rides the GGUF descriptor's
             // projector-gated flag — the only path that can advertise it (cloud/Ollama stay non-vision here).
             return ggufCapabilities is { } caps

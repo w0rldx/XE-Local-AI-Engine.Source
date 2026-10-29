@@ -15,7 +15,7 @@ internal static class HostPathSafety
     /// <remarks>
     ///     The caller must fail closed on <see langword="null" />.
     /// </remarks>
-    public static string? TryResolveTrustedRoot(string hostPath)
+    public static string? ResolveTrustedRootOrNull(string hostPath)
     {
         if (string.IsNullOrWhiteSpace(hostPath) || hostPath.Any(char.IsControl))
         {

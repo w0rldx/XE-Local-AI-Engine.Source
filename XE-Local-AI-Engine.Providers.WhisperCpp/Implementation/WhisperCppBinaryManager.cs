@@ -131,7 +131,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
                 throw new WhisperRuntimeException("The recorded managed whisper.cpp runtime is invalid and must be rebuilt or removed.");
             }
 
-            var managed = await TryResolveManagedRuntimeAsync(installed, ct).ConfigureAwait(false);
+            var managed = await ResolveManagedRuntimeOrNullAsync(installed, ct).ConfigureAwait(false);
             if (managed is not null)
             {
                 return managed;
@@ -200,7 +200,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         return Path.Combine(RuntimeCacheDirectory.Resolve(), "whisper.cpp");
     }
 
-    private async Task<WhisperBinary?> TryResolveManagedRuntimeAsync(ManagedRuntimeState<WhisperBackend> state, CancellationToken ct)
+    private async Task<WhisperBinary?> ResolveManagedRuntimeOrNullAsync(ManagedRuntimeState<WhisperBackend> state, CancellationToken ct)
     {
         if (state.SourceBuildPath is not { Length: > 0 } buildPath
             || state.ServerSha256 is not { Length: 64 } expectedSha
@@ -372,13 +372,13 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         string backendDir,
         CancellationToken ct)
     {
-        var firstError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, archiveKind, backendDir, ct).ConfigureAwait(false);
+        var firstError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, archiveKind, backendDir, ct).ConfigureAwait(false);
         if (firstError is null)
         {
             return;
         }
 
-        var secondError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, archiveKind, backendDir, ct).ConfigureAwait(false);
+        var secondError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, archiveKind, backendDir, ct).ConfigureAwait(false);
         if (secondError is null)
         {
             return;
@@ -389,7 +389,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             secondError);
     }
 
-    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url,
+    private async Task<Exception?> DownloadVerifyExtractOrErrorAsync(Uri url,
         string assetName,
         string expectedSha256,
         WhisperArchiveKind archiveKind,

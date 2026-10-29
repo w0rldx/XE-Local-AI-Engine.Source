@@ -318,7 +318,7 @@ internal sealed class NodeChatConversationCommands
         return await dbContext.ReadWorkSessionIdForConversationAsync(conversationId, cancellationToken);
     }
 
-    public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -337,12 +337,12 @@ internal sealed class NodeChatConversationCommands
                 await OpenIfNeededAsync(command.Connection, token);
                 var updated = await command.ExecuteNonQueryAsync(token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
+                return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
             },
             cancellationToken);
     }
 
-    public async Task<NodeChatConversationDto?> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -353,12 +353,12 @@ internal sealed class NodeChatConversationCommands
                     [request.IsPinned, request.UpdatedAtUtc, request.ConversationId],
                     token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
+                return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
             },
             cancellationToken);
     }
 
-    public async Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -369,12 +369,12 @@ internal sealed class NodeChatConversationCommands
                     [request.Archived, request.UpdatedAtUtc, request.ConversationId],
                     token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
+                return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
             },
             cancellationToken);
     }
 
-    public async Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatGuardedWriteOutcome> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -400,12 +400,12 @@ internal sealed class NodeChatConversationCommands
                 await OpenIfNeededAsync(command.Connection, token);
                 var updated = await command.ExecuteNonQueryAsync(token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
+                return await GuardedWriteOutcomeAsync(dbContext, updated, request.ConversationId, token);
             },
             cancellationToken);
     }
 
-    public async Task<NodeChatConversationDto?> SetConversationStateAsync(NodeChatSetConversationStateRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatGuardedWriteOutcome> SetConversationStateAsync(NodeChatSetConversationStateRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -430,12 +430,12 @@ internal sealed class NodeChatConversationCommands
                 await OpenIfNeededAsync(command.Connection, token);
                 var updated = await command.ExecuteNonQueryAsync(token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
+                return await GuardedWriteOutcomeAsync(dbContext, updated, request.ConversationId, token);
             },
             cancellationToken);
     }
 
-    public async Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatConversationDto> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -447,8 +447,38 @@ internal sealed class NodeChatConversationCommands
                     [request.MemoryExcluded, request.UpdatedAtUtc, request.ConversationId],
                     token);
 
-                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token);
+                return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
             },
             cancellationToken);
+    }
+
+    /// <summary>
+    ///     The conversation an UPDATE just wrote. Zero rows means it does not exist or was purged, which the caller
+    ///     named, so it throws <see cref="NodeChatConversationNotFoundException" />.
+    /// </summary>
+    private static async Task<NodeChatConversationDto> ReadUpdatedConversationAsync(NodeChatDbContext dbContext, int updated, Guid conversationId, CancellationToken cancellationToken)
+    {
+        var conversation = updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, conversationId, cancellationToken);
+        return conversation ?? throw new NodeChatConversationNotFoundException(conversationId);
+    }
+
+    /// <summary>
+    ///     Tells a guarded write that matched no row apart: a live conversation means the guard rejected it, a missing or
+    ///     purged one means there was nothing to write. Runs under the same exclusive scope as the UPDATE.
+    /// </summary>
+    private static async Task<NodeChatGuardedWriteOutcome> GuardedWriteOutcomeAsync(NodeChatDbContext dbContext, int updated, Guid conversationId, CancellationToken cancellationToken)
+    {
+        if (updated > 0)
+        {
+            return NodeChatGuardedWriteOutcome.Written;
+        }
+
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT 1 FROM conversations WHERE conversation_id = $conversation_id AND purged = 0;";
+        AddParameter(command, "$conversation_id", conversationId);
+        await OpenIfNeededAsync(command.Connection, cancellationToken);
+        return await command.ExecuteScalarAsync(cancellationToken) is null
+            ? NodeChatGuardedWriteOutcome.ConversationNotFound
+            : NodeChatGuardedWriteOutcome.Superseded;
     }
 }

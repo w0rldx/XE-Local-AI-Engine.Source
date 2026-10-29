@@ -109,7 +109,7 @@ public sealed class IntegrationSessionServiceTests
     {
         var harness = new IntegrationInvokeHarness();
 
-        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()));
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => harness.SessionService.DeleteAsync(Guid.NewGuid()));
     }
 
     [Test]
@@ -171,7 +171,7 @@ public sealed class IntegrationSessionServiceTests
     {
         var harness = new IntegrationInvokeHarness();
 
-        AssertEx.Equal(IntegrationSessionDeleteOutcome.NotFound, await harness.SessionService.DeleteAsync(Guid.NewGuid()));
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => harness.SessionService.DeleteAsync(Guid.NewGuid()));
         AssertEx.Equal(expected: 0, harness.SessionGate.TrackedCount, "The delete path mints an entry the same way the invoke path does.");
     }
 
@@ -289,7 +289,7 @@ public sealed class IntegrationSessionServiceTests
 
         var read = await harness.SessionService.GetAsync(foreign.Id);
 
-        AssertEx.Equal(foreign.Id, AssertEx.NotNull(read).Id);
-        AssertEx.Null(await harness.SessionService.GetAsync(Guid.NewGuid()));
+        AssertEx.Equal(foreign.Id, read.Id);
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => harness.SessionService.GetAsync(Guid.NewGuid()));
     }
 }

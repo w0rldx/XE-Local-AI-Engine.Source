@@ -81,7 +81,7 @@ public sealed class LlamaCppRuntimeTagTests
     [Arguments("b0", 0L)]
     public void TryParseTagNumber_WhenWellFormed_ReturnsNumber(string tag, long expected)
     {
-        AssertEx.Equal(expected, LlamaCppRuntimeTag.TryParseTagNumber(tag));
+        AssertEx.Equal(expected, LlamaCppRuntimeTag.ParseTagNumberOrNull(tag));
     }
 
     [Test]
@@ -93,6 +93,6 @@ public sealed class LlamaCppRuntimeTagTests
     [Arguments("v1.2.3")]
     public void TryParseTagNumber_WhenMalformed_ReturnsNull(string? tag)
     {
-        AssertEx.Null(LlamaCppRuntimeTag.TryParseTagNumber(tag));
+        AssertEx.Null(LlamaCppRuntimeTag.ParseTagNumberOrNull(tag));
     }
 }

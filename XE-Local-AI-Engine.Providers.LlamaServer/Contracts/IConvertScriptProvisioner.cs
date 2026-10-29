@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     The llama.cpp conversion tooling a training export runs, provisioned at a pinned commit under the managed
 ///     runtime directory.
@@ -37,10 +39,10 @@ public sealed class ConvertScriptPaths
 public interface IConvertScriptProvisioner
 {
     /// <summary>
-    ///     Returns the already-provisioned scripts for the pinned commit, or <see langword="null" /> when nothing has
-    ///     been adopted yet. Pure disk check; never fetches.
+    ///     Gets the already-provisioned scripts for the pinned commit; <see langword="false" /> when nothing has been
+    ///     adopted yet. Pure disk check; never fetches.
     /// </summary>
-    ConvertScriptPaths? TryResolve();
+    bool TryResolve([NotNullWhen(true)] out ConvertScriptPaths? paths);
 
     /// <summary>
     ///     Returns the provisioned scripts, acquiring and adopting them first when absent. Single-flight: concurrent

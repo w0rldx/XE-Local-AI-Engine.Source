@@ -201,7 +201,7 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     private async Task<bool> NvidiaPresentAsync(CancellationToken ct)
     {
         // nvidia-smi exiting 0 with any GPU name on stdout is sufficient evidence of an NVIDIA adapter.
-        var output = await TryRunAsync("nvidia-smi", "--query-gpu=name --format=csv,noheader", ct).ConfigureAwait(false);
+        var output = await RunOrNullAsync("nvidia-smi", "--query-gpu=name --format=csv,noheader", ct).ConfigureAwait(false);
         return !string.IsNullOrWhiteSpace(output);
     }
 
@@ -210,7 +210,7 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         return _platform switch
         {
             ProbePlatform.Windows => await ReadWindowsAdapterListAsync(ct).ConfigureAwait(false),
-            ProbePlatform.Linux => await TryRunAsync("lspci", string.Empty, ct).ConfigureAwait(false) ?? string.Empty,
+            ProbePlatform.Linux => await RunOrNullAsync("lspci", string.Empty, ct).ConfigureAwait(false) ?? string.Empty,
             _ => string.Empty
         };
     }
@@ -230,7 +230,7 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     {
         foreach (var (fileName, arguments) in WindowsAdapterListCommands(Environment.SystemDirectory))
         {
-            var output = await TryRunAsync(fileName, arguments, ct).ConfigureAwait(false);
+            var output = await RunOrNullAsync(fileName, arguments, ct).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(output))
             {
                 return output;
@@ -260,7 +260,7 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         yield return new AdapterListCommand("wmic", "path win32_VideoController get name");
     }
 
-    private async Task<string?> TryRunAsync(string fileName, string arguments, CancellationToken ct)
+    private async Task<string?> RunOrNullAsync(string fileName, string arguments, CancellationToken ct)
     {
         IProbeProcess? process = null;
         try

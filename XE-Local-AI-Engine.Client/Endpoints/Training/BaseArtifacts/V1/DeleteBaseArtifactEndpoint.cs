@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 
@@ -20,7 +21,7 @@ public sealed class DeleteBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces(StatusCodes.Status204NoContent)
-                               .Produces(StatusCodes.Status404NotFound)
+                               .Produces<TrainingErrorResponse>(StatusCodes.Status404NotFound)
                                .Produces<BaseArtifactBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
@@ -29,9 +30,6 @@ public sealed class DeleteBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
         var outcome = await _baseArtifactService.DeleteAsync(request.ArtifactId, ct);
         switch (outcome)
         {
-            case BaseArtifactDeleteOutcome.NotFound:
-                await Send.NotFoundAsync(ct);
-                return;
             case BaseArtifactDeleteOutcome.Downloading:
                 await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("downloading",
                     "The base checkpoint is still downloading. Cancel the download before deleting it."));

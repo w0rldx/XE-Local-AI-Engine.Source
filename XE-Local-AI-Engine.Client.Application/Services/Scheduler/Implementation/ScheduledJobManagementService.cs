@@ -95,9 +95,9 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return _definitionStore.ListAsync(includeDeleted, cancellationToken);
     }
 
-    public Task<ScheduledJobDefinitionRecord?> GetJobAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ScheduledJobDefinitionRecord> GetJobAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _definitionStore.GetByIdAsync(id, cancellationToken);
+        return await _definitionStore.GetByIdAsync(id, cancellationToken) ?? throw JobNotFound();
     }
 
     public async Task<ScheduledJobDefinitionRecord> CreateJobAsync(ScheduledJobManagementInput input,
@@ -125,18 +125,14 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return record;
     }
 
-    public async Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(Guid id,
+    public async Task<ScheduledJobDefinitionRecord> UpdateJobAsync(Guid id,
         ScheduledJobManagementInput input,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         // Not-found (including soft-deleted) wins over a body problem, so a PUT on a deleted job is a 404, never a 400.
-        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
-        if (existing is null || existing.DeletedAtUtc is not null)
-        {
-            return null;
-        }
+        var existing = await GetLiveJobAsync(id, cancellationToken);
 
         var descriptor = Validate(input, existing);
         await ValidateReferencesAsync(input, cancellationToken);
@@ -144,11 +140,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag and original creator through to the store regardless of what the request body claims.
         var storeInput = ToStoreInput(input, descriptor, existing.Enabled, existing.CreatedBy);
-        var updated = await _definitionStore.UpdateAsync(id, storeInput, cancellationToken);
-        if (updated is null)
-        {
-            return null;
-        }
+        // Null only when a concurrent delete won the race since the read above: the same not-found answer.
+        var updated = await _definitionStore.UpdateAsync(id, storeInput, cancellationToken) ?? throw JobNotFound();
 
         // Delete-and-recreate is the simplest correct path: the new definition fully determines the Quartz job/trigger.
         await ReconcileScheduleAsync(updated, descriptor, cancellationToken);
@@ -164,16 +157,12 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return updated;
     }
 
-    public async Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(Guid id,
+    public async Task<ScheduledJobDefinitionRecord> SetEnabledAsync(Guid id,
         bool enabled,
         CancellationToken cancellationToken = default)
     {
         // A soft-deleted definition is invisible: enabling it would re-schedule a Quartz job nobody can see.
-        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
-        if (existing is null || existing.DeletedAtUtc is not null)
-        {
-            return null;
-        }
+        var existing = await GetLiveJobAsync(id, cancellationToken);
 
         // Resolve the template BEFORE the durable flag is flipped: a registered template is required to build the dispatch job,
         // so a definition on an unknown template can never be scheduled and would otherwise read as enabled while never firing.
@@ -182,11 +171,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             throw new ScheduledJobValidationException($"Template '{existing.TemplateId}' is not registered, so this job cannot be enabled.");
         }
 
-        var updated = await _definitionStore.SetEnabledAsync(id, enabled, cancellationToken);
-        if (updated is null)
-        {
-            return null;
-        }
+        // Null only when a concurrent delete won the race since the read above: the same not-found answer.
+        var updated = await _definitionStore.SetEnabledAsync(id, enabled, cancellationToken) ?? throw JobNotFound();
 
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(updated.Id);
@@ -220,45 +206,33 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return updated;
     }
 
-    public async Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteJobAsync(Guid id, CancellationToken cancellationToken = default)
     {
         // Store-first soft-delete preserves run history, and a missing Quartz job is not an error. An unknown id is not found,
         // and a repeat delete succeeds without re-stamping DeletedAtUtc, logging or publishing again.
-        var existing = await _definitionStore.GetByIdAsync(id, cancellationToken);
-        if (existing is null)
-        {
-            return false;
-        }
-
+        var existing = await GetJobAsync(id, cancellationToken);
         if (existing.DeletedAtUtc is not null)
         {
-            return true;
+            return;
         }
 
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         _ = await scheduler.DeleteJob(BuildJobKey(id), cancellationToken);
 
-        var deleted = await _definitionStore.SoftDeleteAsync(id, cancellationToken);
-
-        if (deleted)
+        if (!await _definitionStore.SoftDeleteAsync(id, cancellationToken))
         {
-            _logger.LogInformation("Soft-deleted scheduled job {ScheduledJobId} and unscheduled its Quartz job.", id);
-            await SafePublishDefinitionAsync(id, "deleted");
+            throw JobNotFound();
         }
 
-        return deleted;
+        _logger.LogInformation("Soft-deleted scheduled job {ScheduledJobId} and unscheduled its Quartz job.", id);
+        await SafePublishDefinitionAsync(id, "deleted");
     }
 
     public async Task<Guid> TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default)
     {
-        var definition = await _definitionStore.GetByIdAsync(id, cancellationToken);
-        if (definition is null || definition.DeletedAtUtc is not null)
-        {
-            throw new ScheduledJobValidationException("Scheduled job not found.");
-        }
-
+        var definition = await GetLiveJobAsync(id, cancellationToken);
         if (!definition.Enabled)
         {
             throw new ScheduledJobValidationException("A disabled scheduled job cannot be triggered manually.");
@@ -372,19 +346,14 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return _runStore.ListAsync(status, fromUtc, toUtc, scheduledJobId, cancellationToken);
     }
 
-    public Task<ScheduledJobRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
+    public async Task<ScheduledJobRunRecord> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        return _runStore.GetByIdAsync(runId, cancellationToken);
+        return await _runStore.GetByIdAsync(runId, cancellationToken) ?? throw new ScheduledJobNotFoundException("Scheduled job run not found.");
     }
 
     public async Task<RunCancellationOutcome> CancelRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        var run = await _runStore.GetByIdAsync(runId, cancellationToken);
-        if (run is null)
-        {
-            return RunCancellationOutcome.NotFound;
-        }
-
+        var run = await GetRunAsync(runId, cancellationToken);
         if (IsTerminal(run.Status))
         {
             return RunCancellationOutcome.AlreadyTerminal;
@@ -411,6 +380,16 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             wasInterrupted);
 
         return wasInterrupted ? RunCancellationOutcome.Requested : RunCancellationOutcome.RequestedButNotRunning;
+    }
+
+    private static ScheduledJobNotFoundException JobNotFound() =>
+        new("Scheduled job not found.");
+
+    /// <summary>The definition an action route may act on: a soft-deleted one is as missing as an unknown id.</summary>
+    private async Task<ScheduledJobDefinitionRecord> GetLiveJobAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var existing = await GetJobAsync(id, cancellationToken);
+        return existing.DeletedAtUtc is null ? existing : throw JobNotFound();
     }
 
     private static bool IsTerminal(ScheduledRunStatus status)

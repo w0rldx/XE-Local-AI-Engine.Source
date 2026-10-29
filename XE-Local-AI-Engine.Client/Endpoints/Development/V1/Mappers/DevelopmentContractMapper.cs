@@ -19,7 +19,7 @@ internal static class DevelopmentContractMapper
     /// </remarks>
     public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value)
     {
-        var profile = DevelopmentProfileSummary.TryFrom(value.CommandProfileJson);
+        var profile = DevelopmentProfileSummary.FromOrNull(value.CommandProfileJson);
         return new DevelopmentProjectResponse
         {
             Id = value.Id,

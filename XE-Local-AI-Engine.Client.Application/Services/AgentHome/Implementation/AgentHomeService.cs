@@ -113,11 +113,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             throw new AgentHomeRequestRejectedException("the AgentHome workspace is unavailable until isolation recovery succeeds.");
         }
 
-        using var lease = _leaseManager.TryAcquire(key);
-        if (lease is null)
+        if (!_leaseManager.TryAcquire(key, out var lease))
         {
             throw new AgentHomeBusyException("an AgentHome run is already in progress for this node.");
         }
+
+        using var leaseScope = lease;
 
         var prepareRequest = new AgentHomePrepareRequest
         {
@@ -241,7 +242,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         var baselineCommands = new List<AgentHomeCommandLogRecord>();
         try
         {
-            attachmentsSnapshot = await TryStageConversationAttachmentsAsync(request.ConversationId, prepareToken);
+            attachmentsSnapshot = await StageConversationAttachmentsOrNullAsync(request.ConversationId, prepareToken);
             if (attachmentsSnapshot is null && attachmentsNamed)
             {
                 throw new AgentHomeRequestRejectedException($"this conversation has no extracted attachments to copy under '{AttachmentsFolderAlias}'.");
@@ -318,11 +319,9 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             return new ConversationSandboxPreparation([], lease: null, isBusy: true);
         }
 
-        var lease = _leaseManager.TryAcquire(key);
-
         // Share the owner-node execution lease with RunLifecycleAsync so an in-flight run and a chat-mode re-stage cannot
         // race on one sandbox. Non-blocking: a held lease skips the re-stage rather than blocking the chat turn.
-        if (lease is null)
+        if (!_leaseManager.TryAcquire(key, out var lease))
         {
             _logger.LogDebug("AgentHome attachment staging for node {NodeId} skipped: a run is already in progress.", identity.NodeId);
             return new ConversationSandboxPreparation([], lease: null, isBusy: true);
@@ -382,7 +381,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
     // Builds a decrypted-Markdown staging snapshot for the conversation's attachments, or null without a conversation or
     // extracted files. The caller appends its host path as a folder and disposes it. Logs counts and aliases only.
-    private async Task<IConversationStagingSnapshot?> TryStageConversationAttachmentsAsync(Guid? conversationId,
+    private async Task<IConversationStagingSnapshot?> StageConversationAttachmentsOrNullAsync(Guid? conversationId,
         CancellationToken cancellationToken)
     {
         if (conversationId is not { } resolvedConversationId)

@@ -149,13 +149,13 @@ public sealed partial class McpAgentRunStore
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {
-        var ledger = await TryLoadLedgerAsync(connection, transaction, cancellationToken)
+        var ledger = await LoadLedgerOrNullAsync(connection, transaction, cancellationToken)
                      ?? throw new InvalidOperationException("The MCP run ledger singleton is missing.");
         ValidateLedgerVersion(ledger);
         return ledger;
     }
 
-    private static async Task<McpAgentRunLedgerCounters?> TryLoadLedgerAsync(SqliteConnection connection,
+    private static async Task<McpAgentRunLedgerCounters?> LoadLedgerOrNullAsync(SqliteConnection connection,
         SqliteTransaction transaction,
         CancellationToken cancellationToken)
     {

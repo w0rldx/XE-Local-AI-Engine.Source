@@ -28,7 +28,8 @@ public sealed class GetRuntimeResidentsEndpointTests
     public async Task GetResidents_ProjectsImageAndWhisperRowsOntoTheExactWireShape()
     {
         var imageGate = new ImageRuntimeActivityGate();
-        using var job = AssertEx.NotNull(imageGate.TryAcquireJobLease());
+        AssertEx.Succeeded(imageGate.TryAcquireJobLease(out var job));
+        using var jobScope = job;
         var host = new Doubles(imageGate);
         host.ImageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: true, exited: false), ImageProcess("sdxl", leased: false, exited: true)]);
         host.WhisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "large-v3-turbo", WhisperBackend.Cuda);
@@ -50,7 +51,8 @@ public sealed class GetRuntimeResidentsEndpointTests
     public async Task GetResidents_WhileWhisperStartsAndAnImageSpawns_ReportsStartingRowsWithoutAModel()
     {
         var imageGate = new ImageRuntimeActivityGate();
-        using var spawn = AssertEx.NotNull(imageGate.TryAcquireSpawnReadinessLease());
+        AssertEx.Succeeded(imageGate.TryAcquireSpawnReadinessLease(out var spawn));
+        using var spawnScope = spawn;
         var host = new Doubles(imageGate);
         host.ImageSupervisor.GetResidents().Returns([]);
         host.WhisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Starting, modelId: null, backend: null);

@@ -45,7 +45,7 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
 
         await Send.OkAsync(new SelectLocalModelResponse
         {
-            SelectedModelName = result.SelectedModelName!
+            SelectedModelName = result.SelectedModelName
         }, ct);
     }
 
@@ -66,7 +66,7 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
             return true;
         }
 
-        var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, ct);
+        var registration = await _modelTrustResolver.FindExternalAsync(modelName, ct);
         if (registration is not null)
         {
             return true;

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -11,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     An exception no <c>IExceptionHandler</c> maps reaches <c>DefaultExceptionHandler</c> as a generic 500. A type
 ///     counts as handled when a file under <c>XE-Local-AI-Engine.Client/ExceptionHandling/</c> names it, or names a
-///     base type declared in the same scanned assemblies, in comment- and literal-stripped code. The rest sit in
+///     base type declared in the scanned or persistence assemblies, in comment- and literal-stripped code. The rest sit in
 ///     <c>Architecture/UnhandledExceptionAllowlist.txt</c> with the symbol that catches them, shrink-only.
 /// </remarks>
 [Category(TestCategories.Unit)]
@@ -33,6 +34,12 @@ public sealed partial class ExceptionHandlerCoverageTests
         typeof(RuntimePackageValidationResult).Assembly,
         typeof(IInvocationAgentFactory).Assembly
     ];
+
+    /// <summary>
+    ///     Where a named base type may live: the scanned assemblies plus the persistence one, which declares the shared
+    ///     <see cref="ResourceNotFoundException" /> base. Never the BCL, whose <c>Exception</c> every handler names.
+    /// </summary>
+    private static readonly Assembly[] BaseTypeAssemblies = [.. ScannedAssemblies, typeof(ResourceNotFoundException).Assembly];
 
     private static readonly string HandlerDirectory =
         RepositoryPaths.Combine("XE-Local-AI-Engine.Client", "ExceptionHandling");
@@ -110,10 +117,10 @@ public sealed partial class ExceptionHandlerCoverageTests
                     .ToList();
     }
 
-    /// <summary>True when the handlers name <paramref name="type" /> or a base type declared in a scanned assembly.</summary>
+    /// <summary>True when the handlers name <paramref name="type" /> or a base type declared in <see cref="BaseTypeAssemblies" />.</summary>
     private static bool IsNamed(Type type, HashSet<string> handlerNames)
     {
-        for (var current = type; current is not null && ScannedAssemblies.Contains(current.Assembly); current = current.BaseType)
+        for (var current = type; current is not null && BaseTypeAssemblies.Contains(current.Assembly); current = current.BaseType)
         {
             if (handlerNames.Contains(current.Name))
             {

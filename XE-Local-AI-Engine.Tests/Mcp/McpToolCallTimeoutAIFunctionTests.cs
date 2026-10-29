@@ -46,7 +46,7 @@ public sealed class McpToolCallTimeoutAIFunctionTests
 
         AssertEx.True(result?.ToString()?.Contains("did not respond within", StringComparison.Ordinal) == true,
             "Expected a typed tool-failure result naming the timeout.");
-        AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.TryGetCode(result), "The audit outcome must read timeout, not success.");
+        AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.GetCodeOrNull(result), "The audit outcome must read timeout, not success.");
         AssertEx.Equal(expected: 1, invocations);
         AssertEx.Equal(expected: 1L, observedTimeouts);
     }

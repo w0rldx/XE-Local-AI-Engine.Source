@@ -65,11 +65,11 @@ public interface ILlamaCppBinaryManager
     ///     docs/wiki/03-local-runtime-and-providers.md, "The read-only installed-binary query".
     /// </remarks>
     /// <exception cref="LlamaRuntimeException">A configured bring-your-own override failed validation.</exception>
-    Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct);
+    Task<LlamaBinary?> FindInstalledBinaryAsync(GpuVariant variant, CancellationToken ct);
 
     /// <summary>
     ///     Whether a Windows CUDA build is on disk with incomplete companion libraries, which
-    ///     <see cref="TryGetInstalledBinaryAsync" /> reports as nothing installed. Read-only like that query.
+    ///     <see cref="FindInstalledBinaryAsync" /> reports as nothing installed. Read-only like that query.
     /// </summary>
     Task<bool> IsCompanionSetIncompleteAsync(GpuVariant variant, CancellationToken ct)
     {

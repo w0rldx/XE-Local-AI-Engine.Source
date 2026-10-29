@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Common.Caching;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>The one RAM-only vector cache behind the node's three embedding-reuse sites (playbook ranking, memory dedup, knowledge search).</summary>
 /// <remarks>
@@ -68,7 +69,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
     public long ApproximateSizeInBytes => Interlocked.Read(ref _sizeInBytes);
 
     /// <summary>Returns a live (non-expired) value and marks it as most-recently used.</summary>
-    public bool TryGet(TKey key, out TValue value)
+    public bool TryGet(TKey key, [MaybeNullWhen(false)] out TValue value)
     {
         if (_entries.TryGetValue(key, out var entry) && !IsExpired(entry, _timeProvider.GetUtcNow()))
         {
@@ -77,7 +78,7 @@ public sealed class ByteBudgetedCache<TKey, TValue>
             return true;
         }
 
-        value = default!;
+        value = default;
         return false;
     }
 

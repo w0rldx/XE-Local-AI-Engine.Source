@@ -37,9 +37,9 @@ public sealed class BenchmarkLaunchBackendTests
         var later = Facts("NVIDIA GeForce RTX 5090", capturedAtUtc: 1_700_000_999_999);
         var otherBox = Facts("NVIDIA GeForce RTX 4090", capturedAtUtc: 1_700_000_000_000);
 
-        var first = AssertEx.NotNull(BenchmarkLaunchEvidence.TryBuild(receipt: null, facts, BenchmarkKvCacheType.SourceAuto));
-        var second = AssertEx.NotNull(BenchmarkLaunchEvidence.TryBuild(receipt: null, later, BenchmarkKvCacheType.SourceAuto));
-        var third = AssertEx.NotNull(BenchmarkLaunchEvidence.TryBuild(receipt: null, otherBox, BenchmarkKvCacheType.SourceAuto));
+        var first = AssertEx.NotNull(BenchmarkLaunchEvidence.BuildOrNull(receipt: null, facts, BenchmarkKvCacheType.SourceAuto));
+        var second = AssertEx.NotNull(BenchmarkLaunchEvidence.BuildOrNull(receipt: null, later, BenchmarkKvCacheType.SourceAuto));
+        var third = AssertEx.NotNull(BenchmarkLaunchEvidence.BuildOrNull(receipt: null, otherBox, BenchmarkKvCacheType.SourceAuto));
 
         AssertEx.Equal(first.EnvironmentFactsHash, second.EnvironmentFactsHash,
             "Two captures of an unchanged node must hash equally, or every compare reports a difference.");

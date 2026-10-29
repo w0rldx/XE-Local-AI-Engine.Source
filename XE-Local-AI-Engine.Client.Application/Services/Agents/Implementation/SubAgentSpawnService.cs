@@ -152,11 +152,14 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
         // Per-root fan-out cap: the lease releases its slot on dispose; the using-declaration releases it on every
         // return path below. A missing ambient context means "no spawn context was seeded" → reject conservatively.
-        using var fanOutLease = context?.TryEnterFanOut();
-        if (context is null || fanOutLease is null)
+#pragma warning disable CA2000 // A refused fan-out hands back no lease; a granted one is disposed by the using declaration below.
+        if (context is null || !context.TryEnterFanOut(out var lease))
+#pragma warning restore CA2000
         {
             return ReasonFanOutExceeded;
         }
+
+        using var fanOutLease = lease;
 
         // A sub-agent always runs a chat/tool loop, so it competes for a Chat-role process.
         const ModelRole role = ModelRole.Chat;
@@ -252,13 +255,16 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
                 "Cannot run: the accepted agent execution configuration has changed.");
         }
 
-        using var fanOutLease = context?.TryEnterFanOut();
-        if (context is null || fanOutLease is null)
+#pragma warning disable CA2000 // A refused fan-out hands back no lease; a granted one is disposed by the using declaration below.
+        if (context is null || !context.TryEnterFanOut(out var lease))
+#pragma warning restore CA2000
         {
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonFanOutExceeded);
         }
 
-        var binding = await TryCreateResolvedMcpBindingAsync(mcpBinding, request, ct);
+        using var fanOutLease = lease;
+
+        var binding = await CreateResolvedMcpBindingOrNullAsync(mcpBinding, request, ct);
         if (binding is null)
         {
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.AgentConfigChanged,
@@ -342,7 +348,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         return outcome ?? SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonQueueBusy);
     }
 
-    private async Task<ResolvedBinding?> TryCreateResolvedMcpBindingAsync(McpExecutionBinding binding,
+    private async Task<ResolvedBinding?> CreateResolvedMcpBindingOrNullAsync(McpExecutionBinding binding,
         McpExecutionBindingRequest request,
         CancellationToken cancellationToken)
     {

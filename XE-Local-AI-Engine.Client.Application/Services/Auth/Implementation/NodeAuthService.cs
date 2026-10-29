@@ -370,7 +370,7 @@ public sealed class NodeAuthService : INodeAuthService
             : [];
     }
 
-    public async Task<bool> RevokeSessionAsync(ClaimsPrincipal principal, string sessionId, CancellationToken cancellationToken)
+    public async Task RevokeSessionAsync(ClaimsPrincipal principal, string sessionId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(principal);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -378,11 +378,10 @@ public sealed class NodeAuthService : INodeAuthService
         if (_userManager.GetUserId(principal) is not { } userId
             || !await _identity.RevokeSessionAsync(userId, sessionId, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken))
         {
-            return false;
+            throw new NodeAuthSessionNotFoundException();
         }
 
         _liveConnections.AbortSession(userId, sessionId);
-        return true;
     }
 
     public async Task RevokeAllSessionsAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
@@ -814,9 +813,8 @@ public sealed class NodeAuthService : INodeAuthService
             await _identity.RotateAsync(rotated, stored, now, cancellationToken);
         }
 
-        return new NodeAuthTokenResult
+        return new NodeAuthTokenResult.Issued
         {
-            Succeeded = true,
             AccessToken = accessToken,
             AccessTokenExpiresAtUtc = accessTokenExpiresAtUtc,
             RefreshToken = refreshToken,
@@ -857,15 +855,10 @@ public sealed class NodeAuthService : INodeAuthService
         return (int)Math.Clamp(remainingSeconds, min: 1, max: int.MaxValue);
     }
 
-    private static NodeAuthTokenResult FailedTokenResult(int? lockedOutRetryAfterSeconds = null)
+    private static NodeAuthTokenResult.Failed FailedTokenResult(int? lockedOutRetryAfterSeconds = null)
     {
-        return new NodeAuthTokenResult
+        return new NodeAuthTokenResult.Failed
         {
-            Succeeded = false,
-            AccessToken = null,
-            AccessTokenExpiresAtUtc = null,
-            RefreshToken = null,
-            RefreshTokenExpiresAtUtc = null,
             LockedOutRetryAfterSeconds = lockedOutRetryAfterSeconds
         };
     }

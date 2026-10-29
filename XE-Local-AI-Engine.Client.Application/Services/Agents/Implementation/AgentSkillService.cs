@@ -45,23 +45,26 @@ internal sealed class AgentSkillService : IAgentSkillService
         return await _store.CreateAsync(input, cancellationToken);
     }
 
-    public async Task<AgentSkillRecord?> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default)
+    public async Task<AgentSkillRecord> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         await ValidateAsync(input, id, cancellationToken);
 
-        return await _store.UpdateAsync(id, input, cancellationToken);
+        return await _store.UpdateAsync(id, input, cancellationToken) ?? throw new AgentSkillNotFoundException(id);
     }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _store.DeleteAsync(id, cancellationToken);
+        if (!await _store.DeleteAsync(id, cancellationToken))
+        {
+            throw new AgentSkillNotFoundException(id);
+        }
     }
 
-    public Task<AgentSkillRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<AgentSkillRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _store.GetByIdAsync(id, cancellationToken);
+        return await _store.GetByIdAsync(id, cancellationToken) ?? throw new AgentSkillNotFoundException(id);
     }
 
     public Task<IReadOnlyList<AgentSkillRecord>> ListAsync(CancellationToken cancellationToken = default)

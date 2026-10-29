@@ -18,7 +18,7 @@ public sealed class SettingValidationFailureTests
         using var provider = OutOfRangeServices().BuildServiceProvider();
         var thrown = AssertEx.Throws<OptionsValidationException>(() => _ = provider.GetRequiredService<IOptions<DevelopmentWorkspaceRetentionOptions>>().Value);
 
-        AssertEx.True(SettingValidationFailure.TryFind(thrown, out var failures), "A single validation failure is recognized.");
+        AssertEx.Succeeded(SettingValidationFailure.TryFind(thrown, out var failures), "A single validation failure is recognized.");
         AssertEx.Equal(typeof(DevelopmentWorkspaceRetentionOptions), failures.Single().OptionsType);
     }
 
@@ -33,7 +33,7 @@ public sealed class SettingValidationFailureTests
         using var provider = services.BuildServiceProvider();
         var thrown = AssertEx.Throws<AggregateException>(() => provider.GetRequiredService<IStartupValidator>().Validate());
 
-        AssertEx.True(SettingValidationFailure.TryFind(thrown, out var failures), "An aggregate made only of validation failures is recognized.");
+        AssertEx.Succeeded(SettingValidationFailure.TryFind(thrown, out var failures), "An aggregate made only of validation failures is recognized.");
         AssertEx.Equal(expected: 2, failures.Count);
         var names = SettingValidationFailure.OptionsTypeNames(failures);
         AssertEx.Contains(names, nameof(DevelopmentWorkspaceRetentionOptions));

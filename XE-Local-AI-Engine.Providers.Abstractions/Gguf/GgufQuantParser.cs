@@ -42,7 +42,7 @@ public static partial class GgufQuantParser
     ///     disappears from search behind "No GGUF repositories matched that search" — as tngtech/Qwen3.6-27B-NVFP4-GGUF does entirely,
     ///     and as s-batman/Ornith-1.0-9B-NVFP4-MTP-GGUF's NVFP4 file does from the picker.
     /// </remarks>
-    public static string? TryParse(string fileName)
+    public static string? ParseOrNull(string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName))
         {

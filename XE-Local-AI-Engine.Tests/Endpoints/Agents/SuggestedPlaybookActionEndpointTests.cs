@@ -220,6 +220,82 @@ public sealed class SuggestedPlaybookActionEndpointTests
         AssertEx.Equal("Analysis", root.GetProperty("source").GetString());
     }
 
+    [Test]
+    public async Task ReviewRoutes_WhenTheSuggestionIsNoLongerPending_ReturnConflictNotPending()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
+        using (var reject = await SendAsync(factory, client, HttpMethod.Post, RejectRoute(agentId, actionId), new
+               {
+               }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, reject.StatusCode);
+        }
+
+        // The archived action still exists, so each review route answers 409 (wrong state), not 404 (missing).
+        await AssertConflictAsync(await SendAsync(factory, client, HttpMethod.Post, RejectRoute(agentId, actionId), new
+        {
+        }), "NotPending");
+        await AssertConflictAsync(await SendAsync(factory, client, HttpMethod.Post, $"/api/local/v1/agents/{agentId}/playbook/{actionId}/eval", new
+        {
+        }), "NotPending");
+        await AssertConflictAsync(await SendAsync(factory, client, HttpMethod.Put, $"/api/local/v1/agents/{agentId}/playbook/{actionId}/suggested", new
+        {
+            behavior = "Edited behavior.",
+            priority = 1
+        }), "NotPending");
+
+        using var promote = await SendAsync(factory, client, HttpMethod.Post, PromoteRoute(agentId, actionId), new
+        {
+        });
+
+        AssertEx.Equal(HttpStatusCode.Conflict, promote.StatusCode);
+        using var promoteDocument = JsonDocument.Parse(await promote.Content.ReadAsStringAsync());
+        AssertEx.Equal("NotPending", promoteDocument.RootElement.GetProperty("status").GetString());
+    }
+
+    [Test]
+    public async Task ManualUpdate_OfAnAnalysisSuggestion_ReturnsConflictNotManual()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var agentId = await SeedAgentAsync(factory, "Owner");
+        var actionId = await SeedSuggestionAsync(factory, agentId);
+
+        var response = await SendAsync(factory, client, HttpMethod.Put, $"/api/local/v1/agents/{agentId}/playbook/{actionId}", new
+        {
+            state = "Disabled",
+            behavior = "Rewritten by hand.",
+            priority = 1
+        });
+
+        await AssertConflictAsync(response, "NotManual");
+    }
+
+    private static async Task AssertConflictAsync(HttpResponseMessage response, string outcome)
+    {
+        using (response)
+        {
+            AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode, response.RequestMessage?.RequestUri?.ToString());
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            AssertEx.Equal(outcome, document.RootElement.GetProperty("outcome").GetString());
+        }
+    }
+
+    private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, HttpClient client, HttpMethod method, string route, object body)
+    {
+        using var request = new HttpRequestMessage(method, route)
+        {
+            Content = JsonContent.Create(body)
+        };
+        factory.AddNodeBearerToken(request);
+        return await client.SendAsync(request);
+    }
+
     private static async Task<Guid> SeedAgentAsync(TestServerWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();

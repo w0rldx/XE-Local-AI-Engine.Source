@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -64,16 +65,17 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
     }
 
     /// <inheritdoc />
-    public ConvertScriptPaths? TryResolve()
+    public bool TryResolve([NotNullWhen(true)] out ConvertScriptPaths? paths)
     {
-        return TryResolve(LlamaCppReleasePins.PinnedSourceCommitSha);
+        paths = ResolveOrNull(LlamaCppReleasePins.PinnedSourceCommitSha);
+        return paths is not null;
     }
 
     /// <inheritdoc />
     public async Task<ConvertScriptPaths> EnsureAsync(CancellationToken ct)
     {
         var commit = LlamaCppReleasePins.PinnedSourceCommitSha;
-        if (TryResolve(commit) is { } existing)
+        if (ResolveOrNull(commit) is { } existing)
         {
             return existing;
         }
@@ -82,7 +84,7 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         try
         {
             // Re-check under the gate: a concurrent caller may have adopted while this one waited.
-            if (TryResolve(commit) is { } adopted)
+            if (ResolveOrNull(commit) is { } adopted)
             {
                 return adopted;
             }
@@ -95,7 +97,7 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         }
     }
 
-    private ConvertScriptPaths? TryResolve(string commit)
+    private ConvertScriptPaths? ResolveOrNull(string commit)
     {
         var final = Path.Combine(ScriptsRoot, commit);
         var paths = new ConvertScriptPaths
@@ -150,7 +152,7 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
             Directory.Move(stagingDirectory, finalDirectory);
             _logger.LogInformation("Provisioned the llama.cpp conversion scripts at commit {Commit}.", commit);
 
-            return TryResolve(commit)
+            return ResolveOrNull(commit)
                    ?? throw new LlamaRuntimeException("The provisioned llama.cpp conversion scripts are incomplete.");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)

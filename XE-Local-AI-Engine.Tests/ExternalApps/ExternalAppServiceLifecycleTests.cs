@@ -262,7 +262,7 @@ public sealed class ExternalAppServiceLifecycleTests
         // The instance key was forgotten. The one entry left is the application key install takes transiently, which
         // is bounded by the catalog rather than by how many instances have ever existed.
         AssertEx.Equal(expected: 1, harness.Gate.TrackedCount);
-        using var reentered = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(installed.Id)),
+        using var reentered = AssertEx.NotNull(await harness.Gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(installed.Id)),
             "The uninstalled instance's gate must be free.");
         AssertEx.Equal(expected: 2,
             harness.Gate.TrackedCount,

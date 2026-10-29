@@ -101,7 +101,7 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
         return Task.FromResult<IReadOnlyList<ExternalProviderModelRegistration>>([.. _registrations]);
     }
 
-    public Task<ExternalProviderModelRegistration?> TryResolveAsync(string modelId, CancellationToken ct)
+    public Task<ExternalProviderModelRegistration?> FindRegistrationAsync(string modelId, CancellationToken ct)
     {
         ResolveCallCount++;
         var canonical = ExternalModelId.Canonicalize(modelId);
@@ -109,16 +109,16 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
             string.Equals(registration.ModelId, canonical, StringComparison.Ordinal)));
     }
 
-    public async Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct)
+    public async Task<ExternalProviderBinding?> FindBindingAsync(string modelId, CancellationToken ct)
     {
-        return (await TryResolveTransportBindingAsync(modelId, ct))?.Binding;
+        return (await FindTransportBindingAsync(modelId, ct))?.Binding;
     }
 
-    public async Task<ExternalProviderTransportBinding?> TryResolveTransportBindingAsync(string modelId, CancellationToken ct)
+    public async Task<ExternalProviderTransportBinding?> FindTransportBindingAsync(string modelId, CancellationToken ct)
     {
         // Resolved through the same path a caller takes, so the endpoint and the key are always from one generation —
         // the property the production registry guarantees and these tests must not accidentally relax.
-        if (await TryResolveAsync(modelId, ct) is not { } registration)
+        if (await FindRegistrationAsync(modelId, ct) is not { } registration)
         {
             return null;
         }

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -198,7 +199,7 @@ public sealed record LlamaServerLaunchProjection
     ///     The effective projection, or <see langword="null" /> when the vector could not be parsed, a malformed
     ///     numeric value included, so a caller falls back rather than record a wrong fact.
     /// </returns>
-    public static LlamaServerLaunchProjection? TryFromArguments(IReadOnlyList<string> arguments)
+    public static LlamaServerLaunchProjection? FromArgumentsOrNull(IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -397,7 +398,7 @@ public sealed record LlamaServerLaunchProjection
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    /// <summary>The value-taking flags <see cref="TryFromArguments" /> reads; every other argument is ignored.</summary>
+    /// <summary>The value-taking flags <see cref="FromArgumentsOrNull" /> reads; every other argument is ignored.</summary>
     private static bool IsAllowListedValueOption(string argument) =>
         argument switch
         {
@@ -409,7 +410,7 @@ public sealed record LlamaServerLaunchProjection
             _ => false
         };
 
-    private static bool TryParseInt(string value, out int? parsed)
+    private static bool TryParseInt(string value, [NotNullWhen(true)] out int? parsed)
     {
         if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
         {

@@ -71,7 +71,7 @@ internal sealed partial class ExternalAppService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
 
-        using var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
+        using var lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
                           ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
         var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
@@ -138,7 +138,7 @@ internal sealed partial class ExternalAppService
         IDisposable? lease = null;
         try
         {
-            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
+            lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
                     ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
             var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
@@ -508,7 +508,7 @@ internal sealed partial class ExternalAppService
         var manifest = DeserializeManifest(row.ManifestSnapshotJson);
         var variables = ParseVariables(row.VariablesJson);
         var identity = ExternalAppContainerIdentity.Resolve(daemonIsRootless, _options.ContainerIdentity);
-        var plan = TryPlanForVerification(row, manifest, variables, identity);
+        var plan = PlanForVerificationOrNull(row, manifest, variables, identity);
 
         var existing = plan is null
             ? null
@@ -602,7 +602,7 @@ internal sealed partial class ExternalAppService
     ///     Rebuilds the plan around the host ports the instance ALREADY has, so verifying an existing container does
     ///     not fail on a port the allocator would have picked differently this time.
     /// </summary>
-    internal DeploymentPlan? TryPlanForVerification(ExternalAppInstanceSnapshot row,
+    internal DeploymentPlan? PlanForVerificationOrNull(ExternalAppInstanceSnapshot row,
         ApplicationManifest manifest,
         IReadOnlyDictionary<string, string> variables,
         ResolvedContainerIdentity identity)

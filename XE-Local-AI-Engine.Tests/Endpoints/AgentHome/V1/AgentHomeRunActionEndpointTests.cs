@@ -76,7 +76,7 @@ public sealed class AgentHomeRunActionEndpointTests
         using var response = await SendAsync(HttpMethod.Delete, DeleteRoute,
             deletes: new StubDeleteService
             {
-                Outcome = AgentHomeRunDeleteOutcome.NotFound
+                Missing = true
             });
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -232,6 +232,9 @@ public sealed class AgentHomeRunActionEndpointTests
     {
         public AgentHomeRunDeleteOutcome Outcome { get; init; } = AgentHomeRunDeleteOutcome.Deleted;
 
+        /// <summary>The run is not one the node serves: the service throws, as the real one does.</summary>
+        public bool Missing { get; init; }
+
         public int Calls { get; private set; }
 
         public string? LastRunId { get; private set; }
@@ -240,7 +243,7 @@ public sealed class AgentHomeRunActionEndpointTests
         {
             Calls++;
             LastRunId = runId;
-            return Task.FromResult(Outcome);
+            return Missing ? throw new AgentHomeRunNotFoundException(runId) : Task.FromResult(Outcome);
         }
     }
 
@@ -261,16 +264,17 @@ public sealed class AgentHomeRunActionEndpointTests
                 TotalCount = 0
             });
 
-        public Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default)
+        // A null text stands for a run the node does not serve, which the real service throws for.
+        public Task<AgentHomeRunText> ReadLogAsync(string runId, CancellationToken cancellationToken = default)
         {
             LastLogRunId = runId;
-            return Task.FromResult(Log);
+            return Task.FromResult(Log ?? throw new AgentHomeRunNotFoundException(runId));
         }
 
-        public Task<AgentHomeRunText?> ReadPatchAsync(string runId, CancellationToken cancellationToken = default)
+        public Task<AgentHomeRunText> ReadPatchAsync(string runId, CancellationToken cancellationToken = default)
         {
             LastPatchRunId = runId;
-            return Task.FromResult(Patch);
+            return Task.FromResult(Patch ?? throw new AgentHomeRunNotFoundException(runId));
         }
     }
 }

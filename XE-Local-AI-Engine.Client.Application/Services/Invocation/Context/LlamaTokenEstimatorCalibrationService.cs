@@ -307,7 +307,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
             return default;
         }
 
-        var tokenCount = await TryReadCountAsync(ct => _nativeClient.TokenizeAsync(llamaServerBaseAddress, CalibrationText, ct), cancellationToken);
+        var tokenCount = await ReadCountOrNullAsync(ct => _nativeClient.TokenizeAsync(llamaServerBaseAddress, CalibrationText, ct), cancellationToken);
         if (tokenCount is not { } sampleTokens)
         {
             return default;
@@ -317,9 +317,9 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
 
         // Both counts or neither: a preamble derived from one fresh and one missing count would be noise. A failure keeps the prior preamble.
         int? preamble = null;
-        if (await TryReadCountAsync(ct => _nativeClient.CountPromptTokensAsync(llamaServerBaseAddress, ProbeSystemPrompt, ProbeUserMessage, [], ct),
+        if (await ReadCountOrNullAsync(ct => _nativeClient.CountPromptTokensAsync(llamaServerBaseAddress, ProbeSystemPrompt, ProbeUserMessage, [], ct),
                 cancellationToken) is { } withoutTools
-            && await TryReadCountAsync(ct => _nativeClient.CountPromptTokensAsync(llamaServerBaseAddress, ProbeSystemPrompt, ProbeUserMessage, ProbeTools, ct),
+            && await ReadCountOrNullAsync(ct => _nativeClient.CountPromptTokensAsync(llamaServerBaseAddress, ProbeSystemPrompt, ProbeUserMessage, ProbeTools, ct),
                 cancellationToken) is { } withTools)
         {
             preamble = Math.Clamp(CalculateToolTemplatePreamble(withTools, withoutTools, divisor), 0, TokenEstimatorCalibrationStore.MaximumToolTemplatePreambleTokens);
@@ -330,7 +330,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     }
 
     /// <summary>Sends one counting request under the endpoint, redirect and status guards and reads its token count, or <see langword="null" /> on any failure.</summary>
-    private async Task<int?> TryReadCountAsync(Func<CancellationToken, Task<LlamaServerTokenizeResponse>> send, CancellationToken cancellationToken)
+    private async Task<int?> ReadCountOrNullAsync(Func<CancellationToken, Task<LlamaServerTokenizeResponse>> send, CancellationToken cancellationToken)
     {
         try
         {

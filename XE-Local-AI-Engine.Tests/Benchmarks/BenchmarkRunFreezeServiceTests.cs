@@ -944,7 +944,7 @@ public sealed class BenchmarkRunFreezeServiceTests
             // ReasoningBudgetEnforceable is left at its own default (true) on purpose: it is the inert answer for a
             // model nothing was detected about, and freezing it ALONE is what claimed enforceability for a model that
             // does not reason at all.
-            capabilities.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            capabilities.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(new GgufModelCapabilities(supportsThinking, true, false));
 
             var models = new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)

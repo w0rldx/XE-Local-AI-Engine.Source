@@ -34,12 +34,6 @@ public sealed class GetTranscriptionSessionEndpoint : Endpoint<TranscriptionSess
         ArgumentNullException.ThrowIfNull(req);
 
         var session = await _sessions.GetSessionAsync(req.SessionId, ct);
-        if (session is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(session.ToResponse(), ct);
     }
 }

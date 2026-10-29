@@ -583,8 +583,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The invalid record must be replaced by the generated vector.");
-        AssertEx.Equal(ResolvedNativeIdentity, repaired.VectorIdentity);
-        AssertEx.Equal(Dimensions, repaired.Vector.Length);
+        AssertEx.Equal(ResolvedNativeIdentity, repaired?.VectorIdentity);
+        AssertEx.Equal(Dimensions, repaired?.Vector.Length);
     }
 
     [Test]
@@ -629,8 +629,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         AssertEx.Equal(1, provider.GenerateCallCount);
         AssertEx.True(cache.TryGet(cacheFamily, query, out var repaired), "The wrong-identity record must be replaced.");
-        AssertEx.Equal(ResolvedNativeIdentity, repaired.VectorIdentity);
-        AssertEx.Equal(Dimensions, repaired.Vector.Length);
+        AssertEx.Equal(ResolvedNativeIdentity, repaired?.VectorIdentity);
+        AssertEx.Equal(Dimensions, repaired?.Vector.Length);
     }
 
     [Test]

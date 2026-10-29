@@ -289,7 +289,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
                 : [];
             foreach (var ignored in unjudged.Except(applying))
             {
-                written += await store.IgnoreNodeRunSteeringAsync(run.Id, nodeRun.Id, ignored.OperationId, cancellationToken) is null ? 0 : 1;
+                written += await store.IgnoreNodeRunSteeringAsync(run.Id, nodeRun.Id, ignored.OperationId, cancellationToken) is GraphWorkflowConditionalWriteResult.Written ? 1 : 0;
             }
 
             if (applying.Count == 0)

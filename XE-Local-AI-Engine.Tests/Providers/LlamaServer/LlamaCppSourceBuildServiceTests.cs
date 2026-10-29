@@ -579,8 +579,8 @@ public sealed class LlamaCppSourceBuildServiceTests
         var adoptedBin = Path.Combine(temp.Path, "llama.cpp", "source-build", "active", "build", "bin");
         AssertEx.True(File.Exists(Path.Combine(adoptedBin, "llama-quantize")),
             "The built quantizer must be adopted alongside the server.");
-        AssertEx.Equal(Path.Combine(adoptedBin, "llama-quantize"), LlamaCppToolBinaries.TryResolveQuantizer(adoptedBin));
-        AssertEx.Equal(Path.Combine(adoptedBin, "llama-perplexity"), LlamaCppToolBinaries.TryResolvePerplexity(adoptedBin));
+        AssertEx.Equal(Path.Combine(adoptedBin, "llama-quantize"), LlamaCppToolBinaries.FindQuantizer(adoptedBin));
+        AssertEx.Equal(Path.Combine(adoptedBin, "llama-perplexity"), LlamaCppToolBinaries.FindPerplexity(adoptedBin));
     }
 
     [Test]
@@ -621,8 +621,8 @@ public sealed class LlamaCppSourceBuildServiceTests
 
         AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
         var adoptedBin = Path.Combine(temp.Path, "llama.cpp", "source-build", "active", "build", "bin");
-        AssertEx.Null(LlamaCppToolBinaries.TryResolveQuantizer(adoptedBin));
-        AssertEx.Null(LlamaCppToolBinaries.TryResolvePerplexity(adoptedBin));
+        AssertEx.Null(LlamaCppToolBinaries.FindQuantizer(adoptedBin));
+        AssertEx.Null(LlamaCppToolBinaries.FindPerplexity(adoptedBin));
     }
 
     [Test]
@@ -862,7 +862,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
+        public Task<LlamaBinary?> FindInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
             Task.FromResult<LlamaBinary?>(null);
 
         public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct) =>
@@ -893,7 +893,7 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class LeaseOnlySupervisor : ILlamaServerProcessSupervisor
     {
-        public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct) =>
+        public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct) =>
             Task.FromResult<ILlamaServerRuntimeMutationLease?>(new Lease());
 
         public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>
@@ -931,7 +931,7 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class BusySupervisor : ILlamaServerProcessSupervisor
     {
-        public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct) =>
+        public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct) =>
             Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
 
         public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>

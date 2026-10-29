@@ -9,25 +9,25 @@ public sealed class OrchestrationTopologyTests
     [Test]
     public void TryParse_WhenNull_ReturnsNull()
     {
-        AssertEx.True(OrchestrationTopologyJson.TryParse(null) is null, "A null payload must parse to null (no topology).");
+        AssertEx.True(OrchestrationTopologyJson.ParseOrNull(null) is null, "A null payload must parse to null (no topology).");
     }
 
     [Test]
     public void TryParse_WhenBlank_ReturnsNull()
     {
-        AssertEx.True(OrchestrationTopologyJson.TryParse("   ") is null, "A blank payload must parse to null (no topology).");
+        AssertEx.True(OrchestrationTopologyJson.ParseOrNull("   ") is null, "A blank payload must parse to null (no topology).");
     }
 
     [Test]
     public void TryParse_WhenMalformedJson_ReturnsNull()
     {
-        AssertEx.True(OrchestrationTopologyJson.TryParse("{ not json") is null, "Malformed JSON must parse to null rather than throw.");
+        AssertEx.True(OrchestrationTopologyJson.ParseOrNull("{ not json") is null, "Malformed JSON must parse to null rather than throw.");
     }
 
     [Test]
     public void TryParse_WhenUnknownVersion_ReturnsNull()
     {
-        var topology = OrchestrationTopologyJson.TryParse("{\"version\":2,\"triageAgentDefinitionId\":\"" + Guid.NewGuid().ToString("D") + "\"}");
+        var topology = OrchestrationTopologyJson.ParseOrNull("{\"version\":2,\"triageAgentDefinitionId\":\"" + Guid.NewGuid().ToString("D") + "\"}");
 
         AssertEx.True(topology is null, "A version this build does not understand must parse to null (forward-compat degrade).");
     }
@@ -53,7 +53,7 @@ public sealed class OrchestrationTopologyTests
             ParticipantAgentDefinitionIds = participants
         };
 
-        AssertEx.True(OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology)) is null,
+        AssertEx.True(OrchestrationTopologyJson.ParseOrNull(OrchestrationTopologyJson.Serialize(topology)) is null,
             "A participant list over the cap must parse to null (fail-closed).");
     }
 
@@ -72,7 +72,7 @@ public sealed class OrchestrationTopologyTests
             MaxTurnsPerAgent = OrchestrationTopologyJson.MaxTurnsPerAgentCeiling + 1
         };
 
-        AssertEx.True(OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology)) is null,
+        AssertEx.True(OrchestrationTopologyJson.ParseOrNull(OrchestrationTopologyJson.Serialize(topology)) is null,
             "A per-agent turn cap over the ceiling must parse to null (fail-closed).");
     }
 
@@ -89,7 +89,7 @@ public sealed class OrchestrationTopologyTests
             MaxTurnsPerAgent = OrchestrationTopologyJson.MaxTurnsPerAgentCeiling
         };
 
-        var parsed = OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology));
+        var parsed = OrchestrationTopologyJson.ParseOrNull(OrchestrationTopologyJson.Serialize(topology));
 
         AssertEx.NotNull(parsed);
         AssertEx.Equal(OrchestrationTopologyJson.MaxTurnsPerAgentCeiling, parsed!.MaxTurnsPerAgent);
@@ -118,7 +118,7 @@ public sealed class OrchestrationTopologyTests
             Handoffs = handoffs
         };
 
-        AssertEx.True(OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology)) is null,
+        AssertEx.True(OrchestrationTopologyJson.ParseOrNull(OrchestrationTopologyJson.Serialize(topology)) is null,
             "A handoff list over the cap must parse to null (fail-closed).");
     }
 
@@ -143,7 +143,7 @@ public sealed class OrchestrationTopologyTests
             ParticipantAgentDefinitionIds = participants
         };
 
-        var parsed = OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology));
+        var parsed = OrchestrationTopologyJson.ParseOrNull(OrchestrationTopologyJson.Serialize(topology));
 
         AssertEx.NotNull(parsed);
         AssertEx.Equal(OrchestrationTopologyJson.MaxParticipants, parsed!.ParticipantAgentDefinitionIds.Count);
@@ -162,7 +162,7 @@ public sealed class OrchestrationTopologyTests
                    "\"maxTurnsPerAgent\":5," +
                    "\"returnToPrevious\":true}";
 
-        var topology = OrchestrationTopologyJson.TryParse(json);
+        var topology = OrchestrationTopologyJson.ParseOrNull(json);
 
         AssertEx.NotNull(topology);
         AssertEx.Equal(expected: 1, topology!.Version);
@@ -200,7 +200,7 @@ public sealed class OrchestrationTopologyTests
             ReturnToPrevious = false
         };
 
-        var roundTripped = OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology));
+        var roundTripped = OrchestrationTopologyJson.ParseOrNull(OrchestrationTopologyJson.Serialize(topology));
 
         AssertEx.NotNull(roundTripped);
         AssertEx.Equal(topology.TriageAgentDefinitionId, roundTripped!.TriageAgentDefinitionId);
@@ -216,7 +216,7 @@ public sealed class OrchestrationTopologyTests
         var triage = Guid.NewGuid();
         var json = "{\"version\":1,\"triageAgentDefinitionId\":\"" + triage.ToString("D") + "\",\"participantAgentDefinitionIds\":[\"" + triage.ToString("D") + "\"]}";
 
-        var topology = OrchestrationTopologyJson.TryParse(json);
+        var topology = OrchestrationTopologyJson.ParseOrNull(json);
 
         AssertEx.NotNull(topology);
         AssertEx.Empty(topology!.Handoffs);

@@ -15,20 +15,17 @@ public interface IGoldenHarvestService
 {
     /// <summary>
     ///     Harvests golden candidates for <paramref name="agentId" />, returning a per-run <see cref="GoldenHarvestOutcome" />.
-    ///     When the agent does not exist the outcome reports <see cref="GoldenHarvestOutcome.AgentExists" /> = <c>false</c>
-    ///     with zero counts (the endpoint maps it to 404).
     /// </summary>
+    /// <exception cref="Agents.AgentDefinitionNotFoundException">No agent definition has <paramref name="agentId" />.</exception>
     Task<GoldenHarvestOutcome> HarvestAsync(Guid agentId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-///     Per-run summary of a golden harvest: whether the agent existed, how many thumbs-up sources were scanned, and
+///     Per-run summary of a golden harvest: how many thumbs-up sources were scanned, and
 ///     how the candidates split across created, already-harvested and skipped. Counts only, never turn text.
 /// </summary>
 public sealed class GoldenHarvestOutcome
 {
-    public required bool AgentExists { get; init; }
-
     public required int ThumbsUpScanned { get; init; }
 
     public required int CreatedCount { get; init; }

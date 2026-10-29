@@ -30,11 +30,6 @@ public sealed class UpdateSlashCommandEndpoint : Endpoint<UpdateSlashCommandRequ
         try
         {
             var item = await _service.UpdateAsync(req.CommandId, req.ToInput(), ct);
-            if (item is null)
-            {
-                await Send.NotFoundAsync(ct);
-                return;
-            }
 
             await Send.OkAsync(item.ToResponse(), ct);
         }

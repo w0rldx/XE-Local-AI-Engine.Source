@@ -101,7 +101,7 @@ public sealed class BinaryManagerVariantSelectionTests
     {
         // Unlike Resolve(), the exact resolve never substitutes the CPU floor — no Linux arm64 CUDA prebuilt is pinned,
         // so it returns null and the binary manager fails loud rather than serving a CPU archive stamped as CUDA.
-        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda);
+        var pin = LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.Arm64, GpuVariant.Cuda);
 
         AssertEx.Null(pin);
     }
@@ -109,7 +109,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public void ResolveExact_LinuxX64Cuda_ReturnsGenuineCudaPin()
     {
-        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
+        var pin = LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
 
         AssertEx.NotNull(pin);
         AssertEx.Contains(pin!.AssetName, "ubuntu-cuda");
@@ -118,7 +118,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public void ResolveExact_WindowsCuda_ReturnsGenuineCudaPin()
     {
-        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda);
+        var pin = LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda);
 
         AssertEx.NotNull(pin);
         AssertEx.Contains(pin!.AssetName, "win-cuda");
@@ -128,7 +128,7 @@ public sealed class BinaryManagerVariantSelectionTests
     public void ResolveExact_LinuxCpu_ReturnsCpuPin()
     {
         // The CPU variant's exact pin IS the CPU floor, so a CPU request still resolves.
-        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu);
+        var pin = LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu);
 
         AssertEx.NotNull(pin);
         AssertEx.Contains(pin!.AssetName, "ubuntu");

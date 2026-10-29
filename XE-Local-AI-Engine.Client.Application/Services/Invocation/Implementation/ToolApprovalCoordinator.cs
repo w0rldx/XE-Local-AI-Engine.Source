@@ -178,7 +178,7 @@ public sealed class ToolApprovalCoordinator
             throw new ApprovalUnavailableException(reason);
         }
 
-        var sessionApprovalKey = TryResolveSessionApprovalKey(package, approvalRequest, approvalToolName);
+        var sessionApprovalKey = ResolveSessionApprovalKeyOrNull(package, approvalRequest, approvalToolName);
         if (sessionApprovalKey is { } memoKey && _sessionApprovals.ContainsKey(memoKey))
         {
             // The operator already approved this exact tool, on this skill at this content version, for this resource, in this conversation. The prompt is
@@ -697,7 +697,7 @@ public sealed class ToolApprovalCoordinator
     ///     IMPORTED skill is never eligible; and <c>read_skill_resource</c> must name its resource. Those names are only
     ///     reachable by reading the model's own call arguments. Rationale: docs/wiki/04-agent-mode.md §4.6.
     /// </remarks>
-    private ApprovalMemoKey? TryResolveSessionApprovalKey(RuntimePackage package,
+    private ApprovalMemoKey? ResolveSessionApprovalKeyOrNull(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
         string? toolName)
     {

@@ -56,11 +56,11 @@ public sealed class NodeRefreshEndpoint : EndpointWithoutRequest<NodeAccessToken
         {
             NodeAuthCookie.ClearUnlockTicket(HttpContext.Response);
             var consumed = HttpContext.RequestServices.GetService<VaultUnlockTicket>()?.TryConsume(unlockTicket, _timeProvider.GetUtcNow()) == true;
-            if (consumed && !result.Succeeded)
+            if (consumed && result is not NodeAuthTokenResult.Issued)
             {
                 result = await _authService.IssueSessionAfterVaultUnlockAsync(clientLabel, ct);
             }
-            else if (!result.Succeeded)
+            else if (result is not NodeAuthTokenResult.Issued)
             {
                 // A second tab replaying the spent ticket: its 401 must not clear the refresh cookie the first one just set.
                 await Send.UnauthorizedAsync(ct);

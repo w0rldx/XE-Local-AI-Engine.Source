@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     A deployment could not be planned because a value it needs is missing or malformed: an unresolved
 ///     <c>${TOKEN}</c>, or a <c>${</c> that does not close on a valid one.
@@ -79,17 +81,9 @@ public sealed class ExternalAppsDisabledException : Exception
 ///     No such instance, or no such application in the catalog — including an installed application that has since
 ///     left the catalog, which is what an update against it is refused with.
 /// </summary>
-public sealed class ExternalAppNotFoundException : Exception
+public sealed class ExternalAppNotFoundException : ResourceNotFoundException
 {
     public ExternalAppNotFoundException(string message) : base(message)
-    {
-    }
-
-    public ExternalAppNotFoundException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
-
-    public ExternalAppNotFoundException()
     {
     }
 }

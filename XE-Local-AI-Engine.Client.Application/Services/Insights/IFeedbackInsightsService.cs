@@ -9,11 +9,9 @@ namespace XE_Local_AI_Engine.Client.Services.Insights;
 /// </remarks>
 public interface IFeedbackInsightsService
 {
-    /// <summary>
-    ///     Returns the shaped feedback insights for the agent, or <c>null</c> when no agent definition has that id
-    ///     (the endpoint maps <c>null</c> to 404).
-    /// </summary>
-    Task<FeedbackInsightsResult?> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
+    /// <summary>Returns the shaped feedback insights for the agent.</summary>
+    /// <exception cref="Agents.AgentDefinitionNotFoundException">No agent definition has <paramref name="agentDefinitionId" />.</exception>
+    Task<FeedbackInsightsResult> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

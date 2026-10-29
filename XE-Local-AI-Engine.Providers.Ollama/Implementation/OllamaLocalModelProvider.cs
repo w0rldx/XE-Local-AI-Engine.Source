@@ -112,7 +112,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
                 // conversion, so the value is byte-identical regardless of model.ModifiedAt.Kind.
                 ModifiedAt = new DateTimeOffset(model.ModifiedAt),
                 RevisionFingerprint = model.Digest,
-                MaxContextTokens = await TryReadContextLengthAsync(modelName, ct).ConfigureAwait(false)
+                MaxContextTokens = await ReadContextLengthOrNullAsync(modelName, ct).ConfigureAwait(false)
             });
         }
 
@@ -245,7 +245,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
 #pragma warning restore CA2000
     }
 
-    private async Task<int?> TryReadContextLengthAsync(string modelName, CancellationToken ct)
+    private async Task<int?> ReadContextLengthOrNullAsync(string modelName, CancellationToken ct)
     {
         try
         {

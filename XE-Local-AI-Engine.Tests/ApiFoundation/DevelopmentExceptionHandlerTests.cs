@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins the Development area's exception mapping in the global chain: a missing entity is the surface's
-///     bodyless 404, and the two Development conflicts write the exact
+///     bodyless 404 (through <see cref="ResourceNotFoundExceptionHandler" />), and the two Development conflicts write the exact
 ///     <c>AddError(message) + Send.ErrorsAsync(statusCode: 409)</c> body.
 /// </summary>
 [Category(TestCategories.Integration)]
@@ -38,43 +38,6 @@ public sealed class DevelopmentExceptionHandlerTests
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.Equal(string.Empty, body, "the 404 the Development endpoints used to send carried no body, and the global handler must not add one.");
-    }
-
-    /// <summary>
-    ///     The not-found handler answers the TYPED family only. A bare <see cref="KeyNotFoundException" /> — a
-    ///     dictionary miss anywhere else in the pipeline — must still reach the 500 that says something is broken,
-    ///     which is the whole reason the store stopped throwing the CLR type.
-    /// </summary>
-    [Test]
-    public async Task NotFoundHandler_ForABareKeyNotFoundException_DeclinesToHandleIt()
-    {
-        var context = new DefaultHttpContext
-        {
-            Response =
-            {
-                Body = new MemoryStream()
-            }
-        };
-        var handler = new DevelopmentNotFoundExceptionHandler();
-
-        AssertEx.False(await handler.TryHandleAsync(context, new KeyNotFoundException("an unrelated dictionary miss"), CancellationToken.None));
-    }
-
-    [Test]
-    public async Task NotFoundHandler_ForTheTypedFamily_Writes404WithNoBody()
-    {
-        var context = new DefaultHttpContext
-        {
-            Response =
-            {
-                Body = new MemoryStream()
-            }
-        };
-        var handler = new DevelopmentNotFoundExceptionHandler();
-
-        AssertEx.True(await handler.TryHandleAsync(context, new DevelopmentNotFoundException("Development project 'x' was not found."), CancellationToken.None));
-        AssertEx.Equal(expected: 404, context.Response.StatusCode);
-        AssertEx.Equal(expected: 0L, context.Response.Body.Length);
     }
 
     /// <summary>

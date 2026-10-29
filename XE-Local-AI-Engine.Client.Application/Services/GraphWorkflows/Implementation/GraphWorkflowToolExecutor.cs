@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -154,7 +155,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
 
         // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path must hand its runner something, and a tool call has
         // no such handle — an in-process await its token ends. An id minted here would appear on the row as a correlation nothing else in the system carries.
-        var flight = await _lane.TryStartAsync(nodeRun.Id,
+        var flight = await _lane.StartOrNullAsync(nodeRun.Id,
             nodeRun.Attempt,
             Guid.Empty,
             async (leaseAcquired, token) =>
@@ -400,10 +401,11 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     }
 
     /// <summary>The resolved arguments' <c>url</c>, the only member <c>web_fetch</c>'s schema has.</summary>
-    private static bool TryReadUrl(string argumentsJson, out string url, out string refusal)
+    private static bool TryReadUrl(string argumentsJson, [NotNullWhen(true)] out string? url, [NotNullWhen(false)] out string? refusal)
     {
-        url = string.Empty;
-        refusal = $"'{WebFetchToolDefinition.ToolName}' takes exactly one string argument, 'url'.";
+        url = null;
+        var shapeRefusal = $"'{WebFetchToolDefinition.ToolName}' takes exactly one string argument, 'url'.";
+        refusal = shapeRefusal;
         try
         {
             using var document = JsonDocument.Parse(argumentsJson);
@@ -416,10 +418,12 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             }
 
             url = value.GetString()!;
+            refusal = null;
             return true;
         }
         catch (JsonException)
         {
+            refusal = shapeRefusal;
             return false;
         }
     }
@@ -440,9 +444,12 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     ///     to an edge condition's, and the element is inserted VERBATIM — a bound number stays a number for the tool's
     ///     schema. A path the document does not carry refuses the call, naming the argument and the path, never the document.
     /// </remarks>
-    private static bool TryResolveArguments(GraphWorkflowToolConfig config, string inputJson, out string argumentsJson, out string refusal)
+    private static bool TryResolveArguments(GraphWorkflowToolConfig config,
+        string inputJson,
+        [NotNullWhen(true)] out string? argumentsJson,
+        [NotNullWhen(false)] out string? refusal)
     {
-        refusal = string.Empty;
+        refusal = null;
         var arguments = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         if (config.Arguments is { ValueKind: JsonValueKind.Object } literals)
         {
@@ -456,7 +463,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         {
             if (GraphWorkflowDocuments.Resolve(inputJson, path) is not { } bound)
             {
-                argumentsJson = string.Empty;
+                argumentsJson = null;
                 refusal = $"The argument '{name}' binds to '{path}', which this node run's input document does not carry.";
                 return false;
             }
@@ -643,11 +650,10 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             written++;
         }
 
-        var document = TryComposeFailed(graph, node, nodeRun.Attempt, output);
-        if (document is null && output is not null)
+        if (!TryComposeFailed(graph, node, nodeRun.Attempt, output, out var document) && output is not null)
         {
             // The text did not fit under the cap: the row fails with the empty envelope instead, and its reason is unchanged.
-            document = TryComposeFailed(graph, node, nodeRun.Attempt, output: null);
+            _ = TryComposeFailed(graph, node, nodeRun.Attempt, output: null, out document);
         }
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Failed, nodeRun.NodeKey);
@@ -666,22 +672,28 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         return written + 1;
     }
 
-    /// <summary>The <c>Failed</c> document over <paramref name="output" /> (the empty object when null), or null when it is over the cap.</summary>
-    private string? TryComposeFailed(GraphWorkflowGraph graph, GraphWorkflowGraphNode node, int attempt, JsonElement? output)
+    /// <summary>The <c>Failed</c> document over <paramref name="output" /> (the empty object when null); false when it is over the cap.</summary>
+    private bool TryComposeFailed(GraphWorkflowGraph graph,
+        GraphWorkflowGraphNode node,
+        int attempt,
+        JsonElement? output,
+        [NotNullWhen(true)] out string? document)
     {
         try
         {
-            return GraphWorkflowDocuments.Compose(graph,
+            document = GraphWorkflowDocuments.Compose(graph,
                 node,
                 attempt,
                 GraphWorkflowNodeOutputStatuses.Failed,
                 output ?? GraphWorkflowDocuments.EmptyObject,
                 _options.MaxOutputJsonBytes);
+            return true;
         }
         catch (GraphWorkflowOutputTooLargeException)
         {
             // A cap small enough to refuse even an empty envelope. The row still fails, and says why.
-            return null;
+            document = null;
+            return false;
         }
     }
 }

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>One complete node database snapshot in the backups folder, named by its file name only.</summary>
 public sealed class NodeDbSnapshot
 {
@@ -38,24 +40,21 @@ public sealed class NodeDbAutomaticBackupStatus
     public string? Error { get; init; }
 }
 
-public enum NodeDbSnapshotCreateStatus
+/// <summary>The result of an on-demand snapshot: the new row when it was created, otherwise why not.</summary>
+public abstract record NodeDbSnapshotCreateResult
 {
-    Created,
+    public sealed record Created : NodeDbSnapshotCreateResult
+    {
+        public required NodeDbSnapshot Snapshot { get; init; }
+    }
 
     /// <summary>Another on-demand snapshot is running.</summary>
-    Busy,
+    public sealed record Busy : NodeDbSnapshotCreateResult;
 
     /// <summary>The node database is not a file this node can snapshot.</summary>
-    Unsupported,
-    InsufficientSpace
-}
+    public sealed record Unsupported : NodeDbSnapshotCreateResult;
 
-/// <summary>The result of an on-demand snapshot; <see cref="Snapshot" /> is set only when it was created.</summary>
-public sealed class NodeDbSnapshotCreateResult
-{
-    public required NodeDbSnapshotCreateStatus Status { get; init; }
-
-    public NodeDbSnapshot? Snapshot { get; init; }
+    public sealed record InsufficientSpace : NodeDbSnapshotCreateResult;
 }
 
 /// <summary>What <see cref="NodeDbRestoreStaging.ApplyPendingAsync" /> did; <see cref="Error" /> is set when a staged restore failed.</summary>
@@ -90,7 +89,6 @@ public enum NodeDbRestoreStageStatus
 
     /// <summary>A snapshot is being taken; staging waits for it.</summary>
     Busy,
-    NotFound,
 
     /// <summary>The snapshot cannot be restored; <see cref="NodeDbRestoreStageResult.Reason" /> says why.</summary>
     Refused
@@ -101,4 +99,15 @@ public sealed class NodeDbRestoreStageResult
     public required NodeDbRestoreStageStatus Status { get; init; }
 
     public string? Reason { get; init; }
+}
+
+/// <summary>
+///     Thrown when an operator names a backup that is not a listed snapshot. <c>ResourceNotFoundExceptionHandler</c>
+///     answers it with the bodyless 404.
+/// </summary>
+public sealed class NodeBackupNotFoundException : ResourceNotFoundException
+{
+    public NodeBackupNotFoundException(string name) : base($"Backup '{name}' was not found.")
+    {
+    }
 }

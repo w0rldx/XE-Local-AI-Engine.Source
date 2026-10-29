@@ -25,12 +25,6 @@ public sealed class GetTrainingRunEndpoint : Endpoint<TrainingRunByIdRequest, Tr
     public override async Task HandleAsync(TrainingRunByIdRequest req, CancellationToken ct)
     {
         var run = await _runs.GetAsync(req.RunId, ct);
-        if (run is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(run.ToResponse(), ct);
     }
 }

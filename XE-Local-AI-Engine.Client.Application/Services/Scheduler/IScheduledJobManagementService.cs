@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     It validates the supplied schedule (template exists, schedule-kind supported, cron/interval/one-shot fields
 ///     well-formed, timezone resolves, runtime and display name present, enum values defined), persists the definition
 ///     through <see cref="IScheduledJobDefinitionStore" /> <em>first</em>, then reconciles the Quartz job and trigger
-///     to the stored state. The store owns id/timestamp stamping and the soft-delete and enable lifecycle. Bad input
-///     throws <see cref="ScheduledJobValidationException" />; a missing definition or run returns <c>null</c>.
+///     to the stored state. The store owns stamping and the soft-delete and enable lifecycle. Bad input throws
+///     <see cref="ScheduledJobValidationException" />, a missing row <see cref="ScheduledJobNotFoundException" />.
 /// </remarks>
 public interface IScheduledJobManagementService
 {
@@ -24,8 +24,9 @@ public interface IScheduledJobManagementService
     /// </summary>
     Task<IReadOnlyList<ScheduledJobDefinitionRecord>> ListJobsAsync(bool includeDeleted = false, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the definition for <paramref name="id" />, or <c>null</c> when no definition has that id.</summary>
-    Task<ScheduledJobDefinitionRecord?> GetJobAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Returns the definition for <paramref name="id" />, soft-deleted or not.</summary>
+    /// <exception cref="ScheduledJobNotFoundException">No definition has that id.</exception>
+    Task<ScheduledJobDefinitionRecord> GetJobAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Validates and persists a new definition, then schedules its Quartz job/trigger when the definition is enabled.
@@ -39,29 +40,32 @@ public interface IScheduledJobManagementService
     /// </summary>
     /// <remarks>
     ///     The enabling state is preserved: toggling it is the dedicated <see cref="SetEnabledAsync" /> action. Returns
-    ///     the updated record, or <c>null</c> when no live (non-deleted) definition has that id.
+    ///     the updated record.
     /// </remarks>
-    Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(Guid id, ScheduledJobManagementInput input, CancellationToken cancellationToken = default);
+    /// <exception cref="ScheduledJobNotFoundException">No live (non-deleted) definition has that id.</exception>
+    Task<ScheduledJobDefinitionRecord> UpdateJobAsync(Guid id, ScheduledJobManagementInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Enables or disables the definition with <paramref name="id" />: enabling schedules its job/trigger, disabling
-    ///     unschedules it; the store stamps/clears <c>DisabledAtUtc</c>. Returns the updated record, or <c>null</c> when no
-    ///     live definition has it.
+    ///     unschedules it; the store stamps/clears <c>DisabledAtUtc</c>. Returns the updated record.
     /// </summary>
-    Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
+    /// <exception cref="ScheduledJobNotFoundException">No live (non-deleted) definition has that id.</exception>
+    /// <exception cref="ScheduledJobValidationException">Enabling a definition whose template is no longer registered.</exception>
+    Task<ScheduledJobDefinitionRecord> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Soft-deletes the definition with <paramref name="id" /> (preserving its run history) and unschedules its Quartz
-    ///     job. Idempotent: returns <c>true</c> when the row is (or already was) soft-deleted, <c>false</c> when none matched.
+    ///     job. Idempotent: a row that already was soft-deleted succeeds again.
     /// </summary>
-    Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <exception cref="ScheduledJobNotFoundException">No definition has that id.</exception>
+    Task DeleteJobAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Fires the definition with <paramref name="id" /> immediately through Quartz.
     /// </summary>
     /// <remarks>
-    ///     It throws <see cref="ScheduledJobValidationException" /> when no definition has that id, when it is disabled
-    ///     or deleted, when its template forbids manual triggering, or when its Quartz job is not currently scheduled.
+    ///     It throws <see cref="ScheduledJobNotFoundException" /> when no live definition has that id, and
+    ///     <see cref="ScheduledJobValidationException" /> when it is disabled, when its template forbids manual triggering, or when its Quartz job is not currently scheduled.
     ///     <paramref name="parameterOverrides" /> are per-fire values stamped onto the firing trigger's
     ///     <c>JobDataMap</c>; they never mutate the stored definition, and the dispatcher decides which of them may
     ///     override a stored parameter. A <c>null</c> or empty map fires the stored parameters exactly.
@@ -92,8 +96,9 @@ public interface IScheduledJobManagementService
         Guid? scheduledJobId = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the run for <paramref name="runId" />, or <c>null</c> when no run has that id.</summary>
-    Task<ScheduledJobRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
+    /// <summary>Returns the run for <paramref name="runId" />.</summary>
+    /// <exception cref="ScheduledJobNotFoundException">No run has that id.</exception>
+    Task<ScheduledJobRunRecord> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Requests best-effort cancellation of the run with <paramref name="runId" />: it records
@@ -102,8 +107,9 @@ public interface IScheduledJobManagementService
     /// <remarks>
     ///     The handler's <see cref="CancellationToken" /> is signaled, and the dispatcher records the terminal
     ///     <c>Cancelled</c> state once the handler observes it. The returned <see cref="RunCancellationOutcome" /> says
-    ///     whether the run was missing, already terminal, actively interrupted, or marked but not currently running.
+    ///     whether the run was already terminal, actively interrupted, or marked but not currently running.
     /// </remarks>
+    /// <exception cref="ScheduledJobNotFoundException">No run has that id.</exception>
     Task<RunCancellationOutcome> CancelRunAsync(Guid runId, CancellationToken cancellationToken = default);
 }
 

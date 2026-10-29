@@ -236,7 +236,7 @@ public sealed class SandboxedMcpStdioLiveTests
     private static int LoadedEngineScopeCount()
     {
         var isolation = new HostSandboxContainmentProbe().Containment.FilesystemIsolation;
-        return SandboxScopeUnitKiller.TryCreate(isolation)?.ListEngineOwnedUnits().Count ?? 0;
+        return SandboxScopeUnitKiller.CreateOrNull(isolation)?.ListEngineOwnedUnits().Count ?? 0;
     }
 
     private static INodeDataDirectory NodeDataDirectory()

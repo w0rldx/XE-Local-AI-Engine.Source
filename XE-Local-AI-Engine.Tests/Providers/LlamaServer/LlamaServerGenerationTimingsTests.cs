@@ -36,7 +36,7 @@ public sealed class LlamaServerGenerationTimingsTests
     [Test]
     public void TryRead_FromAnAgentUpdateWrappingALlamaServerChunk_ReadsEveryTiming()
     {
-        var timings = LlamaServerGenerationTimings.TryRead(AgentUpdate(TimingsChunkJson).RawRepresentation);
+        var timings = LlamaServerGenerationTimings.ReadOrNull(AgentUpdate(TimingsChunkJson).RawRepresentation);
 
         var measured = AssertEx.NotNull(timings, "The final chunk of a llama-server stream always carries timings.");
         AssertEx.Equal<int?>(123, measured.PromptTokens);
@@ -51,9 +51,9 @@ public sealed class LlamaServerGenerationTimingsTests
     {
         // The guard that keeps this off every cloud turn's hot path: absent means unmeasured, not an exception and not a
         // zero-valued measurement.
-        AssertEx.Null(LlamaServerGenerationTimings.TryRead(AgentUpdate(PlainChunkJson).RawRepresentation));
-        AssertEx.Null(LlamaServerGenerationTimings.TryRead(rawRepresentation: null));
-        AssertEx.Null(LlamaServerGenerationTimings.TryRead("not an OpenAI chunk"));
+        AssertEx.Null(LlamaServerGenerationTimings.ReadOrNull(AgentUpdate(PlainChunkJson).RawRepresentation));
+        AssertEx.Null(LlamaServerGenerationTimings.ReadOrNull(rawRepresentation: null));
+        AssertEx.Null(LlamaServerGenerationTimings.ReadOrNull("not an OpenAI chunk"));
     }
 
     [Test]
@@ -67,7 +67,7 @@ public sealed class LlamaServerGenerationTimingsTests
                                 "timings":{"cache_n":0,"prompt_n":-1,"prompt_ms":-1.0,"predicted_n":-1,"predicted_ms":-1.0}}
                                """;
 
-        AssertEx.Null(LlamaServerGenerationTimings.TryRead(AgentUpdate(untimed).RawRepresentation));
+        AssertEx.Null(LlamaServerGenerationTimings.ReadOrNull(AgentUpdate(untimed).RawRepresentation));
     }
 
     // The exact production chain: OpenAI chunk -> MEAI ChatResponseUpdate.RawRepresentation -> AgentResponseUpdate.

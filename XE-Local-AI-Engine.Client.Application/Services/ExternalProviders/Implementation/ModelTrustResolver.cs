@@ -47,15 +47,15 @@ public sealed class ModelTrustResolver : IModelTrustResolver
             return ClassifyNonExternal(modelId);
         }
 
-        var registration = await TryResolveExternalCoreAsync(modelId, cancellationToken);
+        var registration = await ResolveExternalCoreOrNullAsync(modelId, cancellationToken);
         return ToLocality(registration);
     }
 
     /// <inheritdoc />
-    public async Task<ExternalProviderModelRegistration?> TryResolveExternalAsync(string? modelId, CancellationToken cancellationToken = default)
+    public async Task<ExternalProviderModelRegistration?> FindExternalAsync(string? modelId, CancellationToken cancellationToken = default)
     {
         return ExternalModelId.HasExternalScheme(modelId)
-            ? await TryResolveExternalCoreAsync(modelId, cancellationToken)
+            ? await ResolveExternalCoreOrNullAsync(modelId, cancellationToken)
             : null;
     }
 
@@ -89,7 +89,7 @@ public sealed class ModelTrustResolver : IModelTrustResolver
     public async Task<ExternalProviderCloudGrants> ResolveCloudGrantsAsync(string? modelId, CancellationToken cancellationToken = default)
     {
         return ExternalModelId.HasExternalScheme(modelId)
-            ? ToCloudGrants(await TryResolveExternalCoreAsync(modelId, cancellationToken))
+            ? ToCloudGrants(await ResolveExternalCoreOrNullAsync(modelId, cancellationToken))
             : ExternalProviderCloudGrants.None;
     }
 
@@ -147,11 +147,11 @@ public sealed class ModelTrustResolver : IModelTrustResolver
             : ModelTrustLocality.Cloud;
     }
 
-    private async Task<ExternalProviderModelRegistration?> TryResolveExternalCoreAsync(string modelId, CancellationToken cancellationToken)
+    private async Task<ExternalProviderModelRegistration?> ResolveExternalCoreOrNullAsync(string modelId, CancellationToken cancellationToken)
     {
         try
         {
-            return await _registry.TryResolveAsync(modelId, cancellationToken);
+            return await _registry.FindRegistrationAsync(modelId, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

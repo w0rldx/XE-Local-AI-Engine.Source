@@ -78,7 +78,7 @@ public sealed class ModelTrustResolverTests
     public async Task ResolveAsync_WhenTheRegistryThrows_IsUnresolvedRatherThanPropagating()
     {
         var registry = Substitute.For<IExternalProviderRegistry>();
-        _ = registry.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _ = registry.FindRegistrationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns<Task<ExternalProviderModelRegistration?>>(_ => throw new IOException("the store is unreadable"));
         var resolver = new ModelTrustResolver(registry,
             Substitute.For<IExternalProviderRegistryCache>(),
@@ -189,8 +189,8 @@ public sealed class ModelTrustResolverTests
         var resolver = Build(out _, ExternalProviderLocality.Local);
 
         AssertEx.Equal(ExternalProviderTestData.WireId,
-            AssertEx.NotNull(await resolver.TryResolveExternalAsync(ExternalProviderTestData.ModelId)).Model.WireId);
-        AssertEx.Null(await resolver.TryResolveExternalAsync("qwen3-27b.gguf"));
+            AssertEx.NotNull(await resolver.FindExternalAsync(ExternalProviderTestData.ModelId)).Model.WireId);
+        AssertEx.Null(await resolver.FindExternalAsync("qwen3-27b.gguf"));
     }
 
     [Test]
@@ -276,7 +276,7 @@ public sealed class ModelTrustResolverTests
     public async Task ResolveCloudGrantsAsync_WhenTheRegistryThrows_IsNone()
     {
         var registry = Substitute.For<IExternalProviderRegistry>();
-        _ = registry.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _ = registry.FindRegistrationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns<Task<ExternalProviderModelRegistration?>>(_ => throw new IOException("the store is unreadable"));
         var resolver = new ModelTrustResolver(registry,
             Substitute.For<IExternalProviderRegistryCache>(),

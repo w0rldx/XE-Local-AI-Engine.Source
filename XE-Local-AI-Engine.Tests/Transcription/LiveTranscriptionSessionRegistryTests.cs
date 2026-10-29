@@ -476,7 +476,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry);
 
         _ = await harness.Service.CancelAsync(cancelled, CancellationToken.None);
-        _ = await harness.Service.DeleteSessionAsync(deleted, CancellationToken.None);
+        // No row backs the id, so the delete reports not-found, but only after it has ended the live session.
+        _ = await AssertEx.ThrowsAsync<TranscriptionNotFoundException>(() => harness.Service.DeleteSessionAsync(deleted, CancellationToken.None));
 
         await registry.Received(1).EndAsync(cancelled, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
         await registry.Received(1).EndAsync(deleted, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
@@ -1605,13 +1606,13 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await AssertEx.StaysIncompleteAsync(delete, "Delete must join the in-flight end, not remove the row from under lanes that are still running.");
         await registry.Received(1).EndAsync(created.Id, LiveEndReason.Cancelled, Arg.Any<CancellationToken>());
-        AssertEx.NotNull(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None),
-            "The row is still there while the teardown runs.");
+        _ = await harness.Service.GetSessionAsync(created.Id, CancellationToken.None); // the row is still there while the teardown runs
 
         ending.SetResult();
         await delete;
 
-        AssertEx.Null(await harness.Service.GetSessionAsync(created.Id, CancellationToken.None), "And gone once it finished.");
+        _ = await AssertEx.ThrowsAsync<TranscriptionNotFoundException>(() => harness.Service.GetSessionAsync(created.Id, CancellationToken.None),
+            "And gone once it finished.");
     }
 
     [Test]

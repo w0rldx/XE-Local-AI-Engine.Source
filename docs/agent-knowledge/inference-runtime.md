@@ -10,7 +10,7 @@ schema, chat-template capability detection, or request-body patches. Dev-host sc
 
 **Rule:** `LlamaCppReleasePins.PinnedTag` is the offline floor, not the recommendation; after a pin or BYO change re-run
 `scripts/run-tool-grammar-smoke-local.sh`. Linux x64 CUDA is pinned with its tag-prefixed cudart companion; arm64 keeps Vulkan; BYO and the source build stay alternatives. Verify assets by the Releases API `digest`. Never cache an indeterminate device probe or let it
-download (`TryGetInstalledBinaryAsync` only). Helper tools resolve beside `llama-server`; a BYO tree
+download (`FindInstalledBinaryAsync` only). Helper tools resolve beside `llama-server`; a BYO tree
 without `llama-fit-params` 400s every Explore. Never build that target into a shared tree
 (it stales every frozen profile's fingerprint): use a disposable `cp -a` copy of `bin/`. Never enable `--ui-mcp-proxy`.
 **Authority:** `LlamaFitParamsProcessRunner`, `RuntimeBundleIdentityCalculator.IsRuntimeBundleFile`.

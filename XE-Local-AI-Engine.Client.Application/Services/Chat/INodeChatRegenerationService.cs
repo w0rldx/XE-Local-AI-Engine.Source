@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Regenerates an assistant turn as a SIBLING VARIANT, driving the run through the same shared runner and pump as
@@ -40,7 +41,7 @@ public interface INodeChatRegenerationService
 ///     Thrown when a chat operation names a conversation that does not exist. It is caller-triggerable, not an
 ///     internal invariant, so <c>LocalChatHub</c> turns it into a <c>HubException</c> the browser can show.
 /// </summary>
-public sealed class NodeChatConversationNotFoundException : InvalidOperationException
+public sealed class NodeChatConversationNotFoundException : ResourceNotFoundException
 {
     public NodeChatConversationNotFoundException(Guid conversationId) : base($"Conversation {conversationId} was not found. It may have been deleted — reload the chat list.")
     {
@@ -54,7 +55,7 @@ public sealed class NodeChatConversationNotFoundException : InvalidOperationExce
 ///     Thrown when a regenerate names an assistant message the conversation no longer holds. Same caller-triggerable
 ///     class as <see cref="NodeChatConversationNotFoundException" /> and translated by <c>LocalChatHub</c> the same way.
 /// </summary>
-public sealed class NodeChatMessageNotFoundException : InvalidOperationException
+public sealed class NodeChatMessageNotFoundException : ResourceNotFoundException
 {
     public NodeChatMessageNotFoundException(Guid messageId) : base($"Message {messageId} was not found in this conversation. Reload the conversation and try again.")
     {

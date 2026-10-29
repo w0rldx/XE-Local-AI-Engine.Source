@@ -33,13 +33,13 @@ public interface IModelProviderMapStore
     }
 
     /// <summary>Inserts only when the case-insensitive model key is absent.</summary>
-    Task<ModelProviderMapRecord?> TryInsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
+    Task<ModelProviderMapWriteResult> TryInsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
     {
         throw new NotSupportedException("This provider-map store does not expose conditional persistence operations.");
     }
 
     /// <summary>Updates only when the current row has <paramref name="expectedRevision" />.</summary>
-    Task<ModelProviderMapRecord?> TryUpdateAsync(string modelName,
+    Task<ModelProviderMapWriteResult> TryUpdateAsync(string modelName,
         string providerName,
         string expectedRevision,
         CancellationToken cancellationToken = default)

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -9,14 +10,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class FittedArgsParser : IFittedArgsParser
 {
     /// <inheritdoc />
-    public ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
+    public bool TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string> startupOutput,
-        IReadOnlyList<string> successfulLaunchArguments)
+        IReadOnlyList<string> successfulLaunchArguments,
+        [NotNullWhen(true)] out ResolvedLaunchArguments? draft)
     {
         ArgumentNullException.ThrowIfNull(fitParamsOutput);
         ArgumentNullException.ThrowIfNull(startupOutput);
         ArgumentNullException.ThrowIfNull(successfulLaunchArguments);
 
-        return LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput, startupOutput, successfulLaunchArguments);
+        draft = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(fitParamsOutput, startupOutput, successfulLaunchArguments);
+        return draft is not null;
     }
 }

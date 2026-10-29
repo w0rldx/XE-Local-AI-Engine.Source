@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     Represents node chat origin values.
 /// </summary>
@@ -116,17 +118,31 @@ public static class NodeChatFeedbackRatingValues
 }
 
 /// <summary>
+///     What a guarded synopsis or state write decided: <c>INodeChatPersistenceService.SetCompactionSummaryAsync</c> and
+///     <c>SetConversationStateAsync</c>.
+/// </summary>
+public enum NodeChatGuardedWriteOutcome
+{
+    /// <summary>The row was written.</summary>
+    Written,
+
+    /// <summary>The guard was on and the stored stamp moved since the caller read it (a path change cleared it); nothing was written.</summary>
+    Superseded,
+
+    /// <summary>The conversation does not exist or was purged; nothing was written.</summary>
+    ConversationNotFound
+}
+
+/// <summary>
 ///     Thrown when a message-correlated write names no persisted message: the pair does not exist, or the request id
 ///     does not match the row it addresses.
 /// </summary>
 /// <remarks>
-///     Endpoints that answer "not found" for a bad correlation catch THIS rather than
-///     <see cref="InvalidOperationException" />, so an unrelated fault under the same call cannot present as a 404.
-///     It still derives from that type, which the pump and the other correlated writers already read as "this write
-///     cannot proceed". It is about the correlation, not about a message a person named, which
-///     <c>NodeChatMessageNotFoundException</c> covers.
+///     A <see cref="ResourceNotFoundException" />, so an HTTP route that reaches it answers the bodyless 404; the pump
+///     and the other correlated writers catch nothing by type and simply fail the write. It is about the correlation,
+///     not about a message a person named, which <c>NodeChatMessageNotFoundException</c> covers.
 /// </remarks>
-public sealed class NodeChatMessageCorrelationNotFoundException : InvalidOperationException
+public sealed class NodeChatMessageCorrelationNotFoundException : ResourceNotFoundException
 {
     public NodeChatMessageCorrelationNotFoundException(string message) : base(message)
     {

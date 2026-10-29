@@ -64,6 +64,23 @@ public sealed class ConversationStateDistillationServiceTests
     }
 
     [Test]
+    public async Task DistillPendingAsync_WhenTheConversationIsDeletedMidCall_ReportsConversationNotFound()
+    {
+        var harness = new Harness(Conversation(CompletedMessages(count: 6)))
+        {
+            AcceptedWrites = 1,
+            RejectedWith = NodeChatGuardedWriteOutcome.ConversationNotFound
+        };
+        harness.Results.Enqueue(Distillation("first fact", consumed: 2, coversTo: 1));
+        harness.Results.Enqueue(Distillation("orphaned fact", consumed: 2, coversTo: 3));
+
+        var outcome = await harness.Service.DistillPendingAsync(ConversationId, requestedModel: null, upToAnchorSequence: null);
+
+        AssertEx.Equal(ConversationStateDistillationStatus.ConversationNotFound, outcome.Status, "a purge is not a path change: nothing is left to supersede.");
+        AssertEx.Equal(expected: 2, harness.Writes().Count, "nothing is attempted after the conversation is gone.");
+    }
+
+    [Test]
     public async Task DistillPendingAsync_WhenAPathChangeRestampedTheRowMidCall_DiscardsThatDeltaAndStops()
     {
         var harness = new Harness(Conversation(CompletedMessages(count: 6)))
@@ -260,9 +277,9 @@ public sealed class ConversationStateDistillationServiceTests
             INodeRuntimeSettings? runtimeSettings = null)
         {
             Persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-            // A null write result means the guard rejected it (the row was restamped); the default accepts every write.
+            // A Superseded write result means the guard rejected it (the row was restamped); the default accepts every write.
             Persistence.SetConversationStateAsync(Arg.Any<NodeChatSetConversationStateRequest>(), Arg.Any<CancellationToken>())
-                       .Returns(_ => AcceptedWrites-- > 0 ? conversation : null);
+                       .Returns(_ => AcceptedWrites-- > 0 ? NodeChatGuardedWriteOutcome.Written : RejectedWith);
             var distiller = Substitute.For<IConversationStateDistiller>();
             distiller.DistillAsync(Arg.Any<ConversationStateDistillerInput>(), Arg.Any<CancellationToken>())
                      .Returns(call =>
@@ -300,6 +317,9 @@ public sealed class ConversationStateDistillationServiceTests
         public Queue<ConversationStateDistillation?> Results { get; } = new();
 
         public int AcceptedWrites { get; set; } = int.MaxValue;
+
+        /// <summary>What a write past <see cref="AcceptedWrites" /> answers.</summary>
+        public NodeChatGuardedWriteOutcome RejectedWith { get; init; } = NodeChatGuardedWriteOutcome.Superseded;
 
         public List<List<int>> InputSequences { get; } = [];
 

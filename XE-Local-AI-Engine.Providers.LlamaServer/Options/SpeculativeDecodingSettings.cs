@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>What a <c>--spec-type</c> mode needs to launch, and which draft flags it may emit.</summary>
 /// <remarks>
 ///     The <c>draft-</c> name prefix spans two classes and is NOT a capability test: every allowed mode is mapped to a
@@ -188,7 +190,7 @@ public readonly record struct SpeculativeDecodingSettings(
     ///     returned with <c>false</c> is safe to surface: it carries only the operator-supplied mode string, never an
     ///     internal path.
     /// </remarks>
-    public bool TryValidate(out string? error)
+    public bool TryValidate([NotNullWhen(false)] out string? error)
     {
         if (!IsEnabled)
         {

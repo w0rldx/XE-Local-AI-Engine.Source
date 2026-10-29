@@ -383,7 +383,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// </remarks>
     internal static ChatOptions? ApplyReasoningBudget(ChatOptions? options)
     {
-        if (TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } markerTokens || markerTokens <= 0)
+        if (ReadInt32OrNull(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } markerTokens || markerTokens <= 0)
         {
             return options;
         }
@@ -415,7 +415,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     }
 
     private static bool IsReasoningControlArmed(ChatOptions? options) =>
-        TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is > 0;
+        ReadInt32OrNull(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is > 0;
 
     // Non-streaming twin of the per-update strip in GetStreamingResponseAsync: a summarizer fold or a JSON job reads
     // response.Text whole, so residue tags at its head would land in the summary or break the parse.
@@ -454,7 +454,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private static int ClampToGenerationRoom(int budgetTokens, ChatOptions options)
     {
         int? room = null;
-        if (TryReadInt32(options.AdditionalProperties, SamplingOptionKeys.NumCtx) is { } window && window > 0)
+        if (ReadInt32OrNull(options.AdditionalProperties, SamplingOptionKeys.NumCtx) is { } window && window > 0)
         {
             room = window;
         }
@@ -490,9 +490,9 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
         var topK = options.TopK;
         var properties = options.AdditionalProperties;
-        var minP = TryReadSingle(properties, SamplingOptionKeys.MinP);
-        var repeatPenalty = TryReadSingle(properties, SamplingOptionKeys.RepeatPenalty);
-        var repeatLastN = TryReadInt32(properties, SamplingOptionKeys.RepeatLastN);
+        var minP = ReadSingleOrNull(properties, SamplingOptionKeys.MinP);
+        var repeatPenalty = ReadSingleOrNull(properties, SamplingOptionKeys.RepeatPenalty);
+        var repeatLastN = ReadInt32OrNull(properties, SamplingOptionKeys.RepeatLastN);
 
         if (topK is null && minP is null && repeatPenalty is null && repeatLastN is null)
         {
@@ -553,12 +553,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             body => body.ResponseFormat = OpenAIChatResponseFormat.CreateJsonSchemaFormat(name, payload, description, jsonSchemaIsStrict: false));
     }
 
-    private static float? TryReadSingle(AdditionalPropertiesDictionary? properties, string key)
+    private static float? ReadSingleOrNull(AdditionalPropertiesDictionary? properties, string key)
     {
         return properties is not null && properties.TryGetValue<float>(key, out var value) && !float.IsNaN(value) ? value : null;
     }
 
-    private static int? TryReadInt32(AdditionalPropertiesDictionary? properties, string key)
+    private static int? ReadInt32OrNull(AdditionalPropertiesDictionary? properties, string key)
     {
         return properties is not null && properties.TryGetValue<int>(key, out var value) ? value : null;
     }

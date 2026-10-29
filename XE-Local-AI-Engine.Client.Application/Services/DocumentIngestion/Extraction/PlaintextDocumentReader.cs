@@ -79,7 +79,7 @@ internal sealed class PlaintextDocumentReader : IngestionDocumentReader
         var insideFence = false;
         foreach (var block in EnumerateLosslessBlocks(text))
         {
-            var headingLevel = insideFence ? null : TryGetMarkdownHeadingLevel(block);
+            var headingLevel = insideFence ? null : GetMarkdownHeadingLevelOrNull(block);
             if (headingLevel is int level)
             {
                 section.Elements.Add(new IngestionDocumentHeader(block)
@@ -137,7 +137,7 @@ internal sealed class PlaintextDocumentReader : IngestionDocumentReader
         }
     }
 
-    private static int? TryGetMarkdownHeadingLevel(string block)
+    private static int? GetMarkdownHeadingLevelOrNull(string block)
     {
         if (block.IndexOf('\n', StringComparison.Ordinal) < 0)
         {

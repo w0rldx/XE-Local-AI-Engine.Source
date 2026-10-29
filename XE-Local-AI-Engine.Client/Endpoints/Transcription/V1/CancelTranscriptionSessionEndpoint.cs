@@ -39,12 +39,9 @@ public sealed class CancelTranscriptionSessionEndpoint : Endpoint<TranscriptionS
         var cancelled = await _sessions.CancelAsync(req.SessionId, ct);
         if (!cancelled)
         {
-            var session = await _sessions.GetSessionSummaryAsync(req.SessionId, ct);
-            if (session is null)
-            {
-                await Send.NotFoundAsync(ct);
-                return;
-            }
+            // The summary read stays nullable for the hub's persist-free sessions; here an unknown id is a plain 404.
+            var session = await _sessions.GetSessionSummaryAsync(req.SessionId, ct)
+                          ?? throw new TranscriptionNotFoundException("The transcription session was not found.");
 
             AddError($"This session is not running ({session.Status}), so there is nothing to cancel.");
             await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);

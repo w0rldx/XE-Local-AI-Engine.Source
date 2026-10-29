@@ -87,7 +87,7 @@ public static class WavPcm16
     ///     the payload never reaches past the end of the stream. Rates outside 8-192 kHz and more than eight channels
     ///     are refused.
     /// </remarks>
-    public static Layout? TryReadLayout(Stream stream)
+    public static Layout? ReadLayoutOrNull(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
 

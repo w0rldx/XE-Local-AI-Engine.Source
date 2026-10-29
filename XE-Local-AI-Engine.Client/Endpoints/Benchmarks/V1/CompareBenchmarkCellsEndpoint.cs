@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
@@ -37,12 +36,7 @@ public sealed class CompareBenchmarkCellsEndpoint : Endpoint<CompareBenchmarkCel
 
         // A refused selection throws BenchmarkValidationException, which the global handler maps through
         // BenchmarkEndpointSupport — the same 400 body this endpoint has always sent.
-        if (await _comparisons.CompareCellsAsync(req.ProjectId, req.CellKeys ?? [], ct) is not { } comparison)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
-
+        var comparison = await _comparisons.CompareCellsAsync(req.ProjectId, req.CellKeys ?? [], ct);
         var listed = comparison.Cells.ToResponse();
         await Send.OkAsync(new CompareBenchmarkCellsResponse
         {

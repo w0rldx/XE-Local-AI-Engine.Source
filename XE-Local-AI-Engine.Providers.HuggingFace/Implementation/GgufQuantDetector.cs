@@ -7,13 +7,13 @@ internal static class GgufQuantDetector
 {
     public static string? Detect(string fileName, GgufStrictHeaderParser.StrictHeader header)
     {
-        return GgufQuantParser.TryParse(Path.GetFileName(fileName))
+        return GgufQuantParser.ParseOrNull(Path.GetFileName(fileName))
                ?? GgufStrictHeaderParser.ResolveQuantization(header);
     }
 
     public static bool IsCanonical(string? quantization)
     {
         return !string.IsNullOrWhiteSpace(quantization)
-               && string.Equals(GgufQuantParser.TryParse($"model-{quantization}.gguf"), quantization, StringComparison.Ordinal);
+               && string.Equals(GgufQuantParser.ParseOrNull($"model-{quantization}.gguf"), quantization, StringComparison.Ordinal);
     }
 }

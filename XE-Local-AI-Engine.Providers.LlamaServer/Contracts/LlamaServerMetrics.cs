@@ -23,7 +23,7 @@ public static class LlamaServerMetrics
     ///     Pure and culture-invariant, so it is unit-testable without a live server. Tolerates label sets and trailing
     ///     timestamps; comment lines are skipped.
     /// </remarks>
-    public static double? TryParse(string? text, string name)
+    public static double? ParseOrNull(string? text, string name)
     {
         if (string.IsNullOrEmpty(text) || string.IsNullOrWhiteSpace(name))
         {

@@ -21,8 +21,9 @@ public interface IDatasetGenerationService
     ///     Requests cancellation: a queued dataset is terminalized directly, while a generating one is signaled
     ///     through the executor's registry so it stops cooperatively and is still recorded as cancelled.
     /// </summary>
-    /// <returns><see langword="false" /> for an unknown dataset or one whose work item is already terminal.</returns>
-    Task<bool> CancelAsync(Guid datasetId, CancellationToken cancellationToken = default);
+    /// <exception cref="TrainingNotFoundException">No dataset carries <paramref name="datasetId" />.</exception>
+    /// <exception cref="TrainingConflictException"><c>GenerationInactive</c>: the dataset's work item is already terminal.</exception>
+    Task CancelAsync(Guid datasetId, CancellationToken cancellationToken = default);
 }
 
 /// <inheritdoc />
@@ -69,22 +70,22 @@ public sealed class DatasetGenerationService : IDatasetGenerationService
         return dataset;
     }
 
-    public async Task<bool> CancelAsync(Guid datasetId, CancellationToken cancellationToken = default)
+    public async Task CancelAsync(Guid datasetId, CancellationToken cancellationToken = default)
     {
-        var dataset = await _store.GetDatasetAsync(datasetId, cancellationToken);
-        if (dataset?.WorkStatus is not (DatasetGenerationWorkStatus.Queued or DatasetGenerationWorkStatus.Running))
+        var dataset = await _store.GetDatasetAsync(datasetId, cancellationToken)
+                      ?? throw new TrainingNotFoundException("The training dataset was not found.");
+        if (dataset.WorkStatus is not (DatasetGenerationWorkStatus.Queued or DatasetGenerationWorkStatus.Running))
         {
-            return false;
+            throw new TrainingConflictException("GenerationInactive");
         }
 
         // A running generation is signaled, never terminalized here: the executor owns the cooperative stop and the
         // terminal write, so cancelling from two places would race the work item.
         if (_cancellations.Cancel(datasetId))
         {
-            return true;
+            return;
         }
 
         _ = await _store.CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, "Cancelled before generation started.", cancellationToken);
-        return true;
     }
 }

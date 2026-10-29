@@ -49,10 +49,11 @@ public sealed class RestoreNodeBackupEndpoint : Endpoint<RestoreNodeBackupReques
     {
         ArgumentNullException.ThrowIfNull(req);
 
+        // Checked before the local-mode gate so an unknown name is a 404 in every mode; StageRestoreAsync throws the same
+        // exception for a snapshot pruned in between.
         if (_backups.ResolveSnapshotPath(req.Name) is null)
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            throw new NodeBackupNotFoundException(req.Name);
         }
 
         if (!_launchContext.IsLocalMode)
@@ -65,9 +66,6 @@ public sealed class RestoreNodeBackupEndpoint : Endpoint<RestoreNodeBackupReques
         var staged = await _backups.StageRestoreAsync(req.Name, ct);
         switch (staged.Status)
         {
-            case NodeDbRestoreStageStatus.NotFound:
-                await Send.NotFoundAsync(ct);
-                return;
             case NodeDbRestoreStageStatus.Busy:
                 await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "A database backup is running; try again when it has finished."));
                 return;

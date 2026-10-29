@@ -35,7 +35,7 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
         return await _store.AddAsync(WithNormalizedReasoningEffort(input), cancellationToken);
     }
 
-    public async Task<AgentDefinitionRecord?> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default)
+    public async Task<AgentDefinitionRecord> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -50,7 +50,8 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
         }
 
         await ValidateAsync(input, cancellationToken);
-        return await _store.UpdateAsync(id, WithNormalizedReasoningEffort(input), cancellationToken);
+        return await _store.UpdateAsync(id, WithNormalizedReasoningEffort(input), cancellationToken)
+               ?? throw new AgentDefinitionNotFoundException(id);
     }
 
     // Stores the canonical lowercase value (or null when blank), so every reader sees one spelling.
@@ -60,14 +61,17 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
             ReasoningEffort = ReasoningEffortNormalizer.Normalize(input.ReasoningEffort)
         };
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _store.DeleteAsync(id, cancellationToken);
+        if (!await _store.DeleteAsync(id, cancellationToken))
+        {
+            throw new AgentDefinitionNotFoundException(id);
+        }
     }
 
-    public Task<AgentDefinitionRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<AgentDefinitionRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _store.GetByIdAsync(id, cancellationToken);
+        return await _store.GetByIdAsync(id, cancellationToken) ?? throw new AgentDefinitionNotFoundException(id);
     }
 
     public Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default)
@@ -178,7 +182,7 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
 
         // The shared parser answers null on malformed or unknown-version input so the resolver can degrade; here the
         // payload is already known non-blank, so a null means it does not parse as v1: a definition error.
-        var topology = OrchestrationTopologyJson.TryParse(input.OrchestrationTopologyJson);
+        var topology = OrchestrationTopologyJson.ParseOrNull(input.OrchestrationTopologyJson);
         if (topology is null)
         {
             throw new AgentDefinitionValidationException($"OrchestrationTopologyJson is malformed or not a supported version (expected version {OrchestrationTopologyJson.CurrentVersion}).");

@@ -114,7 +114,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
                 throw new StableDiffusionRuntimeException("The recorded managed stable-diffusion.cpp runtime is invalid and must be rebuilt or removed.");
             }
 
-            var managed = await TryResolveManagedRuntimeAsync(installed, ct).ConfigureAwait(false);
+            var managed = await ResolveManagedRuntimeOrNullAsync(installed, ct).ConfigureAwait(false);
             if (managed is not null)
             {
                 return managed;
@@ -170,7 +170,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         };
     }
 
-    private async Task<SdBinary?> TryResolveManagedRuntimeAsync(ManagedRuntimeState<SdGpuBackend> state, CancellationToken ct)
+    private async Task<SdBinary?> ResolveManagedRuntimeOrNullAsync(ManagedRuntimeState<SdGpuBackend> state, CancellationToken ct)
     {
         if (state.SourceBuildPath is not { Length: > 0 } buildPath
             || state.ServerSha256 is not { Length: 64 } expectedSha
@@ -363,13 +363,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
 
     private async Task DownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, string serverDir, CancellationToken ct)
     {
-        var firstError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, serverDir, ct).ConfigureAwait(false);
+        var firstError = await DownloadVerifyFlattenCudartOrErrorAsync(url, assetName, expectedSha256, serverDir, ct).ConfigureAwait(false);
         if (firstError is null)
         {
             return;
         }
 
-        var secondError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, serverDir, ct).ConfigureAwait(false);
+        var secondError = await DownloadVerifyFlattenCudartOrErrorAsync(url, assetName, expectedSha256, serverDir, ct).ConfigureAwait(false);
         if (secondError is null)
         {
             return;
@@ -378,7 +378,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         throw new StableDiffusionRuntimeException("The stable-diffusion.cpp CUDA runtime archive could not be downloaded or failed integrity verification after a retry.", secondError);
     }
 
-    private async Task<Exception?> TryDownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, string serverDir, CancellationToken ct)
+    private async Task<Exception?> DownloadVerifyFlattenCudartOrErrorAsync(Uri url, string assetName, string expectedSha256, string serverDir, CancellationToken ct)
     {
         var tempArchive = Path.Combine(Path.GetTempPath(), $"sdcpp-cudart-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
         var stagingDir = Path.Combine(Path.GetTempPath(), $"sdcpp-cudart-{Guid.NewGuid():N}");
@@ -452,13 +452,13 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     /// </summary>
     private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, string backendDir, CancellationToken ct)
     {
-        var firstError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, backendDir, ct).ConfigureAwait(false);
+        var firstError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, backendDir, ct).ConfigureAwait(false);
         if (firstError is null)
         {
             return;
         }
 
-        var secondError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, backendDir, ct).ConfigureAwait(false);
+        var secondError = await DownloadVerifyExtractOrErrorAsync(url, assetName, expectedSha256, backendDir, ct).ConfigureAwait(false);
         if (secondError is null)
         {
             return;
@@ -469,7 +469,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             secondError);
     }
 
-    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, string backendDir, CancellationToken ct)
+    private async Task<Exception?> DownloadVerifyExtractOrErrorAsync(Uri url, string assetName, string expectedSha256, string backendDir, CancellationToken ct)
     {
         // Defense-in-depth: strip any directory component before it composes a temp path so a name can never traverse.
         var tempArchive = Path.Combine(Path.GetTempPath(), $"sdcpp-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");

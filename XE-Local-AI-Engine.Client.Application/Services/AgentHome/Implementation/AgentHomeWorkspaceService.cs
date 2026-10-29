@@ -165,7 +165,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
     private PlannedFolderCopy PlanFolderCopy(ResolvedSelectedFolder folder, CancellationToken cancellationToken)
     {
-        var root = HostPathSafety.TryResolveTrustedRoot(folder.HostPath)
+        var root = HostPathSafety.ResolveTrustedRootOrNull(folder.HostPath)
                    ?? throw new AgentHomeRequestRejectedException($"selected folder '{folder.Alias}' could not be resolved to a safe host path.");
 
         if (folder.Mode == SelectedFolderMode.ReadOnlyMount)

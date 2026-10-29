@@ -26,12 +26,6 @@ public sealed class GetTrainingDatasetEndpoint : Endpoint<GetTrainingDatasetRequ
     public override async Task HandleAsync(GetTrainingDatasetRequest req, CancellationToken ct)
     {
         var record = await _datasets.GetAsync(req.DatasetId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

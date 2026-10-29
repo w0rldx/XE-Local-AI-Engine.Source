@@ -121,7 +121,7 @@ public static class BenchmarkJudgeExecutionKey
     ///     LoRA, projector or draft model (the adapter/base closure is not identified yet, so two such launches cannot
     ///     be shown to be the same execution).
     /// </remarks>
-    public static BenchmarkJudgeExecutionIdentityV1? TryBuild(LlamaServerLaunchReceipt? receipt, RuntimeEnvironmentFactsV1? environment)
+    public static BenchmarkJudgeExecutionIdentityV1? BuildOrNull(LlamaServerLaunchReceipt? receipt, RuntimeEnvironmentFactsV1? environment)
     {
         if (receipt is null || environment is null)
         {
@@ -199,10 +199,10 @@ public static class BenchmarkJudgeExecutionKey
     ///     The cohort key, or <see langword="null" /> when the identity is incomplete. Bound to the policy hash so two
     ///     different policies can never share a cohort even on an identical machine.
     /// </summary>
-    public static string? TryCompute(string policyHash, LlamaServerLaunchReceipt? receipt, RuntimeEnvironmentFactsV1? environment)
+    public static string? ComputeOrNull(string policyHash, LlamaServerLaunchReceipt? receipt, RuntimeEnvironmentFactsV1? environment)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(policyHash);
-        return TryBuild(receipt, environment) is { } identity ? Compute(policyHash, identity) : null;
+        return BuildOrNull(receipt, environment) is { } identity ? Compute(policyHash, identity) : null;
     }
 
     /// <summary>The cohort key for an already-built identity.</summary>

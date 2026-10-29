@@ -46,16 +46,16 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     }
 
     [Test]
-    public void GlobalHandlers_RegisterWorkSessionNotFoundBeforeTheDefaultHandler()
+    public void GlobalHandlers_RegisterResourceNotFoundBeforeTheDefaultHandler()
     {
         var root = FindRepositoryRoot();
         var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
-        var workSessionHandler = composition.IndexOf(".AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()", StringComparison.Ordinal);
+        var notFoundHandler = composition.IndexOf(".AddExceptionHandler<ResourceNotFoundExceptionHandler>()", StringComparison.Ordinal);
         var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
 
-        AssertEx.True(workSessionHandler >= 0, "The typed WorkSession not-found handler must be registered in the global exception chain.");
+        AssertEx.True(notFoundHandler >= 0, "The typed resource not-found handler must be registered in the global exception chain.");
         AssertEx.True(defaultHandler >= 0, "The default exception handler registration must remain present.");
-        AssertEx.True(workSessionHandler < defaultHandler, "The typed WorkSession not-found handler must run before the default 500 handler.");
+        AssertEx.True(notFoundHandler < defaultHandler, "The typed resource not-found handler must run before the default 500 handler.");
     }
 
     [Test]
@@ -71,19 +71,6 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 
         AssertEx.Empty(offenders,
             "WorkSession endpoint-local raw KeyNotFoundException catches can turn unrelated defects into 404. Throw the typed persistence family and let its global handler map it.");
-    }
-
-    [Test]
-    public void GlobalHandlers_RegisterDevWorkflowNotFoundBeforeTheDefaultHandler()
-    {
-        var root = FindRepositoryRoot();
-        var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
-        var devWorkflowHandler = composition.IndexOf(".AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()", StringComparison.Ordinal);
-        var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
-
-        AssertEx.True(devWorkflowHandler >= 0, "The typed DevWorkflow not-found handler must be registered in the global exception chain.");
-        AssertEx.True(defaultHandler >= 0, "The default exception handler registration must remain present.");
-        AssertEx.True(devWorkflowHandler < defaultHandler, "The typed DevWorkflow not-found handler must run before the default 500 handler.");
     }
 
     /// <summary>
@@ -119,7 +106,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 
         foreach (var handler in new[]
                  {
-                     "DevelopmentNotFoundExceptionHandler",
+                     "ResourceNotFoundExceptionHandler",
                      "DevelopmentConflictExceptionHandler"
                  })
         {
@@ -132,7 +119,7 @@ public sealed class EndpointExceptionMappingSourceGuardTests
     /// <summary>
     ///     The Development folder's own sweep, mirroring the development-workflow one above. A raw
     ///     <c>KeyNotFoundException</c> catch here turned any unrelated dictionary miss in the pipeline into a 404; the
-    ///     store now throws <c>DevelopmentNotFoundException</c> and the global handler answers it.
+    ///     store now throws <c>DevelopmentNotFoundException</c> and <c>ResourceNotFoundExceptionHandler</c> answers it.
     /// </summary>
     [Test]
     public void DevelopmentEndpoints_TranslateNoRawKeyNotFoundExceptions()

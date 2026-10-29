@@ -184,18 +184,18 @@ public sealed class BenchmarkNiahGeneratorTests
         var generated = BenchmarkNiahGenerator.Expand(ParentId, Config([2048], [50]), projectContextTokens: 8192)[0];
         var item = ItemCarrying(BenchmarkTaskItemKinds.NiahCase, JsonSerializer.SerializeToUtf8Bytes(generated.Case, BenchmarkNiahGenerator.SerializerOptions));
 
-        var read = AssertEx.NotNull(BenchmarkNiahCase.TryRead(item));
+        var read = AssertEx.NotNull(BenchmarkNiahCase.ReadOrNull(item));
 
         AssertEx.Equal(2048, read.ContextTokens);
         AssertEx.Equal(50, read.DepthPercent);
-        AssertEx.Null(BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.Prompt, null)), "An authored prompt is not a probe case.");
+        AssertEx.Null(BenchmarkNiahCase.ReadOrNull(ItemCarrying(BenchmarkTaskItemKinds.Prompt, null)), "An authored prompt is not a probe case.");
     }
 
     /// <summary>Fail closed: a case nothing can vouch for must not slip past the length check by being unreadable.</summary>
     [Test]
     public void TryRead_RefusesACaseWhoseParametersCannotBeRead()
     {
-        _ = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, null)));
+        _ = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahCase.ReadOrNull(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, null)));
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ public sealed class BenchmarkNiahGeneratorTests
     [Test]
     public void TryRead_WhenTheStoredParametersAreNotJson_KeepsTheReaderFailureAsTheInnerException()
     {
-        var refusal = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahCase.TryRead(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, "not json at all"u8.ToArray())));
+        var refusal = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahCase.ReadOrNull(ItemCarrying(BenchmarkTaskItemKinds.NiahCase, "not json at all"u8.ToArray())));
 
         var inner = AssertEx.NotNull(refusal.InnerException, "The JSON reader's own failure must survive the wrap.");
         AssertEx.True(inner is JsonException, $"Expected the inner exception to be a JsonException, got {inner.GetType().Name}.");

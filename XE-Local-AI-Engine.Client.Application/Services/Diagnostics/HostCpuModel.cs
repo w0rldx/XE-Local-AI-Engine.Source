@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.Diagnostics;
 internal static class HostCpuModel
 {
     /// <summary>The CPU model name, or <see langword="null" /> when the platform does not expose one.</summary>
-    internal static string? TryRead()
+    internal static string? ReadOrNull()
     {
         if (OperatingSystem.IsWindows())
         {

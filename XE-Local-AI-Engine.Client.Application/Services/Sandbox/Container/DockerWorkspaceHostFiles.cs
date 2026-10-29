@@ -74,7 +74,7 @@ internal static class DockerWorkspaceHostFiles
     ///     <see langword="null" /> when the platform cannot answer — anything but Linux, or a kernel without <c>statx</c> — and the caller
     ///     decides what an unanswerable probe means, because on a rootful daemon it is a different question than on a rootless one.
     /// </remarks>
-    internal static uint? TryReadOwnerUserId(string hostPath)
+    internal static uint? ReadOwnerUserIdOrNull(string hostPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
 

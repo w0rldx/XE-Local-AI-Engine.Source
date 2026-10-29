@@ -253,7 +253,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         {
             // The same gate the operator-initiated delete passes: an unminted name, one that resolves outside the
             // runs root, or a link is not a run this sweep can classify — and it leaves what it cannot classify.
-            if (AgentHomeRunPaths.TryResolveRun(runsRoot, Path.GetFileName(path)) is not { } run)
+            if (AgentHomeRunPaths.ResolveRunOrNull(runsRoot, Path.GetFileName(path)) is not { } run)
             {
                 unclassified++;
                 continue;

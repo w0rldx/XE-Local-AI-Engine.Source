@@ -103,7 +103,7 @@ internal sealed class DevWorkflowAgentExecutor
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
 
-        if (await TryReadAttachedAsync(nodeRun, cancellationToken) is { Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled })
+        if (await ReadAttachedOrNullAsync(nodeRun, cancellationToken) is { Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled })
         {
             // The session landed and the host died before the poll wrote what it said. Nothing needs re-running: the row is settled off the session's own answer, exactly what that tick
             // would have written. A retry does not come through here — it releases its session first, precisely so it cannot.
@@ -150,7 +150,7 @@ internal sealed class DevWorkflowAgentExecutor
         try
         {
             // The repository is resolved ONCE per admission, before a new session exists, so a node that cannot serve its reads blocks without one to release.
-            var attached = await TryReadAttachedAsync(nodeRun, cancellationToken);
+            var attached = await ReadAttachedOrNullAsync(nodeRun, cancellationToken);
             var agentDefinitionId = attached?.AgentDefinitionId ?? await ResolveAgentAsync(node, cancellationToken);
             var repositoryRoot = await RepositoryRootAsync(nodeRun, agentDefinitionId, cancellationToken);
             session = attached ?? await CreateSessionAsync(store, graph, run, node, nodeRun, agentDefinitionId, cancellationToken);
@@ -238,7 +238,7 @@ internal sealed class DevWorkflowAgentExecutor
                 cancellationToken);
         }
 
-        var session = await TryReadAsync(sessionId, cancellationToken);
+        var session = await ReadOrNullAsync(sessionId, cancellationToken);
         if (session is null)
         {
             return await BlockAsync(store,
@@ -977,10 +977,10 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>The session the row is still carrying, if it has one and it still exists.</summary>
-    private async Task<WorkSessionDetail?> TryReadAttachedAsync(DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken) =>
-        nodeRun.WorkSessionId is { } attached ? await TryReadAsync(attached, cancellationToken) : null;
+    private async Task<WorkSessionDetail?> ReadAttachedOrNullAsync(DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken) =>
+        nodeRun.WorkSessionId is { } attached ? await ReadOrNullAsync(attached, cancellationToken) : null;
 
-    private async Task<WorkSessionDetail?> TryReadAsync(Guid sessionId, CancellationToken cancellationToken)
+    private async Task<WorkSessionDetail?> ReadOrNullAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         try
         {

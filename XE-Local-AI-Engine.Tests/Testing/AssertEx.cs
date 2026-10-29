@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Testing;
 
+using System.Diagnostics.CodeAnalysis;
+
 internal static class AssertEx
 {
     public static void True(bool condition, string? message = null)
@@ -16,6 +18,16 @@ internal static class AssertEx
         {
             throw new AssertionException(message ?? "Expected condition to be false.");
         }
+    }
+
+    /// <summary>
+    ///     <see cref="True" /> for a <c>bool Try*(…, out T? value)</c> call whose out value the test goes on to use: the
+    ///     annotation lets the compiler see that value as set. <see cref="True" /> stays unannotated so existing
+    ///     <c>!</c> after a null check need not change.
+    /// </summary>
+    public static void Succeeded([DoesNotReturnIf(false)] bool succeeded, string? message = null)
+    {
+        True(succeeded, message ?? "Expected the Try call to succeed.");
     }
 
     public static void Null(object? value, string? message = null)

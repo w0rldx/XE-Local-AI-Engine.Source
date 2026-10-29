@@ -98,7 +98,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             PurgeImmediately = true
         });
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
+        await AssertEx.ThrowsAsync<NodeChatMessageCorrelationNotFoundException>(async () =>
             _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
             {
                 Correlation = correlation,
@@ -826,7 +826,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
             });
             return true;
         }
-        catch (InvalidOperationException)
+        catch (NodeChatMessageCorrelationNotFoundException)
         {
             // The purge deleted the message row before terminalize acquired its locks and read it.
             return false;

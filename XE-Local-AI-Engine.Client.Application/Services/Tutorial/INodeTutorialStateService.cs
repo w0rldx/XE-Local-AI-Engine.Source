@@ -15,9 +15,8 @@ public interface INodeTutorialStateService
 
     /// <summary>
     ///     Upserts a single tour entry by key and stamps it now. Completed is terminal and cannot be downgraded to skipped.
-    ///     Returns false when the current user cannot be resolved.
     /// </summary>
-    Task<bool> SaveEntryAsync(ClaimsPrincipal principal, string key, TutorialStatus status, CancellationToken cancellationToken);
+    Task<TutorialEntrySaveOutcome> SaveEntryAsync(ClaimsPrincipal principal, string key, TutorialStatus status, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Returns when the current user acknowledged the AI responsibility notice, or null when they have not (or cannot
@@ -26,10 +25,38 @@ public interface INodeTutorialStateService
     Task<DateTime?> GetAiAcknowledgedAtAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Records the AI responsibility acknowledgement now, keeping the first timestamp on a repeat. Returns the stored
-    ///     timestamp, or null when the current user cannot be resolved or the write failed.
+    ///     Records the AI responsibility acknowledgement now, keeping the first timestamp on a repeat.
     /// </summary>
-    Task<DateTime?> AcknowledgeAiAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
+    Task<AiAcknowledgementResult> AcknowledgeAiAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
+}
+
+/// <summary>What saving one tour entry decided.</summary>
+public enum TutorialEntrySaveOutcome
+{
+    /// <summary>Stored, or already stored as Completed when a Skipped arrived.</summary>
+    Saved,
+
+    /// <summary>The authenticated principal did not resolve to a node user.</summary>
+    UserNotResolved,
+
+    /// <summary>Identity refused the write; nothing was stored.</summary>
+    NotPersisted
+}
+
+/// <summary>What recording the AI responsibility acknowledgement decided.</summary>
+public abstract record AiAcknowledgementResult
+{
+    /// <summary>Stored, or already stored: <see cref="AtUtc" /> is the first acknowledgement's timestamp.</summary>
+    public sealed record Acknowledged : AiAcknowledgementResult
+    {
+        public required DateTime AtUtc { get; init; }
+    }
+
+    /// <summary>The authenticated principal did not resolve to a node user.</summary>
+    public sealed record UserNotResolved : AiAcknowledgementResult;
+
+    /// <summary>Identity refused the write; nothing was stored.</summary>
+    public sealed record NotPersisted : AiAcknowledgementResult;
 }
 
 /// <summary>

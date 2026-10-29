@@ -13,7 +13,7 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_SkipsTheUnslothBannerLinesAndReadsTheHandshake()
     {
-        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse([
+        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.ParseOrNull([
                 "🦥 Unsloth: Will patch your computer to enable 2x faster free finetuning.",
                 "🦥 Unsloth Zoo will now patch everything to make training faster!",
                 TrainingRuntimeTestInfrastructure.ValidHandshake
@@ -34,7 +34,7 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_TakesTheLastHandshakeWhenSeveralLinesParse()
     {
-        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse([
+        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.ParseOrNull([
                 """{"contractVersion":1,"ready":false}""",
                 """{"contractVersion":1,"ready":true,"cudaAvailable":true}"""
             ]),
@@ -46,7 +46,7 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_ReadsPerPackageErrorsWhenAnImportFailed()
     {
-        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.TryParse([
+        var report = AssertEx.NotNull(TrainingRuntimeProbeParser.ParseOrNull([
                 """{"contractVersion":1,"ready":false,"cudaAvailable":true,"errors":{"unsloth":"RuntimeError: mismatch","numpy":"ImportError: none"}}"""
             ]),
             "A partial report is still a report.");
@@ -58,12 +58,12 @@ public sealed class TrainingRuntimeProbeParserTests
     [Test]
     public void TryParse_ReturnsNullWhenNoLineIsAHandshake()
     {
-        AssertEx.Null(TrainingRuntimeProbeParser.TryParse(["not json", "{}", """{"ready":true}""", "{ broken"]));
+        AssertEx.Null(TrainingRuntimeProbeParser.ParseOrNull(["not json", "{}", """{"ready":true}""", "{ broken"]));
     }
 
     [Test]
     public void TryParse_ReturnsNullForAnEmptyCapture()
     {
-        AssertEx.Null(TrainingRuntimeProbeParser.TryParse([]));
+        AssertEx.Null(TrainingRuntimeProbeParser.ParseOrNull([]));
     }
 }

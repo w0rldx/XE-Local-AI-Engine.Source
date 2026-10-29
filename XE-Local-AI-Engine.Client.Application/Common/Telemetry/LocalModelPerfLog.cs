@@ -66,7 +66,7 @@ public sealed class LocalModelPerfLog
     }
 
     /// <summary>The key's history, or <see langword="null" /> when this process never loaded nor unloaded it.</summary>
-    public LocalModelLoadHistory? TryGetLoadHistory(string modelName, ModelRole role)
+    public LocalModelLoadHistory? FindLoadHistory(string modelName, ModelRole role)
     {
         return string.IsNullOrWhiteSpace(modelName) ? null : _loads.GetValueOrDefault(new LoadKey(modelName, role));
     }

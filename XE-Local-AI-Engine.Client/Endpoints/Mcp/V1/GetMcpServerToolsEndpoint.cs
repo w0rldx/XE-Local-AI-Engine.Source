@@ -33,11 +33,6 @@ public sealed class GetMcpServerToolsEndpoint : Endpoint<GetMcpServerToolsReques
     public override async Task HandleAsync(GetMcpServerToolsRequest req, CancellationToken ct)
     {
         var view = await _mcpServerService.GetToolsViewAsync(req.McpServerId, ct);
-        if (view is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(view.ToResponse(), ct);
     }

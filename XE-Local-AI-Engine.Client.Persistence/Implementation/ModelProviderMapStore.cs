@@ -88,7 +88,7 @@ public sealed class ModelProviderMapStore : IModelProviderMapStore
         return entity is null ? null : ToRecord(entity);
     }
 
-    public async Task<ModelProviderMapRecord?> TryInsertAsync(string modelName,
+    public async Task<ModelProviderMapWriteResult> TryInsertAsync(string modelName,
         string providerName,
         CancellationToken cancellationToken = default)
     {
@@ -108,16 +108,19 @@ public sealed class ModelProviderMapStore : IModelProviderMapStore
         try
         {
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
-            return ToRecord(entity);
+            return new ModelProviderMapWriteResult.Written
+            {
+                Record = ToRecord(entity)
+            };
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqliteException { SqliteExtendedErrorCode: 1555 or 2067 })
         {
             _dbContext.Entry(entity).State = EntityState.Detached;
-            return null;
+            return new ModelProviderMapWriteResult.Superseded();
         }
     }
 
-    public async Task<ModelProviderMapRecord?> TryUpdateAsync(string modelName,
+    public async Task<ModelProviderMapWriteResult> TryUpdateAsync(string modelName,
         string providerName,
         string expectedRevision,
         CancellationToken cancellationToken = default)
@@ -138,7 +141,12 @@ public sealed class ModelProviderMapStore : IModelProviderMapStore
 
         DetachTracked(modelName);
 
-        return affected == 1 ? new ModelProviderMapRecord(modelName, providerName, updatedAtUtc, revision) : null;
+        return affected == 1
+            ? new ModelProviderMapWriteResult.Written
+            {
+                Record = new ModelProviderMapRecord(modelName, providerName, updatedAtUtc, revision)
+            }
+            : new ModelProviderMapWriteResult.Superseded();
     }
 
     public async Task<bool> TryDeleteAsync(string modelName,

@@ -251,7 +251,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
 
         // The gate is what every operation actually holds, so it — not the runner map — is the authority: a row a
         // live operation owns is skipped, because removing its containers is a mutation no lost swap could undo.
-        using var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id));
+        using var lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(row.Id));
         if (lease is null)
         {
             return RowVerdict.Busy;
@@ -446,7 +446,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         CancellationToken cancellationToken)
     {
         var identity = ExternalAppContainerIdentity.Resolve(daemonIsRootless, _options.ContainerIdentity);
-        var plan = _service.TryPlanForVerification(row, manifest, ExternalAppService.ParseVariables(row.VariablesJson), identity);
+        var plan = _service.PlanForVerificationOrNull(row, manifest, ExternalAppService.ParseVariables(row.VariablesJson), identity);
         if (plan is null)
         {
             // One unplannable-snapshot cause is knowable and NOT repaired by a Start: a manifest reading the bridge on a
@@ -605,7 +605,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
             return false;
         }
 
-        using (var lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId)))
+        using (var lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(instanceId)))
         {
             if (lease is null)
             {

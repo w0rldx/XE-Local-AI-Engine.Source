@@ -21,17 +21,14 @@ public sealed class BenchmarkComparisonService
     }
 
     /// <summary>
-    ///     Two to six cells side by side with the paired-difference interval between every pair of them, or null when
-    ///     the project is gone.
+    ///     Two to six cells side by side with the paired-difference interval between every pair of them.
     /// </summary>
+    /// <exception cref="BenchmarkNotFoundException">No project carries <paramref name="projectId" />.</exception>
     /// <exception cref="BenchmarkValidationException">The selection is out of bounds, repeats a key, or names a cell the project does not hold.</exception>
-    public async Task<BenchmarkCellComparison?> CompareCellsAsync(Guid projectId, IReadOnlyList<string> cellKeys, CancellationToken cancellationToken = default)
+    public async Task<BenchmarkCellComparison> CompareCellsAsync(Guid projectId, IReadOnlyList<string> cellKeys, CancellationToken cancellationToken = default)
     {
         BenchmarkPairedBootstrap.ValidateCellSelection(cellKeys);
-        if (await _store.GetProjectAsync(projectId, cancellationToken) is null)
-        {
-            return null;
-        }
+        await EnsureProjectAsync(projectId, cancellationToken);
 
         var page = await _store.ListCellsAsync(projectId, cancellationToken);
 
@@ -62,17 +59,15 @@ public sealed class BenchmarkComparisonService
         };
     }
 
-    /// <summary>The project's verdict matrix and active fit, or null when the project is gone.</summary>
+    /// <summary>The project's verdict matrix and active fit.</summary>
+    /// <exception cref="BenchmarkNotFoundException">No project carries <paramref name="projectId" />.</exception>
     /// <remarks>
     ///     One read, deliberately: splitting them would let a client render a strength beside a verdict set that did
     ///     not produce it, and nothing on the wire would say so.
     /// </remarks>
-    public async Task<BenchmarkComparisonsView?> GetComparisonsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    public async Task<BenchmarkComparisonsView> GetComparisonsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
-        if (await _store.GetProjectAsync(projectId, cancellationToken) is null)
-        {
-            return null;
-        }
+        await EnsureProjectAsync(projectId, cancellationToken);
 
         var cohort = await _store.GetPairwiseCohortAsync(projectId, cancellationToken);
         var fit = await _store.GetActivePairwiseFitAsync(projectId, cancellationToken);
@@ -95,6 +90,14 @@ public sealed class BenchmarkComparisonService
     ///     <see cref="BenchmarkPairedBootstrap.MinimumSharedItems" /> rankable items produces no entry at all: the
     ///     absence is the answer, and a zero would be indistinguishable from a measured tie.
     /// </summary>
+    private async Task EnsureProjectAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        if (await _store.GetProjectAsync(projectId, cancellationToken) is null)
+        {
+            throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        }
+    }
+
     private static List<BenchmarkCellPairDelta> PairedDeltas(IReadOnlyList<BenchmarkCellRecord> cells, IReadOnlySet<Guid> scorable)
     {
         var deltas = new List<BenchmarkCellPairDelta>();

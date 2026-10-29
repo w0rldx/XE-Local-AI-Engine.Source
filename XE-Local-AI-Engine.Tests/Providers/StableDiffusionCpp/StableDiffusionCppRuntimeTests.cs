@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -431,9 +432,10 @@ public sealed class StableDiffusionCppRuntimeTests
         }
 
         // Null unless a test supplies a lease: the runtime then proceeds leaseless, exactly as against a genuinely absent daemon.
-        public IImageServerJobLease? TryAcquireJobLease(string modelName)
+        public bool TryAcquireJobLease(string modelName, [NotNullWhen(true)] out IImageServerJobLease? lease)
         {
-            return _lease;
+            lease = _lease;
+            return lease is not null;
         }
 
         public IReadOnlyList<ImageServerResidentSnapshot> GetResidents()

@@ -41,7 +41,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
     ///     has not loaded it at all, or an unadmitted reload since — which clears the reading rather than letting it
     ///     describe a replaced process.
     /// </remarks>
-    public LlamaServerVramAtLoad? TryGetLastReadyLoad(string modelName, ModelRole role)
+    public LlamaServerVramAtLoad? FindLastReadyLoad(string modelName, ModelRole role)
     {
         return string.IsNullOrWhiteSpace(modelName)
             ? null

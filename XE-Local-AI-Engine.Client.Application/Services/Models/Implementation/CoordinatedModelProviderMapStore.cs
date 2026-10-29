@@ -38,10 +38,10 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
                 : new ProviderMapClaimResult.Conflict(current.ProviderName);
         }
 
-        var inserted = await _persistence.TryInsertAsync(modelName, LlamaServerProviderConstants.ProviderName, cancellationToken);
-        if (inserted is not null)
+        if (await _persistence.TryInsertAsync(modelName, LlamaServerProviderConstants.ProviderName, cancellationToken)
+            is ModelProviderMapWriteResult.Written inserted)
         {
-            return new ProviderMapClaimResult.Created(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false));
+            return new ProviderMapClaimResult.Created(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted.Record, WasRemoval: false));
         }
 
         current = await _persistence.ReadAsync(modelName, cancellationToken)
@@ -67,10 +67,9 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
                 return new ProviderMapMutationResult.Superseded(Current: null);
             }
 
-            var inserted = await _persistence.TryInsertAsync(modelName, providerName, cancellationToken);
-            return inserted is null
-                ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken))
-                : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted, WasRemoval: false));
+            return await _persistence.TryInsertAsync(modelName, providerName, cancellationToken) is ModelProviderMapWriteResult.Written inserted
+                ? new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: null, Mutation: inserted.Record, WasRemoval: false))
+                : new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken));
         }
 
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
@@ -78,10 +77,9 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
             return new ProviderMapMutationResult.Superseded(current);
         }
 
-        var updated = await _persistence.TryUpdateAsync(modelName, providerName, current.Revision, cancellationToken);
-        return updated is null
-            ? new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken))
-            : new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: updated, WasRemoval: false));
+        return await _persistence.TryUpdateAsync(modelName, providerName, current.Revision, cancellationToken) is ModelProviderMapWriteResult.Written updated
+            ? new ProviderMapMutationResult.Mutated(new ProviderMapMutationReceipt(modelName, Prior: current, Mutation: updated.Record, WasRemoval: false))
+            : new ProviderMapMutationResult.Superseded(await _persistence.ReadAsync(modelName, cancellationToken));
     }
 
     public async Task<ProviderMapRestoreResult> TryRestoreAsync(IModelProviderMapMutationLease lease,
@@ -99,7 +97,7 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
             }
 
             var restored = await _persistence.TryInsertAsync(receipt.Prior.ModelName, receipt.Prior.ProviderName, cancellationToken);
-            return restored is null ? ProviderMapRestoreResult.Superseded : ProviderMapRestoreResult.Restored;
+            return restored is ModelProviderMapWriteResult.Written ? ProviderMapRestoreResult.Restored : ProviderMapRestoreResult.Superseded;
         }
 
         if (receipt.Mutation is null)
@@ -120,7 +118,7 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
             receipt.Prior.ProviderName,
             receipt.Mutation.Revision,
             cancellationToken);
-        return updated is null ? ProviderMapRestoreResult.Superseded : ProviderMapRestoreResult.Restored;
+        return updated is ModelProviderMapWriteResult.Written ? ProviderMapRestoreResult.Restored : ProviderMapRestoreResult.Superseded;
     }
 
     public async Task<ProviderMapRemovalResult> TryRemoveIfMatchAsync(IModelProviderMapMutationLease lease,

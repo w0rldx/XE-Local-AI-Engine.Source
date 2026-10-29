@@ -189,7 +189,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             int? effectiveContext = null;
             try
             {
-                effectiveContext = await _healthProbe.TryReadEffectiveContextTokensAsync(spec.BaseAddress, ct).ConfigureAwait(false);
+                effectiveContext = await _healthProbe.ReadEffectiveContextTokensOrNullAsync(spec.BaseAddress, ct).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -199,7 +199,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             receipt = await LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceiptAsync(variant,
                 manifest.Version ?? binary.Version,
                 manifest.ExecutableSha256,
-                LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
+                LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments)
                 ?? LlamaServerLaunchProjection.From(variant,
                     resolved,
                     plan,

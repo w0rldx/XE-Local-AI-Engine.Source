@@ -23,9 +23,7 @@ public sealed class KnowledgeQueryEmbeddingCacheTests
 
         var expected = Entry(VectorA, "nomic-embed-text::native:v1:3");
         cache.Store("nomic-embed-text::native:v1", "what is the retention policy", expected);
-        var hit = cache.TryGet("nomic-embed-text::native:v1", "what is the retention policy", out var entry);
-
-        AssertEx.True(hit, "A stored query must be a cache hit.");
+        AssertEx.Succeeded(cache.TryGet("nomic-embed-text::native:v1", "what is the retention policy", out var entry), "A stored query must be a cache hit.");
         AssertEx.Equal(expected.VectorIdentity, entry.VectorIdentity);
         AssertEx.True(entry.Vector.Span.SequenceEqual(VectorA), "The cached vector must round-trip unchanged.");
     }

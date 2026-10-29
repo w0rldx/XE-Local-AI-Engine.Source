@@ -132,7 +132,7 @@ public sealed partial class InvocationRunner
 
         // Folded on ARRIVAL, not once per drained stream: a tool-calling turn is several llama-server requests inside ONE RunStreamingAsync, which
         // FunctionInvokingChatClient loops internally, so last-wins keeps only the final one. `timings` rides each request's LAST chunk; `timings_per_token`, which double-counts, stays off.
-        stream.AddSegmentTimings(LlamaServerGenerationTimings.TryRead(update.RawRepresentation));
+        stream.AddSegmentTimings(LlamaServerGenerationTimings.ReadOrNull(update.RawRepresentation));
 
         // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call lifecycle events, so a streamed token
         // costs one scan. Local tools run inside FunctionInvokingChatClient, so detecting the call/result content here is what puts their lifecycle events on the SSE stream.
@@ -351,10 +351,10 @@ public sealed partial class InvocationRunner
             ToolName = toolName,
             Phase = ToolCallLifecyclePhase.Completed,
             Result = toolResultText,
-            IsError = functionResult.Exception is not null || ToolFailureText.TryGetCode(functionResult.Result) is not null,
+            IsError = functionResult.Exception is not null || ToolFailureText.GetCodeOrNull(functionResult.Result) is not null,
             IsDenied = ToolInvocationObservabilityChatClient.IsDeniedResult(functionResult.Result),
             Media = ToolResultMedia.Get(functionResult.Result),
-            DurationMs = ToolExecutionTimingScope.TryGet(resultCallId)
+            DurationMs = ToolExecutionTimingScope.GetOrNull(resultCallId)
         });
 
         // ToolArgumentRepairAIFunction returns this structured result instead of throwing once repeated invalid-argument calls disable

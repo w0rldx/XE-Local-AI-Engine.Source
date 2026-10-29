@@ -326,7 +326,7 @@ public sealed class RuntimeAcquisitionProgressTests
         // Windows CUDA fetches TWO archives back to back — the build plus its cudart companion. Without the step
         // counter the banner would run 0→100 % twice with nothing to explain the second pass.
         using var cache = new TempCacheDir();
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
         var cudartName = AssertEx.NotNull(LlamaCppReleasePins.DeriveCudartAssetName(pin.AssetName));
 
         var mainArchive = BuildZip((pin.ServerRelativePath, "fake-llama-server"));

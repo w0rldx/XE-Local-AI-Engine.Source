@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -33,7 +34,7 @@ public sealed class BenchmarkKldBaseCache
     }
 
     /// <summary>The finished file for this key, or <see langword="null" /> when it has not been measured yet.</summary>
-    public string? TryResolveExisting(BenchmarkKldCacheKey key)
+    public string? FindExisting(BenchmarkKldCacheKey key)
     {
         var path = PathFor(key);
         return File.Exists(path) ? path : null;
@@ -61,7 +62,7 @@ public sealed class BenchmarkKldBaseCache
     }
 
     /// <summary>
-    ///     Takes the per-key write lease, or returns <see langword="null" /> when another process holds it.
+    ///     Takes the per-key write lease, or returns <see langword="false" /> when another process holds it.
     /// </summary>
     /// <remarks>
     ///     <see cref="FileOptions.DeleteOnClose" /> is what makes this correct across a crash: the OS drops the handle
@@ -69,23 +70,25 @@ public sealed class BenchmarkKldBaseCache
     ///     stale lock nobody will ever release. That crashed-predecessor case is precisely the one a bare "does the
     ///     file exist" check gets wrong.
     /// </remarks>
-    public FileStream? TryAcquireLease(BenchmarkKldCacheKey key)
+    public bool TryAcquireLease(BenchmarkKldCacheKey key, [NotNullWhen(true)] out FileStream? lease)
     {
         ArgumentNullException.ThrowIfNull(key);
         Directory.CreateDirectory(_root);
         try
         {
-            return new FileStream(Path.Combine(_root, key.LockFileName),
+            lease = new FileStream(Path.Combine(_root, key.LockFileName),
                 FileMode.CreateNew,
                 FileAccess.Write,
                 FileShare.None,
                 bufferSize: 1,
                 FileOptions.DeleteOnClose);
+            return true;
         }
         catch (IOException)
         {
             // Held by a live writer. The caller polls the finished file rather than writing a second copy.
-            return null;
+            lease = null;
+            return false;
         }
     }
 

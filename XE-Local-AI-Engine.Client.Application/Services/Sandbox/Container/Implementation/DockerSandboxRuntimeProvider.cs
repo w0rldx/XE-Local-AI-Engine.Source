@@ -774,7 +774,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             var failure = DescribeWorkspaceMappingFailure(outcome.ExitCode == 0,
                 File.Exists(hostProbePath),
                 engineUserId,
-                File.Exists(hostProbePath) ? DockerWorkspaceHostFiles.TryReadOwnerUserId(hostProbePath) : null);
+                File.Exists(hostProbePath) ? DockerWorkspaceHostFiles.ReadOwnerUserIdOrNull(hostProbePath) : null);
 
             if (failure is not null)
             {

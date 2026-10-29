@@ -91,10 +91,10 @@ export function useCancelEvaluation() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...cancelEvaluationMutation(),
-		// Settled, not succeeded: the node answers 404 for an evaluation that is already terminal, which is the answer
-		// a stale row gets when the executor settled a moment earlier. That is not a failure to report — it means the
-		// list is out of date, and refetching it is the whole remedy. A refetch after a 409 is harmless and hands the
-		// row a fresh version, so the same rule covers every outcome.
+		// Settled, not succeeded: the node answers 409 `EvaluationTerminal` for an evaluation that is already terminal,
+		// which is the answer a stale row gets when the executor settled a moment earlier. That is not a failure to
+		// report — it means the list is out of date, and refetching it is the whole remedy. A refetch after any 409 is
+		// harmless and hands the row a fresh version, so the same rule covers every outcome.
 		onSettled: async () => {
 			await invalidate(queryClient, comparisonQueryIds.evaluations);
 		},

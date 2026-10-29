@@ -248,7 +248,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     {
         // Read once, here, on the trusted host path. The digest of these exact bytes rides on the profile so the
         // workspace invariant can detect a command rewriting the file mid-attempt.
-        var import = DevelopmentCommandProfileImport.TryRead(repositoryRoot);
+        var import = DevelopmentCommandProfileImport.ReadOrNull(repositoryRoot);
         var importDigest = import?.Digest;
 
         // Precedence: the operator's confirmation, then the repository's request, then detection. That request is only

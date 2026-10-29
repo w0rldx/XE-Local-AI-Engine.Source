@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
+using System.Diagnostics.CodeAnalysis;
+
 public enum LocalModelSelectionPolicy
 {
     ConfiguredModel = 0,
@@ -15,6 +17,8 @@ public static class LocalModelAdministrationFailureCodes
 
 public sealed class LocalModelDeletionResult
 {
+    /// <summary>True when the name was valid; the delete then names <see cref="ModelName" />, whether or not it removed anything.</summary>
+    [MemberNotNullWhen(true, nameof(ModelName))]
     public required bool Succeeded { get; init; }
 
     public required string? ModelName { get; init; }
@@ -28,6 +32,7 @@ public sealed class LocalModelDeletionResult
 
 public sealed class LocalModelSelectionResult
 {
+    [MemberNotNullWhen(true, nameof(SelectedModelName))]
     public required bool Succeeded { get; init; }
 
     public required string? SelectedModelName { get; init; }

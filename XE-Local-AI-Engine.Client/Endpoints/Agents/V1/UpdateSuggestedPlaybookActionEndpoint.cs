@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// </summary>
 /// <remarks>
 ///     A separate route from the manual PUT so analysis provenance is never rewritten to Manual. Operator-gated; 404
-///     when the action is missing, belongs to another agent, or is not a pending suggestion.
+///     when the action is missing or belongs to another agent, 409 when it is not a pending suggestion.
 /// </remarks>
 public sealed class UpdateSuggestedPlaybookActionEndpoint : Endpoint<UpdateSuggestedPlaybookActionRequest, PlaybookActionResponse>
 {
@@ -28,11 +28,12 @@ public sealed class UpdateSuggestedPlaybookActionEndpoint : Endpoint<UpdateSugge
     {
         Put(LocalApiRoutes.Agents.PlaybookActionSuggested);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdateSuggestedPlaybookActionRequest req, CancellationToken ct)
     {
-        var record = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput
+        var result = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput
             {
                 AgentDefinitionId = req.AgentDefinitionId,
                 ActionId = req.ActionId,
@@ -43,12 +44,18 @@ public sealed class UpdateSuggestedPlaybookActionEndpoint : Endpoint<UpdateSugge
             },
             ct);
 
-        if (record is null)
+        switch (result)
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            case PlaybookSuggestionReviewResult.Applied applied:
+                await Send.OkAsync(applied.Record.ToResponse(), ct);
+                return;
+            default:
+                await Send.ConflictProblemAsync("The action is no longer a pending suggestion.",
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = "NotPending"
+                    });
+                return;
         }
-
-        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

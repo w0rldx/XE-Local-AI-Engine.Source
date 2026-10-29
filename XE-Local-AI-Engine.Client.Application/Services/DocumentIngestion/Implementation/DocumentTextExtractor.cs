@@ -295,7 +295,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     {
         // Stage 1: declared entry count from the EOCD record, with zero ZipArchiveEntry allocations. Null means no
         // well-formed EOCD in the bounded window (a non-zip stream), so fall through and let the reader raise its error.
-        var declaredEntryCount = TryReadDeclaredZipEntryCount(buffer);
+        var declaredEntryCount = ReadDeclaredZipEntryCountOrNull(buffer);
         if (declaredEntryCount is null)
         {
             return null;
@@ -395,7 +395,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     ///     non-zip stream, so the caller falls through to the reader's own error handling. Strictly bounded: it never
     ///     scans outside the trailing window, and any structural inconsistency yields null rather than a throw.
     /// </remarks>
-    private static long? TryReadDeclaredZipEntryCount(MemoryStream buffer)
+    private static long? ReadDeclaredZipEntryCountOrNull(MemoryStream buffer)
     {
         const uint EocdSignature = 0x06054b50;
         const uint Zip64LocatorSignature = 0x07064b50;

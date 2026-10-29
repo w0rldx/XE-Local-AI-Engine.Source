@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
@@ -105,7 +106,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
 
         // Not a flaw in the assistant's behavior but in the generation itself, so these are rejected rather than kept
         // as Bad data: a Bad label on a correct answer would teach the wrong lesson.
-        if (DatasetGenerationExecutor.EchoesTeacherPrompt(record!.UserMessage))
+        if (DatasetGenerationExecutor.EchoesTeacherPrompt(record.UserMessage))
         {
             return GenerationDefect(EchoedInstructionReason, context, layers);
         }
@@ -390,7 +391,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         }
     }
 
-    private static bool TryReadRecord(string rawCompletion, JsonElement schema, out TeacherSampleRecordV1? record, out string reason)
+    private static bool TryReadRecord(string rawCompletion, JsonElement schema, [NotNullWhen(true)] out TeacherSampleRecordV1? record, [NotNullWhen(false)] out string? reason)
     {
         record = null;
         if (!TryExtractJsonObject(rawCompletion, out var json, out reason))
@@ -448,7 +449,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
             return false;
         }
 
-        reason = string.Empty;
+        reason = null;
         return true;
     }
 
@@ -493,9 +494,9 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
     ///     drafts before it answers); with none, the first-to-last-brace slice keeps the parse error informative. An
     ///     unclosed object that opens with a quoted key is a truncated record, never a source of nested candidates.
     /// </remarks>
-    private static bool TryExtractJsonObject(string text, out string json, out string failureReason)
+    private static bool TryExtractJsonObject(string text, [NotNullWhen(true)] out string? json, [NotNullWhen(false)] out string? failureReason)
     {
-        json = string.Empty;
+        json = null;
         failureReason = "The completion contains no JSON object.";
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -522,6 +523,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
             if (ParsesAsObject(candidates[index]))
             {
                 json = candidates[index];
+                failureReason = null;
                 return true;
             }
         }
@@ -534,6 +536,7 @@ public sealed class SampleValidationPipeline : ISampleValidationPipeline
         }
 
         json = text[start..(end + 1)];
+        failureReason = null;
         return true;
     }
 

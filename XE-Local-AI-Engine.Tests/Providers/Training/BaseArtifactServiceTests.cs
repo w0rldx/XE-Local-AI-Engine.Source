@@ -107,11 +107,20 @@ public sealed class BaseArtifactServiceTests : IDisposable
     }
 
     [Test]
-    public async Task Delete_WhenTheArtifactDoesNotExist_ReportsNotFound()
+    public async Task Delete_WhenTheArtifactDoesNotExist_ThrowsTrainingNotFound()
     {
         _ = _store.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((TrainingBaseArtifactRecord?)null);
 
-        AssertEx.Equal(BaseArtifactDeleteOutcome.NotFound, await Service().DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => Service().DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Test]
+    public async Task GetAndLicense_WhenTheArtifactDoesNotExist_ThrowTrainingNotFound()
+    {
+        _ = _store.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((TrainingBaseArtifactRecord?)null);
+
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => Service().GetAsync(Guid.NewGuid(), CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => Service().GetLicenseAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
     [Test]

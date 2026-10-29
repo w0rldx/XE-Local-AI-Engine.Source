@@ -39,8 +39,8 @@ public sealed class InferenceBenchmarkHarnessTests
     [Test]
     public void PromMetricParser_ExtractsGauge()
     {
-        AssertEx.Equal<double?>(1234d, LlamaServerMetrics.TryParse(MetricsScrape, "llamacpp:prompt_tokens_total"));
-        AssertEx.Equal<double?>(567.5d, LlamaServerMetrics.TryParse(MetricsScrape, "llamacpp:tokens_predicted_total"));
+        AssertEx.Equal<double?>(1234d, LlamaServerMetrics.ParseOrNull(MetricsScrape, "llamacpp:prompt_tokens_total"));
+        AssertEx.Equal<double?>(567.5d, LlamaServerMetrics.ParseOrNull(MetricsScrape, "llamacpp:tokens_predicted_total"));
     }
 
     [Test]
@@ -64,8 +64,8 @@ public sealed class InferenceBenchmarkHarnessTests
     [Test]
     public void PromMetricParser_ReturnsNull_WhenAbsent()
     {
-        AssertEx.Null(LlamaServerMetrics.TryParse(MetricsScrape, "llamacpp:tokens_predicted_seconds_total"));
-        AssertEx.Null(LlamaServerMetrics.TryParse(text: null, "llamacpp:prompt_tokens_total"));
+        AssertEx.Null(LlamaServerMetrics.ParseOrNull(MetricsScrape, "llamacpp:tokens_predicted_seconds_total"));
+        AssertEx.Null(LlamaServerMetrics.ParseOrNull(text: null, "llamacpp:prompt_tokens_total"));
     }
 
     [Test]
@@ -500,7 +500,7 @@ public sealed class InferenceBenchmarkHarnessTests
                         });
 
         var processBudgetProbe = Substitute.For<IProcessVramBudgetProbe>();
-        processBudgetProbe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        processBudgetProbe.GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                           .Returns(Task.FromResult(processBudgetVram));
 
         return new InferenceBenchmarkHarness(chatFactory,

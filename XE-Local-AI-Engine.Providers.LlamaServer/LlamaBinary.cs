@@ -30,7 +30,7 @@ public sealed class LlamaBinary
     ///     Upstream prebuilt archives carry no quantizer today, so only a source build resolves one. The presence check
     ///     is evaluated on read rather than stored, so it can never go stale against the tree.
     /// </remarks>
-    public string? QuantizerExecutablePath => LlamaCppToolBinaries.TryResolveQuantizerBesideServer(ServerExecutablePath);
+    public string? QuantizerExecutablePath => LlamaCppToolBinaries.FindQuantizerBesideServer(ServerExecutablePath);
 
     /// <summary>
     ///     The <c>llama-perplexity</c> helper beside this binary, or <see langword="null" /> when this runtime shipped
@@ -40,5 +40,5 @@ public sealed class LlamaBinary
     ///     Prebuilt archives carry it; a source build only does so from the commit that widened the cmake target lists
     ///     onward. Evaluated on read rather than stored, exactly like <see cref="QuantizerExecutablePath" />.
     /// </remarks>
-    public string? PerplexityExecutablePath => LlamaCppToolBinaries.TryResolvePerplexityBesideServer(ServerExecutablePath);
+    public string? PerplexityExecutablePath => LlamaCppToolBinaries.FindPerplexityBesideServer(ServerExecutablePath);
 }

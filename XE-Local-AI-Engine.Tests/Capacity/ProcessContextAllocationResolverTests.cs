@@ -1012,7 +1012,7 @@ public sealed class ProcessContextAllocationResolverTests
         }
 
         var probe = Substitute.For<IProcessVramBudgetProbe>();
-        probe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        probe.GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(processBudget));
 
         return new ProcessContextAllocationResolver(store,

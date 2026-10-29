@@ -105,7 +105,7 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
             failed |= !await TryEnsureAsync(rerankerModelName, ModelRole.Reranker, cancellationToken);
         }
 
-        var embedder = await TryResolveLlamaCppEmbedderAsync(cancellationToken);
+        var embedder = await ResolveLlamaCppEmbedderOrNullAsync(cancellationToken);
         if (embedder is not null)
         {
             failed |= !await TryEnsureAsync(embedder, ModelRole.Embedding, cancellationToken);
@@ -122,7 +122,7 @@ public sealed partial class KnowledgeModelPrewarmer : IKnowledgeModelPrewarmer
 
     // The embedder warms only on the llama.cpp provider and only under a confidently resolved installed name: the name
     // the search and ingestion lanes embed with, so the warm process is the one they reuse.
-    private async Task<string?> TryResolveLlamaCppEmbedderAsync(CancellationToken cancellationToken)
+    private async Task<string?> ResolveLlamaCppEmbedderOrNullAsync(CancellationToken cancellationToken)
     {
         if (!string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
         {

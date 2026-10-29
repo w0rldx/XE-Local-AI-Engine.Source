@@ -57,7 +57,7 @@ public sealed class CudartCompanionAssetTests
     [Arguments("Linux")]
     public void CudaPin_CarriesCompanionRuntimeArchiveMetadata(string os)
     {
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact((os == "Linux" ? OSPlatform.Linux : OSPlatform.Windows), Architecture.X64, GpuVariant.Cuda));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull((os == "Linux" ? OSPlatform.Linux : OSPlatform.Windows), Architecture.X64, GpuVariant.Cuda));
 
         AssertEx.NotNullOrEmpty(pin.CudartAssetName);
         AssertEx.NotNullOrEmpty(pin.CudartSha256);

@@ -27,11 +27,6 @@ public sealed class UpdateCustomToolEndpoint : Endpoint<CustomToolDefinition, Cu
         // in the body resolves back to the stored value in the service, so an unrelated edit never clears a secret.
         var customToolId = Route<Guid>("customToolId");
         var view = await _customToolService.UpdateAsync(customToolId, req, ct);
-        if (view is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(view, ct);
     }

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="ILlamaDeviceInventoryProbe" />: it resolves an ALREADY-AVAILABLE hash-verified binary through
-///     <see cref="ILlamaCppBinaryManager.TryGetInstalledBinaryAsync" />, never acquiring one, runs a short-lived
+///     <see cref="ILlamaCppBinaryManager.FindInstalledBinaryAsync" />, never acquiring one, runs a short-lived
 ///     <c>--list-devices</c> probe and parses the result into a structured inventory.
 /// </summary>
 /// <remarks>
@@ -88,7 +88,7 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
         {
             // NEVER EnsureBinaryAsync here: this probe answers a read-only diagnostic — the hardware-profile GET the app shell fires on every authenticated page — and
             // Ensure would DOWNLOAD a multi-hundred-megabyte runtime as a side effect of a page load, on an Offline or Manual node too. Until something else installs one, "unknown".
-            var binary = await _binaryManager.TryGetInstalledBinaryAsync(variant, ct).ConfigureAwait(false);
+            var binary = await _binaryManager.FindInstalledBinaryAsync(variant, ct).ConfigureAwait(false);
             if (binary is null)
             {
                 // Not cached (Unknown never is), so the first probe AFTER an install — by provisioning, the ensure/select

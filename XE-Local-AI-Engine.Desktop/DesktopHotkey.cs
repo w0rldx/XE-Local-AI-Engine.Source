@@ -23,7 +23,8 @@ internal sealed class DesktopHotkey
     internal uint VirtualKey { get; }
     private string Key { get; }
 
-    internal static DesktopHotkey Default { get; } = Parse(DefaultChord)!;
+    internal static DesktopHotkey Default { get; } =
+        Parse(DefaultChord) ?? throw new InvalidOperationException($"The default hotkey chord '{DefaultChord}' does not parse.");
 
     internal static DesktopHotkey ParseOrDefault(string? text) =>
         Parse(text) ?? Default;

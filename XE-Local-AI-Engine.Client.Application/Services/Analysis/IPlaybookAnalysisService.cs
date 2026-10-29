@@ -15,18 +15,16 @@ public interface IPlaybookAnalysisService
 {
     /// <summary>Runs analysis for the agent and persists the resulting <c>Suggested</c> actions.</summary>
     /// <remarks>
-    ///     Returns an outcome whose <see cref="PlaybookAnalysisOutcome.AgentExists" /> is <c>false</c> when no agent has that id (the
-    ///     endpoint maps that to 404), and whose <see cref="PlaybookAnalysisOutcome.MeetsThreshold" /> is <c>false</c> when the feedback is
-    ///     below the occurrence threshold (no agent is invoked and nothing is written).
+    ///     The outcome's <see cref="PlaybookAnalysisOutcome.MeetsThreshold" /> is <c>false</c> when the feedback is below the occurrence
+    ///     threshold (no agent is invoked and nothing is written).
     /// </remarks>
+    /// <exception cref="Agents.AgentDefinitionNotFoundException">No agent definition has <paramref name="agentDefinitionId" />.</exception>
     Task<PlaybookAnalysisOutcome> AnalyzeAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The result of an analysis run. The counts let the operator see what was proposed vs kept vs filtered.</summary>
 public sealed class PlaybookAnalysisOutcome
 {
-    public required bool AgentExists { get; init; }
-
     public required bool MeetsThreshold { get; init; }
 
     public required IReadOnlyList<PlaybookActionRecord> CreatedSuggestions { get; init; }

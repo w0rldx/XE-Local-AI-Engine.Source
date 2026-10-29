@@ -157,7 +157,7 @@ public sealed class StableDiffusionCppRuntimeEditTests
                       ModelName = call.Arg<string>(),
                       BaseAddress = BaseAddress
                   });
-        supervisor.TryAcquireJobLease(Arg.Any<string>()).Returns((IImageServerJobLease?)null);
+        supervisor.TryAcquireJobLease(Arg.Any<string>(), out Arg.Any<IImageServerJobLease?>()).Returns(false);
         return supervisor;
     }
 

@@ -34,7 +34,7 @@ internal static class DevelopmentCommandProfileImport
     ///     Returns the declared profile id and build target plus the digest of the exact bytes read, or null when the
     ///     repository ships no import file.
     /// </summary>
-    public static ImportedProfile? TryRead(string repositoryRoot)
+    public static ImportedProfile? ReadOrNull(string repositoryRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         var path = Path.Combine(repositoryRoot, ".xe-dev", "profile.json");
@@ -66,14 +66,14 @@ internal static class DevelopmentCommandProfileImport
     ///     Digest of the import file as it currently stands in a worktree, or null when it is absent. Used by the
     ///     workspace invariant to detect a command that wrote the file as a side effect.
     /// </summary>
-    public static string? TryComputeDigest(string worktreePath)
+    public static string? ComputeDigestOrNull(string worktreePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(worktreePath);
         var path = Path.Combine(worktreePath, ".xe-dev", "profile.json");
         return File.Exists(path) ? ComputeDigest(ReadBounded(path)) : null;
     }
 
-    // Synchronous by necessity: TryComputeDigest is reached from the DevelopmentWorkspaceTools constructor, which
+    // Synchronous by necessity: ComputeDigestOrNull is reached from the DevelopmentWorkspaceTools constructor, which
     // captures the baseline digest, and from its synchronous invariant check. Neither has an async seam.
 #pragma warning disable MA0045 // Reached from a constructor and a synchronous invariant check; see the comment above.
     private static byte[] ReadBounded(string path)

@@ -191,7 +191,9 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var endpoint = await _supervisor.EnsureRunningAsync(modelId, ct).ConfigureAwait(false);
-            if (_supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation) is { } lease)
+#pragma warning disable CA2000 // Ownership passes to the returned LeasedEndpoint, which the caller disposes.
+            if (_supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation, out var lease))
+#pragma warning restore CA2000
             {
                 return new LeasedEndpoint(endpoint, lease);
             }

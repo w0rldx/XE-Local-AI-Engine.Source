@@ -10,8 +10,9 @@ public interface IToolMockService
     /// <summary>Every tool mock the node holds.</summary>
     Task<IReadOnlyList<ToolMockRecord>> ListAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The tool mock, or <c>null</c> when no mock carries that id.</summary>
-    Task<ToolMockRecord?> GetAsync(Guid mockId, CancellationToken cancellationToken = default);
+    /// <summary>The tool mock.</summary>
+    /// <exception cref="TrainingNotFoundException">No mock carries <paramref name="mockId" />.</exception>
+    Task<ToolMockRecord> GetAsync(Guid mockId, CancellationToken cancellationToken = default);
 
     /// <summary>Statically verifies the stored body against the tool's live parameter schema and records the verdict.</summary>
     Task<ToolMockVerifyResult> VerifyAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default);
@@ -39,16 +40,16 @@ public sealed class ToolMockService : IToolMockService
     public Task<IReadOnlyList<ToolMockRecord>> ListAsync(CancellationToken cancellationToken = default) =>
         _store.ListMocksAsync(cancellationToken);
 
-    public Task<ToolMockRecord?> GetAsync(Guid mockId, CancellationToken cancellationToken = default) =>
-        _store.GetMockAsync(mockId, cancellationToken);
+    public async Task<ToolMockRecord> GetAsync(Guid mockId, CancellationToken cancellationToken = default) =>
+        await _store.GetMockAsync(mockId, cancellationToken) ?? throw new TrainingNotFoundException("The tool mock was not found.");
 
     public async Task<ToolMockVerifyResult> VerifyAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var mock = await _store.GetMockAsync(mockId, cancellationToken)
                    ?? throw new TrainingNotFoundException("The tool mock was not found.");
-        var verification = _verifier.TryParse(mock.MockJson.Span, out var body, out var parseError) && body is not null
+        var verification = _verifier.TryParse(mock.MockJson.Span, out var body, out var parseError)
             ? _verifier.Verify(body, await FindSchemaAsync(mock.ToolName, cancellationToken))
-            : new ToolMockVerificationV1(SchemaVersion: 1, Passed: false, [parseError ?? "The mock body is unreadable."]);
+            : new ToolMockVerificationV1(SchemaVersion: 1, Passed: false, [parseError]);
 
         var updated = await _store.SetMockVerificationAsync(mockId,
             expectedVersion,

@@ -70,7 +70,7 @@ public sealed class SupervisorGateScopeTests
         var stalledReuse = supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => probe.Probing == 1, TimeSpan.FromSeconds(3), "The reuse liveness probe never started.");
 
-        var mutation = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var mutation = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         await AssertEx.StaysIncompleteAsync(mutation,
             "A runtime mutation must not even decide until every ensure already inside the gate has left it.");
 
@@ -85,7 +85,7 @@ public sealed class SupervisorGateScopeTests
     public async Task RuntimeMutationSharedEntry_WaitsBehindAHeldLease_AndHoldsOffTheNextOne()
     {
         await using var supervisor = SupervisorFactory.Create();
-        var lease = AssertEx.NotNull(await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None));
+        var lease = AssertEx.NotNull(await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None));
 
         // A binary ensure must not land files while an install holds the runtime exclusively.
         var entering = supervisor.EnterRuntimeMutationSharedAsync(CancellationToken.None);
@@ -94,7 +94,7 @@ public sealed class SupervisorGateScopeTests
         await lease.DisposeAsync();
         var entry = await entering.WaitAsync(TimeSpan.FromSeconds(3));
 
-        var nextLease = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var nextLease = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         await AssertEx.StaysIncompleteAsync(nextLease, "A new lease must wait until the shared entry is released.");
 
         entry.Dispose();
@@ -223,7 +223,7 @@ public sealed class SupervisorGateScopeTests
             }
         }
 
-        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        public Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
         {
             return Task.FromResult<int?>(null);
         }

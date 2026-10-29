@@ -20,30 +20,34 @@ public interface IMcpServerService
     /// <summary>
     ///     Validates and applies the editable fields of <paramref name="input" /> to the registration with
     ///     <paramref name="id" />, preserving its current enabled state (enabling is <see cref="SetEnabledAsync" />).
-    ///     Returns the updated record, or <c>null</c> when no registration has that id.
+    ///     Returns the updated record.
     /// </summary>
-    Task<McpServerRecord?> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default);
+    /// <exception cref="McpServerNotFoundException">No registration has <paramref name="id" />.</exception>
+    Task<McpServerRecord> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Enables or disables the registration with <paramref name="id" /> without touching its other fields. Returns the
-    ///     updated record, or <c>null</c> when no registration has that id.
+    ///     updated record.
     /// </summary>
-    Task<McpServerRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
+    /// <exception cref="McpServerNotFoundException">No registration has <paramref name="id" />.</exception>
+    Task<McpServerRecord> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
 
-    /// <summary>Removes the registration with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Removes the registration with <paramref name="id" />.</summary>
+    /// <exception cref="McpServerNotFoundException">No registration has <paramref name="id" />.</exception>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no registration has that id.</summary>
-    Task<McpServerRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Returns the record for <paramref name="id" />.</summary>
+    /// <exception cref="McpServerNotFoundException">No registration has <paramref name="id" />.</exception>
+    Task<McpServerRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Returns every registered server, oldest first.</summary>
     Task<IReadOnlyList<McpServerRecord>> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The tool-panel view of the registration with <paramref name="id" />: its status verdict plus discovered tools.
-    ///     Returns <c>null</c> when no registration has that id.
     /// </summary>
-    Task<McpServerToolsView?> GetToolsViewAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <exception cref="McpServerNotFoundException">No registration has <paramref name="id" />.</exception>
+    Task<McpServerToolsView> GetToolsViewAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The tool-panel status of one registered MCP server.</summary>
@@ -75,6 +79,14 @@ public sealed class McpServerToolsView
 
     /// <summary>Discovered tools; empty unless <see cref="McpServerToolsStatus.Connected" />.</summary>
     public required IReadOnlyList<McpServerToolInfo> Tools { get; init; }
+}
+
+/// <summary>No MCP server registration has the id the client supplied.</summary>
+public sealed class McpServerNotFoundException : ResourceNotFoundException
+{
+    public McpServerNotFoundException(Guid id) : base($"No MCP server registration has id '{id}'.")
+    {
+    }
 }
 
 /// <summary>Thrown when an MCP server create/update fails validation. The message is safe to surface to callers.</summary>

@@ -36,7 +36,7 @@ public sealed class SandboxMountBrokerTests : IDisposable
     }
 
     [Test]
-    public void TryResolveSandboxPath_TranslatesAMountRootAndAnythingBeneathIt()
+    public void ResolveSandboxPathOrNull_TranslatesAMountRootAndAnythingBeneathIt()
     {
         var handle = Handle([
             new SandboxMountBinding
@@ -47,12 +47,12 @@ public sealed class SandboxMountBrokerTests : IDisposable
             }
         ]);
 
-        AssertEx.Equal("/xe-runtime/home", handle.TryResolveSandboxPath("/host/runtime/home"));
-        AssertEx.Equal("/xe-runtime/home/.nuget/packages", handle.TryResolveSandboxPath("/host/runtime/home/.nuget/packages"));
+        AssertEx.Equal("/xe-runtime/home", handle.ResolveSandboxPathOrNull("/host/runtime/home"));
+        AssertEx.Equal("/xe-runtime/home/.nuget/packages", handle.ResolveSandboxPathOrNull("/host/runtime/home/.nuget/packages"));
     }
 
     [Test]
-    public void TryResolveSandboxPath_PrefersTheLongestMatchingMount()
+    public void ResolveSandboxPathOrNull_PrefersTheLongestMatchingMount()
     {
         // A nested mount must win over the one it sits inside — the read-only .git/config layered over the workspace is
         // exactly this shape, and answering with the workspace's mapping would name the wrong file.
@@ -71,12 +71,12 @@ public sealed class SandboxMountBrokerTests : IDisposable
             }
         ]);
 
-        AssertEx.Equal("/workspace/.git/config", handle.TryResolveSandboxPath("/host/workspace/.git/config"));
-        AssertEx.Equal("/workspace/src/Lib.cs", handle.TryResolveSandboxPath("/host/workspace/src/Lib.cs"));
+        AssertEx.Equal("/workspace/.git/config", handle.ResolveSandboxPathOrNull("/host/workspace/.git/config"));
+        AssertEx.Equal("/workspace/src/Lib.cs", handle.ResolveSandboxPathOrNull("/host/workspace/src/Lib.cs"));
     }
 
     [Test]
-    public void TryResolveSandboxPath_WhenNoMountCoversThePath_ReturnsNullRatherThanTheHostPath()
+    public void ResolveSandboxPathOrNull_WhenNoMountCoversThePath_ReturnsNullRatherThanTheHostPath()
     {
         // Returning the host path would compose a command that fails deep inside a build against a directory the
         // sandbox has never heard of. Null is what lets the caller refuse at composition time instead.
@@ -89,7 +89,7 @@ public sealed class SandboxMountBrokerTests : IDisposable
             }
         ]);
 
-        AssertEx.Null(handle.TryResolveSandboxPath("/host/runtime/home"));
+        AssertEx.Null(handle.ResolveSandboxPathOrNull("/host/runtime/home"));
     }
 
     [Test]
@@ -111,7 +111,7 @@ public sealed class SandboxMountBrokerTests : IDisposable
             }
         ]));
 
-        AssertEx.Equal(home, handle.TryResolveSandboxPath(home));
+        AssertEx.Equal(home, handle.ResolveSandboxPathOrNull(home));
         AssertEx.Contains(handle.Mounts, mount => string.Equals(mount.HostPath, workspace, StringComparison.Ordinal)
                                                   && string.Equals(mount.SandboxPath, workspace, StringComparison.Ordinal));
         AssertEx.Empty(handle.Mounts.Where(static mount => mount.SandboxPath.StartsWith("/xe-runtime", StringComparison.Ordinal)));

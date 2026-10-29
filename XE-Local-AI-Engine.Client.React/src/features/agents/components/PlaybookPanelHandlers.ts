@@ -84,7 +84,7 @@ export function usePlaybookPanelHandlers({
 		(values: PlaybookActionFormValues) => {
 			if (editorTarget?.mode === "edit") {
 				// A Suggested (Analysis-provenance) action must edit via the dedicated `/suggested` route — the manual
-				// PUT 404s on it. The body omits `state`; the action stays Suggested until Approve.
+				// PUT answers 409 on it. The body omits `state`; the action stays Suggested until Approve.
 				if (editingAction?.state === "Suggested") {
 					updateSuggestedMutation.mutate(
 						{ actionId: editorTarget.id, request: toSaveSuggestedActionRequest(values) },

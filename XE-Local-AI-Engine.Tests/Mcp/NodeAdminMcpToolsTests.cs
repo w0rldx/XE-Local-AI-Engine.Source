@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
@@ -504,7 +505,6 @@ public sealed class NodeAdminMcpToolsTests
         {
             Version = 2
         });
-        harness.Agents.DeleteAsync(record.Id, Arg.Any<CancellationToken>()).Returns(true);
 
         AssertEx.Equal("current", (await harness.Tools.GetNodeSettingsAsync(CancellationToken.None)).DefaultModelName!);
         var updatedSettings = await harness.Tools.UpdateNodeSettingsAsync(CancellationToken.None,
@@ -709,8 +709,9 @@ public sealed class NodeAdminMcpToolsTests
         var harness = new Harness();
         var record = AgentRecord();
         harness.Agents.GetByKeyAsync("agent", Arg.Any<CancellationToken>()).Returns(record);
-        harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
-        harness.Agents.DeleteAsync(record.Id, Arg.Any<CancellationToken>()).Returns(false);
+        harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>())
+               .ThrowsAsync(new AgentDefinitionNotFoundException(record.Id));
+        harness.Agents.DeleteAsync(record.Id, Arg.Any<CancellationToken>()).ThrowsAsync(new AgentDefinitionNotFoundException(record.Id));
 
         var updateRace = await harness.Tools.UpdateAgentAsync("agent", "Agent", "Instructions", CancellationToken.None);
         var deleteRace = await harness.Tools.DeleteAgentAsync("agent", CancellationToken.None);
@@ -819,7 +820,6 @@ public sealed class NodeAdminMcpToolsTests
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
-        harness.Agents.DeleteAsync(record.Id, Arg.Any<CancellationToken>()).Returns(true);
         var runDetail = RunDetail();
         harness.WorkflowStore.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>())
                .Returns(Array.Empty<DevWorkflowWorkItemSnapshot>());

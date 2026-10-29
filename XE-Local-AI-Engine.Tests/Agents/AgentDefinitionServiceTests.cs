@@ -116,16 +116,26 @@ public sealed class AgentDefinitionServiceTests
     }
 
     [Test]
-    public async Task UpdateAsync_WhenStoreReturnsNull_ReturnsNull()
+    public async Task UpdateAsync_WhenStoreReturnsNull_ThrowsNotFound()
     {
         var service = CreateService(out var store, ["GetCurrentTime"]);
         var id = Guid.NewGuid();
         var input = CreateInput(allowedTools: ["GetCurrentTime"]);
         store.UpdateAsync(id, input, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
 
-        var result = await service.UpdateAsync(id, input);
+        await AssertEx.ThrowsAsync<AgentDefinitionNotFoundException>(() => service.UpdateAsync(id, input));
+    }
 
-        AssertEx.True(result is null, "Updating a missing definition must return null.");
+    [Test]
+    public async Task GetAndDelete_WhenTheIdIsUnknown_ThrowNotFound()
+    {
+        var service = CreateService(out var store);
+        var id = Guid.NewGuid();
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
+        store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(false);
+
+        await AssertEx.ThrowsAsync<AgentDefinitionNotFoundException>(() => service.GetByIdAsync(id));
+        await AssertEx.ThrowsAsync<AgentDefinitionNotFoundException>(() => service.DeleteAsync(id));
     }
 
     [Test]
@@ -148,8 +158,9 @@ public sealed class AgentDefinitionServiceTests
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(record);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
 
-        AssertEx.Equal(expected: true, await service.DeleteAsync(id));
-        AssertEx.Equal(record.Id, (await service.GetByIdAsync(id))!.Id);
+        await service.DeleteAsync(id);
+        await store.Received(1).DeleteAsync(id, Arg.Any<CancellationToken>());
+        AssertEx.Equal(record.Id, (await service.GetByIdAsync(id)).Id);
         AssertEx.Equal(expected: 1, (await service.ListAsync()).Count);
     }
 
@@ -400,6 +411,7 @@ public sealed class AgentDefinitionServiceTests
             {
                 ["list_files"] = true
             });
+        store.UpdateAsync(id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(StoredRecord(id));
 
         await service.UpdateAsync(id, input);
 
@@ -415,6 +427,7 @@ public sealed class AgentDefinitionServiceTests
         var id = Guid.NewGuid();
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(StoredRecord(id));
         var input = CreateInput(allowedTools: ["list_files"]);
+        store.UpdateAsync(id, input, Arg.Any<CancellationToken>()).Returns(StoredRecord(id));
 
         await service.UpdateAsync(id, input);
 

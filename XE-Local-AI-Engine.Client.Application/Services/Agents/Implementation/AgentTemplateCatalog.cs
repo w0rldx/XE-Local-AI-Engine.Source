@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 /// <summary>
@@ -30,11 +31,11 @@ internal sealed class AgentTemplateCatalog : IAgentTemplateCatalog
         return _templates;
     }
 
-    public AgentTemplate? TryGet(string slug)
+    public bool TryGet(string slug, [NotNullWhen(true)] out AgentTemplate? agentTemplate)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
 
-        return _bySlug.TryGetValue(slug, out var template) ? template : null;
+        return _bySlug.TryGetValue(slug, out agentTemplate);
     }
 
     private static IReadOnlyList<AgentTemplate> LoadTemplates()

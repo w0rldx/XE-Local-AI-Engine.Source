@@ -21,10 +21,12 @@ public sealed class ModelFitRefreshTriggerTests
     {
         var jobId = Guid.NewGuid();
         var management = Substitute.For<IScheduledJobManagementService>();
-        management.GetJobAsync(jobId, Arg.Any<CancellationToken>()).Returns((ScheduledJobDefinitionRecord?)null);
+        management.GetJobAsync(jobId, Arg.Any<CancellationToken>())
+                  .Returns<Task<ScheduledJobDefinitionRecord>>(_ => throw new ScheduledJobNotFoundException("Scheduled job not found."));
         var trigger = new ModelFitRefreshTrigger(management);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None));
+        // The management service's not-found passes through untouched: the endpoint answers it with a 404.
+        await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None));
 
         await management.DidNotReceive().TriggerNowAsync(Arg.Any<Guid>(),
             Arg.Any<IReadOnlyDictionary<string, string>?>(),

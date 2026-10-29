@@ -213,7 +213,7 @@ public sealed class TrainingOptionDefaultsCalculator : ITrainingOptionDefaultsCa
         var files = BaseArtifactManifest.DeserializeFiles(artifact.FilesJson);
         var directory = BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifact.Id);
         var configFile = files.FirstOrDefault(static file => string.Equals(file.FileName, "config.json", StringComparison.OrdinalIgnoreCase));
-        var config = TrainingFootprintEstimator.TryReadConfig(Path.Combine(directory, configFile?.FileName ?? "config.json"))
+        var config = TrainingFootprintEstimator.ReadConfigOrNull(Path.Combine(directory, configFile?.FileName ?? "config.json"))
                      ?? throw new TrainingRunRejectedException("The base checkpoint's config.json could not be read, so its size cannot be estimated.");
 
         var parameterCount = TrainingFootprintEstimator.EstimateParameterCount(files, config);

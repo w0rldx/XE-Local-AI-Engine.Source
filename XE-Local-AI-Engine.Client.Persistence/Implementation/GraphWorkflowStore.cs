@@ -79,18 +79,23 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
         long expectedVersion,
         Func<GraphWorkflowRun, Task<MutationOutcome>> mutate,
         CancellationToken cancellationToken) =>
+        await ExecuteConditionalMutationAsync(runId, expectedVersion, mutate, cancellationToken) switch
+        {
+            GraphWorkflowConditionalWriteResult.Written written => written.Result,
 
-        // Never null: this overload's mutate always decides. The nullable core is the conditional-write path.
-        (await TryExecuteMutationAsync(runId, expectedVersion, async run => await mutate(run), cancellationToken))!;
+            // This overload's mutations always decide; a decline here is a wiring bug, not a race.
+            var declined => throw new InvalidOperationException($"An unconditional graph workflow mutation on run '{runId}' declined: {declined}.")
+        };
 
     /// <summary>
     ///     The same one-decision-one-event-one-transaction shape, for a mutation that may decline to write: a
-    ///     <see langword="null" /> outcome rolls the transaction back untouched and answers <see langword="null" />,
-    ///     which is how a compare-and-set reports that it matched no row without raising.
+    ///     <see cref="MutationOutcome.Decline" /> outcome rolls the transaction back untouched and answers
+    ///     <see cref="GraphWorkflowConditionalWriteResult.Declined" />, which is how a compare-and-set reports that it
+    ///     matched no row without raising.
     /// </summary>
-    private async Task<GraphWorkflowMutationResult?> TryExecuteMutationAsync(Guid runId,
+    private async Task<GraphWorkflowConditionalWriteResult> ExecuteConditionalMutationAsync(Guid runId,
         long expectedVersion,
-        Func<GraphWorkflowRun, Task<MutationOutcome?>> mutate,
+        Func<GraphWorkflowRun, Task<MutationOutcome>> mutate,
         CancellationToken cancellationToken,
         bool bumpVersion = true)
     {
@@ -101,10 +106,11 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
                       ?? throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found.");
             EnsureVersion(run, expectedVersion);
 
-            if (await mutate(run) is not { } outcome)
+            var outcome = await mutate(run);
+            if (outcome.DeclinedBy is { } reason)
             {
                 await RollbackAsync(transaction);
-                return null;
+                return new GraphWorkflowConditionalWriteResult.Declined { Reason = reason };
             }
 
             // The watermark is allocated per COMMIT, not per event row: a mutation that records no event — the settle from Cancelling to Cancelled is the only one —
@@ -117,10 +123,13 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
 
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new GraphWorkflowMutationResult
+            return new GraphWorkflowConditionalWriteResult.Written
             {
-                RunId = runId,
-                Sequence = sequence
+                Result = new GraphWorkflowMutationResult
+                {
+                    RunId = runId,
+                    Sequence = sequence
+                }
             };
         }
         catch (DbUpdateConcurrencyException exception)
@@ -295,6 +304,18 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
         public required string? NodeKey { get; init; }
 
         public required byte[]? DetailJson { get; init; }
+
+        /// <summary>Set only by <see cref="Decline" />: the conditional write writes nothing and reports why.</summary>
+        public GraphWorkflowWriteDecline? DeclinedBy { get; private init; }
+
+        public static MutationOutcome Decline(GraphWorkflowWriteDecline reason) =>
+            new()
+            {
+                EventType = null,
+                NodeKey = null,
+                DetailJson = null,
+                DeclinedBy = reason
+            };
     }
 
     private sealed record ReasonDetailPayload(string Reason);

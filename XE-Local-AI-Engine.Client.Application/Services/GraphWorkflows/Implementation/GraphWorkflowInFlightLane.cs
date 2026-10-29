@@ -60,7 +60,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
         Justification = "Ownership transfers to the in-flight entry, which outlives this call by design: Consume disposes it "
                         + "when the settle has committed, Discard disposes it once the work has unwound, and DisposeAsync "
                         + "disposes whatever is left. Disposing here would cancel the work that was just started.")]
-    public async Task<GraphWorkflowInFlight<TResult>?> TryStartAsync(Guid nodeRunId,
+    public async Task<GraphWorkflowInFlight<TResult>?> StartOrNullAsync(Guid nodeRunId,
         int attempt,
         Guid invocationId,
         Func<StrongBox<bool>, CancellationToken, Task<TResult>> work,

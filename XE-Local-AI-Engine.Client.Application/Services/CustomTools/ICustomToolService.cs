@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
-///     Application-layer orchestration over <see cref="XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore" />: validates
+///     Application-layer orchestration over <see cref="ICustomToolStore" />: validates
 ///     operator-authored custom tools and delegates persistence.
 /// </summary>
 /// <remarks>
@@ -17,15 +19,18 @@ public interface ICustomToolService
 
     /// <summary>
     ///     Validates and applies <paramref name="definition" /> to the tool with <paramref name="id" />. Returns the
-    ///     updated view (secrets masked), or <c>null</c> when no tool has that id.
+    ///     updated view (secrets masked).
     /// </summary>
-    Task<CustomToolView?> UpdateAsync(Guid id, CustomToolDefinition definition, CancellationToken cancellationToken = default);
+    /// <exception cref="CustomToolNotFoundException">No tool has <paramref name="id" />.</exception>
+    Task<CustomToolView> UpdateAsync(Guid id, CustomToolDefinition definition, CancellationToken cancellationToken = default);
 
-    /// <summary>Removes the tool with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Removes the tool with <paramref name="id" />.</summary>
+    /// <exception cref="CustomToolNotFoundException">No tool has <paramref name="id" />.</exception>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the view for <paramref name="id" /> (secrets masked), or <c>null</c> when no tool has that id.</summary>
-    Task<CustomToolView?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Returns the view for <paramref name="id" /> (secrets masked).</summary>
+    /// <exception cref="CustomToolNotFoundException">No tool has <paramref name="id" />.</exception>
+    Task<CustomToolView> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Returns every custom tool as a masked view, ordered by Name (Ordinal).</summary>
     Task<IReadOnlyList<CustomToolView>> ListAsync(CancellationToken cancellationToken = default);
@@ -36,6 +41,14 @@ public interface ICustomToolService
     /// </summary>
     /// <remarks>Reports ok plus a reason, so the ProgramLaunch selector UI can validate a path the operator picks.</remarks>
     HostExecutableProbeResult ProbeExecutable(string? path);
+}
+
+/// <summary>No custom tool has the id the client supplied.</summary>
+public sealed class CustomToolNotFoundException : ResourceNotFoundException
+{
+    public CustomToolNotFoundException(Guid id) : base($"No custom tool has id '{id}'.")
+    {
+    }
 }
 
 /// <summary>Thrown when a custom-tool create or update fails validation.</summary>

@@ -111,7 +111,7 @@ internal sealed class DevWorkflowNodeTelemetrySource : IDevWorkflowNodeTelemetry
         // The most recent SUCCESSFUL load of the model that served this run, not necessarily one this run caused: a
         // near-zero model_readiness_ms means the load predates it, null means unmeasured. Chat role; null when remote.
         var vram = envelopes.ServedModelName is { } servedModel
-            ? _localModelLoads?.TryGetLastReadyLoad(servedModel, ModelRole.Chat)
+            ? _localModelLoads?.FindLastReadyLoad(servedModel, ModelRole.Chat)
             : null;
 
         return new DevWorkflowNodeTelemetry

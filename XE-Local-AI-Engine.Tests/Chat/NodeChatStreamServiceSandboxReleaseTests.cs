@@ -91,7 +91,7 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
     private static async Task<IAgentHomeExecutionLease?> AcquireOutsideThisContextAsync(AgentHomeExecutionLeaseManager leases)
     {
         await Task.Yield();
-        return leases.TryAcquire(LeaseKey);
+        return leases.TryAcquire(LeaseKey, out var lease) ? lease : null;
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
@@ -198,7 +198,7 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns(OllamaLocalModelProvider.OllamaProviderName);
         var gguf = Substitute.For<IGgufModelCapabilityResolver>();
-        gguf.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((GgufModelCapabilities?)null);
+        gguf.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((GgufModelCapabilities?)null);
 
         return new ModelCapabilityResolver(classification,
             providerResolver,

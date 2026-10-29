@@ -186,7 +186,8 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         // attempt = 1, so there was nothing behind that promise. It goes back to Queued instead.
         var harness = new Harness(_root, kind: "kld");
         var key = BenchmarkKldCacheKey.Create(Harness.BaseFingerprint, BenchmarkFidelityCorpus.Require().Sha256, BenchmarkFidelityPolicy.DefaultChunks);
-        using var heldByAnotherProcess = AssertEx.NotNull(harness.Cache.TryAcquireLease(key));
+        AssertEx.Succeeded(harness.Cache.TryAcquireLease(key, out var heldByAnotherProcess));
+        using var heldScope = heldByAnotherProcess;
 
         await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
 

@@ -20,7 +20,8 @@ public sealed class AcknowledgeAiEndpoint : EndpointWithoutRequest<AiAcknowledge
     {
         Post(LocalApiRoutes.Tutorial.AiAcknowledgement);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static descriptor => descriptor.AutoTagOverride("Tutorial"));
+        Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                                   .AutoTagOverride("Tutorial"));
         Summary(static summary =>
         {
             summary.Summary = "Records that the caller acknowledged the AI responsibility notice.";
@@ -30,18 +31,23 @@ public sealed class AcknowledgeAiEndpoint : EndpointWithoutRequest<AiAcknowledge
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var acknowledgedAt = await _tutorialStateService.AcknowledgeAiAsync(User, ct);
-        if (acknowledgedAt is null)
+        switch (await _tutorialStateService.AcknowledgeAiAsync(User, ct))
         {
-            await Send.UnauthorizedAsync(ct);
-            return;
+            case AiAcknowledgementResult.Acknowledged acknowledged:
+                await Send.OkAsync(new AiAcknowledgementResponse
+                    {
+                        Acknowledged = true,
+                        AcknowledgedAtUtc = acknowledged.AtUtc
+                    },
+                    ct);
+                return;
+            case AiAcknowledgementResult.NotPersisted:
+                AddError("The acknowledgement could not be saved. Try again.");
+                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
+                return;
+            default:
+                await Send.UnauthorizedAsync(ct);
+                return;
         }
-
-        await Send.OkAsync(new AiAcknowledgementResponse
-            {
-                Acknowledged = true,
-                AcknowledgedAtUtc = acknowledgedAt
-            },
-            ct);
     }
 }

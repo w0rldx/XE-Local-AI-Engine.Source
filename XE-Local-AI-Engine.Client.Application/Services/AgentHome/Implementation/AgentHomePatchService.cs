@@ -51,7 +51,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         cancellationToken.ThrowIfCancellationRequested();
 
         // Every git below is scoped to these, never to the repository root: a file written beside the copied folders
-        // would otherwise ride changes.patch and the line totals while TryMapEntry dropped it from changed-files.json.
+        // would otherwise ride changes.patch and the line totals while MapEntryOrNull dropped it from changed-files.json.
         var aliases = request.ResolvedFolders.Select(static folder => folder.Alias).Distinct(StringComparer.Ordinal).ToList();
         if (aliases.Count == 0)
         {
@@ -691,12 +691,12 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
                         .ToDictionary(group => group.Key, group => group.First().Id.ToString(), StringComparer.Ordinal);
 
         return ParseNameStatus(nameStatusOutput)
-               .Select(record => TryMapEntry(record, aliasToId))
+               .Select(record => MapEntryOrNull(record, aliasToId))
                .OfType<ChangedFileEntry>()
                .ToList();
     }
 
-    private ChangedFileEntry? TryMapEntry(NameStatusRecord record, IReadOnlyDictionary<string, string> aliasToId)
+    private ChangedFileEntry? MapEntryOrNull(NameStatusRecord record, IReadOnlyDictionary<string, string> aliasToId)
     {
         var path = record.Path;
         var separator = path.IndexOf(value: '/', StringComparison.Ordinal);

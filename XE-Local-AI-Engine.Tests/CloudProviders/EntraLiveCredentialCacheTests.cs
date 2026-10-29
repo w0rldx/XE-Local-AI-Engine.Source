@@ -13,11 +13,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class EntraLiveCredentialCacheTests
 {
     [Test]
-    public void TryGet_WhenNothingStored_ReturnsNull()
+    public void TryGet_WhenNothingStored_ReturnsFalse()
     {
         var cache = new EntraLiveCredentialCache();
 
-        AssertEx.Null(cache.TryGet("tenant|client|scope"));
+        AssertEx.False(cache.TryGet("tenant|client|scope", out _));
     }
 
     [Test]
@@ -28,16 +28,17 @@ public sealed class EntraLiveCredentialCacheTests
 
         cache.Store("tenant|client|scope", credential);
 
-        AssertEx.True(ReferenceEquals(credential, cache.TryGet("tenant|client|scope")));
+        AssertEx.Succeeded(cache.TryGet("tenant|client|scope", out var cached));
+        AssertEx.True(ReferenceEquals(credential, cached));
     }
 
     [Test]
-    public void TryGet_WhenKeyDoesNotMatchStoredKey_ReturnsNull()
+    public void TryGet_WhenKeyDoesNotMatchStoredKey_ReturnsFalse()
     {
         var cache = new EntraLiveCredentialCache();
         cache.Store("tenant-a|client|scope", new StubTokenCredential());
 
-        AssertEx.Null(cache.TryGet("tenant-b|client|scope"));
+        AssertEx.False(cache.TryGet("tenant-b|client|scope", out _));
     }
 
     [Test]
@@ -52,8 +53,9 @@ public sealed class EntraLiveCredentialCacheTests
 
         cache.Store("tenant-b|client|scope", second);
 
-        AssertEx.Null(cache.TryGet("tenant-a|client|scope"));
-        AssertEx.True(ReferenceEquals(second, cache.TryGet("tenant-b|client|scope")));
+        AssertEx.False(cache.TryGet("tenant-a|client|scope", out _));
+        AssertEx.Succeeded(cache.TryGet("tenant-b|client|scope", out var cached));
+        AssertEx.True(ReferenceEquals(second, cached));
     }
 
     [Test]

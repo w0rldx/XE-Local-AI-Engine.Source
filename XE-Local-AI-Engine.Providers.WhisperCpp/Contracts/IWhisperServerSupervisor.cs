@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>Lifecycle state of the resident <c>whisper-server</c> daemon.</summary>
@@ -92,11 +93,11 @@ public interface IWhisperServerSupervisor
     Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct);
 
     /// <summary>
-    ///     Acquires a transcription lease against the resident daemon. Returns <see langword="null" /> when the daemon
+    ///     Acquires a transcription lease against the resident daemon. Returns <see langword="false" /> when the daemon
     ///     no longer serves <paramref name="modelId" /> at <paramref name="generation" />, or is latched for eviction
     ///     or for a model switch.
     /// </summary>
-    IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation);
+    bool TryAcquireJobLease(string modelId, long generation, [NotNullWhen(true)] out IWhisperTranscriptionLease? lease);
 
     /// <summary>
     ///     Reports a transport failure against the daemon at <paramref name="generation" />. If it exited, logs it once, tears it

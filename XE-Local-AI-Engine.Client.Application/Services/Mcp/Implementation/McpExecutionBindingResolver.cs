@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -73,7 +74,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
     private async Task<McpExecutionBindingResolution> ResolveBareModelAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
     {
-        var modelId = request.ModelId!;
+        var modelId = request.ModelId ?? throw new InvalidOperationException("A bare-model binding is resolved only for a request that names a model.");
         if (!await _ggufModelStore.ExistsAsync(modelId, cancellationToken))
         {
             return Reject(McpExecutionFailureCodes.ModelNotAvailable, "Cannot run: the requested local model is not available.");
@@ -98,7 +99,8 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
     private async Task<McpExecutionBindingResolution> ResolveSavedAgentAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
     {
-        var definition = await _agentDefinitionService.GetByKeyAsync(request.AgentKey!, cancellationToken);
+        var agentKey = request.AgentKey ?? throw new InvalidOperationException("A saved-agent binding is resolved only for a request that names an agent.");
+        var definition = await _agentDefinitionService.GetByKeyAsync(agentKey, cancellationToken);
         if (definition is null)
         {
             return Reject(McpExecutionFailureCodes.AgentNotFound, "Cannot run: the requested saved agent was not found.");
@@ -144,14 +146,18 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             // Agentic runs auto-approve every call, which would skip the web result review: the web tools never enter the binding.
             allowedTools = [.. resolved.AllowedTools.Where(static tool => !WebAccessToolCatalog.IsWebTool(tool.Name))];
         }
-        else
+        else if (!isSeededCoder)
         {
             allowedTools = [];
-            if (isSeededCoder && !TryProjectExactCoderTools(resolved.AllowedTools, out allowedTools))
-            {
-                return Reject(McpExecutionFailureCodes.AgentConfigChanged,
-                    "Cannot run: the saved Coder capability configuration is incomplete or unsafe.");
-            }
+        }
+        else if (TryProjectExactCoderTools(resolved.AllowedTools, out var projectedTools))
+        {
+            allowedTools = projectedTools;
+        }
+        else
+        {
+            return Reject(McpExecutionFailureCodes.AgentConfigChanged,
+                "Cannot run: the saved Coder capability configuration is incomplete or unsafe.");
         }
 
         var binding = CreateBinding(modelId,
@@ -166,7 +172,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         return McpExecutionBindingResolution.Success(binding);
     }
 
-    private static bool TryProjectExactCoderTools(IReadOnlyList<AllowedToolDto> resolvedTools, out IReadOnlyList<AllowedToolDto> projectedTools)
+    private static bool TryProjectExactCoderTools(IReadOnlyList<AllowedToolDto> resolvedTools, [NotNullWhen(true)] out IReadOnlyList<AllowedToolDto>? projectedTools)
     {
         // The shared resolver may append capabilities such as ask_user after applying the saved definition's allowed names; they are irrelevant to
         // inbound Coder execution and never enter its binding. The three expected names stay fail-closed: each occurs exactly once, read-only.
@@ -177,7 +183,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
                                              || tool.Location != ToolLocation.ClientLocal
                                              || tool.RequiresApproval))
         {
-            projectedTools = [];
+            projectedTools = null;
             return false;
         }
 

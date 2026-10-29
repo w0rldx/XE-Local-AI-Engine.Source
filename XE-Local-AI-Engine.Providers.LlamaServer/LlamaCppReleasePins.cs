@@ -214,7 +214,7 @@ public static class LlamaCppReleasePins
     ///     CAUTION: a GPU-variant request whose (os, arch, variant) has no pinned prebuilt — arm64 CUDA — returns the CPU
     ///     floor pin here, a non-null CPU archive, and serving that as a GPU-variant binary would mislabel a CPU build
     ///     the supervisor then emits GPU placement flags against. A caller acquiring a GPU variant must use
-    ///     <see cref="TryResolveExact" /> and treat null as "no prebuilt", never fall through to this floor.
+    ///     <see cref="ResolveExactOrNull" /> and treat null as "no prebuilt", never fall through to this floor.
     /// </remarks>
     public static LlamaCppAssetPin? Resolve(OSPlatform os, Architecture arch, GpuVariant variant)
     {
@@ -236,7 +236,7 @@ public static class LlamaCppReleasePins
     ///     archive, so an arm64 CUDA request — which has no pinned prebuilt — resolves to null and the binary manager
     ///     fails with the sanitized "no prebuilt" error instead of serving a CPU build stamped as CUDA.
     /// </remarks>
-    public static LlamaCppAssetPin? TryResolveExact(OSPlatform os, Architecture arch, GpuVariant variant)
+    public static LlamaCppAssetPin? ResolveExactOrNull(OSPlatform os, Architecture arch, GpuVariant variant)
     {
         return Pins.TryGetValue(new PinKey(os, arch, variant), out var pin) ? pin : null;
     }
@@ -255,7 +255,7 @@ public static class LlamaCppReleasePins
     /// </remarks>
     public static LlamaCppAssetPin? ResolveForAcquisition(OSPlatform os, Architecture arch, GpuVariant variant)
     {
-        return variant == GpuVariant.Cpu ? Resolve(os, arch, variant) : TryResolveExact(os, arch, variant);
+        return variant == GpuVariant.Cpu ? Resolve(os, arch, variant) : ResolveExactOrNull(os, arch, variant);
     }
 
     /// <summary>

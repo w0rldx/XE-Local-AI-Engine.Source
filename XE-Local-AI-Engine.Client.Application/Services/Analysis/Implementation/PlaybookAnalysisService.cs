@@ -34,20 +34,8 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
 
     public async Task<PlaybookAnalysisOutcome> AnalyzeAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
-        // Read the feedback-insights aggregate (reuse — never re-derive). Null means the agent does not exist → the endpoint 404s.
+        // Read the feedback-insights aggregate (reuse — never re-derive). An unknown agent throws its not-found there.
         var insights = await _insightsService.GetAgentFeedbackInsightsAsync(agentDefinitionId, cancellationToken);
-        if (insights is null)
-        {
-            return new PlaybookAnalysisOutcome
-            {
-                AgentExists = false,
-                MeetsThreshold = false,
-                CreatedSuggestions = [],
-                ProposedCount = 0,
-                RejectedCount = 0,
-                DuplicateCount = 0
-            };
-        }
 
         // Never act on a single signal: if the aggregate is below the occurrence threshold, don't even invoke the
         // model. A sub-threshold run writes nothing.
@@ -56,8 +44,7 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
             _logger.LogInformation("Skipping playbook analysis for agent {AgentId}: feedback below the occurrence threshold.", agentDefinitionId);
             return new PlaybookAnalysisOutcome
             {
-                AgentExists = true,
-                MeetsThreshold = false,
+                    MeetsThreshold = false,
                 CreatedSuggestions = [],
                 ProposedCount = 0,
                 RejectedCount = 0,
@@ -121,7 +108,6 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
 
         return new PlaybookAnalysisOutcome
         {
-            AgentExists = true,
             MeetsThreshold = true,
             CreatedSuggestions = created,
             ProposedCount = proposals.Count,

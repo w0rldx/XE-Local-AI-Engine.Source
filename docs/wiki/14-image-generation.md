@@ -88,7 +88,7 @@ Operator (React) ──REST /api/local/v1/images/* ──▶ FastEndpoints
 `ImageJobCoordinator` (`IImageJobCoordinator`, **Singleton**) is modelled on the GGUF download coordinator: a per-job in-flight `CancellationTokenSource` registry, throttled coarse status push, and detached run tasks. The one invariant that shapes everything: **generation is serialized to at most one running job** through a single-slot `SemaphoreSlim`. Extra jobs wait in their run task holding `ImageJobStatus.Queued` and are **never submitted to the runtime** until the slot frees. This bounds the blast radius of a cancel-that-must-kill the daemon to exactly one job.
 
 - **`EnqueueAsync`** persists a `Queued` job to `image_jobs`, mints its token, kicks the serialized worker, and returns the job id. Generation runs **detached** after the call returns (the registry is Singleton so it outlives the request).
-- **`CancelAsync`** signals the tracked job's token: a still-queued job is dropped to `Cancelled` **without ever calling the runtime**; a generating job's token is cancelled so the runtime performs the queued-cancel or kill+restart. Returns `false` for an unknown or already-terminal job.
+- **`CancelAsync`** signals the tracked job's token: a still-queued job is dropped to `Cancelled` **without ever calling the runtime**; a generating job's token is cancelled so the runtime performs the queued-cancel or kill+restart. Returns `false` for an already-terminal job (the cancel route's 409) and throws `ImageNotFoundException` for an unknown one (404).
 - **`GetAsync` / `ListAsync`** read the persisted status view (newest first); `ListAsync` is paged (`limit`/`offset`) and reports the unpaged total.
 - **`DeleteAsync`** removes a terminal job with its images — see [Deleting a job](#deleting-a-job).
 - **`SnapshotBufferedEvents`** returns a late hub subscriber's replay log. The coordinator keeps a per-job ordered event buffer (cap 128) that lingers ~5 minutes after a terminal event so a client that connects late can catch up.
@@ -419,7 +419,7 @@ Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file i
 | `DraftImagePromptEndpoint` | `POST images/prompts/draft` | Turn an image idea into a detailed prompt (and negative prompt) with a node-local chat model, through the shared drafting service (`IConfigDraftService`: fail-closed model eligibility, single draft slot → 409, unusable output → 422). Writes nothing; the form's Apply fills the prompt fields. |
 | `ListImageJobsEndpoint` | `GET images/jobs` | One page of persisted jobs, newest first (`limit`/`offset`, with the unpaged `totalCount`). |
 | `GetImageJobEndpoint` | `GET images/jobs/{jobId}` | One job's current status view. |
-| `CancelImageJobEndpoint` | `POST images/jobs/{jobId}/cancel` | Request cancellation of a tracked job. |
+| `CancelImageJobEndpoint` | `POST images/jobs/{jobId}/cancel` | Request cancellation of a tracked job. 404 for an unknown job, 409 for one that already finished. |
 | `DeleteImageJobEndpoint` | `DELETE images/jobs/{jobId}` | Delete a terminal job with its image(s) — rows and encrypted blobs. 409 while the job is still queued or generating. |
 | `RetrieveImageEndpoint` | `GET images/{imageId}` | Fetch the produced image bytes for a succeeded job or an uploaded image (decrypted on read). |
 | `UploadImageEndpoint` | `POST images/uploads` | Store a PNG or JPEG source photo, encrypted, with no job. See [Uploaded source images](#uploaded-source-images). |

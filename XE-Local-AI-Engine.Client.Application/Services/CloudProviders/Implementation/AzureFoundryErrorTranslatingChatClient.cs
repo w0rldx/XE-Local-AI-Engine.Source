@@ -197,8 +197,8 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
                 ? nested
                 : root;
 
-            var code = TryGetString(errorElement, "code");
-            var message = SanitizeSingleLine(TryGetString(errorElement, "message"));
+            var code = GetStringOrNull(errorElement, "code");
+            var message = SanitizeSingleLine(GetStringOrNull(errorElement, "message"));
             return new ErrorBodyDetail(code, message);
         }
         catch (JsonException)
@@ -207,7 +207,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         }
     }
 
-    private static string? TryGetString(JsonElement element, string propertyName)
+    private static string? GetStringOrNull(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()

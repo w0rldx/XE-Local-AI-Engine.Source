@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
@@ -40,8 +41,17 @@ public sealed class DatasetGenerationHub : Hub
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var dataset = await _datasets.GetAsync(datasetId, cancellationToken)
-                      ?? throw new HubException("The training dataset was not found.");
+        TrainingDatasetRecord dataset;
+        try
+        {
+            dataset = await _datasets.GetAsync(datasetId, cancellationToken);
+        }
+        catch (TrainingNotFoundException exception)
+        {
+            // A hub has no exception handler: without this the caller would see SignalR\'s generic invocation error.
+            throw new HubException("The training dataset was not found.", exception);
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, DatasetGroup(datasetId), cancellationToken);
 
         var replay = _events.Replay(datasetId, afterSeq);

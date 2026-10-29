@@ -29,11 +29,6 @@ public sealed class ListSkillResourcesEndpoint : Endpoint<ListSkillResourcesRequ
     public override async Task HandleAsync(ListSkillResourcesRequest req, CancellationToken ct)
     {
         var record = await _agentSkillService.GetByIdAsync(req.SkillId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(new ListSkillResourcesResponse
             {

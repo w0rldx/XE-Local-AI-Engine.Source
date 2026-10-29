@@ -20,17 +20,24 @@ public sealed class UpdatePlaybookActionEndpoint : Endpoint<UpdatePlaybookAction
     {
         Put(LocalApiRoutes.Agents.PlaybookActionById);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdatePlaybookActionRequest req, CancellationToken ct)
     {
-        var record = await _playbookActionService.UpdateAsync(req.ActionId, req.ToInput(), ct);
-        if (record is null)
+        switch (await _playbookActionService.UpdateAsync(req.ActionId, req.ToInput(), ct))
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            case PlaybookActionUpdateResult.Updated updated:
+                await Send.OkAsync(updated.Record.ToResponse(), ct);
+                return;
+            default:
+                // The `outcome` member keeps the refusal machine-readable without matching on the message.
+                await Send.ConflictProblemAsync("This action came from analysis; edit it through the suggestion review instead.",
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = "NotManual"
+                    });
+                return;
         }
-
-        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

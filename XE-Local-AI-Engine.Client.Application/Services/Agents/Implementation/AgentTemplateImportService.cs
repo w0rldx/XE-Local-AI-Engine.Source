@@ -34,8 +34,7 @@ internal sealed class AgentTemplateImportService : IAgentTemplateImportService
 
         foreach (var slug in requestedSlugs)
         {
-            var template = _catalog.TryGet(slug);
-            if (template is null)
+            if (!_catalog.TryGet(slug, out var template))
             {
                 unknown.Add(slug);
                 continue;

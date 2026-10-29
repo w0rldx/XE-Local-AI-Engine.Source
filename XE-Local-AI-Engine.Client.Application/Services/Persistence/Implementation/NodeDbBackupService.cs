@@ -188,14 +188,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
 
         try
         {
-            var snapshotPath = ResolveSnapshotPath(name);
-            if (snapshotPath is null)
-            {
-                return new NodeDbRestoreStageResult
-                {
-                    Status = NodeDbRestoreStageStatus.NotFound
-                };
-            }
+            var snapshotPath = ResolveSnapshotPath(name) ?? throw new NodeBackupNotFoundException(name);
 
             var backupDirectory = ResolveBackupDirectory();
             var refusal = NodeDbRestoreStaging.DescribeLinkedSnapshot(backupDirectory, snapshotPath)
@@ -237,10 +230,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
     {
         if (Interlocked.CompareExchange(ref _creating, 1, 0) != 0)
         {
-            return new NodeDbSnapshotCreateResult
-            {
-                Status = NodeDbSnapshotCreateStatus.Busy
-            };
+            return new NodeDbSnapshotCreateResult.Busy();
         }
 
         string? temporaryPath = null;
@@ -251,20 +241,14 @@ public sealed class NodeDbBackupService : INodeDbBackupService
             var dataSource = dbContext.Database.GetDbConnection().DataSource;
             if (string.IsNullOrWhiteSpace(dataSource) || string.Equals(dataSource, ":memory:", StringComparison.Ordinal))
             {
-                return new NodeDbSnapshotCreateResult
-                {
-                    Status = NodeDbSnapshotCreateStatus.Unsupported
-                };
+                return new NodeDbSnapshotCreateResult.Unsupported();
             }
 
             var backupDirectory = ResolveBackupDirectory();
             Directory.CreateDirectory(backupDirectory);
             if (!HasRoomForSnapshot(dbContext, backupDirectory))
             {
-                return new NodeDbSnapshotCreateResult
-                {
-                    Status = NodeDbSnapshotCreateStatus.InsufficientSpace
-                };
+                return new NodeDbSnapshotCreateResult.InsufficientSpace();
             }
 
             var destinationPath = BuildSnapshotPath(backupDirectory);
@@ -276,9 +260,8 @@ public sealed class NodeDbBackupService : INodeDbBackupService
             var snapshot = ToSnapshot(destinationPath);
             _logger.LogInformation("Snapshotted the node database to {BackupPath} ({BackupBytes} bytes) on the operator's request.", destinationPath, snapshot.SizeBytes);
             PruneOldSnapshots(backupDirectory, await _runtimeSettings.GetNodeDbBackupRetainCountAsync(cancellationToken));
-            return new NodeDbSnapshotCreateResult
+            return new NodeDbSnapshotCreateResult.Created
             {
-                Status = NodeDbSnapshotCreateStatus.Created,
                 Snapshot = snapshot
             };
         }

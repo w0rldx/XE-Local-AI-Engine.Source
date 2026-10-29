@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -553,7 +554,7 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
         };
     }
 
-    private static bool TryNormalizeSha256(string? value, out string normalized)
+    private static bool TryNormalizeSha256(string? value, [NotNullWhen(true)] out string? normalized)
     {
         if (value is { Length: 64 } && value.All(Uri.IsHexDigit))
         {
@@ -561,16 +562,16 @@ public sealed class LaunchPolicyFingerprintProvider : ILaunchPolicyFingerprintPr
             return true;
         }
 
-        normalized = string.Empty;
+        normalized = null;
         return false;
     }
 
     private static bool TrySplitFingerprint(string? value,
-        out string strongHash,
-        out string validationHash)
+        [NotNullWhen(true)] out string? strongHash,
+        [NotNullWhen(true)] out string? validationHash)
     {
-        strongHash = string.Empty;
-        validationHash = string.Empty;
+        strongHash = null;
+        validationHash = null;
         if (value is not { Length: 129 } || value[64] != FingerprintSeparator)
         {
             return false;

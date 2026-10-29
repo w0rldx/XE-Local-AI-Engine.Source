@@ -156,9 +156,9 @@ public sealed class NodeChatStreamServiceAgentHomeTests
         AssertEx.False(runner.ReadResult.Contains("workspace is busy", StringComparison.OrdinalIgnoreCase));
         AssertEx.Equal(expected: 1, preparationLease.AmbientScopeDisposeCount);
         AssertEx.Equal(expected: 1, preparationLease.DisposeCount);
-        using var afterCompletion = leases.TryAcquire(key);
-        AssertEx.NotNull(afterCompletion);
-        AssertEx.False(afterCompletion!.IsBorrowed);
+        AssertEx.Succeeded(leases.TryAcquire(key, out var afterCompletion));
+        using var afterCompletionScope = afterCompletion;
+        AssertEx.False(afterCompletion.IsBorrowed);
     }
 
     [Test]

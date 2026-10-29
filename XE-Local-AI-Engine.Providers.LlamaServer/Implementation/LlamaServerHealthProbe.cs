@@ -92,7 +92,7 @@ internal sealed class LlamaServerHealthProbe : ILlamaServerHealthProbe
     }
 
     /// <inheritdoc />
-    public async Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+    public async Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
 

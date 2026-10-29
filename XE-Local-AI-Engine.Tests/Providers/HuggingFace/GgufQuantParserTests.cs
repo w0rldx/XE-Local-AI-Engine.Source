@@ -26,7 +26,7 @@ public sealed class GgufQuantParserTests
     [Arguments("gpt-oss-20b-nvfp4.gguf", "NVFP4")] // FreedomAISVR/gpt-oss-20B-NVFP4-GGUF — lowercase
     public void TryParse_ExtractsPlainQuant(string fileName, string expected)
     {
-        AssertEx.Equal(expected, GgufQuantParser.TryParse(fileName));
+        AssertEx.Equal(expected, GgufQuantParser.ParseOrNull(fileName));
     }
 
     [Test]
@@ -35,7 +35,7 @@ public sealed class GgufQuantParserTests
     [Arguments("no-recognizable-token.gguf")]
     public void TryParse_ReturnsNull_WhenNoQuantToken(string fileName)
     {
-        AssertEx.Null(GgufQuantParser.TryParse(fileName));
+        AssertEx.Null(GgufQuantParser.ParseOrNull(fileName));
     }
 
     [Test]
@@ -46,20 +46,20 @@ public sealed class GgufQuantParserTests
     [Arguments("model-UD_Q4_K_M.gguf", "UD-Q4_K_M")] // underscore-separated marker still recognized
     public void TryParse_PreservesUnslothDynamicMarker(string fileName, string expected)
     {
-        AssertEx.Equal(expected, GgufQuantParser.TryParse(fileName));
+        AssertEx.Equal(expected, GgufQuantParser.ParseOrNull(fileName));
     }
 
     [Test]
     public void TryParse_DoesNotTreatTrailingUdLetters_AsDynamicMarker()
     {
         // "HUD-" is not the Unsloth marker (the U is glued to an alphanumeric), so the base quant is returned.
-        AssertEx.Equal("Q4_K_M", GgufQuantParser.TryParse("some-HUD-Q4_K_M.gguf"));
+        AssertEx.Equal("Q4_K_M", GgufQuantParser.ParseOrNull("some-HUD-Q4_K_M.gguf"));
     }
 
     [Test]
     public void TryParse_HandlesShardedDynamicFile_TakingTheQuantToken()
     {
-        AssertEx.Equal("UD-Q4_K_XL", GgufQuantParser.TryParse("gemma-3-27b-it-UD-Q4_K_XL-00001-of-00002.gguf"));
+        AssertEx.Equal("UD-Q4_K_XL", GgufQuantParser.ParseOrNull("gemma-3-27b-it-UD-Q4_K_XL-00001-of-00002.gguf"));
     }
 
     [Test]

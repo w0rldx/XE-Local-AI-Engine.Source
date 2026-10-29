@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Training.BaseArtifacts.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
@@ -21,19 +22,13 @@ public sealed class CancelBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<BaseArtifactResponse>(StatusCodes.Status200OK)
-                               .Produces(StatusCodes.Status404NotFound)
+                               .Produces<TrainingErrorResponse>(StatusCodes.Status404NotFound)
                                .Produces<BaseArtifactBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)
     {
         var artifact = await _baseArtifactService.GetAsync(request.ArtifactId, ct);
-        if (artifact is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         if (!await _baseArtifactService.CancelAsync(request.ArtifactId))
         {
             await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("not-downloading",

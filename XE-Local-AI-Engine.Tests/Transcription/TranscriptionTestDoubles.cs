@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using System.Buffers.Binary;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -148,8 +149,11 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
             }
         });
 
-    public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation) =>
-        null;
+    public bool TryAcquireJobLease(string modelId, long generation, [NotNullWhen(true)] out IWhisperTranscriptionLease? lease)
+    {
+        lease = null;
+        return false;
+    }
 
     public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
         Task.FromResult<WhisperRuntimeException?>(null);

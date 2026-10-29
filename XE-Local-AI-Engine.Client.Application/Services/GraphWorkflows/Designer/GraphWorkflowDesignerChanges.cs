@@ -28,7 +28,7 @@ internal static class GraphWorkflowDesignerChanges
 
     public static IReadOnlyList<GraphWorkflowDesignerChange> Compute(string workingGraphJson, string proposalGraphJson, int maxNodes)
     {
-        if (TryParse(workingGraphJson, maxNodes) is { } working && TryParse(proposalGraphJson, maxNodes) is { } proposal)
+        if (ParseOrNull(workingGraphJson, maxNodes) is { } working && ParseOrNull(proposalGraphJson, maxNodes) is { } proposal)
         {
             return
             [
@@ -261,7 +261,7 @@ internal static class GraphWorkflowDesignerChanges
     private static JsonElement SerializeConfig(GraphWorkflowNodeConfig config) =>
         JsonSerializer.SerializeToElement(config, config.GetType(), ConfigOptions);
 
-    private static GraphWorkflowGraph? TryParse(string graphJson, int maxNodes)
+    private static GraphWorkflowGraph? ParseOrNull(string graphJson, int maxNodes)
     {
         if (string.IsNullOrWhiteSpace(graphJson))
         {

@@ -11,15 +11,9 @@ internal sealed class VaultUnlockOutcome
 
     /// <summary>
     ///     Set by a recovery-code unlock: the real host resets the admin password (Identity and the vault's password
-    ///     wrap, via <c>INodeAuthService.ResetAdminPasswordAsync</c>) to this value right after migrations.
+    ///     wrap, via <c>INodeAuthService.ResetAdminPasswordAsync</c>) right after migrations.
     /// </summary>
-    public string? ResetPassword { get; init; }
-
-    /// <summary>The recovery code that proved the reset; that call verifies it again against the file.</summary>
-    public string? ResetRecoveryCode { get; init; }
-
-    /// <summary>The rotated recovery code the pre-host already showed; the reset wraps the vault's recovery slot under it.</summary>
-    public string? ResetNewRecoveryCode { get; init; }
+    public VaultRecoveryReset? RecoveryReset { get; init; }
 
     /// <summary>Set by a pre-host password unlock: the real host registers it so <c>auth/refresh</c> can trade the <c>node_ut</c> cookie once.</summary>
     public VaultUnlockTicket? UnlockTicket { get; init; }

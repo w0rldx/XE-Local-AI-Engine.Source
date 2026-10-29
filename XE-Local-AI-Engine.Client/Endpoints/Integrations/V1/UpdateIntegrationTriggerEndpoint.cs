@@ -48,12 +48,12 @@ public sealed class UpdateIntegrationTriggerEndpoint : Endpoint<UpdateIntegratio
             },
             ct);
 
-        if (result.Outcome != IntegrationTriggerOutcome.Saved)
+        if (result is not IntegrationTriggerResult.Saved saved)
         {
-            await IntegrationTriggerResponses.SendFailureAsync(this, Send, result, ct);
+            await IntegrationTriggerResponses.SendFailureAsync(this, Send, (IntegrationTriggerResult.Rejected)result, ct);
             return;
         }
 
-        await Send.OkAsync(IntegrationMapper.ToView(result.Trigger!), ct);
+        await Send.OkAsync(IntegrationMapper.ToView(saved.Trigger), ct);
     }
 }

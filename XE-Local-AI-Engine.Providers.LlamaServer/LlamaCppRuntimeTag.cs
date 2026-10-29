@@ -31,8 +31,8 @@ public static class LlamaCppRuntimeTag
             return true;
         }
 
-        var installedNumber = TryParseTagNumber(installedTag);
-        var recommendedNumber = TryParseTagNumber(recommendedTag);
+        var installedNumber = ParseTagNumberOrNull(installedTag);
+        var recommendedNumber = ParseTagNumberOrNull(recommendedTag);
 
         if (installedNumber is { } installed && recommendedNumber is { } recommended)
         {
@@ -47,7 +47,7 @@ public static class LlamaCppRuntimeTag
     ///     Parses the integer after the leading <c>b</c> of a llama.cpp release tag, or <see langword="null" /> when
     ///     <paramref name="tag" /> is not in the <c>b&lt;number&gt;</c> form.
     /// </summary>
-    public static long? TryParseTagNumber(string? tag)
+    public static long? ParseTagNumberOrNull(string? tag)
     {
         if (string.IsNullOrWhiteSpace(tag) || (tag[0] != 'b' && tag[0] != 'B'))
         {

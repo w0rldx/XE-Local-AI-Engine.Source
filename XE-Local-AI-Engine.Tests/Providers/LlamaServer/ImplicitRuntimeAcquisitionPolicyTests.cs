@@ -201,7 +201,7 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
     /// <summary>A published pinned Windows-CUDA server with ggml-cuda but none of the companion DLLs.</summary>
     private static async Task<string> WriteCachedWindowsCudaServerAsync(string cacheRoot)
     {
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
         var serverPath = Path.Combine(cacheRoot, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cuda",
             pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
         var serverDir = Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!).FullName;

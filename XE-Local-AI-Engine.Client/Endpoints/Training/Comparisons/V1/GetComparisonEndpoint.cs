@@ -25,12 +25,6 @@ public sealed class GetComparisonEndpoint : Endpoint<ComparisonByIdRequest, Comp
     public override async Task HandleAsync(ComparisonByIdRequest req, CancellationToken ct)
     {
         var report = await _comparisons.GetAsync(req.ComparisonId, ct);
-        if (report is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(report.ToResponse(), ct);
     }
 }

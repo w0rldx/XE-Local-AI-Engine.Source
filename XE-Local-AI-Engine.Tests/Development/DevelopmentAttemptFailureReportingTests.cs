@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -180,7 +181,7 @@ public sealed class DevelopmentAttemptFailureReportingTests
             return false;
         }
 
-        public bool TryGetDeliveryReader(Guid attemptId, out ChannelReader<DevelopmentAttemptLiveUpdate>? reader)
+        public bool TryGetDeliveryReader(Guid attemptId, [NotNullWhen(true)] out ChannelReader<DevelopmentAttemptLiveUpdate>? reader)
         {
             reader = null;
             return false;

@@ -161,7 +161,7 @@ public sealed class GraphWorkflowCancelTests
         await using var lane = new GraphWorkflowInFlightLane<int>(slots: 1);
         var nodeRunId = Guid.NewGuid();
 
-        var flight = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
+        var flight = await lane.StartOrNullAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
 
         AssertEx.NotNull(flight);
         AssertEx.True(lane.IsInFlight(nodeRunId));
@@ -178,9 +178,9 @@ public sealed class GraphWorkflowCancelTests
     {
         await using var lane = new GraphWorkflowInFlightLane<int>(slots: 1);
 
-        _ = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
+        _ = await lane.StartOrNullAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
 
-        var refused = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(result: 2), CancellationToken.None);
+        var refused = await lane.StartOrNullAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(result: 2), CancellationToken.None);
 
         AssertEx.Null(refused, "the slot count is the bound, and a full lane simply answers no.");
     }
@@ -202,7 +202,7 @@ public sealed class GraphWorkflowCancelTests
                      current
                  })
         {
-            _ = await lane.TryStartAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
+            _ = await lane.StartOrNullAsync(nodeRunId, attempt: 1, Guid.NewGuid(), Parked, CancellationToken.None);
         }
 
         await lane.ForgetSupersededAsync([Row(superseded, GraphWorkflowNodeRunStatus.Running, attempt: 2), Row(current, GraphWorkflowNodeRunStatus.Running, attempt: 1)]);
@@ -548,13 +548,13 @@ internal sealed class GatedDrainGraphWorkflowStore : IGraphWorkflowStore
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListUnpublishedNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.ListUnpublishedNodeRunsAsync(runId, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
         _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
         _inner.AppendNodeRunSteeringAsync(command, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
         _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
@@ -566,7 +566,7 @@ internal sealed class GatedDrainGraphWorkflowStore : IGraphWorkflowStore
     public Task<GraphWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid runId, string nodeKey, CancellationToken cancellationToken = default) =>
         _inner.GetNodeRunAsync(runId, nodeKey, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
         _inner.DecideNodeRunAsync(command, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>

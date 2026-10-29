@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 
@@ -26,7 +27,7 @@ internal static class GoldenInputTurns
     ///     (malformed JSON, no turns, an unknown role, or a blank-text turn) returns <see langword="false" /> with a
     ///     human-readable <paramref name="error" /> and an empty message list.
     /// </summary>
-    internal static bool TryParse(string? inputTurnsJson, out IReadOnlyList<ChatMessage> messages, out string? error)
+    internal static bool TryParse(string? inputTurnsJson, out IReadOnlyList<ChatMessage> messages, [NotNullWhen(false)] out string? error)
     {
         messages = [];
 

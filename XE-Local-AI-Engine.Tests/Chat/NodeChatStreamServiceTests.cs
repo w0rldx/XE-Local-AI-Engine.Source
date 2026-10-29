@@ -132,8 +132,8 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.False(events.Exists(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming), "the model never ran.");
         AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(dispatcher.CurrentInvocation).Status, "the lease's Assigned state reached a terminal.");
-        AssertEx.Null(resumeRegistry.TryGetLiveInvocation(requestId), "nothing is left to resume into.");
-        AssertEx.Null(resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId));
+        AssertEx.False(resumeRegistry.TryGetLiveInvocation(requestId, out _), "nothing is left to resume into.");
+        AssertEx.False(resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId, out _));
     }
 
     [Test]

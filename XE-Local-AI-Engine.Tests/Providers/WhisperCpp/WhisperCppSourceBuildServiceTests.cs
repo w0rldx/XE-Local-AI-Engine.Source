@@ -43,8 +43,8 @@ public sealed class WhisperCppSourceBuildServiceTests
         // This is the 409 the operator sees, and the snapshot is what lets the UI say WHAT to wait for.
         using var cache = new TempDirectory();
         using var harness = new Harness(cache.Path);
-        using var transcription = harness.ActivityGate.TryAcquireJobLease();
-        AssertEx.NotNull(transcription);
+        AssertEx.Succeeded(harness.ActivityGate.TryAcquireJobLease(out var transcription));
+        using var transcriptionScope = transcription;
 
         var result = await harness.Service.StartAsync(OfficialCudaRequest, CancellationToken.None);
 
@@ -83,8 +83,8 @@ public sealed class WhisperCppSourceBuildServiceTests
         // Removing the managed runtime is the same mutation as replacing it, so it takes the same reservation.
         using var cache = new TempDirectory();
         using var harness = new Harness(cache.Path);
-        using var resident = harness.ActivityGate.TryAcquireResidentProcessLease();
-        AssertEx.NotNull(resident);
+        AssertEx.Succeeded(harness.ActivityGate.TryAcquireResidentProcessLease(out var resident));
+        using var residentScope = resident;
 
         var result = await harness.Service.RemoveAsync(CancellationToken.None);
 

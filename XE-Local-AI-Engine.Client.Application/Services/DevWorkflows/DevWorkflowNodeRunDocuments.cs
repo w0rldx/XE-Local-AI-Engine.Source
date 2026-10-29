@@ -27,7 +27,7 @@ public static class DevWorkflowNodeRunDocuments
     ///     member and REJECTS a null one. An absent list is therefore empty, and a null ELEMENT is dropped for the
     ///     same reason — one bad entry costs its own key, not the whole read.
     /// </remarks>
-    public static DevWorkflowRoute? TryParseRoute(string? routeJson) =>
+    public static DevWorkflowRoute? ParseRouteOrNull(string? routeJson) =>
         Read<StoredRoute>(routeJson) is { } route
             ? new DevWorkflowRoute(Names(route.Satisfied), Names(route.Dead), Names(route.Waived), route.GateAnswer, route.Truncated)
             : null;
@@ -65,7 +65,7 @@ public static class DevWorkflowNodeRunDocuments
     }
 
     /// <summary>
-    ///     The stored document, whose lists may be absent — <see cref="TryParseRoute" /> is what normalizes them. A row
+    ///     The stored document, whose lists may be absent — <see cref="ParseRouteOrNull" /> is what normalizes them. A row
     ///     written before the waived bucket existed simply omits it, which reads back as the empty list it means.
     /// </summary>
     private sealed record StoredRoute(

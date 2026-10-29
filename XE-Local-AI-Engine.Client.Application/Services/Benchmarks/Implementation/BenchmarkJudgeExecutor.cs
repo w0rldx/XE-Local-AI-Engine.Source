@@ -647,7 +647,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             return;
         }
 
-        var command = BenchmarkLaunchEvidence.TryBuild(receipt,
+        var command = BenchmarkLaunchEvidence.BuildOrNull(receipt,
             environment,
             attempt.LaunchIntent?.KvCacheTypeSource ?? BenchmarkKvCacheType.SourceAuto);
         if (command is null)
@@ -661,7 +661,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 work.QueueSequence,
                 work.Version,
                 command,
-                BenchmarkJudgeExecutionKey.TryCompute(policyHash, receipt, environment),
+                BenchmarkJudgeExecutionKey.ComputeOrNull(policyHash, receipt, environment),
                 CancellationToken.None);
         }
         catch (Exception exception)

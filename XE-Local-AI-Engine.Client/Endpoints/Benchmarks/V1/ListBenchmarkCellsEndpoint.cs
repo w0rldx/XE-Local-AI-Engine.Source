@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
@@ -30,11 +29,8 @@ public sealed class ListBenchmarkCellsEndpoint : Endpoint<ListBenchmarkCellsRequ
 
     public override async Task HandleAsync(ListBenchmarkCellsRequest req, CancellationToken ct)
     {
-        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
+        // Throws BenchmarkNotFoundException, which BenchmarkExceptionHandler answers with the 404.
+        _ = await _records.GetProjectAsync(req.ProjectId, ct);
 
         var cells = await _records.ListCellsAsync(req.ProjectId, ct);
         await Send.OkAsync(cells.ToResponse(), ct);

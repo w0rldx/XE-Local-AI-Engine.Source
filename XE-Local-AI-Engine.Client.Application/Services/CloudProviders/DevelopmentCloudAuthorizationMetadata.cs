@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -32,7 +33,7 @@ public static class DevelopmentCloudAuthorizationMetadata
 
     internal static bool TryCreateRequest(ChatOptions? options,
         string providerName,
-        out CloudEgressAuthorizationRequest? request)
+        [NotNullWhen(true)] out CloudEgressAuthorizationRequest? request)
     {
         var properties = options?.AdditionalProperties;
         if (properties is null)

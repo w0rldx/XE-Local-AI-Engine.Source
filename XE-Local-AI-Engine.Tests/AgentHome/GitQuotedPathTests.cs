@@ -34,7 +34,7 @@ public sealed class GitQuotedPathTests
     [Arguments("only escapes", "\"\\\\\\\"\"", "\\\"")]
     public void TryDecode_ReadsTheGrammarGitEmits(string shape, string quoted, string expected)
     {
-        var decoded = GitQuotedPath.TryDecode(quoted);
+        var decoded = GitQuotedPath.DecodeOrNull(quoted);
 
         AssertEx.Equal(expected, decoded, $"{shape}: {quoted}");
     }
@@ -61,7 +61,7 @@ public sealed class GitQuotedPathTests
     [Arguments("a surrogate half in octal", "\"\\355\\240\\200.txt\"")]
     public void TryDecode_RefusesWhatGitWouldNotRead(string shape, string quoted)
     {
-        var decoded = GitQuotedPath.TryDecode(quoted);
+        var decoded = GitQuotedPath.DecodeOrNull(quoted);
 
         AssertEx.Null(decoded, $"{shape} must not decode: {quoted} -> {decoded}");
     }
@@ -70,7 +70,7 @@ public sealed class GitQuotedPathTests
     [Test]
     public void TryDecode_WithAnEmptyLiteral_DecodesToTheEmptyName()
     {
-        AssertEx.Equal(string.Empty, GitQuotedPath.TryDecode("\"\""));
+        AssertEx.Equal(string.Empty, GitQuotedPath.DecodeOrNull("\"\""));
     }
 
     [Test]

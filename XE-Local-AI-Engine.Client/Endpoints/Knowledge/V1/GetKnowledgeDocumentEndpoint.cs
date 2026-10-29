@@ -28,12 +28,6 @@ public sealed class GetKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumentRou
     public override async Task HandleAsync(KnowledgeDocumentRouteRequest req, CancellationToken ct)
     {
         var detail = await _catalogService.GetAsync(req.DocumentId, ct);
-        if (detail is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(ToResponse(detail), ct);
     }
 

@@ -25,11 +25,6 @@ public sealed class GetSlashCommandEndpoint : Endpoint<SlashCommandByIdRequest, 
     public override async Task HandleAsync(SlashCommandByIdRequest req, CancellationToken ct)
     {
         var item = await _service.GetByIdAsync(req.CommandId, ct);
-        if (item is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(item.ToResponse(), ct);
     }

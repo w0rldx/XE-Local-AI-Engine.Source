@@ -824,7 +824,8 @@ internal sealed class DevWorkflowGraph
                 continue;
             }
 
-            var classified = schema.Find(classifiedBy.Single())!;
+            var classified = schema.Find(classifiedBy.Single())
+                             ?? throw new InvalidOperationException("Every classifying member was resolved from this outputSchema above.");
             // An optional member the agent leaves out fires no edge at all, which is the same dead end as an unrouted value.
             if (!classified.Required)
             {

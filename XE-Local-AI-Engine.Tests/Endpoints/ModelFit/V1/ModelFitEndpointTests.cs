@@ -167,14 +167,14 @@ public sealed class ModelFitEndpointTests
     }
 
     [Test]
-    public async Task RefreshRecommendations_WhenJobNotFound_ReturnsBadRequestWithErrorBody()
+    public async Task RefreshRecommendations_WhenJobNotFound_ReturnsBodylessNotFound()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
         {
-            // A random id resolves to no definition → the template guard throws ScheduledJobValidationException → global DomainValidationExceptionHandler → 400.
+            // A random id resolves to no definition → GetJobAsync throws ScheduledJobNotFoundException → ResourceNotFoundExceptionHandler → 404.
             Content = JsonContent.Create(new
             {
                 scheduledJobId = Guid.NewGuid()
@@ -183,9 +183,8 @@ public sealed class ModelFitEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var payload = await response.Content.ReadAsStringAsync();
-        AssertEx.True(payload.Length > 0, "Validation error response must have a non-empty body.");
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Empty(await response.Content.ReadAsStringAsync(), "The not-found handler answers with no body.");
     }
 
     [Test]

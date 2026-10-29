@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
@@ -133,15 +134,18 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        await using var spawnLease = (_runtimeActivityGate.TryAcquireSpawnReadinessLease()
-                                      ?? throw new WhisperRuntimeException("The transcription runtime is busy with an exclusive operation."))
-            .ConfigureAwait(false);
+        if (!_runtimeActivityGate.TryAcquireSpawnReadinessLease(out var spawnLease))
+        {
+            throw new WhisperRuntimeException("The transcription runtime is busy with an exclusive operation.");
+        }
+
+        await using var spawnLeaseScope = spawnLease.ConfigureAwait(false);
 
         // Fast path: a live daemon already serving this model is reused without taking the ensure gate, subject to a
         // rate-limited liveness probe so a wedged daemon is respawned rather than handed out forever.
         if (Current is { } existing && !existing.Handle.HasExited && existing.ServesModel(modelId))
         {
-            var reused = await TryReuseAsync(existing, ct).ConfigureAwait(false);
+            var reused = await ReuseOrNullAsync(existing, ct).ConfigureAwait(false);
             if (reused is not null)
             {
                 return reused;
@@ -156,13 +160,13 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             {
                 if (underGate.ServesModel(modelId))
                 {
-                    var reused = await TryReuseAsync(underGate, ct).ConfigureAwait(false);
+                    var reused = await ReuseOrNullAsync(underGate, ct).ConfigureAwait(false);
                     if (reused is not null)
                     {
                         return reused;
                     }
                 }
-                else if (await TryLoadModelAsync(underGate, modelId, ct).ConfigureAwait(false) is { } switched)
+                else if (await LoadModelOrNullAsync(underGate, modelId, ct).ConfigureAwait(false) is { } switched)
                 {
                     return switched;
                 }
@@ -194,8 +198,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     /// <inheritdoc />
     public async Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct)
     {
-        var reservation = _runtimeActivityGate.TryAcquireEvictionReservation();
-        if (reservation is null)
+        if (!_runtimeActivityGate.TryAcquireEvictionReservation(out var reservation))
         {
             // A transcription or a spawn is in flight. This is the 409 the endpoint reports, with the snapshot that
             // tells the operator what to wait for.
@@ -223,20 +226,21 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <inheritdoc />
-    public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation)
+    public bool TryAcquireJobLease(string modelId, long generation, [NotNullWhen(true)] out IWhisperTranscriptionLease? lease)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
+        lease = null;
 
         var running = Current;
         if (running is null || running.Handle.HasExited || !running.Matches(modelId, generation))
         {
-            return null;
+            return false;
         }
 
         // Atomically register against the daemon, refusing when the reaper or a model switch has already latched it.
         if (!running.TryAcquireTranscription())
         {
-            return null;
+            return false;
         }
 
         // Confirm it is still the REGISTERED, live daemon: a teardown between the lookup and here would leave this
@@ -244,18 +248,18 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         if (running.Handle.HasExited || !ReferenceEquals(Current, running) || !running.Matches(modelId, generation))
         {
             running.ReleaseTranscription();
-            return null;
+            return false;
         }
 
-        var activityLease = _runtimeActivityGate.TryAcquireJobLease();
-        if (activityLease is null)
+        if (!_runtimeActivityGate.TryAcquireJobLease(out var activityLease))
         {
             running.ReleaseTranscription();
-            return null;
+            return false;
         }
 
         running.MarkUsed(_timeProvider.GetUtcNow());
-        return new WhisperTranscriptionLease(running, activityLease, _timeProvider);
+        lease = new WhisperTranscriptionLease(running, activityLease, _timeProvider);
+        return true;
     }
 
     /// <inheritdoc />
@@ -394,7 +398,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     ///     consecutive probes. The probe is rate limited to at most one per interval per daemon, so the hot path costs
     ///     no HTTP at all between probes.
     /// </remarks>
-    private async Task<WhisperServerEndpoint?> TryReuseAsync(RunningServer existing, CancellationToken ct)
+    private async Task<WhisperServerEndpoint?> ReuseOrNullAsync(RunningServer existing, CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
 
@@ -493,8 +497,10 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             _logger.LogInformation("whisper-server ready for model {ModelId} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
                 modelId, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
-            var residentLease = _runtimeActivityGate.TryAcquireResidentProcessLease()
-                                ?? throw new WhisperRuntimeException("The transcription runtime became busy before the server process could be registered.");
+            if (!_runtimeActivityGate.TryAcquireResidentProcessLease(out var residentLease))
+            {
+                throw new WhisperRuntimeException("The transcription runtime became busy before the server process could be registered.");
+            }
 
             var generation = Interlocked.Increment(ref _generation);
             var running = new RunningServer(handle,
@@ -566,7 +572,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     ///     a spawn does. A failed load can kill the server outright, the daemon exiting when a model fails to initialize after freeing the
     ///     previous one, so any non-2xx, health timeout or exit returns null and the caller respawns.
     /// </remarks>
-    private async Task<WhisperServerEndpoint?> TryLoadModelAsync(RunningServer running, string modelId, CancellationToken ct)
+    private async Task<WhisperServerEndpoint?> LoadModelOrNullAsync(RunningServer running, string modelId, CancellationToken ct)
     {
         var entry = WhisperModelCatalog.Find(modelId)
                     ?? throw new WhisperRuntimeException("The selected transcription model is not installed.");

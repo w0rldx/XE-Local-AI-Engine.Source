@@ -15,7 +15,7 @@ public sealed class ConvertScriptProvisionerTests
         using var temp = new TempDirectory();
         using var provisioner = new ConvertScriptProvisioner(new FakeFetcher(), NullLogger<ConvertScriptProvisioner>.Instance, temp.Path);
 
-        AssertEx.Null(provisioner.TryResolve());
+        AssertEx.False(provisioner.TryResolve(out _));
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class ConvertScriptProvisionerTests
         _ = await provisioner.EnsureAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 1, fetcher.FetchCount);
-        AssertEx.NotNull(provisioner.TryResolve());
+        AssertEx.True(provisioner.TryResolve(out _));
     }
 
     [Test]
@@ -71,7 +71,7 @@ public sealed class ConvertScriptProvisionerTests
 
         _ = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => provisioner.EnsureAsync(CancellationToken.None));
 
-        AssertEx.Null(provisioner.TryResolve());
+        AssertEx.False(provisioner.TryResolve(out _));
     }
 
     [Test]
@@ -86,7 +86,7 @@ public sealed class ConvertScriptProvisionerTests
 
         _ = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => provisioner.EnsureAsync(CancellationToken.None));
 
-        AssertEx.Null(provisioner.TryResolve());
+        AssertEx.False(provisioner.TryResolve(out _));
         AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "llama.cpp", "convert-scripts", ".staging")),
             "A rejected acquisition must leave no staging directory behind.");
     }

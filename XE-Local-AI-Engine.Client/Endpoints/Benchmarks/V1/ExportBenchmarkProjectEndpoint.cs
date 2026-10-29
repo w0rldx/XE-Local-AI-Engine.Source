@@ -32,12 +32,6 @@ public sealed class ExportBenchmarkProjectEndpoint : Endpoint<BenchmarkProjectRo
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
         var export = await _exports.GetJsonAsync(req.ProjectId, ct);
-        if (export is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
-
         var now = _timeProvider.GetUtcNow();
         var runs = export.Runs.Select(item => (item.Full with
                          {

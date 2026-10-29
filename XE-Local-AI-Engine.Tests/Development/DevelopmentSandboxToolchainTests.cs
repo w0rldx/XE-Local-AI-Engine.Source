@@ -316,7 +316,7 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
     {
         RequireLinux();
         const string tree = "/var";
-        var facts = SandboxUnixMetadata.TryRead(tree);
+        var facts = SandboxUnixMetadata.ReadOrNull(tree);
         if (facts is not { UserId: 0, IsGroupOrWorldWritable: false })
         {
             throw new SkipTestException("this host's /var is not root-owned and closed to group and world writes.");
@@ -326,7 +326,7 @@ public sealed class DevelopmentSandboxToolchainTests : IDisposable
         Directory.CreateDirectory(_root);
         var probe = Path.Combine(_root, "owner-probe");
         await File.WriteAllTextAsync(probe, string.Empty);
-        if (SandboxUnixMetadata.TryRead(probe) is { UserId: 0 })
+        if (SandboxUnixMetadata.ReadOrNull(probe) is { UserId: 0 })
         {
             throw new SkipTestException("these tests run as root, so a root-owned tree is the engine's own and the writable refusal cannot be shown.");
         }

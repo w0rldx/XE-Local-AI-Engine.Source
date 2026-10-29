@@ -246,19 +246,18 @@ public sealed class DesktopLifecycleTests
     {
         using var directory = new TempDirectory();
         var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var first = DesktopInstance.TryAcquire(directory.Path);
-        AssertEx.NotNull(first);
-        await using (first!)
+        AssertEx.Succeeded(DesktopInstance.TryAcquire(directory.Path, out var first));
+        await using (first)
         {
-            AssertEx.Null(DesktopInstance.TryAcquire(directory.Path));
-            first!.Listen(() => received.TrySetResult());
+            AssertEx.False(DesktopInstance.TryAcquire(directory.Path, out _));
+            first.Listen(() => received.TrySetResult());
             await DesktopInstance.ActivateAsync(directory.Path, CancellationToken.None);
             await received.Task.WaitAsync(TimeSpan.FromSeconds(5));
             AssertEx.True(received.Task.IsCompletedSuccessfully);
         }
 
-        await using var replacement = DesktopInstance.TryAcquire(directory.Path);
-        AssertEx.NotNull(replacement);
+        AssertEx.Succeeded(DesktopInstance.TryAcquire(directory.Path, out var replacement));
+        await using var replacementScope = replacement;
     }
 
     [Test]
@@ -289,7 +288,7 @@ public sealed class DesktopLifecycleTests
         File.SetUnixFileMode(directory.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
-            var exception = AssertEx.Throws<UnauthorizedAccessException>(() => DesktopInstance.TryAcquire(directory.Path));
+            var exception = AssertEx.Throws<UnauthorizedAccessException>(() => DesktopInstance.TryAcquire(directory.Path, out _));
             AssertEx.Equal(DesktopApplication.DataDirectoryUnusableExitCode, DesktopApplication.StartupFailureExitCode(exception, engineReady: false));
         }
         finally
@@ -302,28 +301,27 @@ public sealed class DesktopLifecycleTests
     public async Task Instance_StoppingActivationRetainsLeaseUntilDisposal()
     {
         using var directory = new TempDirectory();
-        var instance = DesktopInstance.TryAcquire(directory.Path);
-        AssertEx.NotNull(instance);
-        await using (instance!)
+        AssertEx.Succeeded(DesktopInstance.TryAcquire(directory.Path, out var instance));
+        await using (instance)
         {
-            instance!.Listen(() => { });
+            instance.Listen(() => { });
             await instance.StopListeningAsync();
-            AssertEx.Null(DesktopInstance.TryAcquire(directory.Path));
+            AssertEx.False(DesktopInstance.TryAcquire(directory.Path, out _));
         }
 
-        await using var replacement = DesktopInstance.TryAcquire(directory.Path);
-        AssertEx.NotNull(replacement);
+        AssertEx.Succeeded(DesktopInstance.TryAcquire(directory.Path, out var replacement));
+        await using var replacementScope = replacement;
     }
 
     [Test]
     public async Task Instance_InvalidMessageDoesNotActivateAndNextPeerCanActivate()
     {
         using var directory = new TempDirectory();
-        await using var first = DesktopInstance.TryAcquire(directory.Path);
-        AssertEx.NotNull(first);
+        AssertEx.Succeeded(DesktopInstance.TryAcquire(directory.Path, out var first));
+        await using var firstScope = first;
         var activations = 0;
         var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        first!.Listen(() =>
+        first.Listen(() =>
         {
             Interlocked.Increment(ref activations);
             received.TrySetResult();
@@ -350,7 +348,7 @@ public sealed class DesktopLifecycleTests
     {
         using var directory = new TempDirectory();
         AssertEx.Equal(DesktopInstance.PipeName(directory.Path), DesktopInstance.PipeName(directory.Path + Path.DirectorySeparatorChar));
-        _ = AssertEx.Throws<DirectoryNotFoundException>(() => DesktopInstance.TryAcquire(Path.Combine(directory.Path, "missing")));
+        _ = AssertEx.Throws<DirectoryNotFoundException>(() => DesktopInstance.TryAcquire(Path.Combine(directory.Path, "missing"), out _));
     }
 
     [Test]

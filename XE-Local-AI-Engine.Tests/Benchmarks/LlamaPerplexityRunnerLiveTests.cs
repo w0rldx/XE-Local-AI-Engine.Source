@@ -39,7 +39,7 @@ public sealed class LlamaPerplexityRunnerLiveTests : IDisposable
         var result = await new LlamaPerplexityRunner().RunAsync(executable, arguments, CancellationToken.None);
 
         AssertEx.Equal(expected: 0, result.ExitCode, $"llama-perplexity failed: {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
-        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output),
+        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.ParsePerplexityOrNull(result.Output),
             $"The parser must read the real binary's output; got: {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
         AssertEx.True(reading.Mean is > 1.0 and < 1_000.0, $"A perplexity outside (1, 1000) is not a measurement; got {reading.Mean}.");
         AssertEx.True(reading.StandardError > 0, $"A standard error of zero over two chunks would mean the error was never parsed; got {reading.StandardError}.");
@@ -77,7 +77,7 @@ public sealed class LlamaPerplexityRunnerLiveTests : IDisposable
             BestEffortFile.TryDeleteFile(temp);
         }
 
-        AssertEx.Null(cache.TryResolveExisting(key), "A killed base phase must publish nothing that resolves as a cached measurement.");
+        AssertEx.Null(cache.FindExisting(key), "A killed base phase must publish nothing that resolves as a cached measurement.");
         AssertEx.Empty(Directory.EnumerateFiles(cache.Root, "*.logits"));
     }
 
@@ -88,7 +88,7 @@ public sealed class LlamaPerplexityRunnerLiveTests : IDisposable
     private static (string Executable, string Model) RequireRuntime()
     {
         var serverPath = Environment.GetEnvironmentVariable("XE_LLAMACPP_SERVER_PATH");
-        var executable = serverPath is { Length: > 0 } ? LlamaCppToolBinaries.TryResolvePerplexityBesideServer(serverPath) : null;
+        var executable = serverPath is { Length: > 0 } ? LlamaCppToolBinaries.FindPerplexityBesideServer(serverPath) : null;
         if (executable is null)
         {
             throw new SkipTestException("this host has no llama-perplexity beside XE_LLAMACPP_SERVER_PATH to measure with.");

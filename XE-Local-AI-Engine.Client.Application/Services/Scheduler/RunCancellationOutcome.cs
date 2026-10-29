@@ -6,21 +6,18 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 /// </summary>
 public enum RunCancellationOutcome
 {
-    /// <summary>No run exists with the supplied id.</summary>
-    NotFound = 0,
-
     /// <summary>The run already reached a terminal state, so there is nothing to cancel.</summary>
-    AlreadyTerminal = 1,
+    AlreadyTerminal = 0,
 
     /// <summary>
     ///     Cancellation was requested and the run was active in Quartz: its <c>CancellationToken</c> has been signaled.
     ///     The handler will move the run to <c>Cancelled</c> once it observes the token.
     /// </summary>
-    Requested = 2,
+    Requested = 1,
 
     /// <summary>
     ///     Cancellation was requested (the timestamp is recorded) but Quartz reported no matching active fire — the run is
     ///     not currently executing in this process. Startup reconciliation will eventually mark such a run terminal.
     /// </summary>
-    RequestedButNotRunning = 3
+    RequestedButNotRunning = 2
 }

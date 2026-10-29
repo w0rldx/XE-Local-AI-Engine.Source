@@ -323,7 +323,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             var relative = parts[2].Trim();
             if (GitQuotedPath.IsQuoted(relative))
             {
-                if (GitQuotedPath.TryDecode(relative) is not { } decoded)
+                if (GitQuotedPath.DecodeOrNull(relative) is not { } decoded)
                 {
                     continue;
                 }
@@ -609,7 +609,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return null;
         }
 
-        var resolvedRoot = HostPathSafety.TryResolveTrustedRoot(resolved.HostPath);
+        var resolvedRoot = HostPathSafety.ResolveTrustedRootOrNull(resolved.HostPath);
         if (resolvedRoot is null)
         {
             rejections.Add(AliasRejection(alias, "its host root could not be resolved."));
@@ -666,7 +666,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     private static bool EscapesViaReparsePoint(string resolvedRoot, string candidate)
     {
         // Walk from the candidate's nearest existing ancestor up to the root; a reparse point that resolves outside the
-        // root is an escape. The root itself was already canonicalized (symlinks followed) by TryResolveTrustedRoot.
+        // root is an escape. The root itself was already canonicalized (symlinks followed) by ResolveTrustedRootOrNull.
         var current = new DirectoryInfo(Path.GetDirectoryName(candidate) ?? resolvedRoot);
         while (current is not null && current.Exists && HostPathSafety.IsPathWithinRoot(resolvedRoot, Path.TrimEndingDirectorySeparator(current.FullName)))
         {

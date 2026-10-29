@@ -19,7 +19,7 @@ public static class BenchmarkNiahCase
     ///     Throws when it IS one and its parameters cannot be read: a probe nothing can vouch for must not quietly
     ///     skip the length check that exists to stop it measuring the context window instead of the model.
     /// </remarks>
-    public static BenchmarkNiahCaseV1? TryRead(BenchmarkTaskItemRecord item)
+    public static BenchmarkNiahCaseV1? ReadOrNull(BenchmarkTaskItemRecord item)
     {
         ArgumentNullException.ThrowIfNull(item);
         if (!string.Equals(item.Kind, BenchmarkTaskItemKinds.NiahCase, StringComparison.Ordinal))

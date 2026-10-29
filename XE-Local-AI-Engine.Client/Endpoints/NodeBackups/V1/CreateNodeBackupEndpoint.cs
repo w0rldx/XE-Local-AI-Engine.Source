@@ -34,16 +34,15 @@ public sealed class CreateNodeBackupEndpoint : EndpointWithoutRequest<NodeBackup
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var result = await _backups.CreateSnapshotAsync(ct);
-        switch (result.Status)
+        switch (await _backups.CreateSnapshotAsync(ct))
         {
-            case NodeDbSnapshotCreateStatus.Created:
-                await Send.ResponseAsync(result.Snapshot!.ToResponse(), StatusCodes.Status201Created, ct);
+            case NodeDbSnapshotCreateResult.Created created:
+                await Send.ResponseAsync(created.Snapshot.ToResponse(), StatusCodes.Status201Created, ct);
                 return;
-            case NodeDbSnapshotCreateStatus.Busy:
+            case NodeDbSnapshotCreateResult.Busy:
                 await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "A database backup is already running."));
                 return;
-            case NodeDbSnapshotCreateStatus.Unsupported:
+            case NodeDbSnapshotCreateResult.Unsupported:
                 await Send.ResultAsync(Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "This node's database is not a file that can be backed up."));
                 return;
             default:

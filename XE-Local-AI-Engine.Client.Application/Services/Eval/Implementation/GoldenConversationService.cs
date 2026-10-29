@@ -88,33 +88,49 @@ internal sealed class GoldenConversationService : IGoldenConversationService
         return _store.ListByAgentAsync(agentDefinitionId, cancellationToken);
     }
 
-    public async Task<GoldenConversationRecord?> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<GoldenConversationApproveResult> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // Ownership and staging guard: only a harvested, currently-disabled case belonging to the route agent is
         // promoted, so no route approves another agent's case and no manual or active case is flipped here.
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null
-            || existing.AgentDefinitionId != agentDefinitionId
-            || existing.Source != GoldenConversationSource.Harvested
-            || existing.Enabled)
+        var existing = await LoadOwnedAsync(agentDefinitionId, id, cancellationToken);
+        if (existing.Source != GoldenConversationSource.Harvested)
         {
-            return null;
+            return new GoldenConversationApproveResult.NotHarvested();
         }
 
-        return await _store.SetEnabledAsync(id, enabled: true, cancellationToken);
+        if (existing.Enabled)
+        {
+            return new GoldenConversationApproveResult.AlreadyEnabled();
+        }
+
+        // A null here means the row was deleted between the guard's read and this write.
+        var enabled = await _store.SetEnabledAsync(id, enabled: true, cancellationToken)
+                      ?? throw new GoldenConversationNotFoundException(id);
+        return new GoldenConversationApproveResult.Approved
+        {
+            Record = enabled
+        };
     }
 
-    public async Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // Ownership guard: only delete the case when it belongs to the route agent, so one agent's golden route cannot
         // delete another agent's case (IDOR).
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null || existing.AgentDefinitionId != agentDefinitionId)
-        {
-            return false;
-        }
+        await LoadOwnedAsync(agentDefinitionId, id, cancellationToken);
 
-        return await _store.DeleteAsync(id, cancellationToken);
+        if (!await _store.DeleteAsync(id, cancellationToken))
+        {
+            throw new GoldenConversationNotFoundException(id);
+        }
+    }
+
+    // An agent's route sees only its own cases: one owned by another agent is reported exactly like a missing one.
+    private async Task<GoldenConversationRecord> LoadOwnedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken)
+    {
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
+        return existing is not null && existing.AgentDefinitionId == agentDefinitionId
+            ? existing
+            : throw new GoldenConversationNotFoundException(id);
     }
 
     // Shared boundary validation keeping the manual and harvested creates identical: non-blank title and turns, at
@@ -172,14 +188,14 @@ internal sealed class GoldenConversationService : IGoldenConversationService
         // rejected here rather than collapsed to User at eval time, which would reshape the evaluated conversation.
         if (!GoldenInputTurns.TryParse(input.InputTurns, out _, out var turnsError))
         {
-            throw new PlaybookActionValidationException(turnsError ?? "InputTurns is invalid.");
+            throw new PlaybookActionValidationException(turnsError);
         }
 
         // Semantic assertion validation: an assertion must carry a non-blank required or forbidden phrase, or it
         // passes any output, so without one a rubric must score the case instead. The judge fails legacy rows closed.
         if (!string.IsNullOrWhiteSpace(input.Assertion))
         {
-            var assertion = GoldenAssertion.TryParse(input.Assertion);
+            var assertion = GoldenAssertion.ParseOrNull(input.Assertion);
             if (assertion is null)
             {
                 throw new PlaybookActionValidationException("Assertion is not valid JSON.");

@@ -41,32 +41,23 @@ public sealed class CancelNodeChatMessageEndpoint : Endpoint<CancelNodeChatMessa
             RequestId = req.RequestId
         };
 
-        // CancelMessageAsync throws NodeChatReadOnlyConversationException (an InvalidOperationException) for a Remote conversation, so the catch stays typed to let the
-        // 409 through. TryCancel runs first harmlessly: a Remote conversation never registers a stream, since its send is refused.
-        try
-        {
-            _ = _streamCancellationRegistry.TryCancel(correlation);
-            var result = await _chatPersistence.CancelMessageAsync(new NodeChatCancelRequest
-                {
-                    Correlation = correlation,
-                    CancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
-                },
-                ct);
-
-            await Send.OkAsync(new NodeChatCancelMessageResponse
+        // TryCancel first is harmless: a Remote conversation never registers a stream; CancelMessageAsync then throws the
+        // read-only 409 for it, and the correlation-not-found exception (404) for an unknown pair.
+        _ = _streamCancellationRegistry.TryCancel(correlation);
+        var result = await _chatPersistence.CancelMessageAsync(new NodeChatCancelRequest
             {
-                ConversationId = result.Correlation.ConversationId,
-                MessageId = result.Correlation.MessageId,
-                RequestId = result.Correlation.RequestId,
-                Status = result.Status,
-                Cancelled = result.Cancelled
-            }, ct);
-        }
-        catch (NodeChatMessageCorrelationNotFoundException)
+                Correlation = correlation,
+                CancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            ct);
+
+        await Send.OkAsync(new NodeChatCancelMessageResponse
         {
-            // The TYPED correlation failure only: catching its base InvalidOperationException here would report any unrelated fault raised under CancelMessageAsync as
-            // "not found", hiding it from the 500 that says something is actually broken.
-            await Send.NotFoundAsync(ct);
-        }
+            ConversationId = result.Correlation.ConversationId,
+            MessageId = result.Correlation.MessageId,
+            RequestId = result.Correlation.RequestId,
+            Status = result.Status,
+            Cancelled = result.Cancelled
+        }, ct);
     }
 }

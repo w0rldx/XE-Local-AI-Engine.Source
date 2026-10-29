@@ -34,12 +34,7 @@ public sealed class DeleteUploadedImageEndpoint : Endpoint<UploadedImageRouteReq
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        if (!await _uploads.DeleteAsync(req.ImageId, ct))
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
+        await _uploads.DeleteAsync(req.ImageId, ct);
         await Send.NoContentAsync(ct);
     }
 }

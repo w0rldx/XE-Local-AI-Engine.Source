@@ -166,10 +166,10 @@ public sealed class ListAgentHomeRunsEndpointTests
         }
 
         // The text reads are this stub's neighbors on the interface; their own route tests own them.
-        public Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<AgentHomeRunText?>(null);
+        public Task<AgentHomeRunText> ReadLogAsync(string runId, CancellationToken cancellationToken = default) =>
+            throw new AgentHomeRunNotFoundException(runId);
 
-        public Task<AgentHomeRunText?> ReadPatchAsync(string runId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<AgentHomeRunText?>(null);
+        public Task<AgentHomeRunText> ReadPatchAsync(string runId, CancellationToken cancellationToken = default) =>
+            throw new AgentHomeRunNotFoundException(runId);
     }
 }

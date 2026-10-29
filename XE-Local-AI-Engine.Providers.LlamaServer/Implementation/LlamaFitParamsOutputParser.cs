@@ -21,7 +21,7 @@ internal static partial class LlamaFitParamsOutputParser
     ///     Attempts to build a replay draft from <paramref name="fitParamsOutput" />. Returns <see langword="null" />
     ///     when no complete machine-readable line can be located.
     /// </summary>
-    public static ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
+    public static ResolvedLaunchArguments? ParseFittedArgsOrNull(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string>? startupOutput = null,
         IReadOnlyList<string>? successfulLaunchArguments = null)
     {
@@ -120,6 +120,7 @@ internal static partial class LlamaFitParamsOutputParser
         return foundPlacement;
     }
 
+    // kvTypeK/kvTypeV are null on success when the launch set no KV cache type (the llama.cpp default).
     private static bool TryParseSuccessfulLaunchPolicy(IReadOnlyList<string>? arguments,
         out string? kvTypeK,
         out string? kvTypeV,

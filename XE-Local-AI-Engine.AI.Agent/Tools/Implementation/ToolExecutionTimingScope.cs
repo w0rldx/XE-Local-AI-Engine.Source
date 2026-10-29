@@ -34,7 +34,7 @@ public static class ToolExecutionTimingScope
     }
 
     /// <summary>The recorded execution time of <paramref name="callId" />, or <see langword="null" /> when none was recorded.</summary>
-    public static long? TryGet(string? callId)
+    public static long? GetOrNull(string? callId)
     {
         return !string.IsNullOrEmpty(callId) && Ambient.Value is { } durations && durations.TryGetValue(callId, out var elapsedMs)
             ? elapsedMs

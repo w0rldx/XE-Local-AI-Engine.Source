@@ -183,18 +183,25 @@ public sealed partial class NodeAdminMcpTools
                 };
             }
 
-            var deleted = await _agentDefinitionService.DeleteAsync(existing.Id, cancellationToken);
-            return deleted
-                ? new McpAgentDeleteResponse
-                {
-                    Deleted = true
-                }
-                : new McpAgentDeleteResponse
+            try
+            {
+                await _agentDefinitionService.DeleteAsync(existing.Id, cancellationToken);
+            }
+            catch (AgentDefinitionNotFoundException)
+            {
+                // Deleted between the lookup and the delete: the same answer as a lookup miss.
+                return new McpAgentDeleteResponse
                 {
                     Deleted = false,
                     FailureCode = McpAdminToolFailureCodes.AgentNotFound,
                     DisplayMessage = "Agent not found."
                 };
+            }
+
+            return new McpAgentDeleteResponse
+            {
+                Deleted = true
+            };
         }, static response => !response.Deleted);
     }
 

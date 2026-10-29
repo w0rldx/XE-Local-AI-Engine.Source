@@ -249,6 +249,43 @@ public sealed class GraphWorkflowMutationResult
 }
 
 /// <summary>
+///     What a conditional write decided: <see cref="Written" /> with what it committed, or <see cref="Declined" />
+///     because a precondition it re-checks inside its own transaction no longer held, and nothing was written.
+/// </summary>
+/// <remarks>A decline is not an error: the caller re-reads and answers from what the rows now say.</remarks>
+public abstract record GraphWorkflowConditionalWriteResult
+{
+    public sealed record Written : GraphWorkflowConditionalWriteResult
+    {
+        public required GraphWorkflowMutationResult Result { get; init; }
+    }
+
+    public sealed record Declined : GraphWorkflowConditionalWriteResult
+    {
+        public required GraphWorkflowWriteDecline Reason { get; init; }
+    }
+}
+
+/// <summary>Why a conditional write declined.</summary>
+public enum GraphWorkflowWriteDecline
+{
+    /// <summary>The run is no longer <c>Running</c> or <c>WaitingForApproval</c>.</summary>
+    RunNotActive,
+
+    /// <summary>
+    ///     The node run is gone, or no longer in the state the write needs: already stamped, already decided, settled,
+    ///     or the steering entry already judged.
+    /// </summary>
+    NodeRunNotEligible,
+
+    /// <summary>The node run already holds as many steering entries as the command allows.</summary>
+    SteeringCapReached,
+
+    /// <summary>The steer's operation id is already recorded on the node run.</summary>
+    OperationAlreadyRecorded
+}
+
+/// <summary>
 ///     One node run to create at start: one per node of the pinned graph, all <c>Pending</c>.
 /// </summary>
 /// <remarks>
@@ -661,23 +698,24 @@ public interface IGraphWorkflowStore
 
     /// <summary>
     ///     Stamps a node run's published message and appends <c>node.published</c>, in one transaction — only while the
-    ///     stamp is still empty. <see langword="null" /> means another tick already stamped it: nothing was written.
+    ///     stamp is still empty. <see cref="GraphWorkflowWriteDecline.NodeRunNotEligible" /> means another tick already
+    ///     stamped it: nothing was written.
     /// </summary>
-    Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default);
+    Task<GraphWorkflowConditionalWriteResult> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Appends a steering entry as one conditional write. <see langword="null" /> means the row, the run or the entry
-    ///     count no longer allowed it (or the operation id is already there): re-read and answer from the row.
+    ///     Appends a steering entry as one conditional write. A decline names whether the run, the node run, the entry
+    ///     count or an already-recorded operation id refused it: re-read and answer from the row.
     /// </summary>
-    Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default);
+    Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Stamps an unapplied steering entry <c>applied: false</c> and appends <c>node.steer-ignored</c>, in one
-    ///     transaction. <see langword="null" /> means the entry was already judged.
+    ///     transaction. <see cref="GraphWorkflowWriteDecline.NodeRunNotEligible" /> means the entry was already judged.
     /// </summary>
-    Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default);
+    Task<GraphWorkflowConditionalWriteResult> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default);
 
@@ -691,11 +729,11 @@ public interface IGraphWorkflowStore
     ///     its composed output, and a <c>gate.decided</c> event is appended, in one transaction.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> means the conditional write matched no row — the pause was decided or moved between
-    ///     the caller's read and this write. Re-read and answer from what the row now says; it is not an error, which
-    ///     is why it is not an exception.
+    ///     A decline means the conditional write matched no row — the run stopped, or the pause was decided or moved
+    ///     between the caller's read and this write. Re-read and answer from what the row now says; it is not an error,
+    ///     which is why it is not an exception.
     /// </remarks>
-    Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default);
+    Task<GraphWorkflowConditionalWriteResult> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The node run one operation id already decided on this run, or <see langword="null" />.
@@ -751,7 +789,7 @@ public sealed class GraphWorkflowRunBusyException : InvalidOperationException
     }
 }
 
-public sealed class GraphWorkflowNotFoundException : InvalidOperationException
+public sealed class GraphWorkflowNotFoundException : ResourceNotFoundException
 {
     public GraphWorkflowNotFoundException(string message) : base(message)
     {

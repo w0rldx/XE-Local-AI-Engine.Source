@@ -35,13 +35,7 @@ public sealed class DeleteTranscriptionSessionEndpoint : Endpoint<TranscriptionS
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var deleted = await _sessions.DeleteSessionAsync(req.SessionId, ct);
-        if (!deleted)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
+        await _sessions.DeleteSessionAsync(req.SessionId, ct);
         await Send.NoContentAsync(ct);
     }
 }

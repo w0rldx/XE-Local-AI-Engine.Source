@@ -36,7 +36,7 @@ public sealed class ToolExecutionTimingTests
         using (ToolExecutionTimingScope.Open())
         {
             _ = await SendAsync(provider.GetRequiredService<IChatClient>(), tool);
-            recorded = ToolExecutionTimingScope.TryGet(callId);
+            recorded = ToolExecutionTimingScope.GetOrNull(callId);
         }
 
         AssertEx.Equal(expected: 2, model.CallCount, "a tool round and an answer round must reach the model");
@@ -62,7 +62,7 @@ public sealed class ToolExecutionTimingTests
         using (ToolExecutionTimingScope.Open())
         {
             _ = await SendAsync(provider.GetRequiredService<IChatClient>(), tool);
-            recorded = ToolExecutionTimingScope.TryGet(callId);
+            recorded = ToolExecutionTimingScope.GetOrNull(callId);
         }
 
         AssertEx.Equal(expected: 40L, recorded, "a failing call is still timed");
@@ -90,7 +90,7 @@ public sealed class ToolExecutionTimingTests
 
         AssertEx.Equal("done", response.Text);
         AssertEx.Equal(expected: 1, executions, "the tool still runs with no scope open");
-        AssertEx.Null(ToolExecutionTimingScope.TryGet(callId), "no scope means nothing to record into and nothing to read");
+        AssertEx.Null(ToolExecutionTimingScope.GetOrNull(callId), "no scope means nothing to record into and nothing to read");
     }
 
     [Test]

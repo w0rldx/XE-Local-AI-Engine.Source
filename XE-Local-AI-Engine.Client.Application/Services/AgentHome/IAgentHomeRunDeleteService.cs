@@ -12,6 +12,10 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 /// </remarks>
 public interface IAgentHomeRunDeleteService
 {
+    /// <summary>
+    ///     Throws <see cref="AgentHomeRunNotFoundException" /> for a run the node will not serve, under the same
+    ///     indistinguishability rule as the reads.
+    /// </summary>
     Task<AgentHomeRunDeleteOutcome> DeleteAsync(string runId, CancellationToken cancellationToken = default);
 }
 
@@ -20,12 +24,6 @@ public enum AgentHomeRunDeleteOutcome
 {
     /// <summary>The run directory is gone.</summary>
     Deleted,
-
-    /// <summary>
-    ///     No such run. Also the answer for a name the node never minted, one that resolves outside the runs root, and
-    ///     a linked directory — the caller must not be able to tell those apart from a run that simply is not there.
-    /// </summary>
-    NotFound,
 
     /// <summary>
     ///     Not right now: a run holds the execution lease, or the removal itself failed. One outcome for both because

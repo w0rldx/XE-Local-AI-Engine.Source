@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class LlamaFitParamsOutputParserTests
 {
     [Test]
-    public void TryParseFittedArgs_ConcreteOutputWithOverride_ReturnsCompleteReplay()
+    public void ParseFittedArgsOrNull_ConcreteOutputWithOverride_ReturnsCompleteReplay()
     {
         // Representative concrete b9692 grammar, reduced to one tensor override for a focused assertion.
         string[] fitParamsOutput =
@@ -21,7 +21,7 @@ public sealed class LlamaFitParamsOutputParserTests
             @"-c 4096 -ngl 48 -ot ""blk\.14\.ffn_(up|down|gate)_(ch|)exps=CPU"""
         ];
 
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(fitParamsOutput);
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(fitParamsOutput);
 
         var draft = AssertEx.NotNull(resolved);
         AssertEx.False(draft.ExploreMode);
@@ -32,11 +32,11 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_ExpertOffloadSpawn_FreezesTheEquivalentOverrideTensor()
+    public void ParseFittedArgsOrNull_ExpertOffloadSpawn_FreezesTheEquivalentOverrideTensor()
     {
         // The helper fits against --cpu-moe and echoes every override back as -ot. That -ot IS the frozen expert
         // placement, so the replay reproduces what the admission ledger booked without ever emitting --cpu-moe.
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs([@"-c 8192 -ngl 48 -ot ""\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"""],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull([@"-c 8192 -ngl 48 -ot ""\.ffn_(up|down|gate|gate_up)_(ch|)exps=CPU"""],
             startupOutput: [],
             successfulLaunchArguments: ["-m", "/models/moe.gguf", "--fit", "on", "--cpu-moe"]);
 
@@ -48,11 +48,11 @@ public sealed class LlamaFitParamsOutputParserTests
     [Test]
     [Arguments("--cpu-moe")]
     [Arguments("-cmoe")]
-    public void TryParseFittedArgs_ExpertOffloadSpawnWithoutAnOverride_ProvesNoReplay(string flag)
+    public void ParseFittedArgsOrNull_ExpertOffloadSpawnWithoutAnOverride_ProvesNoReplay(string flag)
     {
         // A fit line with no -ot cannot express the placement the spawn ran under. Drafting it would freeze a replay
         // that launches the experts back onto the GPU, outside the footprint admission reserved, so no draft is made.
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 48"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 48"],
             startupOutput: [],
             successfulLaunchArguments: ["-m", "/models/moe.gguf", "--fit", "on", flag]);
 
@@ -60,11 +60,11 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_ResidentSpawn_IsUnchangedByTheExpertOffloadRule()
+    public void ParseFittedArgsOrNull_ResidentSpawn_IsUnchangedByTheExpertOffloadRule()
     {
         // The byte-identical pin: a dense/fully-resident explore names no expert flag, so the draft is what it always
         // was -- an absent -ot stays absent and still yields a complete replay.
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 48"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 48"],
             startupOutput: [],
             successfulLaunchArguments: ["-m", "/models/dense.gguf", "--fit", "on"]);
 
@@ -75,9 +75,9 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_MultiDeviceGrammar_PreservesTensorSplit()
+    public void ParseFittedArgsOrNull_MultiDeviceGrammar_PreservesTensorSplit()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32 -ts 7,3"]);
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 32 -ts 7,3"]);
 
         var draft = AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 8192, draft.CtxSize);
@@ -87,9 +87,9 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_OptimizedSuccessfulLaunch_PreservesKvTypesAndFlashAttention()
+    public void ParseFittedArgsOrNull_OptimizedSuccessfulLaunch_PreservesKvTypesAndFlashAttention()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 32"],
             startupOutput: [],
             successfulLaunchArguments: ["-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0"]);
 
@@ -100,9 +100,9 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_SafeSuccessfulLaunch_PreservesAbsentKvAndFlashAttention()
+    public void ParseFittedArgsOrNull_SafeSuccessfulLaunch_PreservesAbsentKvAndFlashAttention()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 32"],
             startupOutput: [],
             successfulLaunchArguments: ["--fit", "on", "-c", "8192"]);
 
@@ -118,9 +118,9 @@ public sealed class LlamaFitParamsOutputParserTests
     [Arguments("-fa on -ctk q8_0")]
     [Arguments("-fa on -ctk q8_0 -ctv q4_0")]
     [Arguments("-fa off -ctk q8_0 -ctv q8_0")]
-    public void TryParseFittedArgs_InconsistentSuccessfulLaunchPolicy_ReturnsNull(string launchArguments)
+    public void ParseFittedArgsOrNull_InconsistentSuccessfulLaunchPolicy_ReturnsNull(string launchArguments)
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl 32"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 32"],
             startupOutput: [],
             successfulLaunchArguments: launchArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
@@ -128,20 +128,20 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_CapturedUnresolvedDefaults_ReturnsNull()
+    public void ParseFittedArgsOrNull_CapturedUnresolvedDefaults_ReturnsNull()
     {
         // Captured from the real b9692 helper. These are llama.cpp sentinels, not frozen values:
         // context 0 means the model-trained context and GPU layers -1 means automatic placement.
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 0 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 0 -ngl -1"],
             ["load_tensors: offloaded 25/25 layers to GPU"]);
 
         AssertEx.Null(resolved);
     }
 
     [Test]
-    public void TryParseFittedArgs_AutomaticLayersWithFullOffloadEvidence_NormalizesToExplicitAllLayers()
+    public void ParseFittedArgsOrNull_AutomaticLayersWithFullOffloadEvidence_NormalizesToExplicitAllLayers()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl -1"],
             ["load_tensors: offloaded 25/25 layers to GPU"]);
 
         var draft = AssertEx.NotNull(resolved);
@@ -150,18 +150,18 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_AutomaticLayersWithoutFullOffloadEvidence_ReturnsNull()
+    public void ParseFittedArgsOrNull_AutomaticLayersWithoutFullOffloadEvidence_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl -1"],
             ["load_tensors: offloaded 24/25 layers to GPU"]);
 
         AssertEx.Null(resolved);
     }
 
     [Test]
-    public void TryParseFittedArgs_AutomaticLayersWithMixedStartupPlacements_ReturnsNull()
+    public void ParseFittedArgsOrNull_AutomaticLayersWithMixedStartupPlacements_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -1"],
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl -1"],
         [
             "load_tensors: offloaded 25/25 layers to GPU",
             "load_tensors: offloaded 4/10 layers to GPU"
@@ -171,9 +171,9 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_ExplicitAllLayers_PreservesConcreteAllLayersValue()
+    public void ParseFittedArgsOrNull_ExplicitAllLayers_PreservesConcreteAllLayersValue()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 8192 -ngl -2"]);
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl -2"]);
 
         var draft = AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 8192, draft.CtxSize);
@@ -181,17 +181,17 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
-    public void TryParseFittedArgs_ContextWithoutGpuPlacement_ReturnsNull()
+    public void ParseFittedArgsOrNull_ContextWithoutGpuPlacement_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs(["-c 4096"]);
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 4096"]);
 
         AssertEx.Null(resolved);
     }
 
     [Test]
-    public void TryParseFittedArgs_StartupLogLookalikes_ReturnsNull()
+    public void ParseFittedArgsOrNull_StartupLogLookalikes_ReturnsNull()
     {
-        var resolved = LlamaFitParamsOutputParser.TryParseFittedArgs([
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull([
             "llama_context: n_ctx = 4096",
             "load_tensors: offloaded 32/32 layers to GPU",
             "common_params_fit: successfully fit params to free device memory"

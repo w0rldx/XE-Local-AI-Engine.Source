@@ -165,15 +165,14 @@ public sealed class LocalChatHub : Hub
     public IAsyncEnumerable<ChatStreamEvent> ResumeConversation(Guid conversationId,
         CancellationToken cancellationToken)
     {
-        var invocationId = _resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId);
-        if (invocationId is null)
+        if (!_resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId, out var invocationId))
         {
             return AsyncEnumerable.Empty<ChatStreamEvent>();
         }
 
         try
         {
-            return TrackAttachment(_resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken), sourceOwnsRun: false, cancellationToken);
+            return TrackAttachment(_resumeRegistry.ResumeAsync(invocationId, cancellationToken), sourceOwnsRun: false, cancellationToken);
         }
         catch (InvalidOperationException)
         {

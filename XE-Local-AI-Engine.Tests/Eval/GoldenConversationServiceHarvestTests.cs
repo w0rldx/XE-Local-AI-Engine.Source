@@ -122,41 +122,66 @@ public sealed class GoldenConversationServiceHarvestTests
         store.SetEnabledAsync(goldenId, enabled: true, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<GoldenConversationRecord?>(Existing(goldenId, AgentId, GoldenConversationSource.Harvested, enabled: true)));
 
-        var result = AssertEx.NotNull(await service.ApproveHarvestedAsync(AgentId, goldenId), "Approve should return the updated record.");
+        var result = AssertEx.NotNull(await service.ApproveHarvestedAsync(AgentId, goldenId) as GoldenConversationApproveResult.Approved,
+            "Approve should return the updated record.");
 
-        AssertEx.True(result.Enabled, "Approve should enable the case.");
+        AssertEx.True(result.Record.Enabled, "Approve should enable the case.");
         await store.Received(1).SetEnabledAsync(goldenId, enabled: true, Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task ApproveHarvestedAsync_WhenCrossAgent_ReturnsNullWithoutEnabling()
+    public async Task ApproveHarvestedAsync_WhenCrossAgent_ThrowsNotFoundWithoutEnabling()
     {
         var goldenId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
         var service = CreateApproveService(out var store, Existing(goldenId, otherAgentId, GoldenConversationSource.Harvested, enabled: false));
 
-        AssertEx.Null(await service.ApproveHarvestedAsync(AgentId, goldenId), "A case owned by another agent must not be approved.");
+        await AssertEx.ThrowsAsync<GoldenConversationNotFoundException>(() => service.ApproveHarvestedAsync(AgentId, goldenId),
+            "A case owned by another agent is reported like a missing one.");
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task ApproveHarvestedAsync_WhenManualSource_ReturnsNullWithoutEnabling()
+    public async Task ApproveHarvestedAsync_WhenManualSource_ReturnsNotHarvestedWithoutEnabling()
     {
         var goldenId = Guid.NewGuid();
         var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Manual, enabled: false));
 
-        AssertEx.Null(await service.ApproveHarvestedAsync(AgentId, goldenId), "A manual case must not be approved via the harvest path.");
+        AssertEx.True(await service.ApproveHarvestedAsync(AgentId, goldenId) is GoldenConversationApproveResult.NotHarvested,
+            "A manual case must not be approved via the harvest path.");
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task ApproveHarvestedAsync_WhenAlreadyEnabled_ReturnsNullWithoutEnabling()
+    public async Task ApproveHarvestedAsync_WhenAlreadyEnabled_ReturnsAlreadyEnabledWithoutEnabling()
     {
         var goldenId = Guid.NewGuid();
         var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Harvested, enabled: true));
 
-        AssertEx.Null(await service.ApproveHarvestedAsync(AgentId, goldenId), "An already-enabled case must not be re-approved.");
+        AssertEx.True(await service.ApproveHarvestedAsync(AgentId, goldenId) is GoldenConversationApproveResult.AlreadyEnabled,
+            "An already-enabled case must not be re-approved.");
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ApproveHarvestedAsync_WhenTheRowIsDeletedBeforeTheWrite_ThrowsNotFound()
+    {
+        var goldenId = Guid.NewGuid();
+        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Harvested, enabled: false));
+        store.SetEnabledAsync(goldenId, enabled: true, Arg.Any<CancellationToken>()).Returns(Task.FromResult<GoldenConversationRecord?>(null));
+
+        await AssertEx.ThrowsAsync<GoldenConversationNotFoundException>(() => service.ApproveHarvestedAsync(AgentId, goldenId));
+    }
+
+    [Test]
+    public async Task DeleteAsync_WhenMissingOrCrossAgent_ThrowsNotFoundWithoutDeleting()
+    {
+        var goldenId = Guid.NewGuid();
+        var service = CreateApproveService(out var store, Existing(goldenId, Guid.NewGuid(), GoldenConversationSource.Manual, enabled: true));
+
+        await AssertEx.ThrowsAsync<GoldenConversationNotFoundException>(() => service.DeleteAsync(AgentId, goldenId));
+        await AssertEx.ThrowsAsync<GoldenConversationNotFoundException>(() => service.DeleteAsync(AgentId, Guid.NewGuid()));
+        await store.DidNotReceive().DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     private static GoldenConversationService CreateService(out IGoldenConversationStore store)

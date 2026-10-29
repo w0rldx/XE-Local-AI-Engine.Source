@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Interaction;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 ///     The hand-off between the runner's human round-trip and the <c>ask_user</c> tool body, keyed on the tool call's
@@ -45,7 +46,7 @@ public sealed class UserQuestionAnswerStash
     ///     same call id is not a repeat of the same question, so it must fall through to the handler's fail-safe rather
     ///     than silently replay a stale answer.
     /// </summary>
-    public bool TryPop(string callId, out string resultJson)
+    public bool TryPop(string callId, [NotNullWhen(true)] out string? resultJson)
     {
         if (!string.IsNullOrEmpty(callId) && _answers.TryRemove(callId, out var stashed))
         {
@@ -53,7 +54,7 @@ public sealed class UserQuestionAnswerStash
             return true;
         }
 
-        resultJson = string.Empty;
+        resultJson = null;
         return false;
     }
 

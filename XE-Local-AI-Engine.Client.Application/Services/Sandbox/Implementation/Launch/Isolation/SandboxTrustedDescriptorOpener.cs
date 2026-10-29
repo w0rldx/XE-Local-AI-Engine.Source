@@ -95,7 +95,7 @@ internal static class SandboxTrustedDescriptorOpener
                 current = next;
                 currentPath = string.Concat(currentPath, "/", component);
 
-                var facts = SandboxUnixMetadata.TryReadDescriptor(current.Descriptor)
+                var facts = SandboxUnixMetadata.ReadDescriptorOrNull(current.Descriptor)
                             ?? throw new SandboxIsolationUnavailableException($"'{currentPath}' could not be stat'ed after it was opened");
 
                 if (isTarget)

@@ -194,7 +194,7 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
     private async Task<GraphWorkflowDesignerResult?> RefuseRemoteModelAsync(string modelName, CancellationToken cancellationToken)
     {
         var locality = await _trust.ResolveAsync(modelName, cancellationToken);
-        if (locality == ModelTrustLocality.Local && await _trust.TryResolveExternalAsync(modelName, cancellationToken) is null)
+        if (locality == ModelTrustLocality.Local && await _trust.FindExternalAsync(modelName, cancellationToken) is null)
         {
             return GraphWorkflowDesignerResult.Failed(GraphWorkflowDesignerFailureKind.ModelNotEligible,
                 "The selected model is neither an installed chat model served by a node-local runtime nor a cloud model.");

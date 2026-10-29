@@ -490,7 +490,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 continue;
             }
 
-            var quant = GgufQuantParser.TryParse(fileName);
+            var quant = GgufQuantParser.ParseOrNull(fileName);
             if (quant is null)
             {
                 continue;
@@ -747,7 +747,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
 
         var prefix = stem[..separator];
-        var quant = GgufQuantParser.TryParse(prefix);
+        var quant = GgufQuantParser.ParseOrNull(prefix);
         return quant is not null
                && (prefix.EndsWith(quant, StringComparison.OrdinalIgnoreCase)
                    || prefix.EndsWith(quant.Replace("UD-", "UD_", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase));

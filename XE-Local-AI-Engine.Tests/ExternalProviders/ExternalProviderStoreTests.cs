@@ -169,7 +169,7 @@ public sealed class ExternalProviderStoreTests : IDisposable
         // The runtime is untouched: only a save is refused, so an upgrade never breaks a working connection.
         var connection = (await store.LoadAsync()).Connections.Single();
         AssertEx.False(connection.AllowInsecureHttp);
-        AssertEx.NotNull(await new ExternalProviderRegistry(store).TryResolveAsync("ext:lan-box/qwen3", CancellationToken.None));
+        AssertEx.NotNull(await new ExternalProviderRegistry(store).FindRegistrationAsync("ext:lan-box/qwen3", CancellationToken.None));
     }
 
     [Test]
@@ -260,7 +260,7 @@ public sealed class ExternalProviderStoreTests : IDisposable
         AssertEx.True(stored["connections"]![0]!["models"]![0]!.AsObject().Remove("apiSurface"), "the fixture must predate the field");
         await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(Encoding.UTF8.GetBytes(stored.ToJsonString())));
 
-        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(store).TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(store).FindRegistrationAsync("ext:unsloth-box/qwen3", CancellationToken.None));
 
         AssertEx.Equal(ExternalProviderApiSurface.ChatCompletions, registration.Model.ApiSurface);
     }
@@ -280,8 +280,8 @@ public sealed class ExternalProviderStoreTests : IDisposable
         ]));
 
         var registry = new ExternalProviderRegistry(store);
-        var responses = AssertEx.NotNull(await registry.TryResolveAsync("ext:unsloth-box/gpt-5.6-terra", CancellationToken.None));
-        var chat = AssertEx.NotNull(await registry.TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        var responses = AssertEx.NotNull(await registry.FindRegistrationAsync("ext:unsloth-box/gpt-5.6-terra", CancellationToken.None));
+        var chat = AssertEx.NotNull(await registry.FindRegistrationAsync("ext:unsloth-box/qwen3", CancellationToken.None));
         AssertEx.Equal(ExternalProviderApiSurface.Responses, responses.Model.ApiSurface);
         AssertEx.Equal(ExternalProviderApiSurface.ChatCompletions, chat.Model.ApiSurface);
     }
@@ -1132,7 +1132,7 @@ public sealed class ExternalProviderStoreTests : IDisposable
         // A fresh store instance reads the file back, so this is the encrypted payload, not an in-memory copy.
         using var reread = CreateStore();
         AssertEx.Equal(grants, (await reread.LoadAsync()).Connections.Single().CloudGrants);
-        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(reread).TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(reread).FindRegistrationAsync("ext:unsloth-box/qwen3", CancellationToken.None));
         AssertEx.Equal(grants, registration.Connection.CloudGrants);
     }
 
@@ -1218,7 +1218,7 @@ public sealed class ExternalProviderStoreTests : IDisposable
         await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(Encoding.UTF8.GetBytes(legacy.ToJsonString())));
 
         AssertEx.Null((await store.LoadAsync()).Connections.Single().CloudGrants);
-        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(store).TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(store).FindRegistrationAsync("ext:unsloth-box/qwen3", CancellationToken.None));
         AssertEx.Equal(ExternalProviderCloudGrants.None, registration.Connection.CloudGrants);
 
         // Null and None are the same grants, so the reconciler's idempotent resave does not churn the file.

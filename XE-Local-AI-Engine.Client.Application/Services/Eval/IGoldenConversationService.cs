@@ -41,17 +41,21 @@ public interface IGoldenConversationService
     ///     when it belongs to <paramref name="agentDefinitionId" />, is harvested and is currently disabled.
     /// </summary>
     /// <remarks>
-    ///     It returns the updated record, or <c>null</c> when no such case exists, which the endpoint maps to 404 —
-    ///     the same ownership guard the manual-authoring and analysis-review paths use.
+    ///     It returns <see cref="GoldenConversationApproveResult.Approved" /> with the updated record, or the reason the
+    ///     case cannot be approved. A case owned by another agent is reported exactly like a missing one — the same
+    ///     ownership guard the manual-authoring and analysis-review paths use.
     /// </remarks>
-    Task<GoldenConversationRecord?> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+    /// <exception cref="GoldenConversationNotFoundException">No case of <paramref name="agentDefinitionId" /> has <paramref name="id" />.</exception>
+    Task<GoldenConversationApproveResult> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Removes the golden case with <paramref name="id" /> only when it belongs to the agent named on the route,
-    ///     returning whether a row was deleted.
+    ///     Removes the golden case with <paramref name="id" /> only when it belongs to the agent named on the route.
     /// </summary>
-    /// <remarks>It is <c>false</c> for an unknown id and for one owned by a different agent alike.</remarks>
-    Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+    /// <exception cref="GoldenConversationNotFoundException">
+    ///     No case of <paramref name="agentDefinitionId" /> has <paramref name="id" />: an unknown id and one owned by a
+    ///     different agent alike.
+    /// </exception>
+    Task DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -82,4 +86,33 @@ public sealed class GoldenConversationCreateInput
     public Guid? SourceMessageId { get; init; }
 
     public Guid? SourceConversationId { get; init; }
+}
+
+/// <summary>
+///     Result of <see cref="IGoldenConversationService.ApproveHarvestedAsync" />: the enabled case (200), or why it
+///     cannot be approved (409).
+/// </summary>
+public abstract record GoldenConversationApproveResult
+{
+    public sealed record Approved : GoldenConversationApproveResult
+    {
+        public required GoldenConversationRecord Record { get; init; }
+    }
+
+    /// <summary>The case was authored manually; only a harvested candidate is approved.</summary>
+    public sealed record NotHarvested : GoldenConversationApproveResult;
+
+    /// <summary>The candidate is already in the active set.</summary>
+    public sealed record AlreadyEnabled : GoldenConversationApproveResult;
+}
+
+/// <summary>
+///     No golden case has the id the client supplied, or it belongs to another agent than the route's: the ownership
+///     guard reports both alike.
+/// </summary>
+public sealed class GoldenConversationNotFoundException : ResourceNotFoundException
+{
+    public GoldenConversationNotFoundException(Guid id) : base($"No golden conversation of this agent has id '{id}'.")
+    {
+    }
 }

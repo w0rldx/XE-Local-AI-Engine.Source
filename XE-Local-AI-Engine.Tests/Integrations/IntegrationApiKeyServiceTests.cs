@@ -163,7 +163,7 @@ public sealed class IntegrationApiKeyServiceTests
         var generated = await service.GenerateAsync("ingest", allowedTriggerIds: null, principalId: null);
         AssertEx.NotNull(await service.ValidateAsync(generated.Key));
 
-        AssertEx.True(await service.RevokeAsync(generated.View.Id));
+        await service.RevokeAsync(generated.View.Id);
 
         AssertEx.Null(await service.ValidateAsync(generated.Key), "A revoked credential must stop authenticating immediately.");
         AssertEx.Equal(expected: 1, store.Rows.Count, "Revocation is SOFT: execution and audit rows reference the prefix, so the row must survive.");
@@ -172,11 +172,11 @@ public sealed class IntegrationApiKeyServiceTests
     }
 
     [Test]
-    public async Task RevokeAsync_WithAnUnknownId_ReturnsFalse()
+    public async Task RevokeAsync_WithAnUnknownId_ThrowsNotFound()
     {
         var service = CreateService(out _);
 
-        AssertEx.False(await service.RevokeAsync(Guid.NewGuid()));
+        _ = await AssertEx.ThrowsAsync<IntegrationNotFoundException>(() => service.RevokeAsync(Guid.NewGuid()));
     }
 
     [Test]

@@ -435,7 +435,7 @@ public sealed class LlamaServerLaunchProjectionTests
             plan: plan,
             chatCacheRamMiB: 512);
 
-        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(spec.Arguments));
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments));
 
         AssertEx.Equal(intended, effective);
         AssertEx.Equal(intended.ComputeIdentity(), effective.ComputeIdentity());
@@ -460,7 +460,7 @@ public sealed class LlamaServerLaunchProjectionTests
             plan: plan);
 
         AssertEx.Equal(LlamaServerLaunchProjection.From(variant, resolved, plan, ModelRole.Embedding),
-            AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)));
+            AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments)));
     }
 
     [Test]
@@ -492,7 +492,7 @@ public sealed class LlamaServerLaunchProjectionTests
                         .Where(static argument => !string.Equals(argument, "--metrics", StringComparison.Ordinal))
                         .ToArray();
 
-        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(gated));
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(gated));
 
         AssertEx.True(intended.Metrics);
         AssertEx.False(effective.Metrics, "A dropped --metrics must read as absent, not as the intent that rendered it.");
@@ -504,10 +504,10 @@ public sealed class LlamaServerLaunchProjectionTests
     {
         // --cpu-moe is a valueless flag like --jinja/--metrics, so the effective reading must recover it and its
         // absence must read as absent rather than as the intent that rendered it.
-        var withFlag = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments([
+        var withFlag = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull([
             "-m", ModelFilePath, "--parallel", "1", "--fit", "on", "--cpu-moe", "-c", "8192"
         ]));
-        var withoutFlag = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments([
+        var withoutFlag = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull([
             "-m", ModelFilePath, "--parallel", "1", "--fit", "on", "-c", "8192"
         ]));
 
@@ -540,7 +540,7 @@ public sealed class LlamaServerLaunchProjectionTests
     {
         // Operator extra arguments are appended after everything else and llama.cpp is last-wins for a scalar flag, so
         // the honest reading of the vector is the last value — and an argument this projection does not model is skipped.
-        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments([
+        var effective = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull([
             "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
             "--metrics", "-c", "8192", "--jinja", "--cache-ram", "0", "-lv", "4", "-c", "4096"
         ]));
@@ -557,11 +557,11 @@ public sealed class LlamaServerLaunchProjectionTests
     [Arguments("--cache-ram")]
     public void TryFromArguments_ForAnUnreadableVector_IsNullRatherThanAWrongFact(string flag)
     {
-        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["--metrics", flag, "not-a-number"]),
+        AssertEx.Null(LlamaServerLaunchProjection.FromArgumentsOrNull(["--metrics", flag, "not-a-number"]),
             "A value that cannot be read must degrade to no projection, never to a fabricated one.");
-        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["--metrics", flag]),
+        AssertEx.Null(LlamaServerLaunchProjection.FromArgumentsOrNull(["--metrics", flag]),
             "A trailing flag with no value must degrade to no projection.");
-        AssertEx.Null(LlamaServerLaunchProjection.TryFromArguments(["-fa", "--jinja"]),
+        AssertEx.Null(LlamaServerLaunchProjection.FromArgumentsOrNull(["-fa", "--jinja"]),
             "A value flag followed by another flag must not swallow the flag as its value.");
     }
 

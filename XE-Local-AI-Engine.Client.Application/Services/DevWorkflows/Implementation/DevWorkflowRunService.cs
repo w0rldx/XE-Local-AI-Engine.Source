@@ -45,7 +45,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     {
         // The operation id IS the run id: a start has no run row to key idempotency against, and a second identifier
         // would be a table nobody reads. A genuinely second start of one work item is refused by the live-run rule.
-        if (await TryReadAsync(operationId, cancellationToken) is { } replayed)
+        if (await ReadOrNullAsync(operationId, cancellationToken) is { } replayed)
         {
             // A replay has to be a replay of THIS request: a reused operation id naming a different work item or
             // definition is a caller bug, and answering it would hand out a run nobody asked for.
@@ -112,7 +112,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     {
         // Ahead of the status check below for the reason it runs ahead of CommandAsync's transition table: a resume
         // that committed and was retried is a replay, and by then its run is legitimately Running — what this refuses.
-        if (await TryReplayAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken) is { } replayed)
+        if (await ReplayOrNullAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken) is { } replayed)
         {
             return replayed;
         }
@@ -284,7 +284,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     /// </remarks>
     private async Task<DevWorkflowRunDetail> CommandAsync(Guid runId, Guid operationId, DevWorkflowRunStatus target, CancellationToken cancellationToken)
     {
-        if (await TryReplayAsync(runId, operationId, target, cancellationToken) is { } replayed)
+        if (await ReplayOrNullAsync(runId, operationId, target, cancellationToken) is { } replayed)
         {
             return replayed;
         }
@@ -308,7 +308,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     ///     is that promise made visible to the verbs. It is the replay of THIS verb or it is not a replay at all.
     ///     See docs/wiki/25-dev-workflows.md ("The application service seams").
     /// </remarks>
-    private async Task<DevWorkflowRunDetail?> TryReplayAsync(Guid runId,
+    private async Task<DevWorkflowRunDetail?> ReplayOrNullAsync(Guid runId,
         Guid operationId,
         DevWorkflowRunStatus target,
         CancellationToken cancellationToken)
@@ -370,7 +370,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         };
     }
 
-    private async Task<DevWorkflowRunSnapshot?> TryReadAsync(Guid runId, CancellationToken cancellationToken)
+    private async Task<DevWorkflowRunSnapshot?> ReadOrNullAsync(Guid runId, CancellationToken cancellationToken)
     {
         try
         {

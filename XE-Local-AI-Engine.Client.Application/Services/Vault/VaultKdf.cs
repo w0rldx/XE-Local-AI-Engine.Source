@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Vault;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -80,9 +81,9 @@ public static class VaultKdf
     ///     Parses a recovery code typed by the operator: case-insensitive, dashes and whitespace ignored. The caller
     ///     zeroes <paramref name="code" /> after use.
     /// </summary>
-    public static bool TryParseRecoveryCode(string? text, out byte[] code)
+    public static bool TryParseRecoveryCode(string? text, [NotNullWhen(true)] out byte[]? code)
     {
-        code = [];
+        code = null;
         if (string.IsNullOrWhiteSpace(text))
         {
             return false;

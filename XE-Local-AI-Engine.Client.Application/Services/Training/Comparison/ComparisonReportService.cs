@@ -13,7 +13,8 @@ public interface IComparisonReportService
 
     Task<IReadOnlyList<TrainingComparisonRecord>> ListAsync(CancellationToken cancellationToken = default);
 
-    Task<TrainingComparisonRecord?> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default);
+    /// <exception cref="TrainingNotFoundException">No comparison carries <paramref name="comparisonId" />.</exception>
+    Task<TrainingComparisonRecord> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default);
 
     Task DeleteAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default);
 
@@ -84,8 +85,8 @@ public sealed class ComparisonReportService : IComparisonReportService
     public Task<IReadOnlyList<TrainingComparisonRecord>> ListAsync(CancellationToken cancellationToken = default) =>
         _evaluations.ListComparisonsAsync(cancellationToken);
 
-    public Task<TrainingComparisonRecord?> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default) =>
-        _evaluations.GetComparisonAsync(comparisonId, cancellationToken);
+    public async Task<TrainingComparisonRecord> GetAsync(Guid comparisonId, CancellationToken cancellationToken = default) =>
+        await _evaluations.GetComparisonAsync(comparisonId, cancellationToken) ?? throw new TrainingNotFoundException("The comparison report was not found.");
 
     public async Task DeleteAsync(Guid comparisonId, long expectedVersion, CancellationToken cancellationToken = default)
     {

@@ -3220,7 +3220,7 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowTools
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1RunGraphWorkflowDesignerTurnRequest = {
 	definitionId?: string | null;
 	modelName?: string;
-	messages?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest>;
+	messages: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest>;
 	graph?: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
 	selectedNodeKey?: string | null;
 	intent?: string | null;
@@ -8117,7 +8117,10 @@ export type ApproveGoldenConversationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type ApproveGoldenConversationError = ApproveGoldenConversationErrors[keyof ApproveGoldenConversationErrors];
 
 export type ApproveGoldenConversationResponses = {
 	/**
@@ -8295,7 +8298,10 @@ export type UpdatePlaybookActionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type UpdatePlaybookActionError = UpdatePlaybookActionErrors[keyof UpdatePlaybookActionErrors];
 
 export type UpdatePlaybookActionResponses = {
 	/**
@@ -8325,7 +8331,10 @@ export type RunPlaybookActionEvalErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type RunPlaybookActionEvalError = RunPlaybookActionEvalErrors[keyof RunPlaybookActionEvalErrors];
 
 export type RunPlaybookActionEvalResponses = {
 	/**
@@ -8386,7 +8395,10 @@ export type RejectSuggestedPlaybookActionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type RejectSuggestedPlaybookActionError = RejectSuggestedPlaybookActionErrors[keyof RejectSuggestedPlaybookActionErrors];
 
 export type RejectSuggestedPlaybookActionResponses = {
 	/**
@@ -8417,7 +8429,10 @@ export type UpdateSuggestedPlaybookActionErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type UpdateSuggestedPlaybookActionError = UpdateSuggestedPlaybookActionErrors[keyof UpdateSuggestedPlaybookActionErrors];
 
 export type UpdateSuggestedPlaybookActionResponses = {
 	/**
@@ -15370,7 +15385,10 @@ export type CancelImageJobErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
 };
+
+export type CancelImageJobError = CancelImageJobErrors[keyof CancelImageJobErrors];
 
 export type CancelImageJobResponses = {
 	/**
@@ -20047,7 +20065,7 @@ export type DeleteBaseArtifactErrors = {
 	/**
 	 * Not Found
 	 */
-	404: unknown;
+	404: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
 };
 
@@ -20083,8 +20101,10 @@ export type GetBaseArtifactErrors = {
 	/**
 	 * Not Found
 	 */
-	404: unknown;
+	404: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 };
+
+export type GetBaseArtifactError = GetBaseArtifactErrors[keyof GetBaseArtifactErrors];
 
 export type GetBaseArtifactResponses = {
 	/**
@@ -20116,7 +20136,7 @@ export type CancelBaseArtifactErrors = {
 	/**
 	 * Not Found
 	 */
-	404: unknown;
+	404: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
 };
 
@@ -20434,7 +20454,14 @@ export type CancelTrainingDatasetErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
+	409: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 };
+
+export type CancelTrainingDatasetError = CancelTrainingDatasetErrors[keyof CancelTrainingDatasetErrors];
 
 export type CancelTrainingDatasetResponses = {
 	/**
@@ -20874,7 +20901,14 @@ export type CancelEvaluationErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
+	409: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 };
+
+export type CancelEvaluationError = CancelEvaluationErrors[keyof CancelEvaluationErrors];
 
 export type CancelEvaluationResponses = {
 	/**
@@ -21182,7 +21216,14 @@ export type CancelTrainingRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
+	409: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 };
+
+export type CancelTrainingRunError = CancelTrainingRunErrors[keyof CancelTrainingRunErrors];
 
 export type CancelTrainingRunResponses = {
 	/**
@@ -22190,6 +22231,7 @@ export type SaveTutorialStateErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
 
 export type SaveTutorialStateError = SaveTutorialStateErrors[keyof SaveTutorialStateErrors];
@@ -22246,7 +22288,10 @@ export type AcknowledgeAiErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: FastEndpointsProblemDetails;
 };
+
+export type AcknowledgeAiError = AcknowledgeAiErrors[keyof AcknowledgeAiErrors];
 
 export type AcknowledgeAiResponses = {
 	/**

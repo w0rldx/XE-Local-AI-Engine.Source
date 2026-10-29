@@ -23,12 +23,7 @@ public sealed class RemoveDevelopmentTemplateEndpoint : Endpoint<DevelopmentTemp
 
     public override async Task HandleAsync(DevelopmentTemplateRequest req, CancellationToken ct)
     {
-        if (!await _service.RemoveTemplateAsync(req.TemplateId, ct))
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
+        await _service.RemoveTemplateAsync(req.TemplateId, ct);
         await Send.NoContentAsync(ct);
     }
 }

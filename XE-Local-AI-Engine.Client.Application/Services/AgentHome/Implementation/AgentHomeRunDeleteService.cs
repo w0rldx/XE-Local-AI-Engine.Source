@@ -46,9 +46,9 @@ internal sealed partial class AgentHomeRunDeleteService : IAgentHomeRunDeleteSer
     private AgentHomeRunDeleteOutcome RemoveRun(string runId)
     {
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_options, _dataDirectoryRoot);
-        if (AgentHomeRunPaths.TryResolveRun(runsRoot, runId) is not { } run)
+        if (AgentHomeRunPaths.ResolveRunOrNull(runsRoot, runId) is not { } run)
         {
-            return AgentHomeRunDeleteOutcome.NotFound;
+            throw new AgentHomeRunNotFoundException(runId);
         }
 
         // Read LAST, because a run can start while the path is being resolved — but never THIS run: an id is minted

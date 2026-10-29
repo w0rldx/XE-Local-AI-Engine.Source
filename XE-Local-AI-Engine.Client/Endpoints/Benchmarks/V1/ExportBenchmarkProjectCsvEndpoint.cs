@@ -4,7 +4,6 @@ using System.Text;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
@@ -33,12 +32,6 @@ public sealed class ExportBenchmarkProjectCsvEndpoint : Endpoint<BenchmarkProjec
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
         var export = await _exports.GetCsvAsync(req.ProjectId, ct);
-        if (export is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
-
         var now = _timeProvider.GetUtcNow();
         var csv = BenchmarkExportCsv.Render(export.Runs,
             export.Fidelity.ExpectedKldDigest,

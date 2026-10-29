@@ -15,7 +15,7 @@ internal static class ConversationStateDeltaParser
     };
 
     /// <summary>Returns the delta, or null when the output holds no JSON object with an add, supersede or resolve member.</summary>
-    public static ConversationStateDelta? TryParse(string? modelOutput)
+    public static ConversationStateDelta? ParseOrNull(string? modelOutput)
     {
         if (string.IsNullOrWhiteSpace(modelOutput))
         {

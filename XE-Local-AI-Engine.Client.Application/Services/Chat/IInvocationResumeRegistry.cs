@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -16,14 +17,14 @@ using XE_Local_AI_Engine.Client.Services.Events;
 public interface IInvocationResumeRegistry
 {
     /// <summary>
-    ///     Returns the latest snapshot for a still-live invocation, or <see langword="null" /> when the invocation
-    ///     is unknown or has already reached a terminal state.
+    ///     Gets the latest snapshot for a still-live invocation; <see langword="false" /> when the invocation is unknown
+    ///     or has already reached a terminal state.
     /// </summary>
-    InvocationState? TryGetLiveInvocation(Guid invocationId);
+    bool TryGetLiveInvocation(Guid invocationId, [NotNullWhen(true)] out InvocationState? state);
 
     /// <summary>
-    ///     The id of the still-live invocation for <paramref name="conversationId" />, or <see langword="null" /> when
-    ///     that conversation has no running turn.
+    ///     Gets the id of the still-live invocation for <paramref name="conversationId" />; <see langword="false" />
+    ///     when that conversation has no running turn.
     /// </summary>
     /// <remarks>
     ///     This is the COLD-LOAD re-attach, a different entry point from the reconnect one: a reconnecting client
@@ -32,7 +33,7 @@ public interface IInvocationResumeRegistry
     ///     Without this lookup such a client loses an in-flight question and the run parks until it times out. At most
     ///     one invocation is live on this node, so the scan is over a one-or-zero-element map.
     /// </remarks>
-    Guid? TryGetLiveInvocationIdForConversation(Guid conversationId);
+    bool TryGetLiveInvocationIdForConversation(Guid conversationId, out Guid invocationId);
 
     /// <summary>
     ///     Re-attaches a fresh stream consumer to a live invocation, replaying the content accumulated so far before

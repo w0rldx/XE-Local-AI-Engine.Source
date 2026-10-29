@@ -65,7 +65,7 @@ public sealed class NodeChatMigrationRecoveryService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var lockFile = TryOpenStartupLock(lockPath);
+            var lockFile = OpenStartupLockOrNull(lockPath);
             if (lockFile is not null)
             {
                 return lockFile;
@@ -80,7 +80,7 @@ public sealed class NodeChatMigrationRecoveryService
         }
     }
 
-    private static FileStream? TryOpenStartupLock(string lockPath)
+    private static FileStream? OpenStartupLockOrNull(string lockPath)
     {
         try
         {

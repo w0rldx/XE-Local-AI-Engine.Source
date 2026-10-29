@@ -31,7 +31,7 @@ public sealed class DevelopmentProfileSummary
     ///     catalog drifted, hiding the drift behind an outage instead of surfacing it where it matters — at the start
     ///     of an attempt.
     /// </remarks>
-    public static DevelopmentProfileSummary? TryFrom(string? storedCommandProfileJson)
+    public static DevelopmentProfileSummary? FromOrNull(string? storedCommandProfileJson)
     {
         if (string.IsNullOrWhiteSpace(storedCommandProfileJson))
         {

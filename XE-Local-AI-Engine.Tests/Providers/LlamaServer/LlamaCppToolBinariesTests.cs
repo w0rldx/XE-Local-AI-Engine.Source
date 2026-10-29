@@ -27,7 +27,7 @@ public sealed class LlamaCppToolBinariesTests
         var expected = Path.Combine(dir.Path, LlamaCppToolBinaries.PerplexityFileName);
         File.WriteAllText(expected, "perplexity");
 
-        AssertEx.Equal(expected, LlamaCppToolBinaries.TryResolvePerplexity(dir.Path));
+        AssertEx.Equal(expected, LlamaCppToolBinaries.FindPerplexity(dir.Path));
     }
 
     [Test]
@@ -35,9 +35,9 @@ public sealed class LlamaCppToolBinariesTests
     {
         using var dir = new TempDirectory();
 
-        AssertEx.Null(LlamaCppToolBinaries.TryResolvePerplexity(dir.Path));
-        AssertEx.Null(LlamaCppToolBinaries.TryResolvePerplexity(null));
-        AssertEx.Null(LlamaCppToolBinaries.TryResolvePerplexity("   "));
+        AssertEx.Null(LlamaCppToolBinaries.FindPerplexity(dir.Path));
+        AssertEx.Null(LlamaCppToolBinaries.FindPerplexity(null));
+        AssertEx.Null(LlamaCppToolBinaries.FindPerplexity("   "));
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class LlamaCppToolBinariesTests
 
         // Evaluated on read: the same record flips from null to a path the moment the helper lands beside the server.
         AssertEx.Null(binary.PerplexityExecutablePath);
-        AssertEx.Null(LlamaCppToolBinaries.TryResolvePerplexityBesideServer(null));
+        AssertEx.Null(LlamaCppToolBinaries.FindPerplexityBesideServer(null));
 
         var expected = Path.Combine(dir.Path, LlamaCppToolBinaries.PerplexityFileName);
         File.WriteAllText(expected, "perplexity");

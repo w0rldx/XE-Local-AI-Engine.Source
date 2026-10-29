@@ -600,7 +600,7 @@ model store detail: the `index.json` lock is an in-process semaphore and the man
 `index.json.tmp`; concurrent downloads of the same file are safe (unique `.part` names, `File.Move` without overwrite) but
 the loser fails with a destination conflict. The hand-authored `index.json` + symlink recipe is live-proven. A lighter path
 read from code but NOT live-verified: `GgufModelRegistry.LoadEntriesAsync` rescans the directory whenever `index.json` is
-missing/empty/corrupt and auto-registers any `.gguf` whose name `GgufQuantParser.TryParse` recognises a quant token in.
+missing/empty/corrupt and auto-registers any `.gguf` whose name `GgufQuantParser.ParseOrNull` recognises a quant token in.
 
 ### A live round in a worktree starts from a FRESH isolated DB, and a scratch host never touches the user data dir
 

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using System.Globalization;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -37,12 +36,6 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint : Endpoint<GetKldDiskEst
     {
         ArgumentNullException.ThrowIfNull(req);
         var project = await _records.GetProjectAsync(req.ProjectId, ct);
-        if (project is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
-
         var chunks = BenchmarkFidelityPolicy.ClampChunks(req.Chunks ?? project.FidelityChunks);
         var estimated = BenchmarkFidelityPolicy.EstimateKldBytes(chunks, BenchmarkFidelityPolicy.DefaultVocabSize);
         var free = _cache.AvailableFreeBytes();

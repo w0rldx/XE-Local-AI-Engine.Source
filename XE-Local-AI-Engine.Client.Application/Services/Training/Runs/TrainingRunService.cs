@@ -23,13 +23,16 @@ public interface ITrainingRunService
 
     Task<TrainingRunPage> ListAsync(TrainingRunQuery query, CancellationToken cancellationToken = default);
 
-    Task<TrainingRunRecord?> GetAsync(Guid runId, CancellationToken cancellationToken = default);
+    /// <exception cref="TrainingNotFoundException">No run carries <paramref name="runId" />.</exception>
+    Task<TrainingRunRecord> GetAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Requests cancellation. A queued run is terminalized directly; a running one is signaled through the
     ///     executor's registry so the trainer can stop cooperatively and still be recorded as cancelled.
     /// </summary>
-    Task<bool> CancelAsync(Guid runId, CancellationToken cancellationToken = default);
+    /// <exception cref="TrainingNotFoundException">No run carries <paramref name="runId" />.</exception>
+    /// <exception cref="TrainingConflictException"><c>RunTerminal</c>: the run has already finished.</exception>
+    Task CancelAsync(Guid runId, CancellationToken cancellationToken = default);
 }
 
 public sealed class TrainingRunService : ITrainingRunService
@@ -110,27 +113,26 @@ public sealed class TrainingRunService : ITrainingRunService
     public Task<TrainingRunPage> ListAsync(TrainingRunQuery query, CancellationToken cancellationToken = default) =>
         _runStore.ListAsync(query, cancellationToken);
 
-    public Task<TrainingRunRecord?> GetAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        _runStore.GetAsync(runId, cancellationToken);
+    public async Task<TrainingRunRecord> GetAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        await _runStore.GetAsync(runId, cancellationToken) ?? throw new TrainingNotFoundException("The training run was not found.");
 
-    public async Task<bool> CancelAsync(Guid runId, CancellationToken cancellationToken = default)
+    public async Task CancelAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        var run = await _runStore.GetAsync(runId, cancellationToken);
-        if (run is null || run.Status is TrainingRunStatus.Succeeded or TrainingRunStatus.Failed or TrainingRunStatus.Cancelled)
+        var run = await GetAsync(runId, cancellationToken);
+        if (run.Status is TrainingRunStatus.Succeeded or TrainingRunStatus.Failed or TrainingRunStatus.Cancelled)
         {
-            return false;
+            throw new TrainingConflictException("RunTerminal");
         }
 
         // A running trainer is signaled, never terminalized here: the executor owns the process-group SIGTERM, the
         // cooperative stop and the terminal write, so cancelling from two places would race the work item.
         if (_cancellations.Cancel(runId))
         {
-            return true;
+            return;
         }
 
         _ = await _runStore.CompleteRunAsync(runId, TrainingWorkStatus.Cancelled, "Cancelled before the run started.", cancellationToken);
         _signal.Wake();
-        return true;
     }
 
     /// <summary>

@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
-///     Cancels generation. Mirrors the training-run cancel: a queued dataset is terminalized, a generating one is
-///     signaled through the executor's registry, and an unknown or already-finished dataset is a 404.
+///     Cancels generation like the training-run cancel: a queued dataset is terminalized, a generating one signaled.
+///     An unknown dataset is a 404 and a finished one a 409, both from <c>TrainingExceptionHandler</c>.
 /// </summary>
 public sealed class CancelTrainingDatasetEndpoint : Endpoint<CancelTrainingDatasetRequest>
 {
@@ -26,17 +26,16 @@ public sealed class CancelTrainingDatasetEndpoint : Endpoint<CancelTrainingDatas
         Policies(NodeAuthorizationPolicies.Operator);
         // The dataset id is the whole request and it comes from the route, so this POST has no body. Without declaring
         // that, FastEndpoints requires a JSON body and a bodyless cancel is answered with 415 instead of acting.
-        Description(builder => builder.Accepts<CancelTrainingDatasetRequest>());
+        Description(builder => builder
+                               .Accepts<CancelTrainingDatasetRequest>()
+                               .Produces(StatusCodes.Status204NoContent)
+                               .Produces<TrainingErrorResponse>(StatusCodes.Status404NotFound)
+                               .Produces<TrainingErrorResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancelTrainingDatasetRequest req, CancellationToken ct)
     {
-        if (!await _generation.CancelAsync(req.DatasetId, ct))
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
+        await _generation.CancelAsync(req.DatasetId, ct);
         await Send.NoContentAsync(ct);
     }
 }

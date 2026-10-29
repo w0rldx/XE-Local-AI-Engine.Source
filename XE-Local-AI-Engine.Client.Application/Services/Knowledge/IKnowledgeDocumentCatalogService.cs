@@ -33,8 +33,9 @@ public interface IKnowledgeDocumentCatalogService
         string sourceId,
         CancellationToken cancellationToken);
 
-    /// <summary>Reads one document's detail plus its ordered chunks, or <see langword="null" /> when the id is unknown.</summary>
-    Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken);
+    /// <summary>Reads one document's detail plus its ordered chunks.</summary>
+    /// <exception cref="KnowledgeDocumentNotFoundException">The id is unknown.</exception>
+    Task<KnowledgeDocumentDetail> GetAsync(Guid documentId, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Reads one document only when it belongs to <paramref name="collectionId" />. This is the authorization seam
@@ -47,9 +48,10 @@ public interface IKnowledgeDocumentCatalogService
 
     /// <summary>
     ///     Resets one document to <see cref="KnowledgeDocumentStatus.Pending" /> (clearing any failure reason and attempts) so a
-    ///     reindex can re-run the pipeline. Returns <see langword="false" /> when the id is unknown.
+    ///     reindex can re-run the pipeline.
     /// </summary>
-    Task<bool> ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken);
+    /// <exception cref="KnowledgeDocumentNotFoundException">The id is unknown.</exception>
+    Task ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Resets every INDEXED document whose stored embedding/vector identity or parser/chunker version differs from

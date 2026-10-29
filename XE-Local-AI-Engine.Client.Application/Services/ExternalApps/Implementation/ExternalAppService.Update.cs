@@ -82,7 +82,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
         IDisposable? lease = null;
         try
         {
-            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
+            lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
                     ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
             var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken);
@@ -298,7 +298,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
     ///     The host ports are placeholders and they are enough, because the planner only substitutes their numbers
     ///     into <c>XE_UI_HOST_PORT_&lt;service&gt;</c> while what is asked is whether the target RESOLVES — the
     ///     bridge built-ins above all. Binding real ports would make admission fail for an unrelated reason. The
-    ///     refusal families are the ones <c>TryPlanForVerification</c> treats as "cannot be planned as it stands",
+    ///     refusal families are the ones <c>PlanForVerificationOrNull</c> treats as "cannot be planned as it stands",
     ///     re-raised as the validation exception the API renders as a 400 carrying the planner's own message.
     /// </remarks>
     private void RequireTargetIsPlannable(Guid instanceId,

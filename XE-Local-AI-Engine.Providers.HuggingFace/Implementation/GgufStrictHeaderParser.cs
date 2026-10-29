@@ -117,6 +117,7 @@ internal static class GgufStrictHeaderParser
             : null;
     }
 
+    // value is null on success for an array or a skipped scalar type: the bytes are consumed but not kept.
     private static bool TryReadValue(ref Reader reader, uint type, out object? value)
     {
         value = null;

@@ -62,7 +62,7 @@ public sealed record LlamaServerLaunchReceipt
 
     /// <summary>
     ///     The allow-listed launch shape this spawn EMITTED, read back from the final argument vector through
-    ///     <see cref="LlamaServerLaunchProjection.TryFromArguments" />.
+    ///     <see cref="LlamaServerLaunchProjection.FromArgumentsOrNull" />.
     /// </summary>
     /// <remarks>
     ///     It falls back to the INTENDED projection — the <see cref="LlamaServerLaunchProjection.From" /> identity a

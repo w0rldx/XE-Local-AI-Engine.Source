@@ -255,7 +255,7 @@ public sealed class OperatorVariantPinTests
 
     private static void SeedCachedPrebuilt(string cacheRoot, GpuVariant variant)
     {
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, variant));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, variant));
         var slug = variant == GpuVariant.Vulkan ? "vulkan" : "cpu";
         var serverPath = Path.Combine(cacheRoot, "llama.cpp", LlamaCppReleasePins.PinnedTag, slug,
             pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
@@ -265,7 +265,7 @@ public sealed class OperatorVariantPinTests
 
     private static InstalledRuntimeState PrebuiltRecord(GpuVariant variant, bool operatorSelected)
     {
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, variant));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, variant));
         return new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, pin.AssetName, pin.Sha256, variant,
             new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), OperatorSelected: operatorSelected);
     }

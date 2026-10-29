@@ -80,26 +80,15 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
         _inner.ListUnpublishedNodeRunsAsync(runId, cancellationToken);
 
     /// <summary>A publish is a node change a watching chat page repaints for; a stamp that matched no row announces nothing.</summary>
-    public async Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default)
-    {
-        if (await _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken) is not { } result)
-        {
-            return null;
-        }
-
-        return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken);
-    }
+    public async Task<GraphWorkflowConditionalWriteResult> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
+        await PublishWrittenAsync(await _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken), GraphWorkflowChangeKind.Node, cancellationToken);
 
     /// <summary>A steer the row now lists, which a watching chat page repaints for; a declined append announces nothing.</summary>
-    public async Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
-        await _inner.AppendNodeRunSteeringAsync(command, cancellationToken) is { } result
-            ? await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken)
-            : null;
+    public async Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
+        await PublishWrittenAsync(await _inner.AppendNodeRunSteeringAsync(command, cancellationToken), GraphWorkflowChangeKind.Node, cancellationToken);
 
-    public async Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
-        await _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken) is { } result
-            ? await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Node, cancellationToken)
-            : null;
+    public async Task<GraphWorkflowConditionalWriteResult> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+        await PublishWrittenAsync(await _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken), GraphWorkflowChangeKind.Node, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.TransitionRunAsync(command, cancellationToken), GraphWorkflowChangeKind.Run, cancellationToken);
@@ -125,15 +114,8 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     ///     An answered pause is the change a watching client most needs told: it is what removes the badge asking for a
     ///     person. A write that matched no row announces nothing, because nothing committed.
     /// </summary>
-    public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
-    {
-        if (await _inner.DecideNodeRunAsync(command, cancellationToken) is not { } result)
-        {
-            return null;
-        }
-
-        return await PublishAsync(Task.FromResult(result), GraphWorkflowChangeKind.Gate, cancellationToken);
-    }
+    public async Task<GraphWorkflowConditionalWriteResult> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default) =>
+        await PublishWrittenAsync(await _inner.DecideNodeRunAsync(command, cancellationToken), GraphWorkflowChangeKind.Gate, cancellationToken);
 
     public Task<GraphWorkflowNodeRunSnapshot?> FindNodeRunByDecisionOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
         _inner.FindNodeRunByDecisionOperationAsync(runId, operationId, cancellationToken);
@@ -159,6 +141,19 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
         GraphWorkflowUnjudgedNodeRunSettlement? unjudged = null,
         CancellationToken cancellationToken = default) =>
         _inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
+
+    /// <summary>A conditional write that declined committed nothing, so it announces nothing.</summary>
+    private async Task<GraphWorkflowConditionalWriteResult> PublishWrittenAsync(GraphWorkflowConditionalWriteResult result,
+        GraphWorkflowChangeKind kind,
+        CancellationToken cancellationToken)
+    {
+        if (result is GraphWorkflowConditionalWriteResult.Written written)
+        {
+            _ = await PublishAsync(Task.FromResult(written.Result), kind, cancellationToken);
+        }
+
+        return result;
+    }
 
     /// <summary>Awaits the mutation, then announces the watermark that commit allocated.</summary>
     /// <remarks>

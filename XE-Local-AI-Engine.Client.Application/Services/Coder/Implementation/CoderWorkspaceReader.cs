@@ -316,8 +316,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
     private async Task<CoderWorkspaceAccess> TryOpenAsync(CancellationToken cancellationToken)
     {
         var identity = await _identityProvider.GetAsync(cancellationToken);
-        var lease = _leaseManager.TryAcquire(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId));
-        if (lease is null)
+        if (!_leaseManager.TryAcquire(new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId), out var lease))
         {
             return new CoderWorkspaceAccess
             {

@@ -49,10 +49,6 @@ public sealed class UpdateTranscriptSegmentEndpoint : Endpoint<UpdateTranscriptS
                 await Send.OkAsync(result.Segment.ToResponse(), ct);
                 return;
 
-            case UpdateTranscriptSegmentOutcome.SessionNotFound:
-            case UpdateTranscriptSegmentOutcome.SegmentNotFound:
-                await Send.NotFoundAsync(ct);
-                return;
 
             case UpdateTranscriptSegmentOutcome.SessionTranscribing:
                 await Send.ResultAsync(Results.Conflict(new TranscriptSegmentUpdateBlockedResponse

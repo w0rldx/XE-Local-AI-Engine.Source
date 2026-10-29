@@ -48,7 +48,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
     }
 
     /// <summary>Builds a killer from measured containment, or <see langword="null" /> when the host has no isolation.</summary>
-    public static SandboxScopeUnitKiller? TryCreate(SandboxFilesystemIsolation? isolation)
+    public static SandboxScopeUnitKiller? CreateOrNull(SandboxFilesystemIsolation? isolation)
     {
         return isolation is null
             ? null
@@ -65,7 +65,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
             return;
         }
 
-        using var process = TryStart(["kill", "--kill-whom=cgroup", "--signal=SIGKILL", "--wait", unitName]);
+        using var process = StartOrNull(["kill", "--kill-whom=cgroup", "--signal=SIGKILL", "--wait", unitName]);
         if (process is null)
         {
             return;
@@ -94,7 +94,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
             return;
         }
 
-        using var process = TryStart(["kill", "--kill-whom=cgroup", "--signal=SIGKILL", "--wait", unitName]);
+        using var process = StartOrNull(["kill", "--kill-whom=cgroup", "--signal=SIGKILL", "--wait", unitName]);
         if (process is not null && !process.WaitForExit(KillTimeout))
         {
             TryKillHelper(process);
@@ -111,7 +111,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
     /// <inheritdoc />
     public IReadOnlyList<SandboxScopeUnitStatus> ListEngineOwnedUnits()
     {
-        using var process = TryStart(["list-units", "--type=scope", "--all", "--no-legend", "--plain", SandboxScopeUnit.ListPattern]);
+        using var process = StartOrNull(["list-units", "--type=scope", "--all", "--no-legend", "--plain", SandboxScopeUnit.ListPattern]);
         if (process is null)
         {
             return [];
@@ -157,7 +157,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
     private Dictionary<string, TimeSpan> ReadActiveDurations(IReadOnlyList<string> unitNames)
     {
         var durations = new Dictionary<string, TimeSpan>(StringComparer.Ordinal);
-        if (unitNames.Count == 0 || TryReadMonotonicMicroseconds() is not { } nowMicroseconds)
+        if (unitNames.Count == 0 || ReadMonotonicMicrosecondsOrNull() is not { } nowMicroseconds)
         {
             return durations;
         }
@@ -170,7 +170,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
         };
         arguments.AddRange(unitNames);
 
-        using var process = TryStart(arguments);
+        using var process = StartOrNull(arguments);
         if (process is null)
         {
             return durations;
@@ -231,7 +231,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
         durations[unitName] = TimeSpan.FromMicroseconds(nowMicroseconds - activeEnter);
     }
 
-    private static long? TryReadMonotonicMicroseconds()
+    private static long? ReadMonotonicMicrosecondsOrNull()
     {
         try
         {
@@ -245,7 +245,7 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
         }
     }
 
-    private Process? TryStart(IReadOnlyList<string> arguments)
+    private Process? StartOrNull(IReadOnlyList<string> arguments)
     {
         try
         {

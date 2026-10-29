@@ -561,7 +561,7 @@ public sealed class BinaryManagerInstallTagTests
         // live catalog resolves the pinned floor (e.g. a node whose recommended setting points back at the pin) while a
         // newer tag is already recorded — the recorded tag must survive (only the live/tier-2 resolve may advance it).
         using var cache = new TempDir();
-        var newerTag = $"b{LlamaCppRuntimeTag.TryParseTagNumber(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
+        var newerTag = $"b{LlamaCppRuntimeTag.ParseTagNumberOrNull(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
         AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(LlamaCppReleasePins.PinnedTag, newerTag), "The recorded tag must be newer than the pinned floor for this test to be meaningful.");
 
         // The pinned-floor binary is cached on disk so the resolve serves it without a download.
@@ -593,7 +593,7 @@ public sealed class BinaryManagerInstallTagTests
     {
         // The live catalog only picks a tag to ACQUIRE: online, it answered with the pin and replaced the newer runtime
         // the user installed, although that runtime's binary was still on disk.
-        var newerTag = $"b{LlamaCppRuntimeTag.TryParseTagNumber(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
+        var newerTag = $"b{LlamaCppRuntimeTag.ParseTagNumberOrNull(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
 
         var binary = await EnsureWithInstalledTagOnDiskOnlineAsync(newerTag);
 

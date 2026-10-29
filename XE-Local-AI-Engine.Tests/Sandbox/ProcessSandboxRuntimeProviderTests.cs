@@ -77,7 +77,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         var sessionRoot = AssertEx.NotNull(Path.GetDirectoryName(AssertEx.NotNull(handle.WorkingRoot)));
-        var owner = AssertEx.NotNull(SandboxSessionOwner.TryReadFrom(sessionRoot), "a killed engine's folder can only be swept if it names its owner");
+        var owner = AssertEx.NotNull(SandboxSessionOwner.ReadFromOrNull(sessionRoot), "a killed engine's folder can only be swept if it names its owner");
 
         AssertEx.Equal(Environment.ProcessId, owner.ProcessId);
         AssertEx.True(SandboxSessionOwner.IsAlive(owner.ProcessId, owner.ProcessStartTimeUtc), "the record must match this process's own start time");

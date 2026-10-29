@@ -232,7 +232,11 @@ public sealed class GraphWorkflowChatPublishTests
     {
         // A private host whose resume registry reports a live chat turn on every conversation — the one seam a streaming reply needs.
         var registry = Substitute.For<IInvocationResumeRegistry>();
-        registry.TryGetLiveInvocationIdForConversation(Arg.Any<Guid>()).Returns(Guid.NewGuid());
+        registry.TryGetLiveInvocationIdForConversation(Arg.Any<Guid>(), out Arg.Any<Guid>()).Returns(call =>
+        {
+            call[1] = Guid.NewGuid();
+            return true;
+        });
         await using var harness = GraphWorkflowHarness.PrivateHost(services =>
         {
             services.RemoveAll<IInvocationResumeRegistry>();

@@ -703,8 +703,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             "Manual job must be registered before disabling.");
 
         var disabled = await service.SetEnabledAsync(record.Id, enabled: false);
-        AssertEx.NotNull(disabled, "SetEnabledAsync must return the updated record.");
-        AssertEx.Equal(expected: false, disabled!.Enabled);
+        AssertEx.Equal(expected: false, disabled.Enabled);
 
         AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "Disabling a Manual job must remove the durable Quartz job.");
@@ -827,8 +826,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // Update: change cron expression.
         var updatedInput = ValidCronInput("0 0 12 * * ?", "Updated Job");
         var updated = await service.UpdateJobAsync(created.Id, updatedInput);
-        AssertEx.NotNull(updated, "UpdateJobAsync must return the updated record.");
-        AssertEx.Equal("Updated Job", updated!.DisplayName);
+        AssertEx.Equal("Updated Job", updated.DisplayName);
 
         // Quartz: job still exists (rescheduled, not removed).
         AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
@@ -854,8 +852,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // Disable then update; enabled state must stay false.
         await service.SetEnabledAsync(created.Id, enabled: false);
         var updated = await service.UpdateJobAsync(created.Id, ValidCronInput());
-        AssertEx.NotNull(updated, "UpdateJobAsync must return the updated record.");
-        AssertEx.Equal(expected: false, updated!.Enabled, "Update must preserve the disabled state.");
+        AssertEx.Equal(expected: false, updated.Enabled, "Update must preserve the disabled state.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
@@ -880,8 +877,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             "Job must be scheduled before disabling.");
 
         var disabled = await service.SetEnabledAsync(created.Id, enabled: false);
-        AssertEx.NotNull(disabled, "SetEnabledAsync must return the updated record.");
-        AssertEx.Equal(expected: false, disabled!.Enabled, "Disabled record must have Enabled=false.");
+        AssertEx.Equal(expected: false, disabled.Enabled, "Disabled record must have Enabled=false.");
         AssertEx.True(disabled.DisabledAtUtc.HasValue, "DisabledAtUtc must be stamped on disable.");
 
         // Quartz: job must be removed.
@@ -911,8 +907,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             "Job must be unscheduled after disable.");
 
         var enabled = await service.SetEnabledAsync(created.Id, enabled: true);
-        AssertEx.NotNull(enabled, "SetEnabledAsync must return the updated record.");
-        AssertEx.Equal(expected: true, enabled!.Enabled);
+        AssertEx.Equal(expected: true, enabled.Enabled);
         AssertEx.Null(enabled.DisabledAtUtc, "DisabledAtUtc must be cleared on re-enable.");
 
         AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
@@ -1046,22 +1041,24 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var created = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await service.DeleteJobAsync(created.Id), "The first delete must soft-delete the row.");
+        await service.DeleteJobAsync(created.Id);
         var firstStamp = AssertEx.NotNull(await service.GetJobAsync(created.Id)).DeletedAtUtc;
         AssertEx.True(firstStamp.HasValue, "DeletedAtUtc must be stamped by the first delete.");
 
-        AssertEx.Null(await service.SetEnabledAsync(created.Id, enabled: true));
-        AssertEx.Null(await service.SetEnabledAsync(created.Id, enabled: false));
-        AssertEx.Null(await service.UpdateJobAsync(created.Id, ValidCronInput()));
+        _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.SetEnabledAsync(created.Id, enabled: true));
+        _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.SetEnabledAsync(created.Id, enabled: false));
+        _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.UpdateJobAsync(created.Id, ValidCronInput()));
+        _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.TriggerNowAsync(created.Id));
         AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "No action on a soft-deleted job may re-schedule its Quartz job.");
 
-        AssertEx.True(await service.DeleteJobAsync(created.Id), "A second delete is an idempotent success.");
+        // A second delete is an idempotent success: it neither throws nor re-stamps.
+        await service.DeleteJobAsync(created.Id);
         var afterSecondDelete = AssertEx.NotNull(await service.GetJobAsync(created.Id));
         AssertEx.Equal(firstStamp, afterSecondDelete.DeletedAtUtc);
         AssertEx.False(afterSecondDelete.Enabled, "The soft-deleted row stays disabled.");
 
-        AssertEx.False(await service.DeleteJobAsync(Guid.NewGuid()), "An unknown id is still reported as not found.");
+        _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.DeleteJobAsync(Guid.NewGuid()));
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
@@ -1087,7 +1084,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     [Test]
-    public async Task TriggerNowAsync_WhenJobNotFound_ThrowsValidation()
+    public async Task TriggerNowAsync_WhenJobNotFound_ThrowsNotFound()
     {
         var dbPath = GetDatabasePath("trigger-notfound.sqlite");
         await MigrateAsync(dbPath);
@@ -1098,7 +1095,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
         await scheduler.Start(CancellationToken.None);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(Guid.NewGuid()));
+        await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.TriggerNowAsync(Guid.NewGuid()));
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
@@ -1264,7 +1261,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
 
     [Test]
-    public async Task CancelRunAsync_WhenRunNotFound_ReturnsNotFound()
+    public async Task CancelRunAsync_WhenRunNotFound_ThrowsNotFound()
     {
         var dbPath = GetDatabasePath("cancel-notfound.sqlite");
         await MigrateAsync(dbPath);
@@ -1272,9 +1269,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var outcome = await service.CancelRunAsync(Guid.NewGuid());
-
-        AssertEx.Equal(RunCancellationOutcome.NotFound, outcome);
+        _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.CancelRunAsync(Guid.NewGuid()));
     }
 
     [Test]

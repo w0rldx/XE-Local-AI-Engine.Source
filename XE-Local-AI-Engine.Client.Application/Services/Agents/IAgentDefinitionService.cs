@@ -19,15 +19,18 @@ public interface IAgentDefinitionService
 
     /// <summary>
     ///     Validates and applies <paramref name="input" /> to the definition with <paramref name="id" />. Returns the
-    ///     updated record, or <c>null</c> when no definition has that id.
+    ///     updated record.
     /// </summary>
-    Task<AgentDefinitionRecord?> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default);
+    /// <exception cref="AgentDefinitionNotFoundException">No definition has <paramref name="id" />.</exception>
+    Task<AgentDefinitionRecord> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default);
 
-    /// <summary>Removes the definition with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Removes the definition with <paramref name="id" />.</summary>
+    /// <exception cref="AgentDefinitionNotFoundException">No definition has <paramref name="id" />.</exception>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no definition has that id.</summary>
-    Task<AgentDefinitionRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Returns the record for <paramref name="id" />.</summary>
+    /// <exception cref="AgentDefinitionNotFoundException">No definition has <paramref name="id" />.</exception>
+    Task<AgentDefinitionRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Resolves a definition key as either its id or an exact, ordinal name. Blank keys never match.
@@ -40,6 +43,14 @@ public interface IAgentDefinitionService
 
     /// <summary>Returns the seed slugs already imported, so a template catalog can mark them as imported.</summary>
     Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>No agent definition has the id the client supplied.</summary>
+public sealed class AgentDefinitionNotFoundException : ResourceNotFoundException
+{
+    public AgentDefinitionNotFoundException(Guid id) : base($"No agent definition has id '{id}'.")
+    {
+    }
 }
 
 /// <summary>Thrown when an agent-definition create/update fails validation. The message is safe to surface to callers.</summary>

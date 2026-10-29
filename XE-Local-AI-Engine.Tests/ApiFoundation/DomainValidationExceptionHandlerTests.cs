@@ -47,11 +47,11 @@ public sealed class DomainValidationExceptionHandlerTests
             useCase = "definitely-not-a-supported-use-case"
         });
 
-        // The global handler's body: a random job id resolves to no definition, so the trigger throws
-        // ScheduledJobValidationException out of HandleAsync (the endpoint does not catch it).
+        // The global handler's body: a disabled job cannot be fired by hand, so the trigger throws an uncaught
+        // ScheduledJobValidationException. An unknown id would not do: that is a bodyless 404 now.
         var global = await PostAsync(new
         {
-            scheduledJobId = Guid.NewGuid()
+            scheduledJobId = await CreateDisabledRecommendationJobAsync()
         });
 
         AssertEx.Equal(HttpStatusCode.BadRequest, local.StatusCode);
@@ -184,6 +184,36 @@ public sealed class DomainValidationExceptionHandlerTests
         return body.Json
                    .Replace(body.ErrorReason, "<message>", StringComparison.Ordinal)
                    .Replace(body.TraceId, "<traceId>", StringComparison.Ordinal);
+    }
+
+    private async Task<Guid> CreateDisabledRecommendationJobAsync()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var create = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/scheduler/jobs")
+        {
+            Content = JsonContent.Create(new
+            {
+                templateId = "model-recommendation-check",
+                displayName = "Disabled recommendation refresh",
+                scheduleKind = "Manual",
+                timeZoneId = "UTC",
+                preventOverlap = false
+            })
+        };
+        factory.AddNodeBearerToken(create);
+        using var created = await client.SendAsync(create);
+        var payload = await created.Content.ReadAsStringAsync();
+        AssertEx.True(created.IsSuccessStatusCode, $"Create must succeed, got {(int)created.StatusCode}: {payload}");
+        using var document = JsonDocument.Parse(payload);
+        var jobId = document.RootElement.GetProperty("id").GetGuid();
+
+        using var disable = new HttpRequestMessage(HttpMethod.Post, $"/api/local/v1/scheduler/jobs/{jobId}/disable");
+        factory.AddNodeBearerToken(disable);
+        using var disabled = await client.SendAsync(disable);
+        AssertEx.True(disabled.IsSuccessStatusCode, $"Disable must succeed, got {(int)disabled.StatusCode}.");
+        return jobId;
     }
 
     private async Task<ProblemBody> PostAsync(object payload)

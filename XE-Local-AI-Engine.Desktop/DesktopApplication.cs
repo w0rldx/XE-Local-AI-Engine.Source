@@ -125,8 +125,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         {
             Directory.CreateDirectory(_options.DataDirectory);
             Directory.CreateDirectory(_options.ProfileDirectory);
-            _instance = DesktopInstance.TryAcquire(_options.DataDirectory);
-            if (_instance is null)
+            if (!DesktopInstance.TryAcquire(_options.DataDirectory, out _instance))
             {
                 if (_options.Port is not null)
                 {

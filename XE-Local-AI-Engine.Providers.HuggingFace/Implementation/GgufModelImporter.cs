@@ -165,7 +165,7 @@ internal sealed class GgufModelImporter : IGgufModelImporter
         }
         catch (Exception exception)
         {
-            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll(new OwnedArtifact
+            var cleanupFailure = OwnedArtifactCleanup.DeleteAllOrFailure(new OwnedArtifact
             {
                 Path = temporaryPath,
                 Owned = true

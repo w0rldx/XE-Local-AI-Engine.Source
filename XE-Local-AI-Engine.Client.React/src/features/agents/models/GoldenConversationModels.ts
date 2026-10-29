@@ -119,17 +119,31 @@ export function findGoldenFieldOverLimit(request: CreateGoldenConversationReques
 // reason. `EvalRequired` = no eval has run; `EvalRegressed` = the latest eval failed (a prior-good case broke);
 // `EvalStale` = the action or its evaluation context changed since the last passing eval; `EvalIncomplete` = the last
 // eval only scored a subset of the enabled golden cases (raise the cap and re-run); `CapReached` = the agent is
-// already at its MaxEnabledActions bound, so the operator must archive/disable an Enabled action before promoting.
+// already at its MaxEnabledActions bound, so the operator must archive/disable an Enabled action before promoting;
+// `NotPending` = the action is no longer a pending suggestion (someone else promoted or rejected it).
 // Consumed by PlaybookActionMappers (the promote flow), not the golden CRUD — kept here with the golden governance
 // types it co-evolved with.
-export type PromoteConflictStatus = "EvalRequired" | "EvalRegressed" | "EvalStale" | "EvalIncomplete" | "CapReached";
+export type PromoteConflictStatus =
+	| "EvalRequired"
+	| "EvalRegressed"
+	| "EvalStale"
+	| "EvalIncomplete"
+	| "CapReached"
+	| "NotPending";
 
 export interface PromoteConflictBody {
 	readonly status: PromoteConflictStatus;
 	readonly reason: string;
 }
 
-const promoteConflictStatusSchema = z.enum(["EvalRequired", "EvalRegressed", "EvalStale", "EvalIncomplete", "CapReached"]);
+const promoteConflictStatusSchema = z.enum([
+	"EvalRequired",
+	"EvalRegressed",
+	"EvalStale",
+	"EvalIncomplete",
+	"CapReached",
+	"NotPending",
+]);
 
 const promoteConflictBodySchema = z.object({
 	status: promoteConflictStatusSchema,

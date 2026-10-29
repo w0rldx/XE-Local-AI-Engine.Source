@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Desktop;
 
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
@@ -31,7 +32,7 @@ internal sealed class DesktopInstance : IAsyncDisposable
         return "xe-activate-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.UserName + "\n" + normalized)));
     }
 
-    internal static DesktopInstance? TryAcquire(string directory)
+    internal static bool TryAcquire(string directory, [NotNullWhen(true)] out DesktopInstance? instance)
     {
         FileStream lease;
         try
@@ -55,12 +56,14 @@ internal sealed class DesktopInstance : IAsyncDisposable
         }
         catch (IOException exception) when (!OperatingSystem.IsWindows() || (exception.HResult & 0xffff) is 32 or 33)
         {
-            return null;
+            instance = null;
+            return false;
         }
 
         try
         {
-            return new DesktopInstance(lease, PipeName(directory));
+            instance = new DesktopInstance(lease, PipeName(directory));
+            return true;
         }
         catch
         {

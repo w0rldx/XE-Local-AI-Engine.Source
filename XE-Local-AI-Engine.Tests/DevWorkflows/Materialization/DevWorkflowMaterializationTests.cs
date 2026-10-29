@@ -396,7 +396,7 @@ public sealed class DevWorkflowMaterializationTests
             message: "the commit marker says no graph moved, or a consumer refetches and gets the same revision back.");
 
         // Nothing rewrote the graph, so nothing re-records the route either: it keeps the shape it settled with.
-        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute((await harness.ReadNodeRunAsync(runId, "decompose")).RouteJson));
+        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.ParseRouteOrNull((await harness.ReadNodeRunAsync(runId, "decompose")).RouteJson));
         AssertEx.Equal("join", string.Join(", ", route.Satisfied), "the authored edge is the whole route, because it is still the whole graph.");
         AssertEx.Empty(route.Dead);
         AssertEx.Empty(route.Waived);
@@ -450,7 +450,7 @@ public sealed class DevWorkflowMaterializationTests
         // between the two — and why nothing caught it. The assertion is on what the tick leaves behind.
         _ = await harness.AdvanceAsync(runId);
 
-        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.TryParseRoute((await harness.ReadNodeRunAsync(runId, "decompose")).RouteJson));
+        var route = AssertEx.NotNull(DevWorkflowNodeRunDocuments.ParseRouteOrNull((await harness.ReadNodeRunAsync(runId, "decompose")).RouteJson));
         AssertEx.Equal("implement#alpha, implement#beta, join",
             string.Join(", ", route.Satisfied.OrderBy(static key => key, StringComparer.Ordinal)),
             "both clone roots the expansion wired to the decomposition, and the authored join edge it kept — which is what EdgeState "

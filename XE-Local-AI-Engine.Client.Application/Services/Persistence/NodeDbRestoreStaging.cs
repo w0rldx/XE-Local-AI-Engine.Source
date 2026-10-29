@@ -228,13 +228,15 @@ public static partial class NodeDbRestoreStaging
             return Failed(markerPath, problem, asidePath);
         }
 
+        // A first attempt records its stamp in the marker before the first move; a retry reuses the recorded one.
+        var recordStamp = stamp is null;
+        stamp ??= nowUtc.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+        asidePath ??= AsidePath(databasePath, stamp);
         var movedDatabase = false;
         try
         {
-            if (stamp is null)
+            if (recordStamp)
             {
-                stamp = nowUtc.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
-                asidePath = AsidePath(databasePath, stamp);
                 await WriteMarkerFileAsync(markerPath,
                     new NodeDbRestoreMarker
                     {
@@ -249,7 +251,7 @@ public static partial class NodeDbRestoreStaging
             // database (an earlier attempt that died between the moves) go aside too, so the snapshot never meets a stale WAL.
             if (File.Exists(databasePath))
             {
-                File.Move(databasePath, asidePath!);
+                File.Move(databasePath, asidePath);
                 movedDatabase = true;
             }
 
@@ -271,9 +273,9 @@ public static partial class NodeDbRestoreStaging
             var reason = exception.Message;
             if (movedDatabase && !File.Exists(databasePath))
             {
-                reason += TryMove(asidePath!, databasePath)
-                          + TryMove(asidePath + WalSuffix, databasePath + WalSuffix)
-                          + TryMove(asidePath + ShmSuffix, databasePath + ShmSuffix);
+                reason += MoveBackOrProblem(asidePath, databasePath)
+                          + MoveBackOrProblem(asidePath + WalSuffix, databasePath + WalSuffix)
+                          + MoveBackOrProblem(asidePath + ShmSuffix, databasePath + ShmSuffix);
             }
 
             return Failed(markerPath, reason, asidePath);
@@ -281,7 +283,7 @@ public static partial class NodeDbRestoreStaging
 
         // The snapshot is installed from here on. An undeletable marker is a warning while a set-aside database lets the next
         // start recognize the finished restore; without one the start must stop, or the snapshot would be applied twice.
-        var deleteProblem = TryDelete(markerPath);
+        var deleteProblem = DeleteOrProblem(markerPath);
         if (deleteProblem is not null && !File.Exists(asidePath))
         {
             return new NodeDbRestoreApplyResult
@@ -311,7 +313,7 @@ public static partial class NodeDbRestoreStaging
     /// <summary>The marker of a restore an earlier start installed but could not clear: never applied twice, only cleared.</summary>
     private static NodeDbRestoreApplyResult CompleteEarlierRestore(string markerPath, string name, string asidePath)
     {
-        var deleteProblem = TryDelete(markerPath);
+        var deleteProblem = DeleteOrProblem(markerPath);
         return new NodeDbRestoreApplyResult
         {
             Applied = false,
@@ -340,7 +342,8 @@ public static partial class NodeDbRestoreStaging
         File.Move(temporaryPath, markerPath, overwrite: true);
     }
 
-    private static string? TryDelete(string path)
+    /// <summary>Deletes <paramref name="path" />; null when it worked, else the failure message.</summary>
+    private static string? DeleteOrProblem(string path)
     {
         try
         {
@@ -473,7 +476,7 @@ public static partial class NodeDbRestoreStaging
     }
 
     /// <summary>Moves a set-aside file back; empty when it worked, else a sentence for the failure reason naming the file.</summary>
-    private static string TryMove(string source, string destination)
+    private static string MoveBackOrProblem(string source, string destination)
     {
         try
         {

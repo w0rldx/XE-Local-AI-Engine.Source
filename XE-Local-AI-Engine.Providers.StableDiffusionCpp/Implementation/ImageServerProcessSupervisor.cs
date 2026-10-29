@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -138,15 +139,18 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        await using var activityLease = (_runtimeActivityGate.TryAcquireSpawnReadinessLease()
-                                         ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation."))
-            .ConfigureAwait(false);
+        if (!_runtimeActivityGate.TryAcquireSpawnReadinessLease(out var activityLease))
+        {
+            throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation.");
+        }
+
+        await using var activityLeaseScope = activityLease.ConfigureAwait(false);
 
         // Fast path: an already-running, live daemon is reused without taking the spawn gate — subject to a rate-limited
         // liveness probe so a wedged (alive but unresponsive) daemon is respawned instead of handed out.
         if (_processes.TryGetValue(modelName, out var existing) && !existing.Handle.HasExited)
         {
-            var reused = await TryReuseAsync(modelName, existing, ct).ConfigureAwait(false);
+            var reused = await ReuseOrNullAsync(modelName, existing, ct).ConfigureAwait(false);
             if (reused is not null)
             {
                 return reused;
@@ -161,9 +165,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        await using var activityLease = (_runtimeActivityGate.TryAcquireSpawnReadinessLease()
-                                         ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation."))
-            .ConfigureAwait(false);
+        if (!_runtimeActivityGate.TryAcquireSpawnReadinessLease(out var activityLease))
+        {
+            throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation.");
+        }
+
+        await using var activityLeaseScope = activityLease.ConfigureAwait(false);
 
         // Abort path: tear down the running daemon (dropping its one in-flight job) and spawn a fresh one.
         return await SpawnUnderGateAsync(modelName, evictFirst: true, ct).ConfigureAwait(false);
@@ -182,8 +189,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// <inheritdoc />
     public async Task<ImageServerEvictAllResult> EvictAllAsync(CancellationToken ct)
     {
-        var reservation = _runtimeActivityGate.TryAcquireEvictionReservation();
-        if (reservation is null)
+        if (!_runtimeActivityGate.TryAcquireEvictionReservation(out var reservation))
         {
             return new ImageServerEvictAllResult
             {
@@ -225,30 +231,32 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     }
 
     /// <inheritdoc />
-    public IImageServerJobLease? TryAcquireJobLease(string modelName)
+    public bool TryAcquireJobLease(string modelName, [NotNullWhen(true)] out IImageServerJobLease? lease)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        lease = null;
         if (!_processes.TryGetValue(modelName, out var running) || running.Handle.HasExited)
         {
-            return null;
+            return false;
         }
 
         // Atomically register the lease, refusing if an idle reaper / cap evictor has already latched this daemon for eviction, then confirm the daemon is still the registered, live one: a forced
-        // teardown between the lookup and here would leave the lease guarding a dead handle, so release and return null (leaseless).
+        // teardown between the lookup and here would leave the lease guarding a dead handle, so release and return false (leaseless).
         if (!running.TryAcquireJob())
         {
-            return null;
+            return false;
         }
 
         if (running.Handle.HasExited || !_processes.TryGetValue(modelName, out var current) || !ReferenceEquals(current, running))
         {
             running.ReleaseJob();
-            return null;
+            return false;
         }
 
         running.MarkUsed(_timeProvider.GetUtcNow());
         _residencyNotifier.NotifyChanged();
-        return new ImageJobLease(this, modelName, running, _timeProvider);
+        lease = new ImageJobLease(this, modelName, running, _timeProvider);
+        return true;
     }
 
     /// <inheritdoc />
@@ -277,7 +285,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///     <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeInterval" /> per daemon, so the hot path stays
     ///     cheap — between probes the endpoint is reused with no HTTP.
     /// </remarks>
-    private async Task<ImageServerEndpoint?> TryReuseAsync(string modelName, RunningServer existing, CancellationToken ct)
+    private async Task<ImageServerEndpoint?> ReuseOrNullAsync(string modelName, RunningServer existing, CancellationToken ct)
     {
         // The launch arguments were built from the weight set installed at spawn time; an install completed since (a Qwen-Image set gaining its LlmVision part) leaves the resident daemon without
         // the new part, so it is respawned rather than handed out. A daemon under a job lease is never torn down: fail closed instead of reusing the stale weight set.
@@ -364,7 +372,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             // Re-check under the gate — another caller may have spawned while we waited (ensure path only).
             if (!evictFirst && _processes.TryGetValue(modelName, out var existing) && !existing.Handle.HasExited)
             {
-                var reused = await TryReuseAsync(modelName, existing, ct).ConfigureAwait(false);
+                var reused = await ReuseOrNullAsync(modelName, existing, ct).ConfigureAwait(false);
                 if (reused is not null)
                 {
                     return reused;
@@ -372,7 +380,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             }
 
             // A stale/exited/wedged (or, on restart, the outgoing) daemon under this key is reaped before respawn (a
-            // wedged one was already torn down by TryReuseAsync; RemoveProcessAsync is idempotent so the retry is a no-op).
+            // wedged one was already torn down by ReuseOrNullAsync; RemoveProcessAsync is idempotent so the retry is a no-op).
             if (_processes.TryGetValue(modelName, out var stale))
             {
                 await RemoveProcessAsync(modelName, stale).ConfigureAwait(false);
@@ -453,8 +461,11 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 ModelName = modelName,
                 BaseAddress = spec.BaseAddress
             };
-            var residentLease = _runtimeActivityGate.TryAcquireResidentProcessLease()
-                                ?? throw new StableDiffusionRuntimeException("The image runtime became busy before the server process could be registered.");
+            if (!_runtimeActivityGate.TryAcquireResidentProcessLease(out var residentLease))
+            {
+                throw new StableDiffusionRuntimeException("The image runtime became busy before the server process could be registered.");
+            }
+
             var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow(), residentLease, FingerprintOf(parts));
             _processes[modelName] = running;
 

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -58,10 +59,10 @@ public sealed class DatasetExportService : IDatasetExportService
     ///     Reads a Hermes <c>&lt;tool_call&gt;</c> block back into its tool name and argument JSON. Public so the exported
     ///     form is verifiable by parsing it rather than by string-matching the writer's own output.
     /// </summary>
-    public static bool TryReadHermesToolCall(string value, out string toolName, out string argumentsJson)
+    public static bool TryReadHermesToolCall(string value, [NotNullWhen(true)] out string? toolName, [NotNullWhen(true)] out string? argumentsJson)
     {
-        toolName = string.Empty;
-        argumentsJson = string.Empty;
+        toolName = null;
+        argumentsJson = null;
         var start = value.IndexOf(ToolCallOpen, StringComparison.Ordinal);
         var end = value.IndexOf(ToolCallClose, StringComparison.Ordinal);
         if (start < 0 || end <= start)

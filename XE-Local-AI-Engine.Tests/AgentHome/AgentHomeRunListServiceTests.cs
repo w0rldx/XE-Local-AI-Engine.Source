@@ -479,12 +479,12 @@ public sealed class AgentHomeRunListServiceTests : IDisposable
     [Arguments("..", "a bare parent reference")]
     [Arguments("run-1758300000000-1/../../escape", "a traversal hidden behind a well-formed prefix")]
     [Arguments("not-a-run", "a name the node never minted")]
-    public async Task ReadLogAndPatchAsync_WithAnUnservableRunId_AnswerUnknown(string runId, string why)
+    public async Task ReadLogAndPatchAsync_WithAnUnservableRunId_ThrowRunNotFound(string runId, string why)
     {
         SeedRun(Now.AddDays(-1));
 
-        AssertEx.Null(await Service().ReadLogAsync(runId), why);
-        AssertEx.Null(await Service().ReadPatchAsync(runId), why);
+        _ = await AssertEx.ThrowsAsync<AgentHomeRunNotFoundException>(() => Service().ReadLogAsync(runId), why);
+        _ = await AssertEx.ThrowsAsync<AgentHomeRunNotFoundException>(() => Service().ReadPatchAsync(runId), why);
     }
 
     private AgentHomeRunListService Service() =>

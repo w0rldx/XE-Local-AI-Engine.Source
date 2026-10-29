@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -41,7 +42,7 @@ internal static class DesktopPortStore
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
 
-        var port = await TryReadPersistedPortAsync(dataDirectory, cancellationToken);
+        var port = await ReadPersistedPortOrNullAsync(dataDirectory, cancellationToken);
         if (port is null)
         {
             return DesktopLaunch.LoopbackBindUrl;
@@ -161,7 +162,7 @@ internal static class DesktopPortStore
         }
     }
 
-    private static bool TryValidateReadyInfo(ReadyInfo? info, string expectedDataDirectory, out ReadyInfo? validated)
+    private static bool TryValidateReadyInfo(ReadyInfo? info, string expectedDataDirectory, [NotNullWhen(true)] out ReadyInfo? validated)
     {
         validated = null;
         if (info is null
@@ -200,9 +201,9 @@ internal static class DesktopPortStore
         return true;
     }
 
-    private static bool TryNormalizeAbsolutePath(string path, out string normalized)
+    private static bool TryNormalizeAbsolutePath(string path, [NotNullWhen(true)] out string? normalized)
     {
-        normalized = string.Empty;
+        normalized = null;
         if (string.IsNullOrWhiteSpace(path) || path.Any(char.IsControl) || !Path.IsPathFullyQualified(path))
         {
             return false;
@@ -239,7 +240,7 @@ internal static class DesktopPortStore
         }
     }
 
-    private static async Task<int?> TryReadPersistedPortAsync(string dataDirectory, CancellationToken cancellationToken)
+    private static async Task<int?> ReadPersistedPortOrNullAsync(string dataDirectory, CancellationToken cancellationToken)
     {
         var portFilePath = Path.Combine(dataDirectory, PortFileName);
 

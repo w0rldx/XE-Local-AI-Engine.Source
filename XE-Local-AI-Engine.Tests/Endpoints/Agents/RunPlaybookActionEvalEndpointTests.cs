@@ -110,14 +110,14 @@ public sealed class RunPlaybookActionEvalEndpointTests
     }
 
     [Test]
-    public async Task RunEval_WhenActionEnabledNotPending_ReturnsNotFound()
+    public async Task RunEval_WhenActionEnabledNotPending_ReturnsConflict()
     {
         var factory = Factory;
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner");
 
-        // A manual Enabled action is not a pending Suggested/Analysis action — the eval guard 404s.
+        // A manual Enabled action is not a pending Suggested/Analysis action — the eval guard answers 409.
         Guid enabledActionId;
         using (var scope = factory.Services.CreateScope())
         {
@@ -144,7 +144,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
     [Test]

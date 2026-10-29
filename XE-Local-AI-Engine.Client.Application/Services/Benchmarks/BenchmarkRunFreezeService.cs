@@ -280,7 +280,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         var agentDefinitionId = request.AgentDefinitionId ?? project.AgentDefinitionId;
         var definition = await GetSingleAgentDefinitionAsync(agentDefinitionId, request.AgentDefinitionId is not null, cancellationToken);
 
-        var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken)
+        var capabilities = await _modelCapabilities.ResolveOrNullAsync(primary.ModelName, cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
         var leafItems = await LoadLeafItemsAsync(project, cancellationToken);
@@ -447,7 +447,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         // these numbers, and a probe silently truncated to a smaller window measures the window rather than the model.
         foreach (var probe in leafItems)
         {
-            if (BenchmarkNiahCase.TryRead(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
+            if (BenchmarkNiahCase.ReadOrNull(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
             {
                 throw new BenchmarkValidationException($"The long-context probe '{probeCase.Label}' asks for {probeCase.ContextTokens} tokens, which does not fit the project's "
                                                        + $"{project.ContextTokens}-token context window.");

@@ -13,7 +13,7 @@ Fine-tuning is a Python problem. The tooling that performs it — Unsloth, PEFT,
 
 Three facts about this repository constrain the answer.
 
-**The host is not a training machine that happens to serve inference.** It is an inference node. A single GPU carries chat, embeddings, image generation, benchmarks and model-fit probing, and every one of those paths already contends for it. The supervisor's runtime-mutation lease (`ILlamaServerProcessSupervisor.TryAcquireRuntimeMutationLeaseAsync`) and the GPU load admission semaphore (`IGpuModelLoadAdmission`) exist because that contention is real and was paid for. A training run is not another consumer of that budget — it is a multi-hour, whole-GPU tenant, which is a different kind of thing.
+**The host is not a training machine that happens to serve inference.** It is an inference node. A single GPU carries chat, embeddings, image generation, benchmarks and model-fit probing, and every one of those paths already contends for it. The supervisor's runtime-mutation lease (`ILlamaServerProcessSupervisor.AcquireRuntimeMutationLeaseOrNullAsync`) and the GPU load admission semaphore (`IGpuModelLoadAdmission`) exist because that contention is real and was paid for. A training run is not another consumer of that budget — it is a multi-hour, whole-GPU tenant, which is a different kind of thing.
 
 **The host's Python is not usable.** The host's system Python is newer than Unsloth's supported floor at the pin (3.13), and the torch wheels the Blackwell (sm_120) path needs come from the cu128/cu129 index. Depending on whatever interpreter the operator happens to have installed reproduces the toolchain problem ADR 0004 solved for Development Mode, in a feature where the failure mode is a run that trains for two hours and then cannot export.
 
@@ -38,7 +38,7 @@ The corollary that matters for review: a pull request that adds a training conce
 A run acquires two things for its whole duration:
 
 - a process-wide training-activity hold — referred to below as the `ITrainingActivity` marker, which is a conceptual name in this ADR and not a C# type: the mechanism is `IGpuWorkGate.TryBeginExclusive(GpuWorkKind.TrainingRun)`, whose exclusive/shared admission makes this marker and every other queue's converse check one atomic decision under one lock — and
-- the existing supervisor runtime-mutation lease (`TryAcquireRuntimeMutationLeaseAsync`), which already refuses while any model is loaded.
+- the existing supervisor runtime-mutation lease (`AcquireRuntimeMutationLeaseOrNullAsync`), which already refuses while any model is loaded.
 
 That second acquisition gives training the same eject-first user experience the llama.cpp source build already has: a run cannot start while a model is resident, and the refusal surfaces as the established `runtime-busy` outcome rather than as a new failure vocabulary. Dataset generation, benchmark runs and image jobs take a shared admission on the same gate before starting (`IGpuWorkGate.TryBeginShared` with `GpuWorkKind.DatasetGeneration`, `GpuWorkKind.Benchmark`, `GpuWorkKind.ImageJob`), which is refused while an exclusive holder owns the node, and conversely a run start refuses while any of them is active.
 

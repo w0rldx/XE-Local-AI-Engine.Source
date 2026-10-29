@@ -11,7 +11,7 @@ public sealed class ModelFitMapperRoleTests
     [Test]
     public void TryParseRole_WhenReranker_ReturnsReranker()
     {
-        var role = ModelFitMapper.TryParseRole(" ReRaNkEr ");
+        var role = ModelFitMapper.ParseRoleOrNull(" ReRaNkEr ");
 
         AssertEx.Equal(ModelRole.Reranker, role!.Value);
     }
@@ -27,7 +27,7 @@ public sealed class ModelFitMapperRoleTests
     [Test]
     public void TheDecisionRole_RoundTripsItsWireToken()
     {
-        AssertEx.Equal(ModelRole.Decision, ModelFitMapper.TryParseRole("Decision")!.Value);
+        AssertEx.Equal(ModelRole.Decision, ModelFitMapper.ParseRoleOrNull("Decision")!.Value);
         AssertEx.Equal("decision", ModelRole.Decision.ToWireString());
     }
 

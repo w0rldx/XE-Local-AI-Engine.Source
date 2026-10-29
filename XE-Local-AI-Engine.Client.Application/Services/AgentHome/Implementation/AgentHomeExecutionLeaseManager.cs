@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseManager
 {
@@ -11,14 +12,16 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<AgentHomeExecutionLeaseKey, byte> _poisoned = new();
 
-    public IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key)
+    public bool TryAcquire(AgentHomeExecutionLeaseKey key, [NotNullWhen(true)] out IAgentHomeExecutionLease? lease)
     {
-        return TryAcquireCore(key, allowPoisoned: false);
+        lease = AcquireOrNull(key, allowPoisoned: false);
+        return lease is not null;
     }
 
-    public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key)
+    public bool TryAcquireForRecovery(AgentHomeExecutionLeaseKey key, [NotNullWhen(true)] out IAgentHomeExecutionLease? lease)
     {
-        return TryAcquireCore(key, allowPoisoned: true);
+        lease = AcquireOrNull(key, allowPoisoned: true);
+        return lease is not null;
     }
 
     // A read of the gate, never a wait on it: CurrentCount is 0 exactly while an OwnedLease holds it, and a key that
@@ -35,7 +38,7 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
     public void ClearPoison(AgentHomeExecutionLeaseKey key) =>
         _ = _poisoned.TryRemove(key, out _);
 
-    private IAgentHomeExecutionLease? TryAcquireCore(AgentHomeExecutionLeaseKey key, bool allowPoisoned)
+    private IAgentHomeExecutionLease? AcquireOrNull(AgentHomeExecutionLeaseKey key, bool allowPoisoned)
     {
         if (string.IsNullOrWhiteSpace(key.OwnerUserId) || string.IsNullOrWhiteSpace(key.NodeId))
         {

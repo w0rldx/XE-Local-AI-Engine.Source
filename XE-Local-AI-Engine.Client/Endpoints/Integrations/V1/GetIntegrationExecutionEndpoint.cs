@@ -29,12 +29,6 @@ public sealed class GetIntegrationExecutionEndpoint : EndpointWithoutRequest<Int
     public override async Task HandleAsync(CancellationToken ct)
     {
         var execution = await _executions.GetAsync(Route<Guid>("executionId"), ct);
-        if (execution is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(IntegrationMapper.ToDetail(execution), ct);
     }
 }

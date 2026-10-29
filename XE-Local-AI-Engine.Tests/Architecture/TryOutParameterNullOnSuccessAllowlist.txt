@@ -1,0 +1,33 @@
+# Nullable out parameters of bool Try* methods that are null on SUCCESS — the allowlist for TryMethodConventionTests.
+#
+# Format: <Namespace.Type.Method(parameter)>  # <why null is a successful result>, one line per parameter, sorted.
+#
+# Rule 2 of docs/wiki/16-code-conventions.md "Absence": a nullable out parameter of a bool Try* says when it is null
+# with [NotNullWhen], [MaybeNullWhen] or [NotNullIfNotNull]. A parameter listed here is legitimately null on a true
+# return as well, so no condition is honest.
+#
+# The list is SHRINK-ONLY: an unlisted unattributed parameter fails, and a listed one that now carries an attribute,
+# is no longer nullable, or no longer exists fails as stale.
+
+XE_Local_AI_Engine.Client.Hosting.DesktopLaunch.TryGetMcpKeyScope(scope)  # flag absent: true with no scope
+XE_Local_AI_Engine.Client.Hosting.DesktopLaunch.TryGetOptionValue(value)  # option absent: true with no value
+XE_Local_AI_Engine.Client.Hosting.DesktopLaunch.TryGetPort(port)  # flag absent: true with no port
+XE_Local_AI_Engine.Client.Hosting.DesktopLaunch.TryGetResetAdminPassword(newPassword)  # flag present with an empty value: true, prompt for one
+XE_Local_AI_Engine.Client.Hosting.DesktopLaunch.TryGetSetupCommand(command)  # no --setup flag: true with no command
+XE_Local_AI_Engine.Client.Models.SeedValue.TryParse(seed)  # blank input is a valid "no seed"
+XE_Local_AI_Engine.Client.Services.Agents.Implementation.SubAgentSpawnService.TryResolveDelegateMcpTools(tools)  # no allowed tools: true, offer none
+XE_Local_AI_Engine.Client.Services.Benchmarks.BenchmarkKvCacheType.TryNormalize(normalized)  # blank request: true, llama.cpp default
+XE_Local_AI_Engine.Client.Services.CloudProviders.Auth.EntraAuthCodeDefaults.TryValidateRedirectUri(parsed)  # blank URI: true, use the default
+XE_Local_AI_Engine.Client.Services.ExternalProviders.IExternalProviderRegistryCache.TryClassifyCached(registration)  # cache present: true with null = not registered
+XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation.ExternalProviderRegistry.TryClassifyCached(registration)  # implements the interface member above
+XE_Local_AI_Engine.Client.Services.Mcp.Server.NodeAdminMcpTools.TryMapGenerationMetadata(metadata)  # no metadata input: true with none
+XE_Local_AI_Engine.Client.Services.Mcp.Server.NodeAdminMcpTools.TryParseVariant(variant)  # blank variant: true, no pin
+XE_Local_AI_Engine.Client.Services.Mcp.Server.NodeAgentMcpTools.TryParseOptionalWorkspaceId(workspaceId)  # blank id: true, no workspace
+XE_Local_AI_Engine.Client.Services.Training.Datasets.SampleValidationPipeline.TryValidateArguments(reason)  # error out, null when valid
+XE_Local_AI_Engine.Providers.HuggingFace.Implementation.GgufHeaderReader.TryReadValue(value)  # array or skipped scalar: consumed, not kept
+XE_Local_AI_Engine.Providers.HuggingFace.Implementation.GgufStrictHeaderParser.TryReadValue(value)  # array or skipped scalar: consumed, not kept
+XE_Local_AI_Engine.Providers.LlamaServer.Contracts.IProcessLaunchAdmissionRegistry.TryBeginLaunch(admission)  # direct launch: true with no capacity admission
+XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(kvTypeK)  # no -ctk: llama.cpp default
+XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(kvTypeV)  # no -ctv: llama.cpp default
+XE_Local_AI_Engine.Providers.LlamaServer.Implementation.ProcessLaunchAdmissionRegistry.TryBeginLaunch(admission)  # implements the interface member above
+XE_Local_AI_Engine.Providers.LlamaServer.Options.LlamaServerKvCacheTypes.TryNormalize(normalized)  # blank request: true, llama.cpp default

@@ -36,35 +36,19 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint : Endpoint<SuggestedP
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var result = await _playbookActionService.PromoteSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct);
-
-        switch (result.Status)
+        switch (await _playbookActionService.PromoteSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct))
         {
-            case PlaybookPromotionStatus.Promoted when result.Record is not null:
-                await Send.OkAsync(result.Record.ToResponse(), ct);
+            case PlaybookPromotionResult.Promoted promoted:
+                await Send.OkAsync(promoted.Record.ToResponse(), ct);
                 return;
-            case PlaybookPromotionStatus.NotFound:
-                await Send.NotFoundAsync(ct);
-                return;
-            case PlaybookPromotionStatus.CapReached:
-                // Relevance-retrieval and cohort-monitoring hard cap: the agent is already at MaxEnabledActions. Surface a typed 409 with the PascalCase status
-                // name (the established wire format every other branch uses) so the panel's parser recognizes it, explains the block and prompts an archive/disable.
-                var capConflict = new PlaybookPromotionConflictResponse
+            case PlaybookPromotionResult.Blocked blocked:
+                // Not pending, an eval-gate block, or the enabled-action cap: a typed 409 with the PascalCase status name
+                // (the established wire format) so the panel's parser recognizes it and explains why Approve is unavailable.
+                await Send.ResultAsync(Results.Conflict(new PlaybookPromotionConflictResponse
                 {
-                    Status = result.Status.ToString(),
-                    Reason = ReasonFor(result.Status)
-                };
-                await Send.ResultAsync(Results.Conflict(capConflict));
-                return;
-            default:
-                // EvalRequired / EvalRegressed / EvalStale (and a Promoted with no record) → evaluation blocked the promotion. Surface a typed 409 so the panel
-                // can explain why Approve is unavailable (same Conflict-body convention as the chat/auth endpoints).
-                var conflict = new PlaybookPromotionConflictResponse
-                {
-                    Status = result.Status.ToString(),
-                    Reason = ReasonFor(result.Status)
-                };
-                await Send.ResultAsync(Results.Conflict(conflict));
+                    Status = blocked.Status.ToString(),
+                    Reason = ReasonFor(blocked.Status)
+                }));
                 return;
         }
     }
@@ -79,6 +63,7 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint : Endpoint<SuggestedP
                 "The action or its evaluation context (base instructions, sibling actions, golden set, or model) changed since the last eval. Re-run the eval before promoting.",
             PlaybookPromotionStatus.EvalIncomplete => "The last eval only evaluated a subset of the enabled golden cases. Raise the golden-case cap and re-run a complete eval before promoting.",
             PlaybookPromotionStatus.CapReached => "The agent already has the maximum number of enabled playbook actions; archive or disable one before promoting.",
+            PlaybookPromotionStatus.NotPending => "The action is no longer a pending suggestion.",
             _ => "Promotion is blocked by the eval gate."
         };
     }

@@ -73,7 +73,7 @@ public sealed class LocalModelExternalEndpointTests
     public async Task GetModelDetails_ForAnExternalModel_AnswersFromTheDeclarationsWithTheConnectionMetadata()
     {
         var trustResolver = Substitute.For<IModelTrustResolver>();
-        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Registration());
+        trustResolver.FindExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Registration());
         await using var factory = CreateFactory(trustResolver: trustResolver);
         using var client = factory.CreateClient();
 
@@ -101,7 +101,7 @@ public sealed class LocalModelExternalEndpointTests
     public async Task GetModelDetails_CarriesADeclaredGradedEffortCapability()
     {
         var trustResolver = Substitute.For<IModelTrustResolver>();
-        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        trustResolver.FindExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(Registration(supportsReasoning: true, supportsReasoningEffort: true));
         await using var factory = CreateFactory(trustResolver: trustResolver);
         using var client = factory.CreateClient();
@@ -122,7 +122,7 @@ public sealed class LocalModelExternalEndpointTests
         // A well-formed ext: id whose registration has been removed has nothing to report — a clean 404, exactly like
         // a stale GGUF map row, and never a probe of a local runtime that was never going to serve it.
         var trustResolver = Substitute.For<IModelTrustResolver>();
-        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ExternalProviderModelRegistration?)null);
+        trustResolver.FindExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ExternalProviderModelRegistration?)null);
         await using var factory = CreateFactory(trustResolver: trustResolver);
         using var client = factory.CreateClient();
 
@@ -138,7 +138,7 @@ public sealed class LocalModelExternalEndpointTests
         // A well-formed id whose registration is gone passes the name grammar. Storing it as the node default would
         // make every chat turn fail to route with no explanation of why.
         var trustResolver = Substitute.For<IModelTrustResolver>();
-        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ExternalProviderModelRegistration?)null);
+        trustResolver.FindExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ExternalProviderModelRegistration?)null);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
         await using var factory = CreateFactory(trustResolver: trustResolver, settingsStore: settingsStore);
         using var client = factory.CreateClient();
@@ -158,7 +158,7 @@ public sealed class LocalModelExternalEndpointTests
     public async Task SelectModel_WhenTheExternalIdIsRegistered_IsAccepted()
     {
         var trustResolver = Substitute.For<IModelTrustResolver>();
-        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Registration());
+        trustResolver.FindExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Registration());
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
         await using var factory = CreateFactory(trustResolver: trustResolver, settingsStore: settingsStore);
         using var client = factory.CreateClient();

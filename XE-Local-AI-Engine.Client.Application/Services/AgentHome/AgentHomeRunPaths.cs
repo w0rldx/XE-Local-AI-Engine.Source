@@ -47,7 +47,7 @@ internal static class AgentHomeRunPaths
     ///     each would either resurrect an expired run or age a live one into a sweep. A name that does not parse is
     ///     unknown, and an unknown run is never deleted.
     /// </remarks>
-    public static DateTimeOffset? TryParseStartedAt(string directoryName)
+    public static DateTimeOffset? ParseStartedAtOrNull(string directoryName)
     {
         if (string.IsNullOrEmpty(directoryName) || !directoryName.StartsWith(RunIdPrefix, StringComparison.Ordinal))
         {
@@ -91,9 +91,9 @@ internal static class AgentHomeRunPaths
     ///     the belt on that; the link check keeps a planted link from being treated as the tree it points at. A run
     ///     that does not exist reads the same as one refused, so a probe learns nothing from the difference.
     /// </remarks>
-    public static AgentHomeRunLocation? TryResolveRun(string runsRoot, string runDirectoryName)
+    public static AgentHomeRunLocation? ResolveRunOrNull(string runsRoot, string runDirectoryName)
     {
-        if (TryParseStartedAt(runDirectoryName) is not { } startedAt)
+        if (ParseStartedAtOrNull(runDirectoryName) is not { } startedAt)
         {
             return null;
         }

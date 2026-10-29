@@ -52,18 +52,14 @@ internal sealed class McpServerService : IMcpServerService
         }
     }
 
-    public async Task<McpServerRecord?> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default)
+    public async Task<McpServerRecord> UpdateAsync(Guid id, McpServerInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         Validate(input);
         input = NormalizeTrustTier(input);
 
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null)
-        {
-            return null;
-        }
+        var existing = await _store.GetByIdAsync(id, cancellationToken) ?? throw new McpServerNotFoundException(id);
 
         await EnsureNameAvailableAsync(input.Name, id, cancellationToken);
 
@@ -90,7 +86,7 @@ internal sealed class McpServerService : IMcpServerService
 
         if (updated is null)
         {
-            return null;
+            throw new McpServerNotFoundException(id);
         }
 
         // Only an enabled server has a live connection to refresh, and the store bumps Version only for a change that affects
@@ -103,13 +99,9 @@ internal sealed class McpServerService : IMcpServerService
         return updated;
     }
 
-    public async Task<McpServerRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
+    public async Task<McpServerRecord> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
     {
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null)
-        {
-            return null;
-        }
+        var existing = await _store.GetByIdAsync(id, cancellationToken) ?? throw new McpServerNotFoundException(id);
 
         if (existing.Enabled == enabled)
         {
@@ -128,7 +120,7 @@ internal sealed class McpServerService : IMcpServerService
         var updated = await _store.SetEnabledAsync(id, enabled, cancellationToken);
         if (updated is null)
         {
-            return null;
+            throw new McpServerNotFoundException(id);
         }
 
         // A disable is revoked before returning, so no call reaches a server the operator has just turned off; the detached refresh
@@ -143,18 +135,13 @@ internal sealed class McpServerService : IMcpServerService
         return updated;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null)
-        {
-            return false;
-        }
+        var existing = await _store.GetByIdAsync(id, cancellationToken) ?? throw new McpServerNotFoundException(id);
 
-        var deleted = await _store.DeleteAsync(id, cancellationToken);
-        if (!deleted)
+        if (!await _store.DeleteAsync(id, cancellationToken))
         {
-            return false;
+            throw new McpServerNotFoundException(id);
         }
 
         // Removing an enabled server shrinks the connected set; a disabled server had no live connection to tear down.
@@ -163,13 +150,11 @@ internal sealed class McpServerService : IMcpServerService
             await _connectionManager.RevokeAsync(id);
             StartRefresh(id);
         }
-
-        return true;
     }
 
-    public Task<McpServerRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<McpServerRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _store.GetByIdAsync(id, cancellationToken);
+        return await _store.GetByIdAsync(id, cancellationToken) ?? throw new McpServerNotFoundException(id);
     }
 
     public Task<IReadOnlyList<McpServerRecord>> ListAsync(CancellationToken cancellationToken = default)
@@ -177,13 +162,9 @@ internal sealed class McpServerService : IMcpServerService
         return _store.ListAsync(cancellationToken);
     }
 
-    public async Task<McpServerToolsView?> GetToolsViewAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<McpServerToolsView> GetToolsViewAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetByIdAsync(id, cancellationToken);
-        if (record is null)
-        {
-            return null;
-        }
+        var record = await _store.GetByIdAsync(id, cancellationToken) ?? throw new McpServerNotFoundException(id);
 
         // A disabled server is never connected, so report disabled regardless of any stale status entry.
         if (!record.Enabled)

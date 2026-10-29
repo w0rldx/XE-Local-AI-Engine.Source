@@ -24,9 +24,10 @@ public sealed class TrainingDatasetService
     public Task<IReadOnlyList<TrainingDatasetRecord>> ListAsync(CancellationToken cancellationToken = default) =>
         _store.ListDatasetsAsync(cancellationToken);
 
-    /// <summary>The dataset, or <c>null</c> when no dataset carries that id.</summary>
-    public Task<TrainingDatasetRecord?> GetAsync(Guid datasetId, CancellationToken cancellationToken = default) =>
-        _store.GetDatasetAsync(datasetId, cancellationToken);
+    /// <summary>The dataset.</summary>
+    /// <exception cref="TrainingNotFoundException">No dataset carries <paramref name="datasetId" />.</exception>
+    public async Task<TrainingDatasetRecord> GetAsync(Guid datasetId, CancellationToken cancellationToken = default) =>
+        await _store.GetDatasetAsync(datasetId, cancellationToken) ?? throw new TrainingNotFoundException("The training dataset was not found.");
 
     /// <summary>Deletes the dataset. Refused while a non-terminal generation work item still references it.</summary>
     public Task DeleteAsync(Guid datasetId, long expectedVersion, CancellationToken cancellationToken = default) =>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -227,13 +228,13 @@ internal static class DesktopBootstrap
     {
         if (!TryResolveDataDirectoryPath(out var dataDirectory, out var error))
         {
-            throw new DesktopDataDirectoryException(error!);
+            throw new DesktopDataDirectoryException(error);
         }
 
         return dataDirectory;
     }
 
-    internal static bool TryResolveDataDirectoryPath(out string dataDirectory, out string? error)
+    internal static bool TryResolveDataDirectoryPath([NotNullWhen(true)] out string? dataDirectory, [NotNullWhen(false)] out string? error)
     {
         try
         {
@@ -243,7 +244,7 @@ internal static class DesktopBootstrap
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            dataDirectory = string.Empty;
+            dataDirectory = null;
             error = $"The {DataDirectoryEnvironmentVariable} value must be a valid absolute path.";
             return false;
         }
@@ -436,7 +437,7 @@ internal static class DesktopBootstrap
         return secret ?? ReadAndValidateExistingSecret(keyPath);
     }
 
-    private static bool TryReadExistingSecret(string keyPath, out string? secret)
+    private static bool TryReadExistingSecret(string keyPath, [NotNullWhen(true)] out string? secret)
     {
         try
         {

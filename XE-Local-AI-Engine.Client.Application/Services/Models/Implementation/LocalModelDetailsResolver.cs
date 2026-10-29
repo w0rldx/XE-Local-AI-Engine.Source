@@ -51,7 +51,7 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
         // operator-declared context window. Template, system prompt and license stay null; a gone registration 404s.
         if (ExternalModelId.HasExternalScheme(modelName))
         {
-            var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, cancellationToken);
+            var registration = await _modelTrustResolver.FindExternalAsync(modelName, cancellationToken);
             return registration is null
                 ? new LocalModelDetailsResolution.NoLocalDetails()
                 : new LocalModelDetailsResolution.External(registration);
@@ -99,7 +99,7 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
             return new LocalModelDetailsResolution.NoLocalDetails();
         }
 
-        var runtimeInfo = await TryResolveRuntimeInfoAsync(modelName, cancellationToken);
+        var runtimeInfo = await ResolveRuntimeInfoOrNullAsync(modelName, cancellationToken);
         return new LocalModelDetailsResolution.Gguf(descriptor,
             runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null,
             runtimeInfo?.ExpertsOffloaded);
@@ -107,7 +107,7 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
 
     // Best-effort: what the running llama.cpp chat process loaded (null when none is warm or the runtime does not report it).
     // Never fails the details response — the meter simply falls back to MaxContextTokens.
-    private async Task<LocalModelRuntimeInfo?> TryResolveRuntimeInfoAsync(string modelName, CancellationToken cancellationToken)
+    private async Task<LocalModelRuntimeInfo?> ResolveRuntimeInfoOrNullAsync(string modelName, CancellationToken cancellationToken)
     {
         try
         {

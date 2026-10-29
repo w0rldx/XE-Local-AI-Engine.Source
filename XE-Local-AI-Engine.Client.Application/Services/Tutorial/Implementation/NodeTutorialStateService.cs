@@ -45,7 +45,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
         return Deserialize(user.TutorialState);
     }
 
-    public async Task<bool> SaveEntryAsync(ClaimsPrincipal principal, string key, TutorialStatus status, CancellationToken cancellationToken)
+    public async Task<TutorialEntrySaveOutcome> SaveEntryAsync(ClaimsPrincipal principal, string key, TutorialStatus status, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(principal);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -57,7 +57,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             if (user is null)
             {
                 _logger.LogWarning("Tutorial-state save for an authenticated principal that did not resolve to a node user.");
-                return false;
+                return TutorialEntrySaveOutcome.UserNotResolved;
             }
 
             // Authentication can load the user into this request's scoped context before it reaches this lock. Refresh that tracked entity so every serialized
@@ -69,7 +69,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             if (status == TutorialStatus.Skipped && currentEntries.Any(entry =>
                     string.Equals(entry.Key, trimmedKey, StringComparison.Ordinal) && entry.Status == TutorialStatus.Completed))
             {
-                return true;
+                return TutorialEntrySaveOutcome.Saved;
             }
 
             var entries = currentEntries
@@ -89,10 +89,10 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             {
                 _logger.LogWarning("Failed to persist tutorial state for the current user: {Errors}.",
                     string.Join("; ", updateResult.Errors.Select(static error => error.Description)));
-                return false;
+                return TutorialEntrySaveOutcome.NotPersisted;
             }
 
-            return true;
+            return TutorialEntrySaveOutcome.Saved;
         }
         finally
         {
@@ -108,7 +108,7 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
         return user?.AiAcknowledgedAtUtc is { } acknowledgedAt ? DateTime.SpecifyKind(acknowledgedAt, DateTimeKind.Utc) : null;
     }
 
-    public async Task<DateTime?> AcknowledgeAiAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
+    public async Task<AiAcknowledgementResult> AcknowledgeAiAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(principal);
 
@@ -119,26 +119,33 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             if (user is null)
             {
                 _logger.LogWarning("AI acknowledgement for an authenticated principal that did not resolve to a node user.");
-                return null;
+                return new AiAcknowledgementResult.UserNotResolved();
             }
 
             // Same reload as SaveEntryAsync: a parallel acknowledgement must see the first one's timestamp and keep it.
             await _identityStore.ReloadAsync(user, cancellationToken);
             if (user.AiAcknowledgedAtUtc is { } existing)
             {
-                return DateTime.SpecifyKind(existing, DateTimeKind.Utc);
+                return new AiAcknowledgementResult.Acknowledged
+                {
+                    AtUtc = DateTime.SpecifyKind(existing, DateTimeKind.Utc)
+                };
             }
 
-            user.AiAcknowledgedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
+            var acknowledgedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            user.AiAcknowledgedAtUtc = acknowledgedAt;
             var updateResult = await _userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
             {
                 _logger.LogWarning("Failed to persist the AI acknowledgement for the current user: {Errors}.",
                     string.Join("; ", updateResult.Errors.Select(static error => error.Description)));
-                return null;
+                return new AiAcknowledgementResult.NotPersisted();
             }
 
-            return user.AiAcknowledgedAtUtc;
+            return new AiAcknowledgementResult.Acknowledged
+                {
+                    AtUtc = acknowledgedAt
+                };
         }
         finally
         {

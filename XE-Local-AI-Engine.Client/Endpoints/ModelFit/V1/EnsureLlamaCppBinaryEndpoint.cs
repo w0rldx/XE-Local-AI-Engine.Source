@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
+using System.Diagnostics;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
@@ -28,7 +29,7 @@ public sealed class EnsureLlamaCppBinaryEndpoint : Endpoint<EnsureLlamaCppBinary
 
     public override async Task HandleAsync(EnsureLlamaCppBinaryRequest req, CancellationToken ct)
     {
-        if (ModelFitMapper.TryParseVariant(req.Variant) is not { } variant)
+        if (ModelFitMapper.ParseVariantOrNull(req.Variant) is not { } variant)
         {
             AddError("Variant is not supported.");
             await Send.ErrorsAsync(cancellation: ct);
@@ -36,23 +37,25 @@ public sealed class EnsureLlamaCppBinaryEndpoint : Endpoint<EnsureLlamaCppBinary
         }
 
         var result = await _administrationService.EnsureAsync(variant, ct);
-        if (result.Succeeded)
+        switch (result)
         {
-            await Send.OkAsync(result.Binary!.ToResponse(result.RecommendedTag!), ct);
-            return;
+            case LlamaCppRuntimeMutationResult.Succeeded succeeded:
+                await Send.OkAsync(succeeded.Binary.ToResponse(succeeded.RecommendedTag), ct);
+                return;
+            case LlamaCppRuntimeMutationResult.Rejected { Failure: LlamaCppRuntimeAdministrationFailure.Busy } busy:
+                await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+                {
+                    RunningProcessCount = busy.RunningProcessCount,
+                    Message = busy.DisplayMessage
+                }));
+                return;
+            case LlamaCppRuntimeMutationResult.Rejected rejected:
+                AddError(rejected.DisplayMessage);
+                break;
+            default:
+                throw new UnreachableException($"Unknown llama.cpp runtime result '{result}'.");
         }
 
-        if (result.Failure == LlamaCppRuntimeAdministrationFailure.Busy)
-        {
-            await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
-            {
-                RunningProcessCount = result.RunningProcessCount,
-                Message = result.DisplayMessage!
-            }));
-            return;
-        }
-
-        AddError(result.DisplayMessage ?? "The llama.cpp runtime could not be acquired.");
         await Send.ErrorsAsync(cancellation: ct);
     }
 }

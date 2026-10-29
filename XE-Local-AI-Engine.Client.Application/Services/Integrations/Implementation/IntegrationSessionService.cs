@@ -132,11 +132,15 @@ public sealed class IntegrationSessionService
             };
     }
 
-    /// <summary>One session for the operator, unscoped: an operator is not acting as an integrator.</summary>
-    public async Task<IntegrationSessionDto?> GetAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    /// <summary>
+    ///     One session for the operator, unscoped: an operator is not acting as an integrator. Throws
+    ///     <see cref="IntegrationNotFoundException" /> for an unknown id.
+    /// </summary>
+    public async Task<IntegrationSessionDto> GetAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken);
-        return session is null ? null : await ToDtoAsync(session, cancellationToken);
+        var session = await _sessions.GetByIdAsync(sessionId, cancellationToken)
+                      ?? throw new IntegrationNotFoundException($"Integration session {sessionId} was not found.");
+        return await ToDtoAsync(session, cancellationToken);
     }
 
     /// <summary>The operator's page, in the store's order. Nothing is re-sorted or filtered here.</summary>
@@ -222,7 +226,7 @@ public sealed class IntegrationSessionService
             // Same reason as the invoke path: this call minted the entry, no row justifies keeping it, and the read
             // that proved absence is the one inside this section.
             _gate.Forget(sessionId);
-            return IntegrationSessionDeleteOutcome.NotFound;
+            throw new IntegrationNotFoundException($"Integration session {sessionId} was not found.");
         }
 
         if (await _executions.CountActiveBySessionAsync(sessionId, cancellationToken) > 0)

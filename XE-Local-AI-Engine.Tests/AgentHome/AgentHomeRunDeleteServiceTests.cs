@@ -56,9 +56,7 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
     {
         var other = SeedRun(Now.AddDays(-1));
 
-        var outcome = await Service().DeleteAsync("run-1758300000000-999");
-
-        AssertEx.Equal(AgentHomeRunDeleteOutcome.NotFound, outcome);
+        _ = await AssertEx.ThrowsAsync<AgentHomeRunNotFoundException>(() => Service().DeleteAsync("run-1758300000000-999"));
         AssertEx.True(Directory.Exists(other), "an unknown id must not reach any run that does exist.");
     }
 
@@ -75,9 +73,7 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         Directory.CreateDirectory(sentinel);
         SeedRun(Now.AddDays(-1));
 
-        var outcome = await Service().DeleteAsync(runId);
-
-        AssertEx.Equal(AgentHomeRunDeleteOutcome.NotFound, outcome, why);
+        _ = await AssertEx.ThrowsAsync<AgentHomeRunNotFoundException>(() => Service().DeleteAsync(runId), why);
         AssertEx.True(Directory.Exists(sentinel), "nothing outside the runs root may be reachable from a run id.");
         AssertEx.True(Directory.Exists(RunsRoot()), "the runs root itself must survive every malformed id.");
     }
@@ -88,9 +84,7 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         var sentinel = Path.Combine(_dataRoot.Path, "sentinel");
         Directory.CreateDirectory(sentinel);
 
-        var outcome = await Service().DeleteAsync(sentinel);
-
-        AssertEx.Equal(AgentHomeRunDeleteOutcome.NotFound, outcome,
+        _ = await AssertEx.ThrowsAsync<AgentHomeRunNotFoundException>(() => Service().DeleteAsync(sentinel),
             "a rooted name would make Path.Combine discard the runs root entirely.");
         AssertEx.True(Directory.Exists(sentinel));
     }
@@ -106,9 +100,7 @@ public sealed class AgentHomeRunDeleteServiceTests : IDisposable
         var runId = RunId(Now.AddDays(-1), ++_counter);
         Directory.CreateSymbolicLink(Path.Combine(RunsRoot(), runId), target);
 
-        var outcome = await Service().DeleteAsync(runId);
-
-        AssertEx.Equal(AgentHomeRunDeleteOutcome.NotFound, outcome, "a link is never treated as the tree it points at.");
+        _ = await AssertEx.ThrowsAsync<AgentHomeRunNotFoundException>(() => Service().DeleteAsync(runId), "a link is never treated as the tree it points at.");
         AssertEx.True(Directory.Exists(target), "the link's target must be untouched.");
         AssertEx.True(File.Exists(Path.Combine(target, "payload.txt")));
     }

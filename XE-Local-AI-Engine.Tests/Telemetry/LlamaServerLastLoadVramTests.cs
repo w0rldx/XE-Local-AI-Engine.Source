@@ -19,12 +19,12 @@ public sealed class LlamaServerLastLoadVramTests
 
         telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: 7_000, admitted: 5_000));
 
-        var remembered = AssertEx.NotNull(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat));
+        var remembered = AssertEx.NotNull(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Chat));
         AssertEx.Equal(expected: 7_000L, remembered.GlobalFreeVramBytesAtLoad);
         AssertEx.Equal(expected: 5_000L, remembered.AdmittedVramBytes);
 
-        AssertEx.Null(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Embedding), "The embedding server is a different process with its own load.");
-        AssertEx.Null(telemetry.TryGetLastReadyLoad("mistral", ModelRole.Chat), "And a model nobody loaded has nothing to report.");
+        AssertEx.Null(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Embedding), "The embedding server is a different process with its own load.");
+        AssertEx.Null(telemetry.FindLastReadyLoad("mistral", ModelRole.Chat), "And a model nobody loaded has nothing to report.");
     }
 
     /// <summary>Model names are compared the way every other (model, role) key in the runtime compares them.</summary>
@@ -34,7 +34,7 @@ public sealed class LlamaServerLastLoadVramTests
         var telemetry = new NodeMetricsLlamaServerLoadTelemetry();
         telemetry.RecordLoad(Observation("Llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: 7_000, admitted: 5_000));
 
-        AssertEx.NotNull(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat));
+        AssertEx.NotNull(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Chat));
     }
 
     /// <summary>
@@ -50,9 +50,9 @@ public sealed class LlamaServerLastLoadVramTests
         telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Failed, globalFree: 11, admitted: 22));
         telemetry.RecordLoad(Observation("mistral", ModelRole.Chat, LlamaServerReadinessOutcome.Cancelled, globalFree: 33, admitted: 44));
 
-        var remembered = AssertEx.NotNull(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat));
+        var remembered = AssertEx.NotNull(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Chat));
         AssertEx.Equal(expected: 7_000L, remembered.GlobalFreeVramBytesAtLoad, "The failed retry's numbers describe a process that never served.");
-        AssertEx.Null(telemetry.TryGetLastReadyLoad("mistral", ModelRole.Chat), "And a cancelled load leaves no reading behind at all.");
+        AssertEx.Null(telemetry.FindLastReadyLoad("mistral", ModelRole.Chat), "And a cancelled load leaves no reading behind at all.");
     }
 
     /// <summary>Each successful load overwrites its key: a reload under different pressure legitimately reads differently.</summary>
@@ -64,7 +64,7 @@ public sealed class LlamaServerLastLoadVramTests
 
         telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: 2_000, admitted: 1_500));
 
-        var remembered = AssertEx.NotNull(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat));
+        var remembered = AssertEx.NotNull(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Chat));
         AssertEx.Equal(expected: 2_000L, remembered.GlobalFreeVramBytesAtLoad);
         AssertEx.Equal(expected: 1_500L, remembered.AdmittedVramBytes);
     }
@@ -77,7 +77,7 @@ public sealed class LlamaServerLastLoadVramTests
 
         telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: null, admitted: null));
 
-        AssertEx.Null(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat));
+        AssertEx.Null(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Chat));
     }
 
     /// <summary>
@@ -93,7 +93,7 @@ public sealed class LlamaServerLastLoadVramTests
 
         telemetry.RecordLoad(Observation("llama-3.1", ModelRole.Chat, LlamaServerReadinessOutcome.Ready, globalFree: null, admitted: null));
 
-        AssertEx.Null(telemetry.TryGetLastReadyLoad("llama-3.1", ModelRole.Chat),
+        AssertEx.Null(telemetry.FindLastReadyLoad("llama-3.1", ModelRole.Chat),
             "A direct, profiling or variant-moved reload carries no admission, and the old process it replaced is gone.");
     }
 

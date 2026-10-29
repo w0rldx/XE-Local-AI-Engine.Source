@@ -46,5 +46,5 @@ internal interface ILlamaServerHealthProbe
     ///     non-positive: a best-effort read the caller degrades from, never fatal to a spawn. Bounded like the
     ///     readiness probe, and issues one request.
     /// </remarks>
-    Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct);
+    Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct);
 }

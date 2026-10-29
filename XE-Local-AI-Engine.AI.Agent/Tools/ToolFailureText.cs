@@ -38,7 +38,7 @@ internal static class ToolFailureText
         Format(code, $"{message} {NotRunNotice}");
 
     /// <summary>The failure code of a result in this shape, or <see langword="null" /> for anything else.</summary>
-    public static string? TryGetCode(object? result)
+    public static string? GetCodeOrNull(object? result)
     {
         if (result is not string text || !text.StartsWith(Prefix, StringComparison.Ordinal))
         {

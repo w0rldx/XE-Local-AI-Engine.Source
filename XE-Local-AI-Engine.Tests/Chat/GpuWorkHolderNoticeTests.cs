@@ -17,7 +17,8 @@ public sealed class GpuWorkHolderNoticeTests
     public void ForModelLoad_AnExclusiveHolder_NamesIt(GpuWorkKind kind, string message)
     {
         var gate = new GpuWorkGate();
-        using var hold = AssertEx.NotNull(gate.TryBeginExclusive(kind));
+        AssertEx.Succeeded(gate.TryBeginExclusive(kind, out var hold));
+        using var holdScope = hold;
 
         var notice = AssertEx.NotNull(GpuWorkHolderNotice.ForModelLoad(gate, Guid.NewGuid()));
 
@@ -30,8 +31,10 @@ public sealed class GpuWorkHolderNoticeTests
     public void ForModelLoad_OnlySharedHolders_SaysNothing()
     {
         var gate = new GpuWorkGate();
-        using var benchmark = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.Benchmark));
-        using var image = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.ImageJob));
+        AssertEx.Succeeded(gate.TryBeginShared(GpuWorkKind.Benchmark, out var benchmark));
+        using var benchmarkScope = benchmark;
+        AssertEx.Succeeded(gate.TryBeginShared(GpuWorkKind.ImageJob, out var image));
+        using var imageScope = image;
 
         AssertEx.Null(GpuWorkHolderNotice.ForModelLoad(gate, Guid.NewGuid()));
         AssertEx.Equal("Benchmark, ImageJob", string.Join(", ", gate.Holders));

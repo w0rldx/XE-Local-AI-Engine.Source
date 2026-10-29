@@ -23,12 +23,7 @@ public sealed class DeletePlaybookActionEndpoint : Endpoint<DeletePlaybookAction
 
     public override async Task HandleAsync(DeletePlaybookActionRequest req, CancellationToken ct)
     {
-        var deleted = await _playbookActionService.DeleteAsync(req.AgentDefinitionId, req.ActionId, ct);
-        if (!deleted)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _playbookActionService.DeleteAsync(req.AgentDefinitionId, req.ActionId, ct);
 
         await Send.NoContentAsync(ct);
     }

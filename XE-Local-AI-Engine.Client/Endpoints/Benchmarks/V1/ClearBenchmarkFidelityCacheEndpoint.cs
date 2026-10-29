@@ -41,11 +41,8 @@ public sealed class ClearBenchmarkFidelityCacheEndpoint : Endpoint<BenchmarkProj
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _records.GetProjectAsync(req.ProjectId, ct) is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
+        // Throws BenchmarkNotFoundException, which BenchmarkExceptionHandler answers with the 404.
+        _ = await _records.GetProjectAsync(req.ProjectId, ct);
 
         if (await _records.HasLiveFidelityWorkAsync(ct))
         {

@@ -266,8 +266,9 @@ public sealed class ImageServerSupervisorTests
 
         await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         var firstHandle = launcher.Handles.Single();
-        var lease = supervisor.TryAcquireJobLease("sd15");
-        AssertEx.NotNull(lease);
+#pragma warning disable CA2000 // Released mid-test below: the release is what frees the daemon for eviction.
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+#pragma warning restore CA2000
 
         // Past the TTL, but the daemon is leased (mid-generation): a new distinct model finds no evictable victim → reject.
         time.Advance(ttl + TimeSpan.FromMinutes(1));
@@ -278,14 +279,14 @@ public sealed class ImageServerSupervisorTests
         AssertEx.Equal(expected: 1, launcher.LaunchCount);
 
         // Release the lease → the now-idle past-TTL daemon becomes an eligible LRU victim → the new model is admitted.
-        lease!.Dispose();
+        lease.Dispose();
         await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
         AssertEx.True(firstHandle.WasTreeKilled, "once the lease is released the idle past-TTL daemon should be evicted.");
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
     }
 
     [Test]
-    public async Task TryAcquireJobLease_AfterDaemonEvicted_ReturnsNullLeaseless()
+    public async Task TryAcquireJobLease_AfterDaemonEvicted_ReturnsFalseLeaseless()
     {
         // Once a daemon has been evicted (torn down), a lease attempt must refuse leaselessly rather than
         // hand back a lease over a dead/removed daemon. Lease acquisition and eviction share an atomic latch, so a lease
@@ -308,8 +309,7 @@ public sealed class ImageServerSupervisorTests
         await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
         AssertEx.True(firstHandle.WasTreeKilled, "the idle past-TTL daemon should have been evicted to admit the new model.");
 
-        var lease = supervisor.TryAcquireJobLease("sd15");
-        AssertEx.Null(lease);
+        AssertEx.False(supervisor.TryAcquireJobLease("sd15", out _));
     }
 
     [Test]
@@ -329,11 +329,12 @@ public sealed class ImageServerSupervisorTests
 
         await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         var firstHandle = launcher.Handles.Single();
-        using var lease = supervisor.TryAcquireJobLease("sd15");
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        using var leaseScope = lease;
 
         // Advance most of the TTL, then Touch — the daemon is now recently-used again.
         time.Advance(ttl - TimeSpan.FromMinutes(1));
-        lease!.Touch();
+        lease.Touch();
         time.Advance(TimeSpan.FromMinutes(2)); // 1 min past the ORIGINAL window, but only 2 min since the Touch.
 
         // A new model at cap finds the touched daemon still in-window (and leased) → reject, daemon survives.
@@ -351,7 +352,8 @@ public sealed class ImageServerSupervisorTests
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
         await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
         await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
-        using var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        using var leaseScope = lease;
 
         launcher.Handles.Single().SimulateExit(exitCode: 137);
 
@@ -371,7 +373,8 @@ public sealed class ImageServerSupervisorTests
         var logger = new RecordingLogger<ImageServerProcessSupervisor>();
         await using var supervisor = ImageSupervisorFactory.Create(launcher, logger: logger);
         await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
-        using var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
+        using var leaseScope = lease;
 
         await supervisor.RestartAsync("sd15", CancellationToken.None);
 

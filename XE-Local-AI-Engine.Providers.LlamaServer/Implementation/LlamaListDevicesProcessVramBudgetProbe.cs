@@ -42,7 +42,7 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
     ///     all; an empty device list, a non-zero exit with no parseable devices, the per-probe timeout and any
     ///     unexpected exception all read as "unknown".
     /// </remarks>
-    public async Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct)
+    public async Task<long?> GetProcessBudgetBytesOrNullAsync(string backend, CancellationToken ct)
     {
         var variant = MapBackendToVariant(backend);
         if (variant is null)
@@ -56,7 +56,7 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
         {
             var binary = await _binaryManager.EnsureBinaryAsync(variant.Value, ct).ConfigureAwait(false);
             var output = await RunListDevicesAsync(binary, ct).ConfigureAwait(false);
-            return output is null ? null : TryParseMaxFreeVramBytes(output);
+            return output is null ? null : ParseMaxFreeVramBytesOrNull(output);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -80,7 +80,7 @@ public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVra
     ///     llama.cpp offloads the model to a single device, so the device with the most free VRAM is the one most
     ///     likely able to host it. Pure and side-effect-free, so the parse is unit-testable without spawning a process.
     /// </remarks>
-    internal static long? TryParseMaxFreeVramBytes(string output)
+    internal static long? ParseMaxFreeVramBytesOrNull(string output)
     {
         if (string.IsNullOrWhiteSpace(output))
         {

@@ -299,7 +299,7 @@ internal sealed class HostGitResult
 }
 
 /// <summary>
-///     One run directory that has passed <see cref="AgentHomeRunPaths.TryResolveRun" />: proven to be a name the node
+///     One run directory that has passed <see cref="AgentHomeRunPaths.ResolveRunOrNull" />: proven to be a name the node
 ///     minted, to sit under the runs root, and not to be a link. Holding the three together is what stops a caller
 ///     from re-deriving the path from the id after the gate ran.
 /// </summary>

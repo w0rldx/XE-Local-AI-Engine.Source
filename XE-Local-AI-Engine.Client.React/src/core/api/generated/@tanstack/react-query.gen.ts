@@ -493,6 +493,7 @@ import {
 } from "../sdk.gen";
 import type {
 	AcknowledgeAiData,
+	AcknowledgeAiError,
 	AcknowledgeAiResponse,
 	AnalyzePlaybookData,
 	AnalyzePlaybookResponse,
@@ -509,6 +510,7 @@ import type {
 	ApplyDevelopmentPatchError,
 	ApplyDevelopmentPatchResponse,
 	ApproveGoldenConversationData,
+	ApproveGoldenConversationError,
 	ApproveGoldenConversationResponse,
 	ArchiveDevWorkflowDefinitionData,
 	ArchiveDevWorkflowDefinitionResponse,
@@ -539,6 +541,7 @@ import type {
 	CancelDevWorkflowRunError,
 	CancelDevWorkflowRunResponse,
 	CancelEvaluationData,
+	CancelEvaluationError,
 	CancelEvaluationResponse,
 	CancelExternalAppOperationData,
 	CancelExternalAppOperationError,
@@ -550,6 +553,7 @@ import type {
 	CancelGraphWorkflowRunError,
 	CancelGraphWorkflowRunResponse,
 	CancelImageJobData,
+	CancelImageJobError,
 	CancelImageJobResponse,
 	CancelImageModelDownloadData,
 	CancelImageModelDownloadResponse,
@@ -566,8 +570,10 @@ import type {
 	CancelStableDiffusionCppSourceBuildData,
 	CancelStableDiffusionCppSourceBuildResponse,
 	CancelTrainingDatasetData,
+	CancelTrainingDatasetError,
 	CancelTrainingDatasetResponse,
 	CancelTrainingRunData,
+	CancelTrainingRunError,
 	CancelTrainingRunResponse,
 	CancelTranscriptionModelDownloadData,
 	CancelTranscriptionModelDownloadError,
@@ -879,6 +885,7 @@ import type {
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusResponse,
 	GetBaseArtifactData,
+	GetBaseArtifactError,
 	GetBaseArtifactLicenseData,
 	GetBaseArtifactLicenseResponse,
 	GetBaseArtifactResponse,
@@ -1390,6 +1397,7 @@ import type {
 	ReindexKnowledgeDocumentData,
 	ReindexKnowledgeDocumentResponse,
 	RejectSuggestedPlaybookActionData,
+	RejectSuggestedPlaybookActionError,
 	RejectSuggestedPlaybookActionResponse,
 	RejudgeBenchmarkProjectData,
 	RejudgeBenchmarkProjectError,
@@ -1466,6 +1474,7 @@ import type {
 	RunGraphWorkflowDesignerTurnError,
 	RunGraphWorkflowDesignerTurnResponse,
 	RunPlaybookActionEvalData,
+	RunPlaybookActionEvalError,
 	RunPlaybookActionEvalResponse,
 	RunTrainingArtifactSmokeData,
 	RunTrainingArtifactSmokeError,
@@ -1642,6 +1651,7 @@ import type {
 	UpdateMcpServerData,
 	UpdateMcpServerResponse,
 	UpdatePlaybookActionData,
+	UpdatePlaybookActionError,
 	UpdatePlaybookActionResponse,
 	UpdateScheduledJobData,
 	UpdateScheduledJobResponse,
@@ -1652,6 +1662,7 @@ import type {
 	UpdateSlashCommandError,
 	UpdateSlashCommandResponse,
 	UpdateSuggestedPlaybookActionData,
+	UpdateSuggestedPlaybookActionError,
 	UpdateSuggestedPlaybookActionResponse,
 	UpdateTrainingDefinitionData,
 	UpdateTrainingDefinitionError,
@@ -2398,10 +2409,14 @@ export const deleteGoldenConversationMutation = (
 
 export const approveGoldenConversationMutation = (
 	options?: Partial<Options<ApproveGoldenConversationData>>,
-): UseMutationOptions<ApproveGoldenConversationResponse, AxiosError<DefaultError>, Options<ApproveGoldenConversationData>> => {
+): UseMutationOptions<
+	ApproveGoldenConversationResponse,
+	AxiosError<ApproveGoldenConversationError>,
+	Options<ApproveGoldenConversationData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		ApproveGoldenConversationResponse,
-		AxiosError<DefaultError>,
+		AxiosError<ApproveGoldenConversationError>,
 		Options<ApproveGoldenConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2518,10 +2533,10 @@ export const deletePlaybookActionMutation = (
 
 export const updatePlaybookActionMutation = (
 	options?: Partial<Options<UpdatePlaybookActionData>>,
-): UseMutationOptions<UpdatePlaybookActionResponse, AxiosError<DefaultError>, Options<UpdatePlaybookActionData>> => {
+): UseMutationOptions<UpdatePlaybookActionResponse, AxiosError<UpdatePlaybookActionError>, Options<UpdatePlaybookActionData>> => {
 	const mutationOptions: UseMutationOptions<
 		UpdatePlaybookActionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdatePlaybookActionError>,
 		Options<UpdatePlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2538,10 +2553,14 @@ export const updatePlaybookActionMutation = (
 
 export const runPlaybookActionEvalMutation = (
 	options?: Partial<Options<RunPlaybookActionEvalData>>,
-): UseMutationOptions<RunPlaybookActionEvalResponse, AxiosError<DefaultError>, Options<RunPlaybookActionEvalData>> => {
+): UseMutationOptions<
+	RunPlaybookActionEvalResponse,
+	AxiosError<RunPlaybookActionEvalError>,
+	Options<RunPlaybookActionEvalData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		RunPlaybookActionEvalResponse,
-		AxiosError<DefaultError>,
+		AxiosError<RunPlaybookActionEvalError>,
 		Options<RunPlaybookActionEvalData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2584,12 +2603,12 @@ export const rejectSuggestedPlaybookActionMutation = (
 	options?: Partial<Options<RejectSuggestedPlaybookActionData>>,
 ): UseMutationOptions<
 	RejectSuggestedPlaybookActionResponse,
-	AxiosError<DefaultError>,
+	AxiosError<RejectSuggestedPlaybookActionError>,
 	Options<RejectSuggestedPlaybookActionData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		RejectSuggestedPlaybookActionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<RejectSuggestedPlaybookActionError>,
 		Options<RejectSuggestedPlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -2608,12 +2627,12 @@ export const updateSuggestedPlaybookActionMutation = (
 	options?: Partial<Options<UpdateSuggestedPlaybookActionData>>,
 ): UseMutationOptions<
 	UpdateSuggestedPlaybookActionResponse,
-	AxiosError<DefaultError>,
+	AxiosError<UpdateSuggestedPlaybookActionError>,
 	Options<UpdateSuggestedPlaybookActionData>
 > => {
 	const mutationOptions: UseMutationOptions<
 		UpdateSuggestedPlaybookActionResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdateSuggestedPlaybookActionError>,
 		Options<UpdateSuggestedPlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -7325,8 +7344,12 @@ export const getImageJobOptions = (options: Options<GetImageJobData>) =>
 
 export const cancelImageJobMutation = (
 	options?: Partial<Options<CancelImageJobData>>,
-): UseMutationOptions<CancelImageJobResponse, AxiosError<DefaultError>, Options<CancelImageJobData>> => {
-	const mutationOptions: UseMutationOptions<CancelImageJobResponse, AxiosError<DefaultError>, Options<CancelImageJobData>> = {
+): UseMutationOptions<CancelImageJobResponse, AxiosError<CancelImageJobError>, Options<CancelImageJobData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelImageJobResponse,
+		AxiosError<CancelImageJobError>,
+		Options<CancelImageJobData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelImageJob({
 				...options,
@@ -10714,7 +10737,7 @@ export const getBaseArtifactQueryKey = (options: Options<GetBaseArtifactData>) =
 export const getBaseArtifactOptions = (options: Options<GetBaseArtifactData>) =>
 	queryOptions<
 		GetBaseArtifactResponse,
-		AxiosError<DefaultError>,
+		AxiosError<GetBaseArtifactError>,
 		GetBaseArtifactResponse,
 		ReturnType<typeof getBaseArtifactQueryKey>
 	>({
@@ -10943,10 +10966,14 @@ export const getTrainingDatasetOptions = (options: Options<GetTrainingDatasetDat
 
 export const cancelTrainingDatasetMutation = (
 	options?: Partial<Options<CancelTrainingDatasetData>>,
-): UseMutationOptions<CancelTrainingDatasetResponse, AxiosError<DefaultError>, Options<CancelTrainingDatasetData>> => {
+): UseMutationOptions<
+	CancelTrainingDatasetResponse,
+	AxiosError<CancelTrainingDatasetError>,
+	Options<CancelTrainingDatasetData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		CancelTrainingDatasetResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CancelTrainingDatasetError>,
 		Options<CancelTrainingDatasetData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -11281,8 +11308,12 @@ export const getEvaluationOptions = (options: Options<GetEvaluationData>) =>
 
 export const cancelEvaluationMutation = (
 	options?: Partial<Options<CancelEvaluationData>>,
-): UseMutationOptions<CancelEvaluationResponse, AxiosError<DefaultError>, Options<CancelEvaluationData>> => {
-	const mutationOptions: UseMutationOptions<CancelEvaluationResponse, AxiosError<DefaultError>, Options<CancelEvaluationData>> = {
+): UseMutationOptions<CancelEvaluationResponse, AxiosError<CancelEvaluationError>, Options<CancelEvaluationData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelEvaluationResponse,
+		AxiosError<CancelEvaluationError>,
+		Options<CancelEvaluationData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelEvaluation({
 				...options,
@@ -11514,10 +11545,10 @@ export const listTrainingArtifactsOptions = (options: Options<ListTrainingArtifa
 
 export const cancelTrainingRunMutation = (
 	options?: Partial<Options<CancelTrainingRunData>>,
-): UseMutationOptions<CancelTrainingRunResponse, AxiosError<DefaultError>, Options<CancelTrainingRunData>> => {
+): UseMutationOptions<CancelTrainingRunResponse, AxiosError<CancelTrainingRunError>, Options<CancelTrainingRunData>> => {
 	const mutationOptions: UseMutationOptions<
 		CancelTrainingRunResponse,
-		AxiosError<DefaultError>,
+		AxiosError<CancelTrainingRunError>,
 		Options<CancelTrainingRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -12306,8 +12337,8 @@ export const getAiAcknowledgementOptions = (options?: Options<GetAiAcknowledgeme
  */
 export const acknowledgeAiMutation = (
 	options?: Partial<Options<AcknowledgeAiData>>,
-): UseMutationOptions<AcknowledgeAiResponse, AxiosError<DefaultError>, Options<AcknowledgeAiData>> => {
-	const mutationOptions: UseMutationOptions<AcknowledgeAiResponse, AxiosError<DefaultError>, Options<AcknowledgeAiData>> = {
+): UseMutationOptions<AcknowledgeAiResponse, AxiosError<AcknowledgeAiError>, Options<AcknowledgeAiData>> => {
+	const mutationOptions: UseMutationOptions<AcknowledgeAiResponse, AxiosError<AcknowledgeAiError>, Options<AcknowledgeAiData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await acknowledgeAi({
 				...options,

@@ -33,11 +33,6 @@ public sealed class SetMcpServerEnabledEndpoint : Endpoint<SetMcpServerEnabledRe
     public override async Task HandleAsync(SetMcpServerEnabledRequest req, CancellationToken ct)
     {
         var record = await _mcpServerService.SetEnabledAsync(req.McpServerId, req.Enabled, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(record.ToResponse(), ct);
     }

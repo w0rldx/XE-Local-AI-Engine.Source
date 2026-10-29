@@ -44,7 +44,7 @@ internal static class NodeLocator
         {
             return new DiscoveredNode
             {
-                Origin = TryParseOrigin(url, fromReadyFile: false)
+                Origin = ParseOriginOrNull(url, fromReadyFile: false)
                          ?? throw new NodeDiscoveryException(NodeDiscoveryFailure.InvalidUrl,
                              "The node URL must be an http or https loopback origin without credentials, a path, a query or a fragment.")
             };
@@ -76,7 +76,7 @@ internal static class NodeLocator
         var path = string.IsNullOrWhiteSpace(overridden)
             ? Path.Combine(localApplicationData, ApplicationDataFolderName)
             : overridden;
-        return TryNormalizeAbsolutePath(path)
+        return NormalizeAbsolutePathOrNull(path)
                ?? throw new NodeDiscoveryException(NodeDiscoveryFailure.InvalidDataDirectory,
                    $"The {DataDirectoryEnvironmentVariable} value must be a valid absolute path.");
     }
@@ -85,7 +85,7 @@ internal static class NodeLocator
     ///     A canonical <c>scheme://host:port</c> origin, or null. An explicit URL may be http or https and name
     ///     <c>localhost</c>; a <c>ready.json</c> URL must be http on a loopback IP literal, as the engine writes it.
     /// </summary>
-    internal static Uri? TryParseOrigin(string? value, bool fromReadyFile)
+    internal static Uri? ParseOriginOrNull(string? value, bool fromReadyFile)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var url)
             || !(url.Scheme == Uri.UriSchemeHttp || (!fromReadyFile && url.Scheme == Uri.UriSchemeHttps))
@@ -139,11 +139,11 @@ internal static class NodeLocator
         if (ready.Pid <= 0
             || string.IsNullOrWhiteSpace(ready.Version)
             || ready.Version.Any(char.IsControl)
-            || TryNormalizeAbsolutePath(ready.DataDir) is not { } recorded
+            || NormalizeAbsolutePathOrNull(ready.DataDir) is not { } recorded
             || !string.Equals(recorded,
-                TryNormalizeAbsolutePath(expectedDataDirectory),
+                NormalizeAbsolutePathOrNull(expectedDataDirectory),
                 OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-            || TryParseOrigin(ready.Url, fromReadyFile: true) is not { } origin)
+            || ParseOriginOrNull(ready.Url, fromReadyFile: true) is not { } origin)
         {
             return null;
         }
@@ -152,7 +152,7 @@ internal static class NodeLocator
         return string.Equals(ready.McpUrl, $"{canonical}/api/local/v1/mcp/server", StringComparison.Ordinal) ? origin : null;
     }
 
-    private static string? TryNormalizeAbsolutePath(string? path)
+    private static string? NormalizeAbsolutePathOrNull(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || path.Any(char.IsControl) || !Path.IsPathFullyQualified(path))
         {

@@ -190,7 +190,7 @@ internal sealed partial class NodePatchApplyService
 
             foreach (var path in paths)
             {
-                if (TryStripPrefix(path, prefix) is { } relative && targets.Contains(relative))
+                if (StripPrefixOrNull(path, prefix) is { } relative && targets.Contains(relative))
                 {
                     entries.Add(new PatchApplyDirtyEntry
                     {
@@ -212,7 +212,7 @@ internal sealed partial class NodePatchApplyService
         return indexStatus == ' ' ? "modified" : "staged";
     }
 
-    private static string? TryStripPrefix(string repositoryRelativePath, string prefix)
+    private static string? StripPrefixOrNull(string repositoryRelativePath, string prefix)
     {
         if (prefix.Length == 0)
         {

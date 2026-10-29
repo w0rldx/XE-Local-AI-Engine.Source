@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Security.DataProtection;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
@@ -118,7 +119,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
 
     // Probes a key by materializing its encryptor, which unwraps the at-rest key material. True only for a failure this scheme's
     // classifier recognizes; success, or one the inner resolver already accounted for, returns false so probing continues unmasked.
-    private bool TryDetectKeyRingDecryptionFailure(IKey key, out Exception failure)
+    private bool TryDetectKeyRingDecryptionFailure(IKey key, [NotNullWhen(true)] out Exception? failure)
     {
         try
         {
@@ -133,7 +134,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
             }
         }
 
-        failure = null!;
+        failure = null;
         return false;
     }
 

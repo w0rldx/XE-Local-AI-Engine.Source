@@ -36,11 +36,6 @@ public sealed class AnalyzePlaybookEndpoint : Endpoint<AnalyzePlaybookRequest, L
     public override async Task HandleAsync(AnalyzePlaybookRequest req, CancellationToken ct)
     {
         var outcome = await _analysisService.AnalyzeAsync(req.AgentDefinitionId, ct);
-        if (!outcome.AgentExists)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(new ListPlaybookActionsResponse
             {

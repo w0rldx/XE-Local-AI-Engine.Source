@@ -30,12 +30,6 @@ public sealed class EnableScheduledJobEndpoint : Endpoint<ScheduledJobActionRequ
         // A ScheduledJobValidationException (template no longer registered) is mapped to 400 by the global
         // DomainValidationExceptionHandler, like the other scheduler mutations.
         var record = await _scheduledJobManagementService.SetEnabledAsync(req.ScheduledJobId, enabled: true, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

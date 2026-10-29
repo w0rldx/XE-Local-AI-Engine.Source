@@ -43,7 +43,7 @@ public sealed class LlamaServerGenerationTimings
     ///     Microsoft.Extensions.AI.OpenAI 10.9.0, OpenAI 2.12.0). <c>timings</c> is outside OpenAI's schema, so it is
     ///     read through <see cref="StreamingChatCompletionUpdate" />'s experimental <c>Patch</c> (<c>SCME0001</c>).
     /// </remarks>
-    public static LlamaServerGenerationTimings? TryRead(object? rawRepresentation)
+    public static LlamaServerGenerationTimings? ReadOrNull(object? rawRepresentation)
     {
         var update = Unwrap(rawRepresentation);
         if (update is null)

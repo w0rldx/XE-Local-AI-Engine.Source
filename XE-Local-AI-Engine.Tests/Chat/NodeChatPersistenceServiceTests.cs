@@ -2569,25 +2569,25 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task RenamePinArchive_WhenConversationMissing_ReturnsNull()
+    public async Task RenamePinArchive_WhenConversationMissing_ThrowsConversationNotFound()
     {
         await using var provider = await BuildProviderAsync("rename-pin-archive-missing.sqlite");
         var service = CreateService(provider);
         var missingId = Guid.NewGuid();
 
-        AssertEx.Null(await service.RenameConversationAsync(new NodeChatRenameConversationRequest
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(() => service.RenameConversationAsync(new NodeChatRenameConversationRequest
         {
             ConversationId = missingId,
             Title = "Nope",
             UpdatedAtUtc = 700
         }));
-        AssertEx.Null(await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(() => service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest
         {
             ConversationId = missingId,
             IsPinned = true,
             UpdatedAtUtc = 701
         }));
-        AssertEx.Null(await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(() => service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest
         {
             ConversationId = missingId,
             Archived = true,
@@ -2911,7 +2911,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task BranchConversationAsync_WhenMessageNotInConversation_ReturnsNull()
+    public async Task BranchConversationAsync_WhenMessageOrConversationMissing_ThrowsNotFound()
     {
         await using var provider = await BuildProviderAsync("branch-missing.sqlite");
         var service = CreateService(provider);
@@ -2922,13 +2922,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             CreatedAtUtc = 820
         });
 
-        AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest
+        _ = await AssertEx.ThrowsAsync<NodeChatMessageNotFoundException>(() => service.BranchConversationAsync(new NodeChatBranchConversationRequest
         {
             ConversationId = source.ConversationId,
             MessageId = Guid.NewGuid(),
             CreatedAtUtc = 821
         }));
-        AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest
+        _ = await AssertEx.ThrowsAsync<NodeChatConversationNotFoundException>(() => service.BranchConversationAsync(new NodeChatBranchConversationRequest
         {
             ConversationId = Guid.NewGuid(),
             MessageId = Guid.NewGuid(),
@@ -3507,7 +3507,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task CreateMessageVariantAsync_WhenOriginalMissing_ReturnsNull()
+    public async Task CreateMessageVariantAsync_WhenOriginalMissing_ThrowsMessageNotFound()
     {
         await using var provider = await BuildProviderAsync("variant-missing.sqlite");
         var service = CreateService(provider);
@@ -3518,7 +3518,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             CreatedAtUtc = 910
         });
 
-        AssertEx.Null(await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
+        _ = await AssertEx.ThrowsAsync<NodeChatMessageNotFoundException>(() => service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
         {
             ConversationId = conversation.ConversationId,
             OriginalMessageId = Guid.NewGuid(),
@@ -3825,15 +3825,16 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             };
 
         // Unguarded (the default) behaves as before, even over a never-compacted NULL stamp.
-        AssertEx.NotNull(await service.SetCompactionSummaryAsync(Write("FIRST", 20)));
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await service.SetCompactionSummaryAsync(Write("FIRST", 20)));
 
         var rejected = await service.SetCompactionSummaryAsync(Write("STALE", 30, guard: true, expected: 19));
-        AssertEx.Null(rejected, "A stale expected stamp must not write.");
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Superseded, rejected, "A stale expected stamp must not write.");
         var unchanged = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         AssertEx.Equal("FIRST", unchanged.CompactionSummary);
         AssertEx.Equal<long?>(20, unchanged.CompactionSummaryUpdatedAtUtc);
 
-        var accepted = AssertEx.NotNull(await service.SetCompactionSummaryAsync(Write("SECOND", 30, guard: true, expected: 20)));
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await service.SetCompactionSummaryAsync(Write("SECOND", 30, guard: true, expected: 20)));
+        var accepted = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         AssertEx.Equal("SECOND", accepted.CompactionSummary);
         AssertEx.Equal<long?>(30, accepted.CompactionSummaryUpdatedAtUtc);
 
@@ -3844,12 +3845,12 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             SelectedPath = null,
             UpdatedAtUtc = 40
         });
-        AssertEx.Null(await service.SetCompactionSummaryAsync(Write("OLD PATH", 50, guard: true, expected: 30)));
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Superseded, await service.SetCompactionSummaryAsync(Write("OLD PATH", 50, guard: true, expected: 30)));
         var cleared = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         AssertEx.Null(cleared.CompactionSummary, "The clear stands over the late write.");
         AssertEx.Equal<long?>(40, cleared.CompactionSummaryUpdatedAtUtc);
 
-        AssertEx.NotNull(await service.SetCompactionSummaryAsync(Write("UNGUARDED", 60)));
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await service.SetCompactionSummaryAsync(Write("UNGUARDED", 60)));
         AssertEx.Equal("UNGUARDED", AssertEx.NotNull(await service.GetConversationAsync(conversationId)).CompactionSummary);
     }
 

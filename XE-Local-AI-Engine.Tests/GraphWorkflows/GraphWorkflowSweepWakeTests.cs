@@ -74,14 +74,14 @@ public sealed class GraphWorkflowSweepWakeTests
         var landed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         GraphWorkflowInFlight<int>? flight = null;
         await using var lane = new GraphWorkflowInFlightLane<int>(slots: 1, onLanded: () => landed.TrySetResult(flight!.Work.IsCompleted));
-        flight = await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => release.Task, CancellationToken.None);
+        flight = await lane.StartOrNullAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => release.Task, CancellationToken.None);
         AssertEx.NotNull(flight);
         AssertEx.False(landed.Task.IsCompleted, "work still in flight has not landed.");
 
         release.SetResult(42);
 
         AssertEx.True(await landed.Task.WaitAsync(TestBudgets.Contended), "the landing is reported after the work completed.");
-        AssertEx.NotNull(await lane.TryStartAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(1), CancellationToken.None),
+        AssertEx.NotNull(await lane.StartOrNullAsync(Guid.NewGuid(), attempt: 1, Guid.NewGuid(), (_, _) => Task.FromResult(1), CancellationToken.None),
             "and after its slot was released.");
     }
 

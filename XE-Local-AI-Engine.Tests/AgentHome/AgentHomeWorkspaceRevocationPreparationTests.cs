@@ -40,7 +40,8 @@ public sealed class AgentHomeWorkspaceRevocationPreparationTests
     {
         var provider = new FakeSandboxRuntimeProvider(TimeProvider.System);
         var leases = new AgentHomeExecutionLeaseManager();
-        using var held = leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner", "node"));
+        AssertEx.Succeeded(leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner", "node"), out var held));
+        using var heldScope = held;
         var service = CreateService(provider, leases);
 
         Task action;
@@ -60,16 +61,16 @@ public sealed class AgentHomeWorkspaceRevocationPreparationTests
         var service = CreateService(provider, leases);
         var session = await service.PrepareAsync(Folder());
 
-        Task<IAgentHomeExecutionLease?> contender;
+        Task<bool> contender;
         using (ExecutionContext.SuppressFlow())
         {
-            contender = Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner", "node")));
+            contender = Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner", "node"), out _));
         }
 
-        AssertEx.Null(await contender);
+        AssertEx.False(await contender);
         await session.DisposeAsync();
-        using var acquired = leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner", "node"));
-        AssertEx.NotNull(acquired);
+        AssertEx.Succeeded(leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner", "node"), out var acquired));
+        using var acquiredScope = acquired;
     }
 
     [Test]

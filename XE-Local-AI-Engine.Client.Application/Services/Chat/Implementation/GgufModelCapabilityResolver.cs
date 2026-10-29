@@ -21,7 +21,7 @@ internal sealed class GgufModelCapabilityResolver : IGgufModelCapabilityResolver
     }
 
     /// <inheritdoc />
-    public async Task<GgufModelCapabilities?> TryResolveAsync(string modelName, CancellationToken cancellationToken = default)
+    public async Task<GgufModelCapabilities?> ResolveOrNullAsync(string modelName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(modelName))
         {

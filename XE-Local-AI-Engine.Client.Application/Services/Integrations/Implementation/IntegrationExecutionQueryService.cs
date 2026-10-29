@@ -51,8 +51,10 @@ public sealed class IntegrationExecutionQueryService
     public Task<int> CountAsync(IntegrationExecutionFilter filter, CancellationToken cancellationToken = default) =>
         _executions.CountAsync(filter, cancellationToken);
 
-    public Task<IntegrationExecutionSnapshot?> GetAsync(Guid executionId, CancellationToken cancellationToken = default) =>
-        _executions.GetByIdAsync(executionId, cancellationToken);
+    /// <summary>One execution for the operator. Throws <see cref="IntegrationNotFoundException" /> for an unknown id.</summary>
+    public async Task<IntegrationExecutionSnapshot> GetAsync(Guid executionId, CancellationToken cancellationToken = default) =>
+        await _executions.GetByIdAsync(executionId, cancellationToken)
+        ?? throw new IntegrationNotFoundException($"Integration execution {executionId} was not found.");
 
     /// <summary>
     ///     A page of an execution's PERSISTED events, ascending by sequence and never from the ring: the ring is

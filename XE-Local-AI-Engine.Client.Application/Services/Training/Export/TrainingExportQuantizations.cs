@@ -31,7 +31,7 @@ public static class TrainingExportQuantizations
     public static IReadOnlyCollection<string> All => Allowed;
 
     /// <summary>Normalizes and validates a requested quantization, or returns null when it is not supported.</summary>
-    public static string? TryNormalize(string? requested)
+    public static string? NormalizeOrNull(string? requested)
     {
         if (string.IsNullOrWhiteSpace(requested))
         {

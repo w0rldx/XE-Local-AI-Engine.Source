@@ -89,27 +89,16 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
 
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)
     {
-        // Same ownership + Suggested + Analysis guard as the review paths — a missing/cross-agent/non-pending action
-        // surfaces ActionFound == false so the endpoint 404s.
+        // Same ownership + Suggested + Analysis guard as the review paths: a missing/cross-agent action throws its
+        // not-found, a non-pending one runs nothing.
         var suggested = await _playbookActionService.LoadPendingSuggestionAsync(agentId, actionId, cancellationToken);
         if (suggested is null)
         {
-            return new PlaybookEvalOutcome
-            {
-                ActionFound = false,
-                Result = null
-            };
+            return new PlaybookEvalOutcome.NotPending();
         }
 
-        var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken);
-        if (agent is null)
-        {
-            return new PlaybookEvalOutcome
-            {
-                ActionFound = false,
-                Result = null
-            };
-        }
+        var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken)
+                    ?? throw new AgentDefinitionNotFoundException(agentId);
 
         // Baseline = the agent's current resolved prompt (Instructions + Enabled actions). Candidate = baseline + the
         // Suggested action's behavior. The gate measures the marginal effect of promoting THIS action.
@@ -262,12 +251,14 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
 
         // Recording persists the JSON on the action under the ownership guard and yields the updated record, which we
         // thread out via the outcome so the endpoint maps the response directly with no second, unscoped fetch.
-        var updated = await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken);
-        return new PlaybookEvalOutcome
+        return await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken) switch
         {
-            ActionFound = true,
-            Result = result,
-            Action = updated
+            PlaybookSuggestionReviewResult.Applied applied => new PlaybookEvalOutcome.Recorded
+            {
+                Result = result,
+                Action = applied.Record
+            },
+            _ => new PlaybookEvalOutcome.NotPending()
         };
     }
 }

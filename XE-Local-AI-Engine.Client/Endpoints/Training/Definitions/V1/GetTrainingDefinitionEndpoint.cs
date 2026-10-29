@@ -26,12 +26,6 @@ public sealed class GetTrainingDefinitionEndpoint : Endpoint<GetTrainingDefiniti
     public override async Task HandleAsync(GetTrainingDefinitionRequest req, CancellationToken ct)
     {
         var record = await _definitions.GetAsync(req.DefinitionId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

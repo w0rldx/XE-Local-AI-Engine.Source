@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
@@ -28,12 +27,6 @@ public sealed class ListBenchmarkRunsEndpoint : Endpoint<ListBenchmarkRunsReques
     public override async Task HandleAsync(ListBenchmarkRunsRequest req, CancellationToken ct)
     {
         var project = await _records.GetProjectAsync(req.ProjectId, ct);
-        if (project is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
-
         var expectedKldDigest = BenchmarkEndpointSupport.ExpectedKldDigest(project);
 
         var page = await _records.ListRunsAsync(req.ProjectId,

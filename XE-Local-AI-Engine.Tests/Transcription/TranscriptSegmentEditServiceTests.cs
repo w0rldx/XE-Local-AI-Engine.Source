@@ -68,20 +68,22 @@ public sealed class TranscriptSegmentEditServiceTests
     }
 
     [Test]
-    public async Task UpdateSegmentText_ForAnUnknownSessionOrSeq_ReportsWhichIsMissing()
+    public async Task UpdateSegmentText_ForAnUnknownSessionOrSeq_ThrowsNotFoundNamingWhichIsMissing()
     {
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
         var sessionId = await SeedAsync(harness, TranscriptionSessionStatus.Completed);
 
-        var unknownSession = await harness.Service.UpdateSegmentTextAsync(Guid.NewGuid(), seq: 1, "corrected", CancellationToken.None);
-        var unknownSeq = await harness.Service.UpdateSegmentTextAsync(sessionId, seq: 9, "corrected", CancellationToken.None);
+        var unknownSession = await AssertEx.ThrowsAsync<TranscriptionNotFoundException>(
+            () => harness.Service.UpdateSegmentTextAsync(Guid.NewGuid(), seq: 1, "corrected", CancellationToken.None));
+        var unknownSeq = await AssertEx.ThrowsAsync<TranscriptionNotFoundException>(
+            () => harness.Service.UpdateSegmentTextAsync(sessionId, seq: 9, "corrected", CancellationToken.None));
 
-        AssertEx.Equal(UpdateTranscriptSegmentOutcome.SessionNotFound, unknownSession.Outcome);
-        AssertEx.Equal(UpdateTranscriptSegmentOutcome.SegmentNotFound, unknownSeq.Outcome);
+        AssertEx.Contains(unknownSession.Message, "session was not found");
+        AssertEx.Contains(unknownSeq.Message, "no transcript row with that sequence");
     }
 
     [Test]
-    public async Task UpdateSegmentText_WhenADeleteTakesTheRowBeforeTheReadBack_ReportsSegmentNotFound()
+    public async Task UpdateSegmentText_WhenADeleteTakesTheRowBeforeTheReadBack_ThrowsNotFound()
     {
         var sessionId = Guid.NewGuid();
         var store = Substitute.For<ITranscriptionSessionStore>();
@@ -110,11 +112,9 @@ public sealed class TranscriptSegmentEditServiceTests
             TimeProvider.System,
             NullLogger<TranscriptionService>.Instance);
 
-        var result = await service.UpdateSegmentTextAsync(sessionId, seq: 1, "corrected", CancellationToken.None);
-
-        // A vanished read-back is SegmentNotFound, never a throw the endpoint would answer with a 500.
-        AssertEx.Equal(UpdateTranscriptSegmentOutcome.SegmentNotFound, result.Outcome);
-        AssertEx.Null(result.Segment);
+        // A vanished read-back is the typed not-found the host answers with a 404, never a fault it would answer with a 500.
+        _ = await AssertEx.ThrowsAsync<TranscriptionNotFoundException>(
+            () => service.UpdateSegmentTextAsync(sessionId, seq: 1, "corrected", CancellationToken.None));
     }
 
     // A session holding rows "first" (seq 1) and "second" (seq 2), moved to the given status.

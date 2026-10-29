@@ -490,7 +490,7 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
         LlamaServerLaunchReceipt? receipt,
         RuntimeEnvironmentFactsV1? environment)
     {
-        var command = BenchmarkLaunchEvidence.TryBuild(receipt,
+        var command = BenchmarkLaunchEvidence.BuildOrNull(receipt,
             environment,
             work.Run.PrimaryLaunchIntent?.KvCacheTypeSource ?? BenchmarkKvCacheType.SourceAuto);
         if (command is null)

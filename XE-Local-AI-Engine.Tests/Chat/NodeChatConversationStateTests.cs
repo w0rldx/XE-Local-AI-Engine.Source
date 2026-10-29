@@ -37,14 +37,13 @@ public sealed class NodeChatConversationStateTests : IDisposable
         var service = CreateService(provider);
         var conversationId = await CreateConversationAsync(service);
 
-        var returned = AssertEx.NotNull(await service.SetConversationStateAsync(new NodeChatSetConversationStateRequest
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await service.SetConversationStateAsync(new NodeChatSetConversationStateRequest
         {
             ConversationId = conversationId,
             State = StateJson,
             CoversToSequence = 4,
             UpdatedAtUtc = 50
         }));
-        AssertEx.Equal(StateJson, returned.ConversationState);
 
         var read = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         AssertEx.Equal(StateJson, read.ConversationState);
@@ -76,7 +75,7 @@ public sealed class NodeChatConversationStateTests : IDisposable
     }
 
     [Test]
-    public async Task SetConversationStateAsync_WhenGuardedOnAStaleStamp_WritesNothingAndReturnsNull()
+    public async Task SetConversationStateAsync_WhenGuardedOnAStaleStamp_WritesNothingAndReportsSuperseded()
     {
         await using var provider = await BuildProviderAsync("state-guard.sqlite");
         var service = CreateService(provider);
@@ -102,19 +101,20 @@ public sealed class NodeChatConversationStateTests : IDisposable
             ExpectedUpdatedAtUtc = 50
         });
 
-        AssertEx.Null(rejected);
-        var written = AssertEx.NotNull(accepted);
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Superseded, rejected);
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, accepted);
+        var written = AssertEx.NotNull(await service.GetConversationAsync(conversationId));
         AssertEx.Equal<long?>(60, written.ConversationStateUpdatedAtUtc);
         AssertEx.Equal<int?>(9, written.ConversationStateCoversToSequence);
     }
 
     [Test]
-    public async Task SetConversationStateAsync_ForAnUnknownConversation_ReturnsNull()
+    public async Task SetConversationStateAsync_ForAnUnknownConversation_ReportsConversationNotFound()
     {
         await using var provider = await BuildProviderAsync("state-unknown.sqlite");
         var service = CreateService(provider);
 
-        AssertEx.Null(await service.SetConversationStateAsync(new NodeChatSetConversationStateRequest
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.ConversationNotFound, await service.SetConversationStateAsync(new NodeChatSetConversationStateRequest
         {
             ConversationId = Guid.NewGuid(),
             State = StateJson,

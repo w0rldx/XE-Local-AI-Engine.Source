@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Tools.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -125,7 +126,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
             }
 
             // Steps 2-5: risk class, composed approval, executable resolution, structural approval floor.
-            if (TryAdmit(entry, out var executable) is { } refusal)
+            if (!TryAdmit(entry, out var executable, out var refusal))
             {
                 return new ToolInvocationOutcome
                 {
@@ -148,7 +149,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
 
             // Step 7. The same validator, schema and strictness the registry's own wrapper applies — run BEFORE the call so a schema
             // violation is the node's failure rather than a successful node output carrying repair guidance meant for a model.
-            var validation = ToolArgumentValidator.CoerceAndValidate(executable.JsonSchema, arguments!, rejectUnknownProperties: true);
+            var validation = ToolArgumentValidator.CoerceAndValidate(executable.JsonSchema, arguments, rejectUnknownProperties: true);
             if (!validation.IsValid)
             {
                 return new ToolInvocationOutcome
@@ -162,11 +163,11 @@ internal sealed class ToolInvocationService : IToolInvocationService
             // Step 8. Whatever is left of the budget armed above — the validation this call has already done came out
             // of the same one.
             budget.Token.ThrowIfCancellationRequested();
-            var result = Stringify(await executable.InvokeAsync(arguments!, budget.Token));
+            var result = Stringify(await executable.InvokeAsync(arguments, budget.Token));
 
             // Step 10. A repair envelope means the wrapper's own deserialization branch answered rather than the tool.
             // Pre-validation cannot reach that branch, so the result is inspected before it counts as a success.
-            if (TryReadRepairReason(result) is { } repairReason)
+            if (ReadRepairReasonOrNull(result) is { } repairReason)
             {
                 return new ToolInvocationOutcome
                 {
@@ -240,7 +241,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
                 continue;
             }
 
-            if (TryAdmit(entry, out var executable) is not null)
+            if (!TryAdmit(entry, out var executable, out _))
             {
                 continue;
             }
@@ -293,7 +294,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
 
         using (var schema = JsonDocument.Parse(action.ParameterSchema))
         {
-            var validation = ToolArgumentValidator.CoerceAndValidate(schema.RootElement, arguments!, rejectUnknownProperties: true);
+            var validation = ToolArgumentValidator.CoerceAndValidate(schema.RootElement, arguments, rejectUnknownProperties: true);
             if (!validation.IsValid)
             {
                 return new ToolInvocationOutcome
@@ -337,30 +338,36 @@ internal sealed class ToolInvocationService : IToolInvocationService
         };
 
     /// <summary>
-    ///     The envelope, applied to one catalog entry. Returns <see langword="null" /> when the tool may run (and hands
-    ///     back its executable), or the structural refusal reason.
+    ///     The envelope, applied to one catalog entry. Returns <see langword="true" /> when the tool may run (and hands
+    ///     back its executable), or <see langword="false" /> with the structural refusal reason.
     /// </summary>
-    private string? TryAdmit(LocalToolCatalogEntry entry, out AIFunction executable)
+    private bool TryAdmit(LocalToolCatalogEntry entry,
+        [NotNullWhen(true)] out AIFunction? executable,
+        [NotNullWhen(false)] out string? refusal)
     {
-        executable = null!;
+        executable = null;
+        refusal = null;
 
         // Gate 1. Risk class. ReadLocal is the only class a node may run unattended.
         if (entry.Category != ToolCategory.ReadLocal)
         {
-            return "not-read-local";
+            refusal = "not-read-local";
+            return false;
         }
 
         // Gate 1b. A work-session tool reads the step's own turn scope, which a node invocation never has.
         if (WorkSessionToolCatalog.Descriptors.Any(descriptor => string.Equals(descriptor.Name, entry.Name, StringComparison.Ordinal)))
         {
-            return "work-session-only";
+            refusal = "work-session-only";
+            return false;
         }
 
         // Gate 2. The composed effective approval, tighten-only over the catalog default. A node policy tightening
         // ReadLocal closes every Tool node — deliberate.
         if (_approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval))
         {
-            return "approval-gated";
+            refusal = "approval-gated";
+            return false;
         }
 
         // Step 4. BOTH registries: the built-in chat registry carries two tools, and the other six invocable ones are
@@ -370,26 +377,30 @@ internal sealed class ToolInvocationService : IToolInvocationService
                        ?? (_clientLocalToolRegistry.TryResolve(entry.Name, out var clientLocal) ? clientLocal : null);
         if ((resolved as AIFunction) is not { } function)
         {
-            return "no-executable";
+            refusal = "no-executable";
+            return false;
         }
 
         // Step 5. The structural floor. Unreachable today given gate 2, kept because the registry PRE-WRAP — not the
         // policy — is the last line of defense and can change independently of it. Never unwrapped.
         if (function is ApprovalRequiredAIFunction)
         {
-            return "approval-gated";
+            refusal = "approval-gated";
+            return false;
         }
 
         executable = function;
-        return null;
+        return true;
     }
 
     // From HeadlessToolExecutor.TryParseArguments (minus the element it does not need): the arguments are cloned property-by-property into an
     // ordinal bag, which is what both the validator and AIFunction read. The parser's own message is the one deliberate departure — see the catch.
-    private static bool TryParseArguments(string argumentsJson, out AIFunctionArguments? arguments, out string error)
+    private static bool TryParseArguments(string argumentsJson,
+        [NotNullWhen(true)] out AIFunctionArguments? arguments,
+        [NotNullWhen(false)] out string? error)
     {
         arguments = null;
-        error = string.Empty;
+        error = null;
         var text = string.IsNullOrWhiteSpace(argumentsJson) ? "{}" : argumentsJson;
         try
         {
@@ -435,7 +446,7 @@ internal sealed class ToolInvocationService : IToolInvocationService
     ///     The <c>reason</c> of a <c>ToolArgumentRepairResult</c> envelope, or <see langword="null" /> when the result
     ///     is a real tool answer. <c>tool_disabled</c> cannot fire outside a repair scope and costs nothing to cover.
     /// </summary>
-    private static string? TryReadRepairReason(string result)
+    private static string? ReadRepairReasonOrNull(string result)
     {
         if (string.IsNullOrWhiteSpace(result))
         {

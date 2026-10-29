@@ -76,7 +76,7 @@ public sealed record SandboxHandle
     ///     command that fails deep inside a build with a "directory not found" naming a path the container never heard of, which is far
     ///     harder to read than a refusal at composition time.
     /// </remarks>
-    public string? TryResolveSandboxPath(string hostPath)
+    public string? ResolveSandboxPathOrNull(string hostPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
 

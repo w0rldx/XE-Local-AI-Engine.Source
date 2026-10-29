@@ -50,12 +50,6 @@ public sealed class BranchNodeChatConversationEndpoint : Endpoint<BranchNodeChat
             },
             ct);
 
-        if (branched is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(branched.ToResponse(), ct);
     }
 }

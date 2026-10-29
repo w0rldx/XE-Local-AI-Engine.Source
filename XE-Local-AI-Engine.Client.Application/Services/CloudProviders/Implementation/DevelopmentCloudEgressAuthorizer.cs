@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
@@ -48,9 +49,9 @@ public sealed class DevelopmentCloudEgressAuthorizer : ICloudEgressAuthorizer
 
         var now = _timeProvider.GetUtcNow();
         Reject(envelope.ExpiresAt <= now, "The Development cloud authorization envelope has expired.");
-        Reject(!_contextCatalog.TryGet(envelope.AuthorizedBundleId!, out var bundle) || bundle is null,
+        Reject(!_contextCatalog.TryGet(envelope.AuthorizedBundleId, out var bundle),
             "The approved Development cloud context bundle is unavailable.");
-        Reject(!bundle!.SecretScanPassed || bundle.ByteCount <= 0 || bundle.ByteCount > _maximumBundleBytes,
+        Reject(!bundle.SecretScanPassed || bundle.ByteCount <= 0 || bundle.ByteCount > _maximumBundleBytes,
             "The approved Development cloud context bundle is invalid or exceeds the authorized byte limit.");
         Reject(bundle.ExpiresAt <= now || bundle.ExpiresAt != envelope.ExpiresAt,
             "The approved Development cloud context expiry does not match the authorization envelope.");
@@ -72,14 +73,14 @@ public sealed class DevelopmentCloudEgressAuthorizer : ICloudEgressAuthorizer
             TaskId = envelope.TaskId,
             AttemptId = envelope.AttemptId,
             ProviderName = request.ProviderName,
-            ModelId = request.ModelId!,
-            BundleId = envelope.AuthorizedBundleId!,
-            BundleHash = envelope.AuthorizedBundleHash!,
+            ModelId = request.ModelId,
+            BundleId = envelope.AuthorizedBundleId,
+            BundleHash = envelope.AuthorizedBundleHash,
             AuthorizedAt = now
         });
     }
 
-    private static void Reject(bool condition, string reason)
+    private static void Reject([DoesNotReturnIf(true)] bool condition, string reason)
     {
         if (condition)
         {

@@ -54,7 +54,7 @@ public sealed class RunPythonToolHandlerTests
         var result = await handler.ExecuteAsync("{not json");
 
         AssertEx.Contains(result, "valid JSON", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result), "telemetry must record a failure, not a success");
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(result), "telemetry must record a failure, not a success");
         AssertEx.False(gateway.WasCalled, "there is no request to hand on");
     }
 
@@ -67,7 +67,7 @@ public sealed class RunPythonToolHandlerTests
         var result = await handler.ExecuteAsync("null");
 
         AssertEx.Contains(result, "empty", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result));
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(result));
         AssertEx.False(gateway.WasCalled);
     }
 

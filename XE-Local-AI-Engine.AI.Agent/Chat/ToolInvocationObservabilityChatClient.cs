@@ -148,7 +148,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         {
             { Exception: not null } => "error",
             _ when IsDeniedResult(functionResult.Result) => "denied",
-            _ => ToolFailureText.TryGetCode(functionResult.Result) switch
+            _ => ToolFailureText.GetCodeOrNull(functionResult.Result) switch
             {
                 null => "success",
                 ToolFailureText.TimeoutCode => "timeout",

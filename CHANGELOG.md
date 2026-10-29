@@ -254,6 +254,19 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **A request on something in the wrong state answers 409, not 404.** A missing id still answers the same bodyless
+  404 everywhere. Calls that used to answer 404 (or 401/400) for a different failure now say what went wrong:
+  - Playbook actions: the manual edit of an analysis-provenance action is 409 `NotManual`; reject, suggested edit, eval
+    and promote of an action that is no longer a pending suggestion are 409 `NotPending` (promote keeps its
+    `PlaybookPromotionConflictResponse` body).
+  - Golden conversations: approving a manual case is 409 `NotHarvested`; approving an enabled one is 409 `AlreadyEnabled`.
+  - Training: cancelling a finished run, evaluation or dataset generation is 409 (`RunTerminal`, `EvaluationTerminal`,
+    `GenerationInactive`). Training 404s now carry the `TrainingErrorResponse` body (`code: NotFound`).
+  - Images: cancelling a finished job is 409.
+  - Model fit: refreshing recommendations with an unknown or deleted scheduled job is 404 (was 400).
+  - Tutorial state: a save or AI acknowledgement that Identity refuses to store is 409 (was 401).
+  - Chat: compacting a conversation deleted while the fold runs is 404 (was 200 `Superseded`).
+  - A NodeChat not-found that reaches an HTTP route is a bodyless 404 (was 500).
 - **A gateway's "The requested operation is unsupported." is answered once, with a fix**, whatever HTTP status it
   arrives with: it is no longer retried or counted toward the circuit breaker as a 5xx, and the chat suggests the
   other API surface or another model. The enterprise AI gateway template now starts its header row as `project-id`.
@@ -754,6 +767,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Internal
 
+- **One convention for absence** (wiki 16, "Absence"). A lookup where absence is normal returns `T?` and is never named
+  `Try*`; `Try*` is `bool` with `[NotNullWhen]`/`[MaybeNullWhen]` out parameters; a mutation that can fail more than
+  one way returns an outcome type; a missing client-supplied id throws a `ResourceNotFoundException` subtype that one
+  handler maps to the bodyless 404, replacing five per-domain handlers and about 100 endpoint null checks. About 400
+  `Try*` members were renamed or reshaped and the `null!`/`default!` out assignments are gone.
+  `TryMethodConventionTests` keeps it that way.
 - **Developer workflow** — `pnpm run acceptance` runs `licenses:check` (the most frequent CI red was a license manifest
   nobody checked locally); a root `mise.toml` pins the CI toolchain (Node 22, pnpm, uv; the SDK stays in `global.json`);
   `scripts/regen-after-merge.sh` regenerates and stages the generated and sorted frontend files after a merge;

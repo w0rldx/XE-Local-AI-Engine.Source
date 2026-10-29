@@ -251,7 +251,7 @@ public sealed class LocalRuntimeWarmer
     {
         try
         {
-            var registration = await _modelTrustResolver.TryResolveExternalAsync(resolvedModel, cancellationToken);
+            var registration = await _modelTrustResolver.FindExternalAsync(resolvedModel, cancellationToken);
             return registration?.Model.ContextLength is > 0 ? registration.Model.ContextLength : null;
         }
         catch (OperationCanceledException)
@@ -322,7 +322,7 @@ public sealed class LocalRuntimeWarmer
             return null;
         }
 
-        if (_perfLog.TryGetLoadHistory(resolvedModel, ModelRole.Chat) is not { } history)
+        if (_perfLog.FindLoadHistory(resolvedModel, ModelRole.Chat) is not { } history)
         {
             return new InvocationRuntimePhaseDetail
             {

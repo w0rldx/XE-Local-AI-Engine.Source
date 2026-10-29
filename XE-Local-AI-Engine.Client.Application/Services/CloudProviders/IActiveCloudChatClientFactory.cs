@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -29,7 +30,7 @@ public interface IActiveCloudChatClientFactory
     ///     this throws a typed provider error, surfaced as a re-authenticate prompt, rather than returning
     ///     <see langword="false" />: selecting a cloud provider must not silently fall back to the local model.
     /// </remarks>
-    bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client);
+    bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client);
 
     /// <summary>
     ///     Reports whether a cloud provider is currently selected for <paramref name="requestedModelId" />, regardless

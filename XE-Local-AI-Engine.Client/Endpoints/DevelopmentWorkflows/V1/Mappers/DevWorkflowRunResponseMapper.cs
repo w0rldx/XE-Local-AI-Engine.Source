@@ -172,7 +172,7 @@ internal static class DevWorkflowRunResponseMapper
     ///     unreadable policy resolution does.
     /// </remarks>
     private static DevWorkflowNodeRouteResponse? Route(string? routeJson) =>
-        DevWorkflowNodeRunDocuments.TryParseRoute(routeJson) is { } route
+        DevWorkflowNodeRunDocuments.ParseRouteOrNull(routeJson) is { } route
             ? new DevWorkflowNodeRouteResponse
             {
                 Satisfied = route.Satisfied,

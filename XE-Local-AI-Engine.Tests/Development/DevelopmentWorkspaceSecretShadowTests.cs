@@ -80,7 +80,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             AssertEx.False(shadow.HostPath.StartsWith(session.HostWorktreePath, StringComparison.Ordinal), shadow.HostPath);
         }
 
-        // Two shadows must never share a mount source: a shared one would make SandboxHandle.TryResolveSandboxPath
+        // Two shadows must never share a mount source: a shared one would make SandboxHandle.ResolveSandboxPathOrNull
         // answer for whichever it happened to see first.
         AssertEx.Equal(expected: 3, shadows.Select(static mount => mount.HostPath).Distinct(StringComparer.Ordinal).Count());
 

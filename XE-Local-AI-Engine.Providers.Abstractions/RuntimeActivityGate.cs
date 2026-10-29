@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>Lock-protected atomic implementation of a native runtime's activity gate.</summary>
@@ -32,55 +33,61 @@ public abstract class RuntimeActivityGate : IRuntimeActivityGate
     }
 
     /// <inheritdoc />
-    public IRuntimeActivityLease? TryAcquireJobLease()
+    public bool TryAcquireJobLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
     {
         lock (_gate)
         {
             if (_mutationReserved || _evictionReserved)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             _activeJobs++;
         }
 
-        return Granted(LeaseKind.Job);
+        lease = Granted(LeaseKind.Job);
+        return true;
     }
 
     /// <inheritdoc />
-    public IRuntimeActivityLease? TryAcquireSpawnReadinessLease()
+    public bool TryAcquireSpawnReadinessLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
     {
         lock (_gate)
         {
             if (_mutationReserved || _evictionReserved)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             _spawnReadiness++;
         }
 
-        return Granted(LeaseKind.SpawnReadiness);
+        lease = Granted(LeaseKind.SpawnReadiness);
+        return true;
     }
 
     /// <inheritdoc />
-    public IRuntimeActivityLease? TryAcquireResidentProcessLease()
+    public bool TryAcquireResidentProcessLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
     {
         lock (_gate)
         {
             if (_mutationReserved || _evictionReserved)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             _residentProcesses++;
         }
 
-        return Granted(LeaseKind.ResidentProcess);
+        lease = Granted(LeaseKind.ResidentProcess);
+        return true;
     }
 
     /// <inheritdoc />
-    public IRuntimeActivityLease? TryAcquireEvictionReservation()
+    public bool TryAcquireEvictionReservation([NotNullWhen(true)] out IRuntimeActivityLease? lease)
     {
         lock (_gate)
         {
@@ -88,17 +95,19 @@ public abstract class RuntimeActivityGate : IRuntimeActivityGate
             // or mid-spawn.
             if (_mutationReserved || _evictionReserved || _activeJobs != 0 || _spawnReadiness != 0)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             _evictionReserved = true;
         }
 
-        return Granted(LeaseKind.Eviction);
+        lease = Granted(LeaseKind.Eviction);
+        return true;
     }
 
     /// <inheritdoc />
-    public IRuntimeActivityLease? TryAcquireMutationReservation()
+    public bool TryAcquireMutationReservation([NotNullWhen(true)] out IRuntimeActivityLease? lease)
     {
         lock (_gate)
         {
@@ -106,13 +115,15 @@ public abstract class RuntimeActivityGate : IRuntimeActivityGate
             // resident: a running child still has the binary and the model file open.
             if (_mutationReserved || _evictionReserved || _activeJobs != 0 || _spawnReadiness != 0 || _residentProcesses != 0)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             _mutationReserved = true;
         }
 
-        return Granted(LeaseKind.Mutation);
+        lease = Granted(LeaseKind.Mutation);
+        return true;
     }
 
     private Lease Granted(LeaseKind kind)

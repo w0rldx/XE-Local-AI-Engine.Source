@@ -276,7 +276,8 @@ public sealed class TranscriptionUploadEndpointTests
         var gate = factory.Services.GetRequiredService<IWhisperRuntimeActivityGate>();
 
         // The reservation a running whisper source build holds for its whole run.
-        await using (AssertEx.NotNull(gate.TryAcquireMutationReservation()))
+        AssertEx.Succeeded(gate.TryAcquireMutationReservation(out var reservation));
+        await using (reservation)
         {
             using var refused = await UploadAsync(factory, client, sessionId, "clip.wav", ReadFixtureWav());
 

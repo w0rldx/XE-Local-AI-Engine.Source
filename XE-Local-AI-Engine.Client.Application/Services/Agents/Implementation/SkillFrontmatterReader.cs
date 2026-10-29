@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     Splits a <c>SKILL.md</c> into its YAML frontmatter and its body.
 /// </summary>
@@ -18,7 +20,7 @@ internal static class SkillFrontmatterReader
     ///     Parses <paramref name="document" />. Returns <c>false</c> with an operator-safe
     ///     <paramref name="error" /> when the frontmatter block is missing, unterminated, or structurally unsupported.
     /// </summary>
-    public static bool TryRead(string? document, out SkillFrontmatterDocument? result, out string? error)
+    public static bool TryRead(string? document, [NotNullWhen(true)] out SkillFrontmatterDocument? result, [NotNullWhen(false)] out string? error)
     {
         result = null;
         error = null;
@@ -68,7 +70,7 @@ internal static class SkillFrontmatterReader
         int end,
         Dictionary<string, string> scalars,
         Dictionary<string, string> metadata,
-        out string? error)
+        [NotNullWhen(false)] out string? error)
     {
         error = null;
         var index = start;

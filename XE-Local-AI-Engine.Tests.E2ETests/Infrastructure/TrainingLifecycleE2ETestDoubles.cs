@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -250,8 +251,11 @@ public static class TrainingLifecycleE2ETestDoubles
             SourceCommit = "e2e"
         };
 
-        public ConvertScriptPaths TryResolve() =>
-            Paths;
+        public bool TryResolve([NotNullWhen(true)] out ConvertScriptPaths? paths)
+        {
+            paths = Paths;
+            return true;
+        }
 
         public Task<ConvertScriptPaths> EnsureAsync(CancellationToken ct) =>
             Task.FromResult(Paths);
@@ -283,7 +287,7 @@ public static class TrainingLifecycleE2ETestDoubles
             EnsureBinaryAsync(variant, ct);
 
         // The fixture writes the server file in its constructor, so it is genuinely already installed.
-        public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
+        public Task<LlamaBinary?> FindInstalledBinaryAsync(GpuVariant variant, CancellationToken ct) =>
             Task.FromResult<LlamaBinary?>(new LlamaBinary
             {
                 ServerExecutablePath = _server,

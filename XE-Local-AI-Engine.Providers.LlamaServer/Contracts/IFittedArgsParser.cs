@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     Public seam over the provider-internal <c>llama-fit-params</c> stdout parser. Lets the Application-layer
 ///     Inference Optimizer turn a machine-readable fit result into a frozen replay draft without exposing parser details.
@@ -9,7 +11,7 @@ public interface IFittedArgsParser
     /// <summary>
     ///     Builds a replay draft from <paramref name="fitParamsOutput" />, the authoritative
     ///     <paramref name="startupOutput" /> placement evidence and the exact
-    ///     <paramref name="successfulLaunchArguments" /> that reached readiness, or <see langword="null" /> when no
+    ///     <paramref name="successfulLaunchArguments" /> that reached readiness; <see langword="false" /> when no
     ///     concrete replay can be proven.
     /// </summary>
     /// <remarks>
@@ -19,7 +21,8 @@ public interface IFittedArgsParser
     ///     draft only when the fit output names the equivalent tensor-override placement — a replay that silently
     ///     dropped the flag would run outside its admitted footprint.
     /// </remarks>
-    ResolvedLaunchArguments? TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
+    bool TryParseFittedArgs(IReadOnlyList<string> fitParamsOutput,
         IReadOnlyList<string> startupOutput,
-        IReadOnlyList<string> successfulLaunchArguments);
+        IReadOnlyList<string> successfulLaunchArguments,
+        [NotNullWhen(true)] out ResolvedLaunchArguments? draft);
 }

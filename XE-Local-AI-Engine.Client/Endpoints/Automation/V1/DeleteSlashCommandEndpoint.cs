@@ -23,11 +23,7 @@ public sealed class DeleteSlashCommandEndpoint : Endpoint<SlashCommandByIdReques
 
     public override async Task HandleAsync(SlashCommandByIdRequest req, CancellationToken ct)
     {
-        if (!await _service.DeleteAsync(req.CommandId, ct))
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _service.DeleteAsync(req.CommandId, ct);
 
         await Send.NoContentAsync(ct);
     }

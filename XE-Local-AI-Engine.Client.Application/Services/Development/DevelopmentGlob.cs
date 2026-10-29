@@ -25,10 +25,10 @@ internal static class DevelopmentGlob
             return false;
         }
 
-        Regex regex;
+        Regex? regex;
         lock (CacheGate)
         {
-            if (!Cache.TryGetValue(pattern, out regex!))
+            if (!Cache.TryGetValue(pattern, out regex))
             {
                 regex = new Regex(Translate(pattern),
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,

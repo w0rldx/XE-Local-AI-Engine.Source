@@ -452,13 +452,13 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         var current = SandboxSessionOwner.ForCurrentProcess();
         current.WriteTo(root);
 
-        var read = AssertEx.NotNull(SandboxSessionOwner.TryReadFrom(root));
+        var read = AssertEx.NotNull(SandboxSessionOwner.ReadFromOrNull(root));
 
         AssertEx.Equal(Environment.ProcessId, read.ProcessId);
         AssertEx.Equal(current.ProcessStartTimeUtc, read.ProcessStartTimeUtc);
         AssertEx.True(SandboxSessionOwner.IsAlive(read.ProcessId, read.ProcessStartTimeUtc));
         AssertEx.False(SandboxSessionOwner.IsAlive(read.ProcessId, read.ProcessStartTimeUtc.AddMinutes(-10)), "a recycled pid is not the owner");
-        AssertEx.Null(SandboxSessionOwner.TryReadFrom(Path.Combine(root, "missing")));
+        AssertEx.Null(SandboxSessionOwner.ReadFromOrNull(Path.Combine(root, "missing")));
     }
 
     private string CreateScratchContainerRoot()

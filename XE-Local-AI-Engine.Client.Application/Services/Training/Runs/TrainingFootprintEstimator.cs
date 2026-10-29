@@ -133,7 +133,7 @@ public static class TrainingFootprintEstimator
     ///     Tolerant <c>config.json</c> read. A repository is free to omit any field, so a partial parse is the normal
     ///     outcome and only a document that will not parse at all returns null.
     /// </summary>
-    public static BaseCheckpointConfigV1? TryReadConfig(string configPath)
+    public static BaseCheckpointConfigV1? ReadConfigOrNull(string configPath)
     {
         if (string.IsNullOrWhiteSpace(configPath) || !File.Exists(configPath))
         {

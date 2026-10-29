@@ -61,7 +61,7 @@ internal sealed partial class CustomToolService : ICustomToolService
         return ToView(record);
     }
 
-    public async Task<CustomToolView?> UpdateAsync(Guid id, CustomToolDefinition definition, CancellationToken cancellationToken = default)
+    public async Task<CustomToolView> UpdateAsync(Guid id, CustomToolDefinition definition, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
@@ -69,19 +69,22 @@ internal sealed partial class CustomToolService : ICustomToolService
         // the stored value instead of overwriting it with the sentinel.
         var existing = await _store.GetByIdAsync(id, cancellationToken);
         var input = await ValidateAndBuildInputAsync(definition, id, existing, cancellationToken);
-        var record = await _store.UpdateAsync(id, input, cancellationToken);
-        return record is null ? null : ToView(record);
+        var record = await _store.UpdateAsync(id, input, cancellationToken) ?? throw new CustomToolNotFoundException(id);
+        return ToView(record);
     }
 
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return _store.DeleteAsync(id, cancellationToken);
+        if (!await _store.DeleteAsync(id, cancellationToken))
+        {
+            throw new CustomToolNotFoundException(id);
+        }
     }
 
-    public async Task<CustomToolView?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<CustomToolView> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var record = await _store.GetByIdAsync(id, cancellationToken);
-        return record is null ? null : ToView(record);
+        var record = await _store.GetByIdAsync(id, cancellationToken) ?? throw new CustomToolNotFoundException(id);
+        return ToView(record);
     }
 
     public async Task<IReadOnlyList<CustomToolView>> ListAsync(CancellationToken cancellationToken = default)

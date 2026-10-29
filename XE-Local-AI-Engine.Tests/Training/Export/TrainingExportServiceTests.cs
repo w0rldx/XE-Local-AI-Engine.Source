@@ -137,7 +137,8 @@ public sealed class TrainingExportServiceTests : IDisposable
     public async Task Start_WhileTrainingHoldsTheGpu_IsRefusedBeforeAnythingIsWritten()
     {
         using var harness = Harness.Create(this);
-        using var held = AssertEx.NotNull(harness.Gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "The gate must be free to begin with.");
+        AssertEx.Succeeded(harness.Gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var held), "The gate must be free to begin with.");
+        using var heldScope = held;
 
         var start = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
 
@@ -328,8 +329,8 @@ public sealed class TrainingExportServiceTests : IDisposable
         _ = await harness.StartAsync(TrainingArtifactKind.MergedGguf);
         await harness.DrainAsync();
 
-        using var acquired = harness.Gate.TryBeginExclusive(GpuWorkKind.Export);
-        AssertEx.NotNull(acquired, "Artifact creation failure must release the export activity admission.");
+        AssertEx.Succeeded(harness.Gate.TryBeginExclusive(GpuWorkKind.Export, out var acquired), "Artifact creation failure must release the export activity admission.");
+        using var acquiredScope = acquired;
     }
 
     /// <summary>Wires one export service over scripted collaborators and a temp-directory workspace.</summary>
@@ -469,7 +470,7 @@ public sealed class TrainingExportServiceTests : IDisposable
             // The substitute returns null for the lease by default, which reads as "a model is loaded"; a free
             // runtime hands one out.
             var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-            _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+            _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                           .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
 
             var gate = new GpuWorkGate();

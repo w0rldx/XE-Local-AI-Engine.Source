@@ -213,7 +213,7 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
 
     private async Task<string> MemberSha256Async(string absolutePath, long length, DateTime lastWriteTimeUtc, CancellationToken cancellationToken)
     {
-        var sha256 = MemberHashMemo.TryGet(absolutePath, length, lastWriteTimeUtc);
+        var sha256 = MemberHashMemo.Find(absolutePath, length, lastWriteTimeUtc);
         if (sha256 is null)
         {
             sha256 = await FileSha256.ComputeAsync(absolutePath, cancellationToken).ConfigureAwait(false);

@@ -99,7 +99,7 @@ public static class OrchestrationTopologyJson
     ///     Parses the stored topology JSON. Returns <c>null</c> when the payload is null/blank, malformed, or carries a
     ///     version this build does not understand — the caller treats that as "no topology" and degrades to single-agent.
     /// </summary>
-    public static OrchestrationTopology? TryParse(string? topologyJson)
+    public static OrchestrationTopology? ParseOrNull(string? topologyJson)
     {
         if (string.IsNullOrWhiteSpace(topologyJson))
         {

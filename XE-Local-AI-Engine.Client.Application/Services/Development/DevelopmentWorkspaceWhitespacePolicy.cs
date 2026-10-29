@@ -104,7 +104,7 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
             }
 
             var path = line[(separator + 1)..];
-            if (TryRenderPattern(path) is { } pattern)
+            if (RenderPatternOrNull(path) is { } pattern)
             {
                 _ = paths.Add(pattern);
                 continue;
@@ -144,7 +144,7 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
     ///     it. It also puts a non-special character first, so a path beginning <c>#</c> or <c>!</c> cannot be read as
     ///     a comment or a negation.
     /// </remarks>
-    private static string? TryRenderPattern(string path)
+    private static string? RenderPatternOrNull(string path)
     {
         if (path.Length == 0 || path[0] == '"' || path.Any(char.IsControl))
         {

@@ -29,6 +29,7 @@ public interface INodeDbBackupService
     /// <summary>
     ///     Checks a listed snapshot and writes the marker the next start applies. Shares the one-at-a-time guard with
     ///     <see cref="CreateSnapshotAsync" />, so a snapshot and its retention prune never run while a restore is staged.
+    ///     Throws <see cref="NodeBackupNotFoundException" /> when <paramref name="name" /> is not a listed snapshot.
     /// </summary>
     Task<NodeDbRestoreStageResult> StageRestoreAsync(string name, CancellationToken cancellationToken = default);
 

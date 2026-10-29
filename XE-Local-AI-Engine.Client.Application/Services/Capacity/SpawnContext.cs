@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 /// <summary>
@@ -89,23 +90,25 @@ public sealed class SpawnContext
 
     /// <summary>Tries to admit one more concurrent live sub-agent against the fan-out cap.</summary>
     /// <remarks>
-    ///     On success returns a non-null handle that decrements the live count on dispose (wrap the child run in a <c>using</c>); at the cap
-    ///     it returns <see langword="null" /> and the caller rejects the spawn. Atomic compare-and-increment, so concurrent spawns in the same
-    ///     turn cannot both pass the last slot.
+    ///     On success <paramref name="lease" /> is a handle that decrements the live count on dispose (wrap the child run in a <c>using</c>);
+    ///     at the cap it returns <see langword="false" /> and the caller rejects the spawn. Atomic compare-and-increment, so concurrent spawns
+    ///     in the same turn cannot both pass the last slot.
     /// </remarks>
-    public IDisposable? TryEnterFanOut()
+    public bool TryEnterFanOut([NotNullWhen(true)] out IDisposable? lease)
     {
         while (true)
         {
             var current = Volatile.Read(ref _liveFanOut);
             if (current >= _fanOutCap)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             if (Interlocked.CompareExchange(ref _liveFanOut, current + 1, current) == current)
             {
-                return new FanOutLease(this);
+                lease = new FanOutLease(this);
+                return true;
             }
         }
     }

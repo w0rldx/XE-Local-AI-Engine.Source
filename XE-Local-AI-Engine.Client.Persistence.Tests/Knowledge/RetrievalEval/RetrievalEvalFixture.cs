@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval;
 
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -471,9 +472,9 @@ internal sealed class RetrievalEvalFixture : IDisposable
     /// <summary>A cache that never hits — every query is embedded fresh (the harness is not measuring cache behavior).</summary>
     private sealed class NoOpQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
     {
-        public bool TryGet(string policyFamilyIdentity, string query, out KnowledgeQueryEmbeddingCacheEntry entry)
+        public bool TryGet(string policyFamilyIdentity, string query, [NotNullWhen(true)] out KnowledgeQueryEmbeddingCacheEntry? entry)
         {
-            entry = default!;
+            entry = null;
             return false;
         }
 

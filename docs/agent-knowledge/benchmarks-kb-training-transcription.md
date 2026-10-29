@@ -11,7 +11,7 @@ type, the knowledge base, `Services/Training` or `Services/Transcription`. Archi
 
 ### Benchmark cache evidence comes from response timings
 
-**Rule:** llama-server `prompt_n` counts evaluated tokens only and `cache_n` reused ones; derive reuse as `cache_n / (cache_n + prompt_n)`, never from cold/warm `prompt_tokens_total` deltas. **Prevents:** reporting no cache reuse when the warm request reused the prompt. **Authority:** `LlamaServerGenerationTimings.TryRead`, `InferenceBenchmarkHarness.StreamStageAsync` / `DeriveCacheHitRate`; pinned llama.cpp `tools/server/server-context.cpp`.
+**Rule:** llama-server `prompt_n` counts evaluated tokens only and `cache_n` reused ones; derive reuse as `cache_n / (cache_n + prompt_n)`, never from cold/warm `prompt_tokens_total` deltas. **Prevents:** reporting no cache reuse when the warm request reused the prompt. **Authority:** `LlamaServerGenerationTimings.ReadOrNull`, `InferenceBenchmarkHarness.StreamStageAsync` / `DeriveCacheHitRate`; pinned llama.cpp `tools/server/server-context.cpp`.
 
 ### Benchmark launch evidence (KV-cache type feature, 2026-08-16)
 

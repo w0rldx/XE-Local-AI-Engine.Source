@@ -39,10 +39,6 @@ public sealed class CancelScheduledJobRunEndpoint : Endpoint<ScheduledJobRunRout
 
         switch (outcome)
         {
-            case RunCancellationOutcome.NotFound:
-                await Send.NotFoundAsync(ct);
-                return;
-
             case RunCancellationOutcome.AlreadyTerminal:
                 // The outcome stays machine-readable as an `outcome` extension member so a client can branch on it
                 // exactly as it did when the 409 carried a ScheduledJobRunCancelResponse body.
@@ -59,7 +55,7 @@ public sealed class CancelScheduledJobRunEndpoint : Endpoint<ScheduledJobRunRout
                 await Send.ResultAsync(Results.Accepted(uri: null, new ScheduledJobRunCancelResponse
                 {
                     Outcome = outcome.ToString(),
-                    CancellationRequestedAtUtc = run?.CancellationRequestedAtUtc
+                    CancellationRequestedAtUtc = run.CancellationRequestedAtUtc
                 }));
                 return;
         }

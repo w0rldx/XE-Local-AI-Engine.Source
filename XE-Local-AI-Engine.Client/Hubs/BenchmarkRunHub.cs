@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -41,8 +42,17 @@ public sealed class BenchmarkRunHub : Hub
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var run = await _records.GetRunAsync(runId, cancellationToken)
-                  ?? throw new HubException("Benchmark run was not found.");
+        BenchmarkRunRecord run;
+        try
+        {
+            run = await _records.GetRunAsync(runId, cancellationToken);
+        }
+        catch (BenchmarkNotFoundException exception)
+        {
+            // A hub has no exception handler: without this the caller would see SignalR\'s generic invocation error.
+            throw new HubException("Benchmark run was not found.", exception);
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken);
 
         var replay = _events.Replay(runId, afterSeq, run.Version);

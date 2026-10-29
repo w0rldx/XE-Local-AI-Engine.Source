@@ -155,9 +155,9 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         };
     }
 
-    public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken)
+    public async Task<KnowledgeDocumentDetail> GetAsync(Guid documentId, CancellationToken cancellationToken)
     {
-        return await GetCoreAsync(documentId, collectionId: null, cancellationToken);
+        return await GetCoreAsync(documentId, collectionId: null, cancellationToken) ?? throw NotFound();
     }
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, string collectionId, CancellationToken cancellationToken)
@@ -244,7 +244,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         return result is string status ? ParseStatus(status) : null;
     }
 
-    public async Task<bool> ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken)
+    public async Task ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken)
     {
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
@@ -259,9 +259,14 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
         AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
         AddParameter(command, "$document_id", documentId);
-        var affected = await command.ExecuteNonQueryAsync(cancellationToken);
-        return affected > 0;
+        if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+        {
+            throw NotFound();
+        }
     }
+
+    private static KnowledgeDocumentNotFoundException NotFound() =>
+        new("The knowledge document was not found.");
 
     public async Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken)
     {

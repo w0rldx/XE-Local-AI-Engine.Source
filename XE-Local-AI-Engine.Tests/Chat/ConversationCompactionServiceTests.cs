@@ -61,7 +61,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -138,7 +138,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages, compactionSummary: "OLD", coversToSequence: 1);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -184,7 +184,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -223,7 +223,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync("user-model", Arg.Any<CancellationToken>()).Returns("user-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -249,7 +249,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync("cloud-model", Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -272,7 +272,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -319,7 +319,7 @@ public sealed class ConversationCompactionServiceTests
         };
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -354,7 +354,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -424,7 +424,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -445,7 +445,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -469,7 +469,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -494,7 +494,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(CompletedMessages(count: 12));
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -519,7 +519,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
 
@@ -649,7 +649,7 @@ public sealed class ConversationCompactionServiceTests
         {
             time.Advance(TimeSpan.FromSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds));
             call.Arg<CancellationToken>().ThrowIfCancellationRequested();
-            return Conversation(CompletedMessages(12));
+            return NodeChatGuardedWriteOutcome.Written;
         });
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
@@ -664,6 +664,24 @@ public sealed class ConversationCompactionServiceTests
     }
 
     [Test]
+    public async Task CompactAsync_WhenTheConversationIsDeletedDuringTheFold_ReportsConversationNotFound()
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(Conversation(CompletedMessages(12)));
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.ConversationNotFound);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("ORPHANED SYNOPSIS");
+        var service = CreateService(persistence, summarizer, resolver);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.ConversationNotFound, result.Outcome, "a purge mid-fold is not a path change.");
+        AssertEx.Null(result.Summary);
+    }
+
+    [Test]
     public async Task CompactAsync_WhenAPathChangeRestampsTheRowDuringTheFold_ReportsSupersededAndDiscardsTheSynopsis()
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
@@ -673,7 +691,7 @@ public sealed class ConversationCompactionServiceTests
                        CompactionSummaryUpdatedAtUtc = 40
                    });
         // The store rejects the compare-and-set: a path change restamped compaction_summary_updated_at_utc meanwhile.
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns((NodeChatConversationDto?)null);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Superseded);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -696,7 +714,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(CompletedMessages(count: 12));
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -763,13 +781,36 @@ public sealed class ConversationCompactionServiceTests
         await persistence.DidNotReceiveWithAnyArgs().SetConversationStateAsync(default!, default);
     }
 
+    // This class's own distillation substitute: the real service needs a model-backed distiller, and only how compaction
+    // reads the returned status is under test.
+    [Test]
+    public async Task CompactAsync_WhenDistillationFindsTheConversationGone_ReportsConversationNotFoundAndNeverSummarizes()
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(Conversation(CompletedMessages(count: 12)));
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        var distillation = Distillation(new ConversationStateDistillationOutcome
+        {
+            Status = ConversationStateDistillationStatus.ConversationNotFound
+        });
+        var service = CreateService(persistence, summarizer, resolver, distillation: distillation);
+
+        var result = await service.CompactAsync(ConversationId);
+
+        AssertEx.Equal(ConversationCompactionOutcome.ConversationNotFound, result.Outcome, "a purge while distilling leaves nothing to fold into.");
+        await summarizer.DidNotReceiveWithAnyArgs().SummarizeAsync(default!, default);
+        await persistence.DidNotReceiveWithAnyArgs().SetCompactionSummaryAsync(default!, default);
+    }
+
     [Test]
     public async Task CompactAsync_WhenDistillIsFalse_NeverCallsTheDistillerAndSendsNoCapturedState()
     {
         var conversation = Conversation(CompletedMessages(count: 12));
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -791,7 +832,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(CompletedMessages(count: 12));
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         var summarizer = Substitute.For<IConversationSummarizer>();
@@ -914,7 +955,7 @@ public sealed class ConversationCompactionServiceTests
         var conversation = Conversation(messages);
         var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(NodeChatGuardedWriteOutcome.Written);
         var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
         return CreateService(persistence, summarizer, resolver);

@@ -91,7 +91,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     claim, and claims already taken are released through <see cref="RunningProcess.ReleaseEvictionClaim" />: an
     ///     abandoned claim refuses every future lease, an ownership-blind clear erases an operator eject's own mark.
     /// </remarks>
-    private async Task<ProfilingRefusal?> TryEvictAllRolesForProfilingAsync(string modelName)
+    private async Task<ProfilingRefusal?> EvictAllRolesForProfilingOrRefusalAsync(string modelName)
     {
         var claimed = new List<EvictionClaim>();
         var exited = new List<EvictionClaim>();

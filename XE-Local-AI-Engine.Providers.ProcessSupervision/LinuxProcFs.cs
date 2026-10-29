@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 internal static partial class LinuxProcFs
 {
     /// <summary>Parent pid (field 4), process group (field 5) and start time (field 22) of <c>/proc/[pid]/stat</c>, or null when unreadable.</summary>
-    public static ProcessStat? TryReadStat(int processId)
+    public static ProcessStat? ReadStatOrNull(int processId)
     {
         if (processId <= 0 || !OperatingSystem.IsLinux())
         {
@@ -56,7 +56,7 @@ internal static partial class LinuxProcFs
     ///     The executable <c>/proc/[pid]/exe</c> points at, the kernel's canonical path of the running binary, or null when the
     ///     process is gone or the link is unreadable.
     /// </summary>
-    public static string? TryReadExecutablePath(int processId)
+    public static string? ReadExecutablePathOrNull(int processId)
     {
         if (processId <= 0 || !OperatingSystem.IsLinux())
         {
@@ -77,7 +77,7 @@ internal static partial class LinuxProcFs
     ///     The canonical path of <paramref name="path" /> with every symlink resolved, the same form the kernel reports through
     ///     <c>/proc/[pid]/exe</c>, or null when it cannot be resolved.
     /// </summary>
-    public static string? TryRealPath(string path)
+    public static string? RealPathOrNull(string path)
     {
         if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(path))
         {

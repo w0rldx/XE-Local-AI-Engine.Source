@@ -1190,19 +1190,18 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         return published;
     }
 
-    private static bool TryParsePortKey(string key, out int containerPort, out string protocol)
+    private static bool TryParsePortKey(string key, out int containerPort, [NotNullWhen(true)] out string? protocol)
     {
-        containerPort = 0;
-        protocol = "tcp";
-
         var separator = key.IndexOf('/', StringComparison.Ordinal);
         var portText = separator < 0 ? key : key[..separator];
-        if (separator >= 0)
+        if (!int.TryParse(portText, NumberStyles.None, CultureInfo.InvariantCulture, out containerPort))
         {
-            protocol = key[(separator + 1)..];
+            protocol = null;
+            return false;
         }
 
-        return int.TryParse(portText, NumberStyles.None, CultureInfo.InvariantCulture, out containerPort);
+        protocol = separator < 0 ? "tcp" : key[(separator + 1)..];
+        return true;
     }
 
     /// <summary>

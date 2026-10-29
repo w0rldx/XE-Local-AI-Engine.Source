@@ -107,7 +107,14 @@ public sealed class TranscriptionService : ITranscriptionService
                ?? throw new InvalidOperationException("The transcription session vanished immediately after it was created.");
     }
 
-    public async Task<TranscriptionSessionDetailView?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken)
+    public async Task<TranscriptionSessionDetailView> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        await FindSessionAsync(sessionId, cancellationToken) ?? throw SessionNotFound();
+
+    /// <summary>
+    ///     The batch path's own read: a session deleted under a running transcription is an outcome there, because a throw
+    ///     would land in the run's catch-all and record a failure on a row that no longer exists.
+    /// </summary>
+    private async Task<TranscriptionSessionDetailView?> FindSessionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
@@ -145,13 +152,16 @@ public sealed class TranscriptionService : ITranscriptionService
     ///     for a session that no longer exists, and <c>AppendSegmentsAsync</c> checks existence itself so a late
     ///     append answers false rather than throwing. Tracking the run task to join on it would buy nothing this relies on.
     /// </remarks>
-    public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken)
+    public async Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         _ = await CancelAsync(sessionId, cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
-                          .DeleteAsync(sessionId, cancellationToken);
+        if (!await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
+                        .DeleteAsync(sessionId, cancellationToken))
+        {
+            throw SessionNotFound();
+        }
     }
 
     /// <inheritdoc />
@@ -216,7 +226,7 @@ public sealed class TranscriptionService : ITranscriptionService
         try
         {
             // Read and validated UNDER the guard, so the status this run acts on cannot change beneath it.
-            var session = await GetSessionAsync(slot.SessionId, cancellationToken);
+            var session = await FindSessionAsync(slot.SessionId, cancellationToken);
             if (session is null)
             {
                 return TranscribeFileResult.SessionNotFound();
@@ -259,14 +269,7 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         // The summary, not the transcript: this method needs a status, a model, a config and a source kind, and
         // decrypting every segment of a long session to reach them is work nobody asked for.
-        var session = await GetSessionSummaryAsync(sessionId, cancellationToken);
-        if (session is null)
-        {
-            return new StartLiveResult
-            {
-                Outcome = StartLiveOutcome.SessionNotFound
-            };
-        }
+        var session = await GetSessionSummaryAsync(sessionId, cancellationToken) ?? throw SessionNotFound();
 
         // Before the status checks: a file session has no live path at any status, so answering "already finished"
         // would send the caller off to retry something that can never work.
@@ -460,14 +463,7 @@ public sealed class TranscriptionService : ITranscriptionService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>();
 
-        var session = await store.GetSummaryAsync(sessionId, cancellationToken);
-        if (session is null)
-        {
-            return new UpdateTranscriptSegmentResult
-            {
-                Outcome = UpdateTranscriptSegmentOutcome.SessionNotFound
-            };
-        }
+        var session = await store.GetSummaryAsync(sessionId, cancellationToken) ?? throw SessionNotFound();
 
         // The registry is asked as well as the row, and for registration rather than liveness: after Stop a session
         // still drains and commits rows while it no longer accepts audio.
@@ -482,12 +478,7 @@ public sealed class TranscriptionService : ITranscriptionService
         var outcome = await store.UpdateSegmentTextAsync(sessionId, seq, text, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
         if (outcome != TranscriptSegmentUpdateOutcome.Updated)
         {
-            return new UpdateTranscriptSegmentResult
-            {
-                Outcome = outcome == TranscriptSegmentUpdateOutcome.SessionNotFound
-                    ? UpdateTranscriptSegmentOutcome.SessionNotFound
-                    : UpdateTranscriptSegmentOutcome.SegmentNotFound
-            };
+            throw outcome == TranscriptSegmentUpdateOutcome.SessionNotFound ? SessionNotFound() : SegmentNotFound();
         }
 
         // The exclusive watermark one below the row reads back exactly that row, without decrypting the rest of the transcript.
@@ -499,25 +490,21 @@ public sealed class TranscriptionService : ITranscriptionService
                 Outcome = UpdateTranscriptSegmentOutcome.Updated,
                 Segment = rows[0]
             }
-            : new UpdateTranscriptSegmentResult
-            {
-                Outcome = UpdateTranscriptSegmentOutcome.SegmentNotFound
-            };
+            : throw SegmentNotFound();
     }
+
+    private static TranscriptionNotFoundException SessionNotFound() =>
+        new("The transcription session was not found.");
+
+    private static TranscriptionNotFoundException SegmentNotFound() =>
+        new("The transcription session holds no transcript row with that sequence.");
 
     /// <summary>
     ///     What to tell a caller whose status transition lost: the row moved under it between the read and the write.
     /// </summary>
     private async Task<StartLiveResult> DescribeMovedRowAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        var current = await GetSessionSummaryAsync(sessionId, cancellationToken);
-        if (current is null)
-        {
-            return new StartLiveResult
-            {
-                Outcome = StartLiveOutcome.SessionNotFound
-            };
-        }
+        var current = await GetSessionSummaryAsync(sessionId, cancellationToken) ?? throw SessionNotFound();
 
         return new StartLiveResult
         {
@@ -694,7 +681,7 @@ public sealed class TranscriptionService : ITranscriptionService
             }
         }
 
-        var completed = await GetSessionAsync(slot.SessionId, CancellationToken.None);
+        var completed = await FindSessionAsync(slot.SessionId, CancellationToken.None);
         return completed is null
             ? TranscribeFileResult.SessionNotFound()
             : TranscribeFileResult.Succeeded(completed);
@@ -806,7 +793,7 @@ public sealed class TranscriptionService : ITranscriptionService
         bool transcoded,
         CancellationToken cancellationToken)
     {
-        var plan = container == AudioContainer.Wav || transcoded ? await TryPlanAsync(audioPath, cancellationToken) : null;
+        var plan = container == AudioContainer.Wav || transcoded ? await PlanOrNullAsync(audioPath, cancellationToken) : null;
         if (plan is not null || transcoded || !_transcoder.IsAvailable)
         {
             return plan?.Regions.Count > 1 ? plan : null;
@@ -824,7 +811,7 @@ public sealed class TranscriptionService : ITranscriptionService
             return null;
         }
 
-        plan = await TryPlanAsync(converted, cancellationToken);
+        plan = await PlanOrNullAsync(converted, cancellationToken);
         return plan?.Regions.Count > 1 ? plan : null;
     }
 
@@ -834,12 +821,12 @@ public sealed class TranscriptionService : ITranscriptionService
     ///     <see cref="MaxRegionBytes" /> (256 MB) returns <see langword="null" /> and the file goes out as today's single
     ///     streamed request.
     /// </remarks>
-    private async Task<SplitPlan?> TryPlanAsync(string path, CancellationToken cancellationToken)
+    private async Task<SplitPlan?> PlanOrNullAsync(string path, CancellationToken cancellationToken)
     {
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
         await using (stream)
         {
-            var layout = WavPcm16.TryReadLayout(stream);
+            var layout = WavPcm16.ReadLayoutOrNull(stream);
             if (layout is not { } found)
             {
                 _logger.LogDebug("The audio at {Path} is not 16-bit PCM WAV; it is not split at silences.", Path.GetFileName(path));

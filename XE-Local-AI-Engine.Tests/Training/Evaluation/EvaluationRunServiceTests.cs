@@ -91,22 +91,25 @@ public sealed class EvaluationRunServiceTests
         harness.Existing(runningId, TrainingEvaluationStatus.Running);
         harness.Existing(doneId, TrainingEvaluationStatus.Succeeded);
 
-        AssertEx.True(await harness.Service.CancelAsync(queuedId), "A queued evaluation is cancellable.");
+        await harness.Service.CancelAsync(queuedId);
         _ = await harness.Evaluations.Received(1)
                          .CompleteAsync(queuedId, TrainingWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
 
         using var running = new CancellationTokenSource();
         using (harness.Cancellations.Register(runningId, running))
         {
-            AssertEx.True(await harness.Service.CancelAsync(runningId), "A running evaluation is cancellable.");
+            await harness.Service.CancelAsync(runningId);
         }
 
         AssertEx.True(running.IsCancellationRequested, "A running evaluation is signalled through the registry.");
         _ = await harness.Evaluations.DidNotReceive()
                          .CompleteAsync(runningId, Arg.Any<TrainingWorkStatus>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
 
-        AssertEx.False(await harness.Service.CancelAsync(doneId), "A finished evaluation has nothing to cancel.");
-        AssertEx.False(await harness.Service.CancelAsync(Guid.NewGuid()), "An unknown evaluation has nothing to cancel.");
+        var conflict = await AssertEx.ThrowsAsync<TrainingConflictException>(() => harness.Service.CancelAsync(doneId),
+            "A finished evaluation has nothing to cancel: a 409.");
+        AssertEx.Equal("EvaluationTerminal", conflict.Code);
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => harness.Service.CancelAsync(Guid.NewGuid()),
+            "An unknown evaluation is a 404.");
     }
 
     /// <summary>One service over substituted stores; only the irrelevant live dataset fingerprint varies.</summary>

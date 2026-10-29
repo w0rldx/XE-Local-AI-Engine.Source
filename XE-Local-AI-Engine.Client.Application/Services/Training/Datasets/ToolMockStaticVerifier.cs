@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 public interface IToolMockStaticVerifier
@@ -11,7 +12,7 @@ public interface IToolMockStaticVerifier
     ToolMockVerificationV1 Verify(ToolMockBodyV1 body, string? parameterSchema);
 
     /// <summary>Parses raw mock JSON, returning a failing verdict instead of throwing on malformed input.</summary>
-    bool TryParse(ReadOnlySpan<byte> mockJson, out ToolMockBodyV1? body, out string? failureReason);
+    bool TryParse(ReadOnlySpan<byte> mockJson, [NotNullWhen(true)] out ToolMockBodyV1? body, [NotNullWhen(false)] out string? failureReason);
 }
 
 /// <inheritdoc />
@@ -27,7 +28,7 @@ public sealed class ToolMockStaticVerifier : IToolMockStaticVerifier
     /// </remarks>
     private static readonly string[] ExpressionMarkers = ["{{", "}}", "${", "$(", "#{", "<%", "%>", "`"];
 
-    public bool TryParse(ReadOnlySpan<byte> mockJson, out ToolMockBodyV1? body, out string? failureReason)
+    public bool TryParse(ReadOnlySpan<byte> mockJson, [NotNullWhen(true)] out ToolMockBodyV1? body, [NotNullWhen(false)] out string? failureReason)
     {
         try
         {

@@ -30,11 +30,6 @@ public sealed class UpdateSkillEndpoint : Endpoint<UpdateSkillRequest, SkillResp
         ArgumentNullException.ThrowIfNull(req);
 
         var record = await _agentSkillService.UpdateAsync(req.SkillId, req.ToInput(_timeProvider.GetUtcNow()), ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(record.ToResponse(), ct);
     }

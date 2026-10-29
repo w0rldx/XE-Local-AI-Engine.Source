@@ -72,7 +72,7 @@ public static partial class StoredNodeSettingsValidation
     public static bool IsKnownQuant(string value)
     {
         var trimmed = value.Trim();
-        return string.Equals(GgufQuantParser.TryParse(trimmed), trimmed, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(GgufQuantParser.ParseOrNull(trimmed), trimmed, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

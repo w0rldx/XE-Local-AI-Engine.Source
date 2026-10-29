@@ -73,7 +73,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         await EnsureChatConversationAsync(conversationId, cancellationToken);
         await _guard.EnsureMutableAsync(conversationId, cancellationToken);
         var attachments = await ResolveAttachmentsAsync(conversationId, GraphWorkflowGraph.Parse(definition.GraphJson), request.AttachmentFileIds, cancellationToken);
-        if (_resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId) is not null)
+        if (_resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId, out _))
         {
             throw new GraphWorkflowRunBusyException("A chat reply is still streaming in this conversation; wait for it or stop it first.");
         }

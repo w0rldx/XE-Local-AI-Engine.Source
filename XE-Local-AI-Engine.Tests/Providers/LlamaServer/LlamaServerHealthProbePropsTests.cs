@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="LlamaServerHealthProbe.TryReadEffectiveContextTokensAsync" /> parses the effective per-slot
+///     <see cref="LlamaServerHealthProbe.ReadEffectiveContextTokensOrNullAsync" /> parses the effective per-slot
 ///     context window from the server's <c>/props</c> endpoint (<c>default_generation_settings.n_ctx</c>), degrading to
 ///     <see langword="null" /> on any unavailability rather than throwing.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed class LlamaServerHealthProbePropsTests
         using var client = new HttpClient(handler);
         var probe = new LlamaServerHealthProbe(client);
 
-        var effective = await probe.TryReadEffectiveContextTokensAsync(BaseAddress, CancellationToken.None);
+        var effective = await probe.ReadEffectiveContextTokensOrNullAsync(BaseAddress, CancellationToken.None);
 
         AssertEx.True(effective == 16384, "n_ctx from /props must be parsed as the effective context.");
     }
@@ -34,7 +34,7 @@ public sealed class LlamaServerHealthProbePropsTests
         using var client = new HttpClient(handler);
         var probe = new LlamaServerHealthProbe(client);
 
-        var effective = await probe.TryReadEffectiveContextTokensAsync(BaseAddress, CancellationToken.None);
+        var effective = await probe.ReadEffectiveContextTokensOrNullAsync(BaseAddress, CancellationToken.None);
 
         AssertEx.True(effective is null, "a /props body without n_ctx yields an unknown effective context.");
     }
@@ -46,7 +46,7 @@ public sealed class LlamaServerHealthProbePropsTests
         using var client = new HttpClient(handler);
         var probe = new LlamaServerHealthProbe(client);
 
-        var effective = await probe.TryReadEffectiveContextTokensAsync(BaseAddress, CancellationToken.None);
+        var effective = await probe.ReadEffectiveContextTokensOrNullAsync(BaseAddress, CancellationToken.None);
 
         AssertEx.True(effective is null, "a non-200 /props response yields an unknown effective context.");
     }

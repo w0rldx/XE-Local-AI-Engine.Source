@@ -332,7 +332,7 @@ public sealed class SupervisorBenchmarkReceiptTests
     public async Task RunningImageSha256_ForThisLiveProcess_IsLowercaseHex()
     {
         // The digest is read back from the RUNNING image, so this test process is a genuine subject for it.
-        var sha256 = await LlamaServerProcessSupervisor.TryComputeRunningImageSha256Async(Environment.ProcessId);
+        var sha256 = await LlamaServerProcessSupervisor.ComputeRunningImageSha256OrNullAsync(Environment.ProcessId);
 
         var digest = AssertEx.NotNull(sha256);
         AssertEx.Equal(expected: 64, digest.Length);
@@ -346,7 +346,7 @@ public sealed class SupervisorBenchmarkReceiptTests
     [Arguments(int.MaxValue)]
     public async Task RunningImageSha256_WhenTheImageCannotBeRead_IsNullRatherThanAThrow(int processId)
     {
-        AssertEx.Null(await LlamaServerProcessSupervisor.TryComputeRunningImageSha256Async(processId));
+        AssertEx.Null(await LlamaServerProcessSupervisor.ComputeRunningImageSha256OrNullAsync(processId));
     }
 
     [Test]

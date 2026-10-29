@@ -126,6 +126,35 @@ public sealed class TrainingRunServiceTests : IDisposable
         AssertEx.Contains(TrainingRunService.HoldoutTooSmallMessage(2, 0.3), "30% of each sample kind, so at least one kind needs 4 samples");
     }
 
+    /// <summary>
+    ///     An unknown run and a finished one used to share one <c>false</c>; they are now a 404 and a 409 apart, and the
+    ///     first cancel of a queued run still terminalizes it.
+    /// </summary>
+    [Test]
+    public async Task Cancel_TellsAnUnknownRunFromAFinishedOne()
+    {
+        await using var provider = await BuildProviderAsync(Guid.NewGuid().ToString("N"));
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var fixture = await SeedAsync(context);
+        var service = BuildService(context);
+        var run = await service.CreateAsync(new CreateTrainingRunCommand
+        {
+            DatasetId = fixture.DatasetId,
+            ExpectedDatasetVersion = fixture.DatasetVersion,
+            BaseArtifactId = fixture.BaseArtifactId,
+            LicenseConfirmed = true
+        });
+
+        await service.CancelAsync(run.Id);
+
+        AssertEx.Equal(TrainingRunStatus.Cancelled, (await service.GetAsync(run.Id)).Status);
+        var conflict = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.CancelAsync(run.Id));
+        AssertEx.Equal("RunTerminal", conflict.Code);
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => service.CancelAsync(Guid.NewGuid()));
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => service.GetAsync(Guid.NewGuid()));
+    }
+
     [Test]
     public async Task DatasetFreeze_EditAfterEnqueue_DoesNotAffectRun()
     {

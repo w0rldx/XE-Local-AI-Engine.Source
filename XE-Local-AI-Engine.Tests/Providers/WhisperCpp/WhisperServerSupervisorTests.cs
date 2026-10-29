@@ -233,11 +233,12 @@ public sealed class WhisperServerSupervisorTests
         var stale = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
         await harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None);
 
-        AssertEx.Null(harness.Supervisor.TryAcquireJobLease(stale.ModelId, stale.Generation),
+        AssertEx.False(harness.Supervisor.TryAcquireJobLease(stale.ModelId, stale.Generation, out _),
             "A lease for the generation that was replaced must be refused.");
 
         var current = await harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None);
-        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireJobLease(current.ModelId, current.Generation));
+        AssertEx.Succeeded(harness.Supervisor.TryAcquireJobLease(current.ModelId, current.Generation, out var lease));
+        using var leaseScope = lease;
     }
 
     [Test]
@@ -248,7 +249,8 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
 
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
-        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation));
+        AssertEx.Succeeded(harness.Supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation, out var lease));
+        using var leaseScope = lease;
 
         var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None));
 
@@ -368,7 +370,8 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
 
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
-        using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation));
+        AssertEx.Succeeded(harness.Supervisor.TryAcquireJobLease(endpoint.ModelId, endpoint.Generation, out var lease));
+        using var leaseScope = lease;
 
         var result = await harness.Supervisor.EvictAsync(CancellationToken.None);
 
@@ -549,7 +552,8 @@ public sealed class WhisperServerSupervisorTests
     public async Task EnsureRunning_WhileAMutationIsReserved_ReportsBusy()
     {
         await using var harness = new WhisperSupervisorHarness();
-        using var mutation = AssertEx.NotNull(harness.ActivityGate.TryAcquireMutationReservation());
+        AssertEx.Succeeded(harness.ActivityGate.TryAcquireMutationReservation(out var mutation));
+        using var mutationScope = mutation;
 
         var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
 

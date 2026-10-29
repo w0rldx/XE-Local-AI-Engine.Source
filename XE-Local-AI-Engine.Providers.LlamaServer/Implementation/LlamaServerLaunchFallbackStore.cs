@@ -200,7 +200,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
 
         // simplified: a lock this process could not acquire — a sibling holding it past the retry budget, or an unwritable cache root — degrades to the in-process lock
         // alone, the old ceiling, where a sibling write landing inside that window is lost. Accepted: it costs one failed spawn that re-records the verdict.
-        await using var crossProcessLock = await TryAcquireWriteLockAsync(ct).ConfigureAwait(false);
+        await using var crossProcessLock = await AcquireWriteLockOrNullAsync(ct).ConfigureAwait(false);
         var (onDisk, _) = await LoadAsync(ct).ConfigureAwait(false);
         disabled.UnionWith(onDisk);
 
@@ -230,7 +230,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     ///     Either way the write proceeds unlocked, and both paths are logged at Warning — the degraded merge is the one
     ///     thing a silent return would hide.
     /// </remarks>
-    private async Task<FileStream?> TryAcquireWriteLockAsync(CancellationToken ct)
+    private async Task<FileStream?> AcquireWriteLockOrNullAsync(CancellationToken ct)
     {
         for (var attempt = 1; attempt <= LockAttempts; attempt++)
         {

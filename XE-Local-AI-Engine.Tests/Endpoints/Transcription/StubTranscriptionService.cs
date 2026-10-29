@@ -116,15 +116,8 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         return Task.FromResult(session);
     }
 
-    public Task<TranscriptionSessionDetailView?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken)
-    {
-        if (GetReturnsNull)
-        {
-            return Task.FromResult<TranscriptionSessionDetailView?>(result: null);
-        }
-
-        return Task.FromResult(_sessions.TryGetValue(sessionId, out var session) ? session : null);
-    }
+    public Task<TranscriptionSessionDetailView> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        Task.FromResult(FindSession(sessionId) ?? throw SessionNotFound());
 
     public Task<TranscriptionSessionSummaryView?> GetSessionSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
     {
@@ -175,8 +168,8 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         });
     }
 
-    public Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
-        Task.FromResult(DeleteResult);
+    public Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        DeleteResult ? Task.CompletedTask : throw SessionNotFound();
 
     public Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken)
     {
@@ -213,7 +206,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
             return TranscribeResult;
         }
 
-        var session = await GetSessionAsync(slot.SessionId, cancellationToken)
+        var session = FindSession(slot.SessionId)
                       ?? new TranscriptionSessionDetailView
                       {
                           Id = slot.SessionId,
@@ -245,11 +238,13 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
             throw StartLiveThrows;
         }
 
-        return Task.FromResult(StartLiveResult ?? new StartLiveResult
-        {
-            Outcome = _sessions.ContainsKey(sessionId) ? StartLiveOutcome.Started : StartLiveOutcome.SessionNotFound,
-            Status = TranscriptionSessionStatus.Transcribing
-        });
+        return Task.FromResult(StartLiveResult ?? (_sessions.ContainsKey(sessionId)
+            ? new StartLiveResult
+            {
+                Outcome = StartLiveOutcome.Started,
+                Status = TranscriptionSessionStatus.Transcribing
+            }
+            : throw SessionNotFound()));
     }
 
     public Task AppendLiveSegmentAsync(Guid sessionId,
@@ -277,7 +272,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<TranscriptSegmentView>>([]);
 
-    /// <summary>What <see cref="UpdateSegmentTextAsync" /> answers; null means the session is unknown.</summary>
+    /// <summary>What <see cref="UpdateSegmentTextAsync" /> answers; null throws the not-found the real service throws.</summary>
     public UpdateTranscriptSegmentResult? UpdateSegmentResult { get; init; }
 
     public int UpdateSegmentCallCount { get; private set; }
@@ -292,10 +287,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         UpdateSegmentCallCount++;
         LastUpdatedSeq = seq;
         LastUpdatedText = text;
-        return Task.FromResult(UpdateSegmentResult ?? new UpdateTranscriptSegmentResult
-        {
-            Outcome = UpdateTranscriptSegmentOutcome.SessionNotFound
-        });
+        return Task.FromResult(UpdateSegmentResult ?? throw SessionNotFound());
     }
 
     public void Dispose()
@@ -312,4 +304,10 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
             // A scratch directory that survives a test run is litter, never a failure.
         }
     }
+
+    private TranscriptionSessionDetailView? FindSession(Guid sessionId) =>
+        !GetReturnsNull && _sessions.TryGetValue(sessionId, out var session) ? session : null;
+
+    private static TranscriptionNotFoundException SessionNotFound() =>
+        new("The transcription session was not found.");
 }

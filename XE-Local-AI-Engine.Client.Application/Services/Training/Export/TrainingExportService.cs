@@ -115,7 +115,7 @@ public sealed class TrainingExportService : ITrainingExportService
         }
 
         var quantization = request.Kind == TrainingArtifactKind.MergedGguf
-            ? TrainingExportQuantizations.TryNormalize(request.QuantType)
+            ? TrainingExportQuantizations.NormalizeOrNull(request.QuantType)
             : TrainingExportQuantizations.Float16;
         if (quantization is null)
         {
@@ -143,8 +143,9 @@ public sealed class TrainingExportService : ITrainingExportService
 
         // Acquired in the queue's order and BEFORE anything is written, so a busy machine costs a refused request rather
         // than a half-written staged file.
-        var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export);
-        if (activity is null)
+#pragma warning disable CA2000 // Disposed on every refusal below, otherwise owned by the detached pipeline.
+        if (!_gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export, out var activity))
+#pragma warning restore CA2000
         {
             return new TrainingExportStart
             {
@@ -156,7 +157,7 @@ public sealed class TrainingExportService : ITrainingExportService
         ILlamaServerRuntimeMutationLease? lease = null;
         try
         {
-            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
+            lease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(cancellationToken);
         }
         catch
         {
@@ -202,12 +203,15 @@ public sealed class TrainingExportService : ITrainingExportService
         }
 
         var view = await ResolveSmokeViewAsync(store, artifact, cancellationToken);
-        var activity = _gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export)
-                       ?? throw new TrainingExportRejectedException("Training or an export is already running.");
+        if (!_gpuWorkGate.TryBeginExclusive(GpuWorkKind.Export, out var activity))
+        {
+            throw new TrainingExportRejectedException("Training or an export is already running.");
+        }
+
         ILlamaServerRuntimeMutationLease? lease = null;
         try
         {
-            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken)
+            lease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(cancellationToken)
                     ?? throw new TrainingExportRejectedException("A model is loaded. Eject it and try the smoke test again.");
             var result = await _smokeGate.RunAsync(view, cancellationToken);
             _ = await store.SetArtifactSmokeStateAsync(artifact.Id, artifact.Version, result.State, result.Reason, cancellationToken);
@@ -576,7 +580,7 @@ public sealed class TrainingExportService : ITrainingExportService
         var tail = new Queue<string>();
         await foreach (var line in handle.ReadOutputAsync(cancellationToken))
         {
-            if (TrainingRunStdioParser.TryParse(line) is { Kind: TrainingStdioEventKind.Error } parsed)
+            if (TrainingRunStdioParser.ParseOrNull(line) is { Kind: TrainingStdioEventKind.Error } parsed)
             {
                 protocolError = parsed.Message ?? parsed.Category;
             }

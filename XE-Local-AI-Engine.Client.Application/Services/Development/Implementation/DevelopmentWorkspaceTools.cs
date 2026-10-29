@@ -62,7 +62,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
         _liveProgress = liveProgress;
         _exclusions = exclusions ?? DefaultExclusions;
-        _importBaselineDigest = DevelopmentCommandProfileImport.TryComputeDigest(session.HostWorktreePath);
+        _importBaselineDigest = DevelopmentCommandProfileImport.ComputeDigestOrNull(session.HostWorktreePath);
         EnsureRuntimeDirectories();
     }
 
@@ -395,7 +395,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     /// </remarks>
     private void EnsureCommandProfileImportUnchanged()
     {
-        var actual = DevelopmentCommandProfileImport.TryComputeDigest(_session.HostWorktreePath);
+        var actual = DevelopmentCommandProfileImport.ComputeDigestOrNull(_session.HostWorktreePath);
         if (!string.Equals(actual, _importBaselineDigest, StringComparison.Ordinal))
         {
             throw new DevelopmentWorkspaceSecurityException("A fixed command changed the repository command-profile import file in the managed Development worktree.");
@@ -623,7 +623,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     private string ResolveRuntimeDirectory(string name)
     {
         var hostPath = HostRuntimeDirectory(name);
-        return _session.SandboxHandle.TryResolveSandboxPath(hostPath)
+        return _session.SandboxHandle.ResolveSandboxPathOrNull(hostPath)
                ?? throw new InvalidOperationException($"The sandbox does not expose the Development runtime directory '{name}'. The workspace provider must request it as an "
                                                       + "engine-generated mount before any command runs.");
     }

@@ -295,7 +295,7 @@ internal static class LlamaServerLaunchArgumentComposer
 
         if (!speculative.TryValidate(out var error))
         {
-            throw LlamaServerProcessSupervisor.NonRetryable(error!);
+            throw LlamaServerProcessSupervisor.NonRetryable(error);
         }
 
         args.Add("--spec-type");

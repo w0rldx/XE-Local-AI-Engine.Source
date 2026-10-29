@@ -112,28 +112,45 @@ public sealed class TrainingEndpointTests
     public async Task CancelDataset_WhenTheCancelIsAccepted_ReturnsNoContent()
     {
         await using var context = new Context();
-        _ = context.Generation.CancelAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(true);
+        _ = context.Generation.CancelAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
 
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        _ = await context.Generation.Received(1).CancelAsync(DatasetId, Arg.Any<CancellationToken>());
+        await context.Generation.Received(1).CancelAsync(DatasetId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>Unknown and already-terminal are the same answer here, exactly as the run cancel reports them.</summary>
+    /// <summary>Unknown and already-terminal are told apart: a 404 for the first, a 409 naming the state for the second.</summary>
     [Test]
-    public async Task CancelDataset_WhenTheDatasetIsUnknownOrAlreadyTerminal_ReturnsNotFound()
+    public async Task CancelDataset_WhenTheDatasetIsUnknown_ReturnsNotFoundWithTheTrainingBody()
     {
         await using var context = new Context();
-        _ = context.Generation.CancelAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+        _ = context.Generation.CancelAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                   .Returns<Task>(_ => throw new TrainingNotFoundException("The training dataset was not found."));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
 
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "NotFound", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task CancelDataset_WhenTheGenerationAlreadyFinished_ReturnsConflict()
+    {
+        await using var context = new Context();
+        _ = context.Generation.CancelAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                   .Returns<Task>(_ => throw new TrainingConflictException("GenerationInactive"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, $"{Api}/datasets/{DatasetId}/cancel");
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The dataset is not generating.", StringComparison.Ordinal);
     }
 
     [Test]

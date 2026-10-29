@@ -45,9 +45,9 @@ public sealed class AgentTemplateCatalogTests
 
         var knownSlug = catalog.List()[0].Slug;
 
-        var found = AssertEx.NotNull(catalog.TryGet(knownSlug), "A known slug should resolve a template.");
+        AssertEx.Succeeded(catalog.TryGet(knownSlug, out var found), "A known slug should resolve a template.");
         AssertEx.Equal(knownSlug, found.Slug);
 
-        AssertEx.Null(catalog.TryGet("not-a-real-slug"), "An unknown slug should resolve null.");
+        AssertEx.False(catalog.TryGet("not-a-real-slug", out _), "An unknown slug should resolve nothing.");
     }
 }

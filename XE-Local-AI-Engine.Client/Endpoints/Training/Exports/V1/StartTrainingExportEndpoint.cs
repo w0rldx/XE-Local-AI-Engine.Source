@@ -35,7 +35,7 @@ public sealed class StartTrainingExportEndpoint : Endpoint<StartTrainingExportRe
         // The validator has already refused a null kind; this is the shape the compiler needs, not a second policy.
         var kind = req.Kind ?? TrainingArtifactKind.MergedGguf;
         var quantization = kind == TrainingArtifactKind.MergedGguf
-            ? TrainingExportQuantizations.TryNormalize(req.QuantType) ?? req.QuantType ?? string.Empty
+            ? TrainingExportQuantizations.NormalizeOrNull(req.QuantType) ?? req.QuantType ?? string.Empty
             : TrainingExportQuantizations.Float16;
         var start = await _exports.StartExportAsync(req.RunId, new TrainingExportRequest
         {

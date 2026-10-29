@@ -916,9 +916,15 @@ public sealed class OpenApiDocumentTests
         AssertProblemDetails(paths, "/api/local/v1/external-providers/connections/{connectionId}", "get", "404");
         AssertProblemDetails(paths, "/api/local/v1/transcription/sessions/{sessionId}/cancel", "post", "409");
 
-        // Send.NotFoundAsync writes no body, so this 404 declares none.
-        var notFound = paths.GetProperty("/api/local/v1/training/base-artifacts/{artifactId}").GetProperty("get").GetProperty("responses").GetProperty("404");
-        AssertEx.False(notFound.TryGetProperty("content", out _), "GET base-artifacts/{artifactId} answers an empty 404.");
+        // ResourceNotFoundExceptionHandler writes no body, so this 404 declares none.
+        var notFound = paths.GetProperty("/api/local/v1/transcription/sessions/{sessionId}").GetProperty("get").GetProperty("responses").GetProperty("404");
+        AssertEx.False(notFound.TryGetProperty("content", out _), "GET transcription/sessions/{sessionId} answers an empty 404.");
+
+        // The Training family keeps its own handler, whose 404 carries the TrainingErrorResponse body, and says so.
+        var trainingNotFound = paths.GetProperty("/api/local/v1/training/base-artifacts/{artifactId}").GetProperty("get").GetProperty("responses")
+                                    .GetProperty("404").GetProperty("content").GetProperty("application/json").GetProperty("schema")
+                                    .GetProperty("$ref").GetString();
+        AssertEx.Contains(trainingNotFound, "TrainingErrorResponse", StringComparison.Ordinal);
     }
 
     [Test]

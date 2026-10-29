@@ -86,7 +86,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         {
             try
             {
-                var registered = await TryClaimAndRegisterNextAsync(stoppingToken);
+                var registered = await ClaimAndRegisterNextOrNullAsync(stoppingToken);
                 if (registered is null)
                 {
                     _ = await _wake.WaitAsync(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
@@ -115,7 +115,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         }
     }
 
-    private async Task<RegisteredClaim?> TryClaimAndRegisterNextAsync(CancellationToken cancellationToken)
+    private async Task<RegisteredClaim?> ClaimAndRegisterNextOrNullAsync(CancellationToken cancellationToken)
     {
         await _claimGate.WaitAsync(cancellationToken);
         try

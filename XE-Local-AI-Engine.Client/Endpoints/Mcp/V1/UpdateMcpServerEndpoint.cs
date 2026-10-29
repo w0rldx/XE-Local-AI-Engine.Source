@@ -25,11 +25,6 @@ public sealed class UpdateMcpServerEndpoint : Endpoint<UpdateMcpServerRequest, M
     public override async Task HandleAsync(UpdateMcpServerRequest req, CancellationToken ct)
     {
         var record = await _mcpServerService.UpdateAsync(req.McpServerId, req.ToInput(), ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(record.ToResponse(), ct);
     }

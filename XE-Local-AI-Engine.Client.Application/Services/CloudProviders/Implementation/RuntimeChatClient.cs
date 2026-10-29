@@ -110,7 +110,7 @@ public sealed class RuntimeChatClient : IChatClient
             return _localClient.Value;
         }
 
-        if (!_activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient) || cloudClient is null)
+        if (!_activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient))
         {
             AuthorizeDevelopmentLocalRequest(options, requestedModelId);
             return _localClient.Value;
@@ -154,7 +154,7 @@ public sealed class RuntimeChatClient : IChatClient
                            ?? throw new CloudEgressAuthorizationException("The selected cloud provider could not be identified for Development authorization.");
         if (DevelopmentCloudAuthorizationMetadata.TryCreateRequest(options, providerName, out var request))
         {
-            _cloudEgressAuthorizer.Authorize(request!);
+            _cloudEgressAuthorizer.Authorize(request);
         }
     }
 }

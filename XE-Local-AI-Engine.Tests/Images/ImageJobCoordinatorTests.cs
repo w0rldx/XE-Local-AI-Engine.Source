@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Images;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -56,7 +57,8 @@ public sealed class ImageJobCoordinatorTests
     public async Task RunJob_WhileAnExclusiveGpuHolderOwnsTheNode_FailsWithoutCallingTheRuntime()
     {
         var gate = new GpuWorkGate();
-        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A training run holds the node.");
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var held), "A training run holds the node.");
+        using var heldScope = held;
         using var harness = Harness.Create(blockRuntime: false, gpuWorkGate: gate);
 
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("while training"), CancellationToken.None);
@@ -289,7 +291,8 @@ public sealed class ImageJobCoordinatorTests
         var outcome = await harness.Coordinator.DeleteAsync(jobId, CancellationToken.None);
 
         AssertEx.Equal(ImageJobDeleteOutcome.Deleted, outcome);
-        AssertEx.Null(await harness.Coordinator.GetAsync(jobId, CancellationToken.None), "The deleted job must no longer resolve.");
+        _ = await AssertEx.ThrowsAsync<ImageNotFoundException>(() => harness.Coordinator.GetAsync(jobId, CancellationToken.None),
+            "The deleted job must no longer resolve.");
         AssertEx.True(harness.Images.BlobRemovals.ContainsKey(jobId), "The blobs the delete unreferenced must be handed to the image store.");
         // A late hub subscriber must replay nothing for a job that no longer exists — the terminal event would
         // otherwise linger in the replay log for the whole retention window.
@@ -332,11 +335,33 @@ public sealed class ImageJobCoordinatorTests
     }
 
     [Test]
-    public async Task DeleteAsync_WhenJobUnknown_ReportsNotFound()
+    public async Task DeleteAsync_WhenJobUnknown_ThrowsImageNotFound()
     {
         using var harness = Harness.Create(blockRuntime: false);
 
-        AssertEx.Equal(ImageJobDeleteOutcome.NotFound, await harness.Coordinator.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<ImageNotFoundException>(() => harness.Coordinator.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Test]
+    public async Task CancelAsync_WhenTheJobAlreadyFinished_ReturnsFalseRatherThanNotFound()
+    {
+        using var harness = Harness.Create(blockRuntime: false);
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("cancelled-after-it-finished"), CancellationToken.None);
+        await WaitForStatusAsync(harness, jobId, ImageJobStatus.Succeeded);
+
+        // A known job past its terminal door is the endpoint's 409, kept apart from the unknown id's 404 (which throws).
+        // The run task drops its token just after the terminal write, so the answer settles to false rather than being false at once.
+        await AssertEx.EventuallyAsync(async () => !await harness.Coordinator.CancelAsync(jobId, CancellationToken.None), Timeout,
+            "Cancelling a finished job must answer false.");
+    }
+
+    [Test]
+    public async Task CancelAndGet_WhenJobUnknown_ThrowImageNotFound()
+    {
+        using var harness = Harness.Create(blockRuntime: false);
+
+        _ = await AssertEx.ThrowsAsync<ImageNotFoundException>(() => harness.Coordinator.CancelAsync(Guid.NewGuid(), CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<ImageNotFoundException>(() => harness.Coordinator.GetAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
     /// <summary>
@@ -678,33 +703,35 @@ public sealed class ImageJobCoordinatorTests
             };
         }
 
-        public IRuntimeActivityLease? TryAcquireJobLease()
+        public bool TryAcquireJobLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
         {
             if (!_admitJobs)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
             _ = Interlocked.Increment(ref _activeLeaseCount);
-            return new Lease(this);
+            lease = new Lease(this);
+            return true;
         }
 
-        public IRuntimeActivityLease? TryAcquireSpawnReadinessLease()
+        public bool TryAcquireSpawnReadinessLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
         {
             throw new NotSupportedException();
         }
 
-        public IRuntimeActivityLease? TryAcquireResidentProcessLease()
+        public bool TryAcquireResidentProcessLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
         {
             throw new NotSupportedException();
         }
 
-        public IRuntimeActivityLease? TryAcquireEvictionReservation()
+        public bool TryAcquireEvictionReservation([NotNullWhen(true)] out IRuntimeActivityLease? lease)
         {
             throw new NotSupportedException();
         }
 
-        public IRuntimeActivityLease? TryAcquireMutationReservation()
+        public bool TryAcquireMutationReservation([NotNullWhen(true)] out IRuntimeActivityLease? lease)
         {
             throw new NotSupportedException();
         }

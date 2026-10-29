@@ -67,7 +67,7 @@ internal static class BenchmarkLaunchEvidence
     ///     environment capture never happened. A <see langword="null" /> <paramref name="receipt" /> is a recorded
     ///     fact — the spawn never reached readiness — not a reason to skip the environment facts.
     /// </summary>
-    public static BenchmarkLaunchReceiptCommand? TryBuild(LlamaServerLaunchReceipt? receipt,
+    public static BenchmarkLaunchReceiptCommand? BuildOrNull(LlamaServerLaunchReceipt? receipt,
         RuntimeEnvironmentFactsV1? environmentFacts,
         string kvCacheTypeSource)
     {

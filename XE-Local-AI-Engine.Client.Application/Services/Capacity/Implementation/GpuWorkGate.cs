@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <inheritdoc />
 public sealed class GpuWorkGate : IGpuWorkGate
 {
@@ -30,31 +32,35 @@ public sealed class GpuWorkGate : IGpuWorkGate
         }
     }
 
-    public IDisposable? TryBeginExclusive(GpuWorkKind kind)
+    public bool TryBeginExclusive(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle)
     {
         lock (_gate)
         {
             if (_exclusive is not null || _shared.Count > 0)
             {
-                return null;
+                handle = null;
+                return false;
             }
 
             _exclusive = kind;
-            return new Handle(this, kind, exclusive: true);
+            handle = new Handle(this, kind, exclusive: true);
+            return true;
         }
     }
 
-    public IDisposable? TryBeginShared(GpuWorkKind kind)
+    public bool TryBeginShared(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle)
     {
         lock (_gate)
         {
             if (_exclusive is not null)
             {
-                return null;
+                handle = null;
+                return false;
             }
 
             _shared.Add(kind);
-            return new Handle(this, kind, exclusive: false);
+            handle = new Handle(this, kind, exclusive: false);
+            return true;
         }
     }
 

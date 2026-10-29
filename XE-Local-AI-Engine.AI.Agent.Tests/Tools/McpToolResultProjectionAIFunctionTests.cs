@@ -79,7 +79,7 @@ public sealed class McpToolResultProjectionAIFunctionTests
         const string prefix = "[tool error: tool_reported] ";
         AssertEx.True(result!.StartsWith(prefix, StringComparison.Ordinal), "The failure prefix must stay outside the fence.");
         AssertEx.Equal("ticket 9 does not exist", Body(result[prefix.Length..]));
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result));
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(result));
     }
 
     [Test]

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -144,7 +145,10 @@ public sealed class InferenceProfileService : IInferenceProfileService
                 enableMetrics: false,
                 body: (context, _) => Task.FromResult(result: _fittedArgsParser.TryParseFittedArgs(context.FitParamsOutput,
                     context.StartupOutput,
-                    context.SuccessfulLaunchArguments)),
+                    context.SuccessfulLaunchArguments,
+                    out var parsed)
+                    ? parsed
+                    : null),
                 ct);
         }
         catch (LlamaServerProfilingRefusedException exception)
@@ -362,21 +366,21 @@ public sealed class InferenceProfileService : IInferenceProfileService
         {
             globalFreeVramAtFreeze = hardware.AvailableVramBytes;
             processBudgetVramAtFreeze =
-                await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(profile.Backend, ct);
+                await _processVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(profile.Backend, ct);
         }
 
-        var frozen = await _profileStore.MarkFrozenAsync(profileId,
-            benchmark.SnapshotId,
-            globalFreeVramAtFreeze,
-            processBudgetVramAtFreeze,
-            ct);
-        if (frozen is null)
-        {
-            // The store gate rejected the transition (not Explored at write time) — surface as a failed result, do not throw.
-            return ProfileActionResult.Fail($"Profile {profileId} could not be frozen (it is no longer Explored).");
-        }
-
-        return ProfileActionResult.Ok(ToView(frozen));
+        // The store gate re-checks at write time; a row that moved since the read above is a failed result, never a throw.
+        return await _profileStore.MarkFrozenAsync(profileId,
+                benchmark.SnapshotId,
+                globalFreeVramAtFreeze,
+                processBudgetVramAtFreeze,
+                ct) switch
+            {
+                InferenceProfileFreezeResult.Frozen frozen => ProfileActionResult.Ok(ToView(frozen.Profile)),
+                InferenceProfileFreezeResult.NotFound => ProfileActionResult.Fail($"No inference profile with id {profileId}."),
+                InferenceProfileFreezeResult.NotExplored => ProfileActionResult.Fail($"Profile {profileId} could not be frozen (it is no longer Explored)."),
+                var other => throw new UnreachableException($"Unknown freeze result '{other}'.")
+            };
     }
 
     private async Task<LlamaServerProfilingVramSnapshot> CapturePreSpawnVramAsync(string backend, CancellationToken ct)
@@ -391,7 +395,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
         }
 
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
-        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
+        var processBudget = await _processVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(backend, ct);
         return new LlamaServerProfilingVramSnapshot
         {
             GlobalFreeBytes = hardware.AvailableVramBytes,

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 /// <summary>
@@ -37,10 +38,11 @@ public sealed class CompactNodeChatConversationEndpoint : Endpoint<CompactNodeCh
     {
         var result = await _compactionService.CompactAsync(req.ConversationId, req.Model, ct);
 
+        // The outcome is shared with the background maintenance worker, for which a deleted conversation is routine;
+        // here the caller named it, so it is a 404.
         if (result.Outcome == ConversationCompactionOutcome.ConversationNotFound)
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            throw new NodeChatConversationNotFoundException(req.ConversationId);
         }
 
         await Send.OkAsync(new CompactNodeChatConversationResponse

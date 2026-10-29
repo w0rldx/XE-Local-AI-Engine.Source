@@ -177,7 +177,7 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
             new(ChatRole.User, userPrompt)
         ];
         var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
-        var delta = ConversationStateDeltaParser.TryParse(response.Text);
+        var delta = ConversationStateDeltaParser.ParseOrNull(response.Text);
         if (delta is null)
         {
             _logger.LogWarning("Conversation state distiller returned no parseable delta; leaving the state and its watermark untouched.");

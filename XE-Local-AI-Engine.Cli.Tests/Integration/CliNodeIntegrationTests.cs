@@ -126,7 +126,11 @@ public sealed class CliNodeIntegrationTests
         await using var node = await StartScriptedNodeAsync(Substitute.For<Server.INodeChatStreamService>(), registry);
         await using var cli = await CliStack.SignInAsync(node, TimeProvider.System);
         var conversation = await cli.Api.CreateConversationAsync(new CreateConversationRequest(), CancellationToken.None);
-        registry.TryGetLiveInvocationIdForConversation(conversation.ConversationId).Returns(invocationId);
+        registry.TryGetLiveInvocationIdForConversation(conversation.ConversationId, out Arg.Any<Guid>()).Returns(call =>
+        {
+            call[1] = invocationId;
+            return true;
+        });
         registry.ResumeAsync(invocationId, Arg.Any<CancellationToken>())
                 .Returns(call => PlayAsync(Resumed(conversation.ConversationId,
                         invocationId,
@@ -153,7 +157,11 @@ public sealed class CliNodeIntegrationTests
         var invocationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var registry = Substitute.For<Server.IInvocationResumeRegistry>();
-        registry.TryGetLiveInvocationIdForConversation(conversationId).Returns(invocationId);
+        registry.TryGetLiveInvocationIdForConversation(conversationId, out Arg.Any<Guid>()).Returns(call =>
+        {
+            call[1] = invocationId;
+            return true;
+        });
         registry.ResumeAsync(invocationId, Arg.Any<CancellationToken>())
                 .Returns(call => PlayAsync(Resumed(conversationId, invocationId, Frame(Server.ChatStreamEventTypes.AssistantReconcile)),
                     holdOpen: false,

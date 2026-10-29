@@ -110,7 +110,7 @@ public sealed class VaultUnlockHostTests : IDisposable
         var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
         AssertEx.True(outcome.MasterKey.AsSpan().SequenceEqual(_masterKey), "The pre-host must return the unwrapped master key.");
         AssertEx.Equal(url, outcome.BoundUrl);
-        AssertEx.Null(outcome.ResetPassword);
+        AssertEx.Null(outcome.RecoveryReset);
 
         // The cookie is flagged and scoped like the refresh cookie, expires with the ticket, and carries the value the outcome holds.
         var attributes = ticketCookie.Split(';', StringSplitOptions.TrimEntries);
@@ -186,9 +186,10 @@ public sealed class VaultUnlockHostTests : IDisposable
 
         var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
         AssertEx.True(outcome.MasterKey.AsSpan().SequenceEqual(_masterKey), "The recovery code must unwrap the same master key.");
-        AssertEx.Equal(NewPassword, outcome.ResetPassword);
-        AssertEx.Equal(typed, outcome.ResetRecoveryCode);
-        AssertEx.Equal(rotatedCode, outcome.ResetNewRecoveryCode, "The real host must wrap the vault under the code the operator was shown.");
+        var reset = AssertEx.NotNull(outcome.RecoveryReset);
+        AssertEx.Equal(NewPassword, reset.Password);
+        AssertEx.Equal(typed, reset.RecoveryCode);
+        AssertEx.Equal(rotatedCode, reset.NewRecoveryCode, "The real host must wrap the vault under the code the operator was shown.");
         AssertEx.Null(outcome.UnlockTicket);
     }
 
@@ -243,7 +244,7 @@ public sealed class VaultUnlockHostTests : IDisposable
 
             var shown = AssertEx.NotNull(await winner.Content.ReadFromJsonAsync<VaultRecoveryUnlockResponse>()).RecoveryCode;
             var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
-            AssertEx.Equal(shown, outcome.ResetNewRecoveryCode, "The one code shown must be the one the real host wraps the vault under.");
+            AssertEx.Equal(shown, outcome.RecoveryReset?.NewRecoveryCode, "The one code shown must be the one the real host wraps the vault under.");
         }
         finally
         {
@@ -274,7 +275,7 @@ public sealed class VaultUnlockHostTests : IDisposable
         if (passwordResponse.StatusCode == HttpStatusCode.NoContent)
         {
             AssertEx.Equal(HttpStatusCode.Conflict, recoveryResponse.StatusCode);
-            AssertEx.Null(outcome.ResetPassword, "A password win must not carry the losing recovery reset.");
+            AssertEx.Null(outcome.RecoveryReset, "A password win must not carry the losing recovery reset.");
             AssertEx.NotNull(outcome.UnlockTicket);
         }
         else
@@ -283,7 +284,7 @@ public sealed class VaultUnlockHostTests : IDisposable
             AssertEx.Empty(UnlockTicketCookies(passwordResponse), "A password unlock that lost the race must not set the unlock ticket.");
             AssertEx.Null(outcome.UnlockTicket);
             AssertEx.Equal(HttpStatusCode.OK, recoveryResponse.StatusCode);
-            AssertEx.Equal(NewPassword, outcome.ResetPassword);
+            AssertEx.Equal(NewPassword, outcome.RecoveryReset?.Password);
         }
     }
 

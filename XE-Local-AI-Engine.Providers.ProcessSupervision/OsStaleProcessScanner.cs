@@ -95,11 +95,11 @@ public sealed class OsStaleProcessScanner : IStaleProcessScanner
 
     /// <inheritdoc />
     public ProcessStat? ReadStat(int pid) =>
-        LinuxProcFs.TryReadStat(pid);
+        LinuxProcFs.ReadStatOrNull(pid);
 
     /// <inheritdoc />
     public string? ReadExecutablePath(int pid) =>
-        LinuxProcFs.TryReadExecutablePath(pid);
+        LinuxProcFs.ReadExecutablePathOrNull(pid);
 
     /// <inheritdoc />
     public bool KillIfSameProcess(int pid, long expectedStartTicks)
@@ -111,7 +111,7 @@ public sealed class OsStaleProcessScanner : IStaleProcessScanner
         }
 
         // Read-then-signal still leaves a microsecond window; pidfd_open + pidfd_send_signal is the upgrade that closes it.
-        if (LinuxProcFs.TryReadStat(pid) is not { } stat || stat.StartTicks != expectedStartTicks)
+        if (LinuxProcFs.ReadStatOrNull(pid) is not { } stat || stat.StartTicks != expectedStartTicks)
         {
             return false;
         }
@@ -128,7 +128,7 @@ public sealed class OsStaleProcessScanner : IStaleProcessScanner
         {
             // /proc/<pid>/exe is a symlink to the real binary; resolving it avoids ProcessModule.FileName, which can
             // throw for a process this user does not own.
-            return LinuxProcFs.TryReadExecutablePath(process.Id);
+            return LinuxProcFs.ReadExecutablePathOrNull(process.Id);
         }
 
         try

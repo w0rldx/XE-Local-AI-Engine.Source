@@ -64,13 +64,24 @@ public sealed class NodeDbBackupServiceTests : IDisposable
 
         var result = await backupService.CreateSnapshotAsync();
 
-        AssertEx.Equal(NodeDbSnapshotCreateStatus.Created, result.Status);
-        var snapshot = AssertEx.NotNull(result.Snapshot);
+        var snapshot = AssertEx.NotNull(result as NodeDbSnapshotCreateResult.Created).Snapshot;
         AssertEx.Equal($"{BackupFilePrefix}20260101T000000000Z{BackupFileExtension}", snapshot.Name);
         AssertEx.Equal(clock.GetUtcNow(), snapshot.CreatedUtc);
         AssertEx.Equal(snapshot.Name, backupService.ListSnapshots().Single().Name);
         AssertEx.NotNull(backupService.ResolveSnapshotPath(snapshot.Name));
         AssertEx.Equal(NodeDbAutomaticBackupOutcome.NotRun, backupService.LastAutomaticBackup.Outcome, "An on-demand snapshot is not the automatic one.");
+    }
+
+    [Test]
+    public async Task StageRestoreAsync_ForANameThatIsNotAListedSnapshot_ThrowsNotFound_AndWritesNoMarker()
+    {
+        var databasePath = GetDatabasePath("stage-unknown.sqlite");
+        await SeedRawDataAsync(databasePath);
+        await using var serviceProvider = BuildServiceProvider(databasePath);
+        var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
+
+        _ = await AssertEx.ThrowsAsync<NodeBackupNotFoundException>(() => backupService.StageRestoreAsync($"{BackupFilePrefix}20200101T000000000Z{BackupFileExtension}"));
+        AssertEx.False(File.Exists(Path.Combine(_rootPath, "backups", NodeDbRestoreStaging.MarkerFileName)), "An unknown name stages nothing.");
     }
 
     [Test]
@@ -91,9 +102,10 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         AssertEx.Equal(NodeDbRestoreStageStatus.Busy, whileCreating.Status);
         AssertEx.False(File.Exists(Path.Combine(_rootPath, "backups", NodeDbRestoreStaging.MarkerFileName)), "A busy stage writes no marker.");
 
-        var staged = await backupService.StageRestoreAsync(created.Snapshot!.Name);
+        var snapshot = AssertEx.NotNull(created as NodeDbSnapshotCreateResult.Created).Snapshot;
+        var staged = await backupService.StageRestoreAsync(snapshot.Name);
         AssertEx.Equal(NodeDbRestoreStageStatus.Staged, staged.Status, staged.Reason);
-        AssertEx.Equal(created.Snapshot.Name, NodeDbRestoreStaging.ReadStagedSnapshotName(Path.Combine(_rootPath, "backups")));
+        AssertEx.Equal(snapshot.Name, NodeDbRestoreStaging.ReadStagedSnapshotName(Path.Combine(_rootPath, "backups")));
     }
 
     [Test]
@@ -136,7 +148,7 @@ public sealed class NodeDbBackupServiceTests : IDisposable
 
         var result = await serviceProvider.GetRequiredService<INodeDbBackupService>().CreateSnapshotAsync();
 
-        AssertEx.Equal(NodeDbSnapshotCreateStatus.InsufficientSpace, result.Status);
+        AssertEx.True(result is NodeDbSnapshotCreateResult.InsufficientSpace, $"Expected InsufficientSpace, got {result}.");
         AssertEx.Empty(ListSnapshots());
     }
 

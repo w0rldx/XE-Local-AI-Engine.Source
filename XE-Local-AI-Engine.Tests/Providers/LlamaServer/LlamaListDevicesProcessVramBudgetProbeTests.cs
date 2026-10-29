@@ -26,7 +26,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
                                 Vulkan0: Intel(R) Arc(tm) (16000 MiB, 15200 MiB free)
                               """;
 
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes(output);
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull(output);
 
         // 23500 MiB (the RTX 4090, the larger free figure) wins over the 15200 MiB Arc.
         AssertEx.Equal(23500L * BytesPerMib, result);
@@ -37,7 +37,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
     {
         const string output = "  CUDA0: NVIDIA GeForce RTX 4090 (24210 MiB, 23500 MiB free)";
 
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes(output);
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull(output);
 
         AssertEx.Equal(23500L * BytesPerMib, result);
     }
@@ -45,7 +45,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
     [Test]
     public void TryParse_HeaderOnly_ReturnsNull()
     {
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes("Available devices:");
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull("Available devices:");
 
         AssertEx.Null(result);
     }
@@ -53,7 +53,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
     [Test]
     public void TryParse_EmptyString_ReturnsNull()
     {
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes(string.Empty);
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull(string.Empty);
 
         AssertEx.Null(result);
     }
@@ -61,7 +61,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
     [Test]
     public void TryParse_Garbage_ReturnsNull()
     {
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes("ggml_cuda_init: no CUDA-capable device is detected");
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull("ggml_cuda_init: no CUDA-capable device is detected");
 
         AssertEx.Null(result);
     }
@@ -72,7 +72,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
         // A line that reports a total but no "MiB free" column must NOT be mistaken for free capacity.
         const string output = "  CUDA0: NVIDIA GeForce RTX 4090 (24210 MiB total)";
 
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes(output);
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull(output);
 
         AssertEx.Null(result);
     }
@@ -83,7 +83,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
         // Lower-case "mib", uppercase "FREE", and compressed/expanded spacing all still match.
         const string output = "  device0 (8192mib,7000 MiB   FREE)";
 
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes(output);
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull(output);
 
         AssertEx.Equal(7000L * BytesPerMib, result);
     }
@@ -98,7 +98,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
                                 GPU2 (8000 MiB, 1024 MiB free)
                               """;
 
-        var result = LlamaListDevicesProcessVramBudgetProbe.TryParseMaxFreeVramBytes(output);
+        var result = LlamaListDevicesProcessVramBudgetProbe.ParseMaxFreeVramBytesOrNull(output);
 
         AssertEx.Equal(23500L * BytesPerMib, result);
     }
@@ -113,7 +113,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
                      .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("The CPU backend must not resolve a binary or spawn a process."));
         var probe = new LlamaListDevicesProcessVramBudgetProbe(binaryManager, NullLogger<LlamaListDevicesProcessVramBudgetProbe>.Instance);
 
-        var result = await probe.TryGetProcessBudgetBytesAsync("cpu", CancellationToken.None);
+        var result = await probe.GetProcessBudgetBytesOrNullAsync("cpu", CancellationToken.None);
 
         AssertEx.Null(result);
         await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
@@ -125,7 +125,7 @@ public sealed class LlamaListDevicesProcessVramBudgetProbeTests
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var probe = new LlamaListDevicesProcessVramBudgetProbe(binaryManager, NullLogger<LlamaListDevicesProcessVramBudgetProbe>.Instance);
 
-        var result = await probe.TryGetProcessBudgetBytesAsync("   ", CancellationToken.None);
+        var result = await probe.GetProcessBudgetBytesOrNullAsync("   ", CancellationToken.None);
 
         AssertEx.Null(result);
         await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);

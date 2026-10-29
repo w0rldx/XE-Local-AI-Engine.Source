@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     A process-lifetime, per-data-root exclusive lease.
 /// </summary>
@@ -30,8 +32,8 @@ internal sealed class SingleInstanceLease : IDisposable
     private const int ErrnoWouldBlockBsd = 35; // EWOULDBLOCK == EAGAIN on macOS
 
     /// <summary>
-    ///     Attempts to acquire the exclusive lease for <paramref name="dataDirectory" />, returning the held lease or
-    ///     <c>null</c> only when another instance already holds it.
+    ///     Attempts to acquire the exclusive lease for <paramref name="dataDirectory" />. False only when another instance
+    ///     already holds it.
     /// </summary>
     /// <remarks>
     ///     The caller keeps the lease for the process lifetime and disposes it on shutdown. A genuinely broken data
@@ -41,7 +43,8 @@ internal sealed class SingleInstanceLease : IDisposable
     ///     Only a Windows sharing/lock violation or a Unix <c>flock</c> conflict counts as contention.
     /// </remarks>
     /// <param name="dataDirectory">The per-user data directory whose lease serializes process instances.</param>
-    internal static SingleInstanceLease? TryAcquire(string dataDirectory)
+    /// <param name="lease">The held lease, when acquired.</param>
+    internal static bool TryAcquire(string dataDirectory, [NotNullWhen(true)] out SingleInstanceLease? lease)
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
 
@@ -83,10 +86,12 @@ internal sealed class SingleInstanceLease : IDisposable
         catch (IOException)
         {
             // The lock is held by another live instance, or a crashed one the OS is still cleaning up. Do not touch the shared key/DB.
-            return null;
+            lease = null;
+            return false;
         }
 
-        return new SingleInstanceLease(handle);
+        lease = new SingleInstanceLease(handle);
+        return true;
     }
 
     private static bool IsContention(IOException exception)

@@ -146,7 +146,7 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
     ///     processes the gate is released again and no lease is issued, because a runtime swap under a loaded model
     ///     would pull the binaries out from under it.
     /// </remarks>
-    public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireLeaseAsync(Func<bool> mutationBlocked, CancellationToken ct)
+    public async Task<ILlamaServerRuntimeMutationLease?> AcquireLeaseOrNullAsync(Func<bool> mutationBlocked, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(mutationBlocked);
         BeginOperation();

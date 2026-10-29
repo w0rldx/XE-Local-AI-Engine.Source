@@ -22,8 +22,9 @@ public interface ITranscriptionService
     /// <exception cref="ArgumentException">The source kind is not a known one.</exception>
     Task<TranscriptionSessionDetailView> CreateSessionAsync(CreateTranscriptionSessionInput input, CancellationToken cancellationToken);
 
-    /// <summary>Reads one session with its transcript, or <see langword="null" /> when the id is unknown.</summary>
-    Task<TranscriptionSessionDetailView?> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken);
+    /// <summary>Reads one session with its transcript.</summary>
+    /// <exception cref="TranscriptionNotFoundException">The id is unknown.</exception>
+    Task<TranscriptionSessionDetailView> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>
     ///     One session's state without its transcript, or <see langword="null" /> when the id is unknown.
@@ -39,7 +40,8 @@ public interface ITranscriptionService
     Task<TranscriptionSessionPage> ListSessionsAsync(int limit, int offset, CancellationToken cancellationToken);
 
     /// <summary>Cancels any in-flight transcription, then deletes the session and its transcript.</summary>
-    Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken);
+    /// <exception cref="TranscriptionNotFoundException">No session row has that id.</exception>
+    Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Cancels an in-flight transcription, interrupting and joining a live finalization or signaling a batch job.
@@ -69,6 +71,7 @@ public interface ITranscriptionService
     ///     returns its state without registering a second set of lanes, and a registration that throws leaves the row
     ///     in <c>Created</c>, never stranded in <c>Transcribing</c>. A persist-free session has no row and calls <see cref="ILiveTranscriptionSessionRegistry.StartLiveSessionAsync" /> instead.
     /// </remarks>
+    /// <exception cref="TranscriptionNotFoundException">The id is unknown, or the row was deleted while this start ran.</exception>
     /// <exception cref="LiveTranscriptionSourceKindException">The session's source kind has no live capture path.</exception>
     Task<StartLiveResult> StartLiveAsync(Guid sessionId, CancellationToken cancellationToken);
 
@@ -132,5 +135,6 @@ public interface ITranscriptionService
     ///     while the session is <c>Transcribing</c> or the live registry still owns it (draining included), so an edit never
     ///     races a commit.
     /// </summary>
+    /// <exception cref="TranscriptionNotFoundException">The session is unknown, or holds no row with that sequence.</exception>
     Task<UpdateTranscriptSegmentResult> UpdateSegmentTextAsync(Guid sessionId, long seq, string text, CancellationToken cancellationToken);
 }

@@ -80,9 +80,9 @@ public interface IIntegrationApiKeyService
 
     /// <summary>
     ///     Soft revoke: stamps <c>RevokedAtUtc</c> and deletes nothing, because execution rows and kind-3 audit rows
-    ///     reference the prefix. Returns <see langword="false" /> when no row matched.
+    ///     reference the prefix. Throws <see cref="IntegrationNotFoundException" /> when no row matched.
     /// </summary>
-    Task<bool> RevokeAsync(Guid keyId, CancellationToken cancellationToken = default);
+    Task RevokeAsync(Guid keyId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Returns trusted metadata when <paramref name="presented" /> matches a live credential, otherwise

@@ -84,7 +84,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             return OrchestrationResolution.Degraded(OrchestrationDegradationReason.ModelNotToolCapable, "the model for this turn cannot call tools");
         }
 
-        var topology = OrchestrationTopologyJson.TryParse(orchestrator.OrchestrationTopologyJson);
+        var topology = OrchestrationTopologyJson.ParseOrNull(orchestrator.OrchestrationTopologyJson);
         if (topology is null)
         {
             _logger.LogInformation("Orchestrator {AgentDefinitionId} has no usable topology; running it as a single agent.", orchestrator.Id);

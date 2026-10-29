@@ -268,7 +268,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _apiToolCallBridge.SetToolResultTimeout(package.InvocationId, turnPolicy.ToolResultTimeout);
 
         using var providerBudgetScope = ProviderCallBudget.BeginScope(providerCallBudgetOptions, harnessStartedTimestamp);
-        var providerBudget = ProviderCallBudget.Current!;
+        var providerBudget = ProviderCallBudget.Current
+                             ?? throw new InvalidOperationException("The provider call budget scope opened above is not the ambient one.");
 
         // Carries the turn-wide inputs into ExecuteTurnAsync and the stream it creates back out: the terminal telemetry and the
         // finally below read the readiness duration and usage off it, and it stays null when the turn fails before the stream exists.

@@ -32,8 +32,8 @@ public sealed class DatasetExportServiceTests
         AssertEx.Equal("# Title", conversations[3].GetProperty("value").GetString());
 
         // Round trip: the emitted tool_call block parses back to the same name and arguments.
-        var parsed = DatasetExportService.TryReadHermesToolCall(conversations[2].GetProperty("value").GetString()!, out var toolName, out var arguments);
-        AssertEx.True(parsed, "The Hermes tool_call block must be parseable.");
+        AssertEx.Succeeded(DatasetExportService.TryReadHermesToolCall(conversations[2].GetProperty("value").GetString()!, out var toolName, out var arguments),
+            "The Hermes tool_call block must be parseable.");
         AssertEx.Equal("read_file", toolName);
         using var argumentsDocument = JsonDocument.Parse(arguments);
         AssertEx.Equal("README.md", argumentsDocument.RootElement.GetProperty("path").GetString());

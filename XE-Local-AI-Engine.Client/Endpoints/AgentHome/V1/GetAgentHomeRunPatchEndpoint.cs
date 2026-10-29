@@ -38,12 +38,6 @@ public sealed class GetAgentHomeRunPatchEndpoint : Endpoint<AgentHomeRunByIdRequ
         ArgumentNullException.ThrowIfNull(req);
 
         var text = await _service.ReadPatchAsync(req.RunId, ct);
-        if (text is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(text.ToResponse(), ct);
     }
 }

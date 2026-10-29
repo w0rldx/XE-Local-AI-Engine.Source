@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -65,7 +66,8 @@ public sealed class RuntimeResidentsServiceTests
     public async Task ImageSpawnInFlight_WithAnEmptyTable_IsOneStartingRowWithoutAModel()
     {
         _imageSupervisor.GetResidents().Returns([]);
-        using var spawn = AssertEx.NotNull(_imageGate.TryAcquireSpawnReadinessLease());
+        AssertEx.Succeeded(_imageGate.TryAcquireSpawnReadinessLease(out var spawn));
+        using var spawnScope = spawn;
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
@@ -79,7 +81,8 @@ public sealed class RuntimeResidentsServiceTests
     public async Task ImageSpawnInFlight_WithARegisteredDaemon_ListsTheTableOnly()
     {
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
-        using var spawn = AssertEx.NotNull(_imageGate.TryAcquireSpawnReadinessLease());
+        AssertEx.Succeeded(_imageGate.TryAcquireSpawnReadinessLease(out var spawn));
+        using var spawnScope = spawn;
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
@@ -101,7 +104,8 @@ public sealed class RuntimeResidentsServiceTests
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Starting, modelId: null, backend: null);
-        using var spawn = AssertEx.NotNull(_whisperGate.TryAcquireSpawnReadinessLease());
+        AssertEx.Succeeded(_whisperGate.TryAcquireSpawnReadinessLease(out var spawn));
+        using var spawnScope = spawn;
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
@@ -130,7 +134,8 @@ public sealed class RuntimeResidentsServiceTests
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
-        using var transcription = AssertEx.NotNull(_whisperGate.TryAcquireJobLease());
+        AssertEx.Succeeded(_whisperGate.TryAcquireJobLease(out var transcription));
+        using var transcriptionScope = transcription;
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
@@ -157,18 +162,20 @@ public sealed class RuntimeResidentsServiceTests
     public async Task ImageCanEject_IsFalseWhileTheGateWouldRefuseTheEviction(Blocker blocker)
     {
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
-        using var lease = AssertEx.NotNull(blocker switch
+        IRuntimeActivityLease? lease;
+        AssertEx.True(blocker switch
         {
-            Blocker.JobOrTranscription => _imageGate.TryAcquireJobLease(),
-            Blocker.SpawnReadiness => _imageGate.TryAcquireSpawnReadinessLease(),
-            Blocker.MutationReservation => _imageGate.TryAcquireMutationReservation(),
-            _ => _imageGate.TryAcquireEvictionReservation()
+            Blocker.JobOrTranscription => _imageGate.TryAcquireJobLease(out lease),
+            Blocker.SpawnReadiness => _imageGate.TryAcquireSpawnReadinessLease(out lease),
+            Blocker.MutationReservation => _imageGate.TryAcquireMutationReservation(out lease),
+            _ => _imageGate.TryAcquireEvictionReservation(out lease)
         });
+        using var leaseScope = lease;
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.False(row.CanEject, $"{blocker} must block the image eject.");
-        AssertEx.Null(_imageGate.TryAcquireEvictionReservation());
+        AssertEx.False(_imageGate.TryAcquireEvictionReservation(out _));
     }
 
     [Test]
@@ -180,18 +187,20 @@ public sealed class RuntimeResidentsServiceTests
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
-        using var lease = AssertEx.NotNull(blocker switch
+        IRuntimeActivityLease? lease;
+        AssertEx.True(blocker switch
         {
-            Blocker.JobOrTranscription => _whisperGate.TryAcquireJobLease(),
-            Blocker.SpawnReadiness => _whisperGate.TryAcquireSpawnReadinessLease(),
-            Blocker.MutationReservation => _whisperGate.TryAcquireMutationReservation(),
-            _ => _whisperGate.TryAcquireEvictionReservation()
+            Blocker.JobOrTranscription => _whisperGate.TryAcquireJobLease(out lease),
+            Blocker.SpawnReadiness => _whisperGate.TryAcquireSpawnReadinessLease(out lease),
+            Blocker.MutationReservation => _whisperGate.TryAcquireMutationReservation(out lease),
+            _ => _whisperGate.TryAcquireEvictionReservation(out lease)
         });
+        using var leaseScope = lease;
 
         var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.False(row.CanEject, $"{blocker} must block the transcription eject.");
-        AssertEx.Null(_whisperGate.TryAcquireEvictionReservation());
+        AssertEx.False(_whisperGate.TryAcquireEvictionReservation(out _));
     }
 
     [Test]
@@ -200,8 +209,10 @@ public sealed class RuntimeResidentsServiceTests
         // A resident daemon is exactly what an eject is for, so neither eviction reservation refuses on it.
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
-        using var imageResident = AssertEx.NotNull(_imageGate.TryAcquireResidentProcessLease());
-        using var whisperResident = AssertEx.NotNull(_whisperGate.TryAcquireResidentProcessLease());
+        AssertEx.Succeeded(_imageGate.TryAcquireResidentProcessLease(out var imageResident));
+        using var imageResidentScope = imageResident;
+        AssertEx.Succeeded(_whisperGate.TryAcquireResidentProcessLease(out var whisperResident));
+        using var whisperResidentScope = whisperResident;
 
         var rows = await CreateService().GetResidentsAsync();
 

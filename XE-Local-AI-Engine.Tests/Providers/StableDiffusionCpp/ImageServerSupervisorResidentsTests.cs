@@ -38,7 +38,7 @@ public sealed class ImageServerSupervisorResidentsTests
         await using var supervisor = ImageSupervisorFactory.Create();
         await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
 
-        var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
         AssertEx.True(supervisor.GetResidents().Single().HasActiveJobLease);
 
         lease.Dispose();
@@ -69,7 +69,7 @@ public sealed class ImageServerSupervisorResidentsTests
         AssertEx.True(notifier.Count >= 1, "Registration must tick: the daemon is now in GetResidents.");
 
         var beforeLease = notifier.Count;
-        var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+        AssertEx.Succeeded(supervisor.TryAcquireJobLease("sd15", out var lease));
         AssertEx.Equal(beforeLease + 1, notifier.Count);
 
         lease.Dispose();

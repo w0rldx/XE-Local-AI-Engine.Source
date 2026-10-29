@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
@@ -239,8 +240,11 @@ internal sealed class GoldenRecorderSupervisor : IWhisperServerSupervisor
     public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
         throw new NotSupportedException("The recorder does not own the daemon's lifetime.");
 
-    public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation) =>
-        new NoOpLease();
+    public bool TryAcquireJobLease(string modelId, long generation, [NotNullWhen(true)] out IWhisperTranscriptionLease? lease)
+    {
+        lease = new NoOpLease();
+        return true;
+    }
 
     public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
         Task.FromResult<WhisperRuntimeException?>(null);

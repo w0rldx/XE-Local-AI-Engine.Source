@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -183,7 +184,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         // Minted HERE, before the task starts: it is the first argument of the runtime package request AND what the stop path hands the runner, so a turn that
         // minted it privately would leave the cancel path with nothing to call for the whole of its first tick.
         var invocationId = Guid.NewGuid();
-        var flight = await _lane.TryStartAsync(nodeRun.Id,
+        var flight = await _lane.StartOrNullAsync(nodeRun.Id,
             nodeRun.Attempt,
             invocationId,
             (leaseAcquired, token) => RunTurnAsync(run.Id,
@@ -753,7 +754,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
 
             // The parser refuses a native node without a model, so this is the node's own pin, never a default.
-            var model = config.Model!;
+            var model = config.Model ?? throw new InvalidOperationException($"Node '{node.NodeKey}' reached the decision-model lane without the model its parser requires.");
             await using var scope = _scopeFactory.CreateAsyncScope();
             var services = scope.ServiceProvider;
             var trust = services.GetRequiredService<IModelTrustResolver>();
@@ -890,7 +891,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         string inputJson,
         int maxBytes,
         out string prompt,
-        out string? error)
+        [NotNullWhen(false)] out string? error)
     {
         prompt = config.Prompt;
         error = null;

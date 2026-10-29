@@ -163,7 +163,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         {
             Vectors = blobs,
             ResolvedModel = embeddingModelName,
-            VectorIdentity = vectorIdentity!,
+            VectorIdentity = vectorIdentity ?? throw new InvalidOperationException("A non-empty embedding batch produced no vector identity."),
             Dimension = dimension
         };
     }
@@ -207,7 +207,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
             var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
-            var identity = KnowledgeEmbeddingVectorPolicy.TryCreateExpectedIdentity(resolution, _options.EmbeddingVectorMode);
+            var identity = KnowledgeEmbeddingVectorPolicy.CreateExpectedIdentityOrNull(resolution, _options.EmbeddingVectorMode);
             return identity is null
                 ? null
                 : new KnowledgeEmbeddingDescriptor

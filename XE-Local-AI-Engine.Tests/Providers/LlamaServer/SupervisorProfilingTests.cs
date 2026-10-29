@@ -69,7 +69,7 @@ public sealed class SupervisorProfilingTests
     {
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher);
-        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(lease);
 
         var profiling = supervisor.RunExclusiveProfilingAsync("llama3", ModelRole.Chat, ResolvedLaunchArguments.Explore(), false,
@@ -97,11 +97,11 @@ public sealed class SupervisorProfilingTests
             }, CancellationToken.None);
         await entered.Task;
 
-        AssertEx.Null(await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None));
+        AssertEx.Null(await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None));
         release.SetResult();
         await profiling;
 
-        var after = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var after = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(after);
         await (after ?? throw new InvalidOperationException("after must not be null.")).DisposeAsync();
     }
@@ -111,7 +111,7 @@ public sealed class SupervisorProfilingTests
     {
         var launcher = new FakeProcessLauncher();
         var supervisor = SupervisorFactory.Create(launcher);
-        var blocker = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var blocker = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(blocker);
         var profiling = supervisor.RunExclusiveProfilingAsync("llama3",
             ModelRole.Chat,
@@ -828,7 +828,7 @@ public sealed class SupervisorProfilingTests
     [Test]
     public async Task Profiling_MidRemoval_RefusesAStillClaimedRoleAsProfilingRatherThanAsAnOperatorEject()
     {
-        // The real claim-to-remove window, through TryEvictAllRolesForProfilingAsync: it claims EVERY role first, then
+        // The real claim-to-remove window, through EvictAllRolesForProfilingOrRefusalAsync: it claims EVERY role first, then
         // removes them one at a time. While the first removal is held open, the second role is still registered and
         // still claimed — and a chat landing there must be told a benchmark is spawning, not that the operator is
         // ejecting the model (which is terminal and never retried).
@@ -911,7 +911,7 @@ public sealed class SupervisorProfilingTests
             return Task.FromResult(true);
         }
 
-        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        public Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
         {
             return Task.FromResult<int?>(null);
         }

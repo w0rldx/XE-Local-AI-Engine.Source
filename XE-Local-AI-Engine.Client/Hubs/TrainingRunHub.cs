@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
@@ -40,8 +41,17 @@ public sealed class TrainingRunHub : Hub
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        var run = await _runs.GetAsync(runId, cancellationToken)
-                  ?? throw new HubException("The training run was not found.");
+        TrainingRunRecord run;
+        try
+        {
+            run = await _runs.GetAsync(runId, cancellationToken);
+        }
+        catch (TrainingNotFoundException exception)
+        {
+            // A hub has no exception handler: without this the caller would see SignalR\'s generic invocation error.
+            throw new HubException("The training run was not found.", exception);
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken);
 
         var replay = _events.Replay(runId, afterSeq);

@@ -13,16 +13,16 @@ public sealed class TrainingRunStdioParserTests
     [Test]
     public void Parse_ReadsEveryProtocolEvent()
     {
-        var handshake = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"handshake","contractVersion":1,"torch":"2.11.0"}"""),
+        var handshake = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"handshake","contractVersion":1,"torch":"2.11.0"}"""),
             "The handshake must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Handshake, handshake.Kind);
         AssertEx.Equal(expected: 1, handshake.ContractVersion!.Value);
 
-        var phase = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"phase","phase":"training"}"""), "The phase must parse.");
+        var phase = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"phase","phase":"training"}"""), "The phase must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Phase, phase.Kind);
         AssertEx.Equal("training", phase.Phase);
 
-        var progress = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"progress","step":7,"totalSteps":40,"epoch":0.5,"loss":1.25,"lr":0.0002,"vramBytes":123456789}"""),
+        var progress = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"progress","step":7,"totalSteps":40,"epoch":0.5,"loss":1.25,"lr":0.0002,"vramBytes":123456789}"""),
             "The progress line must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Progress, progress.Kind);
         AssertEx.Equal(expected: 7, progress.Step!.Value);
@@ -30,19 +30,19 @@ public sealed class TrainingRunStdioParserTests
         AssertEx.Equal(expected: 1.25, progress.Loss!.Value);
         AssertEx.Equal(expected: 123456789L, progress.VramBytes!.Value);
 
-        var heartbeat = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"heartbeat","phase":"loading"}"""), "The heartbeat must parse.");
+        var heartbeat = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"heartbeat","phase":"loading"}"""), "The heartbeat must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Heartbeat, heartbeat.Kind);
 
-        var artifact = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"artifact","kind":"HfAdapterDir","path":"/staged"}"""),
+        var artifact = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"artifact","kind":"HfAdapterDir","path":"/staged"}"""),
             "The artifact must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Artifact, artifact.Kind);
         AssertEx.Equal("/staged", artifact.Path);
 
-        var done = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"done","cancelled":true}"""), "The done line must parse.");
+        var done = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"done","cancelled":true}"""), "The done line must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Done, done.Kind);
         AssertEx.True(done.Cancelled, "A cooperative stop reports itself as cancelled.");
 
-        var error = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"error","category":"template","message":"no tool branch"}"""),
+        var error = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"error","category":"template","message":"no tool branch"}"""),
             "The error must parse.");
         AssertEx.Equal(TrainingStdioEventKind.Error, error.Kind);
         AssertEx.Equal("no tool branch", error.Message);
@@ -71,14 +71,14 @@ public sealed class TrainingRunStdioParserTests
 
         foreach (var line in noise)
         {
-            AssertEx.Null(TrainingRunStdioParser.TryParse(line), $"'{line}' must not be read as a protocol event.");
+            AssertEx.Null(TrainingRunStdioParser.ParseOrNull(line), $"'{line}' must not be read as a protocol event.");
         }
     }
 
     [Test]
     public void Parse_ToleratesSurroundingWhitespaceAndMissingOptionalFields()
     {
-        var progress = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""   {"event":"progress","step":3}   """),
+        var progress = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""   {"event":"progress","step":3}   """),
             "A padded line is still protocol.");
 
         AssertEx.Equal(expected: 3, progress.Step!.Value);
@@ -90,7 +90,7 @@ public sealed class TrainingRunStdioParserTests
     [Test]
     public void Parse_RejectsAWrongTypedField()
     {
-        var progress = AssertEx.NotNull(TrainingRunStdioParser.TryParse("""{"event":"progress","step":"seven"}"""),
+        var progress = AssertEx.NotNull(TrainingRunStdioParser.ParseOrNull("""{"event":"progress","step":"seven"}"""),
             "The event itself still parses.");
 
         // A string where a number belongs is dropped rather than coerced — a coerced 0 would look like real progress.

@@ -38,18 +38,13 @@ public sealed class DeleteAgentHomeRunEndpoint : Endpoint<AgentHomeRunByIdReques
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        switch (await _service.DeleteAsync(req.RunId, ct))
+        if (await _service.DeleteAsync(req.RunId, ct) == AgentHomeRunDeleteOutcome.Deleted)
         {
-            case AgentHomeRunDeleteOutcome.Deleted:
-                await Send.NoContentAsync(ct);
-                return;
-            case AgentHomeRunDeleteOutcome.Conflict:
-                AddError("This run cannot be deleted right now. A run may be in flight; try again in a moment.");
-                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
-                return;
-            default:
-                await Send.NotFoundAsync(ct);
-                return;
+            await Send.NoContentAsync(ct);
+            return;
         }
+
+        AddError("This run cannot be deleted right now. A run may be in flight; try again in a moment.");
+        await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
     }
 }

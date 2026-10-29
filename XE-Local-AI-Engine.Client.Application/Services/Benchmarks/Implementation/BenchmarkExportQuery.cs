@@ -20,13 +20,9 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
         _logger = logger;
     }
 
-    public async Task<BenchmarkJsonExportQueryResult?> GetJsonAsync(Guid projectId, CancellationToken ct)
+    public async Task<BenchmarkJsonExportQueryResult> GetJsonAsync(Guid projectId, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(projectId, ct);
-        if (project is null)
-        {
-            return null;
-        }
+        var project = await _store.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
         var page = await _store.ListAllRunsAsync(projectId, ct);
         var firstOfMeasuredGroups = FirstOfMeasuredGroups(page.Items);
@@ -69,13 +65,9 @@ internal sealed class BenchmarkExportQuery : IBenchmarkExportQuery
         };
     }
 
-    public async Task<BenchmarkCsvExportQueryResult?> GetCsvAsync(Guid projectId, CancellationToken ct)
+    public async Task<BenchmarkCsvExportQueryResult> GetCsvAsync(Guid projectId, CancellationToken ct)
     {
-        var project = await _store.GetProjectAsync(projectId, ct);
-        if (project is null)
-        {
-            return null;
-        }
+        var project = await _store.GetProjectAsync(projectId, ct) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
         var page = await _store.ListAllRunsAsync(projectId, ct);
         var pairwiseFit = await _store.GetActivePairwiseFitAsync(projectId, ct);

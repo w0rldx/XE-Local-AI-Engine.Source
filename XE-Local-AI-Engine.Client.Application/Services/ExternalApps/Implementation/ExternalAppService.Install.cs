@@ -125,7 +125,7 @@ internal sealed partial class ExternalAppService
         IDisposable? lease = null;
         try
         {
-            lease = await _gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
+            lease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(instanceId))
                     ?? throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
 
             var createdAtUtc = Now();
@@ -194,7 +194,7 @@ internal sealed partial class ExternalAppService
         long createdAtUtc,
         CancellationToken cancellationToken)
     {
-        using var applicationLease = await _gate.TryEnterAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId))
+        using var applicationLease = await _gate.EnterOrNullAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId))
                                      ?? throw new ExternalAppOperationInFlightException("Another install of this application is already being admitted.");
 
         // The empty-catalog rule is authoritative HERE, under the lock and ahead of the one-per-application read: the admission read let

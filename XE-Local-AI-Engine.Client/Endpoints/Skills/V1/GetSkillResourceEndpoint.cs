@@ -40,7 +40,7 @@ public sealed class GetSkillResourceEndpoint : Endpoint<GetSkillResourceRequest,
 
         // Case-insensitive, matching the store's upsert-by-name rule: a name that would REPLACE a resource on write
         // has to be the name that FINDS it on read.
-        var resource = (record?.Resources ?? []).FirstOrDefault(candidate =>
+        var resource = (record.Resources ?? []).FirstOrDefault(candidate =>
             string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
 
         if (resource is null)

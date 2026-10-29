@@ -384,7 +384,7 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.Contains(rendered, "run_python rejected");
         AssertEx.Contains(rendered, "isolate");
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(rendered), "a refusal must be logged as a failed call, not a success");
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(rendered), "a refusal must be logged as a failed call, not a success");
         AssertEx.True(rendered.EndsWith(ToolFailureText.NotRunNotice, StringComparison.Ordinal),
             $"N-88: a refusal must tell the model nothing ran, so a small model does not invent a result (got: {rendered})");
         AssertEx.False(environment.Requested, "a host without the boundary must not provision an interpreter it can never run");
@@ -501,7 +501,7 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.Contains(rendered, "did not finish within 7s");
         AssertEx.Contains(rendered, "terminated");
-        AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.TryGetCode(rendered), "a timed-out run must be logged as a timeout");
+        AssertEx.Equal(ToolFailureText.TimeoutCode, ToolFailureText.GetCodeOrNull(rendered), "a timed-out run must be logged as a timeout");
         AssertEx.False(rendered.Contains(ToolFailureText.NotRunNotice, StringComparison.Ordinal), "the script started, so it may have done something");
     }
 
@@ -515,7 +515,7 @@ public sealed class ComputeToolGatewayTests
             Code = " "
         });
 
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(rendered));
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(rendered));
         AssertEx.Contains(rendered, "arguments are invalid");
         AssertEx.False(rendered.Contains(ToolFailureText.NotRunNotice, StringComparison.Ordinal), "a bad argument is the model's to fix and call again");
     }
@@ -542,7 +542,7 @@ public sealed class ComputeToolGatewayTests
             Code = "open('big.bin','wb').write(b'0' * (1 << 31))"
         });
 
-        AssertEx.Equal("resource_limit", ToolFailureText.TryGetCode(rendered));
+        AssertEx.Equal("resource_limit", ToolFailureText.GetCodeOrNull(rendered));
         AssertEx.Contains(rendered, "most likely at its disk or memory limit");
     }
 
@@ -566,7 +566,7 @@ public sealed class ComputeToolGatewayTests
             Code = "x"
         });
 
-        AssertEx.Equal("resource_limit", ToolFailureText.TryGetCode(rendered));
+        AssertEx.Equal("resource_limit", ToolFailureText.GetCodeOrNull(rendered));
         AssertEx.Contains(rendered, "exceeded the sandbox disk limit");
         AssertEx.False(rendered.Contains("did not finish within", StringComparison.Ordinal), "A disk-ceiling stop is not a timeout.");
     }
@@ -584,7 +584,7 @@ public sealed class ComputeToolGatewayTests
             Code = "raise SystemExit(1)"
         });
 
-        AssertEx.Null(ToolFailureText.TryGetCode(rendered), "the tool did its job; the script's own failure is the model's to read");
+        AssertEx.Null(ToolFailureText.GetCodeOrNull(rendered), "the tool did its job; the script's own failure is the model's to read");
     }
 
     [Test]

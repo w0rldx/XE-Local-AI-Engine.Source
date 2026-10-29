@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Analysis;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -15,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class PlaybookAnalysisServiceTests
 {
     [Test]
-    public async Task AnalyzeAsync_WhenAgentDoesNotExist_ReportsAgentMissingAndNeverInvokesAgent()
+    public async Task AnalyzeAsync_WhenAgentDoesNotExist_ThrowsNotFoundAndNeverInvokesAgent()
     {
         var agentId = Guid.NewGuid();
         var agent = new FakeAnalysisAgent(_ =>
@@ -27,13 +28,10 @@ public sealed class PlaybookAnalysisServiceTests
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(null));
+                .ThrowsAsync(new AgentDefinitionNotFoundException(agentId));
 
-        var outcome = await service.AnalyzeAsync(agentId);
+        await AssertEx.ThrowsAsync<AgentDefinitionNotFoundException>(() => service.AnalyzeAsync(agentId));
 
-        AssertEx.False(outcome.AgentExists, "A null aggregate must surface AgentExists == false (the endpoint 404s).");
-        AssertEx.False(outcome.MeetsThreshold);
-        AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 0, agent.InvocationCount, "The agent must not be invoked for a missing agent.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>());
@@ -52,11 +50,9 @@ public sealed class PlaybookAnalysisServiceTests
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(BuildInsights(agentId, meetsThreshold: false, [])));
+                .Returns(Task.FromResult<FeedbackInsightsResult>(BuildInsights(agentId, meetsThreshold: false, [])));
 
         var outcome = await service.AnalyzeAsync(agentId);
-
-        AssertEx.True(outcome.AgentExists);
         AssertEx.False(outcome.MeetsThreshold, "Sub-threshold feedback must report MeetsThreshold == false.");
         AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
         AssertEx.Equal(expected: 0, agent.InvocationCount, "Sub-threshold runs never invoke the model.");
@@ -86,14 +82,12 @@ public sealed class PlaybookAnalysisServiceTests
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
+                .Returns(Task.FromResult<FeedbackInsightsResult>(insightsResult));
         actionService.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
 
         var outcome = await service.AnalyzeAsync(agentId);
-
-        AssertEx.True(outcome.AgentExists);
         AssertEx.True(outcome.MeetsThreshold);
         AssertEx.Equal(expected: 2, outcome.ProposedCount);
         AssertEx.Equal(expected: 2, outcome.CreatedSuggestions.Count);
@@ -115,7 +109,7 @@ public sealed class PlaybookAnalysisServiceTests
         var agent = new FakeAnalysisAgent(_ => [Proposal([exemplar.MessageId], confidence: 0.7d, new string('b', PlaybookActionOptions.MaxBehaviorLength + 1))]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
+                .Returns(Task.FromResult<FeedbackInsightsResult>(insightsResult));
         actionService.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
@@ -137,7 +131,7 @@ public sealed class PlaybookAnalysisServiceTests
         var agent = new FakeAnalysisAgent(_ => [Proposal([], confidence: 0.7d, "Unsupported claim.")]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
+                .Returns(Task.FromResult<FeedbackInsightsResult>(insightsResult));
         actionService.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
@@ -168,7 +162,7 @@ public sealed class PlaybookAnalysisServiceTests
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
+                .Returns(Task.FromResult<FeedbackInsightsResult>(insightsResult));
         actionService.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         EchoCreatedSuggestion(actionService);
@@ -214,7 +208,7 @@ public sealed class PlaybookAnalysisServiceTests
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
+                .Returns(Task.FromResult<FeedbackInsightsResult>(insightsResult));
         actionService.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([existing]));
         EchoCreatedSuggestion(actionService);

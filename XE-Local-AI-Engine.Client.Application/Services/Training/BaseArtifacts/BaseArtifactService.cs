@@ -19,6 +19,8 @@ internal sealed class BaseArtifactService : IBaseArtifactService
     /// </remarks>
     internal const long DiskHeadroomBytes = 10L * 1024 * 1024 * 1024;
 
+    private const string NotFoundMessage = "The base artifact was not found.";
+
     private readonly IBaseCheckpointStore _checkpointStore;
     private readonly BaseArtifactDownloadCoordinator _coordinator;
     private readonly INodeDataDirectory _dataDirectory;
@@ -84,18 +86,12 @@ internal sealed class BaseArtifactService : IBaseArtifactService
     }
 
     /// <inheritdoc />
-    public async Task<BaseArtifactView?> GetAsync(Guid artifactId, CancellationToken ct)
-    {
-        var record = await _store.GetAsync(artifactId, ct);
-        return record is null ? null : ToView(record);
-    }
+    public async Task<BaseArtifactView> GetAsync(Guid artifactId, CancellationToken ct) =>
+        ToView(await GetRecordAsync(artifactId, ct));
 
     /// <inheritdoc />
-    public async Task<BaseArtifactLicenseView?> GetLicenseAsync(Guid artifactId, CancellationToken ct)
-    {
-        var record = await _store.GetAsync(artifactId, ct);
-        return record is null ? null : BaseArtifactManifest.DeserializeLicense(record.LicenseJson);
-    }
+    public async Task<BaseArtifactLicenseView?> GetLicenseAsync(Guid artifactId, CancellationToken ct) =>
+        BaseArtifactManifest.DeserializeLicense((await GetRecordAsync(artifactId, ct)).LicenseJson);
 
     /// <inheritdoc />
     public Task<bool> CancelAsync(Guid artifactId)
@@ -106,11 +102,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
     /// <inheritdoc />
     public async Task<BaseArtifactDeleteOutcome> DeleteAsync(Guid artifactId, CancellationToken ct)
     {
-        var record = await _store.GetAsync(artifactId, ct);
-        if (record is null)
-        {
-            return BaseArtifactDeleteOutcome.NotFound;
-        }
+        var record = await GetRecordAsync(artifactId, ct);
 
         // Refuse while the transfer is live: deleting the directory under the writer would leave half-written shards
         // that the next attempt would happily resume from. Run references arrive with the run module.
@@ -122,7 +114,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
         var deleted = await _store.DeleteAsync(artifactId, record.Version, ct);
         if (!deleted)
         {
-            return BaseArtifactDeleteOutcome.NotFound;
+            throw new TrainingNotFoundException(NotFoundMessage);
         }
 
         // The row is the record of truth; a directory that survives is wasted disk, not a phantom artifact, so cleanup
@@ -130,6 +122,9 @@ internal sealed class BaseArtifactService : IBaseArtifactService
         BestEffortFile.TryDeleteDirectory(BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifactId));
         return BaseArtifactDeleteOutcome.Deleted;
     }
+
+    private async Task<TrainingBaseArtifactRecord> GetRecordAsync(Guid artifactId, CancellationToken ct) =>
+        await _store.GetAsync(artifactId, ct) ?? throw new TrainingNotFoundException(NotFoundMessage);
 
     private void EnsureDiskSpace(long requiredBytes)
     {

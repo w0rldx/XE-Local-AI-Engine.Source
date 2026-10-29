@@ -555,7 +555,8 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         });
         var leases = new AgentHomeExecutionLeaseManager();
         var reader = CreateReader(provider, leases);
-        using var ownerLease = leases.TryAcquire(new AgentHomeExecutionLeaseKey(Owner, Node));
+        AssertEx.Succeeded(leases.TryAcquire(new AgentHomeExecutionLeaseKey(Owner, Node), out var ownerLease));
+        using var ownerLeaseScope = ownerLease;
 
         var first = reader.ReadFileAsync(new ReadFileToolRequest
         {
@@ -582,7 +583,8 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         });
         var leases = new AgentHomeExecutionLeaseManager();
         var reader = CreateReader(provider, leases);
-        using var ownerLease = leases.TryAcquire(new AgentHomeExecutionLeaseKey(Owner, Node));
+        AssertEx.Succeeded(leases.TryAcquire(new AgentHomeExecutionLeaseKey(Owner, Node), out var ownerLease));
+        using var ownerLeaseScope = ownerLease;
 
         Task<string> read;
         using (ExecutionContext.SuppressFlow())

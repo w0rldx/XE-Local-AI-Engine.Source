@@ -74,7 +74,7 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
         return ClassifyExternalCached(modelId) ?? ClassifyNonExternal(modelId);
     }
 
-    public Task<ExternalProviderModelRegistration?> TryResolveExternalAsync(string? modelId, CancellationToken cancellationToken = default)
+    public Task<ExternalProviderModelRegistration?> FindExternalAsync(string? modelId, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(ExternalModelId.HasExternalScheme(modelId) ? Lookup(modelId) : null);
     }

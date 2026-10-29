@@ -17,7 +17,7 @@ public interface ILlamaServerProcessSupervisor
 {
     /// <summary>
     ///     Enters the runtime-mutation gate SHARED, as a spawn does, for a binary ensure: it waits behind a held
-    ///     <see cref="TryAcquireRuntimeMutationLeaseAsync" /> lease and holds off a new one until disposed.
+    ///     <see cref="AcquireRuntimeMutationLeaseOrNullAsync" /> lease and holds off a new one until disposed.
     /// </summary>
     Task<IDisposable> EnterRuntimeMutationSharedAsync(CancellationToken ct)
     {
@@ -28,7 +28,7 @@ public interface ILlamaServerProcessSupervisor
     ///     Atomically acquires an exclusive runtime-mutation lease only when no process is running or starting. While
     ///     held, new <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> calls wait. Returns null when a process already owns the runtime.
     /// </summary>
-    Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
+    Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct)
     {
         return Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
     }

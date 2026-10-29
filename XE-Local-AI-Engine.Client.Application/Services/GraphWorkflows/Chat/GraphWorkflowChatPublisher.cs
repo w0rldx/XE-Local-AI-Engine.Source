@@ -63,7 +63,7 @@ internal sealed class GraphWorkflowChatPublisher
                         AgentName = node.Label
                     },
                     cancellationToken);
-                written += await store.MarkNodeRunPublishedAsync(run.Id, nodeRun.Id, messageId, cancellationToken) is null ? 0 : 1;
+                written += await store.MarkNodeRunPublishedAsync(run.Id, nodeRun.Id, messageId, cancellationToken) is GraphWorkflowConditionalWriteResult.Written ? 1 : 0;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

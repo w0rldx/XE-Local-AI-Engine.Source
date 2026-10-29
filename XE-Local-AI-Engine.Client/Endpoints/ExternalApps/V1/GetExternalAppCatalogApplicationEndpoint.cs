@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>
@@ -31,12 +32,9 @@ public sealed class GetExternalAppCatalogApplicationEndpoint : Endpoint<External
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var manifest = await _catalog.GetApplicationAsync(req.ApplicationId, ct);
-        if (manifest is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        // The catalog lookup stays T? for the install and update paths; here the caller named the id.
+        var manifest = await _catalog.GetApplicationAsync(req.ApplicationId, ct)
+                       ?? throw new ExternalAppNotFoundException($"The catalog declares no application '{req.ApplicationId}'.");
 
         await Send.OkAsync(ExternalAppMapper.ToManifestView(manifest), ct);
     }

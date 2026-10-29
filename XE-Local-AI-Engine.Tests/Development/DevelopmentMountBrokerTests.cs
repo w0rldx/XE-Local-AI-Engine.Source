@@ -71,7 +71,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
                      "dotnet"
                  })
         {
-            AssertEx.NotNull(session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, name)));
+            AssertEx.NotNull(session.SandboxHandle.ResolveSandboxPathOrNull(Path.Combine(session.RuntimePath, name)));
         }
 
         // The parent itself is never a mount, which is what keeps its contents out.
@@ -90,7 +90,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         var manifestPath = Path.Combine(session.RuntimePath, "workspace.json");
 
         AssertEx.True(File.Exists(manifestPath), "the fixture did not produce a workspace manifest, so this asserts nothing.");
-        AssertEx.Null(session.SandboxHandle.TryResolveSandboxPath(manifestPath));
+        AssertEx.Null(session.SandboxHandle.ResolveSandboxPathOrNull(manifestPath));
     }
 
     [Test]
@@ -181,9 +181,9 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         _ = await tools.RunCommandAsync(DevelopmentCommandIds.GitStatus);
 
         AssertEx.Equal(Path.Combine(session.RuntimePath, "home"),
-            session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, "home")));
+            session.SandboxHandle.ResolveSandboxPathOrNull(Path.Combine(session.RuntimePath, "home")));
         AssertEx.Equal(Path.Combine(session.RuntimePath, "nuget"),
-            session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, "nuget")));
+            session.SandboxHandle.ResolveSandboxPathOrNull(Path.Combine(session.RuntimePath, "nuget")));
     }
 
     [Test]
@@ -218,10 +218,10 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         var nuget = Path.Combine(session.RuntimePath, "nuget");
 
         AssertEx.Equal(SandboxIsolationMode.Filesystem, session.SandboxHandle.Isolation);
-        AssertEx.Equal("/work", session.SandboxHandle.TryResolveSandboxPath(session.HostWorktreePath));
-        AssertEx.Equal("/xe-runtime/home", session.SandboxHandle.TryResolveSandboxPath(Path.Combine(session.RuntimePath, "home")));
+        AssertEx.Equal("/work", session.SandboxHandle.ResolveSandboxPathOrNull(session.HostWorktreePath));
+        AssertEx.Equal("/xe-runtime/home", session.SandboxHandle.ResolveSandboxPathOrNull(Path.Combine(session.RuntimePath, "home")));
         // The package folder keeps its host path, so obj/ written by the warm restore (a host child) still resolves.
-        AssertEx.Equal(nuget, session.SandboxHandle.TryResolveSandboxPath(nuget));
+        AssertEx.Equal(nuget, session.SandboxHandle.ResolveSandboxPathOrNull(nuget));
 
         var result = await sandbox.ExecuteAsync(session.SandboxHandle, new SandboxCommandRequest
         {

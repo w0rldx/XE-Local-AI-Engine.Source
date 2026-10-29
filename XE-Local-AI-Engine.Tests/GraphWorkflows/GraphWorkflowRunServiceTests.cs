@@ -898,7 +898,7 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
         return await _inner.GetRunAsync(runId, cancellationToken);
     }
 
-    public async Task<GraphWorkflowMutationResult?> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
+    public async Task<GraphWorkflowConditionalWriteResult> DecideNodeRunAsync(DecideGraphWorkflowNodeRunCommand command, CancellationToken cancellationToken = default)
     {
         if (_race == GraphWorkflowRace.CancelledMidWrite)
         {
@@ -926,7 +926,7 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
 
         return _race == GraphWorkflowRace.ConcurrencyToken
             ? throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{command.RunId}' before this write could commit.")
-            : null;
+            : new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible };
     }
 
     public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
@@ -973,13 +973,13 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
     public Task<IReadOnlyList<GraphWorkflowNodeRunSnapshot>> ListUnpublishedNodeRunsAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.ListUnpublishedNodeRunsAsync(runId, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> MarkNodeRunPublishedAsync(Guid runId, Guid nodeRunId, Guid messageId, CancellationToken cancellationToken = default) =>
         _inner.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> AppendNodeRunSteeringAsync(AppendGraphWorkflowSteeringCommand command, CancellationToken cancellationToken = default) =>
         _inner.AppendNodeRunSteeringAsync(command, cancellationToken);
 
-    public Task<GraphWorkflowMutationResult?> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
+    public Task<GraphWorkflowConditionalWriteResult> IgnoreNodeRunSteeringAsync(Guid runId, Guid nodeRunId, Guid operationId, CancellationToken cancellationToken = default) =>
         _inner.IgnoreNodeRunSteeringAsync(runId, nodeRunId, operationId, cancellationToken);
 
     public Task<GraphWorkflowMutationResult> TransitionRunAsync(TransitionGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>

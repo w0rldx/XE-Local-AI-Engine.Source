@@ -114,7 +114,7 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     /// </remarks>
     public async Task<LocalModelRuntimeInfo?> GetRuntimeInfoAsync(string modelName, CancellationToken ct)
     {
-        var registration = await _registry.TryResolveAsync(modelName, ct).ConfigureAwait(false);
+        var registration = await _registry.FindRegistrationAsync(modelName, ct).ConfigureAwait(false);
         return registration?.Model.ContextLength is > 0
             ? new LocalModelRuntimeInfo
             {
@@ -209,7 +209,7 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
 
     private async Task<ConnectionProbe> ProbeConnectionAsync(string modelId, CancellationToken ct)
     {
-        if (await _registry.TryResolveTransportBindingAsync(modelId, ct).ConfigureAwait(false) is not { } transportBinding)
+        if (await _registry.FindTransportBindingAsync(modelId, ct).ConfigureAwait(false) is not { } transportBinding)
         {
             // Unregistered between the listing and here — an operator delete mid-probe. Nothing to report on.
             return new ConnectionProbe(IsReachable: true, Diagnostic: null);

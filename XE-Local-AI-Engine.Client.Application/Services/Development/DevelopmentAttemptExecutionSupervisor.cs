@@ -192,7 +192,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor : IDevelopmentAttemp
 
     private async Task DeliverLiveUpdatesObservedAsync(Guid attemptId, CancellationToken cancellationToken)
     {
-        if (!_liveBroker.TryGetDeliveryReader(attemptId, out var reader) || reader is null)
+        if (!_liveBroker.TryGetDeliveryReader(attemptId, out var reader))
         {
             return;
         }

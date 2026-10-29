@@ -123,15 +123,14 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         {
             // Single source of truth for "selectable model file": a real .gguf, not an mmproj projector companion, with a containment-safe path and a recognizable quant token. Gating on the same
             // predicate browse uses keeps the picker from drifting from search/fit (a single unusable file is skipped, never repo-dropping).
-            if (!IsUsableGgufFile(file.FileName))
+            if (!IsUsableGgufFile(file.FileName) || GgufQuantParser.ParseOrNull(file.FileName) is not { } quant)
             {
                 _logger.LogDebug("Skipping a non-usable .gguf file during repo inspection.");
                 continue;
             }
 
-            // Non-null by IsUsableGgufFile (which requires a parseable quant); re-parsed here to capture the token. A drafter (an "MTP/" companion) parses to the SAME token as the base weights it
+            // The quant is re-parsed to capture the token (IsUsableGgufFile already requires a parseable one). A drafter (an "MTP/" companion) parses to the SAME token as the base weights it
             // drafts for, so its quant is marked (Q8_0 → MTP-Q8_0): otherwise the quant list carries the label twice, for a 0.4 GB drafter and the 11.8 GB model, both mapping to one key.
-            var quant = GgufQuantParser.TryParse(file.FileName)!;
             usable.Add(new UsableFile(file, GgufDraftModel.IsDraftFile(file.FileName) ? GgufDraftModel.MarkQuant(quant) : quant));
         }
 
@@ -445,7 +444,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         return IsGgufFileName(fileName)
                && !IsProjectorFile(fileName)
                && GgufFilePath.IsSafeRelativePath(fileName)
-               && GgufQuantParser.TryParse(fileName) is not null;
+               && GgufQuantParser.ParseOrNull(fileName) is not null;
     }
 
     private static bool IsGgufFileName(string fileName)

@@ -562,7 +562,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     {
         await AssertEx.EventuallyAsync(() =>
             {
-                var lease = Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(instanceId)).GetAwaiter().GetResult();
+                var lease = Gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(instanceId)).GetAwaiter().GetResult();
                 lease?.Dispose();
                 return lease is not null;
             },

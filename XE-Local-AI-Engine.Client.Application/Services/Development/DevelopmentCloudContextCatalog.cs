@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 public interface IDevelopmentCloudContextCatalog
 {
     void Register(DevelopmentCloudContextBundle bundle);
-    bool TryGet(string bundleId, out DevelopmentCloudContextBundle? bundle);
+    bool TryGet(string bundleId, [NotNullWhen(true)] out DevelopmentCloudContextBundle? bundle);
 }
 
 public sealed class DevelopmentCloudContextCatalog : IDevelopmentCloudContextCatalog
@@ -27,7 +28,7 @@ public sealed class DevelopmentCloudContextCatalog : IDevelopmentCloudContextCat
         }
     }
 
-    public bool TryGet(string bundleId, out DevelopmentCloudContextBundle? bundle)
+    public bool TryGet(string bundleId, [NotNullWhen(true)] out DevelopmentCloudContextBundle? bundle)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bundleId);
         return _bundles.TryGetValue(bundleId, out bundle);

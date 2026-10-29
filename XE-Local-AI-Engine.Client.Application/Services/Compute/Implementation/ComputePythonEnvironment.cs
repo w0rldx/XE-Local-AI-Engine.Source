@@ -149,7 +149,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                 : await ServedStatusAsync(failure, cancellationToken);
         }
 
-        var expected = await _directory.TryComputeExpectedIdentityAsync(cancellationToken);
+        var expected = await _directory.ComputeExpectedIdentityOrNullAsync(cancellationToken);
         if (expected is null)
         {
             return Status(ManagedPythonEnvironmentState.Failed, ManagedPythonReasonCode.LockfileMissing, "The pinned compute runtime lockfile is missing from this installation.");
@@ -196,7 +196,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     private async Task<ManagedPythonEnvironmentStatus> ServedStatusAsync(string failure, CancellationToken cancellationToken)
     {
         var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
-        var expected = await _directory.TryComputeExpectedIdentityAsync(cancellationToken);
+        var expected = await _directory.ComputeExpectedIdentityOrNullAsync(cancellationToken);
         return Status(ManagedPythonEnvironmentState.Ready,
             ManagedPythonReasonCode.ProvisionFailed,
             $"{failure} The previous compute runtime stays in service.",

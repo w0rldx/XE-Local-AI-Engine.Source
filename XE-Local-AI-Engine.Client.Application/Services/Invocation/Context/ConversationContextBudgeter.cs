@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -604,9 +605,9 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     result. Returns false when nothing was oversized. Shared by Pass 1 and Pass 5 so both produce byte-identical
     ///     excerpt markers, and the rewrite is clone-preserving (<see cref="CloneWithContents" />).
     /// </remarks>
-    private bool TryTruncateToolResult(ChatMessage message, out ChatMessage truncated, out int charsOmitted)
+    private bool TryTruncateToolResult(ChatMessage message, [NotNullWhen(true)] out ChatMessage? truncated, out int charsOmitted)
     {
-        truncated = message;
+        truncated = null;
         charsOmitted = 0;
 
         var excerptChars = Math.Max(0, _options.HistoricalToolResultExcerptChars);
@@ -668,9 +669,9 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     <paramref name="emptied" /> reports the reasoning-ONLY case: nothing survives the strip, so the caller drops
     ///     the message whole instead of sending a contentless one.
     /// </remarks>
-    private static bool TryStripReasoning(ChatMessage message, out ChatMessage stripped, out bool emptied)
+    private static bool TryStripReasoning(ChatMessage message, [NotNullWhen(true)] out ChatMessage? stripped, out bool emptied)
     {
-        stripped = message;
+        stripped = null;
         emptied = false;
 
         // Stays null until the first reasoning part is seen: the overwhelmingly common no-reasoning message allocates
@@ -701,11 +702,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         }
 
         emptied = retained.Count == 0;
-        if (!emptied)
-        {
-            stripped = CloneWithContents(message, retained);
-        }
-
+        stripped = emptied ? message : CloneWithContents(message, retained);
         return true;
     }
 

@@ -74,8 +74,12 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
         // Every wipe below runs under the node's execution lease: a holder borrows it, an idle node lends it for the
         // call, and a run in flight (any owner's) is refused here. Recovery acquire: poison is the caller's decision.
-        using var lease = _leaseManager.TryAcquireForRecovery(new AgentHomeExecutionLeaseKey(attachKey.OwnerUserId, attachKey.NodeId))
-                          ?? throw new AgentHomeBusyException("an AgentHome run is already in progress for this node.");
+        if (!_leaseManager.TryAcquireForRecovery(new AgentHomeExecutionLeaseKey(attachKey.OwnerUserId, attachKey.NodeId), out var lease))
+        {
+            throw new AgentHomeBusyException("an AgentHome run is already in progress for this node.");
+        }
+
+        using var leaseScope = lease;
 
         await _gate.WaitAsync(cancellationToken);
         try
@@ -98,7 +102,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var agentHomeRoot = AgentHomeRunPaths.ResolveAgentHomeRoot(_options, _dataDirectoryRoot);
         Directory.CreateDirectory(agentHomeRoot);
 
-        var existing = await TryReadManifestAsync(agentHomeRoot, cancellationToken);
+        var existing = await ReadManifestOrNullAsync(agentHomeRoot, cancellationToken);
         var createdAt = existing?.CreatedAt;
 
         if (existing is not null)
@@ -217,7 +221,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         };
     }
 
-    private async Task<AgentHomeManifest?> TryReadManifestAsync(string agentHomeRoot, CancellationToken cancellationToken)
+    private async Task<AgentHomeManifest?> ReadManifestOrNullAsync(string agentHomeRoot, CancellationToken cancellationToken)
     {
         var path = Path.Combine(agentHomeRoot, ManifestFileName);
         if (!File.Exists(path))

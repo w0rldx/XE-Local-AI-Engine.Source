@@ -21,7 +21,8 @@ public sealed class DatasetGenerationQueueTests
         var store = Substitute.For<ITrainingDatasetStore>();
         using var startSignal = new DatasetGenerationQueueSignal();
         var service = Service(store, gate, startSignal);
-        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A run holds the gate exclusively.");
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var held), "A run holds the gate exclusively.");
+        using var heldScope = held;
 
         var exception = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.StartAsync(Guid.NewGuid(), 1, "dataset"));
 
@@ -33,7 +34,8 @@ public sealed class DatasetGenerationQueueTests
     public async Task Exclusivity_AfterTheRunReleases_GenerationEnqueuesAndWakesTheQueue()
     {
         var gate = new GpuWorkGate();
-        gate.TryBeginExclusive(GpuWorkKind.TrainingRun)!.Dispose();
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var run));
+        run.Dispose();
         var store = Substitute.For<ITrainingDatasetStore>();
         _ = store.CreateDatasetAndEnqueueAsync(Arg.Any<TrainingDatasetEnqueueCommand>(), Arg.Any<CancellationToken>()).Returns(Dataset());
         using var signal = new DatasetGenerationQueueSignal();
@@ -55,7 +57,7 @@ public sealed class DatasetGenerationQueueTests
         using var signal = new DatasetGenerationQueueSignal();
         var service = Service(store, new GpuWorkGate(), signal);
 
-        AssertEx.True(await service.CancelAsync(datasetId));
+        await service.CancelAsync(datasetId);
 
         _ = await store.Received(1).CompleteGenerationAsync(datasetId, DatasetGenerationWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
@@ -76,14 +78,14 @@ public sealed class DatasetGenerationQueueTests
         using var signal = new DatasetGenerationQueueSignal();
         var service = Service(store, new GpuWorkGate(), signal, cancellations);
 
-        AssertEx.True(await service.CancelAsync(datasetId));
+        await service.CancelAsync(datasetId);
 
         AssertEx.True(source.IsCancellationRequested, "A running generation is signalled, not terminalized behind the executor's back.");
         _ = await store.DidNotReceiveWithAnyArgs().CompleteGenerationAsync(Arg.Any<Guid>(), Arg.Any<DatasetGenerationWorkStatus>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task Cancel_AnUnknownOrTerminalDataset_ReturnsFalse()
+    public async Task Cancel_AnUnknownDatasetIsNotFound_AndATerminalOneIsAConflict()
     {
         var store = Substitute.For<ITrainingDatasetStore>();
         var terminal = Guid.NewGuid();
@@ -95,8 +97,9 @@ public sealed class DatasetGenerationQueueTests
         using var signal = new DatasetGenerationQueueSignal();
         var service = Service(store, new GpuWorkGate(), signal);
 
-        AssertEx.False(await service.CancelAsync(Guid.NewGuid()), "An unknown dataset cannot be cancelled.");
-        AssertEx.False(await service.CancelAsync(terminal), "A finished dataset cannot be cancelled.");
+        _ = await AssertEx.ThrowsAsync<TrainingNotFoundException>(() => service.CancelAsync(Guid.NewGuid()), "An unknown dataset is a 404.");
+        var conflict = await AssertEx.ThrowsAsync<TrainingConflictException>(() => service.CancelAsync(terminal), "A finished dataset is a 409.");
+        AssertEx.Equal("GenerationInactive", conflict.Code);
         _ = await store.DidNotReceiveWithAnyArgs().CompleteGenerationAsync(Arg.Any<Guid>(), Arg.Any<DatasetGenerationWorkStatus>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 

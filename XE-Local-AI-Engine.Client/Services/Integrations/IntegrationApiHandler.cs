@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
@@ -225,10 +226,9 @@ internal sealed class IntegrationApiHandler
 
         // The stream is offered only for an admitted execution, and a refusal here is NOT the accept's answer: fall through to the
         // ordinary accept body, which names the execution and the events route to attach to instead. See this method's remarks.
-        if (result.Outcome is IntegrationAcceptOutcome.Accepted or IntegrationAcceptOutcome.Duplicate
+        if (result is IntegrationAcceptResult.Admitted admitted
             && WantsEventStream(context)
-            && result.ExecutionId is { } admitted
-            && await _writer.WriteAsync(context, admitted, sinceSequence: 0, context.RequestAborted)
+            && await _writer.WriteAsync(context, admitted.ExecutionId, sinceSequence: 0, context.RequestAborted)
             == IntegrationSseWriteOutcome.Streamed)
         {
             return;
@@ -452,20 +452,22 @@ internal sealed class IntegrationApiHandler
 
     private static async Task WriteAcceptOutcomeAsync(HttpContext context, IntegrationAcceptResult result)
     {
+        if (result is IntegrationAcceptResult.Admitted admitted)
+        {
+            context.Response.StatusCode = StatusCodes.Status202Accepted;
+            await context.Response.WriteAsJsonAsync(new IntegrationAcceptResponse
+                {
+                    ExecutionId = admitted.ExecutionId,
+                    SessionId = admitted.SessionId,
+                    Status = StatusName(admitted.Status),
+                    Links = Links(admitted.ExecutionId)
+                },
+                context.RequestAborted);
+            return;
+        }
+
         switch (result.Outcome)
         {
-            case IntegrationAcceptOutcome.Accepted:
-            case IntegrationAcceptOutcome.Duplicate:
-                context.Response.StatusCode = StatusCodes.Status202Accepted;
-                await context.Response.WriteAsJsonAsync(new IntegrationAcceptResponse
-                    {
-                        ExecutionId = result.ExecutionId!.Value,
-                        SessionId = result.SessionId!.Value,
-                        Status = StatusName(result.Status ?? IntegrationExecutionStatus.Accepted),
-                        Links = Links(result.ExecutionId.Value)
-                    },
-                    context.RequestAborted);
-                return;
             case IntegrationAcceptOutcome.TriggerNotFound:
             case IntegrationAcceptOutcome.SessionNotFound:
                 await WriteMessageAsync(context, StatusCodes.Status404NotFound, result.Message);
@@ -537,9 +539,9 @@ internal sealed class IntegrationApiHandler
         }
     }
 
-    private static bool TryMapInputs(IReadOnlyList<IntegrationInvokeInput>? wire, out IReadOnlyList<IntegrationInputDto> inputs)
+    private static bool TryMapInputs(IReadOnlyList<IntegrationInvokeInput>? wire, [NotNullWhen(true)] out IReadOnlyList<IntegrationInputDto>? inputs)
     {
-        inputs = [];
+        inputs = null;
         if (wire is null)
         {
             return false;

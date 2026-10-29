@@ -202,10 +202,10 @@ public sealed class RetrievalEvalLiveProcessPiecesTests
         var product = LlamaServerLaunchProjection.From(variant, ResolvedLaunchArguments.Explore(), plan, role);
         var arguments = LiveLlamaServer.BuildArguments(role, "/m.gguf", 1234, "xe-eval-test-1234", gpuLayers, contextTokens: 1792);
 
-        var parsed = AssertEx.NotNull(LlamaServerLaunchProjection.TryFromArguments(arguments), string.Join(' ', arguments));
+        var parsed = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(arguments), string.Join(' ', arguments));
 
         // Deliberate differences outside the projection: explicit -ngl, --device none on the CPU pass, and the guard's
-        // --alias (TryFromArguments ignores flags it does not allow-list).
+        // --alias (FromArgumentsOrNull ignores flags it does not allow-list).
         AssertEx.Equal(gpuLayers, parsed.GpuLayers);
         AssertEx.True(arguments.Take(4).SequenceEqual(["-m", "/m.gguf", "--alias", "xe-eval-test-1234"]), string.Join(' ', arguments));
         AssertEx.Equal(product, parsed with

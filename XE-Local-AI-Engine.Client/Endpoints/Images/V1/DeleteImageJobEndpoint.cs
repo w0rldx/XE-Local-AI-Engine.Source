@@ -38,9 +38,6 @@ public sealed class DeleteImageJobEndpoint : Endpoint<ImageJobRouteRequest>
 
         switch (outcome)
         {
-            case ImageJobDeleteOutcome.NotFound:
-                await Send.NotFoundAsync(ct);
-                return;
 
             case ImageJobDeleteOutcome.NotTerminal:
                 // The outcome stays machine-readable as an `outcome` extension member so the SPA can tell "still

@@ -28,23 +28,16 @@ internal sealed class NodeChatVariantBranchService
         _writer = writer;
     }
 
-    public async Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatBranchResultDto> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         // Read the source (including its messages) on its own write key, then create the branch under the new
         // conversation's write key. Two serialized scopes avoid a cross-conversation lock-ordering hazard.
-        var source = await _readModel.GetConversationAsync(request.ConversationId, cancellationToken);
-        if (source is null)
-        {
-            return null;
-        }
-
-        var cutoff = source.Messages.FirstOrDefault(message => message.MessageId == request.MessageId);
-        if (cutoff is null)
-        {
-            return null;
-        }
+        var source = await _readModel.GetConversationAsync(request.ConversationId, cancellationToken)
+                     ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
+        var cutoff = source.Messages.FirstOrDefault(message => message.MessageId == request.MessageId)
+                     ?? throw new NodeChatMessageNotFoundException(request.MessageId);
 
         // Collapse variant groups so the branch is a LINEAR thread: one revision per group at the group's ANCHOR, which
         // branches a late regeneration of an early turn early. See docs/wiki/05-chat.md, "Branching a conversation".
@@ -177,7 +170,7 @@ internal sealed class NodeChatVariantBranchService
         return selection.Count > 0 ? selection : null;
     }
 
-    public async Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default)
+    public async Task<NodeChatMessageVariantDto> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.NewMessageId == Guid.Empty || request.RequestId == Guid.Empty)
@@ -192,11 +185,8 @@ internal sealed class NodeChatVariantBranchService
             {
                 // Read the original outside the write transaction (a raw read command cannot run under a Sqlite pending
                 // transaction). The conversation-exclusive lock guarantees the row cannot change before the insert below.
-                var original = await ReadMessageAsync(dbContext, request.ConversationId, request.OriginalMessageId, token);
-                if (original is null)
-                {
-                    return null;
-                }
+                var original = await ReadMessageAsync(dbContext, request.ConversationId, request.OriginalMessageId, token)
+                               ?? throw new NodeChatMessageNotFoundException(request.OriginalMessageId);
 
                 // The whole turn shares a variant group; mint one and back-stamp the original when it has none.
                 var variantGroupId = original.VariantGroupId ?? Guid.NewGuid();

@@ -16,7 +16,8 @@ public interface IDevelopmentTemplateService
 
     Task<DevelopmentTemplateReference> AddTemplateAsync(string templateAlias, string hostPath, CancellationToken cancellationToken = default);
 
-    Task<bool> RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default);
+    /// <summary>Throws <see cref="DevelopmentNotFoundException" /> when no template has that id.</summary>
+    Task RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default);
 
     Task<DevelopmentTemplateMaterializationResult> CreateFromTemplateAsync(Guid templateId,
         string destinationPath,
@@ -96,8 +97,13 @@ internal sealed class DevelopmentTemplateService : IDevelopmentTemplateService
         };
     }
 
-    public Task<bool> RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default) =>
-        _templateStore.RemoveAsync(templateId, cancellationToken);
+    public async Task RemoveTemplateAsync(Guid templateId, CancellationToken cancellationToken = default)
+    {
+        if (!await _templateStore.RemoveAsync(templateId, cancellationToken))
+        {
+            throw new DevelopmentNotFoundException($"Development template '{templateId}' was not found.");
+        }
+    }
 
     public async Task<DevelopmentTemplateMaterializationResult> CreateFromTemplateAsync(Guid templateId,
         string destinationPath,

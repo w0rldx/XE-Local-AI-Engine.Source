@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Training.Runs;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,7 +49,8 @@ public sealed class TrainingExclusivityTests
     public async Task SharedQueues_RefusedAtTheGate_ClaimSoonAfterTheExclusiveHoldReleases()
     {
         var gate = new ObservedGpuWorkGate(new GpuWorkGate());
-        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.Export), "Something exclusive holds the gate.");
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.Export, out var held), "Something exclusive holds the gate.");
+        using var heldScope = held;
         var benchmarks = Substitute.For<IBenchmarkStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
         var benchmarkClaimed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -106,7 +108,7 @@ public sealed class TrainingExclusivityTests
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
         // Configured after the builder, which probes the substitute: the first loop ask is refused, the next granted.
         var asks = 0;
-        _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                       .Returns(_ => Task.FromResult<ILlamaServerRuntimeMutationLease?>(Interlocked.Increment(ref asks) == 1 ? null : Substitute.For<ILlamaServerRuntimeMutationLease>()));
 
         await RunUntilAsync(claimed.Task, queue);
@@ -118,7 +120,8 @@ public sealed class TrainingExclusivityTests
     public async Task Exclusivity_RunActive_BenchmarkAndGenerationRefused()
     {
         var gate = new ObservedGpuWorkGate(new GpuWorkGate());
-        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "The run acquires the gate exclusively.");
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var held), "The run acquires the gate exclusively.");
+        using var heldScope = held;
 
         var benchmarks = Substitute.For<IBenchmarkStore>();
         var datasets = Substitute.For<ITrainingDatasetStore>();
@@ -328,7 +331,8 @@ public sealed class TrainingExclusivityTests
     public async Task Exclusivity_RunStartRefusedWhileTheGateIsAlreadyHeld()
     {
         var gate = new GpuWorkGate();
-        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.Export), "Something else already holds the gate.");
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.Export, out var held), "Something else already holds the gate.");
+        using var heldScope = held;
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         var peeked = PeekSignal(runs, TrainingWorkKind.TrainingRun);
@@ -347,7 +351,7 @@ public sealed class TrainingExclusivityTests
         var peeked = PeekSignal(runs, TrainingWorkKind.TrainingRun);
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
         // The lease refuses while ANY llama-server process is running or spawning — the eject-first gate.
-        _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()).Returns((ILlamaServerRuntimeMutationLease?)null);
+        _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>()).Returns((ILlamaServerRuntimeMutationLease?)null);
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
         await RunUntilAsync(peeked.Task, queue);
@@ -392,21 +396,22 @@ public sealed class TrainingExclusivityTests
             return Task.FromResult<TrainingWorkClaim?>(null);
         });
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                       .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
 
         using var queue = BuildRunQueue(runs, new GpuWorkGate(), supervisor: supervisor);
         await RunUntilAsync(claimed.Task, queue);
 
         _ = await runs.Received().ClaimNextAsync(TrainingWorkKind.EvaluationRun, Arg.Any<CancellationToken>());
-        _ = await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        _ = await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
     }
 
     [Test]
     public async Task Exclusivity_EvaluationStartRefusedWhileTheGateIsAlreadyHeld()
     {
         var gate = new GpuWorkGate();
-        using var held = AssertEx.NotNull(gate.TryBeginExclusive(GpuWorkKind.TrainingRun), "A training run already holds the gate.");
+        AssertEx.Succeeded(gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var held), "A training run already holds the gate.");
+        using var heldScope = held;
         var runs = Substitute.For<ITrainingRunStore>();
         _ = runs.RecoverOnStartupAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<Guid>>([]);
         var peeked = PeekSignal(runs, TrainingWorkKind.EvaluationRun);
@@ -513,9 +518,9 @@ public sealed class TrainingExclusivityTests
 #pragma warning disable CA2000 // Owned by the returned service.
         var signal = new TrainingRunQueueSignal();
 #pragma warning restore CA2000
-        if (supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()) is null)
+        if (supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>()) is null)
         {
-            _ = supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+            _ = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                           .Returns(Substitute.For<ILlamaServerRuntimeMutationLease>());
         }
 
@@ -602,20 +607,20 @@ public sealed class TrainingExclusivityTests
 
         public IReadOnlyList<GpuWorkKind> Holders => _inner.Holders;
 
-        public IDisposable? TryBeginExclusive(GpuWorkKind kind) =>
-            Record(kind, _inner.TryBeginExclusive(kind));
+        public bool TryBeginExclusive(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle) =>
+            Record(kind, _inner.TryBeginExclusive(kind, out handle));
 
-        public IDisposable? TryBeginShared(GpuWorkKind kind) =>
-            Record(kind, _inner.TryBeginShared(kind));
+        public bool TryBeginShared(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle) =>
+            Record(kind, _inner.TryBeginShared(kind, out handle));
 
         /// <summary>Completes with the answer the FIRST admission attempt for <paramref name="kind" /> got: true = admitted.</summary>
         public Task<bool> Asked(GpuWorkKind kind) =>
             Ask(kind).Task;
 
-        private IDisposable? Record(GpuWorkKind kind, IDisposable? admission)
+        private bool Record(GpuWorkKind kind, bool admitted)
         {
-            _ = Ask(kind).TrySetResult(admission is not null);
-            return admission;
+            _ = Ask(kind).TrySetResult(admitted);
+            return admitted;
         }
 
         private TaskCompletionSource<bool> Ask(GpuWorkKind kind) =>

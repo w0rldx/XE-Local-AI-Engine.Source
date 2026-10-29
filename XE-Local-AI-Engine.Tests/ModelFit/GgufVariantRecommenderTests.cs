@@ -363,7 +363,7 @@ public sealed class GgufVariantRecommenderTests
         AssertEx.True(result.SequenceEqual([GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.WontFit]), string.Join(", ", result));
         await companionReserve.Received(1)
                               .ResolveGpuBytesAsync(Arg.Is<HardwareProfile>(profile => profile.AvailableVramBytes == 12 * Gib), Arg.Any<CancellationToken>());
-        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await selector.DidNotReceive().SelectVariantAsync(Arg.Any<CancellationToken>());
 
         var (unreserved, _, _, _) = BuildForProfile(GpuProfile(freeVramBytes: 12 * Gib), companionReserveBytes: 0);
@@ -379,7 +379,7 @@ public sealed class GgufVariantRecommenderTests
 
         AssertEx.True(result.SequenceEqual([GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.WontFit]), string.Join(", ", result));
         await companionReserve.DidNotReceive().ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
-        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -390,7 +390,7 @@ public sealed class GgufVariantRecommenderTests
         var result = await recommender.ClassifyAgainstProfileAsync([1 * Gib, 64 * Gib], CancellationToken.None);
 
         AssertEx.True(result.SequenceEqual([GgufFitVerdict.Unknown, GgufFitVerdict.Unknown]), string.Join(", ", result));
-        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -453,7 +453,7 @@ public sealed class GgufVariantRecommenderTests
         AssertEx.True(result.SequenceEqual([GgufFitVerdict.Unknown, GgufFitVerdict.Unknown]), string.Join(", ", result));
         await runtimeAudit.DidNotReceive().GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await runtimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
-        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     private static HardwareProfile CpuProfile(long availableRamBytes)
@@ -481,7 +481,7 @@ public sealed class GgufVariantRecommenderTests
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
 
         var probe = Substitute.For<IProcessVramBudgetProbe>();
-        probe.TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        probe.GetProcessBudgetBytesOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(freeVramBytes));
 
         if (companionReserve is null)

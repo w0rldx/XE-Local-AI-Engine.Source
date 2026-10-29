@@ -68,10 +68,10 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
             BenchmarkClaimedWork? work = null;
             // The gate is taken BEFORE the claim and held through execution. Refusing at the CLAIM rather than at the executor keeps queued benchmark work queued:
             // it resumes on the next poll once the exclusive holder releases, instead of being terminalized as failed with no retry to fall back on — attempt pins to 1.
-            var admission = _gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark);
+            var admitted = _gpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark, out var admission);
             try
             {
-                if (admission is not null)
+                if (admitted)
                 {
                     await using var claimScope = _scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<IBenchmarkStore>();
@@ -131,7 +131,7 @@ public sealed class BenchmarkQueueHostedService : BackgroundService
 
             if (work is null)
             {
-                await _signal.WaitAsync(admission is null && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
+                await _signal.WaitAsync(!admitted && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }

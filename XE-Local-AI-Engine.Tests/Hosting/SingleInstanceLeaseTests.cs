@@ -19,9 +19,8 @@ public sealed class SingleInstanceLeaseTests
     {
         using var temp = new TempDataDirectory();
 
-        using var lease = SingleInstanceLease.TryAcquire(temp.Path);
-
-        AssertEx.NotNull(lease);
+        AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var lease));
+        using var leaseScope = lease;
         AssertEx.True(File.Exists(Path.Combine(temp.Path, SingleInstanceLease.LeaseFileName)),
             "Acquiring the lease must create the lease file.");
     }
@@ -31,12 +30,11 @@ public sealed class SingleInstanceLeaseTests
     {
         using var temp = new TempDataDirectory();
 
-        using var first = SingleInstanceLease.TryAcquire(temp.Path);
-        AssertEx.NotNull(first);
+        AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var first));
+        using var firstScope = first;
 
-        var second = SingleInstanceLease.TryAcquire(temp.Path);
-
-        AssertEx.Null(second, "A second instance must not acquire the lease while the first holds it.");
+        AssertEx.False(SingleInstanceLease.TryAcquire(temp.Path, out _),
+            "A second instance must not acquire the lease while the first holds it.");
     }
 
     [Test]
@@ -52,7 +50,7 @@ public sealed class SingleInstanceLeaseTests
 
         await AssertEx.ThrowsAsync<DirectoryNotFoundException>(() =>
         {
-            SingleInstanceLease.TryAcquire(missingDirectory);
+            _ = SingleInstanceLease.TryAcquire(missingDirectory, out _);
             return Task.CompletedTask;
         });
     }
@@ -68,7 +66,7 @@ public sealed class SingleInstanceLeaseTests
 
         await AssertEx.ThrowsAsync<IOException>(() =>
         {
-            SingleInstanceLease.TryAcquire(temp.Path);
+            _ = SingleInstanceLease.TryAcquire(temp.Path, out _);
             return Task.CompletedTask;
         });
     }
@@ -90,7 +88,7 @@ public sealed class SingleInstanceLeaseTests
             // DesktopDataDirectoryException is what the engine maps to exit 10 with this text, instead of crashing.
             var exception = await AssertEx.ThrowsAsync<DesktopDataDirectoryException>(() =>
             {
-                SingleInstanceLease.TryAcquire(temp.Path);
+                _ = SingleInstanceLease.TryAcquire(temp.Path, out _);
                 return Task.CompletedTask;
             });
 
@@ -109,13 +107,12 @@ public sealed class SingleInstanceLeaseTests
     {
         using var temp = new TempDataDirectory();
 
-        var first = SingleInstanceLease.TryAcquire(temp.Path);
-        AssertEx.NotNull(first);
-        first!.Dispose();
+        AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var first));
+        first.Dispose();
 
-        using var second = SingleInstanceLease.TryAcquire(temp.Path);
-
-        AssertEx.NotNull(second, "Disposing the held lease must release it so a new instance can acquire it.");
+        AssertEx.Succeeded(SingleInstanceLease.TryAcquire(temp.Path, out var second),
+            "Disposing the held lease must release it so a new instance can acquire it.");
+        using var secondScope = second;
     }
 
     /// <summary>A disposable temp directory standing in for the per-user data directory.</summary>

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -37,8 +36,7 @@ public sealed class ReorderBenchmarkTaskItemsEndpoint : Endpoint<ReorderBenchmar
     public override async Task HandleAsync(ReorderBenchmarkTaskItemsRequest req, CancellationToken ct)
     {
         var reordered = await _items.ReorderAsync(req.ProjectId, req.ItemIds, ct);
-        var project = await _records.GetProjectAsync(req.ProjectId, ct)
-                      ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        var project = await _records.GetProjectAsync(req.ProjectId, ct);
         await Send.OkAsync(reordered.ToResponse(project), ct);
     }
 }

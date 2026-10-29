@@ -107,8 +107,15 @@ public sealed class ProviderCallBudget
         Options = options;
         // "<=" not "<": a step cap seeded at exactly the invocation ceiling is still the caller's per-step bound, and its
         // trip must read as a spent step, not a runaway loop.
-        _callCapTightened = AmbientCallCap.Value is { } ambient && ambient.MaxProviderCalls <= options.MaxProviderCallsPerInvocation;
-        _maxProviderCalls = _callCapTightened ? AmbientCallCap.Value!.MaxProviderCalls : options.MaxProviderCallsPerInvocation;
+        if (AmbientCallCap.Value is { } ambient && ambient.MaxProviderCalls <= options.MaxProviderCallsPerInvocation)
+        {
+            _callCapTightened = true;
+            _maxProviderCalls = ambient.MaxProviderCalls;
+        }
+        else
+        {
+            _maxProviderCalls = options.MaxProviderCallsPerInvocation;
+        }
         _maxCumulativeInputTokens = options.MaxCumulativeInputTokens;
         _startedTimestamp = startedTimestamp;
     }

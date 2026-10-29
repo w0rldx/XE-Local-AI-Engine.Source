@@ -79,7 +79,7 @@ public sealed class DevWorkflowRunQueryService
 
         var run = detail.Run;
         var graph = ReadGraph(run.GraphJson);
-        var nodesByKey = graph.Nodes!.ToDictionary(static node => node.NodeKey, StringComparer.Ordinal);
+        var nodesByKey = graph.Nodes.ToDictionary(static node => node.NodeKey, StringComparer.Ordinal);
         var keysByNodeRunId = detail.NodeRuns.ToDictionary(static nodeRun => nodeRun.Id, static nodeRun => nodeRun.NodeKey);
         var byKey = detail.NodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
         var agentsById = await ResolveAgentsAsync(detail.NodeRuns, cancellationToken);
@@ -159,7 +159,7 @@ public sealed class DevWorkflowRunQueryService
             throw new DevWorkflowNotFoundException($"Development workflow node run '{nodeRunId}' was not found on run '{runId}'.");
         }
 
-        var node = ReadGraph(run.GraphJson).Nodes!.FirstOrDefault(entry => string.Equals(entry.NodeKey, nodeRun.NodeKey, StringComparison.Ordinal));
+        var node = ReadGraph(run.GraphJson).Nodes.FirstOrDefault(entry => string.Equals(entry.NodeKey, nodeRun.NodeKey, StringComparison.Ordinal));
         var agentsById = await ResolveAgentsAsync([nodeRun], cancellationToken);
 
         var artifacts = await _store.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken);
@@ -297,7 +297,7 @@ public sealed class DevWorkflowRunQueryService
             return null;
         }
 
-        var waiting = graph.Edges!.Where(edge => string.Equals(edge.To, nodeRun.NodeKey, StringComparison.Ordinal))
+        var waiting = graph.Edges.Where(edge => string.Equals(edge.To, nodeRun.NodeKey, StringComparison.Ordinal))
                            .Select(static edge => edge.From)
                            .Where(from => !templates.Contains(from)
                                           && (byKey.GetValueOrDefault(from) is not { } source
@@ -384,9 +384,10 @@ public sealed class DevWorkflowRunQueryService
     /// <summary>The slice of the stored graph document the run view reads: node keys, agent bindings and edges.</summary>
     internal sealed class ViewGraph
     {
-        public IReadOnlyList<ViewNode>? Nodes { get; init; }
+        // A stored document may still carry an explicit null, which the deserializer writes over these defaults; ReadGraph normalizes it.
+        public IReadOnlyList<ViewNode> Nodes { get; init; } = [];
 
-        public IReadOnlyList<ViewEdge>? Edges { get; init; }
+        public IReadOnlyList<ViewEdge> Edges { get; init; } = [];
     }
 
     internal sealed class ViewNode

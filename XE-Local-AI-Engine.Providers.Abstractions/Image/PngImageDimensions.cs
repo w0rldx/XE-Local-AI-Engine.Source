@@ -32,7 +32,7 @@ public static class PngImageDimensions
     ///     not a PNG with a readable IHDR (too short, wrong signature, wrong first chunk, or a non-positive/oversized
     ///     dimension). Never throws.
     /// </summary>
-    public static ImageDimensions? TryRead(ReadOnlySpan<byte> imageBytes)
+    public static ImageDimensions? ReadOrNull(ReadOnlySpan<byte> imageBytes)
     {
         if (imageBytes.Length < MinimumHeaderLength
             || !imageBytes[..Signature.Length].SequenceEqual(Signature)

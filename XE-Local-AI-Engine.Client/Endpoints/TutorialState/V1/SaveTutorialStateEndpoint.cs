@@ -21,7 +21,8 @@ public sealed class SaveTutorialStateEndpoint : Endpoint<SaveTutorialStateReques
     {
         Put(LocalApiRoutes.Tutorial.State);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(static descriptor => descriptor.AutoTagOverride("Tutorial"));
+        Description(static descriptor => descriptor.ProducesProblemDetails(StatusCodes.Status409Conflict)
+                                                   .AutoTagOverride("Tutorial"));
     }
 
     public override async Task HandleAsync(SaveTutorialStateRequest req, CancellationToken ct)
@@ -30,13 +31,18 @@ public sealed class SaveTutorialStateEndpoint : Endpoint<SaveTutorialStateReques
         // same parse it read rather than a second copy of the rule.
         _ = TutorialStateMapper.TryParseStatus(req.Status, out var status);
 
-        var saved = await _tutorialStateService.SaveEntryAsync(User, req.Key, status, ct);
-        if (!saved)
+        switch (await _tutorialStateService.SaveEntryAsync(User, req.Key, status, ct))
         {
-            await Send.UnauthorizedAsync(ct);
-            return;
+            case TutorialEntrySaveOutcome.Saved:
+                await Send.NoContentAsync(ct);
+                return;
+            case TutorialEntrySaveOutcome.NotPersisted:
+                AddError("The tour progress could not be saved. Try again.");
+                await Send.ErrorsAsync(StatusCodes.Status409Conflict, ct);
+                return;
+            default:
+                await Send.UnauthorizedAsync(ct);
+                return;
         }
-
-        await Send.NoContentAsync(ct);
     }
 }

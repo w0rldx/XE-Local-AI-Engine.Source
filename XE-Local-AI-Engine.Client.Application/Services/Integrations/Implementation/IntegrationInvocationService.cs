@@ -289,7 +289,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
             return Rejected(IntegrationAcceptOutcome.QueueFull, "The node is at its concurrent execution limit.");
         }
 
-        return new IntegrationAcceptResult
+        return new IntegrationAcceptResult.Admitted
         {
             Outcome = IntegrationAcceptOutcome.Accepted,
             ExecutionId = executionId,
@@ -372,7 +372,7 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         }
 
         return CryptographicOperations.FixedTimeEquals(existing.RequestFingerprint.Span, fingerprint)
-            ? new IntegrationAcceptResult
+            ? new IntegrationAcceptResult.Admitted
             {
                 Outcome = IntegrationAcceptOutcome.Duplicate,
                 ExecutionId = existing.Id,
@@ -423,13 +423,10 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
         return true;
     }
 
-    private static IntegrationAcceptResult Rejected(IntegrationAcceptOutcome outcome, string message) =>
+    private static IntegrationAcceptResult.Rejected Rejected(IntegrationAcceptOutcome outcome, string message) =>
         new()
         {
             Outcome = outcome,
-            ExecutionId = null,
-            SessionId = null,
-            Status = null,
             Message = message
         };
 }

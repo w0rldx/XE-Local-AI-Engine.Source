@@ -44,7 +44,7 @@ internal static class BenchmarkEndpointSupport
     {
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(run);
-        var project = await records.GetProjectAsync(run.ProjectId, ct);
+        var project = await records.FindProjectAsync(run.ProjectId, ct);
         return run.ToDetail(await ReadVerdictAsync(records, run, ct), ExpectedKldDigest(project), project?.CurrentJudgePolicyRevisionId);
     }
 

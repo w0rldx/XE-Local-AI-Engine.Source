@@ -519,7 +519,7 @@ internal static class ModelFitMapper
     }
 
     /// <summary>Parses a wire role string (<c>chat|embedding|reranker|decision</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
-    public static ModelRole? TryParseRole(string? role)
+    public static ModelRole? ParseRoleOrNull(string? role)
     {
         // Upper-invariant (CA1308: upper-casing round-trips safely) for case-insensitive matching of the wire tokens.
         return role?.Trim().ToUpperInvariant() switch
@@ -533,7 +533,7 @@ internal static class ModelFitMapper
     }
 
     /// <summary>Parses a wire variant string (<c>cpu|cuda|vulkan</c>) into <see cref="GpuVariant" />; unknown/empty → null.</summary>
-    public static GpuVariant? TryParseVariant(string? variant)
+    public static GpuVariant? ParseVariantOrNull(string? variant)
     {
         return variant?.Trim().ToUpperInvariant() switch
         {

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     Bounded, RAM-only cache of recent knowledge-search query embeddings, keyed by the canonical vector identity plus
 ///     the exact query text, so a repeated query skips the embedding round trip that dominates retrieval latency.
@@ -17,7 +19,7 @@ public interface IKnowledgeQueryEmbeddingCache
     ///     when present and unexpired. The caller validates the entry's exact identity and width against the current
     ///     policy before using it. Records a hit/miss metric.
     /// </summary>
-    bool TryGet(string policyFamilyIdentity, string query, out KnowledgeQueryEmbeddingCacheEntry entry);
+    bool TryGet(string policyFamilyIdentity, string query, [NotNullWhen(true)] out KnowledgeQueryEmbeddingCacheEntry? entry);
 
     /// <summary>Caches <paramref name="entry" /> for the policy family and query, evicting to stay within the size bound.</summary>
     void Store(string policyFamilyIdentity, string query, KnowledgeQueryEmbeddingCacheEntry entry);

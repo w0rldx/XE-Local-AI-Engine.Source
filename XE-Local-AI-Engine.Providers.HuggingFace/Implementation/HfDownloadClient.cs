@@ -690,7 +690,7 @@ internal sealed class HfDownloadClient
             return null;
         }
 
-        return await RangeResumeState.TryReadRecordAsync(partPath + RangeSidecarSuffix, ct).ConfigureAwait(false) is { Cursors.Length: 1 } record
+        return await RangeResumeState.ReadRecordOrNullAsync(partPath + RangeSidecarSuffix, ct).ConfigureAwait(false) is { Cursors.Length: 1 } record
                && record.Total == expectedSizeBytes
                && record.Cursors[0] == partBytes
             ? new SingleStreamResume
@@ -726,7 +726,7 @@ internal sealed class HfDownloadClient
 
         // A sidecar that will not parse buys nothing: the resume path refetches every range, so the guard must size for
         // the whole file rather than for a pre-sized .part full of holes.
-        return (await RangeResumeState.TryReadRecordAsync(sidecarPath, ct).ConfigureAwait(false))?.Cursors.Sum() ?? 0L;
+        return (await RangeResumeState.ReadRecordOrNullAsync(sidecarPath, ct).ConfigureAwait(false))?.Cursors.Sum() ?? 0L;
     }
 
     private static bool HasCaseInsensitiveCollision(string destinationPath)
@@ -1198,9 +1198,9 @@ internal sealed class HfDownloadClient
             string revision,
             CancellationToken ct)
         {
-            // No record, a torn one (the line is rewritten in place, not atomically, so a crash mid-write leaves an unparseable line TryReadRecordAsync discards — the partial is lost, a torn cursor
+            // No record, a torn one (the line is rewritten in place, not atomically, so a crash mid-write leaves an unparseable line ReadRecordOrNullAsync discards — the partial is lost, a torn cursor
             // never trusted), a record for a different file length, or one written by a commit this ref moved off: refetch every range, including a pre-revision .part.
-            if (await TryReadRecordAsync(sidecarPath, ct).ConfigureAwait(false) is not { } record
+            if (await ReadRecordOrNullAsync(sidecarPath, ct).ConfigureAwait(false) is not { } record
                 || record.Total != totalBytes
                 || !string.Equals(record.Revision, revision, StringComparison.Ordinal))
             {
@@ -1286,7 +1286,7 @@ internal sealed class HfDownloadClient
             }
         }
 
-        public static async Task<ResumeRecord?> TryReadRecordAsync(string sidecarPath, CancellationToken ct)
+        public static async Task<ResumeRecord?> ReadRecordOrNullAsync(string sidecarPath, CancellationToken ct)
         {
             string content;
             try

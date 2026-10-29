@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -537,15 +538,17 @@ public sealed class WhisperServerTranscriberTests
                 }
             });
 
-        public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation)
+        public bool TryAcquireJobLease(string modelId, long generation, [NotNullWhen(true)] out IWhisperTranscriptionLease? lease)
         {
             LeaseAttemptCount++;
             if (LeaseAttemptCount <= LeaseRefusals)
             {
-                return null;
+                lease = null;
+                return false;
             }
 
-            return new CountingLease(this);
+            lease = new CountingLease(this);
+            return true;
         }
 
         /// <summary>What a transport-failure report answers: the supervisor's verdict that the daemon exited, or null.</summary>

@@ -214,7 +214,7 @@ Continues [Agent Mode](../04-agent-mode.md#46-approval-scoping), which keeps the
 - **`Once`** — today's behaviour, unchanged.
 - **`Session`** — remembered for the rest of the conversation, keyed by
   `ApprovalMemoKey(ConversationId, ToolName, SkillName, SkillVersion, ResourceName)`
-  (`TryResolveSessionApprovalKey`, `ToolApprovalCoordinator.cs`). Every field is load-bearing:
+  (`ResolveSessionApprovalKeyOrNull`, `ToolApprovalCoordinator.cs`). Every field is load-bearing:
   - **`SkillVersion`** binds the approval to *content* — an edit, or a re-import that replaces the
     skill, bumps `agent_skills.version` (§4.1) and silently invalidates the memo rather than letting new
     content ride an old consent.
@@ -232,7 +232,7 @@ Continues [Agent Mode](../04-agent-mode.md#46-approval-scoping), which keeps the
     approval that leaves no trace would thin the record of what an agent was allowed to do.
   - Denials are **never** remembered, under any scope.
   - The chat card only OFFERS session scope where the node can honor it. `SessionApprovalEligibility`
-    is the one predicate `TryResolveSessionApprovalKey` and the node tool-catalog response
+    is the one predicate `ResolveSessionApprovalKeyOrNull` and the node tool-catalog response
     (`ToolCatalogEntryResponse.SessionScopeEligible`) both read, so `ToolCallCard` hides its "Approve
     for this session" button for every tool that can never carry a memo — an MCP tool,
     `run_in_agent_home`, a `Parameterized` custom tool, or anything at all while

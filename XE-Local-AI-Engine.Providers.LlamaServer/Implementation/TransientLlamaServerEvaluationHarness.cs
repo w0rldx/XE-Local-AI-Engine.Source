@@ -51,7 +51,7 @@ internal sealed class TransientLlamaServerEvaluationHarness : ITransientLlamaSer
             throw new ArgumentException("The frozen evaluation launch policy is unsupported.", nameof(request));
         }
 
-        var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+        var mutationLease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(ct).ConfigureAwait(false);
         if (mutationLease is null)
         {
             throw new LlamaRuntimeException("Transient evaluation requires every supervised local model to be unloaded before it starts.");

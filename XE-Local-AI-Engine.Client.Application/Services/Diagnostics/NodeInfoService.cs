@@ -303,7 +303,7 @@ public sealed class NodeInfoService : INodeInfoService
             OsArchitecture = RuntimeInformation.OSArchitecture.ToString(),
             ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
             RuntimeFramework = RuntimeInformation.FrameworkDescription,
-            CpuModel = Capture("cpu model", HostCpuModel.TryRead, warnings),
+            CpuModel = Capture("cpu model", HostCpuModel.ReadOrNull, warnings),
             CpuCores = profile?.CpuCores,
             TotalRamBytes = profile?.TotalRamBytes,
             AvailableRamBytes = sample?.AvailableRamBytes ?? profile?.AvailableRamBytes,

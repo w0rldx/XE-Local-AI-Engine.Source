@@ -75,7 +75,7 @@ public sealed class DesktopBootstrapTests : IDisposable
             Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, invalid);
 
             AssertEx.False(DesktopBootstrap.TryResolveDataDirectoryPath(out var resolved, out var error));
-            AssertEx.Equal(string.Empty, resolved);
+            AssertEx.Null(resolved);
             AssertEx.Contains(AssertEx.NotNull(error), "valid absolute path");
         }
     }

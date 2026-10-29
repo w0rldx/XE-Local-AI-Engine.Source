@@ -23,13 +23,7 @@ public sealed class DeleteScheduledJobEndpoint : Endpoint<ScheduledJobRouteReque
 
     public override async Task HandleAsync(ScheduledJobRouteRequest req, CancellationToken ct)
     {
-        var deleted = await _scheduledJobManagementService.DeleteJobAsync(req.ScheduledJobId, ct);
-        if (!deleted)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
+        await _scheduledJobManagementService.DeleteJobAsync(req.ScheduledJobId, ct);
         await Send.NoContentAsync(ct);
     }
 }

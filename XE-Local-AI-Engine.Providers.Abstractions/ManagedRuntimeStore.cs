@@ -60,7 +60,7 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var state = await TryReadAsync<ManagedRuntimeState<TBackend>>(_statePath, ct).ConfigureAwait(false);
+            var state = await ReadOrNullAsync<ManagedRuntimeState<TBackend>>(_statePath, ct).ConfigureAwait(false);
             if (state is not null)
             {
                 if (IsValidState(state))
@@ -68,7 +68,7 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
                     return state;
                 }
 
-                var stateTombstone = TryCreateTombstone(state, "The managed runtime record is semantically invalid.");
+                var stateTombstone = CreateTombstoneOrNull(state, "The managed runtime record is semantically invalid.");
                 if (stateTombstone is not null)
                 {
                     return stateTombstone;
@@ -77,7 +77,7 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
 
             // The primary record is missing or unusable. The desired record still names what the operator selected, so
             // the answer is a tombstone carrying that selection, never "nothing is installed".
-            var desired = await TryReadAsync<DesiredRuntimeState>(_desiredPath, ct).ConfigureAwait(false);
+            var desired = await ReadOrNullAsync<DesiredRuntimeState>(_desiredPath, ct).ConfigureAwait(false);
             return desired is null || !IsValidDesired(desired)
                 ? null
                 : new ManagedRuntimeState<TBackend>(ManagedRuntimeValidity.Invalid,
@@ -144,7 +144,7 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
         }
     }
 
-    private static async Task<T?> TryReadAsync<T>(string path, CancellationToken ct)
+    private static async Task<T?> ReadOrNullAsync<T>(string path, CancellationToken ct)
     {
         if (!File.Exists(path))
         {
@@ -235,7 +235,7 @@ public abstract class ManagedRuntimeStore<TBackend> : IManagedRuntimeStore<TBack
         };
     }
 
-    private ManagedRuntimeState<TBackend>? TryCreateTombstone(ManagedRuntimeState<TBackend> state, string reason)
+    private ManagedRuntimeState<TBackend>? CreateTombstoneOrNull(ManagedRuntimeState<TBackend> state, string reason)
     {
         return IsValidDesiredCore(state.DesiredBackend,
             state.SourceRepository,

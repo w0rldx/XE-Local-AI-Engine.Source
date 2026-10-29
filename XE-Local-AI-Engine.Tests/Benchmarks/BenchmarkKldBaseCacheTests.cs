@@ -25,15 +25,15 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
     }
 
     [Test]
-    public void TryAcquireLease_WhileAnotherWriterHoldsIt_ReturnsNullInsteadOfWritingASecondCopy()
+    public void TryAcquireLease_WhileAnotherWriterHoldsIt_ReturnsFalseInsteadOfWritingASecondCopy()
     {
         var cache = Cache(long.MaxValue);
         var key = Key();
 
-        using var first = AssertEx.NotNull(cache.TryAcquireLease(key));
-        var second = cache.TryAcquireLease(key);
+        AssertEx.Succeeded(cache.TryAcquireLease(key, out var first));
+        using var firstScope = first;
 
-        AssertEx.Null(second, "A second writer must not start a parallel multi-gigabyte write of the same file.");
+        AssertEx.False(cache.TryAcquireLease(key, out _), "A second writer must not start a parallel multi-gigabyte write of the same file.");
     }
 
     /// <summary>
@@ -46,12 +46,11 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
         var cache = Cache(long.MaxValue);
         var key = Key();
 
-        var first = cache.TryAcquireLease(key);
-        AssertEx.NotNull(first);
-        first!.Dispose();
+        AssertEx.Succeeded(cache.TryAcquireLease(key, out var first));
+        first.Dispose();
 
-        using var second = cache.TryAcquireLease(key);
-        AssertEx.NotNull(second, "A lease nobody holds must not block the next measurement forever.");
+        AssertEx.Succeeded(cache.TryAcquireLease(key, out var second), "A lease nobody holds must not block the next measurement forever.");
+        second.Dispose();
     }
 
     [Test]
@@ -87,7 +86,7 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
         // The writer dies here — the executor's finally sweeps the temp and never calls Publish.
         BestEffortFile.TryDeleteFile(temp);
 
-        AssertEx.Null(cache.TryResolveExisting(key), "A killed base phase must leave nothing that resolves as a measurement.");
+        AssertEx.Null(cache.FindExisting(key), "A killed base phase must leave nothing that resolves as a measurement.");
         AssertEx.Empty(Directory.EnumerateFiles(cache.Root, "*.logits"));
     }
 

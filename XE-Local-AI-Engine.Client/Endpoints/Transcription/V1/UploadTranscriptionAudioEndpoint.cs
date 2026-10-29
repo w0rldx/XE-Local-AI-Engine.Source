@@ -66,13 +66,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         ArgumentNullException.ThrowIfNull(req);
 
         // Checked BEFORE a byte of the body is read: otherwise an upload to a session that does not exist is refused only after the whole file has streamed to disk, and the
-        // node writes and deletes a file it was never going to use. The outcome mapping below keeps the same answer for the race where the session disappears after this read.
+        // node writes and deletes a file it was never going to use. An unknown id throws (404); the outcome mapping below covers the race where the session goes after this.
         var existing = await _sessions.GetSessionAsync(req.SessionId, ct);
-        if (existing is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         if (existing.Status is TranscriptionSessionStatus.Completed or TranscriptionSessionStatus.Failed or TranscriptionSessionStatus.Cancelled)
         {
@@ -82,13 +77,14 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
 
         // Held for the whole request, before the session is touched: a runtime build or removal must refuse the upload
         // with no row change, not let it through to fail the session when the supervisor finds the runtime reserved.
-        await using var runtimeLease = _whisperRuntime.TryAcquireJobLease();
-        if (runtimeLease is null)
+        if (!_whisperRuntime.TryAcquireJobLease(out var runtimeLease))
         {
             await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy("The transcription runtime is being built, removed or ejected. Upload the file again once that finishes.",
                 _whisperRuntime.GetActivitySnapshot()));
             return;
         }
+
+        await using var runtimeLeaseScope = runtimeLease;
 
         // A declared length past the cap is refused before a byte is read; the host would otherwise fail the first read and the
         // body would look like it carried no file at all.
@@ -199,6 +195,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
 
         if (result.Outcome == TranscribeFileOutcome.SessionNotFound)
         {
+            // The row vanished under the upload: reported as an outcome, because inside the run a throw would be recorded as a failure.
             await Send.NotFoundAsync(ct);
             return;
         }
@@ -206,12 +203,6 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         // Succeeded, Cancelled and RuntimeFailed are all FINISHED requests whose verdict lives on the session row (Completed, Cancelled or Failed with a sanitized reason), so
         // answering 200 with that row lets one client render every ending alike. The fallback pair carries the one refusal that writes nothing to the row, already-transcribing.
         var session = result.Session ?? await _sessions.GetSessionAsync(req.SessionId, ct);
-        if (session is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(session.ToResponse(result.ErrorCode, result.ErrorMessage), ct);
     }
 

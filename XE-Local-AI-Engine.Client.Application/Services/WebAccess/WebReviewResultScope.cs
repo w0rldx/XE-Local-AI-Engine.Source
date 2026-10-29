@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.WebAccess;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 ///     The per-invocation hand-off between the result review gate and the web tool handlers, keyed by tool-call id.
@@ -31,7 +32,7 @@ internal static class WebReviewResultScope
     }
 
     /// <summary>Removes and returns the reviewed result for <paramref name="callId" />; pop-once, like the <c>ask_user</c> stash.</summary>
-    public static bool TryPop(string? callId, out string resultJson)
+    public static bool TryPop(string? callId, [NotNullWhen(true)] out string? resultJson)
     {
         if (!string.IsNullOrEmpty(callId) && Ambient.Value is { } results && results.TryRemove(callId, out var stashed))
         {
@@ -39,7 +40,7 @@ internal static class WebReviewResultScope
             return true;
         }
 
-        resultJson = string.Empty;
+        resultJson = null;
         return false;
     }
 

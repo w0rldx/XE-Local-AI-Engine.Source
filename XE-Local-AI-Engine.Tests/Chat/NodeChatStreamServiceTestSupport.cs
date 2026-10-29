@@ -108,7 +108,8 @@ internal static partial class NodeChatStreamServiceTestSupport
         AgentHomeExecutionLeaseKey key)
     {
         await Task.Yield();
-        return AssertEx.NotNull(leases.TryAcquire(key));
+        AssertEx.Succeeded(leases.TryAcquire(key, out var lease));
+        return lease;
     }
 
     internal static IGraphWorkflowStore BoundRunStore(Guid conversationId, GraphWorkflowRunStatus status)
@@ -798,11 +799,11 @@ internal static partial class NodeChatStreamServiceTestSupport
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so the existing Ollama-routed tests keep their
-    // /api/show classification behavior. A llama.cpp-capability test overrides TryResolveAsync explicitly.
+    // /api/show classification behavior. A llama.cpp-capability test overrides ResolveOrNullAsync explicitly.
     internal static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities? capabilities = null)
     {
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
-        resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
+        resolver.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
         return resolver;
     }
 

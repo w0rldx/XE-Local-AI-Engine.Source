@@ -124,7 +124,7 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
 
             foreach (var path in Directory.EnumerateFiles(_markersRoot, "*.json"))
             {
-                var marker = TryRead(path);
+                var marker = ReadOrNull(path);
                 if (marker is not null)
                 {
                     markers.Add(new SandboxMarkerEntry(Path.GetFileNameWithoutExtension(path), marker));
@@ -139,7 +139,7 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
         return markers;
     }
 
-    private SandboxProcessMarker? TryRead(string path)
+    private SandboxProcessMarker? ReadOrNull(string path)
     {
         try
         {

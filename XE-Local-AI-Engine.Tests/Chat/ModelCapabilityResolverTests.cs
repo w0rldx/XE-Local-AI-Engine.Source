@@ -64,7 +64,7 @@ public sealed class ModelCapabilityResolverTests
         factory.IsCloudProviderSelected(localModel).Returns(false);
         var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
         providerResolver.ResolveProviderNameForModelAsync(localModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
-        ggufResolver.TryResolveAsync(localModel, Arg.Any<CancellationToken>())
+        ggufResolver.ResolveOrNullAsync(localModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false));
 
         var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(localModel, CancellationToken.None);
@@ -84,7 +84,7 @@ public sealed class ModelCapabilityResolverTests
         factory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
         var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
         providerResolver.ResolveProviderNameForModelAsync(visionModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
-        ggufResolver.TryResolveAsync(visionModel, Arg.Any<CancellationToken>())
+        ggufResolver.ResolveOrNullAsync(visionModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: true));
 
         var local = await resolver.ResolveAsync(visionModel, CancellationToken.None);
@@ -111,7 +111,7 @@ public sealed class ModelCapabilityResolverTests
         factory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
         var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
         providerResolver.ResolveProviderNameForModelAsync(unenforceableModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
-        ggufResolver.TryResolveAsync(unenforceableModel, Arg.Any<CancellationToken>())
+        ggufResolver.ResolveOrNullAsync(unenforceableModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: true,
                         SupportsTools: false,
                         SupportsVision: false,

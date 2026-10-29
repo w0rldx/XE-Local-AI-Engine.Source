@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 
@@ -9,7 +10,7 @@ public interface IDevelopmentAttemptLiveBroker
     bool Register(Guid attemptId);
     bool TryPublish(DevelopmentAttemptLiveUpdate update);
     bool TryGetSnapshot(Guid attemptId, out DevelopmentAttemptLiveSnapshot snapshot);
-    bool TryGetDeliveryReader(Guid attemptId, out ChannelReader<DevelopmentAttemptLiveUpdate>? reader);
+    bool TryGetDeliveryReader(Guid attemptId, [NotNullWhen(true)] out ChannelReader<DevelopmentAttemptLiveUpdate>? reader);
     bool Complete(Guid attemptId);
 }
 
@@ -102,7 +103,7 @@ public sealed class DevelopmentAttemptLiveBroker : IDevelopmentAttemptLiveBroker
         }
     }
 
-    public bool TryGetDeliveryReader(Guid attemptId, out ChannelReader<DevelopmentAttemptLiveUpdate>? reader)
+    public bool TryGetDeliveryReader(Guid attemptId, [NotNullWhen(true)] out ChannelReader<DevelopmentAttemptLiveUpdate>? reader)
     {
         if (!_attempts.TryGetValue(attemptId, out var state))
         {

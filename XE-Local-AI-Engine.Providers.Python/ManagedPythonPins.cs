@@ -41,15 +41,15 @@ public static class ManagedPythonPins
     public static ManagedPythonUvAsset Current => Resolve(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), RuntimeInformation.ProcessArchitecture);
 
     /// <summary>True when <see cref="Current" /> resolves; lets a status read skip the store instead of throwing.</summary>
-    public static bool IsCurrentPlatformSupported => TryResolve(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), RuntimeInformation.ProcessArchitecture) is not null;
+    public static bool IsCurrentPlatformSupported => ResolveOrNull(OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), RuntimeInformation.ProcessArchitecture) is not null;
 
     internal static ManagedPythonUvAsset Resolve(bool isWindows, bool isLinux, Architecture architecture)
     {
-        return TryResolve(isWindows, isLinux, architecture)
+        return ResolveOrNull(isWindows, isLinux, architecture)
                ?? throw new ManagedPythonException("Managed Python is available on Linux x64 and Windows x64 only.");
     }
 
-    private static ManagedPythonUvAsset? TryResolve(bool isWindows, bool isLinux, Architecture architecture)
+    private static ManagedPythonUvAsset? ResolveOrNull(bool isWindows, bool isLinux, Architecture architecture)
     {
         return (isWindows, isLinux, architecture) switch
         {

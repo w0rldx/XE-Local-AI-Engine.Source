@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <summary>
 ///     Managed source-built CUDA runtime branch of <see cref="LlamaCppBinaryManager" />: adoption validation and
 ///     recording (<see cref="AdoptCudaSourceBuildAsync" />) plus the every-serve re-validation
-///     (<see cref="TryServeManagedSourceBinaryAsync" />), for the <c>llama-server</c> an in-app build
+///     (<see cref="ServeManagedSourceBinaryOrNullAsync" />), for the <c>llama-server</c> an in-app build
 ///     (<see cref="Contracts.ILlamaCppSourceBuildService" />) produces, which wins over the pinned prebuilt.
 /// </summary>
 /// <remarks>
@@ -38,10 +38,10 @@ public sealed partial class LlamaCppBinaryManager
     /// </remarks>
     /// <param name="discardInvalidRecord">
     ///     <see langword="false" /> suppresses that self-heal write for the read-only
-    ///     <see cref="TryGetInstalledBinaryAsync" /> lookup, which must leave <c>installed-runtime.json</c> untouched,
+    ///     <see cref="FindInstalledBinaryAsync" /> lookup, which must leave <c>installed-runtime.json</c> untouched,
     ///     so the next <see cref="EnsureBinaryAsync(GpuVariant,CancellationToken)" /> performs the discard instead.
     /// </param>
-    private async Task<LlamaBinary?> TryServeManagedSourceBinaryAsync(InstalledRuntimeState installed, bool discardInvalidRecord, CancellationToken ct)
+    private async Task<LlamaBinary?> ServeManagedSourceBinaryOrNullAsync(InstalledRuntimeState installed, bool discardInvalidRecord, CancellationToken ct)
     {
         var buildBinDir = installed.SourceBuildPath!;
         var serverPath = Path.Combine(buildBinDir, ManagedCudaServerFileName);
@@ -86,7 +86,7 @@ public sealed partial class LlamaCppBinaryManager
         }
     }
 
-    // The self-heal write, applied only when the caller allows one. The read-only TryGetInstalledBinaryAsync lookup
+    // The self-heal write, applied only when the caller allows one. The read-only FindInstalledBinaryAsync lookup
     // passes false so a diagnostics read never mutates installed-runtime.json; the next ensure does the discard.
     private Task DiscardManagedSourceRecordIfAllowedAsync(bool discardInvalidRecord, CancellationToken ct)
     {

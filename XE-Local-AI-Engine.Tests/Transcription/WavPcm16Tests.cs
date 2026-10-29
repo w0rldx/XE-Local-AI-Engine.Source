@@ -198,7 +198,7 @@ public sealed class WavPcm16Tests
     private static WavPcm16.Layout? Read(byte[] wav)
     {
         using var stream = new MemoryStream(wav, writable: false);
-        return WavPcm16.TryReadLayout(stream);
+        return WavPcm16.ReadLayoutOrNull(stream);
     }
 
     private static byte[] Fmt(int formatTag, int channels, int sampleRate, int bits)

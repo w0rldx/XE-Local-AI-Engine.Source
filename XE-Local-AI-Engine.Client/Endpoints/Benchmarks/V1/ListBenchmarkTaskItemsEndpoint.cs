@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -38,8 +37,7 @@ public sealed class ListBenchmarkTaskItemsEndpoint : Endpoint<BenchmarkProjectRo
         // Get-or-create, not a plain list: a project that predates task items has none, and materializing item 0 needs the node encryption key a migration does not
         // have. Every project created since gets its items with itself, so this is a read for all of them.
         var taskItems = await _items.GetOrCreateItemsAsync(req.ProjectId, ct);
-        var project = await _records.GetProjectAsync(req.ProjectId, ct)
-                      ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        var project = await _records.GetProjectAsync(req.ProjectId, ct);
         await Send.OkAsync(taskItems.ToResponse(project), ct);
     }
 }

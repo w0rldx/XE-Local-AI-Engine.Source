@@ -77,48 +77,65 @@ public interface INodeChatPersistenceService
 
     Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Renames a conversation. Returns the updated conversation, or null if not found.</summary>
-    Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Renames a conversation and returns it. Throws <see cref="NodeChatConversationNotFoundException" /> when it
+    ///     does not exist or was purged.
+    /// </summary>
+    Task<NodeChatConversationDto> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Pins or unpins a conversation. Returns the updated conversation, or null if not found.</summary>
-    Task<NodeChatConversationDto?> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Pins or unpins a conversation and returns it. Throws <see cref="NodeChatConversationNotFoundException" />
+    ///     when it does not exist or was purged.
+    /// </summary>
+    Task<NodeChatConversationDto> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Archives or unarchives a conversation, distinct from purge. Returns the updated conversation, or null if not found.</summary>
-    Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     Archives or unarchives a conversation, distinct from purge, and returns it. Throws
+    ///     <see cref="NodeChatConversationNotFoundException" /> when it does not exist or was purged.
+    /// </summary>
+    Task<NodeChatConversationDto> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Sets the conversation's temporary-chat (<c>memory_excluded</c>) flag — the per-conversation override of the
-    ///     bound agent's default (adaptive memory). Returns the updated conversation, or null if not found.
+    ///     bound agent's default (adaptive memory), and returns the conversation. Throws
+    ///     <see cref="NodeChatConversationNotFoundException" /> when it does not exist or was purged.
     /// </summary>
-    Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default);
+    Task<NodeChatConversationDto> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Writes (or clears with a null summary) the conversation's non-destructive compaction synopsis. Returns the
-    ///     updated conversation, or null if not found.
+    ///     Writes (or clears with a null summary) the conversation's non-destructive compaction synopsis.
     /// </summary>
-    Task<NodeChatConversationDto?> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default);
+    /// <remarks>
+    ///     <see cref="NodeChatGuardedWriteOutcome.Superseded" /> when the request's guard no longer matches the stored
+    ///     stamp; <see cref="NodeChatGuardedWriteOutcome.ConversationNotFound" /> when the conversation is gone or purged.
+    /// </remarks>
+    Task<NodeChatGuardedWriteOutcome> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Writes (or clears with a null state) the conversation's distilled state JSON. Returns the updated
-    ///     conversation, or null if not found.
+    ///     Writes (or clears with a null state) the conversation's distilled state JSON.
     /// </summary>
-    Task<NodeChatConversationDto?> SetConversationStateAsync(NodeChatSetConversationStateRequest request, CancellationToken cancellationToken = default);
+    /// <remarks>The same outcomes as <see cref="SetCompactionSummaryAsync" />.</remarks>
+    Task<NodeChatGuardedWriteOutcome> SetConversationStateAsync(NodeChatSetConversationStateRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Branches a conversation, cloning every message up to and including the target into a NEW Origin=Local
-    ///     conversation whose <c>branch_of_conversation_id</c> records the source, or null when either is missing.
+    ///     conversation whose <c>branch_of_conversation_id</c> records the source.
     /// </summary>
-    Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default);
+    /// <remarks>
+    ///     Throws <see cref="NodeChatConversationNotFoundException" /> or <see cref="NodeChatMessageNotFoundException" />
+    ///     when the source conversation or the target message is missing.
+    /// </remarks>
+    Task<NodeChatBranchResultDto> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Records a regenerated assistant turn as a SIBLING VARIANT, never an in-place overwrite, or null when the
-    ///     original message does not exist.
+    ///     Records a regenerated assistant turn as a SIBLING VARIANT, never an in-place overwrite.
     /// </summary>
     /// <remarks>
     ///     The new message shares a <c>variant_group_id</c> with the original, minted and back-stamped onto it when it
-    ///     had none, and copies the original's <c>parent_message_id</c>.
+    ///     had none, and copies the original's <c>parent_message_id</c>. Throws
+    ///     <see cref="NodeChatMessageNotFoundException" /> when the original message does not exist.
     /// </remarks>
-    Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default);
+    Task<NodeChatMessageVariantDto> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Lists all variants of the logical turn that the given message belongs to, ordered by sequence.</summary>
     Task<IReadOnlyList<NodeChatPersistedMessageDto>> ListMessageVariantsAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default);

@@ -67,6 +67,8 @@ internal static class TrainingEndpointSupport
             "DatasetReferenced" => "A training run was created from this dataset and it cannot be deleted.",
             "TrainingBusy" => "Training, an evaluation or an export holds the GPU; dataset generation cannot start until it finishes.",
             "RunActive" => "The training run is still queued or running.",
+            "RunTerminal" => "The training run has already finished.",
+            "GenerationInactive" => "The dataset is not generating.",
             "RunEvaluated" => "An evaluation run was created from this training run and it cannot be deleted.",
             "EvaluationBound" => "The evaluation run is part of a comparison report.",
             "EvaluationActive" => "The evaluation run is still queued or running.",

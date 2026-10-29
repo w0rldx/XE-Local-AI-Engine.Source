@@ -119,7 +119,7 @@ public sealed class SilenceSplitterTests
     private static async Task<IReadOnlyList<SilenceSplitter.Region>> SplitAsync(byte[] wav)
     {
         await using var stream = new MemoryStream(wav, writable: false);
-        var layout = WavPcm16.TryReadLayout(stream);
+        var layout = WavPcm16.ReadLayoutOrNull(stream);
         AssertEx.True(layout.HasValue, "The synthetic clip must be a readable 16-bit PCM WAV.");
         return await SilenceSplitter.SplitAsync(stream, layout.GetValueOrDefault(), CancellationToken.None);
     }

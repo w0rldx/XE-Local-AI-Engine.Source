@@ -397,23 +397,17 @@ public sealed class TranscriptionSessionEndpointTests
     }
 
     [Test]
-    [Arguments(UpdateTranscriptSegmentOutcome.SessionNotFound)]
-    [Arguments(UpdateTranscriptSegmentOutcome.SegmentNotFound)]
-    public async Task UpdateSegment_WhenSessionOrRowUnknown_ReturnsNotFound(UpdateTranscriptSegmentOutcome outcome)
+    public async Task UpdateSegment_WhenSessionOrRowUnknown_ReturnsBodylessNotFound()
     {
-        using var service = new StubTranscriptionService
-        {
-            UpdateSegmentResult = new UpdateTranscriptSegmentResult
-            {
-                Outcome = outcome
-            }
-        };
+        // The stub throws TranscriptionNotFoundException, as the service does for an unknown session or sequence.
+        using var service = new StubTranscriptionService();
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
         using var response = await PutSegmentAsync(factory, client, Guid.NewGuid(), seq: 1, "corrected");
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Empty(await response.Content.ReadAsStringAsync(), "ResourceNotFoundExceptionHandler keeps the 404 bodyless.");
     }
 
     [Test]
@@ -456,13 +450,8 @@ public sealed class TranscriptionSessionEndpointTests
     [Test]
     public async Task UpdateSegment_WithTextOverTheLimit_IsRejected_ButTheLimitItselfPasses()
     {
-        using var service = new StubTranscriptionService
-        {
-            UpdateSegmentResult = new UpdateTranscriptSegmentResult
-            {
-                Outcome = UpdateTranscriptSegmentOutcome.SegmentNotFound
-            }
-        };
+        // No result set: the stub answers with the not-found throw, so reaching the service shows up as a 404.
+        using var service = new StubTranscriptionService();
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 

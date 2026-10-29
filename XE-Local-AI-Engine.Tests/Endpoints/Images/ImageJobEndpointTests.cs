@@ -234,6 +234,24 @@ public sealed class ImageJobEndpointTests
     }
 
     [Test]
+    public async Task CancelImageJob_WhenTheJobAlreadyFinished_Returns409NotTheUnknownJob404()
+    {
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        var jobId = await CreateJobAsync(factory, client);
+        coordinator.Terminalize(jobId);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs/{jobId}/cancel");
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "nothing to cancel");
+    }
+
+    [Test]
     public async Task DeleteImageJob_WhenTerminal_Returns204AndRemovesTheJob()
     {
         var coordinator = new StubImageJobCoordinator();
@@ -615,7 +633,7 @@ public sealed class ImageJobEndpointTests
     }
 
     // Deterministic in-memory coordinator: EnqueueAsync mints an id and stores a Queued view GetAsync then returns; no
-    // sd-server, DbContext, or encryption is exercised. CancelAsync returns false for an unknown id (→ 404).
+    // sd-server, DbContext, or encryption is exercised. An unknown id throws ImageNotFoundException (→ 404).
     private sealed class StubImageJobCoordinator : IImageJobCoordinator
     {
         private readonly ConcurrentDictionary<Guid, ImageJobView> _jobs = new();
@@ -660,11 +678,19 @@ public sealed class ImageJobEndpointTests
             return Task.FromResult(id);
         }
 
-        public Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken) =>
-            Task.FromResult(_jobs.TryRemove(jobId, out _));
+        public Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken)
+        {
+            if (!_jobs.TryGetValue(jobId, out var view))
+            {
+                throw JobNotFound();
+            }
 
-        public Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken) =>
-            Task.FromResult(_jobs.TryGetValue(jobId, out var view) ? view : null);
+            // Mirrors the coordinator: only a queued or generating job is still cancellable.
+            return Task.FromResult(view.Status is ImageJobStatus.Queued or ImageJobStatus.Generating && _jobs.TryRemove(jobId, out _));
+        }
+
+        public Task<ImageJobView> GetAsync(Guid jobId, CancellationToken cancellationToken) =>
+            Task.FromResult(_jobs.TryGetValue(jobId, out var view) ? view : throw JobNotFound());
 
         public Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken)
         {
@@ -685,7 +711,7 @@ public sealed class ImageJobEndpointTests
         {
             if (!_jobs.TryGetValue(jobId, out var view))
             {
-                return Task.FromResult(ImageJobDeleteOutcome.NotFound);
+                throw JobNotFound();
             }
 
             if (view.Status is ImageJobStatus.Queued or ImageJobStatus.Generating)
@@ -696,6 +722,9 @@ public sealed class ImageJobEndpointTests
             _ = _jobs.TryRemove(jobId, out _);
             return Task.FromResult(ImageJobDeleteOutcome.Deleted);
         }
+
+        private static ImageNotFoundException JobNotFound() =>
+            new("The image job was not found.");
 
         /// <summary>Drops the job to a terminal state so a delete against it is not refused.</summary>
         public void Terminalize(Guid jobId)

@@ -26,8 +26,15 @@ public sealed class BenchmarkRecordService
         _logger = logger;
     }
 
-    /// <summary>One project by id, or null when it is gone — the 404 check in front of almost every Benchmarks read.</summary>
-    public Task<BenchmarkProjectRecord?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    /// <summary>One project by the id a client sent — the 404 check in front of almost every Benchmarks read.</summary>
+    /// <exception cref="BenchmarkNotFoundException">No project carries <paramref name="projectId" />.</exception>
+    public async Task<BenchmarkProjectRecord> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        return await _store.GetProjectAsync(projectId, cancellationToken) ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+    }
+
+    /// <summary>A run's own project, or null when a delete raced the read: the run detail then omits the project-derived fields.</summary>
+    public Task<BenchmarkProjectRecord?> FindProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         return _store.GetProjectAsync(projectId, cancellationToken);
     }
@@ -86,10 +93,11 @@ public sealed class BenchmarkRecordService
         }
     }
 
-    /// <summary>One run by id, payloads included, or null when it is gone.</summary>
-    public Task<BenchmarkRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
+    /// <summary>One run by id, payloads included.</summary>
+    /// <exception cref="BenchmarkNotFoundException">No run carries <paramref name="runId" />.</exception>
+    public async Task<BenchmarkRunRecord> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
-        return _store.GetRunAsync(runId, cancellationToken);
+        return await _store.GetRunAsync(runId, cancellationToken) ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
     }
 
     /// <summary>One page of a project's runs, ranked. Never decrypts a payload: a run table is not a run detail.</summary>

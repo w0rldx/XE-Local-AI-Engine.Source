@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -515,7 +516,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
                 provider.GetRequiredService<ILogger<TrainedModelSmokeGate>>()));
 
             var runtimeSupervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-            runtimeSupervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+            runtimeSupervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                              .Returns(_ => Substitute.For<ILlamaServerRuntimeMutationLease>());
             services.RemoveAll<ILlamaServerProcessSupervisor>();
             services.AddSingleton(runtimeSupervisor);
@@ -717,8 +718,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct) =>
             _inner.EvictAsync(ct);
 
-        public IWhisperTranscriptionLease? TryAcquireJobLease(string modelId, long generation) =>
-            _inner.TryAcquireJobLease(modelId, generation);
+        public bool TryAcquireJobLease(string modelId, long generation, [NotNullWhen(true)] out IWhisperTranscriptionLease? lease) =>
+            _inner.TryAcquireJobLease(modelId, generation, out lease);
 
         public Task<WhisperRuntimeException?> ReportRequestFailureAsync(long generation, Exception cause, CancellationToken ct) =>
             _inner.ReportRequestFailureAsync(generation, cause, ct);

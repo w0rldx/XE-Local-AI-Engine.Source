@@ -349,7 +349,7 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 });
             }
 
-            var cleanupFailure = OwnedArtifactCleanup.TryDeleteAll([.. artifacts]);
+            var cleanupFailure = OwnedArtifactCleanup.DeleteAllOrFailure([.. artifacts]);
             if (cleanupFailure is not null)
             {
                 throw new GgufAcquisitionCleanupException("Download cleanup requires recovery.",

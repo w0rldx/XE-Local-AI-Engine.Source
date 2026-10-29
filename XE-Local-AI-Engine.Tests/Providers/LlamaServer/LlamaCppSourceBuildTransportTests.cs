@@ -140,7 +140,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         await service.Received(1).StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
         await prerequisiteProbe.DidNotReceiveWithAnyArgs().ProbeAsync(default, default);
         _ = supervisor.DidNotReceiveWithAnyArgs().CountRunningProcesses();
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
     }
 
     [Test]
@@ -318,7 +318,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         var lease = new RecordingMutationLease(order);
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             order.Add("acquire");
             return Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease);
@@ -350,7 +350,7 @@ public sealed class LlamaCppSourceBuildTransportTests
     public async Task Remove_WhenLeaseCannotBeAcquired_ReturnsConflictSeamWithoutDeleting()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
@@ -383,7 +383,7 @@ public sealed class LlamaCppSourceBuildTransportTests
 
         AssertEx.False(removed);
         AssertEx.True(buildActive);
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
         await binaryManager.DidNotReceiveWithAnyArgs().RemoveSourceBuildAsync(default);
     }
 
@@ -394,7 +394,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         var lease = new RecordingMutationLease([]);
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
@@ -571,7 +571,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         AssertEx.Equal(expected: 2, blocked.RootElement.GetProperty("runningProcessCount").GetInt32());
         AssertEx.Contains(blocked.RootElement.GetProperty("message").GetString()!, "Disable Keep Model Warm", StringComparison.Ordinal);
         // The gate is never entered, so no mutation lease is taken and no cached chat client is dropped.
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
         cacheInvalidator.DidNotReceive().ClearClientCache();
     }
 
@@ -583,7 +583,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         var lease = new RecordingMutationLease([]);
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         supervisor.CountRunningProcesses().Returns(0);
         var installedRuntimeStore = Substitute.For<IInstalledRuntimeStore>();

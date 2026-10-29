@@ -61,7 +61,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
         CancellationToken cancellationToken)
     {
         var binding = await _repositories.ResolveFolderAsync(selectedFolderId, cancellationToken);
-        var resolvedRoot = HostPathSafety.TryResolveTrustedRoot(binding.RepositoryRoot)
+        var resolvedRoot = HostPathSafety.ResolveTrustedRootOrNull(binding.RepositoryRoot)
                            ?? throw new KnowledgeRepositoryImportRejectedException("The registered repository is unavailable or unsafe.");
         var derivedCollection = string.IsNullOrWhiteSpace(collectionId)
             ? string.Concat("REPO-", selectedFolderId.ToString("N"))

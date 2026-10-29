@@ -223,11 +223,10 @@ Run history is owned by `IScheduledJobRunStore` (`XE-Local-AI-Engine.Client.Pers
 
 There are **two ways** a run reaches the handler's `CancellationToken`:
 
-1. **Operator cancel** — `IScheduledJobManagementService.CancelRunAsync(runId)` (`Implementation/ScheduledJobManagementService.cs`). It records intent first (`RequestCancellationAsync` stamps `CancellationRequestedAtUtc`), *then* `scheduler.Interrupt(QuartzFireInstanceId)`. Recording intent first lets the dispatcher distinguish an operator cancel (→ `Cancelled`) from an auto-interrupt timeout (→ `TimedOut`) when the token trips. The method returns a `RunCancellationOutcome`:
+1. **Operator cancel** — `IScheduledJobManagementService.CancelRunAsync(runId)` (`Implementation/ScheduledJobManagementService.cs`). It records intent first (`RequestCancellationAsync` stamps `CancellationRequestedAtUtc`), *then* `scheduler.Interrupt(QuartzFireInstanceId)`. Recording intent first lets the dispatcher distinguish an operator cancel (→ `Cancelled`) from an auto-interrupt timeout (→ `TimedOut`) when the token trips. An unknown run id throws `ScheduledJobNotFoundException` (404); otherwise the method returns a `RunCancellationOutcome`:
 
    | Outcome | Meaning |
    |---|---|
-   | `NotFound` | no run has that id |
    | `AlreadyTerminal` | run already finished |
    | `Requested` | Quartz interrupt was active (run is currently executing) |
    | `RequestedButNotRunning` | intent recorded, but no live fire instance to interrupt |

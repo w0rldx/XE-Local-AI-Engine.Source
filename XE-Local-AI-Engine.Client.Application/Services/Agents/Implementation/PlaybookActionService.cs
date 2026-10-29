@@ -51,25 +51,21 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         return await _store.AddAsync(input, cancellationToken);
     }
 
-    public async Task<PlaybookActionRecord?> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default)
+    public async Task<PlaybookActionUpdateResult> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         await ValidateAsync(input, cancellationToken);
 
-        // Ownership guard: the action must already belong to the route's agent. A mismatch or a missing action
-        // answers null, which the endpoint maps to 404 — this is what blocks the nested-route IDOR.
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null || existing.AgentDefinitionId != input.AgentDefinitionId)
-        {
-            return null;
-        }
+        // Ownership guard: the action must already belong to the route's agent. A mismatch reads exactly like a
+        // missing action, which is what blocks the nested-route IDOR.
+        var existing = await LoadOwnedAsync(input.AgentDefinitionId, id, cancellationToken);
 
         // The manual route never touches an analysis-provenance action: its mapper pins a Manual source, so updating
         // one would rewrite the provenance and drop its evidence. Those are edited only through the review paths.
         if (existing.Source != PlaybookActionSource.Manual)
         {
-            return null;
+            return new PlaybookActionUpdateResult.NotManual();
         }
 
         // Manual Disabled->Enabled is a transition INTO Enabled; enforce the hard cap (excluding this action from the
@@ -79,20 +75,22 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, id, cancellationToken);
         }
 
-        return await _store.UpdateAsync(id, input, cancellationToken);
+        return new PlaybookActionUpdateResult.Updated
+        {
+            Record = await UpdateStoredAsync(id, input, cancellationToken)
+        };
     }
 
-    public async Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // Same ownership guard as UpdateAsync: only delete the action when it belongs to the route agent, so one
         // agent's playbook route cannot delete another agent's action.
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null || existing.AgentDefinitionId != agentDefinitionId)
-        {
-            return false;
-        }
+        await LoadOwnedAsync(agentDefinitionId, id, cancellationToken);
 
-        return await _store.DeleteAsync(id, cancellationToken);
+        if (!await _store.DeleteAsync(id, cancellationToken))
+        {
+            throw new PlaybookActionNotFoundException(id);
+        }
     }
 
     public Task<PlaybookActionRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -149,25 +147,17 @@ internal sealed class PlaybookActionService : IPlaybookActionService
     public async Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // Human-approved staging → active, gated by the golden-conversation evaluation result. The ownership/state
-        // guard runs first (NotFound → 404), then evaluation status (Eval* → 409), and only a passed, current eval flips Enabled.
+        // guard runs first (missing throws, non-pending is blocked), then evaluation status; only a passed, current eval flips Enabled.
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken);
         if (pending is null)
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.NotFound,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.NotPending);
         }
 
         // No eval since authoring/edit → promotion is not yet provable. (UpdateSuggestedAsync clears EvalResult on edit.)
         if (string.IsNullOrWhiteSpace(pending.EvalResult))
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalRequired,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalRequired);
         }
 
         PlaybookEvalResult? evalResult;
@@ -178,54 +168,31 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         catch (JsonException)
         {
             // A result we cannot read cannot prove no-regression; require a fresh eval rather than promote blindly.
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalRequired,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalRequired);
         }
 
         if (evalResult is null)
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalRequired,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalRequired);
         }
 
         // Staleness backstop behind clear-on-edit: the recorded pass must be for the action's current content snapshot.
         if (evalResult.ActionVersionAtEval != pending.Version)
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalStale,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalStale);
         }
 
         // Completeness: a run that evaluated only a subset of the enabled golden cases (the per-run cap truncated the
         // set) cannot prove no-regression across the whole suite, so a subset pass never authorizes promotion.
         if (evalResult.GoldenCaseCount < evalResult.GoldenCaseTotal)
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalIncomplete,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalIncomplete);
         }
 
         // The recorded eval must reflect the CURRENT behavior-affecting context, so recompute over base instructions,
         // sibling actions, the golden set and the model. A legacy result with no fingerprint reads as stale: safe.
-        var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken);
-        if (owningAgent is null)
-        {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.NotFound,
-                Record = null
-            };
-        }
+        var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken)
+                          ?? throw new AgentDefinitionNotFoundException(agentDefinitionId);
 
         var enabledActions = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
         var enabledGoldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
@@ -242,31 +209,19 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             modelIdentity.Token);
         if (!string.Equals(currentFingerprint, evalResult.EvaluationFingerprint, StringComparison.Ordinal))
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalStale,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalStale);
         }
 
         if (!evalResult.Passed)
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalRegressed,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalRegressed);
         }
 
         // Absolute quality floor, defense in depth: the writer folds this into Passed, but a legacy or hand-crafted
         // result could claim Passed with zero candidate passes, and a run where every case failed proves nothing.
         if (evalResult.CandidatePassCount <= 0)
         {
-            return new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalRegressed,
-                Record = null
-            };
+            return Blocked(PlaybookPromotionStatus.EvalRegressed);
         }
 
         // Atomic promote under optimistic concurrency and the cap: threading the validated Version closes the TOCTOU
@@ -274,39 +229,27 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         var commit = await _store.PromoteSuggestedIfCurrentAsync(id, pending.Version, _actionOptions.MaxEnabledActions, pending.EvalResult, cancellationToken);
         return commit.Status switch
         {
-            PlaybookPromotionCommitStatus.Committed => new PlaybookPromotionResult
+            PlaybookPromotionCommitStatus.Committed => new PlaybookPromotionResult.Promoted
             {
-                Status = PlaybookPromotionStatus.Promoted,
-                Record = commit.Record
+                Record = commit.Record ?? throw new InvalidOperationException("A committed promotion carries the enabled record.")
             },
-            PlaybookPromotionCommitStatus.CapReached => new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.CapReached,
-                Record = null
-            },
+            PlaybookPromotionCommitStatus.CapReached => Blocked(PlaybookPromotionStatus.CapReached),
             // A version/state mismatch means a concurrent edit/promote changed the row after the eval evidence was
             // validated; surface the existing stale-eval conflict so the operator re-runs the eval on the current snapshot.
-            PlaybookPromotionCommitStatus.VersionConflict => new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.EvalStale,
-                Record = null
-            },
-            _ => new PlaybookPromotionResult
-            {
-                Status = PlaybookPromotionStatus.NotFound,
-                Record = null
-            }
+            PlaybookPromotionCommitStatus.VersionConflict => Blocked(PlaybookPromotionStatus.EvalStale),
+            // NotFound: the row vanished between the guard and the commit.
+            _ => throw new PlaybookActionNotFoundException(id)
         };
     }
 
-    public async Task<PlaybookActionRecord?> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default)
+    public async Task<PlaybookSuggestionReviewResult> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(evalResultJson);
 
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken);
         if (pending is null)
         {
-            return null;
+            return new PlaybookSuggestionReviewResult.NotPending();
         }
 
         // The eval JSON only: the action keeps every injected field and its staging provenance, so the store leaves
@@ -326,17 +269,20 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             MemoryScope = pending.MemoryScope
         };
 
-        return await _store.UpdateAsync(id, storeInput, cancellationToken);
+        return new PlaybookSuggestionReviewResult.Applied
+        {
+            Record = await UpdateStoredAsync(id, storeInput, cancellationToken)
+        };
     }
 
-    public Task<PlaybookActionRecord?> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
+    public Task<PlaybookSuggestionReviewResult> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // Reject moves the action to Archived (provenance preserved rather than hard-deleted). A recorded eval result
         // is irrelevant once archived, so clear it rather than let a stale pass linger on the rejected record.
         return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, evalResult: null, cancellationToken);
     }
 
-    public async Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default)
+    public async Task<PlaybookSuggestionReviewResult> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -345,7 +291,7 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         var pending = await LoadPendingSuggestionAsync(input.AgentDefinitionId, input.ActionId, cancellationToken);
         if (pending is null)
         {
-            return null;
+            return new PlaybookSuggestionReviewResult.NotPending();
         }
 
         // The action keeps its Suggested state, staging provenance, evidence and confidence; only operator-editable
@@ -364,23 +310,41 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             MemoryScope = pending.MemoryScope
         };
 
-        return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken);
+        return new PlaybookSuggestionReviewResult.Applied
+        {
+            Record = await UpdateStoredAsync(input.ActionId, storeInput, cancellationToken)
+        };
     }
 
     public async Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
-        // A review action applies only to a pending suggestion owned by the route agent, so ownership, the Suggested
-        // state and a staging provenance are all enforced; anything else answers null and the endpoint maps it to 404.
-        var existing = await _store.GetByIdAsync(id, cancellationToken);
-        if (existing is null
-            || existing.AgentDefinitionId != agentDefinitionId
-            || existing.State != PlaybookActionState.Suggested
-            || !IsStagedSuggestionSource(existing.Source))
-        {
-            return null;
-        }
+        // A review action applies only to a pending suggestion owned by the route agent: a missing or cross-agent action
+        // throws its not-found, and one that is not a Suggested, staged candidate answers null (a 409 at the endpoints).
+        var existing = await LoadOwnedAsync(agentDefinitionId, id, cancellationToken);
+        return existing.State == PlaybookActionState.Suggested && IsStagedSuggestionSource(existing.Source) ? existing : null;
+    }
 
-        return existing;
+    // The nested-route ownership guard: an action of another agent is reported exactly like a missing one.
+    private async Task<PlaybookActionRecord> LoadOwnedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken)
+    {
+        var existing = await _store.GetByIdAsync(id, cancellationToken);
+        return existing is not null && existing.AgentDefinitionId == agentDefinitionId
+            ? existing
+            : throw new PlaybookActionNotFoundException(id);
+    }
+
+    // A null from the store means the row was deleted between the guard's read and this write.
+    private async Task<PlaybookActionRecord> UpdateStoredAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken)
+    {
+        return await _store.UpdateAsync(id, input, cancellationToken) ?? throw new PlaybookActionNotFoundException(id);
+    }
+
+    private static PlaybookPromotionResult Blocked(PlaybookPromotionStatus status)
+    {
+        return new PlaybookPromotionResult.Blocked
+        {
+            Status = status
+        };
     }
 
     /// <summary>
@@ -395,12 +359,12 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         return source is PlaybookActionSource.Analysis or PlaybookActionSource.Extracted;
     }
 
-    private async Task<PlaybookActionRecord?> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, string? evalResult, CancellationToken cancellationToken)
+    private async Task<PlaybookSuggestionReviewResult> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, string? evalResult, CancellationToken cancellationToken)
     {
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken);
         if (pending is null)
         {
-            return null;
+            return new PlaybookSuggestionReviewResult.NotPending();
         }
 
         // Preserve the candidate's staging provenance (Analysis/Extracted) and typed scope through the transition; only
@@ -420,7 +384,10 @@ internal sealed class PlaybookActionService : IPlaybookActionService
             MemoryScope = pending.MemoryScope
         };
 
-        return await _store.UpdateAsync(id, storeInput, cancellationToken);
+        return new PlaybookSuggestionReviewResult.Applied
+        {
+            Record = await UpdateStoredAsync(id, storeInput, cancellationToken)
+        };
     }
 
     private async Task EnsureBelowEnabledCapAsync(Guid agentDefinitionId, Guid? excludedActionId, CancellationToken cancellationToken)

@@ -44,12 +44,6 @@ public sealed class CreateNodeChatMessageRevisionEndpoint : Endpoint<ListNodeCha
             },
             ct);
 
-        if (variant is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         var variants = await _chatPersistence.ListMessageVariantsAsync(req.ConversationId, variant.Variant.MessageId, ct);
         await Send.OkAsync(BuildResponse(variant.OriginalMessageId, variant.VariantGroupId, variants), ct);
     }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 
 internal sealed class FeedbackInsightsService : IFeedbackInsightsService
 {
@@ -24,13 +25,10 @@ internal sealed class FeedbackInsightsService : IFeedbackInsightsService
         _timeProvider = timeProvider;
     }
 
-    public async Task<FeedbackInsightsResult?> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
+    public async Task<FeedbackInsightsResult> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
-        var aggregate = await _store.GetAgentFeedbackAggregateAsync(agentDefinitionId, MaxExemplars, cancellationToken);
-        if (aggregate is null)
-        {
-            return null;
-        }
+        var aggregate = await _store.GetAgentFeedbackAggregateAsync(agentDefinitionId, MaxExemplars, cancellationToken)
+                        ?? throw new AgentDefinitionNotFoundException(agentDefinitionId);
 
         var byTool = aggregate.ByTool.Select(BuildToolBreakdown).ToArray();
         var exemplars = aggregate.Exemplars.Select(BuildExemplar).ToArray();

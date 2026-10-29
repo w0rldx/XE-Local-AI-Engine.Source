@@ -25,7 +25,7 @@ public static class LlamaCppToolBinaries
     ///     <see langword="null" /> when this runtime did not ship one (every prebuilt release archive today, and any
     ///     source build produced before the quantizer joined the build targets).
     /// </summary>
-    public static string? TryResolveQuantizer(string? binDirectory)
+    public static string? FindQuantizer(string? binDirectory)
     {
         if (string.IsNullOrWhiteSpace(binDirectory))
         {
@@ -40,10 +40,10 @@ public static class LlamaCppToolBinaries
     ///     Resolves the quantizer that sits beside an already-resolved <c>llama-server</c> executable. This is the shape
     ///     the export service uses: it holds a server path, not a bin directory.
     /// </summary>
-    public static string? TryResolveQuantizerBesideServer(string? serverExecutablePath) =>
+    public static string? FindQuantizerBesideServer(string? serverExecutablePath) =>
         string.IsNullOrWhiteSpace(serverExecutablePath)
             ? null
-            : TryResolveQuantizer(Path.GetDirectoryName(Path.GetFullPath(serverExecutablePath)));
+            : FindQuantizer(Path.GetDirectoryName(Path.GetFullPath(serverExecutablePath)));
 
     /// <summary>Base name of the perplexity tool; <c>.exe</c> is appended on Windows.</summary>
     public const string PerplexityName = "llama-perplexity";
@@ -56,7 +56,7 @@ public static class LlamaCppToolBinaries
     ///     <see langword="null" /> when this runtime did not ship one (any source build produced before the tool joined
     ///     the build targets; the prebuilt release archives all carry it).
     /// </summary>
-    public static string? TryResolvePerplexity(string? binDirectory)
+    public static string? FindPerplexity(string? binDirectory)
     {
         if (string.IsNullOrWhiteSpace(binDirectory))
         {
@@ -71,8 +71,8 @@ public static class LlamaCppToolBinaries
     ///     Resolves the perplexity tool that sits beside an already-resolved <c>llama-server</c> executable. This is the
     ///     shape the benchmark fidelity path uses: it holds a server path, not a bin directory.
     /// </summary>
-    public static string? TryResolvePerplexityBesideServer(string? serverExecutablePath) =>
+    public static string? FindPerplexityBesideServer(string? serverExecutablePath) =>
         string.IsNullOrWhiteSpace(serverExecutablePath)
             ? null
-            : TryResolvePerplexity(Path.GetDirectoryName(Path.GetFullPath(serverExecutablePath)));
+            : FindPerplexity(Path.GetDirectoryName(Path.GetFullPath(serverExecutablePath)));
 }

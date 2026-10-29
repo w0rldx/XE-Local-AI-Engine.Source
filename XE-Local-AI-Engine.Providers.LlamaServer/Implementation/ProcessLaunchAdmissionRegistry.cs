@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Lock-protected process-wide exact launch handoff with conservative orphan/unbound blocking.</summary>
@@ -49,7 +50,7 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
         }
     }
 
-    public bool TryAcquire(ProcessLaunchAdmission admission, out IProcessLaunchAdmissionLease? lease)
+    public bool TryAcquire(ProcessLaunchAdmission admission, [NotNullWhen(true)] out IProcessLaunchAdmissionLease? lease)
     {
         lease = Acquire(admission);
         return lease is not null;
@@ -58,7 +59,7 @@ public sealed class ProcessLaunchAdmissionRegistry : IProcessLaunchAdmissionRegi
     public bool TryBeginLaunch(string modelName,
         ModelRole role,
         out ProcessLaunchAdmission? admission,
-        out IProcessLaunchTicket? ticket)
+        [NotNullWhen(true)] out IProcessLaunchTicket? ticket)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         var key = Key(modelName, role);

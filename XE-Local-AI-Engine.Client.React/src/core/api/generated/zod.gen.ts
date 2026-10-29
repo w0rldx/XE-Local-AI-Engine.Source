@@ -3611,7 +3611,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowToo
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1RunGraphWorkflowDesignerTurnRequest = z.object({
 	definitionId: z.guid().nullish(),
 	modelName: z.string().min(0).max(200).optional(),
-	messages: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest).optional(),
+	messages: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDesignerMessageRequest),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.optional(),
 	selectedNodeKey: z.string().min(0).max(64).nullish(),
 	intent: z.string().nullish(),

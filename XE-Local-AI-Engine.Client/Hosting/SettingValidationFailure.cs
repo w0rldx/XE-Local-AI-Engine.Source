@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
 /// <summary>
@@ -20,7 +21,7 @@ internal static class SettingValidationFailure
     /// <summary>Finds the options validation failures <paramref name="exception" /> consists of, and nothing else.</summary>
     /// <param name="exception">The startup failure.</param>
     /// <param name="failures">The validation exceptions, when the failure is made only of them.</param>
-    internal static bool TryFind(Exception? exception, out IReadOnlyList<OptionsValidationException> failures)
+    internal static bool TryFind(Exception? exception, [NotNullWhen(true)] out IReadOnlyList<OptionsValidationException>? failures)
     {
         failures = exception switch
         {
@@ -28,9 +29,9 @@ internal static class SettingValidationFailure
             AggregateException aggregate when aggregate.InnerExceptions.Count > 0
                                               && aggregate.InnerExceptions.All(static inner => inner is OptionsValidationException) =>
                 [.. aggregate.InnerExceptions.Cast<OptionsValidationException>()],
-            _ => []
+            _ => null
         };
-        return failures.Count > 0;
+        return failures is not null;
     }
 
     /// <summary>The single stderr line: <see cref="StandardErrorPrefix" />, then every failure message, separated by "; ".</summary>

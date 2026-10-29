@@ -352,4 +352,26 @@ public sealed class AgentSkillServiceTests
              .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([]));
         return store;
     }
+
+    [Test]
+    public async Task AgentSkillService_GetUpdateDelete_WhenTheIdIsUnknown_ThrowNotFound()
+    {
+        var store = Substitute.For<IAgentSkillStore>();
+        var id = Guid.NewGuid();
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([]));
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(Task.FromResult<AgentSkillRecord?>(null));
+        store.UpdateAsync(id, Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<AgentSkillRecord?>(null));
+        store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(false);
+        var service = new AgentSkillService(store);
+        var input = new AgentSkillInput
+        {
+            Name = "kubernetes-debug",
+            Description = "Debugs a cluster",
+            Body = "## Body"
+        };
+
+        _ = await AssertEx.ThrowsAsync<AgentSkillNotFoundException>(async () => await service.GetByIdAsync(id));
+        _ = await AssertEx.ThrowsAsync<AgentSkillNotFoundException>(async () => await service.UpdateAsync(id, input));
+        _ = await AssertEx.ThrowsAsync<AgentSkillNotFoundException>(async () => await service.DeleteAsync(id));
+    }
 }

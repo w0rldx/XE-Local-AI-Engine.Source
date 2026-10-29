@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -85,17 +86,17 @@ internal sealed class ModelClassificationService : IModelClassificationService
 
         if (!NeedsDetection(record, digest))
         {
-            return record!;
+            return record;
         }
 
-        var detected = await TryDetectAsync(modelName, digest, cancellationToken);
+        var detected = await DetectOrNullAsync(modelName, digest, cancellationToken);
 
         // On a detection failure fall back to the cached record (preserving any override) or a synthetic Unknown so the
         // model still appears in the list — it just cannot be classified until the daemon is reachable again.
         return detected ?? record ?? UnknownRecord(modelName, digest);
     }
 
-    private static bool NeedsDetection(ModelClassificationRecord? record, string? digest)
+    private static bool NeedsDetection([NotNullWhen(false)] ModelClassificationRecord? record, string? digest)
     {
         if (record is null)
         {
@@ -117,7 +118,7 @@ internal sealed class ModelClassificationService : IModelClassificationService
     ///     Probes <c>/api/show</c>, classifies the capabilities and upserts the detection cache. Returns <c>null</c>
     ///     (never throws) when the probe fails so callers can fall back to the cached record.
     /// </summary>
-    private async Task<ModelClassificationRecord?> TryDetectAsync(string modelName, string? digest, CancellationToken cancellationToken)
+    private async Task<ModelClassificationRecord?> DetectOrNullAsync(string modelName, string? digest, CancellationToken cancellationToken)
     {
         try
         {

@@ -25,7 +25,7 @@ public sealed class InvocationResumeRegistryTests
 
         RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Assigned));
 
-        var live = AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
+        AssertEx.Succeeded(registry.TryGetLiveInvocation(invocationId, out var live));
         AssertEx.Equal(invocationId, live.InvocationId);
         AssertEx.Equal(conversationId, live.ConversationId);
         AssertEx.Equal(InvocationStatus.Assigned, live.Status);
@@ -43,7 +43,7 @@ public sealed class InvocationResumeRegistryTests
 
         RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "hi", generationDurationMs: 1234));
 
-        var live = AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
+        AssertEx.Succeeded(registry.TryGetLiveInvocation(invocationId, out var live));
         AssertEx.Equal(expected: 1234L, live.GenerationDurationMs);
     }
 
@@ -53,7 +53,7 @@ public sealed class InvocationResumeRegistryTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var registry = CreateRegistry(dispatcher);
 
-        AssertEx.Null(registry.TryGetLiveInvocation(Guid.NewGuid()));
+        AssertEx.False(registry.TryGetLiveInvocation(Guid.NewGuid(), out _));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public sealed class InvocationResumeRegistryTests
         RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "hi"));
         RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Completed, "hi there"));
 
-        AssertEx.Null(registry.TryGetLiveInvocation(invocationId));
+        AssertEx.False(registry.TryGetLiveInvocation(invocationId, out _));
     }
 
     [Test]
@@ -724,7 +724,7 @@ public sealed class InvocationResumeRegistryTests
 
         // And the invocation is still live for the refetch/re-resume that follows: the cap rejects the REPLAY, not
         // the run.
-        AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
+        AssertEx.True(registry.TryGetLiveInvocation(invocationId, out _));
     }
 
     [Test]

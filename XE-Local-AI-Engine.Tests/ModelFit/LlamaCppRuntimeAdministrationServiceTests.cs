@@ -28,7 +28,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var lease = new RecordingLease();
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(_ =>
                   {
                       calls.Add("lease");
@@ -65,7 +65,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
     public async Task StartAcquisitionAsync_WhenLeaseUnavailable_ReturnsBusyWithoutStartingBinaryWork()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
@@ -86,7 +86,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var lease = new RecordingLease();
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         supervisor.CountRunningProcesses().Returns(0);
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
@@ -111,7 +111,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var lease = new RecordingLease();
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         supervisor.CountRunningProcesses().Returns(0);
         var sourceBuildActivity = Substitute.For<ILlamaCppSourceBuildActivity>();
@@ -135,7 +135,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var lease = new RecordingLease();
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns<Task<InstalledRuntimeState?>>(_ => throw new OperationCanceledException());
@@ -154,7 +154,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var lease = new RecordingLease();
 #pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns<Task<InstalledRuntimeState?>>(_ => throw new InvalidOperationException("probe failed"));
@@ -181,8 +181,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.InstallAsync("b1");
 
-        AssertEx.False(result.Succeeded);
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
+        _ = Rejected(result);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, Rejected(result).Failure);
         await variantSelector.DidNotReceive().SelectVariantAsync(Arg.Any<CancellationToken>());
         await releaseCatalog.DidNotReceiveWithAnyArgs()
                             .ResolveAssetAsync(default!, default, default, default, default);
@@ -200,7 +200,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.InstallAsync("b10201", GpuVariant.Cuda);
 
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.InvalidRequest, result.Failure);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.InvalidRequest, Rejected(result).Failure);
         await releaseCatalog.Received(1).ResolveAssetAsync("b10201", OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda, Arg.Any<CancellationToken>());
     }
 
@@ -216,11 +216,11 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.InstallAsync("b10201", GpuVariant.Cuda);
 
-        AssertEx.False(result.Succeeded);
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, result.Failure);
-        AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, RuntimeInformation.OSArchitecture, GpuVariant.Cuda), result.DisplayMessage);
+        _ = Rejected(result);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.RuntimeFailure, Rejected(result).Failure);
+        AssertEx.Equal(LlamaCppReleasePins.MissingPrebuiltMessage(OSPlatform.Linux, RuntimeInformation.OSArchitecture, GpuVariant.Cuda), Rejected(result).DisplayMessage);
         await releaseCatalog.DidNotReceiveWithAnyArgs().ResolveAssetAsync(default!, default, default, default, default);
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
         await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default, default!, default);
     }
 
@@ -237,9 +237,9 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.InstallAsync("b10201", GpuVariant.Cuda);
 
-        AssertEx.False(result.Succeeded);
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
-        AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
+        _ = Rejected(result);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, Rejected(result).Failure);
+        AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", Rejected(result).DisplayMessage);
         await releaseCatalog.DidNotReceiveWithAnyArgs().ResolveAssetAsync(default!, default, default, default, default);
         await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default, default!, default);
     }
@@ -265,9 +265,9 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.EnsureAsync(GpuVariant.Cuda);
 
-        AssertEx.True(result.Succeeded, result.DisplayMessage);
-        AssertEx.Equal("cuda", result.Binary!.Variant);
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        _ = Succeeded(result);
+        AssertEx.Equal("cuda", Succeeded(result).Binary.Variant);
+        await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
     }
 
     [Test]
@@ -283,8 +283,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.EnsureAsync(GpuVariant.Vulkan);
 
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
-        AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, Rejected(result).Failure);
+        AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", Rejected(result).DisplayMessage);
         await binaryManager.DidNotReceiveWithAnyArgs().AcquireBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 
@@ -293,7 +293,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
     {
         // The real supervisor refuses the lease while any llama-server runs; the ensure must not depend on it.
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
@@ -309,7 +309,7 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.EnsureAsync(GpuVariant.Cuda);
 
-        AssertEx.True(result.Succeeded, result.DisplayMessage);
+        _ = Succeeded(result);
         await binaryManager.Received(1).AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
     }
 
@@ -346,9 +346,9 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         granted.SetResult(entry);
         var result = await ensuring.WaitAsync(TimeSpan.FromSeconds(3));
 
-        AssertEx.True(result.Succeeded, result.DisplayMessage);
+        _ = Succeeded(result);
         AssertEx.True(steps.SequenceEqual(["ensure", "exit"]), $"Expected ensure then exit, saw {string.Join(", ", steps)}.");
-        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await supervisor.DidNotReceiveWithAnyArgs().AcquireRuntimeMutationLeaseOrNullAsync(default);
     }
 
     [Test]
@@ -373,17 +373,17 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
         var ensured = await service.EnsureAsync(GpuVariant.Cuda);
         var installed = await service.InstallAsync("b1");
 
-        AssertEx.True(ensured.Succeeded, ensured.DisplayMessage);
+        _ = Succeeded(ensured);
         await binaryManager.Received(1).AcquireBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
-        AssertEx.False(installed.Succeeded, "Install still waits for Keep Model Warm to be off.");
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, installed.Failure);
+        _ = Rejected(installed, "Install still waits for Keep Model Warm to be off.");
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, Rejected(installed).Failure);
     }
 
     [Test]
     public async Task InstallAsync_WhileALlamaServerRuns_IsRefusedWithTheEjectMessage()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+        supervisor.AcquireRuntimeMutationLeaseOrNullAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
@@ -400,9 +400,9 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         var result = await service.InstallAsync("b1", GpuVariant.Cpu);
 
-        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
-        AssertEx.Equal("Stop or eject all running llama.cpp models before updating the runtime.", result.DisplayMessage);
-        AssertEx.Equal(1, result.RunningProcessCount);
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, Rejected(result).Failure);
+        AssertEx.Equal("Stop or eject all running llama.cpp models before updating the runtime.", Rejected(result).DisplayMessage);
+        AssertEx.Equal(1, Rejected(result).RunningProcessCount);
         await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default, default!, default);
     }
 
@@ -494,7 +494,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             typeof(LlamaCppRuntimeStatus),
             typeof(LlamaCppRuntimeBinaryView),
             typeof(LlamaCppInstalledRuntimeView),
-            typeof(LlamaCppRuntimeMutationResult)
+            typeof(LlamaCppRuntimeMutationResult.Succeeded),
+            typeof(LlamaCppRuntimeMutationResult.Rejected)
         ];
         string[] forbidden = ["ServerExecutablePath", "SourceBuildPath", "ServerPath", "Sha256"];
 
@@ -594,4 +595,10 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             return ValueTask.CompletedTask;
         }
     }
+
+    private static LlamaCppRuntimeMutationResult.Succeeded Succeeded(LlamaCppRuntimeMutationResult result) =>
+        AssertEx.NotNull(result as LlamaCppRuntimeMutationResult.Succeeded, (result as LlamaCppRuntimeMutationResult.Rejected)?.DisplayMessage);
+
+    private static LlamaCppRuntimeMutationResult.Rejected Rejected(LlamaCppRuntimeMutationResult result, string? message = null) =>
+        AssertEx.NotNull(result as LlamaCppRuntimeMutationResult.Rejected, message ?? "The runtime change must have been refused.");
 }

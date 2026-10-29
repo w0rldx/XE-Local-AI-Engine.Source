@@ -70,7 +70,7 @@ public sealed class InferenceProfileStoreTests : IDisposable
         var frozen = AssertEx.NotNull(await store.MarkFrozenAsync(explored.Id,
             benchmarkSnapshotId,
             globalFreeVramAtFreezeBytes: 6_200_000_000,
-            processBudgetVramAtFreezeBytes: 7_000_000_000));
+            processBudgetVramAtFreezeBytes: 7_000_000_000) as InferenceProfileFreezeResult.Frozen).Profile;
 
         AssertEx.Equal(InferenceProfileStatus.Frozen, frozen.Status);
         AssertEx.Equal(benchmarkSnapshotId, frozen.BenchmarkSnapshotId);
@@ -78,16 +78,16 @@ public sealed class InferenceProfileStoreTests : IDisposable
         AssertEx.Equal(expected: 7_000_000_000L, frozen.ProcessBudgetVramAtFreezeBytes);
 
         // The freeze gate only promotes an Explored row — a second freeze of an already-frozen row is rejected.
-        AssertEx.Null(await store.MarkFrozenAsync(explored.Id,
+        _ = AssertEx.NotNull(await store.MarkFrozenAsync(explored.Id,
             Guid.NewGuid(),
             globalFreeVramAtFreezeBytes: 1,
-            processBudgetVramAtFreezeBytes: 2));
+            processBudgetVramAtFreezeBytes: 2) as InferenceProfileFreezeResult.NotExplored);
 
-        // Freezing an unknown id returns null.
-        AssertEx.Null(await store.MarkFrozenAsync(Guid.NewGuid(),
+        // Freezing an unknown id says so, apart from the wrong-state answer above.
+        _ = AssertEx.NotNull(await store.MarkFrozenAsync(Guid.NewGuid(),
             Guid.NewGuid(),
             globalFreeVramAtFreezeBytes: null,
-            processBudgetVramAtFreezeBytes: null));
+            processBudgetVramAtFreezeBytes: null) as InferenceProfileFreezeResult.NotFound);
     }
 
     [Test]

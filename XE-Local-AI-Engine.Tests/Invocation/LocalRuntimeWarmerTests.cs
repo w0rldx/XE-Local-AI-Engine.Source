@@ -80,8 +80,10 @@ public sealed class LocalRuntimeWarmerTests
     public async Task PrepareLocalRuntimeAsync_LoadingWhileATrainingRunHoldsTheNode_SaysSoAndOnlyThen(bool trainingHoldsTheNode)
     {
         var gate = new GpuWorkGate();
-        using var training = trainingHoldsTheNode ? gate.TryBeginExclusive(GpuWorkKind.TrainingRun) : null;
-        using var benchmarkPoll = trainingHoldsTheNode ? null : gate.TryBeginShared(GpuWorkKind.Benchmark);
+        AssertEx.True(trainingHoldsTheNode
+            ? gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var hold)
+            : gate.TryBeginShared(GpuWorkKind.Benchmark, out hold));
+        using var holdScope = hold;
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         var provider = CreateLlamaCppProvider(effectiveContextTokens: 8192);
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));

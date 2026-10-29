@@ -24,7 +24,7 @@ internal static class NodeAuthEndpointSupport
     {
         ArgumentNullException.ThrowIfNull(result);
 
-        if (!IsCompletePair(result))
+        if (result is not NodeAuthTokenResult.Issued issued)
         {
             if (!bodyMode)
             {
@@ -33,7 +33,7 @@ internal static class NodeAuthEndpointSupport
 
             // The one 401 that says WHY. Only login can produce it — a refresh has no account to lock — so the branch is inert on the refresh path, but the cookie clear and
             // the 401 stay one operation, which is why it lives here rather than in the login endpoint.
-            if (result.LockedOutRetryAfterSeconds is { } retryAfterSeconds)
+            if (result is NodeAuthTokenResult.Failed { LockedOutRetryAfterSeconds: { } retryAfterSeconds })
             {
                 send.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
                 await send.ResultAsync(Results.Json(new NodeLoginLockedOutResponse
@@ -50,22 +50,15 @@ internal static class NodeAuthEndpointSupport
 
         if (!bodyMode)
         {
-            NodeAuthCookie.AppendRefreshToken(send.HttpContext.Response, result.RefreshToken!, result.RefreshTokenExpiresAtUtc!.Value);
+            NodeAuthCookie.AppendRefreshToken(send.HttpContext.Response, issued.RefreshToken, issued.RefreshTokenExpiresAtUtc);
         }
 
         await send.OkAsync(new NodeAccessTokenResponse
         {
-            AccessToken = result.AccessToken!,
-            ExpiresAtUtc = result.AccessTokenExpiresAtUtc!.Value,
-            RefreshToken = bodyMode ? result.RefreshToken : null,
-            RefreshTokenExpiresAtUtc = bodyMode ? result.RefreshTokenExpiresAtUtc : null
+            AccessToken = issued.AccessToken,
+            ExpiresAtUtc = issued.AccessTokenExpiresAtUtc,
+            RefreshToken = bodyMode ? issued.RefreshToken : null,
+            RefreshTokenExpiresAtUtc = bodyMode ? issued.RefreshTokenExpiresAtUtc : null
         }, cancellationToken);
     }
-
-    private static bool IsCompletePair(NodeAuthTokenResult result) =>
-        result.Succeeded
-        && !string.IsNullOrWhiteSpace(result.AccessToken)
-        && result.AccessTokenExpiresAtUtc.HasValue
-        && !string.IsNullOrWhiteSpace(result.RefreshToken)
-        && result.RefreshTokenExpiresAtUtc.HasValue;
 }

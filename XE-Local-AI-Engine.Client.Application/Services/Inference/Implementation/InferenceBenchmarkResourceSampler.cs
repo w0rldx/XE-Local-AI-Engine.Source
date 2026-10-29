@@ -17,7 +17,7 @@ internal sealed class InferenceBenchmarkResourceSampler
     public async Task<ResourceObservation> CaptureAsync(InferenceBenchmarkSpec spec, int? processId, CancellationToken ct)
     {
         var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct);
-        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct);
+        var processBudget = await _processVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(spec.Backend, ct);
         var globalFree = string.Equals(spec.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
             ? null
             : hardware.AvailableVramBytes;
@@ -25,11 +25,11 @@ internal sealed class InferenceBenchmarkResourceSampler
         return new ResourceObservation
         {
             Vram = VramObservation.Create(globalFree, processBudget),
-            WorkingSetBytes = TryGetWorkingSetBytes(processId)
+            WorkingSetBytes = GetWorkingSetBytesOrNull(processId)
         };
     }
 
-    private static long? TryGetWorkingSetBytes(int? processId)
+    private static long? GetWorkingSetBytesOrNull(int? processId)
     {
         if (processId is not { } pid || pid <= 0)
         {

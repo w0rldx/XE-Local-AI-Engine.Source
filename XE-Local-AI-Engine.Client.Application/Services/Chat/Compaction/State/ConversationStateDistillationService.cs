@@ -208,7 +208,12 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
                     ExpectedUpdatedAtUtc = expectedStamp
                 },
                 callerToken);
-            if (written is null)
+            if (written == NodeChatGuardedWriteOutcome.ConversationNotFound)
+            {
+                return progress.ToOutcome(ConversationStateDistillationStatus.ConversationNotFound);
+            }
+
+            if (written == NodeChatGuardedWriteOutcome.Superseded)
             {
                 _logger.LogInformation("Distillation for conversation {ConversationId} was superseded by a path change after {Calls} persisted call(s); the last delta was discarded.",
                     conversationId, progress.Calls);

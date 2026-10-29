@@ -60,7 +60,7 @@ internal sealed class ModelCapabilityProber
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var cachedModels = TryGetCachedInstalledModels();
+        var cachedModels = FindCachedInstalledModels();
         if (cachedModels is not null)
         {
             return new InstalledModelInventoryResult
@@ -144,7 +144,7 @@ internal sealed class ModelCapabilityProber
                                    .Select(NormalizeModelName);
         var connectionStringModelNames = ModelConnectionStringNames
                                          .Select(configuration.GetConnectionString)
-                                         .Select(TryExtractModelName);
+                                         .Select(ExtractModelNameOrNull);
 
         return configuredModelNames
                .Concat(connectionStringModelNames)
@@ -155,7 +155,7 @@ internal sealed class ModelCapabilityProber
                .ToArray();
     }
 
-    private static string? TryExtractModelName(string? connectionString)
+    private static string? ExtractModelNameOrNull(string? connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -179,7 +179,7 @@ internal sealed class ModelCapabilityProber
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
     }
 
-    private IReadOnlyList<InstalledModelInfo>? TryGetCachedInstalledModels()
+    private IReadOnlyList<InstalledModelInfo>? FindCachedInstalledModels()
     {
         lock (_installedModelsCacheSync)
         {

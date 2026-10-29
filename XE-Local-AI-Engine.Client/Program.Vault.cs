@@ -194,11 +194,11 @@ public sealed partial class Program
     }
 
     /// <summary>Completes a recovery-code unlock: the admin password and the vault's password wrap are reset together.</summary>
-    private static async Task ResetRecoveredAdminPasswordAsync(IServiceProvider services, VaultUnlockOutcome outcome)
+    private static async Task ResetRecoveredAdminPasswordAsync(IServiceProvider services, VaultRecoveryReset reset)
     {
         await using var scope = services.CreateAsyncScope();
         var result = await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                                .ResetAdminPasswordAsync(outcome.ResetPassword!, outcome.ResetRecoveryCode, outcome.ResetNewRecoveryCode, CancellationToken.None);
+                                .ResetAdminPasswordAsync(reset.Password, reset.RecoveryCode, reset.NewRecoveryCode, CancellationToken.None);
         if (result.Succeeded)
         {
             Log.Information("Admin password reset with the recovery code; sign in with the new password.");

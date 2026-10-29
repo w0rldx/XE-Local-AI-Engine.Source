@@ -61,7 +61,7 @@ public sealed class SupervisorRaceTests
     {
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher);
-        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(lease);
 
         var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
@@ -79,7 +79,7 @@ public sealed class SupervisorRaceTests
         var launcher = new FakeProcessLauncher();
         var registry = new ProcessLaunchAdmissionRegistry();
         var supervisor = SupervisorFactory.Create(launcher, launchAdmissions: registry);
-        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(lease);
         var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         await AssertEx.StaysIncompleteAsync(ensure, "An ensure must not be admitted while a runtime mutation lease is held.");
@@ -99,9 +99,9 @@ public sealed class SupervisorRaceTests
     public async Task DisposeAsync_CancelsMutationLeaseDelayedBeforeRuntimeGateWithoutActivityLeak()
     {
         var supervisor = SupervisorFactory.Create();
-        var blocker = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var blocker = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(blocker);
-        var pending = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var pending = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         await AssertEx.StaysIncompleteAsync(pending, "A second mutation lease must not be granted while the first is held.");
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
 
@@ -121,7 +121,7 @@ public sealed class SupervisorRaceTests
         await using var supervisor = SupervisorFactory.Create();
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
 
         AssertEx.Null(lease);
         AssertEx.False(supervisor.IsKeepWarmSuppressed());
@@ -132,7 +132,7 @@ public sealed class SupervisorRaceTests
     {
         await using var supervisor = SupervisorFactory.Create();
 
-        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
 
         AssertEx.NotNull(lease);
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
@@ -145,10 +145,10 @@ public sealed class SupervisorRaceTests
     public async Task RuntimeMutationLease_CancelledPendingAttemptReleasesItsSuppression()
     {
         await using var supervisor = SupervisorFactory.Create();
-        var ownedLease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var ownedLease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(ownedLease);
         using var pendingCancellation = new CancellationTokenSource();
-        var pendingAttempt = supervisor.TryAcquireRuntimeMutationLeaseAsync(pendingCancellation.Token);
+        var pendingAttempt = supervisor.AcquireRuntimeMutationLeaseOrNullAsync(pendingCancellation.Token);
 
         await AssertEx.StaysIncompleteAsync(pendingAttempt, "The pending acquire must still be queued behind the owned lease.");
         AssertEx.True(supervisor.IsKeepWarmSuppressed());
@@ -165,7 +165,7 @@ public sealed class SupervisorRaceTests
     public async Task RuntimeMutationLease_CancelledWaitAndDoubleDispose_DoNotCorruptOrderingGate()
     {
         await using var supervisor = SupervisorFactory.Create();
-        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        var lease = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
         AssertEx.NotNull(lease);
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();

@@ -91,14 +91,14 @@ public sealed class NodeChatContextStateEndpointTests
                 }
             ]
         };
-        AssertEx.NotNull(await persistence.SetConversationStateAsync(new NodeChatSetConversationStateRequest
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await persistence.SetConversationStateAsync(new NodeChatSetConversationStateRequest
         {
             ConversationId = conversation.ConversationId,
             State = ConversationStateSerializer.Serialize(state),
             CoversToSequence = 5,
             UpdatedAtUtc = 1_000
         }));
-        AssertEx.NotNull(await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
         {
             ConversationId = conversation.ConversationId,
             Summary = "The user picked SQLite.",
@@ -147,7 +147,7 @@ public sealed class NodeChatContextStateEndpointTests
             UserId = null,
             CreatedAtUtc = 10
         });
-        AssertEx.NotNull(await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
+        AssertEx.Equal(NodeChatGuardedWriteOutcome.Written, await persistence.SetCompactionSummaryAsync(new NodeChatSetCompactionSummaryRequest
         {
             ConversationId = conversation.ConversationId,
             Summary = "Old path synopsis.",

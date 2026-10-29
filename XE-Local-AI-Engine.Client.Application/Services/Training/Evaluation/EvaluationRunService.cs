@@ -23,13 +23,16 @@ public interface IEvaluationRunService
 
     Task<IReadOnlyList<TrainingEvaluationRecord>> ListAsync(Guid? trainingRunId, CancellationToken cancellationToken = default);
 
-    Task<TrainingEvaluationRecord?> GetAsync(Guid evaluationId, CancellationToken cancellationToken = default);
+    /// <exception cref="TrainingNotFoundException">No evaluation carries <paramref name="evaluationId" />.</exception>
+    Task<TrainingEvaluationRecord> GetAsync(Guid evaluationId, CancellationToken cancellationToken = default);
 
     /// <summary>Re-queues an interrupted evaluation; the executor continues at the next unscored sample.</summary>
     Task<TrainingEvaluationRecord> ResumeAsync(Guid evaluationId, CancellationToken cancellationToken = default);
 
-    /// <summary>True when something was cancelled, false when the evaluation is unknown or already terminal.</summary>
-    Task<bool> CancelAsync(Guid evaluationId, CancellationToken cancellationToken = default);
+    /// <summary>Requests cancellation: a queued evaluation is terminalized directly, a running one is signaled.</summary>
+    /// <exception cref="TrainingNotFoundException">No evaluation carries <paramref name="evaluationId" />.</exception>
+    /// <exception cref="TrainingConflictException"><c>EvaluationTerminal</c>: the evaluation has already finished.</exception>
+    Task CancelAsync(Guid evaluationId, CancellationToken cancellationToken = default);
 
     Task DeleteAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default);
 }
@@ -110,8 +113,8 @@ public sealed class EvaluationRunService : IEvaluationRunService
     public Task<IReadOnlyList<TrainingEvaluationRecord>> ListAsync(Guid? trainingRunId, CancellationToken cancellationToken = default) =>
         _evaluations.ListAsync(trainingRunId, cancellationToken);
 
-    public Task<TrainingEvaluationRecord?> GetAsync(Guid evaluationId, CancellationToken cancellationToken = default) =>
-        _evaluations.GetAsync(evaluationId, cancellationToken);
+    public async Task<TrainingEvaluationRecord> GetAsync(Guid evaluationId, CancellationToken cancellationToken = default) =>
+        await _evaluations.GetAsync(evaluationId, cancellationToken) ?? throw new TrainingNotFoundException("The evaluation run was not found.");
 
     public async Task<TrainingEvaluationRecord> ResumeAsync(Guid evaluationId, CancellationToken cancellationToken = default)
     {
@@ -122,25 +125,23 @@ public sealed class EvaluationRunService : IEvaluationRunService
         return resumed;
     }
 
-    public async Task<bool> CancelAsync(Guid evaluationId, CancellationToken cancellationToken = default)
+    public async Task CancelAsync(Guid evaluationId, CancellationToken cancellationToken = default)
     {
-        var evaluation = await _evaluations.GetAsync(evaluationId, cancellationToken);
-        if (evaluation is null
-            || evaluation.Status is TrainingEvaluationStatus.Succeeded or TrainingEvaluationStatus.Failed or TrainingEvaluationStatus.Cancelled)
+        var evaluation = await GetAsync(evaluationId, cancellationToken);
+        if (evaluation.Status is TrainingEvaluationStatus.Succeeded or TrainingEvaluationStatus.Failed or TrainingEvaluationStatus.Cancelled)
         {
-            return false;
+            throw new TrainingConflictException("EvaluationTerminal");
         }
 
         // A running evaluation is signaled, never terminalized here: the executor owns the terminal write, so
         // cancelling from two places would race the work item.
         if (_cancellations.Cancel(evaluationId))
         {
-            return true;
+            return;
         }
 
         _ = await _evaluations.CompleteAsync(evaluationId, TrainingWorkStatus.Cancelled, "Cancelled before the evaluation started.", cancellationToken);
         _signal.Wake();
-        return true;
     }
 
     public Task DeleteAsync(Guid evaluationId, long expectedVersion, CancellationToken cancellationToken = default) =>

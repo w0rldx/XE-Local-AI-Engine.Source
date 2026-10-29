@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -193,12 +194,12 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
         var mocks = await _store.ListUsableMocksAsync(toolName, cancellationToken);
         foreach (var mock in mocks)
         {
-            if (!_mockVerifier.TryParse(mock.MockJson.Span, out var body, out _) || body is null)
+            if (!_mockVerifier.TryParse(mock.MockJson.Span, out var body, out _))
             {
                 continue;
             }
 
-            if (_mockEngine.TryRespond(body, arguments) is { } response)
+            if (_mockEngine.TryRespond(body, arguments, out var response))
             {
                 return new HeadlessToolOutcome
                 {
@@ -229,10 +230,10 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
     ///     parser's detail because a per-sample reason is written into <c>ValidationJson</c>, not onto an operator
     ///     surface.
     /// </remarks>
-    private static bool TryParseArguments(string argumentsJson, out JsonElement element, out string error)
+    private static bool TryParseArguments(string argumentsJson, out JsonElement element, [NotNullWhen(false)] out string? error)
     {
         element = default;
-        error = string.Empty;
+        error = null;
         var text = string.IsNullOrWhiteSpace(argumentsJson) ? "{}" : argumentsJson;
         try
         {

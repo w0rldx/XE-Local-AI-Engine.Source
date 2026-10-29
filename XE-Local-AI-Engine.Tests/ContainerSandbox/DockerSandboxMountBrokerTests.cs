@@ -53,8 +53,8 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
             }
         ]));
 
-        AssertEx.Equal("/xe-runtime/home", handle.TryResolveSandboxPath(home));
-        AssertEx.Equal("/xe-runtime/home/.nuget", handle.TryResolveSandboxPath(Path.Combine(home, ".nuget")));
+        AssertEx.Equal("/xe-runtime/home", handle.ResolveSandboxPathOrNull(home));
+        AssertEx.Equal("/xe-runtime/home/.nuget", handle.ResolveSandboxPathOrNull(Path.Combine(home, ".nuget")));
     }
 
     [Test]
@@ -75,7 +75,7 @@ public sealed class DockerSandboxMountBrokerTests : IDisposable
             }
         ]));
 
-        AssertEx.Equal("/workspace/.git/config", handle.TryResolveSandboxPath(config));
+        AssertEx.Equal("/workspace/.git/config", handle.ResolveSandboxPathOrNull(config));
         AssertEx.Contains(handle.Mounts, mount => string.Equals(mount.SandboxPath, "/workspace/.git/config", StringComparison.Ordinal) && mount.ReadOnly);
     }
 

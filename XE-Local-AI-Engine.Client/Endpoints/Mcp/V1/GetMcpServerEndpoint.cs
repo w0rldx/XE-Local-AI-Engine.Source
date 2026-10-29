@@ -25,11 +25,6 @@ public sealed class GetMcpServerEndpoint : Endpoint<GetMcpServerRequest, McpServ
     public override async Task HandleAsync(GetMcpServerRequest req, CancellationToken ct)
     {
         var record = await _mcpServerService.GetByIdAsync(req.McpServerId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
 
         await Send.OkAsync(record.ToResponse(), ct);
     }

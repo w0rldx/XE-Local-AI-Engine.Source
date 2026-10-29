@@ -20,12 +20,11 @@ internal sealed class DefaultProcessContextAllocationResolver : IProcessContextA
         CancellationToken ct)
     {
         var frozen = !resolved.ExploreMode && resolved.CtxSize > 0;
-        var overridden = _options.DeterministicContextTokensOverride is > 0;
         var tokens = _options.ContextTokensForRole(role);
         var source = ProcessContextAllocationSource.HardwareTier;
-        if (overridden)
+        if (_options.DeterministicContextTokensOverride is { } overrideTokens and > 0)
         {
-            tokens = _options.DeterministicContextTokensOverride!.Value;
+            tokens = overrideTokens;
             source = ProcessContextAllocationSource.DeterministicOverride;
         }
 

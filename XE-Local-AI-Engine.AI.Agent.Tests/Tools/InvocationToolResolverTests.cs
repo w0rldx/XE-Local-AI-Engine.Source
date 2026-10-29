@@ -250,7 +250,7 @@ public sealed class InvocationToolResolverTests
         {
             ["code"] = "print(1)"
         }) as string);
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result), "the refusal is recorded as a failed call");
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(result), "the refusal is recorded as a failed call");
         AssertEx.Contains(result, "compute is off");
         AssertEx.True(result.EndsWith(ToolFailureText.NotRunNotice, StringComparison.Ordinal), $"N-88: the refusal must say nothing ran (got: {result})");
         AssertEx.Equal(expected: 0, handler.Executions, "the approval-free variant never reaches the handler");
@@ -316,7 +316,7 @@ public sealed class InvocationToolResolverTests
             ["code"] = "print(1)"
         }) as string);
 
-        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result));
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(result));
         AssertEx.Contains(result, "needs approval");
         AssertEx.Equal(expected: 0, handler.Executions, "the change between resolution and call must not turn into an unapproved run");
     }

@@ -158,7 +158,7 @@ internal sealed class FakeHealthProbe : ILlamaServerHealthProbe
         return Task.FromResult(Responsive);
     }
 
-    public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+    public Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
     {
         return Task.FromResult(EffectiveContextTokens);
     }
@@ -204,7 +204,7 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
         return Task.FromResult(true);
     }
 
-    public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+    public Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
     {
         return Task.FromResult<int?>(null);
     }
@@ -242,7 +242,7 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>The fake binary is always "already there" — this double downloads nothing, so ensure and lookup agree.</summary>
-    public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
+    public Task<LlamaBinary?> FindInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
         return Task.FromResult<LlamaBinary?>(new LlamaBinary
         {

@@ -146,9 +146,9 @@ namespace XE_Local_AI_Engine.Client
 
             // Local admin password recovery, handled AFTER identity migrations guarantee the tables and Admin role and BEFORE the web host serves, so it runs against the SAME
             // database the app uses and the single-instance lease has already proved nothing else holds the directory. Resets without the old password, revokes refresh tokens, exits.
-            if (vaultUnlock?.ResetPassword is not null)
+            if (vaultUnlock?.RecoveryReset is { } recoveryReset)
             {
-                await ResetRecoveredAdminPasswordAsync(app.Services, vaultUnlock);
+                await ResetRecoveredAdminPasswordAsync(app.Services, recoveryReset);
             }
 
             if (resetRequested)
@@ -223,8 +223,7 @@ namespace XE_Local_AI_Engine.Client
                 return HostLaunchRequest.Exit(2);
             }
 
-            var setupRequested = DesktopLaunch.TryGetSetupCommand(args, out var setupCommand, out var setupError);
-            if (setupRequested && setupError is not null)
+            if (!DesktopLaunch.TryGetSetupCommand(args, out var setupCommand, out var setupError))
             {
                 await standardError.WriteLineAsync(setupError);
                 return HostLaunchRequest.Exit(2);
@@ -235,23 +234,20 @@ namespace XE_Local_AI_Engine.Client
                 Environment.SetEnvironmentVariable(DesktopLaunch.AdminPasswordEnvironmentVariable, null);
             }
 
-            var mcpKeyRequested = DesktopLaunch.TryGetMcpKeyScope(args, out var mcpKeyScope, out var mcpKeyError);
-            if (mcpKeyRequested && mcpKeyError is not null)
+            if (!DesktopLaunch.TryGetMcpKeyScope(args, out var mcpKeyScope, out var mcpKeyError))
             {
                 await standardError.WriteLineAsync(mcpKeyError);
                 return HostLaunchRequest.Exit(3);
             }
 
             // The maintenance commands are one-shots too, so a busy data directory answers them with 4 like setup and --mcp-key.
-            var commandRequested = setupRequested || mcpKeyRequested || DesktopLaunch.TryGetResetAdminPassword(args, out _)
+            var commandRequested = setupCommand is not null || mcpKeyScope is not null || DesktopLaunch.TryGetResetAdminPassword(args, out _)
                                    || DesktopLaunch.GetKnowledgeDowngradeCommand(args) != KnowledgeDowngradeCommand.None;
 
             return new HostLaunchRequest
             {
                 RequestedPort = requestedPort,
-                SetupRequested = setupRequested,
                 SetupCommand = setupCommand,
-                McpKeyRequested = mcpKeyRequested,
                 McpKeyScope = mcpKeyScope,
                 CommandRequested = commandRequested
             };
@@ -294,9 +290,8 @@ namespace XE_Local_AI_Engine.Client
             // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization, which happens in EnsureLocalDataConfiguration just below: two concurrent instances
             // sharing this directory would each generate a key and split the DB. Held for the process lifetime and disposed on shutdown; never reached off the desktop flag.
 #pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped in AttachHostLifetime).
-            var instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
+            if (!SingleInstanceLease.TryAcquire(desktopDataDirectory, out var instanceLease))
 #pragma warning restore CA2000
-            if (instanceLease is null)
             {
                 Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
                 StartupLoggerReady = true;
@@ -596,20 +591,20 @@ namespace XE_Local_AI_Engine.Client
             TextWriter standardOutput,
             TextWriter standardError)
         {
-            if (launch.SetupRequested)
+            if (launch.SetupCommand is { } setupCommand)
             {
                 commandContext?.SetStage(OneShotCommandStage.Handler);
-                var setupExitCode = await SetupCommandAsync(services, launch.SetupCommand!, standardOutput, standardError);
+                var setupExitCode = await SetupCommandAsync(services, setupCommand, standardOutput, standardError);
                 if (setupExitCode != 0)
                 {
                     return setupExitCode;
                 }
             }
 
-            if (launch.McpKeyRequested)
+            if (launch.McpKeyScope is { } mcpKeyScope)
             {
                 commandContext?.SetStage(OneShotCommandStage.Handler);
-                var mcpKeyExitCode = await McpKeyCommandAsync(services, launch.McpKeyScope!.Value, standardOutput, standardError);
+                var mcpKeyExitCode = await McpKeyCommandAsync(services, mcpKeyScope, standardOutput, standardError);
                 if (mcpKeyExitCode != 0)
                 {
                     return mcpKeyExitCode;
@@ -645,13 +640,13 @@ namespace XE_Local_AI_Engine.Client
 
             public int? RequestedPort { get; init; }
 
-            public bool SetupRequested { get; init; }
-
             public SetupCommand? SetupCommand { get; init; }
 
-            public bool McpKeyRequested { get; init; }
-
             public McpServerApiKeyScope? McpKeyScope { get; init; }
+
+            public bool SetupRequested => SetupCommand is not null;
+
+            public bool McpKeyRequested => McpKeyScope is not null;
 
             /// <summary>A one-shot command was named, so a busy data directory answers with exit 4 instead of 1.</summary>
             public bool CommandRequested { get; init; }

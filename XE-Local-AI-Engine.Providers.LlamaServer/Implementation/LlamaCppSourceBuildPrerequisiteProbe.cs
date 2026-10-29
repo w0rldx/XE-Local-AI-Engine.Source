@@ -130,7 +130,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
     // make OR ninja satisfies the build-generator requirement; report which (if any) was found.
     private static async Task<LlamaCppSourceBuildPrerequisiteItem> ProbeBuildToolAsync(CancellationToken ct)
     {
-        var make = await TryProbeAsync("make", ["--version"], ct).ConfigureAwait(false);
+        var make = await ProbeOrNullAsync("make", ["--version"], ct).ConfigureAwait(false);
         if (make is { Length: > 0 })
         {
             return new LlamaCppSourceBuildPrerequisiteItem
@@ -141,7 +141,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
             };
         }
 
-        var ninja = await TryProbeAsync("ninja", ["--version"], ct).ConfigureAwait(false);
+        var ninja = await ProbeOrNullAsync("ninja", ["--version"], ct).ConfigureAwait(false);
         if (ninja is { Length: > 0 })
         {
             return new LlamaCppSourceBuildPrerequisiteItem
@@ -168,7 +168,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
         CancellationToken ct,
         string? executablePath = null)
     {
-        var banner = await TryProbeAsync(executablePath ?? fileName, args, ct).ConfigureAwait(false);
+        var banner = await ProbeOrNullAsync(executablePath ?? fileName, args, ct).ConfigureAwait(false);
         return banner is { Length: > 0 }
             ? new LlamaCppSourceBuildPrerequisiteItem
             {
@@ -186,7 +186,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
 
     // Spawns `<fileName> <args>` (no shell, argv only), bounded + tree-killed, and returns the trimmed first stdout/stderr
     // line on a clean exit, or null on any failure (missing tool, non-zero, timeout). Mirrors ProcessGpuVendorProbe.
-    private static async Task<string?> TryProbeAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
+    private static async Task<string?> ProbeOrNullAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
     {
         var startInfo = new ProcessStartInfo(fileName)
         {

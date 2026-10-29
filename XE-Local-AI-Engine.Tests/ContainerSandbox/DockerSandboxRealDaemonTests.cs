@@ -416,7 +416,7 @@ public sealed class DockerSandboxRealDaemonTests
 
         var hostPath = Path.Combine(fixture.WorkspaceRoot, "owned.txt");
         AssertEx.True(File.Exists(hostPath), "the file the container created is not visible on the host side of the mount.");
-        var owner = DockerWorkspaceHostFiles.TryReadOwnerUserId(hostPath);
+        var owner = DockerWorkspaceHostFiles.ReadOwnerUserIdOrNull(hostPath);
         AssertEx.True(owner.HasValue, "the owner of the container-created file could not be read on the host.");
         AssertEx.Equal(LibC.GetEffectiveUserId(), owner!.Value);
 
@@ -647,7 +647,7 @@ public sealed class DockerSandboxRealDaemonTests
         }
 
         // And the handle answers the translation question the engine actually asks.
-        AssertEx.Equal("/xe-runtime/nuget", fixture.Handle.TryResolveSandboxPath(Path.Combine(fixture.RuntimeRoot, "nuget")));
+        AssertEx.Equal("/xe-runtime/nuget", fixture.Handle.ResolveSandboxPathOrNull(Path.Combine(fixture.RuntimeRoot, "nuget")));
     }
 
     [Test]

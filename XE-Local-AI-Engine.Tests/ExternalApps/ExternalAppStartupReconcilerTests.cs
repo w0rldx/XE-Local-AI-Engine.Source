@@ -426,7 +426,7 @@ public sealed class ExternalAppStartupReconcilerTests
 
         var reconciler = harness.CreateReconciler();
         ExternalAppReconcileSummary guarded;
-        using (AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(row.Id))))
+        using (AssertEx.NotNull(await harness.Gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(row.Id))))
         {
             guarded = await reconciler.ReconcileAsync();
         }
@@ -559,7 +559,7 @@ public sealed class ExternalAppStartupReconcilerTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest);
         var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Updating);
 
-        using var held = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(seeded.Id)));
+        using var held = AssertEx.NotNull(await harness.Gate.EnterOrNullAsync(ExternalAppInstanceGate.InstanceKey(seeded.Id)));
 
         var summary = await harness.CreateReconciler().ReconcileAsync();
 

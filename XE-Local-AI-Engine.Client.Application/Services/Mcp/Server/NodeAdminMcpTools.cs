@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
@@ -286,17 +287,16 @@ public sealed partial class NodeAdminMcpTools
             var record = id is null
                 ? await _agentDefinitionService.CreateAsync(input, cancellationToken)
                 : await _agentDefinitionService.UpdateAsync(id.Value, input, cancellationToken);
-            if (record is null)
-            {
-                return AgentNotFound();
-            }
-
             var status = id is null ? "created" : "updated";
             return new McpAgentResponse
             {
                 Status = status,
                 Agent = McpAgentDefinition.FromRecord(record)
             };
+        }
+        catch (AgentDefinitionNotFoundException)
+        {
+            return AgentNotFound();
         }
         catch (AgentDefinitionValidationException exception)
         {
@@ -345,7 +345,7 @@ public sealed partial class NodeAdminMcpTools
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static bool TryParseIds(IReadOnlyList<string>? values, out IReadOnlyList<Guid> ids)
+    private static bool TryParseIds(IReadOnlyList<string>? values, [NotNullWhen(true)] out IReadOnlyList<Guid>? ids)
     {
         if (values is null)
         {
@@ -358,7 +358,7 @@ public sealed partial class NodeAdminMcpTools
         {
             if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty)
             {
-                ids = [];
+                ids = null;
                 return false;
             }
 
@@ -374,7 +374,7 @@ public sealed partial class NodeAdminMcpTools
 
     private static bool TryMapGenerationMetadata(McpGenerationMetadataInput? value,
         out GenerationMetadataInput? metadata,
-        out string? error)
+        [NotNullWhen(false)] out string? error)
     {
         if (value is null)
         {

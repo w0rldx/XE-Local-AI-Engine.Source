@@ -17,5 +17,5 @@ internal static class TrainingExportPaths
 
     /// <summary>Reads back the quantization the export named a staged file with.</summary>
     public static string? QuantizationOf(string stagedPath) =>
-        GgufQuantParser.TryParse(Path.GetFileName(stagedPath));
+        GgufQuantParser.ParseOrNull(Path.GetFileName(stagedPath));
 }

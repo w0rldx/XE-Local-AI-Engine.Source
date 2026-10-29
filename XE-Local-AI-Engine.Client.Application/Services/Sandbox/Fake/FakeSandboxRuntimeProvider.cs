@@ -395,7 +395,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
     }
 
     /// <summary>Read a host file previously written or copied out; returns <see langword="null" /> when absent.</summary>
-    public string? TryReadHostFile(string hostPath)
+    public string? ReadHostFileOrNull(string hostPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
 

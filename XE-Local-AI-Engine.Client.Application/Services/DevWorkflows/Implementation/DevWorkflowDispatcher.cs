@@ -800,14 +800,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return await lanes.DevTasks.StopAsync(store, run, nodeRun, run.Status == DevWorkflowRunStatus.Cancelling, cancellationToken);
         }
 
-        var owned = nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } };
+        var ownedSessionId = nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } sessionId } ? sessionId : (Guid?)null;
         if (run.Status == DevWorkflowRunStatus.Pausing)
         {
-            if (owned)
+            if (ownedSessionId is { } pausedSessionId)
             {
                 // The session checkpoints and parks, and the row collapses to Pending rather than to a terminal: a pause is meant to be RESUMED, and a Pending row with its session
                 // still attached is exactly what the resume re-admits — it finds the paused session and continues it instead of starting the work over.
-                await lanes.Agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: false, cancellationToken);
+                await lanes.Agent.StopAsync(pausedSessionId, cancel: false, cancellationToken);
             }
             else if (nodeRun.Status != DevWorkflowNodeRunStatus.Queued)
             {
@@ -825,11 +825,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return 1;
         }
 
-        if (owned)
+        if (ownedSessionId is { } cancelledSessionId)
         {
             // Asked, not settled: only the session knows whether it landed Cancelled or finished inside the window, and the top of the NEXT tick polls it. Counted as work so that tick
             // comes immediately rather than settling here, which would hold the advance gate — and with it every other run — for as long as the stop's grace period.
-            await lanes.Agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: true, cancellationToken);
+            await lanes.Agent.StopAsync(cancelledSessionId, cancel: true, cancellationToken);
             return 1;
         }
 

@@ -48,7 +48,7 @@ public sealed class LlamaCppPinConsistencyTests
         // checked separately below.
         foreach (var (os, arch, variant) in PinnedCombinations)
         {
-            var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(os, arch, variant),
+            var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(os, arch, variant),
                 $"Expected a pin row for ({os}, {arch}, {variant}).");
 
             AssertEx.Contains(pin.AssetName,
@@ -65,7 +65,7 @@ public sealed class LlamaCppPinConsistencyTests
         // A CUDA build without its cudart companion silently degrades to CPU-only, so the companion is part of the pin
         // rather than an optional extra. Its name is NOT tag-prefixed upstream — asserting that keeps a well-meaning
         // "make it consistent" edit from inventing an asset that does not exist.
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda),
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda),
             "Windows x64 CUDA must have a pin row.");
 
         var cudartName = AssertEx.NotNull(pin.CudartAssetName, "Windows x64 CUDA pin must carry a cudart companion.");
@@ -79,7 +79,7 @@ public sealed class LlamaCppPinConsistencyTests
     {
         // Outside PinnedCombinations (whose tuples are frozen), so asserted exactly here. Digests from the release-assets digest API;
         // unlike Windows, the Linux companion IS tag-prefixed upstream.
-        var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
+        var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
 
         AssertEx.Equal("llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.AssetName);
         AssertEx.Equal("4594be0afdddcfdf15e82f4fbd6805c60c399eaa62b181432ccaf3de87ef36d0", pin.Sha256);
@@ -95,7 +95,7 @@ public sealed class LlamaCppPinConsistencyTests
         // it. Checking the shape here turns a per-platform runtime failure into a build-time one.
         foreach (var (os, arch, variant) in PinnedCombinations)
         {
-            var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(os, arch, variant),
+            var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(os, arch, variant),
                 $"Expected a pin row for ({os}, {arch}, {variant}).");
 
             AssertEx.True(IsSha256Hex(pin.Sha256),

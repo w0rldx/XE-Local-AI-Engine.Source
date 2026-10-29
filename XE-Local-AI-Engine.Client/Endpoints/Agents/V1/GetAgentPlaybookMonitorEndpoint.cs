@@ -42,12 +42,8 @@ public sealed class GetAgentPlaybookMonitorEndpoint : Endpoint<GetAgentPlaybookM
 
     public override async Task HandleAsync(GetAgentPlaybookMonitorRequest req, CancellationToken ct)
     {
-        var agent = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct);
-        if (agent is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        // Throws the not-found the host maps to 404, so an unknown agent is not answered with an empty list.
+        _ = await _agentDefinitions.GetByIdAsync(req.AgentDefinitionId, ct);
 
         var views = await _playbookMonitorService.GetMonitorAsync(req.AgentDefinitionId, ct);
         await Send.OkAsync(views.ToResponse(_retrievalOptions), ct);

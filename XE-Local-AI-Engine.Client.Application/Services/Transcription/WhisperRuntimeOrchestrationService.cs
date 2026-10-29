@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -83,9 +84,9 @@ public sealed class WhisperRuntimeOrchestrationService
         return _activityGate.GetSnapshot();
     }
 
-    /// <summary>A transcription lease, or <see langword="null" /> while a runtime build, removal or eject holds the runtime.</summary>
-    public IRuntimeActivityLease? TryAcquireJobLease()
+    /// <summary>Acquires a transcription lease; <see langword="false" /> while a runtime build, removal or eject holds the runtime.</summary>
+    public bool TryAcquireJobLease([NotNullWhen(true)] out IRuntimeActivityLease? lease)
     {
-        return _activityGate.TryAcquireJobLease();
+        return _activityGate.TryAcquireJobLease(out lease);
     }
 }

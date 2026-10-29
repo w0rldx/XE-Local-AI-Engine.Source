@@ -84,10 +84,10 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException
                                               or SandboxCapabilityNotSupportedException
-                                              or KeyNotFoundException)
+                                              or KeyNotFoundException and not DevWorkflowNotFoundException)
         {
-            // The node cannot run AS CONFIGURED — a missing project, a repository needing reconnection, a sandbox that
-            // cannot hold a trusted workspace. Ahead of the security catch: a repository conflict IS one, more specific.
+            // The node cannot run AS CONFIGURED — a missing project, a repository needing reconnection, a sandbox that cannot hold a trusted workspace; a
+            // deleted RUN is not one and keeps the caller's unexpected-error path. Ahead of the security catch: a repository conflict IS one, more specific.
             return Refused(DevWorkflowFailureClasses.Configuration, Sanitized(exception), secrets);
         }
         catch (DevelopmentWorkspaceSecurityException exception)

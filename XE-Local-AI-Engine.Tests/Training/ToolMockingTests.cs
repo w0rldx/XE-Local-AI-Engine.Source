@@ -89,13 +89,12 @@ public sealed class ToolMockingTests
     }
 
     [Test]
-    public void MockEngine_NoRuleMatches_AndNoDefault_ReturnsNull()
+    public void MockEngine_NoRuleMatches_AndNoDefault_ReturnsFalse()
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Equality, "OTHER.md", null, "# Other"));
 
-        var response = Engine.TryRespond(body, Arguments("""{"path":"README.md"}"""));
-
-        AssertEx.Null(response, "An unmatched call must not fall through to anything — the caller reports validation-only.");
+        AssertEx.False(Engine.TryRespond(body, Arguments("""{"path":"README.md"}"""), out _),
+            "An unmatched call must not fall through to anything — the caller reports validation-only.");
     }
 
     [Test]
@@ -111,9 +110,12 @@ public sealed class ToolMockingTests
             DefaultResponse = "default"
         };
 
-        AssertEx.Equal("first", Engine.TryRespond(body, Arguments("""{"path":"README.md"}""")));
-        AssertEx.Equal("second", Engine.TryRespond(body, Arguments("""{"path":"other.md"}""")));
-        AssertEx.Equal("default", Engine.TryRespond(body, Arguments("""{"depth":2}""")));
+        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"path":"README.md"}"""), out var first));
+        AssertEx.Equal("first", first);
+        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"path":"other.md"}"""), out var second));
+        AssertEx.Equal("second", second);
+        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"depth":2}"""), out var fallback));
+        AssertEx.Equal("default", fallback);
     }
 
     [Test]
@@ -121,8 +123,9 @@ public sealed class ToolMockingTests
     {
         var body = Body(new ToolMockRuleV1("path", ToolMockMatchKind.Enum, null, ["a.md", "b.md"], "matched"));
 
-        AssertEx.Equal("matched", Engine.TryRespond(body, Arguments("""{"path":"b.md"}""")));
-        AssertEx.Null(Engine.TryRespond(body, Arguments("""{"path":"c.md"}""")));
+        AssertEx.Succeeded(Engine.TryRespond(body, Arguments("""{"path":"b.md"}"""), out var matched));
+        AssertEx.Equal("matched", matched);
+        AssertEx.False(Engine.TryRespond(body, Arguments("""{"path":"c.md"}"""), out _));
     }
 
     private static ToolMockBodyV1 Body(ToolMockRuleV1 rule) =>

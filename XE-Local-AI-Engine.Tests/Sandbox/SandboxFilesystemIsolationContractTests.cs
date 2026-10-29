@@ -183,9 +183,9 @@ public sealed class SandboxFilesystemIsolationContractTests
             });
 
             AssertEx.Equal(SandboxIsolationMode.Filesystem, handle.Isolation);
-            AssertEx.Equal("/work", handle.TryResolveSandboxPath(workspace));
-            AssertEx.Equal("/xe-runtime/home", handle.TryResolveSandboxPath(home));
-            AssertEx.Equal("/work/.git/config", handle.TryResolveSandboxPath(gitConfig));
+            AssertEx.Equal("/work", handle.ResolveSandboxPathOrNull(workspace));
+            AssertEx.Equal("/xe-runtime/home", handle.ResolveSandboxPathOrNull(home));
+            AssertEx.Equal("/work/.git/config", handle.ResolveSandboxPathOrNull(gitConfig));
             AssertEx.Contains(handle.Mounts, mount => mount.HostPath == shadow && mount.SandboxPath == "/work/secrets/key.pem" && mount.ReadOnly);
             AssertEx.Equal("/tmp", AssertEx.NotNull(handle.IsolatedPaths).Home);
             AssertEx.False(Directory.Exists(Path.Combine(workspace, SandboxIsolatedPaths.HomeDirectoryName)));

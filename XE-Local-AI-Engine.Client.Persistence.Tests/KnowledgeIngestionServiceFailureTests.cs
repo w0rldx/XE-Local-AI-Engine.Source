@@ -256,7 +256,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            AssertEx.True(await CreateCatalog(context).ResetToPendingAsync(documentId, CancellationToken.None));
+            await CreateCatalog(context).ResetToPendingAsync(documentId, CancellationToken.None);
         }
 
         AssertEx.Equal(0L, await ReadAttemptsAsync(databasePath, documentId), "An explicit retry must start the count again.");

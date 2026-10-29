@@ -159,17 +159,17 @@ public sealed class InstalledGgufSnapshotStoreTests
         var stamp = new DateTime(2026, 8, 25, 12, 0, 0, DateTimeKind.Utc);
         memo.Set("/models/weight.gguf", length: 4, stamp, "digest");
 
-        AssertEx.Equal("digest", memo.TryGet("/models/weight.gguf", length: 4, stamp));
-        AssertEx.Null(memo.TryGet("/models/weight.gguf", length: 5, stamp), "a changed length must re-hash");
-        AssertEx.Null(memo.TryGet("/models/weight.gguf", length: 4, stamp.AddTicks(1)), "a changed timestamp must re-hash");
-        AssertEx.Null(memo.TryGet("/models/other.gguf", length: 4, stamp), "another file is another entry");
+        AssertEx.Equal("digest", memo.Find("/models/weight.gguf", length: 4, stamp));
+        AssertEx.Null(memo.Find("/models/weight.gguf", length: 5, stamp), "a changed length must re-hash");
+        AssertEx.Null(memo.Find("/models/weight.gguf", length: 4, stamp.AddTicks(1)), "a changed timestamp must re-hash");
+        AssertEx.Null(memo.Find("/models/other.gguf", length: 4, stamp), "another file is another entry");
 
         for (var index = 0; index <= GgufMemberHashMemo.MaxEntries; index++)
         {
             memo.Set($"/models/{index}.gguf", length: 4, stamp, "digest");
         }
 
-        AssertEx.Null(memo.TryGet("/models/weight.gguf", length: 4, stamp), "the bound must drop remembered entries, never grow past it");
+        AssertEx.Null(memo.Find("/models/weight.gguf", length: 4, stamp), "the bound must drop remembered entries, never grow past it");
     }
 
     private static byte[] WeightBytes =>

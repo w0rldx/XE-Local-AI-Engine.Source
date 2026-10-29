@@ -253,7 +253,7 @@ public sealed class RuntimeDeviceAuditServiceTests
     private static ILlamaCppBinaryManager NoRuntimeInstalled()
     {
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+        binaryManager.FindInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<LlamaBinary?>(null));
         binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
                      .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("A device audit must never acquire a llama.cpp runtime."));

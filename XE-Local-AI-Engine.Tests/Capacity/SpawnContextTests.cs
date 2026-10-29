@@ -30,25 +30,21 @@ public sealed class SpawnContextTests
     [Test]
     public async Task TryEnterFanOut_AdmitsUpToCap_ThenRejects_UntilReleased()
     {
-        using var _ = SpawnContext.BeginRoot(fanOutCap: 2, cloudSpawnCap: 3);
+        using var root = SpawnContext.BeginRoot(fanOutCap: 2, cloudSpawnCap: 3);
         var context = AssertEx.NotNull(SpawnContext.Current);
 
-        var first = context.TryEnterFanOut();
-        var second = context.TryEnterFanOut();
-        AssertEx.NotNull(first);
-        AssertEx.NotNull(second);
-
-        // Cap reached: a third concurrent lease is refused.
-        var third = context.TryEnterFanOut();
-        AssertEx.Null(third);
+        AssertEx.Succeeded(context.TryEnterFanOut(out var second));
+        using var secondScope = second;
+        AssertEx.Succeeded(context.TryEnterFanOut(out var first));
+        using (first)
+        {
+            // Cap reached: a third concurrent lease is refused.
+            AssertEx.False(context.TryEnterFanOut(out _));
+        }
 
         // Releasing one frees a slot.
-        first!.Dispose();
-        var afterRelease = context.TryEnterFanOut();
-        AssertEx.NotNull(afterRelease);
-
-        afterRelease!.Dispose();
-        second!.Dispose();
+        AssertEx.Succeeded(context.TryEnterFanOut(out var afterRelease));
+        using var afterReleaseScope = afterRelease;
         await Task.CompletedTask;
     }
 

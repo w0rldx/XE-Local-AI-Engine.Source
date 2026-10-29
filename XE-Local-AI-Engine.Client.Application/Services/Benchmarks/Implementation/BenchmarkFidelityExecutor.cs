@@ -207,13 +207,13 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         var arguments = BuildArguments(modelPath, corpus.Path, chunks, snapshot.PrimaryRuntime, kld?.BaseFilePath, isBasePhase: false);
         var result = await RunUnderWatchdogAsync(executable, arguments, token);
 
-        var reading = BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output);
+        var reading = BenchmarkPerplexityOutputParser.ParsePerplexityOrNull(result.Output);
         if (result.ExitCode != 0 || reading is null)
         {
             throw new BenchmarkExecutionException($"{UnparseableOutputMessage} {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
         }
 
-        var divergence = kld is null ? null : BenchmarkPerplexityOutputParser.TryParseKld(result.Output);
+        var divergence = kld is null ? null : BenchmarkPerplexityOutputParser.ParseKldOrNull(result.Output);
         if (kld is not null && divergence is null)
         {
             throw new BenchmarkExecutionException($"{UnparseableOutputMessage} {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
@@ -267,7 +267,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         }
 
         var key = BenchmarkKldCacheKey.Create(baseFingerprint, corpus.Sha256, chunks);
-        if (_cache.TryResolveExisting(key) is { } existing)
+        if (_cache.FindExisting(key) is { } existing)
         {
             return new KldPreparation
             {
@@ -289,8 +289,9 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
 
         // The lease is the crash-safe half: DeleteOnClose means a killed writer's lock is released by the OS, so a
         // later run takes over instead of waiting on a lock nobody will release.
-        await using var lease = _cache.TryAcquireLease(key);
-        if (lease is null)
+#pragma warning disable CA2000 // A refused lease hands back no stream; a granted one is disposed by the using declaration below.
+        if (!_cache.TryAcquireLease(key, out var lease))
+#pragma warning restore CA2000
         {
             // Another writer holds it, so this process must not write a second multi-gigabyte copy: wait for theirs on the SAME cadence a capacity rejection waits on.
             // If it has still not landed the item goes back in the queue — throwing here would terminalize the measurement as failed, under a message promising a retry there is no mechanism for.
@@ -304,6 +305,8 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
                 }
                 : throw new BenchmarkFidelityRequeueException(BaseWaitedTooLongMessage);
         }
+
+        await using var leaseScope = lease;
 
         // Reserved for the BASE model, and only once this phase is certainly going to run it: an early return on a published file, or a lease another process holds, allocates nothing and must
         // reserve nothing. The reservation is released when this method returns, i.e. after the base file is published, so the quant pass is admitted against a ledger the base is no longer in.
@@ -334,7 +337,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         {
             var arguments = BuildArguments(basePath, corpus.Path, chunks, snapshot.PrimaryRuntime, tempPath, isBasePhase: true);
             var result = await RunUnderWatchdogAsync(executable, arguments, token);
-            if (result.ExitCode != 0 || BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output) is null)
+            if (result.ExitCode != 0 || BenchmarkPerplexityOutputParser.ParsePerplexityOrNull(result.Output) is null)
             {
                 throw new BenchmarkExecutionException($"{UnparseableOutputMessage} {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
             }
@@ -400,7 +403,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
                 await Task.Delay(_admissionRetry.Interval, token);
             }
 
-            if (_cache.TryResolveExisting(key) is { } published)
+            if (_cache.FindExisting(key) is { } published)
             {
                 return published;
             }
@@ -499,7 +502,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             schemaVersion = 1,
             kind = "fidelity-evidence",
             executablePath = executable,
-            executableSha256 = await TryHashFileAsync(executable),
+            executableSha256 = await HashFileOrNullAsync(executable),
             variant = snapshot.PrimaryRuntime.Variant,
             argv = arguments,
             corpusId = corpus.CorpusId,
@@ -508,7 +511,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             environmentFacts = environment
         }));
 
-    private static async Task<string?> TryHashFileAsync(string path)
+    private static async Task<string?> HashFileOrNullAsync(string path)
     {
         try
         {

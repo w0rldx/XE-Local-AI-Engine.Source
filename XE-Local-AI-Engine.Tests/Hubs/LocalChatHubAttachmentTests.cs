@@ -134,7 +134,11 @@ public sealed class LocalChatHubAttachmentTests
         var conversationId = Guid.NewGuid();
         var invocationId = Guid.NewGuid();
         var resumeRegistry = Substitute.For<IInvocationResumeRegistry>();
-        resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId).Returns(invocationId);
+        resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId, out Arg.Any<Guid>()).Returns(call =>
+        {
+            call[1] = invocationId;
+            return true;
+        });
         resumeRegistry.ResumeAsync(invocationId, Arg.Any<CancellationToken>())
                       .Returns<IAsyncEnumerable<ChatStreamEvent>>(_ => throw new InvalidOperationException("already terminal"));
         using var hub = CreateHub(Substitute.For<INodeChatStreamService>(), CreateTracker(), resumeRegistry);

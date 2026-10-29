@@ -135,7 +135,7 @@ public sealed partial class DevelopmentStore
     /// <remarks>
     ///     <see cref="DevelopmentNotFoundException" /> rather than the <c>InvalidOperationException</c> a
     ///     <c>SingleAsync</c> would throw for a task deleted underneath a caller: that is the family the global
-    ///     DevelopmentNotFoundExceptionHandler answers as a 404, and an untyped escape from a recording path leaves its
+    ///     ResourceNotFoundExceptionHandler answers as a 404, and an untyped escape from a recording path leaves its
     ///     row unresolvable.
     /// </remarks>
     private async Task<Guid> ProjectIdForTaskAsync(Guid taskId, CancellationToken cancellationToken)

@@ -467,7 +467,7 @@ public sealed class SandboxIsolationLiveTests
     {
         var isolation = new HostSandboxContainmentProbe().Containment.FilesystemIsolation;
 
-        return SandboxScopeUnitKiller.TryCreate(isolation)?.ListEngineOwnedUnits() ?? [];
+        return SandboxScopeUnitKiller.CreateOrNull(isolation)?.ListEngineOwnedUnits() ?? [];
     }
 
     private static async Task<SandboxHandle> CreateIsolatedSandboxAsync(ProcessSandboxRuntimeProvider provider,

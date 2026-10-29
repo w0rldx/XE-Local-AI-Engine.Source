@@ -17,13 +17,13 @@ internal static class TrainingRuntimeProbeParser
     /// <summary>
     ///     Returns the parsed handshake, or <see langword="null" /> when no line in <paramref name="lines" /> is one.
     /// </summary>
-    public static TrainingRuntimeProbeReport? TryParse(IReadOnlyList<string> lines)
+    public static TrainingRuntimeProbeReport? ParseOrNull(IReadOnlyList<string> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
 
         for (var index = lines.Count - 1; index >= 0; index--)
         {
-            var report = TryParseLine(lines[index]);
+            var report = ParseLineOrNull(lines[index]);
             if (report is not null)
             {
                 return report;
@@ -33,7 +33,7 @@ internal static class TrainingRuntimeProbeParser
         return null;
     }
 
-    private static TrainingRuntimeProbeReport? TryParseLine(string line)
+    private static TrainingRuntimeProbeReport? ParseLineOrNull(string line)
     {
         var trimmed = line.Trim();
         if (trimmed.Length == 0 || trimmed[0] != '{')

@@ -362,50 +362,50 @@ internal sealed class GgufHeaderReader
         var architecture = GetString(values, "general.architecture");
 
         // The quant label rides general.file_type (a uint enum in the GGUF spec), stringified.
-        var quantType = TryGetLong(values, "general.file_type") is { } ft
+        var quantType = GetLongOrNull(values, "general.file_type") is { } ft
             ? ft.ToString(CultureInfo.InvariantCulture)
             : null;
 
-        var paramCount = TryGetLong(values, "general.parameter_count");
+        var paramCount = GetLongOrNull(values, "general.parameter_count");
 
         string? Arch(string suffix)
         {
             return architecture is null ? null : $"{architecture}.{suffix}";
         }
 
-        var blockCount = TryGetLong(values, Arch("block_count"));
-        var headCount = TryGetLong(values, Arch("attention.head_count"));
-        var headCountKv = TryGetLong(values, Arch("attention.head_count_kv"));
-        var embeddingLength = TryGetLong(values, Arch("embedding_length"));
-        var contextLength = TryGetLong(values, Arch("context_length"));
+        var blockCount = GetLongOrNull(values, Arch("block_count"));
+        var headCount = GetLongOrNull(values, Arch("attention.head_count"));
+        var headCountKv = GetLongOrNull(values, Arch("attention.head_count_kv"));
+        var embeddingLength = GetLongOrNull(values, Arch("embedding_length"));
+        var contextLength = GetLongOrNull(values, Arch("context_length"));
 
         // Mixture-of-Experts marker: a dense model omits this key (or writes 0); an MoE model writes its total expert count (e.g. <arch>.expert_count = 8 for Mixtral/Qwen-MoE). Drives the inference
         // profile's is_moe/expert_count so the optimizer measures MoE throughput empirically rather than predicting it.
-        var expertCount = TryGetLong(values, Arch("expert_count"));
+        var expertCount = GetLongOrNull(values, Arch("expert_count"));
 
         // Active experts routed per token (e.g. <arch>.expert_used_count = 2 of 8 for a top-2 MoE gate). Combined with
         // expert_count this drives the memory-fit estimator's expert-offload split; null for dense models.
-        var expertUsedCount = TryGetLong(values, Arch("expert_used_count"));
+        var expertUsedCount = GetLongOrNull(values, Arch("expert_used_count"));
 
         // Explicit per-head key/value dimensions (<arch>.attention.key_length / value_length). Preferred by the memory-fit estimator over the derived head_dim = embedding_length / n_heads — the
         // derivation is wrong for families like Qwen3 that pin head_dim (128) independently of the embedding width. Null when the header omits them.
-        var attentionKeyLength = TryGetLong(values, Arch("attention.key_length"));
-        var attentionValueLength = TryGetLong(values, Arch("attention.value_length"));
+        var attentionKeyLength = GetLongOrNull(values, Arch("attention.key_length"));
+        var attentionValueLength = GetLongOrNull(values, Arch("attention.value_length"));
 
         // Multi-head Latent Attention (deepseek2 family): when BOTH {arch}.attention.key_length_mla and .value_length_mla are present and positive, llama.cpp's is_mla() holds and the cache is
         // allocated as a single latent K tensor with NO V tensor at all. Detection is by these two keys only — never by architecture name.
-        var attentionKeyLengthMla = TryGetLong(values, Arch("attention.key_length_mla"));
-        var attentionValueLengthMla = TryGetLong(values, Arch("attention.value_length_mla"));
+        var attentionKeyLengthMla = GetLongOrNull(values, Arch("attention.key_length_mla"));
+        var attentionValueLengthMla = GetLongOrNull(values, Arch("attention.value_length_mla"));
 
         // Interleaved sliding-window attention (Gemma family): a positive window means the window-limited layers hold at most this many KV positions instead of the full context. The layer stride
         // (every Nth layer is full attention) comes from an explicit header key when present, else the per-architecture default (Gemma3=6, Gemma2=2).
-        var slidingWindow = TryGetLong(values, Arch("attention.sliding_window"));
-        var slidingWindowPattern = TryGetLong(values, Arch("attention.sliding_window_pattern"))
+        var slidingWindow = GetLongOrNull(values, Arch("attention.sliding_window"));
+        var slidingWindowPattern = GetLongOrNull(values, Arch("attention.sliding_window_pattern"))
                                    ?? GgufAttentionDefaults.SlidingWindowPattern(architecture);
 
         // Hybrid recurrent/attention stacks (qwen3next, qwen35, qwen35moe): only every Nth layer holds a KV cache, the rest keep a fixed-size recurrent state. Deliberately NO per-architecture
         // default (llama.cpp assumes 4 when the key is absent): without the key the estimator keeps charging every layer, the conservative side.
-        var fullAttentionInterval = TryGetLong(values, Arch("full_attention_interval"));
+        var fullAttentionInterval = GetLongOrNull(values, Arch("full_attention_interval"));
         var decisionType = architecture is null ? null : GetString(values, $"{architecture}.decision.type");
 
         // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
@@ -444,7 +444,7 @@ internal sealed class GgufHeaderReader
         return values.TryGetValue(key, out var v) && v is string s ? s : null;
     }
 
-    private static long? TryGetLong(IReadOnlyDictionary<string, object> values, string? key)
+    private static long? GetLongOrNull(IReadOnlyDictionary<string, object> values, string? key)
     {
         if (key is null || !values.TryGetValue(key, out var v))
         {

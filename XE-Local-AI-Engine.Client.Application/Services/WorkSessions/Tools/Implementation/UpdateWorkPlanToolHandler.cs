@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -183,10 +184,10 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
         int index,
         string batchDigest,
         AgentWorkSessionSnapshot session,
-        out WorkPlanTaskChange change,
-        out string error)
+        [NotNullWhen(true)] out WorkPlanTaskChange? change,
+        [NotNullWhen(false)] out string? error)
     {
-        change = null!;
+        change = null;
         _ = TryParseOperation(operation.Op, out var parsed);
 
         Guid taskId;
@@ -228,7 +229,7 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
             Status = status,
             BlockedReason = string.IsNullOrWhiteSpace(operation.BlockedReason) ? null : operation.BlockedReason
         };
-        error = string.Empty;
+        error = null;
         return true;
     }
 

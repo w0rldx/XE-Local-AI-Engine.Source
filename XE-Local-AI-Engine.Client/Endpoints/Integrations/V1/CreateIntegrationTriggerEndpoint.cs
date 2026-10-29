@@ -49,13 +49,13 @@ public sealed class CreateIntegrationTriggerEndpoint : Endpoint<CreateIntegratio
             },
             ct);
 
-        if (result.Outcome != IntegrationTriggerOutcome.Saved)
+        if (result is not IntegrationTriggerResult.Saved saved)
         {
-            await IntegrationTriggerResponses.SendFailureAsync(this, Send, result, ct);
+            await IntegrationTriggerResponses.SendFailureAsync(this, Send, (IntegrationTriggerResult.Rejected)result, ct);
             return;
         }
 
-        var view = IntegrationMapper.ToView(result.Trigger!);
+        var view = IntegrationMapper.ToView(saved.Trigger);
         await Send.CreatedAtAsync<GetIntegrationTriggerEndpoint>(new
             {
                 triggerId = view.Id

@@ -111,7 +111,7 @@ internal sealed class ComputeRuntimeDirectory
     }
 
     /// <summary>The identity the shipped lockfile asks for, or null when it cannot be read.</summary>
-    public async Task<ManagedPythonEnvironmentIdentity?> TryComputeExpectedIdentityAsync(CancellationToken cancellationToken)
+    public async Task<ManagedPythonEnvironmentIdentity?> ComputeExpectedIdentityOrNullAsync(CancellationToken cancellationToken)
     {
         try
         {

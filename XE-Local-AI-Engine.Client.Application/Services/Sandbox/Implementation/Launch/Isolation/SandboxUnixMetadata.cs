@@ -37,7 +37,7 @@ internal static class SandboxUnixMetadata
     ///     the platform cannot answer. <paramref name="followSymbolicLinks" /> is <see langword="false" /> by default
     ///     because every caller here is asking about the component itself, not about what it points at.
     /// </summary>
-    public static SandboxUnixFileFacts? TryRead(string path, bool followSymbolicLinks = false)
+    public static SandboxUnixFileFacts? ReadOrNull(string path, bool followSymbolicLinks = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -56,7 +56,7 @@ internal static class SandboxUnixMetadata
     /// <summary>
     ///     Reads the facts for the object an open descriptor refers to. The descriptor may be <c>O_PATH</c>.
     /// </summary>
-    public static SandboxUnixFileFacts? TryReadDescriptor(int fileDescriptor)
+    public static SandboxUnixFileFacts? ReadDescriptorOrNull(int fileDescriptor)
     {
         if (!OperatingSystem.IsLinux() || fileDescriptor < 0)
         {

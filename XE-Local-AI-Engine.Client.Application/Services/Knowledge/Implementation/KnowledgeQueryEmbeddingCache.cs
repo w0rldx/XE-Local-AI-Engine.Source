@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -45,7 +46,7 @@ public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
             StringComparer.Ordinal);
     }
 
-    public bool TryGet(string policyFamilyIdentity, string query, out KnowledgeQueryEmbeddingCacheEntry entry)
+    public bool TryGet(string policyFamilyIdentity, string query, [NotNullWhen(true)] out KnowledgeQueryEmbeddingCacheEntry? entry)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(policyFamilyIdentity);
         ArgumentNullException.ThrowIfNull(query);
@@ -57,7 +58,7 @@ public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
             return true;
         }
 
-        entry = default!;
+        entry = null;
         RecordLookup(hit: false);
         return false;
     }

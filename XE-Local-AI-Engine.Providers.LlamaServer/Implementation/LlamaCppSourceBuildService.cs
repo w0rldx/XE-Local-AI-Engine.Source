@@ -205,7 +205,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 };
             }
 
-            var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+            var mutationLease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(ct).ConfigureAwait(false);
             if (mutationLease is null)
             {
                 var processCount = _supervisor.CountRunningProcesses();
@@ -582,14 +582,14 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
             // Recorded, never enforced: the quantizer is off the inference path — only a training export needs it — so a build that produced everything else is still a
             // perfectly good serving runtime, and failing adoption here would trade a working runtime for a capability the operator may never use.
-            if (LlamaCppToolBinaries.TryResolveQuantizer(builtBin) is null)
+            if (LlamaCppToolBinaries.FindQuantizer(builtBin) is null)
             {
                 AppendLog("The build produced no llama-quantize helper; training exports will not be able to quantize with this runtime.");
                 _logger.LogWarning("The source build produced no {Quantizer} helper.", ManagedQuantizeFileName);
             }
 
             // Same posture for the perplexity tool: only a benchmark fidelity measurement needs it.
-            if (LlamaCppToolBinaries.TryResolvePerplexity(builtBin) is null)
+            if (LlamaCppToolBinaries.FindPerplexity(builtBin) is null)
             {
                 AppendLog("The build produced no llama-perplexity helper; benchmark fidelity cannot be measured with this runtime.");
                 _logger.LogWarning("The source build produced no {Perplexity} helper.", ManagedPerplexityFileName);
@@ -606,7 +606,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
             // Swap into place last: park any previous runtime in the backup, move the staged tree in, then validate + adopt
             // the FINAL binary. On any failure, roll the previous runtime back so the working runtime is never lost.
-            await using var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false)
+            await using var mutationLease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(ct).ConfigureAwait(false)
                                             ?? throw new LlamaRuntimeException("A llama-server process started while the build was running; stop it before adopting the new runtime.");
             var hadPrevious = Directory.Exists(finalTagDir);
             try

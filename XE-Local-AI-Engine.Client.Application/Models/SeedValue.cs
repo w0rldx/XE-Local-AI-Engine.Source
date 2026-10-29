@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 /// <summary>
@@ -24,7 +25,7 @@ public static class SeedValue
     ///     otherwise <paramref name="error" /> is set to <see cref="ValidationMessage" /> and the method returns
     ///     <see langword="false" />.
     /// </summary>
-    public static bool TryParse(string? raw, out long? seed, out string? error)
+    public static bool TryParse(string? raw, out long? seed, [NotNullWhen(false)] out string? error)
     {
         seed = null;
         error = null;

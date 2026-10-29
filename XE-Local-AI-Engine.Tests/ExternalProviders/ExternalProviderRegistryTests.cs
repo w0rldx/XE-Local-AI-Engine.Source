@@ -41,12 +41,12 @@ public sealed class ExternalProviderRegistryTests
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"])));
 
         // The slug is ours to mint and is canonicalized, so a caller holding a case variant of it still resolves.
-        var resolved = await registry.TryResolveAsync("ext:BOX-A/qwen3", CancellationToken.None);
+        var resolved = await registry.FindRegistrationAsync("ext:BOX-A/qwen3", CancellationToken.None);
         AssertEx.Equal("ext:box-a/qwen3", AssertEx.NotNull(resolved).ModelId);
 
         // The SCHEME is matched ordinally, so "EXT:" is not an external id at all — the same rule the model-name
         // validator applies, which is what stops the two from disagreeing about whether an id is even routable.
-        AssertEx.Null(await registry.TryResolveAsync("EXT:box-a/qwen3", CancellationToken.None));
+        AssertEx.Null(await registry.FindRegistrationAsync("EXT:box-a/qwen3", CancellationToken.None));
     }
 
     [Test]
@@ -55,7 +55,7 @@ public sealed class ExternalProviderRegistryTests
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"], supportsTools: null)));
 
         // Unknown fails closed exactly like No: past the store, a capability is declared or it is absent.
-        var resolved = AssertEx.NotNull(await registry.TryResolveAsync("ext:box-a/qwen3", CancellationToken.None));
+        var resolved = AssertEx.NotNull(await registry.FindRegistrationAsync("ext:box-a/qwen3", CancellationToken.None));
         AssertEx.False(resolved.Model.SupportsTools);
     }
 
@@ -78,11 +78,11 @@ public sealed class ExternalProviderRegistryTests
             },
             Connection("legacy-box", models: ["qwen3"], locality: ExternalProviderLocality.Cloud)));
 
-        AssertEx.Equal(grants, AssertEx.NotNull(await registry.TryResolveAsync("ext:cloud-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
+        AssertEx.Equal(grants, AssertEx.NotNull(await registry.FindRegistrationAsync("ext:cloud-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
         AssertEx.Equal(ExternalProviderCloudGrants.None,
-            AssertEx.NotNull(await registry.TryResolveAsync("ext:local-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
+            AssertEx.NotNull(await registry.FindRegistrationAsync("ext:local-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
         AssertEx.Equal(ExternalProviderCloudGrants.None,
-            AssertEx.NotNull(await registry.TryResolveAsync("ext:legacy-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
+            AssertEx.NotNull(await registry.FindRegistrationAsync("ext:legacy-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
     }
 
     [Test]
@@ -90,8 +90,8 @@ public sealed class ExternalProviderRegistryTests
     {
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"])));
 
-        AssertEx.Null(await registry.TryResolveAsync("ext:box-a", CancellationToken.None));
-        AssertEx.Null(await registry.TryResolveAsync("qwen3:8b", CancellationToken.None));
+        AssertEx.Null(await registry.FindRegistrationAsync("ext:box-a", CancellationToken.None));
+        AssertEx.Null(await registry.FindRegistrationAsync("qwen3:8b", CancellationToken.None));
     }
 
     [Test]
@@ -100,8 +100,8 @@ public sealed class ExternalProviderRegistryTests
         var store = new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"]));
         var registry = new ExternalProviderRegistry(store);
 
-        _ = await registry.TryResolveAsync("ext:box-a/qwen3", CancellationToken.None);
-        _ = await registry.TryResolveAsync("ext:box-a/qwen3", CancellationToken.None);
+        _ = await registry.FindRegistrationAsync("ext:box-a/qwen3", CancellationToken.None);
+        _ = await registry.FindRegistrationAsync("ext:box-a/qwen3", CancellationToken.None);
         _ = await registry.ListRegistrationsAsync(CancellationToken.None);
 
         // Every miss would otherwise be a file read plus a data-protection unprotect, on the chat path.
@@ -129,10 +129,10 @@ public sealed class ExternalProviderRegistryTests
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("keyed", models: ["qwen3"], apiKey: "sk-secret"),
             Connection("keyless", models: ["qwen3"])));
 
-        AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:keyed/qwen3", CancellationToken.None)).ApiKey);
+        AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:keyed/qwen3", CancellationToken.None)).ApiKey);
         // Distinct from an empty key: null means send NO Authorization header at all.
-        AssertEx.Null(AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:keyless/qwen3", CancellationToken.None)).ApiKey);
-        AssertEx.Null(await registry.TryResolveTransportBindingAsync("ext:never-existed/qwen3", CancellationToken.None));
+        AssertEx.Null(AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:keyless/qwen3", CancellationToken.None)).ApiKey);
+        AssertEx.Null(await registry.FindTransportBindingAsync("ext:never-existed/qwen3", CancellationToken.None));
     }
 
     [Test]
@@ -140,7 +140,7 @@ public sealed class ExternalProviderRegistryTests
     {
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("keyed", models: ["qwen3"], apiKey: "sk-secret")));
 
-        AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:KEYED/qwen3", CancellationToken.None)).ApiKey);
+        AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:KEYED/qwen3", CancellationToken.None)).ApiKey);
     }
 
     [Test]
@@ -151,8 +151,8 @@ public sealed class ExternalProviderRegistryTests
 
         // The endpoint and the credential come out of ONE snapshot. Read separately they can come from two
         // generations, which is how a concurrent edit presents one connection's key at another's address.
-        var a = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
-        var b = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
+        var a = AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var b = AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
 
         AssertEx.Equal("sk-a", a.ApiKey);
         AssertEx.Equal("http://127.0.0.1:18099/v1/", a.Binding.BaseAddress);
@@ -169,8 +169,8 @@ public sealed class ExternalProviderRegistryTests
             },
             Connection("box-b", models: ["qwen3"], baseUrl: "http://127.0.0.1:18100/v1/")));
 
-        var a = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
-        var b = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
+        var a = AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var b = AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
 
         // The transport is the one consumer that needs the secret VALUE; it rides with the endpoint like the key.
         AssertEx.True(a.Headers.SequenceEqual([new("X-Project", "a"), new("X-Token", "t-a")]), string.Join(", ", a.Headers.Select(static header => header.Key)));
@@ -185,7 +185,7 @@ public sealed class ExternalProviderRegistryTests
             Headers = [ExternalProviderStoreTests.Header("X-Project", "old")]
         });
         var registry = new ExternalProviderRegistry(store);
-        _ = await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None);
+        _ = await registry.FindTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None);
 
         store.Replace(Connection("box-a", models: ["qwen3"]) with
         {
@@ -193,7 +193,7 @@ public sealed class ExternalProviderRegistryTests
         });
         registry.Invalidate();
 
-        var binding = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var binding = AssertEx.NotNull(await registry.FindTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
         AssertEx.Equal("new", binding.Headers.Single().Value);
     }
 
@@ -203,9 +203,9 @@ public sealed class ExternalProviderRegistryTests
         var store = new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"]));
         var registry = new ExternalProviderRegistry(store);
 
-        var before = AssertEx.NotNull(await registry.TryResolveBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var before = AssertEx.NotNull(await registry.FindBindingAsync("ext:box-a/qwen3", CancellationToken.None));
         registry.Invalidate();
-        var after = AssertEx.NotNull(await registry.TryResolveBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var after = AssertEx.NotNull(await registry.FindBindingAsync("ext:box-a/qwen3", CancellationToken.None));
 
         // A moved generation is what a pinned invocation checks against; without it a mid-turn edit is invisible.
         AssertEx.True(after.Generation > before.Generation);

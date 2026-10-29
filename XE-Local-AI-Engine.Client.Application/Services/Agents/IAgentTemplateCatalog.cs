@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     A single curated starter-pack persona, transformed once at build time from the vendored source and shipped as
 ///     an embedded JSON resource.
@@ -31,6 +33,6 @@ public interface IAgentTemplateCatalog
     /// <summary>Returns every template in the catalog, in seed-file order.</summary>
     IReadOnlyList<AgentTemplate> List();
 
-    /// <summary>Returns the template for <paramref name="slug" />, or <c>null</c> when no template has that slug.</summary>
-    AgentTemplate? TryGet(string slug);
+    /// <summary>Gets the template for <paramref name="slug" />; <see langword="false" /> when no template has that slug.</summary>
+    bool TryGet(string slug, [NotNullWhen(true)] out AgentTemplate? agentTemplate);
 }

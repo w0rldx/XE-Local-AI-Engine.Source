@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -442,7 +443,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
             _cloudClient = cloudClient;
         }
 
-        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client)
         {
             client = _cloudClient;
             return true;
@@ -474,7 +475,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
 
         public bool CloudActive { get; set; }
 
-        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client)
         {
             client = CloudActive ? _cloudClient : null;
             return CloudActive;

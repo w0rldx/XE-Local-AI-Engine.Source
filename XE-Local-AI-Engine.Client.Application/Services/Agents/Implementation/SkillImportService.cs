@@ -272,12 +272,12 @@ internal sealed partial class SkillImportService : ISkillImportService
         SkillImportOptions options)
     {
         var problems = new List<string>();
-        if (!SkillFrontmatterReader.TryRead(folder.SkillMarkdown, out var frontmatter, out var parseError) || frontmatter is null)
+        if (!SkillFrontmatterReader.TryRead(folder.SkillMarkdown, out var frontmatter, out var parseError))
         {
             // A root-level or pasted SKILL.md has no folder name and its frontmatter name is unreadable, so the row is labeled by
             // the file; an empty name would render a blank row whose only content is the reason it cannot be imported.
             return Unimportable(folder.DirectoryName.Length > 0 ? folder.DirectoryName : "SKILL.md",
-                [parseError ?? "The skill frontmatter could not be read."]);
+                [parseError]);
         }
 
         // Specification rule: a skill's name must match its containing directory. Where they disagree the directory

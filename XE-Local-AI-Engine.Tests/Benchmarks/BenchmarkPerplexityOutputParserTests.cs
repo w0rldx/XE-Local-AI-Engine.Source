@@ -42,9 +42,9 @@ public sealed class BenchmarkPerplexityOutputParserTests
                                               """;
 
     [Test]
-    public void TryParsePerplexity_OnARealPlainRun_ReadsTheMeanAndItsStandardError()
+    public void ParsePerplexityOrNull_OnARealPlainRun_ReadsTheMeanAndItsStandardError()
     {
-        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.TryParsePerplexity(PlainPerplexityOutput));
+        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.ParsePerplexityOrNull(PlainPerplexityOutput));
 
         AssertEx.Equal(expected: 6.7983, reading.Mean);
         AssertEx.Equal(expected: 0.07405, reading.StandardError);
@@ -56,21 +56,21 @@ public sealed class BenchmarkPerplexityOutputParserTests
     ///     succeeded, and the failure would read as "unparseable output" rather than as a missing pattern.
     /// </summary>
     [Test]
-    public void TryParsePerplexity_OnAKlDivergenceRun_ReadsMeanPplOfTheQuant()
+    public void ParsePerplexityOrNull_OnAKlDivergenceRun_ReadsMeanPplOfTheQuant()
     {
         AssertEx.False(KlDivergenceOutput.Contains("Final estimate", StringComparison.Ordinal),
             "The fixture must keep the property that makes this case real: a KLD run prints no final estimate.");
 
-        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.TryParsePerplexity(KlDivergenceOutput));
+        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.ParsePerplexityOrNull(KlDivergenceOutput));
 
         AssertEx.Equal(expected: 5.886524, reading.Mean);
         AssertEx.Equal(expected: 0.398426, reading.StandardError, "The statistics block separates value from error with U+00B1, not '+/-'.");
     }
 
     [Test]
-    public void TryParseKld_ReadsTheMeanTheP99AndTheAgreementAsAFraction()
+    public void ParseKldOrNull_ReadsTheMeanTheP99AndTheAgreementAsAFraction()
     {
-        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.TryParseKld(KlDivergenceOutput));
+        var reading = AssertEx.NotNull(BenchmarkPerplexityOutputParser.ParseKldOrNull(KlDivergenceOutput));
 
         AssertEx.Equal(expected: 0.030165, reading.Mean);
         AssertEx.Equal<double?>(0.388019, reading.P99, "The p99 row is '99.0%   KLD', distinct from the 99.9% row just above it.");
@@ -86,10 +86,10 @@ public sealed class BenchmarkPerplexityOutputParserTests
     {
         // Fail closed: the caller turns null into a FAILED measurement. A zero here would be a real perplexity and a
         // perfect KL divergence — the two most flattering numbers the axis can report.
-        AssertEx.Null(BenchmarkPerplexityOutputParser.TryParsePerplexity("llama_model_load: error loading model"));
-        AssertEx.Null(BenchmarkPerplexityOutputParser.TryParsePerplexity(null));
-        AssertEx.Null(BenchmarkPerplexityOutputParser.TryParseKld(PlainPerplexityOutput), "A plain run measured no divergence, so it reports none.");
-        AssertEx.Null(BenchmarkPerplexityOutputParser.TryParseKld(null));
+        AssertEx.Null(BenchmarkPerplexityOutputParser.ParsePerplexityOrNull("llama_model_load: error loading model"));
+        AssertEx.Null(BenchmarkPerplexityOutputParser.ParsePerplexityOrNull(null));
+        AssertEx.Null(BenchmarkPerplexityOutputParser.ParseKldOrNull(PlainPerplexityOutput), "A plain run measured no divergence, so it reports none.");
+        AssertEx.Null(BenchmarkPerplexityOutputParser.ParseKldOrNull(null));
     }
 
     [Test]

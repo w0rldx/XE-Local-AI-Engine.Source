@@ -229,6 +229,26 @@ public sealed class GoldenConversationEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Test]
+    public async Task Approve_WhenTheCaseIsMissing_ReturnsNotFound()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var agentId = await SeedAgentAsync(factory, "Owner");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ItemRoute(agentId, Guid.NewGuid())}/approve")
+        {
+            Content = JsonContent.Create(new
+            {
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static async Task<Guid> CreateGoldenAsync(TestServerWebAppFactory factory, HttpClient client, Guid agentId)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, ListRoute(agentId))

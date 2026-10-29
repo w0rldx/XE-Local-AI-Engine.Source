@@ -293,7 +293,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 // but unresponsive) one is respawned. A profiling-owned process is never handed out — its teardown evicts unconditionally and would kill the reuse.
                 if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited && !existing.IsProfilingOwned)
                 {
-                    var reused = await TryReuseAsync(key, existing, intent, ct).ConfigureAwait(false);
+                    var reused = await ReuseOrNullAsync(key, existing, intent, ct).ConfigureAwait(false);
                     if (reused is not null)
                     {
                         return reused;
@@ -356,11 +356,11 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <inheritdoc />
-    public Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
+    public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct)
     {
         // A live or in-flight process blocks the mutation: swapping the runtime binaries under a loaded model would
         // pull them out from under it.
-        return _runtimeMutationGate.TryAcquireLeaseAsync(() => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
+        return _runtimeMutationGate.AcquireLeaseOrNullAsync(() => _processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty,
             ct);
     }
 
@@ -427,7 +427,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
             if (existing is not null && !existing.Handle.HasExited && !profilingOwned)
             {
-                var reused = await TryReuseAsync(key, existing, intent, ct).ConfigureAwait(false);
+                var reused = await ReuseOrNullAsync(key, existing, intent, ct).ConfigureAwait(false);
                 if (reused is not null)
                 {
                     return new EnsureDecision(reused, SpawnTask: null);
@@ -435,7 +435,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             }
 
             // A crashed/exited/wedged process lingering under this key is reaped before respawn (a wedged one was already
-            // torn down by TryReuseAsync; RemoveProcessAsync is idempotent on the instance so the extra call is a no-op).
+            // torn down by ReuseOrNullAsync; RemoveProcessAsync is idempotent on the instance so the extra call is a no-op).
             if (existing is not null)
             {
                 await _reaper.RemoveProcessAsync(key, existing).ConfigureAwait(false);
@@ -458,7 +458,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                     throw NonRetryable("The requested local model launch conflicts with another in-flight admission.");
                 }
 
-                var started = CreateDetachedSpawn(admission, launchTicket!, capacityReservation, intent);
+                var started = CreateDetachedSpawn(admission, launchTicket, capacityReservation, intent);
                 if (!_inflightSpawns.TryAdd(key, started))
                 {
                     return JoinInflightSpawn(_inflightSpawns[key], intent);
@@ -721,7 +721,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     ///     rate-limited to at most one per <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeInterval" /> per
     ///     process, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
     /// </remarks>
-    private async Task<LlamaServerEndpoint?> TryReuseAsync(ProcessKey key, RunningProcess existing, ModelResidencyIntent intent, CancellationToken ct)
+    private async Task<LlamaServerEndpoint?> ReuseOrNullAsync(ProcessKey key, RunningProcess existing, ModelResidencyIntent intent, CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
 
@@ -873,7 +873,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
                     // Explicitly evict every warm role for this model before capturing ambient VRAM: admission only auto-evicts an IDLE LRU victim, so a freshly-used
                     // sibling would survive and contaminate the baseline. The gate held here blocks repopulation; a role serving inference refuses and skips the run.
-                    if (await TryEvictAllRolesForProfilingAsync(modelName).ConfigureAwait(false) is { } refusal)
+                    if (await EvictAllRolesForProfilingOrRefusalAsync(modelName).ConfigureAwait(false) is { } refusal)
                     {
                         throw new LlamaServerProfilingRefusedException(modelName, refusal.Role, refusal.ActiveLeases, refusal.Reason);
                     }

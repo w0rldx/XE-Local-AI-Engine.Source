@@ -13,7 +13,7 @@ internal static class OwnedArtifactCleanup
     ///     Deletes every owned artifact, continuing past failures so one unremovable file does not strand the rest.
     ///     Returns the aggregated failure, or <see langword="null" /> when everything owned was removed.
     /// </summary>
-    public static Exception? TryDeleteAll(params OwnedArtifact[] artifacts)
+    public static Exception? DeleteAllOrFailure(params OwnedArtifact[] artifacts)
     {
         List<Exception>? failures = null;
         foreach (var artifact in artifacts)
@@ -32,14 +32,14 @@ internal static class OwnedArtifactCleanup
     }
 
     /// <summary>
-    ///     As <see cref="TryDeleteAll" />, but throws when anything owned survives. <paramref name="ownership" /> names
+    ///     As <see cref="DeleteAllOrFailure" />, but throws when anything owned survives. <paramref name="ownership" /> names
     ///     the pipeline that owns the artifacts ("import" / "download") and is carried in the message, so the surviving
     ///     inner exception still identifies which transaction failed to compensate.
     /// </summary>
     /// <exception cref="IOException">At least one owned artifact could not be removed.</exception>
     public static void DeleteAll(string ownership, params OwnedArtifact[] artifacts)
     {
-        var failure = TryDeleteAll(artifacts);
+        var failure = DeleteAllOrFailure(artifacts);
         if (failure is not null)
         {
             throw new IOException($"One or more {ownership}-owned artifacts could not be removed.", failure);

@@ -65,7 +65,8 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
         // Hold an active-job lease for the whole submit→poll→complete window so the idle reaper / LRU evictor never tree-kill this daemon mid-generation, even if the job outruns the idle TTL. Each
         // poll Touch()es the lease. See docs/wiki/14-image-generation.md ("Daemon leases and the teardown races").
-        using var jobLease = _supervisor.TryAcquireJobLease(request.ModelName);
+        _ = _supervisor.TryAcquireJobLease(request.ModelName, out var jobLease);
+        using var jobLeaseScope = jobLease;
 
         string? jobId = null;
         try
@@ -281,7 +282,7 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
         // Report the dimensions of the bytes we actually got back, NOT the requested ones: sd-server rounds the latent grid up to a multiple of 64, so a requested 100x512 arrives as 128x512. Echoing
         // the request here made every consumer (job card, stored image metadata) state a false fact about the produced PNG. The request is only the fallback for a payload whose header cannot be read.
-        var produced = PngImageDimensions.TryRead(bytes);
+        var produced = PngImageDimensions.ReadOrNull(bytes);
 
         return new ImageGenerationResult
         {

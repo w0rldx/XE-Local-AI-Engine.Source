@@ -19,18 +19,29 @@ public interface IAgentSkillService
 
     /// <summary>
     ///     Validates and applies <paramref name="input" /> to the skill with <paramref name="id" />. Returns the updated
-    ///     record, or <c>null</c> when no skill has that id.
+    ///     record.
     /// </summary>
-    Task<AgentSkillRecord?> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default);
+    /// <exception cref="AgentSkillNotFoundException">No skill has <paramref name="id" />.</exception>
+    Task<AgentSkillRecord> UpdateAsync(Guid id, AgentSkillInput input, CancellationToken cancellationToken = default);
 
-    /// <summary>Removes the skill with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Removes the skill with <paramref name="id" />.</summary>
+    /// <exception cref="AgentSkillNotFoundException">No skill has <paramref name="id" />.</exception>
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no skill has that id.</summary>
-    Task<AgentSkillRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>Returns the record for <paramref name="id" />.</summary>
+    /// <exception cref="AgentSkillNotFoundException">No skill has <paramref name="id" />.</exception>
+    Task<AgentSkillRecord> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Returns every skill in the library, ordered by Name (Ordinal).</summary>
     Task<IReadOnlyList<AgentSkillRecord>> ListAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>No skill in the library has the id the client supplied.</summary>
+public sealed class AgentSkillNotFoundException : ResourceNotFoundException
+{
+    public AgentSkillNotFoundException(Guid id) : base($"No skill has id '{id}'.")
+    {
+    }
 }
 
 /// <summary>Thrown when a skill create/update fails validation. The message is safe to surface to callers (no skill body/description).</summary>

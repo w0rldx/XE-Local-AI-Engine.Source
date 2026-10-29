@@ -44,7 +44,7 @@ public sealed class EjectRunningModelEndpoint : Endpoint<EjectRunningModelReques
             return;
         }
 
-        if (ModelFitMapper.TryParseRole(req.Role) is not { } role)
+        if (ModelFitMapper.ParseRoleOrNull(req.Role) is not { } role)
         {
             AddError("Role is not supported.");
             await Send.ErrorsAsync(cancellation: ct);

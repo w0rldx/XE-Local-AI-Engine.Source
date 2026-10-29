@@ -18,24 +18,24 @@ public interface IPlaybookActionService
     Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Validates and applies <paramref name="input" /> to the action with <paramref name="id" />, or answers
-    ///     <c>null</c> when no action has that id or it belongs to another agent.
+    ///     Validates and applies <paramref name="input" /> to the manual action with <paramref name="id" />.
     /// </summary>
     /// <remarks>
     ///     The ownership check stops a nested-route IDOR: one agent's playbook route may not update or re-parent
-    ///     another agent's action.
+    ///     another agent's action, so an action owned by another agent is reported exactly like a missing one. An
+    ///     analysis-provenance action answers <see cref="PlaybookActionUpdateResult.NotManual" />: it is edited only
+    ///     through the review paths.
     /// </remarks>
-    Task<PlaybookActionRecord?> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default);
+    /// <exception cref="PlaybookActionNotFoundException">No action of the input's agent has <paramref name="id" />.</exception>
+    Task<PlaybookActionUpdateResult> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Removes the action with <paramref name="id" /> only when it belongs to the route's
     ///     <paramref name="agentDefinitionId" />.
     /// </summary>
-    /// <remarks>
-    ///     <c>true</c> when a row was deleted, <c>false</c> when no action has that id or it belongs to a different
-    ///     agent — the same ownership guard as <see cref="UpdateAsync" />.
-    /// </remarks>
-    Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+    /// <remarks>The same ownership guard as <see cref="UpdateAsync" />.</remarks>
+    /// <exception cref="PlaybookActionNotFoundException">No action of <paramref name="agentDefinitionId" /> has <paramref name="id" />.</exception>
+    Task DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no action has that id.</summary>
     Task<PlaybookActionRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
@@ -60,12 +60,14 @@ public interface IPlaybookActionService
     ///     the golden conversation eval result.
     /// </summary>
     /// <remarks>
-    ///     Human review, because staging is not active. <see cref="PlaybookPromotionResult.Status" /> is
-    ///     <c>NotFound</c> for a missing, cross-agent or non-pending action, <c>EvalRequired</c> with no eval since
-    ///     authoring, <c>EvalStale</c> for an older snapshot or changed behavior-affecting context,
-    ///     <c>EvalIncomplete</c> for a scored subset, <c>EvalRegressed</c> for a failure, <c>CapReached</c> at the
-    ///     cap, and <c>Promoted</c> only when the eval passed, is complete and current and its fingerprint matches.
+    ///     Human review, because staging is not active. <see cref="PlaybookPromotionResult.Promoted" /> only when the
+    ///     eval passed, is complete and current and its fingerprint matches; otherwise
+    ///     <see cref="PlaybookPromotionResult.Blocked" />: <c>NotPending</c>, <c>EvalRequired</c> (no eval since
+    ///     authoring), <c>EvalStale</c> (older snapshot or changed context), <c>EvalIncomplete</c> (scored subset),
+    ///     <c>EvalRegressed</c> (a failure) or <c>CapReached</c>.
     /// </remarks>
+    /// <exception cref="PlaybookActionNotFoundException">No action of <paramref name="agentDefinitionId" /> has <paramref name="id" />.</exception>
+    /// <exception cref="AgentDefinitionNotFoundException">The owning agent is gone.</exception>
     Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -74,16 +76,18 @@ public interface IPlaybookActionService
     /// </summary>
     /// <remarks>
     ///     The action keeps its state and every injected field, so recording an eval never bumps <c>Version</c>: the
-    ///     store excludes <c>EvalResult</c> from its config-affecting rule. Same ownership and state guard, and the
-    ///     same <c>null</c> contract, as <see cref="PromoteSuggestedAsync" />.
+    ///     store excludes <c>EvalResult</c> from its config-affecting rule. Same ownership and state guard as
+    ///     <see cref="PromoteSuggestedAsync" />.
     /// </remarks>
-    Task<PlaybookActionRecord?> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default);
+    /// <exception cref="PlaybookActionNotFoundException">No action of <paramref name="agentDefinitionId" /> has <paramref name="id" />.</exception>
+    Task<PlaybookSuggestionReviewResult> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Loads the pending suggestion owned by <paramref name="agentDefinitionId" /> behind the same guard the
-    ///     review paths apply, or <c>null</c> when none exists.
+    ///     review paths apply, or <c>null</c> when the action exists but is not a pending suggestion.
     /// </summary>
     /// <remarks>Exposed so evaluation can load the candidate snapshot without re-implementing that guard.</remarks>
+    /// <exception cref="PlaybookActionNotFoundException">No action of <paramref name="agentDefinitionId" /> has <paramref name="id" />.</exception>
     Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -92,25 +96,27 @@ public interface IPlaybookActionService
     /// </summary>
     /// <remarks>
     ///     Archived rather than hard-deleted, so provenance is preserved. Same ownership and state guard, and the
-    ///     same <c>null</c> contract, as <see cref="RecordEvalResultAsync" />.
+    ///     same result, as <see cref="RecordEvalResultAsync" />.
     /// </remarks>
-    Task<PlaybookActionRecord?> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+    /// <exception cref="PlaybookActionNotFoundException">No action of <paramref name="agentDefinitionId" /> has <paramref name="id" />.</exception>
+    Task<PlaybookSuggestionReviewResult> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Edits the fields of a pending suggestion before review; it keeps its state, evidence and confidence.
     /// </summary>
     /// <remarks>
     ///     Editing clears any recorded <c>EvalResult</c>, so a stale pass cannot promote an edited action. Same
-    ///     ownership and state guard, and the same <c>null</c> contract, as <see cref="RecordEvalResultAsync" />.
+    ///     ownership and state guard, and the same result, as <see cref="RecordEvalResultAsync" />.
     /// </remarks>
-    Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default);
+    /// <exception cref="PlaybookActionNotFoundException">No action of the input's agent has the input's action id.</exception>
+    Task<PlaybookSuggestionReviewResult> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Outcome of a gated promote: distinguishes a 404 (NotFound) from each eval-gate block, the cap block, and a success.</summary>
+/// <summary>Why a gated promote was blocked: the action's state, each eval-gate block, or the cap. Every value maps to 409.</summary>
 public enum PlaybookPromotionStatus
 {
-    Promoted,
-    NotFound,
+    /// <summary>The action is not a pending suggestion: already promoted, archived, or manual.</summary>
+    NotPending,
     EvalRequired,
     EvalRegressed,
     EvalStale,
@@ -136,15 +142,47 @@ public enum PlaybookPromotionStatus
 }
 
 /// <summary>
-///     Result of <see cref="IPlaybookActionService.PromoteSuggestedAsync" />: <see cref="Status" /> tells the endpoint
-///     whether to return 200 (<c>Promoted</c>), 404 (<c>NotFound</c>) or 409 (any <c>Eval*</c> block, or <c>CapReached</c>);
-///     <see cref="Record" /> carries the enabled record only when <see cref="Status" /> is <c>Promoted</c>.
+///     Result of <see cref="IPlaybookActionService.PromoteSuggestedAsync" />: the enabled record (200), or the reason the
+///     promotion was blocked (409).
 /// </summary>
-public sealed class PlaybookPromotionResult
+public abstract record PlaybookPromotionResult
 {
-    public required PlaybookPromotionStatus Status { get; init; }
+    public sealed record Promoted : PlaybookPromotionResult
+    {
+        public required PlaybookActionRecord Record { get; init; }
+    }
 
-    public required PlaybookActionRecord? Record { get; init; }
+    public sealed record Blocked : PlaybookPromotionResult
+    {
+        public required PlaybookPromotionStatus Status { get; init; }
+    }
+}
+
+/// <summary>Result of <see cref="IPlaybookActionService.UpdateAsync" />: the updated record (200), or a wrong-state refusal (409).</summary>
+public abstract record PlaybookActionUpdateResult
+{
+    public sealed record Updated : PlaybookActionUpdateResult
+    {
+        public required PlaybookActionRecord Record { get; init; }
+    }
+
+    /// <summary>The action carries analysis provenance; it is edited only through the suggestion review paths.</summary>
+    public sealed record NotManual : PlaybookActionUpdateResult;
+}
+
+/// <summary>
+///     Result of the suggestion review paths (record eval, edit, reject): the updated record (200), or a refusal because
+///     the action is not a pending suggestion (409).
+/// </summary>
+public abstract record PlaybookSuggestionReviewResult
+{
+    public sealed record Applied : PlaybookSuggestionReviewResult
+    {
+        public required PlaybookActionRecord Record { get; init; }
+    }
+
+    /// <summary>The action exists but is no longer, or never was, a pending suggestion.</summary>
+    public sealed record NotPending : PlaybookSuggestionReviewResult;
 }
 
 /// <summary>Input for the analysis-staging write path — provenance + confidence are required; state/source are pinned by the service.</summary>
@@ -179,6 +217,17 @@ public sealed class SuggestedActionEditInput
     public required string? Scope { get; init; }
 
     public required int Priority { get; init; }
+}
+
+/// <summary>
+///     No playbook action has the id the client supplied, or it belongs to another agent than the route's: the
+///     nested-route ownership guard reports both alike.
+/// </summary>
+public sealed class PlaybookActionNotFoundException : ResourceNotFoundException
+{
+    public PlaybookActionNotFoundException(Guid id) : base($"No playbook action of this agent has id '{id}'.")
+    {
+    }
 }
 
 /// <summary>Thrown when a playbook-action create/update fails validation. The message is safe to surface to callers.</summary>

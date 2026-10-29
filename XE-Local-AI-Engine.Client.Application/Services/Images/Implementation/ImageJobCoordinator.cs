@@ -130,8 +130,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         var jobId = Guid.NewGuid();
         var createdAt = NowUnixMs();
-        var runtimeActivityLease = _runtimeActivityGate.TryAcquireJobLease()
-                                   ?? throw new ImageRuntimeBusyException("Image generation is temporarily unavailable while the image runtime is changing.");
+        if (!_runtimeActivityGate.TryAcquireJobLease(out var runtimeActivityLease))
+        {
+            throw new ImageRuntimeBusyException("Image generation is temporarily unavailable while the image runtime is changing.");
+        }
 
         try
         {
@@ -175,6 +177,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     {
         if (!_inFlight.TryGetValue(jobId, out var cts))
         {
+            // Not tracked: either finished or never existed, and only the second is a not-found.
+            _ = await GetAsync(jobId, cancellationToken);
             return false;
         }
 
@@ -193,11 +197,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         return true;
     }
 
-    public async Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken)
+    public async Task<ImageJobView> GetAsync(Guid jobId, CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
-        return await store.GetAsync(jobId, cancellationToken);
+        return await store.GetAsync(jobId, cancellationToken) ?? throw JobNotFound();
     }
 
     public async Task<ImageJobPage> ListAsync(int limit, int offset, CancellationToken cancellationToken)
@@ -218,11 +222,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
 
-        var view = await store.GetAsync(jobId, cancellationToken);
-        if (view is null)
-        {
-            return ImageJobDeleteOutcome.NotFound;
-        }
+        var view = await store.GetAsync(jobId, cancellationToken) ?? throw JobNotFound();
 
         // Reading the status and then deleting needs no lock because terminal is a ONE-WAY door: a job's row is only ever written by its own run task, which
         // writes a terminal status once and never leaves it. A job that reads non-terminal here is refused; one that reads terminal cannot become active again.
@@ -235,7 +235,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         if (storagePaths is null)
         {
             // Another delete won the race between the status read and this call.
-            return ImageJobDeleteOutcome.NotFound;
+            throw JobNotFound();
         }
 
         // Drop the replay log with the job, so a hub subscriber that arrives late replays nothing for a job that no
@@ -247,6 +247,9 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         _imageStore.RemoveJobBlobs(jobId, storagePaths);
         return ImageJobDeleteOutcome.Deleted;
     }
+
+    private static ImageNotFoundException JobNotFound() =>
+        new("The image job was not found.");
 
     public IReadOnlyList<ImageJobStatusEvent> SnapshotBufferedEvents(Guid jobId)
     {
@@ -377,8 +380,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
             // A training run holds the whole GPU (decision #13). Admission sits here, after the slot is held and before the runtime is called: a run can begin while this job
             // still waits behind another, so this is the only point at which it is definitely about to allocate VRAM. HELD through generation — checking then releasing would let a run admit.
-            gpuAdmission = _gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob);
-            if (gpuAdmission is null)
+            if (!_gpuWorkGate.TryBeginShared(GpuWorkKind.ImageJob, out gpuAdmission))
             {
                 const string trainingBusy = "A training run is using the GPU. Try again once it finishes.";
                 await RunStoreAsync(store => store.MarkFailedAsync(jobId, trainingBusy, NowUnixMs(), CancellationToken.None), jobId, "mark failed");

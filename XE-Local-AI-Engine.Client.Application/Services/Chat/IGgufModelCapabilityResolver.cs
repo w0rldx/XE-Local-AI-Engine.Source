@@ -15,7 +15,7 @@ public interface IGgufModelCapabilityResolver
     ///     carries that name and another runtime's path must resolve it.
     /// </summary>
     /// <remarks>The lookup reuses the store's per-file header cache, so a hit reads no file.</remarks>
-    Task<GgufModelCapabilities?> TryResolveAsync(string modelName, CancellationToken cancellationToken = default);
+    Task<GgufModelCapabilities?> ResolveOrNullAsync(string modelName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The thinking / tools / vision capabilities advertised by an installed GGUF model.</summary>

@@ -23,7 +23,7 @@ public interface IProcessVramBudgetProbe
     ///     depend on it — the string keeps this seam dependency-clean while still conveying the variant the real probe
     ///     (the <c>--list-devices</c> parser) needs.
     /// </remarks>
-    Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct);
+    Task<long?> GetProcessBudgetBytesOrNullAsync(string backend, CancellationToken ct);
 }
 
 /// <summary>
@@ -33,7 +33,7 @@ public interface IProcessVramBudgetProbe
 public sealed class UnknownProcessVramBudgetProbe : IProcessVramBudgetProbe
 {
     /// <inheritdoc />
-    public Task<long?> TryGetProcessBudgetBytesAsync(string backend, CancellationToken ct)
+    public Task<long?> GetProcessBudgetBytesOrNullAsync(string backend, CancellationToken ct)
     {
         return Task.FromResult<long?>(null);
     }

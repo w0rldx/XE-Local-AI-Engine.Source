@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -34,12 +33,7 @@ public sealed class ListBenchmarkComparisonsEndpoint : Endpoint<ListBenchmarkCom
     public override async Task HandleAsync(ListBenchmarkComparisonsRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (await _comparisons.GetComparisonsAsync(req.ProjectId, ct) is not { } view)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark project was not found.")));
-            return;
-        }
-
+        var view = await _comparisons.GetComparisonsAsync(req.ProjectId, ct);
         var cohort = view.Cohort;
         await Send.OkAsync(new ListBenchmarkComparisonsResponse
         {

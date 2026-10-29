@@ -87,14 +87,14 @@ internal sealed partial class NodePatchApplyService
         // name. The index-line arm catches a same-mode pointer bump, which carries no `mode 160000` line at all.
         if (DeclaresMode(lines, GitlinkMode))
         {
-            return ParsedBlock.Rejected(GitlinkRejection, TryDescribeTarget(lines));
+            return ParsedBlock.Rejected(GitlinkRejection, DescribeTargetOrNull(lines));
         }
 
         // A symlink block's one-line content IS the link target, so applying it creates a REAL link on the host
         // pointing wherever that names. Refused by name for the same reason as the gitlink; see SymlinkMode.
         if (DeclaresMode(lines, SymlinkMode))
         {
-            return ParsedBlock.Rejected(SymlinkRejection, TryDescribeTarget(lines));
+            return ParsedBlock.Rejected(SymlinkRejection, DescribeTargetOrNull(lines));
         }
 
         // Every path git can act on comes from one of these body-line prefixes, with /dev/null skipped for new and
@@ -136,7 +136,7 @@ internal sealed partial class NodePatchApplyService
         {
             // A mode-only block has no unified-diff body lines, and git acts on the header path, so that path goes through
             // the same traversal and alias guards as a body path rather than leaving git as the only backstop.
-            var headerPath = TryParseHeaderAPath(lines[0]);
+            var headerPath = ParseHeaderAPathOrNull(lines[0]);
             if (headerPath is null)
             {
                 return ParsedBlock.Rejected("a mode-only patch block has an unparseable or missing header path.");
@@ -183,7 +183,7 @@ internal sealed partial class NodePatchApplyService
             var wasQuoted = GitQuotedPath.IsQuoted(normalized);
             if (wasQuoted)
             {
-                if (GitQuotedPath.TryDecode(normalized) is not { } decoded)
+                if (GitQuotedPath.DecodeOrNull(normalized) is not { } decoded)
                 {
                     return ParsedBlock.Rejected(QuotedPathRejection);
                 }
@@ -233,7 +233,7 @@ internal sealed partial class NodePatchApplyService
         var aliases = allAliasResults.Select(result => result.Alias).Distinct(StringComparer.Ordinal).ToArray();
         if (aliases.Length != 1)
         {
-            return ParsedBlock.Rejected("a patch block renames or copies across selected folders.", TryDescribeTarget(lines));
+            return ParsedBlock.Rejected("a patch block renames or copies across selected folders.", DescribeTargetOrNull(lines));
         }
 
         var blockAlias = aliases[0];
@@ -243,7 +243,7 @@ internal sealed partial class NodePatchApplyService
         var destBodyPath = allAliasResults.FirstOrDefault(result => result.Prefix == prefixDest);
         if (destBodyPath is not null)
         {
-            var headerBAlias = TryParseHeaderAPath(lines[0])?.Alias;
+            var headerBAlias = ParseHeaderAPathOrNull(lines[0])?.Alias;
             if (headerBAlias is not null && !string.Equals(headerBAlias, blockAlias, StringComparison.Ordinal))
             {
                 return ParsedBlock.Rejected("the patch header b-path does not match the body destination path.",
@@ -310,18 +310,18 @@ internal sealed partial class NodePatchApplyService
     ///     C-quoted path is decoded by the same decoder the guards use and stays unnamed when that refuses, so raw
     ///     undecoded bytes never reach a log line or the dialog.
     /// </remarks>
-    private static string? TryDescribeTarget(string[] lines)
+    private static string? DescribeTargetOrNull(string[] lines)
     {
         var candidate = FirstBodyPathCandidate(lines);
         if (candidate is null)
         {
-            return TryParseHeaderAPath(lines[0]) is { } headerPath ? Describe(headerPath.Alias, headerPath.Relative) : null;
+            return ParseHeaderAPathOrNull(lines[0]) is { } headerPath ? Describe(headerPath.Alias, headerPath.Relative) : null;
         }
 
         var normalized = candidate.Trim();
         if (GitQuotedPath.IsQuoted(normalized))
         {
-            if (GitQuotedPath.TryDecode(normalized) is not { } decoded)
+            if (GitQuotedPath.DecodeOrNull(normalized) is not { } decoded)
             {
                 return null;
             }
@@ -452,7 +452,7 @@ internal sealed partial class NodePatchApplyService
     ///     name only where git does: each side is C-quoted on its own, an unquoted header must spell the same name
     ///     twice, and a rename header therefore parses as none — as it does for git, whose body lines rule there.
     /// </remarks>
-    private static AliasPath? TryParseHeaderAPath(string header)
+    private static AliasPath? ParseHeaderAPathOrNull(string header)
     {
         if (!header.StartsWith(DiffHeaderPrefix, StringComparison.Ordinal))
         {
@@ -465,7 +465,7 @@ internal sealed partial class NodePatchApplyService
         {
             // git quotes each side of the header on its own, so the a-path ends at its own closing quote.
             var closing = GitQuotedPath.FindClosingQuote(afterPrefix);
-            if (closing < 0 || GitQuotedPath.TryDecode(afterPrefix[..(closing + 1)]) is not { } decoded)
+            if (closing < 0 || GitQuotedPath.DecodeOrNull(afterPrefix[..(closing + 1)]) is not { } decoded)
             {
                 return null;
             }

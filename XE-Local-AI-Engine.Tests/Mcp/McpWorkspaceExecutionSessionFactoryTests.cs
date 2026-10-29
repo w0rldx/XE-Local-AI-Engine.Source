@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -422,14 +423,18 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
 
         public TrackingLease? Lease { get; set; }
 
-        public IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key)
+        public bool TryAcquire(AgentHomeExecutionLeaseKey key, [NotNullWhen(true)] out IAgentHomeExecutionLease? lease)
         {
             OnAcquire?.Invoke();
-            return Lease;
+            lease = Lease;
+            return lease is not null;
         }
 
-        public IAgentHomeExecutionLease? TryAcquireForRecovery(AgentHomeExecutionLeaseKey key) =>
-            Lease;
+        public bool TryAcquireForRecovery(AgentHomeExecutionLeaseKey key, [NotNullWhen(true)] out IAgentHomeExecutionLease? lease)
+        {
+            lease = Lease;
+            return lease is not null;
+        }
 
         public bool IsHeld(AgentHomeExecutionLeaseKey key) =>
             false;

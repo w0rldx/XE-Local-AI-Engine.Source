@@ -36,12 +36,7 @@ public sealed class ReindexKnowledgeDocumentEndpoint : Endpoint<KnowledgeDocumen
 
     public override async Task HandleAsync(KnowledgeDocumentRouteRequest req, CancellationToken ct)
     {
-        var reset = await _catalogService.ResetToPendingAsync(req.DocumentId, ct);
-        if (!reset)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _catalogService.ResetToPendingAsync(req.DocumentId, ct);
 
         var admission = await _ingestionDispatcher.EnqueueAsync(req.DocumentId, ct);
         if (admission == KnowledgeIngestionEnqueueResult.QueueFull)

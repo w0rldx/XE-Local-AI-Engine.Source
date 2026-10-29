@@ -27,7 +27,7 @@ public sealed class GraphWorkflowSteeringStoreTests
             (runId, nodeRunId) = await SeedRunningAgentAsync(context, invocationId);
             var store = GraphWorkflowTestFixture.StoreFor(context);
 
-            AssertEx.NotNull(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, Guid.NewGuid(), message)));
+            AssertEx.True(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, Guid.NewGuid(), message)) is GraphWorkflowConditionalWriteResult.Written);
         }
 
         await using (var readContext = fixture.CreateContext())
@@ -54,17 +54,17 @@ public sealed class GraphWorkflowSteeringStoreTests
         var store = GraphWorkflowTestFixture.StoreFor(context);
         var (runId, nodeRunId) = await SeedRunningAgentAsync(context, Guid.NewGuid());
         var operationId = Guid.NewGuid();
-        AssertEx.NotNull(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, operationId, "first", maxEntries: 2)));
+        AssertEx.True(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, operationId, "first", maxEntries: 2)) is GraphWorkflowConditionalWriteResult.Written);
 
-        AssertEx.Null(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, operationId, "again", maxEntries: 2)), "an id is appended once.");
-        AssertEx.NotNull(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, Guid.NewGuid(), "second", maxEntries: 2)));
-        AssertEx.Null(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, Guid.NewGuid(), "third", maxEntries: 2)), "the cap is checked inside the write.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.OperationAlreadyRecorded }, await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, operationId, "again", maxEntries: 2)), "an id is appended once.");
+        AssertEx.True(await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, Guid.NewGuid(), "second", maxEntries: 2)) is GraphWorkflowConditionalWriteResult.Written);
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.SteeringCapReached }, await store.AppendNodeRunSteeringAsync(Steer(runId, nodeRunId, Guid.NewGuid(), "third", maxEntries: 2)), "the cap is checked inside the write.");
 
         var (settledRunId, settledNodeRunId) = await SeedRunningAgentAsync(context, Guid.NewGuid(), GraphWorkflowNodeRunStatus.Succeeded);
-        AssertEx.Null(await store.AppendNodeRunSteeringAsync(Steer(settledRunId, settledNodeRunId, Guid.NewGuid(), "late")), "a settled row is not steerable.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible }, await store.AppendNodeRunSteeringAsync(Steer(settledRunId, settledNodeRunId, Guid.NewGuid(), "late")), "a settled row is not steerable.");
 
         var (cancellingRunId, cancellingNodeRunId) = await SeedRunningAgentAsync(context, Guid.NewGuid(), runStatus: GraphWorkflowRunStatus.Cancelling);
-        AssertEx.Null(await store.AppendNodeRunSteeringAsync(Steer(cancellingRunId, cancellingNodeRunId, Guid.NewGuid(), "late")), "a draining run is not steerable.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.RunNotActive }, await store.AppendNodeRunSteeringAsync(Steer(cancellingRunId, cancellingNodeRunId, Guid.NewGuid(), "late")), "a draining run is not steerable.");
 
         AssertEx.Equal("first,second", string.Join(',', (await store.GetNodeRunAsync(runId, "analyze")).Steering.Select(static entry => entry.Message)));
     }
@@ -90,8 +90,9 @@ public sealed class GraphWorkflowSteeringStoreTests
             EventType = GraphWorkflowEventTypes.NodeSteered,
             AppliedSteeringOperationIds = [applied]
         });
-        AssertEx.NotNull(await store.IgnoreNodeRunSteeringAsync(runId, nodeRunId, ignored));
-        AssertEx.Null(await store.IgnoreNodeRunSteeringAsync(runId, nodeRunId, applied), "an entry already judged is not judged again.");
+        AssertEx.True(await store.IgnoreNodeRunSteeringAsync(runId, nodeRunId, ignored) is GraphWorkflowConditionalWriteResult.Written);
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible },
+            await store.IgnoreNodeRunSteeringAsync(runId, nodeRunId, applied), "an entry already judged is not judged again.");
 
         var nodeRun = await store.GetNodeRunAsync(runId, "analyze");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, nodeRun.Status);

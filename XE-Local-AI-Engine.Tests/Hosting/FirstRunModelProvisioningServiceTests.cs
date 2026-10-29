@@ -570,7 +570,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         // Nothing is on disk until an ensure runs, and this lookup never acquires — so it must also never flip
         // EnsureCalled, which is exactly what the provisioning assertions read.
-        public Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
+        public Task<LlamaBinary?> FindInstalledBinaryAsync(GpuVariant variant, CancellationToken ct)
         {
             return Task.FromResult(EnsureCalled
                 ? new LlamaBinary

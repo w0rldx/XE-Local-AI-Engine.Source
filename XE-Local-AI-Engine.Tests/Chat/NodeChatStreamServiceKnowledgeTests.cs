@@ -186,7 +186,8 @@ public sealed class NodeChatStreamServiceKnowledgeTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
         var gate = new GpuWorkGate();
-        using var benchmark = AssertEx.NotNull(gate.TryBeginShared(GpuWorkKind.Benchmark));
+        AssertEx.Succeeded(gate.TryBeginShared(GpuWorkKind.Benchmark, out var benchmark));
+        using var benchmarkScope = benchmark;
         if (measurementHoldsTheSlot)
         {
             // A benchmark measurement runs under a conversation id no conversation has.

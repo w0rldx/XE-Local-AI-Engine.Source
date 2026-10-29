@@ -20,7 +20,7 @@ public static class LlamaServerReasoningControl
 
     /// <summary>
     ///     Reads the armed control from <paramref name="rawRepresentation" />: the MEAI update itself, or the raw
-    ///     representation of the agent update wrapping it (the same input <see cref="LlamaServerGenerationTimings.TryRead" />
+    ///     representation of the agent update wrapping it (the same input <see cref="LlamaServerGenerationTimings.ReadOrNull" />
     ///     takes).
     /// </summary>
     public static bool TryRead(object? rawRepresentation, [NotNullWhen(true)] out Uri? baseAddress, [NotNullWhen(true)] out string? completionId)

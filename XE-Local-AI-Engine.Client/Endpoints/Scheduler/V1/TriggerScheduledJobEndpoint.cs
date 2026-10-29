@@ -26,14 +26,7 @@ public sealed class TriggerScheduledJobEndpoint : Endpoint<ScheduledJobActionReq
 
     public override async Task HandleAsync(ScheduledJobActionRequest req, CancellationToken ct)
     {
-        // A missing or soft-deleted job is a 404 like the other job ACTION routes (GET still reads a deleted job); the service's own not-found check stays a 400 for its other callers.
-        var job = await _scheduledJobManagementService.GetJobAsync(req.ScheduledJobId, ct);
-        if (job is null || job.DeletedAtUtc is not null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
+        // A missing or soft-deleted job throws ScheduledJobNotFoundException, a 404 like the other job ACTION routes.
         await _scheduledJobManagementService.TriggerNowAsync(req.ScheduledJobId, parameterOverrides: null, ct);
         await Send.NoContentAsync(ct);
     }

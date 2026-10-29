@@ -162,7 +162,7 @@ export interface SavePlaybookActionRequestDto {
 
 // Request body for editing a pending Suggested (analysis-provenance) action via the dedicated `/suggested` route.
 // Carries NO `state` field — the backend pins state/source/evidence; the action stays Suggested until Approve. The
-// manual PUT route 404s on an Analysis-provenance action, so a Suggested edit must use this body + route.
+// manual PUT route answers 409 `NotManual` on an Analysis-provenance action, so a Suggested edit must use this body + route.
 export interface SaveSuggestedActionRequestDto {
 	behavior: string;
 	triggerCondition: string | null;

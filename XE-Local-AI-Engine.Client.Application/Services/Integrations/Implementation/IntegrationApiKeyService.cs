@@ -78,8 +78,13 @@ internal sealed class IntegrationApiKeyService : IIntegrationApiKeyService
         return snapshots.Select(ToView).ToArray();
     }
 
-    public Task<bool> RevokeAsync(Guid keyId, CancellationToken cancellationToken = default) =>
-        _store.RevokeAsync(keyId, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
+    public async Task RevokeAsync(Guid keyId, CancellationToken cancellationToken = default)
+    {
+        if (!await _store.RevokeAsync(keyId, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken))
+        {
+            throw new IntegrationNotFoundException($"Integration API key {keyId} was not found.");
+        }
+    }
 
     public async Task<IntegrationApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default)
     {

@@ -56,7 +56,7 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
             companions.Add(new Companion(rerankerModelName, ModelRole.Reranker));
         }
 
-        if (await TryResolveLlamaCppEmbedderAsync(ct) is { } embedder)
+        if (await ResolveLlamaCppEmbedderOrNullAsync(ct) is { } embedder)
         {
             companions.Add(new Companion(embedder, ModelRole.Embedding));
         }
@@ -91,7 +91,7 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
         return total;
     }
 
-    private async Task<string?> TryResolveLlamaCppEmbedderAsync(CancellationToken ct)
+    private async Task<string?> ResolveLlamaCppEmbedderOrNullAsync(CancellationToken ct)
     {
         if (!string.Equals(_options.EmbeddingProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
         {

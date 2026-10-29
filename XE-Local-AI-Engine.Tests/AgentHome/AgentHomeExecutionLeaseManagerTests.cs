@@ -14,51 +14,51 @@ public sealed class AgentHomeExecutionLeaseManagerTests
     public async Task TryAcquire_SameKeyFromUnrelatedContext_IsBusyAndDoesNotQueue()
     {
         var manager = new AgentHomeExecutionLeaseManager();
-        using var first = manager.TryAcquire(KeyA);
-        AssertEx.NotNull(first);
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var first));
+        using var firstScope = first;
 
-        Task<IAgentHomeExecutionLease?> contender;
+        Task<bool> contender;
         using (ExecutionContext.SuppressFlow())
         {
-            contender = Task.Run(() => manager.TryAcquire(KeyA));
+            contender = Task.Run(() => manager.TryAcquire(KeyA, out _));
         }
 
-        AssertEx.Null(await contender);
+        AssertEx.False(await contender);
     }
 
     [Test]
     public void TryAcquire_SameAmbientKey_ReturnsBorrowedLeaseWithoutReleasingOwner()
     {
         var manager = new AgentHomeExecutionLeaseManager();
-        using var owner = manager.TryAcquire(KeyA);
-        using var borrowed = manager.TryAcquire(KeyA);
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var owner));
+        using var ownerScope = owner;
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var borrowed));
+        using var borrowedScope = borrowed;
 
-        AssertEx.NotNull(owner);
-        AssertEx.NotNull(borrowed);
-        AssertEx.True(borrowed!.IsBorrowed);
+        AssertEx.True(borrowed.IsBorrowed);
     }
 
     [Test]
     public void TryAcquire_DifferentKeyWhileAmbientRootExists_IsRejected()
     {
         var manager = new AgentHomeExecutionLeaseManager();
-        using var first = manager.TryAcquire(KeyA);
-        using var second = manager.TryAcquire(KeyB);
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var first));
+        using var firstScope = first;
 
-        AssertEx.NotNull(first);
-        AssertEx.Null(second);
+        AssertEx.False(manager.TryAcquire(KeyB, out _));
     }
 
     [Test]
     public async Task Dispose_OwnerLease_AllowsLaterUnrelatedAcquisition()
     {
         var manager = new AgentHomeExecutionLeaseManager();
-        manager.TryAcquire(KeyA)!.Dispose();
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var first));
+        first.Dispose();
 
         Task<IAgentHomeExecutionLease?> later;
         using (ExecutionContext.SuppressFlow())
         {
-            later = Task.Run(() => manager.TryAcquire(KeyA));
+            later = Task.Run(() => manager.TryAcquire(KeyA, out var lease) ? lease : null);
         }
 
         using var acquired = await later;
@@ -70,20 +70,23 @@ public sealed class AgentHomeExecutionLeaseManagerTests
     {
         var manager = new AgentHomeExecutionLeaseManager();
         using var owner = await AcquireAfterYieldAsync(manager);
-        AssertEx.Null(manager.TryAcquire(KeyA));
+        AssertEx.False(manager.TryAcquire(KeyA, out _));
 
         using (owner.EnterAmbientScope())
-            using (var borrowed = manager.TryAcquire(KeyA))
+        {
+            AssertEx.Succeeded(manager.TryAcquire(KeyA, out var borrowed));
+            using (borrowed)
             {
-                AssertEx.NotNull(borrowed);
-                AssertEx.True(borrowed!.IsBorrowed);
+                AssertEx.True(borrowed.IsBorrowed);
             }
+        }
     }
 
     private static async Task<IAgentHomeExecutionLease> AcquireAfterYieldAsync(IAgentHomeExecutionLeaseManager manager)
     {
         await Task.Yield();
-        return AssertEx.NotNull(manager.TryAcquire(KeyA));
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var lease));
+        return lease;
     }
 
     [Test]
@@ -92,9 +95,9 @@ public sealed class AgentHomeExecutionLeaseManagerTests
         var manager = new AgentHomeExecutionLeaseManager();
         manager.MarkPoisoned(KeyA);
 
-        AssertEx.Null(manager.TryAcquire(KeyA));
-        using var recovery = manager.TryAcquireForRecovery(KeyA);
-        AssertEx.NotNull(recovery);
+        AssertEx.False(manager.TryAcquire(KeyA, out _));
+        AssertEx.Succeeded(manager.TryAcquireForRecovery(KeyA, out var recovery));
+        using var recoveryScope = recovery;
         manager.ClearPoison(KeyA);
         AssertEx.False(manager.IsPoisoned(KeyA));
     }
@@ -110,18 +113,18 @@ public sealed class AgentHomeExecutionLeaseManagerTests
 
         AssertEx.False(manager.IsHeld(KeyA), "a key nobody ever acquired has no gate, so it cannot be held.");
 
-        var lease = AssertEx.NotNull(manager.TryAcquire(KeyA));
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var lease));
         AssertEx.True(manager.IsHeld(KeyA), "a held lease must read as held, or the sweep would delete a live run.");
         AssertEx.False(manager.IsHeld(KeyB), "the peek is per key.");
 
         // The peek must not have consumed the gate: an unrelated context still finds the key busy.
-        Task<IAgentHomeExecutionLease?> contender;
+        Task<bool> contender;
         using (ExecutionContext.SuppressFlow())
         {
-            contender = Task.Run(() => manager.TryAcquire(KeyA));
+            contender = Task.Run(() => manager.TryAcquire(KeyA, out _));
         }
 
-        AssertEx.Null(await contender, "IsHeld must be a read; a peek that acquired would have released the owner's gate.");
+        AssertEx.False(await contender, "IsHeld must be a read; a peek that acquired would have released the owner's gate.");
 
         lease.Dispose();
         AssertEx.False(manager.IsHeld(KeyA), "a released lease reads as free again.");
@@ -148,12 +151,14 @@ public sealed class AgentHomeExecutionLeaseManagerTests
     public async Task OutOfOrderCrossContextDisposal_DoesNotResurrectDisposedAmbientScope()
     {
         var manager = new AgentHomeExecutionLeaseManager();
-        var owner = AssertEx.NotNull(manager.TryAcquire(KeyA));
+#pragma warning disable CA2000 // Disposed on another context below: that out-of-order disposal is what this test pins.
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var owner));
+#pragma warning restore CA2000
         using var activation = owner.EnterAmbientScope();
         await Task.Run(owner.Dispose);
 
-        using var replacement = manager.TryAcquire(KeyA);
-        AssertEx.NotNull(replacement);
-        AssertEx.False(replacement!.IsBorrowed);
+        AssertEx.Succeeded(manager.TryAcquire(KeyA, out var replacement));
+        using var replacementScope = replacement;
+        AssertEx.False(replacement.IsBorrowed);
     }
 }

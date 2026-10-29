@@ -52,11 +52,13 @@ public sealed class IntegrationSessionFilter
     public required int Offset { get; init; }
 }
 
-/// <summary>What an operator delete decided. <see cref="Busy" /> is the 409 with a cancel-first message.</summary>
+/// <summary>
+///     What an operator delete decided. <see cref="Busy" /> is the 409 with a cancel-first message; an unknown session
+///     throws <see cref="IntegrationNotFoundException" /> instead.
+/// </summary>
 public enum IntegrationSessionDeleteOutcome
 {
     Deleted,
-    NotFound,
     Busy
 }
 

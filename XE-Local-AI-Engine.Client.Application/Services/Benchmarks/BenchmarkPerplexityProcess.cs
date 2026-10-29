@@ -52,7 +52,7 @@ public static partial class BenchmarkPerplexityOutputParser
     ///     A KLD run is tried FIRST: it prints its perplexity inside the statistics block and no final-estimate line,
     ///     so looking for the plain shape first would find nothing and discard a measurement that succeeded.
     /// </remarks>
-    public static BenchmarkPerplexityReading? TryParsePerplexity(string? output)
+    public static BenchmarkPerplexityReading? ParsePerplexityOrNull(string? output)
     {
         if (output is null)
         {
@@ -68,7 +68,7 @@ public static partial class BenchmarkPerplexityOutputParser
     ///     are recorded when present and left null when a build stops printing them, because a missing SECONDARY
     ///     figure is not a reason to discard a measurement that did happen.
     /// </remarks>
-    public static BenchmarkKldReading? TryParseKld(string? output)
+    public static BenchmarkKldReading? ParseKldOrNull(string? output)
     {
         if (output is null || Value(MeanKldPattern, output) is not { } mean)
         {
@@ -98,7 +98,7 @@ public static partial class BenchmarkPerplexityOutputParser
             return null;
         }
 
-        return TryParseInvariant(match.Groups["mean"].Value) is { } mean && TryParseInvariant(match.Groups["error"].Value) is { } standardError
+        return ParseInvariantOrNull(match.Groups["mean"].Value) is { } mean && ParseInvariantOrNull(match.Groups["error"].Value) is { } standardError
             ? new BenchmarkPerplexityReading
             {
                 Mean = mean,
@@ -108,9 +108,9 @@ public static partial class BenchmarkPerplexityOutputParser
     }
 
     private static double? Value(Regex pattern, string output) =>
-        pattern.Match(output) is { Success: true } match ? TryParseInvariant(match.Groups["value"].Value) : null;
+        pattern.Match(output) is { Success: true } match ? ParseInvariantOrNull(match.Groups["value"].Value) : null;
 
-    private static double? TryParseInvariant(string text) =>
+    private static double? ParseInvariantOrNull(string text) =>
         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
 }
 

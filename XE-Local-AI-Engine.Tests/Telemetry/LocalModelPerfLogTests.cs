@@ -24,10 +24,10 @@ public sealed class LocalModelPerfLogTests
         telemetry.RecordLoad(Observation("Llama-3.1", LlamaServerReadinessOutcome.Ready, readinessMs: 9_000));
         telemetry.RecordUnload("llama-3.1", ModelRole.Chat, LlamaServerUnloadReason.IdleTimeout);
 
-        var history = AssertEx.NotNull(perfLog.TryGetLoadHistory("LLAMA-3.1", ModelRole.Chat), "Model names compare case-insensitively.");
+        var history = AssertEx.NotNull(perfLog.FindLoadHistory("LLAMA-3.1", ModelRole.Chat), "Model names compare case-insensitively.");
         AssertEx.Equal(expected: 9_000d, history.LastReadyLoadMs);
         AssertEx.Equal(LlamaServerUnloadReason.IdleTimeout, history.LastUnloadReason);
-        AssertEx.Null(perfLog.TryGetLoadHistory("llama-3.1", ModelRole.Embedding), "The embedder is a different process.");
+        AssertEx.Null(perfLog.FindLoadHistory("llama-3.1", ModelRole.Embedding), "The embedder is a different process.");
     }
 
     [Test]
@@ -39,10 +39,10 @@ public sealed class LocalModelPerfLogTests
         telemetry.RecordUnload("llama-3.1", ModelRole.Chat, LlamaServerUnloadReason.LoadedModelCap);
 
         telemetry.RecordLoad(Observation("llama-3.1", LlamaServerReadinessOutcome.Failed, readinessMs: 50));
-        AssertEx.Equal(LlamaServerUnloadReason.LoadedModelCap, perfLog.TryGetLoadHistory("llama-3.1", ModelRole.Chat)?.LastUnloadReason);
+        AssertEx.Equal(LlamaServerUnloadReason.LoadedModelCap, perfLog.FindLoadHistory("llama-3.1", ModelRole.Chat)?.LastUnloadReason);
 
         telemetry.RecordLoad(Observation("llama-3.1", LlamaServerReadinessOutcome.Ready, readinessMs: 4_000));
-        var history = AssertEx.NotNull(perfLog.TryGetLoadHistory("llama-3.1", ModelRole.Chat));
+        var history = AssertEx.NotNull(perfLog.FindLoadHistory("llama-3.1", ModelRole.Chat));
         AssertEx.Null(history.LastUnloadReason, "The reload's process is still loaded, so the old reason no longer describes it.");
         AssertEx.Equal(expected: 4_000d, history.LastReadyLoadMs);
     }

@@ -28,12 +28,7 @@ public sealed class DeleteGoldenConversationEndpoint : Endpoint<DeleteGoldenConv
 
     public override async Task HandleAsync(DeleteGoldenConversationRequest req, CancellationToken ct)
     {
-        var deleted = await _goldenConversationService.DeleteAsync(req.AgentDefinitionId, req.GoldenConversationId, ct);
-        if (!deleted)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
+        await _goldenConversationService.DeleteAsync(req.AgentDefinitionId, req.GoldenConversationId, ct);
 
         await Send.NoContentAsync(ct);
     }

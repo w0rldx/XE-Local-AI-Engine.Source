@@ -279,8 +279,9 @@ public abstract class ManagedSourceBuildService<TBackend, TDescriptor> : IDispos
                 return result(plan.InsufficientDisk ? StartOutcome.InsufficientDisk : StartOutcome.MissingPrerequisites, plan.Prerequisites, null);
             }
 
-            var mutationReservation = _activityGate.TryAcquireMutationReservation();
-            if (mutationReservation is null)
+#pragma warning disable CA2000 // Ownership passes to the build task's finally, or to the catch below if the start fails.
+            if (!_activityGate.TryAcquireMutationReservation(out var mutationReservation))
+#pragma warning restore CA2000
             {
                 return result(StartOutcome.RuntimeBusy, plan.Prerequisites, _activityGate.GetSnapshot());
             }
@@ -354,11 +355,12 @@ public abstract class ManagedSourceBuildService<TBackend, TDescriptor> : IDispos
                 }
             }
 
-            await using var mutation = _activityGate.TryAcquireMutationReservation();
-            if (mutation is null)
+            if (!_activityGate.TryAcquireMutationReservation(out var mutation))
             {
                 return result(RemoveOutcome.RuntimeBusy, _activityGate.GetSnapshot());
             }
+
+            await using var mutationScope = mutation;
 
             var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (installed is null)

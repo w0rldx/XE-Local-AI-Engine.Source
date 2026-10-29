@@ -4,8 +4,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Tutorial;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -216,6 +220,66 @@ public sealed class TutorialStateEndpointTests
         AssertEx.Equal(firstAt, AcknowledgedAt(after));
     }
 
+    [Test]
+    public async Task Writes_ThatIdentityRefuses_Answer409_NotAnAuthenticationFailure()
+    {
+        // The real service and the real Identity pipeline; only the user validator is told to refuse once seeding is done.
+        var refusing = new RefusingNodeUserValidator();
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services => services.AddSingleton<IUserValidator<NodeUser>>(refusing)
+        };
+        using var client = factory.CreateClient();
+        await SeedAdminUserAsync(factory);
+        refusing.Refuse = true;
+
+        using (var save = await SendWriteAsync(factory, client, HttpMethod.Put, Route, JsonContent.Create(new
+               {
+                   key = "main-app-v1",
+                   status = "completed"
+               })))
+        {
+            AssertEx.Equal(HttpStatusCode.Conflict, save.StatusCode, "a tour write Identity refused is not the caller's authentication failing.");
+            AssertEx.Contains(await save.Content.ReadAsStringAsync(), "could not be saved");
+        }
+
+        using var acknowledge = await SendWriteAsync(factory, client, HttpMethod.Post, AiAcknowledgementRoute, content: null);
+        AssertEx.Equal(HttpStatusCode.Conflict, acknowledge.StatusCode, "an acknowledgement Identity refused is not the caller's authentication failing.");
+        AssertEx.Contains(await acknowledge.Content.ReadAsStringAsync(), "could not be saved");
+    }
+
+    [Test]
+    public async Task Writes_ForAPrincipalWithNoNodeUser_Answer401()
+    {
+        // Substituted: a bearer token for a user Identity cannot find fails authentication before the endpoint runs, so
+        // the real pipeline never reaches the endpoint's own unresolved-user branch.
+        var service = Substitute.For<INodeTutorialStateService>();
+        service.SaveEntryAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<string>(), Arg.Any<TutorialStatus>(), Arg.Any<CancellationToken>())
+               .Returns(TutorialEntrySaveOutcome.UserNotResolved);
+        service.AcknowledgeAiAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(new AiAcknowledgementResult.UserNotResolved());
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeTutorialStateService>();
+                services.AddSingleton(service);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using (var save = await SendWriteAsync(factory, client, HttpMethod.Put, Route, JsonContent.Create(new
+               {
+                   key = "main-app-v1",
+                   status = "completed"
+               })))
+        {
+            AssertEx.Equal(HttpStatusCode.Unauthorized, save.StatusCode);
+        }
+
+        using var acknowledge = await SendWriteAsync(factory, client, HttpMethod.Post, AiAcknowledgementRoute, content: null);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, acknowledge.StatusCode);
+    }
+
     // The node bearer token is minted for the single-admin user id "node-admin-test" (see
     // TestServerWebAppFactory.CreateNodeAccessToken). The tutorial-state service resolves that user via UserManager, so the
     // Identity row must exist for an authenticated write to persist — seed it to match the token exactly.
@@ -315,6 +379,21 @@ public sealed class TutorialStateEndpointTests
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return document.RootElement.Clone();
+    }
+
+    private static async Task<HttpResponseMessage> SendWriteAsync(TestServerWebAppFactory factory,
+        HttpClient client,
+        HttpMethod method,
+        string route,
+        HttpContent? content)
+    {
+        using var request = new HttpRequestMessage(method, route)
+        {
+            Content = content
+        };
+        factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+        return await client.SendAsync(request);
     }
 
     private static string? AcknowledgedAt(JsonElement acknowledgement)

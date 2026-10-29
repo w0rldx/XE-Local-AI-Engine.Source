@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -44,24 +45,27 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
     }
 
-    public InvocationState? TryGetLiveInvocation(Guid invocationId)
+    public bool TryGetLiveInvocation(Guid invocationId, [NotNullWhen(true)] out InvocationState? state)
     {
-        return _live.TryGetValue(invocationId, out var live) && IsNonTerminal(live.LatestState.Status)
+        state = _live.TryGetValue(invocationId, out var live) && IsNonTerminal(live.LatestState.Status)
             ? live.LatestState.Clone()
             : null;
+        return state is not null;
     }
 
-    public Guid? TryGetLiveInvocationIdForConversation(Guid conversationId)
+    public bool TryGetLiveInvocationIdForConversation(Guid conversationId, out Guid invocationId)
     {
         foreach (var state in _live.Values.Select(live => live.LatestState))
         {
             if (state.ConversationId == conversationId && IsNonTerminal(state.Status))
             {
-                return state.InvocationId;
+                invocationId = state.InvocationId;
+                return true;
             }
         }
 
-        return null;
+        invocationId = Guid.Empty;
+        return false;
     }
 
     public IAsyncEnumerable<ChatStreamEvent> ResumeAsync(Guid invocationId,

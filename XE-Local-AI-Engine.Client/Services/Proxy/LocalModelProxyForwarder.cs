@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Proxy;
 
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -346,9 +347,9 @@ internal sealed class LocalModelProxyForwarder
             descriptor.IsAvailable && string.Equals(descriptor.ModelName, model, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool TryReadModel(byte[] body, out string model)
+    private static bool TryReadModel(byte[] body, [NotNullWhen(true)] out string? model)
     {
-        model = string.Empty;
+        model = null;
         if (body.Length == 0)
         {
             return false;

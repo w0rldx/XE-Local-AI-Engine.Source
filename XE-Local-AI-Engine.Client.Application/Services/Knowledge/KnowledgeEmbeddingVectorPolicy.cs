@@ -101,7 +101,7 @@ public static class KnowledgeEmbeddingVectorPolicy
     ///     Returns the exact current identity when its width is policy-known. Native width is provider-output-dependent, so
     ///     callers comparing catalog rows should use <see cref="MatchesCurrentPolicy" /> instead.
     /// </summary>
-    public static string? TryCreateExpectedIdentity(EmbeddingModelResolution resolution, KnowledgeEmbeddingVectorMode mode)
+    public static string? CreateExpectedIdentityOrNull(EmbeddingModelResolution resolution, KnowledgeEmbeddingVectorMode mode)
     {
         ArgumentNullException.ThrowIfNull(resolution);
         return ShouldApplyMatryoshka(resolution, mode)
@@ -134,7 +134,7 @@ public static class KnowledgeEmbeddingVectorPolicy
             return false;
         }
 
-        var expected = TryCreateExpectedIdentity(resolution, mode);
+        var expected = CreateExpectedIdentityOrNull(resolution, mode);
         if (expected is not null)
         {
             return storedWidth == MatryoshkaWidth && string.Equals(storedIdentity, expected, StringComparison.Ordinal);

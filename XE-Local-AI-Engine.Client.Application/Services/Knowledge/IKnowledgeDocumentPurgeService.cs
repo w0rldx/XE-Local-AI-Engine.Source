@@ -14,7 +14,8 @@ public interface IKnowledgeDocumentPurgeService
 {
     /// <summary>
     ///     Purges the document with the given id and its dependent rows plus the encrypted blob. Returns
-    ///     <see langword="false" /> when no document row existed (the endpoint maps that to a 404).
+    ///     <see langword="false" /> when no document row existed: the delete endpoint answers that with
+    ///     <see cref="KnowledgeDocumentNotFoundException" />, while a repository re-import counts it as already gone.
     /// </summary>
     Task<bool> PurgeAsync(Guid documentId, CancellationToken cancellationToken);
 }

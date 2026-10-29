@@ -32,8 +32,7 @@ internal sealed class AgentHomeWorkspaceRevocationPreparation : IWorkspaceRevoca
         ArgumentNullException.ThrowIfNull(folder);
         var identity = await _identityProvider.GetAsync(cancellationToken);
         var key = new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
-        var lease = _leaseManager.TryAcquireForRecovery(key);
-        if (lease is null)
+        if (!_leaseManager.TryAcquireForRecovery(key, out var lease))
         {
             throw new WorkspaceRevocationBusyException();
         }

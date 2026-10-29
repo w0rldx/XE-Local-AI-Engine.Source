@@ -362,8 +362,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
         LlamaServerLaunchReceipt? receipt,
         RuntimeEnvironmentFactsV1? environment)
     {
-        var command = policyHash is null ? null : BenchmarkLaunchEvidence.TryBuild(receipt, environment, BenchmarkKvCacheType.SourceAuto);
-        if (command is null)
+        if (policyHash is null || BenchmarkLaunchEvidence.BuildOrNull(receipt, environment, BenchmarkKvCacheType.SourceAuto) is not { } command)
         {
             return;
         }
@@ -374,7 +373,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
                 work.QueueSequence,
                 work.Version,
                 command,
-                BenchmarkJudgeExecutionKey.TryCompute(policyHash!, receipt, environment),
+                BenchmarkJudgeExecutionKey.ComputeOrNull(policyHash, receipt, environment),
                 CancellationToken.None);
         }
         catch (Exception exception)

@@ -56,7 +56,7 @@ public interface IModelTrustResolver
     ///     unresolvable id. For call sites that need the declarations themselves (capabilities, context length, the
     ///     owning connection) and not just the locality.
     /// </summary>
-    Task<ExternalProviderModelRegistration?> TryResolveExternalAsync(string? modelId, CancellationToken cancellationToken = default);
+    Task<ExternalProviderModelRegistration?> FindExternalAsync(string? modelId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The same rule as <see cref="ResolveAsync" />, synchronously, for the gates that have no async boundary (the

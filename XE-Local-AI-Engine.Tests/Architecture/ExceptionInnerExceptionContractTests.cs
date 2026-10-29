@@ -26,7 +26,7 @@ public sealed class ExceptionInnerExceptionContractTests
 
     // Test-support assemblies ship beside the production ones in the test output directory; they are not product
     // surface, so their exception types are out of scope here.
-    private static readonly string[] NonProductionAssemblies =
+    internal static readonly string[] NonProductionAssemblies =
     [
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Client.Testing",

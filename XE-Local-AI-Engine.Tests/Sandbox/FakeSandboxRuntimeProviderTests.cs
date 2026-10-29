@@ -94,7 +94,7 @@ public sealed class FakeSandboxRuntimeProviderTests
         });
 
         AssertEx.Equal("class C { }", readBack);
-        AssertEx.Equal("class C { }", provider.TryReadHostFile("/host/out/main.cs"));
+        AssertEx.Equal("class C { }", provider.ReadHostFileOrNull("/host/out/main.cs"));
     }
 
     [Test]

@@ -34,7 +34,7 @@ public sealed class DevWorkflowRetryBudgetExceededException : DevWorkflowInvalid
     }
 }
 
-public sealed class DevWorkflowNotFoundException : InvalidOperationException
+public sealed class DevWorkflowNotFoundException : ResourceNotFoundException
 {
     public DevWorkflowNotFoundException(string message) : base(message)
     {

@@ -175,8 +175,8 @@ public sealed class VaultFileCodecTests
         AssertEx.True(groups.All(static group => group.Length == 5));
 
         var sloppy = " " + string.Concat(recoveryCode.Where(static c => c != '-').Select(char.ToLowerInvariant)) + "\n";
-        AssertEx.True(VaultKdf.TryParseRecoveryCode(sloppy, out var parsed));
-        AssertEx.True(VaultKdf.TryParseRecoveryCode(recoveryCode, out var exact));
+        AssertEx.Succeeded(VaultKdf.TryParseRecoveryCode(sloppy, out var parsed));
+        AssertEx.Succeeded(VaultKdf.TryParseRecoveryCode(recoveryCode, out var exact));
         SameBytes(exact, parsed);
         AssertEx.NotNull(VaultFileCodec.UnwrapWithRecovery(file, sloppy));
 

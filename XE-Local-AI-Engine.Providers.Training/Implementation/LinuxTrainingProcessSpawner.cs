@@ -111,7 +111,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
             // THIS host's group, so the pgid is only trusted once the child leads its own group.
             var launcherPath = ResolveFinalPath(startInfo.FileName);
             var (stat, leadsGroup, executablePath) = AwaitTrainerIdentity(process.Id,
-                LinuxTrainingProcessInspector.TryReadStat,
+                LinuxTrainingProcessInspector.ReadStatOrNull,
                 LinuxTrainingProcessInspector.ResolveExecutablePath,
                 launcherPath,
                 timeout => process.WaitForExit(timeout),

@@ -327,11 +327,12 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
         var source = ProcessContextAllocationSource.HardwareTier;
+        var deterministicOverride = ResolveDeterministicOverride(resolved);
         if (!resolved.ExploreMode && resolved.CtxSize > 0)
         {
             source = ProcessContextAllocationSource.FrozenProfile;
         }
-        else if (ResolveDeterministicOverride(resolved) is > 0)
+        else if (deterministicOverride is > 0)
         {
             source = ProcessContextAllocationSource.DeterministicOverride;
         }
@@ -344,9 +345,9 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 await ResolveProcessGpuBudgetAsync(variant, profile, ct), kvCacheQuant);
         }
 
-        if (source == ProcessContextAllocationSource.DeterministicOverride)
+        if (source == ProcessContextAllocationSource.DeterministicOverride && deterministicOverride is { } overrideTokens)
         {
-            var overridden = CapAndAlign(ResolveDeterministicOverride(resolved)!.Value, trainCeiling);
+            var overridden = CapAndAlign(overrideTokens, trainCeiling);
             return BuildAllocation(key, contentIdentity, overridden, trainCeiling, source, variant, profile, facts,
                 await ResolveProcessGpuBudgetAsync(variant, profile, ct), kvCacheQuant);
         }
@@ -587,7 +588,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             GpuVariant.Vulkan => "vulkan",
             _ => "cpu"
         };
-        var probed = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
+        var probed = await _processVramBudgetProbe.GetProcessBudgetBytesOrNullAsync(backend, ct);
         return probed is > 0 ? probed : profile.VramBytes;
     }
 

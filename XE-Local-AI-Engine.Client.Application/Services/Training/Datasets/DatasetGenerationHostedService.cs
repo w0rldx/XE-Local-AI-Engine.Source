@@ -65,10 +65,10 @@ public sealed class DatasetGenerationHostedService : BackgroundService
             }
 
             DatasetGenerationClaimedWork? work = null;
-            var admission = _gpuWorkGate.TryBeginShared(GpuWorkKind.DatasetGeneration);
+            var admitted = _gpuWorkGate.TryBeginShared(GpuWorkKind.DatasetGeneration, out var admission);
             try
             {
-                if (admission is not null)
+                if (admitted)
                 {
                     await using var claimScope = _scopeFactory.CreateAsyncScope();
                     var store = claimScope.ServiceProvider.GetRequiredService<ITrainingDatasetStore>();
@@ -108,7 +108,7 @@ public sealed class DatasetGenerationHostedService : BackgroundService
 
             if (work is null)
             {
-                await WaitAsync(admission is null && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
+                await WaitAsync(!admitted && GateRetryInterval < _pollInterval ? GateRetryInterval : _pollInterval, stoppingToken);
             }
         }
     }

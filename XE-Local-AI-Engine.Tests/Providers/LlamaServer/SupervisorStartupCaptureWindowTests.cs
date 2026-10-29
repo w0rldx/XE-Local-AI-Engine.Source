@@ -264,7 +264,7 @@ public sealed class SupervisorStartupCaptureWindowTests
             return Task.FromResult(true);
         }
 
-        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        public Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
         {
             return Task.FromResult<int?>(null);
         }
@@ -283,7 +283,7 @@ public sealed class SupervisorStartupCaptureWindowTests
             return Task.FromResult(true);
         }
 
-        public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+        public Task<int?> ReadEffectiveContextTokensOrNullAsync(Uri baseAddress, CancellationToken ct)
         {
             return Task.FromResult<int?>(null);
         }

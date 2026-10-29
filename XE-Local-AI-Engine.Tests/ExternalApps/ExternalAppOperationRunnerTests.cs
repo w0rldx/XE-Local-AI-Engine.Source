@@ -91,13 +91,13 @@ public sealed class ExternalAppOperationRunnerTests
         await harness.Gated.PullReached.Task.WaitAsync(TestBudgets.Contended);
 
         var key = ExternalAppInstanceGate.InstanceKey(admitted.Id);
-        AssertEx.Null(await harness.Gate.TryEnterAsync(key),
+        AssertEx.Null(await harness.Gate.EnterOrNullAsync(key),
             "A reconcile pass must not be able to take a gate a live install is standing behind.");
 
         _ = harness.Gated.PullGate.TrySetResult();
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running);
 
-        using var afterwards = AssertEx.NotNull(await harness.Gate.TryEnterAsync(key),
+        using var afterwards = AssertEx.NotNull(await harness.Gate.EnterOrNullAsync(key),
             "The lease is released in the operation's finally, which SettleAsync has already waited for.");
     }
 

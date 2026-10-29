@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ILlamaCppBinaryManager.TryGetInstalledBinaryAsync" />: the READ-ONLY resolve behind the device
+///     <see cref="ILlamaCppBinaryManager.FindInstalledBinaryAsync" />: the READ-ONLY resolve behind the device
 ///     diagnostics. It answers with a binary only when one is already on disk, and otherwise reports "none" — it must
 ///     never download, never create the cache tree, and never write <c>installed-runtime.json</c>, because it runs from
 ///     a plain GET the SPA fires on every authenticated page. The recovery direction matters as much as the refusal: the
@@ -27,7 +27,7 @@ public sealed class BinaryManagerInstalledLookupTests
         store.ReadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<InstalledRuntimeState?>(null));
         var manager = Manager(http, cache.Path, store);
 
-        var binary = await manager.TryGetInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+        var binary = await manager.FindInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
         AssertEx.Null(binary);
         AssertEx.Equal(expected: 0, handler.CallCount);
@@ -48,7 +48,7 @@ public sealed class BinaryManagerInstalledLookupTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = Manager(http, cache.Path, store: null);
 
-        var binary = AssertEx.NotNull(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+        var binary = AssertEx.NotNull(await manager.FindInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.Equal(serverPath, binary.ServerExecutablePath);
         AssertEx.Equal(LlamaCppReleasePins.PinnedTag, binary.Version);
@@ -67,11 +67,11 @@ public sealed class BinaryManagerInstalledLookupTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = Manager(http, cache.Path, store: null);
 
-        AssertEx.Null(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+        AssertEx.Null(await manager.FindInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
         var serverPath = WritePinnedCpuServer(cache.Path);
 
-        var binary = AssertEx.NotNull(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+        var binary = AssertEx.NotNull(await manager.FindInstalledBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
         AssertEx.Equal(serverPath, binary.ServerExecutablePath);
         AssertEx.Equal(expected: 0, handler.CallCount);
     }
@@ -86,7 +86,7 @@ public sealed class BinaryManagerInstalledLookupTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.Arm64, TimeProvider.System);
 
-        AssertEx.Null(await manager.TryGetInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        AssertEx.Null(await manager.FindInstalledBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
         AssertEx.Equal(expected: 0, handler.CallCount);
     }
 

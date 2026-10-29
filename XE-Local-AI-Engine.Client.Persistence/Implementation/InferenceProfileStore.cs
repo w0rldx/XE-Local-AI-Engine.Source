@@ -74,7 +74,7 @@ public sealed class InferenceProfileStore : IInferenceProfileStore
         return ToRecord(existing);
     }
 
-    public async Task<InferenceProfileRecord?> MarkFrozenAsync(Guid id,
+    public async Task<InferenceProfileFreezeResult> MarkFrozenAsync(Guid id,
         Guid benchmarkSnapshotId,
         long? globalFreeVramAtFreezeBytes,
         long? processBudgetVramAtFreezeBytes,
@@ -87,9 +87,14 @@ public sealed class InferenceProfileStore : IInferenceProfileStore
         var entity = await _dbContext.InferenceProfiles
                                      .FirstOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
-        if (entity is null || entity.Status != InferenceProfileStatus.Explored)
+        if (entity is null)
         {
-            return null;
+            return new InferenceProfileFreezeResult.NotFound();
+        }
+
+        if (entity.Status != InferenceProfileStatus.Explored)
+        {
+            return new InferenceProfileFreezeResult.NotExplored();
         }
 
         entity.Status = InferenceProfileStatus.Frozen;
@@ -101,7 +106,10 @@ public sealed class InferenceProfileStore : IInferenceProfileStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return ToRecord(entity);
+        return new InferenceProfileFreezeResult.Frozen
+        {
+            Profile = ToRecord(entity)
+        };
     }
 
     public async Task<InferenceProfileRecord?> MarkStaleAsync(Guid id, CancellationToken cancellationToken = default)

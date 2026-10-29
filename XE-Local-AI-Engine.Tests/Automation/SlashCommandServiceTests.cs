@@ -160,4 +160,26 @@ public sealed class SlashCommandServiceTests
             }));
         AssertEx.True(ReferenceEquals(failure, actual), "Unrelated database failures must propagate unchanged.");
     }
+
+    [Test]
+    public async Task GetUpdateDelete_WhenTheIdIsUnknown_ThrowNotFound()
+    {
+        var store = Substitute.For<ISlashCommandStore>();
+        var id = Guid.NewGuid();
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((SlashCommandRecord?)null);
+        store.UpdateAsync(id, Arg.Any<SlashCommandInput>(), Arg.Any<CancellationToken>()).Returns((SlashCommandRecord?)null);
+        store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(false);
+        var service = new SlashCommandService(store);
+        var input = new SlashCommandInput
+        {
+            Name = "review",
+            Description = null,
+            ActionType = SlashCommandActionType.SendPrompt,
+            Prompt = "Review this."
+        };
+
+        _ = await AssertEx.ThrowsAsync<SlashCommandNotFoundException>(async () => await service.GetByIdAsync(id));
+        _ = await AssertEx.ThrowsAsync<SlashCommandNotFoundException>(async () => await service.UpdateAsync(id, input));
+        _ = await AssertEx.ThrowsAsync<SlashCommandNotFoundException>(async () => await service.DeleteAsync(id));
+    }
 }

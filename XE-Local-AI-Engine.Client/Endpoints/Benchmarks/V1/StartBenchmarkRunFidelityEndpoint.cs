@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -33,13 +32,7 @@ public sealed class StartBenchmarkRunFidelityEndpoint : Endpoint<StartRunFidelit
     {
         ArgumentNullException.ThrowIfNull(req);
         var run = await _records.GetRunAsync(req.RunId, ct);
-        if (run is null)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(new BenchmarkNotFoundException("Benchmark run was not found.")));
-            return;
-        }
-
-        var project = await _records.GetProjectAsync(run.ProjectId, ct);
+        var project = await _records.FindProjectAsync(run.ProjectId, ct);
         _ = await _records.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct);
         _signal.Wake();
         await Send.ResultAsync(Results.Accepted());

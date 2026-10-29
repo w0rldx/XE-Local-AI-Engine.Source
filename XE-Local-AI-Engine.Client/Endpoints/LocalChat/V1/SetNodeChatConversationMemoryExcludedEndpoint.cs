@@ -44,12 +44,6 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint : Endpoint<Set
             UpdatedAtUtc = updatedAtUtc
         }, ct);
 
-        if (updated is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(updated.ToResponse(), ct);
     }
 }

@@ -26,12 +26,6 @@ public sealed class GetToolMockEndpoint : Endpoint<GetToolMockRequest, ToolMockR
     public override async Task HandleAsync(GetToolMockRequest req, CancellationToken ct)
     {
         var record = await _mocks.GetAsync(req.MockId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

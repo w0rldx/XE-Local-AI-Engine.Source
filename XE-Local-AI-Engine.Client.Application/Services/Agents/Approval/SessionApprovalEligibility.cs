@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.CustomTools;
 ///     The single place the "can a session-scoped approval ever be remembered for THIS tool?" rule lives.
 /// </summary>
 /// <remarks>
-///     Two callers share it and must not drift: <c>ToolApprovalCoordinator.TryResolveSessionApprovalKey</c> and the
+///     Two callers share it and must not drift: <c>ToolApprovalCoordinator.ResolveSessionApprovalKeyOrNull</c> and the
 ///     node tool-catalog response, whose boolean keeps the chat card from offering a durable decision the node would
 ///     silently downgrade to "Once". The rule is expressed at TOOL-IDENTITY level, all a catalog entry knows, so it
 ///     is an upper bound: the runner narrows it further per call — see docs/wiki/04-agent-mode.md

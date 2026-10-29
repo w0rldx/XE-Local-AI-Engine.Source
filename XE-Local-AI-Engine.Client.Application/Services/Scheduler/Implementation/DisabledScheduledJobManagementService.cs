@@ -22,19 +22,19 @@ internal sealed class DisabledScheduledJobManagementService : IScheduledJobManag
     public Task<IReadOnlyList<ScheduledJobDefinitionRecord>> ListJobsAsync(bool includeDeleted = false, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task<ScheduledJobDefinitionRecord?> GetJobAsync(Guid id, CancellationToken cancellationToken = default) =>
+    public Task<ScheduledJobDefinitionRecord> GetJobAsync(Guid id, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
     public Task<ScheduledJobDefinitionRecord> CreateJobAsync(ScheduledJobManagementInput input, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(Guid id, ScheduledJobManagementInput input, CancellationToken cancellationToken = default) =>
+    public Task<ScheduledJobDefinitionRecord> UpdateJobAsync(Guid id, ScheduledJobManagementInput input, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default) =>
+    public Task<ScheduledJobDefinitionRecord> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default) =>
+    public Task DeleteJobAsync(Guid id, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
     public Task<Guid> TriggerNowAsync(Guid id,
@@ -52,7 +52,7 @@ internal sealed class DisabledScheduledJobManagementService : IScheduledJobManag
         CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task<ScheduledJobRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+    public Task<ScheduledJobRunRecord> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
     public Task<RunCancellationOutcome> CancelRunAsync(Guid runId, CancellationToken cancellationToken = default) =>

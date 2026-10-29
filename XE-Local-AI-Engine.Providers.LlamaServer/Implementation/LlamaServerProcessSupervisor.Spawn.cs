@@ -259,7 +259,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     throw;
                 }
 
-                if (await TryDownTierAfterOutOfMemoryAsync(key, variant, candidate, automaticCapture, planSet, ct).ConfigureAwait(false) is { } downTieredSet)
+                if (await DownTierAfterOutOfMemoryOrNullAsync(key, variant, candidate, automaticCapture, planSet, ct).ConfigureAwait(false) is { } downTieredSet)
                 {
                     planSet = downTieredSet;
                     continue;
@@ -654,7 +654,7 @@ public sealed partial class LlamaServerProcessSupervisor
 
         // Read the effective per-slot context the server actually loaded (best-effort) so both app-side
         // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
-        var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
+        var effectiveContext = await ReadEffectiveContextOrNullAsync(spec.BaseAddress, ct).ConfigureAwait(false);
 
         // A benchmark spawn — and only a benchmark spawn — records what it actually launched, once the process is genuinely serving. The projection is read
         // back out of the FINAL argv, not recomputed. On why, and why assembly is non-throwing, see wiki 03, section Spawn attempt sequencing, under the benchmark launch receipt.
@@ -663,7 +663,7 @@ public sealed partial class LlamaServerProcessSupervisor
             : await BuildBenchmarkLaunchReceiptAsync(variant,
                 inputs.CapabilityManifest.Version ?? inputs.Binary.Version,
                 inputs.CapabilityManifest.ExecutableSha256,
-                LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
+                LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments)
                 ?? LlamaServerLaunchProjection.From(variant,
                     candidate.Resolved,
                     candidate.Plan,
@@ -808,7 +808,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     After a classified startup OOM, appends a candidate at the next lower context tier and returns the plan set
     ///     carrying it; <see langword="null" /> when the failure was no OOM or no tier is left.
     /// </summary>
-    private async Task<LlamaServerLaunchPlanSet?> TryDownTierAfterOutOfMemoryAsync(ProcessKey key,
+    private async Task<LlamaServerLaunchPlanSet?> DownTierAfterOutOfMemoryOrNullAsync(ProcessKey key,
         GpuVariant variant,
         LlamaServerLaunchCandidate candidate,
         LlamaServerBoundedStartupCapture? automaticCapture,
@@ -914,7 +914,7 @@ public sealed partial class LlamaServerProcessSupervisor
     /// </summary>
     /// <remarks>
     ///     The only fact that can fail to be read is the running image digest, and
-    ///     <see cref="TryComputeRunningImageSha256Async" /> reports that failure as <see langword="null" /> rather than
+    ///     <see cref="ComputeRunningImageSha256OrNullAsync" /> reports that failure as <see langword="null" /> rather than
     ///     as an exception, so a receipt never costs a run its measurement.
     /// </remarks>
     internal static async Task<LlamaServerLaunchReceipt> BuildBenchmarkLaunchReceiptAsync(GpuVariant variant,
@@ -934,7 +934,7 @@ public sealed partial class LlamaServerProcessSupervisor
             Variant = variant,
             Os = DescribeOperatingSystem(),
             ExecutableVersion = executableVersion,
-            ExecutableSha256 = await TryComputeRunningImageSha256Async(processId).ConfigureAwait(false),
+            ExecutableSha256 = await ComputeRunningImageSha256OrNullAsync(processId).ConfigureAwait(false),
             ManifestSha256 = manifestSha256,
             LaunchProjection = launchProjection,
             AuxAssets = auxAssets,
@@ -953,7 +953,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     readiness. Returns <see langword="null" /> whenever the running image cannot be read: an unreadable digest is
     ///     a fact worth recording as absent, never a reason to fail a benchmark.
     /// </remarks>
-    internal static async Task<string?> TryComputeRunningImageSha256Async(int processId)
+    internal static async Task<string?> ComputeRunningImageSha256OrNullAsync(int processId)
     {
         if (processId <= 0)
         {
@@ -981,7 +981,7 @@ public sealed partial class LlamaServerProcessSupervisor
             }
 
             // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it would turn recorded evidence into a
-            // failure. Matches BenchmarkFidelityExecutor.TryHashFileAsync, and means the catch below never absorbs a cancellation it did not ask for.
+            // failure. Matches BenchmarkFidelityExecutor.HashFileOrNullAsync, and means the catch below never absorbs a cancellation it did not ask for.
             return await FileSha256.ComputeAsync(imagePath, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception)
@@ -1077,11 +1077,11 @@ public sealed partial class LlamaServerProcessSupervisor
     }
 
     /// <summary>Best-effort read of the running server's effective context window from /props; null when unavailable.</summary>
-    private async Task<int?> TryReadEffectiveContextAsync(Uri baseAddress, CancellationToken ct)
+    private async Task<int?> ReadEffectiveContextOrNullAsync(Uri baseAddress, CancellationToken ct)
     {
         try
         {
-            return await _healthProbe.TryReadEffectiveContextTokensAsync(baseAddress, ct).ConfigureAwait(false);
+            return await _healthProbe.ReadEffectiveContextTokensOrNullAsync(baseAddress, ct).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

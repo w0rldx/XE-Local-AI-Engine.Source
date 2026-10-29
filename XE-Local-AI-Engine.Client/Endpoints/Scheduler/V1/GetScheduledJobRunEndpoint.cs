@@ -25,12 +25,6 @@ public sealed class GetScheduledJobRunEndpoint : Endpoint<ScheduledJobRunRouteRe
     public override async Task HandleAsync(ScheduledJobRunRouteRequest req, CancellationToken ct)
     {
         var record = await _scheduledJobManagementService.GetRunAsync(req.RunId, ct);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         await Send.OkAsync(record.ToResponse(), ct);
     }
 }

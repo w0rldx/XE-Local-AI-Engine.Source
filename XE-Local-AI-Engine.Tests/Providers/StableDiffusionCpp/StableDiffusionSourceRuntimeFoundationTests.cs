@@ -159,7 +159,8 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
         using var temp = new TempDirectory();
         using var store = new StableDiffusionInstalledRuntimeStore(temp.Path);
         var gate = new ImageRuntimeActivityGate();
-        using var job = AssertEx.NotNull(gate.TryAcquireJobLease());
+        AssertEx.Succeeded(gate.TryAcquireJobLease(out var job));
+        using var jobScope = job;
         var runner = new BlockingRunner();
         using var service = CreateService(temp.Path, store, gate, runner);
 

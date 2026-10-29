@@ -67,12 +67,6 @@ public sealed class StartLiveTranscriptionSessionEndpoint : Endpoint<Transcripti
             return;
         }
 
-        if (result.Outcome == StartLiveOutcome.SessionNotFound)
-        {
-            await Send.NotFoundAsync(ct);
-            return;
-        }
-
         if (result.Outcome == StartLiveOutcome.SessionAlreadyFinished)
         {
             await Send.ResultAsync(Results.Conflict(ToResponse(req.SessionId, result)));

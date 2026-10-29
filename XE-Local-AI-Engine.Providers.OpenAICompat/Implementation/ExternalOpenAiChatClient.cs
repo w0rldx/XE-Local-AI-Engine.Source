@@ -96,7 +96,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
 
     private async Task<InnerTarget> EnsureInnerAsync(CancellationToken ct)
     {
-        var transportBinding = await _registry.TryResolveTransportBindingAsync(_modelId, ct).ConfigureAwait(false)
+        var transportBinding = await _registry.FindTransportBindingAsync(_modelId, ct).ConfigureAwait(false)
                                ?? throw new ExternalProviderModelUnavailableException();
 
         var binding = transportBinding.Binding;

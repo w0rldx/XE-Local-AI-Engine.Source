@@ -81,28 +81,26 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
                 // Peek first: the exclusivity a kind needs has to be held before the claim, and an idle queue must not
                 // take the gate at all — holding it across the poll would starve every other GPU path on a quiet node.
                 kind = await PeekAsync(stoppingToken);
-                if (kind is TrainingWorkKind.TrainingRun or TrainingWorkKind.EvaluationRun)
+                if (kind is TrainingWorkKind.TrainingRun or TrainingWorkKind.EvaluationRun
+                    && _gpuWorkGate.TryBeginExclusive(kind == TrainingWorkKind.TrainingRun
+                            ? GpuWorkKind.TrainingRun
+                            : GpuWorkKind.EvaluationRun,
+                        out admission))
                 {
-                    admission = _gpuWorkGate.TryBeginExclusive(kind == TrainingWorkKind.TrainingRun
-                        ? GpuWorkKind.TrainingRun
-                        : GpuWorkKind.EvaluationRun);
-                    if (admission is not null)
+                    if (kind == TrainingWorkKind.TrainingRun)
                     {
-                        if (kind == TrainingWorkKind.TrainingRun)
+                        lease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(stoppingToken);
+                        if (lease is not null)
                         {
-                            lease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(stoppingToken);
-                            if (lease is not null)
-                            {
-                                claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken);
-                            }
+                            claim = await ClaimAsync(TrainingWorkKind.TrainingRun, stoppingToken);
+                        }
 
-                            LogLeaseWait(lease is null);
-                        }
-                        else
-                        {
-                            // No lease: see the class remarks. The exclusive hold is the exclusivity an evaluation needs.
-                            claim = await ClaimAsync(TrainingWorkKind.EvaluationRun, stoppingToken);
-                        }
+                        LogLeaseWait(lease is null);
+                    }
+                    else
+                    {
+                        // No lease: see the class remarks. The exclusive hold is the exclusivity an evaluation needs.
+                        claim = await ClaimAsync(TrainingWorkKind.EvaluationRun, stoppingToken);
                     }
                 }
 

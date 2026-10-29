@@ -154,7 +154,7 @@ internal sealed class SandboxLifecycleRegistry
             if (_sandboxes.TryRemove(sandboxId, out var state))
             {
                 using var exitBudget = NewExitBudget();
-                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
+                TerminateState(state, SandboxScopeUnitKiller.CreateOrNull(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
             }
         }
     }
@@ -169,7 +169,7 @@ internal sealed class SandboxLifecycleRegistry
         using var exitBudget = NewExitBudget();
         foreach (var state in _sandboxes.Values)
         {
-            TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
+            TerminateState(state, SandboxScopeUnitKiller.CreateOrNull(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
         }
 
         _sandboxes.Clear();
@@ -516,7 +516,7 @@ internal sealed class SandboxLifecycleRegistry
         {
             if (_sandboxes.TryRemove(sandboxId, out var state))
             {
-                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
+                TerminateState(state, SandboxScopeUnitKiller.CreateOrNull(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
             }
         }
     }

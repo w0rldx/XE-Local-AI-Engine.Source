@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.AI;
@@ -453,7 +454,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
             _providerName = providerName;
         }
 
-        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, [NotNullWhen(true)] out IChatClient? client)
         {
             client = _configuredClient;
             return true;

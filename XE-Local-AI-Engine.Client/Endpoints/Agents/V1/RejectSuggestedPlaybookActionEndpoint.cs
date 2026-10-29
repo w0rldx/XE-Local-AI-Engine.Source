@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
 ///     analysis staging: rejects a pending Suggested/Analysis action by archiving it (provenance preserved). 404 when the
-///     action is missing, belongs to another agent, or is not a pending suggestion. Operator-gated.
+///     action is missing or belongs to another agent, 409 when it is not a pending suggestion. Operator-gated.
 /// </summary>
 public sealed class RejectSuggestedPlaybookActionEndpoint : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
 {
@@ -26,18 +26,24 @@ public sealed class RejectSuggestedPlaybookActionEndpoint : Endpoint<SuggestedPl
         Policies(NodeAuthorizationPolicies.Operator);
         // Route-only POST: no body means no Content-Type, and the default POST "Accepts" metadata (application/json
         // only) would answer 415. Accepting any content-type lets the request through; the ids still bind from the route.
-        Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>());
+        Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>()
+                          .ProducesProblem(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var record = await _playbookActionService.RejectSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct);
-        if (record is null)
+        switch (await _playbookActionService.RejectSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct))
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            case PlaybookSuggestionReviewResult.Applied applied:
+                await Send.OkAsync(applied.Record.ToResponse(), ct);
+                return;
+            default:
+                await Send.ConflictProblemAsync("The action is no longer a pending suggestion.",
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["outcome"] = "NotPending"
+                    });
+                return;
         }
-
-        await Send.OkAsync(record.ToResponse(), ct);
     }
 }

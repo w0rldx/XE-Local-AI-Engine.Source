@@ -76,7 +76,7 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         foreach (var path in Directory.EnumerateDirectories(runsRoot))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (AgentHomeRunPaths.TryResolveRun(runsRoot, Path.GetFileName(path)) is { } run)
+            if (AgentHomeRunPaths.ResolveRunOrNull(runsRoot, Path.GetFileName(path)) is { } run)
             {
                 runs.Add(run);
             }
@@ -101,12 +101,9 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     }
 
     /// <inheritdoc />
-    public async Task<AgentHomeRunText?> ReadLogAsync(string runId, CancellationToken cancellationToken = default)
+    public async Task<AgentHomeRunText> ReadLogAsync(string runId, CancellationToken cancellationToken = default)
     {
-        if (ResolveRun(runId) is not { } run)
-        {
-            return null;
-        }
+        var run = ResolveRun(runId);
 
         // The same two windows the page is built from: an operator reading a run wants its opening and its end, and
         // the middle of a multi-gigabyte log is neither.
@@ -119,17 +116,15 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     }
 
     /// <inheritdoc />
-    public async Task<AgentHomeRunText?> ReadPatchAsync(string runId, CancellationToken cancellationToken = default)
+    public async Task<AgentHomeRunText> ReadPatchAsync(string runId, CancellationToken cancellationToken = default)
     {
-        return ResolveRun(runId) is { } run
-            ? await ReadCappedTextAsync(Path.Combine(run.Path, "patches", "changes.patch"), PatchDisplayMaxBytes, cancellationToken)
-            : null;
+        return await ReadCappedTextAsync(Path.Combine(ResolveRun(runId).Path, "patches", "changes.patch"), PatchDisplayMaxBytes, cancellationToken);
     }
 
-    private AgentHomeRunLocation? ResolveRun(string runId)
+    private AgentHomeRunLocation ResolveRun(string runId)
     {
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_options, _dataDirectoryRoot);
-        return AgentHomeRunPaths.TryResolveRun(runsRoot, runId);
+        return AgentHomeRunPaths.ResolveRunOrNull(runsRoot, runId) ?? throw new AgentHomeRunNotFoundException(runId);
     }
 
     /// <summary>
@@ -143,7 +138,7 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     /// </remarks>
     private static async Task<AgentHomeRunText> ReadCappedTextAsync(string path, int maxBytes, CancellationToken cancellationToken)
     {
-        await using var stream = TryOpenRunFile(path, long.MaxValue);
+        await using var stream = OpenRunFileOrNull(path, long.MaxValue);
         if (stream is null)
         {
             return new AgentHomeRunText
@@ -312,7 +307,7 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     /// <summary>How many entries <c>changed-files.json</c> holds; <see langword="null" /> when it cannot be counted.</summary>
     private static async Task<int?> CountChangedFilesAsync(string changedFilesPath, CancellationToken cancellationToken)
     {
-        await using var stream = TryOpenRunFile(changedFilesPath, ChangedFilesMaxBytes);
+        await using var stream = OpenRunFileOrNull(changedFilesPath, ChangedFilesMaxBytes);
         if (stream is null)
         {
             return null;
@@ -341,7 +336,7 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     ///     one of those blocks a thread forever, since .NET offers no non-blocking open and no file-type signal to
     ///     refuse it by; and a file past the caller's cap. Reads never block a writer, and never throw past here.
     /// </remarks>
-    private static FileStream? TryOpenRunFile(string path, long maxBytes)
+    private static FileStream? OpenRunFileOrNull(string path, long maxBytes)
     {
         try
         {
@@ -380,7 +375,7 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     /// </remarks>
     private static async Task<BoundedLines> ReadBoundedLinesAsync(string path, CancellationToken cancellationToken)
     {
-        await using var stream = TryOpenRunFile(path, EventsMaxBytes);
+        await using var stream = OpenRunFileOrNull(path, EventsMaxBytes);
         if (stream is null)
         {
             return new BoundedLines([], false);

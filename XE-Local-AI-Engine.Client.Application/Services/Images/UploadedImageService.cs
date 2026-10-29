@@ -51,10 +51,10 @@ public sealed class UploadedImageService
     }
 
     /// <summary>
-    ///     Deletes an uploaded image (row first, then blob). <see langword="false" /> when no upload has that id,
-    ///     including when the id names a job-produced image.
+    ///     Deletes an uploaded image (row first, then blob).
     /// </summary>
-    public async Task<bool> DeleteAsync(Guid imageId, CancellationToken cancellationToken)
+    /// <exception cref="ImageNotFoundException">No upload has that id, including when the id names a job-produced image.</exception>
+    public async Task DeleteAsync(Guid imageId, CancellationToken cancellationToken)
     {
         string? storagePath;
         await using (var scope = _scopeFactory.CreateAsyncScope())
@@ -65,11 +65,10 @@ public sealed class UploadedImageService
 
         if (storagePath is null)
         {
-            return false;
+            throw new ImageNotFoundException("The uploaded image was not found.");
         }
 
         _imageStore.RemoveUploadBlob(imageId, storagePath);
-        return true;
     }
 
     /// <summary>Sniffs the format and reads the header dimensions, refusing anything the edit path cannot use.</summary>
@@ -80,7 +79,7 @@ public sealed class UploadedImageService
         int height;
         if (bytes.StartsWith(PngSignature))
         {
-            if (PngImageDimensions.TryRead(bytes) is not { } dimensions)
+            if (PngImageDimensions.ReadOrNull(bytes) is not { } dimensions)
             {
                 throw new ImageUploadRejectedException("The image header could not be read.");
             }

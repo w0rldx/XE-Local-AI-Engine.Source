@@ -413,7 +413,7 @@ public sealed partial class BenchmarkStore
         }
 
         // Ranked as if no fit were published when the blob is unreadable, the same rule every other ScoresJson reader applies.
-        var entries = BenchmarkPairwiseFitScores.TryRead(fit, _logger);
+        var entries = BenchmarkPairwiseFitScores.ReadOrNull(fit, _logger);
         if (entries is null)
         {
             return new PairwiseRanking

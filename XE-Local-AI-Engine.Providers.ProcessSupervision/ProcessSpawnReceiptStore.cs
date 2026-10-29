@@ -56,7 +56,7 @@ public sealed class ProcessSpawnReceiptStore
         }
 
         var pid = handle.ProcessId;
-        if (LinuxProcFs.TryReadStat(pid) is not { } stat || LinuxProcFs.TryRealPath(executablePath) is not { } canonicalPath)
+        if (LinuxProcFs.ReadStatOrNull(pid) is not { } stat || LinuxProcFs.RealPathOrNull(executablePath) is not { } canonicalPath)
         {
             _logger.LogWarning("No spawn receipt was written for {Label} (pid {Pid}): its identity could not be read; only the managed-root reap covers it.",
                 label, pid);
@@ -97,7 +97,7 @@ public sealed class ProcessSpawnReceiptStore
 
         foreach (var file in Directory.EnumerateFiles(_directory, "*.json"))
         {
-            receipts.Add(new KeyValuePair<string, ProcessSpawnReceipt?>(file, TryRead(file)));
+            receipts.Add(new KeyValuePair<string, ProcessSpawnReceipt?>(file, ReadOrNull(file)));
         }
 
         return receipts;
@@ -116,7 +116,7 @@ public sealed class ProcessSpawnReceiptStore
         }
     }
 
-    private static ProcessSpawnReceipt? TryRead(string file)
+    private static ProcessSpawnReceipt? ReadOrNull(string file)
     {
         try
         {

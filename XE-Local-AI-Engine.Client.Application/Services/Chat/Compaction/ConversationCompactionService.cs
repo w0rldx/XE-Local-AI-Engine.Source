@@ -118,7 +118,15 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
                     ExpectedUpdatedAtUtc = result.ExpectedUpdatedAtUtc
                 },
                 cancellationToken);
-            if (written is null)
+            if (written == NodeChatGuardedWriteOutcome.ConversationNotFound)
+            {
+                return new ConversationCompactionResult
+                {
+                    Outcome = ConversationCompactionOutcome.ConversationNotFound
+                };
+            }
+
+            if (written == NodeChatGuardedWriteOutcome.Superseded)
             {
                 _logger.LogInformation("Compaction of conversation {ConversationId} was superseded by a path change; the synopsis was discarded.", conversationId);
                 return new ConversationCompactionResult
@@ -220,6 +228,15 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         if (distill)
         {
             var distilled = await _distillation.DistillPendingAsync(conversationId, requestedModel, upToAnchorSequence: cutoffSequence, residencyIntent, cancellationToken);
+            if (distilled.Status == ConversationStateDistillationStatus.ConversationNotFound)
+            {
+                // Deleted or purged while the fold was being prepared: there is nothing left to summarize into.
+                return new ConversationCompactionResult
+                {
+                    Outcome = ConversationCompactionOutcome.ConversationNotFound
+                };
+            }
+
             if (distilled.Status is ConversationStateDistillationStatus.DistillerReturnedNothing or ConversationStateDistillationStatus.TimedOut or ConversationStateDistillationStatus.Superseded
                 || (distilled.Status == ConversationStateDistillationStatus.Distilled && distilled.CoversToSequence < cutoffSequence))
             {

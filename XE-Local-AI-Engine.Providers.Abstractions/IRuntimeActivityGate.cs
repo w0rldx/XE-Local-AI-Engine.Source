@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     Atomically coordinates in-flight jobs (a transcription, an image generation), spawn/readiness windows, resident
 ///     processes, and exclusive runtime mutation.
@@ -15,17 +17,17 @@ public interface IRuntimeActivityGate
     RuntimeActivitySnapshot GetSnapshot();
 
     /// <summary>Held for the duration of one in-flight job.</summary>
-    IRuntimeActivityLease? TryAcquireJobLease();
+    bool TryAcquireJobLease([NotNullWhen(true)] out IRuntimeActivityLease? lease);
 
     /// <summary>Held across a spawn and its readiness wait.</summary>
-    IRuntimeActivityLease? TryAcquireSpawnReadinessLease();
+    bool TryAcquireSpawnReadinessLease([NotNullWhen(true)] out IRuntimeActivityLease? lease);
 
     /// <summary>Held for as long as a daemon process is resident; released only once the child is actually down.</summary>
-    IRuntimeActivityLease? TryAcquireResidentProcessLease();
+    bool TryAcquireResidentProcessLease([NotNullWhen(true)] out IRuntimeActivityLease? lease);
 
     /// <summary>Exclusive against jobs and spawns. Taken by an eject.</summary>
-    IRuntimeActivityLease? TryAcquireEvictionReservation();
+    bool TryAcquireEvictionReservation([NotNullWhen(true)] out IRuntimeActivityLease? lease);
 
     /// <summary>Exclusive against everything, resident processes included. Taken by a managed-runtime mutation.</summary>
-    IRuntimeActivityLease? TryAcquireMutationReservation();
+    bool TryAcquireMutationReservation([NotNullWhen(true)] out IRuntimeActivityLease? lease);
 }
