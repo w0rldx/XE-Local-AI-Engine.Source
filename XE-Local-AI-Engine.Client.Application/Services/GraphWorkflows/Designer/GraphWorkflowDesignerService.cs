@@ -39,6 +39,12 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
     /// <summary>How many times findings are fed back before the proposal is returned as it stands.</summary>
     internal const int MaxFixUpRetries = 2;
 
+    /// <summary>
+    ///     Closes every retry message: the client shows only the last attempt's reply, and without it that reply describes
+    ///     the correction rather than the change the operator asked for.
+    /// </summary>
+    internal const string WholeChangeReply = "In \"reply\", describe the whole change to the user as if this were your first answer; do not describe this correction.";
+
     private static readonly JsonSerializerOptions EnvelopeOptions = new(JsonSerializerDefaults.Web)
     {
         TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
@@ -338,7 +344,8 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
                 if (fixUpsLeft-- > 0)
                 {
                     messages.Add(new ChatMessage(ChatRole.Assistant, response.Text));
-                    messages.Add(new ChatMessage(ChatRole.User, "That was not a usable answer. Answer again with the JSON envelope {\"reply\": ..., \"proposal\": ...} only, and a non-empty reply."));
+                    const string retry = "That was not a usable answer. Answer again with the JSON envelope {\"reply\": ..., \"proposal\": ...} only, and a non-empty reply.";
+                    messages.Add(new ChatMessage(ChatRole.User, request.Intent == GraphWorkflowDesignerIntent.Change ? $"{retry} {WholeChangeReply}" : retry));
                     continue;
                 }
 
@@ -356,17 +363,25 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
                 {
                     nudged = true;
                     messages.Add(new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(envelope, EnvelopeOptions)));
-                    messages.Add(new ChatMessage(ChatRole.User, "You were asked to change the workflow. Answer again with the whole proposed graph in \"proposal\"."));
+                    messages.Add(new ChatMessage(ChatRole.User, $"You were asked to change the workflow. Answer again with the whole proposed graph in \"proposal\". {WholeChangeReply}"));
                     continue;
                 }
 
                 return GraphWorkflowDesignerResult.Success(Turn(reply, proposalGraphJson: null, [], validation: null));
             }
 
+            // Keys aligned before anything reads them, and the aligned envelope is what a retry replays, so a finding's key
+            // names the edge the model sees in its own last answer.
+            envelope = new GraphWorkflowDesignerEnvelope
+            {
+                Reply = envelope.Reply,
+                Proposal = GraphWorkflowDesignerChanges.NormalizeEdgeKeys(request.GraphJson, envelope.Proposal!)
+            };
+
             // A null array reads as empty, so the parser answers it like any other graph with nothing in it.
             var proposalJson = JsonSerializer.Serialize(new GraphWorkflowDesignerGraph
                 {
-                    SchemaVersion = envelope.Proposal!.SchemaVersion,
+                    SchemaVersion = envelope.Proposal.SchemaVersion,
                     Kind = envelope.Proposal.Kind,
                     Chat = envelope.Proposal.Chat,
                     Nodes = envelope.Proposal.Nodes ?? [],
@@ -529,7 +544,7 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
             _ = builder.Append(finding.Message);
         }
 
-        return builder.ToString();
+        return builder.AppendLine().Append(WholeChangeReply).ToString();
     }
 
     private static long? Add(long? total, long? value) =>

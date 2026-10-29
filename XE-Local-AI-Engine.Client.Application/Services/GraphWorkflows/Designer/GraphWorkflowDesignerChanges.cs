@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Designer;
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -44,6 +45,133 @@ internal static class GraphWorkflowDesignerChanges
             .. Diff(Edge, RawElements(workingGraphJson, "edges"), RawElements(proposalGraphJson, "edges"), JsonNode.DeepEquals)
         ];
     }
+
+    /// <summary>
+    ///     The proposal with its edge keys aligned to the working graph, so the key-based diff reports the connections that
+    ///     really changed: a model that reuses an existing key for a new connection would otherwise shift every key after it.
+    /// </summary>
+    /// <remarks>
+    ///     A proposal edge keeps a working key only for the same <c>from</c>/<c>to</c>: first an edge that already carries
+    ///     it, then the next unclaimed working edge between the same nodes, one to one in order, so parallel edges pair up.
+    ///     Any other edge whose key is a working edge's key or repeats an earlier proposal edge's gets the next free
+    ///     <c>e&lt;n&gt;</c> above every number in use. A <c>sourceHandle</c> is not compared: the proposal carries none.
+    /// </remarks>
+    public static GraphWorkflowDesignerGraph NormalizeEdgeKeys(string? workingGraphJson, GraphWorkflowDesignerGraph proposal)
+    {
+        if (proposal.Edges is not { Count: > 0 } edges)
+        {
+            return proposal;
+        }
+
+        var working = RawEdges(workingGraphJson);
+        var keys = new string?[edges.Count];
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < edges.Count; i++)
+        {
+            if (edges[i] is { Key: { } key } edge && working.Any(entry => entry.Key == key && SameEnds(entry, edge)) && claimed.Add(key))
+            {
+                keys[i] = key;
+            }
+        }
+
+        for (var i = 0; i < edges.Count; i++)
+        {
+            if (keys[i] is null && edges[i] is { } edge && working.FirstOrDefault(entry => !claimed.Contains(entry.Key) && SameEnds(entry, edge)) is { Key: { } key })
+            {
+                _ = claimed.Add(key);
+                keys[i] = key;
+            }
+        }
+
+        // Every key either document names, so a fresh key never lands on a node or on a later edge that keeps its own.
+        var used = new HashSet<string>(working.Select(static entry => entry.Key), StringComparer.Ordinal);
+        used.UnionWith(RawKeys(workingGraphJson, "nodes"));
+        used.UnionWith((proposal.Nodes ?? []).Select(static node => node?.Key).OfType<string>());
+        used.UnionWith(edges.Select(static edge => edge?.Key).OfType<string>());
+        var next = used.Select(static key => key.Length > 1 && key[0] == 'e' && long.TryParse(key.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : 0)
+                       .DefaultIfEmpty(0)
+                       .Max() + 1;
+        var workingKeys = working.Select(static entry => entry.Key).ToHashSet(StringComparer.Ordinal);
+        for (var i = 0; i < edges.Count; i++)
+        {
+            if (keys[i] is not null || edges[i] is not { Key: { } key })
+            {
+                continue;
+            }
+
+            if (workingKeys.Contains(key) || claimed.Contains(key))
+            {
+                while (used.Contains($"e{next}"))
+                {
+                    next++;
+                }
+
+                key = $"e{next++}";
+            }
+
+            _ = claimed.Add(key);
+            keys[i] = key;
+        }
+
+        return new GraphWorkflowDesignerGraph
+        {
+            SchemaVersion = proposal.SchemaVersion,
+            Kind = proposal.Kind,
+            Chat = proposal.Chat,
+            Nodes = proposal.Nodes,
+            Edges = [.. edges.Select((edge, i) => keys[i] is not { } key || key == edge.Key
+                ? edge
+                : new GraphWorkflowDesignerEdge
+                {
+                    Key = key,
+                    From = edge.From,
+                    To = edge.To,
+                    Label = edge.Label,
+                    Condition = edge.Condition
+                })]
+        };
+
+        static bool SameEnds(WorkingEdge entry, GraphWorkflowDesignerEdge edge) =>
+            string.Equals(entry.From, edge.From, StringComparison.Ordinal) && string.Equals(entry.To, edge.To, StringComparison.Ordinal);
+    }
+
+    /// <summary>The working graph's keyed edges in document order; empty when it cannot be read.</summary>
+    private static List<WorkingEdge> RawEdges(string? graphJson)
+    {
+        var edges = new List<WorkingEdge>();
+        foreach (var entry in RawArray(graphJson, "edges"))
+        {
+            if (RawString(entry, "key") is { } key)
+            {
+                edges.Add(new WorkingEdge(key, RawString(entry, "from"), RawString(entry, "to")));
+            }
+        }
+
+        return edges;
+    }
+
+    private static IEnumerable<string> RawKeys(string? graphJson, string member) =>
+        RawArray(graphJson, member).Select(static entry => RawString(entry, "key")).OfType<string>();
+
+    private static string? RawString(JsonObject entry, string member) =>
+        entry[member] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    private static IEnumerable<JsonObject> RawArray(string? graphJson, string member)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(graphJson) && JsonNode.Parse(graphJson) is JsonObject document && document[member] is JsonArray array
+                ? array.OfType<JsonObject>().ToList()
+                : [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>One of the working graph's edges, as the key normalization compares it.</summary>
+    private readonly record struct WorkingEdge(string Key, string? From, string? To);
 
     /// <summary>One change when the graph kind or the chat block differs; both sides are already defaulted, so a default written out is equal.</summary>
     private static IEnumerable<GraphWorkflowDesignerChange> SettingsDiff(GraphSettings working, GraphSettings proposal) =>
@@ -155,24 +283,9 @@ internal static class GraphWorkflowDesignerChanges
     private static Dictionary<string, JsonNode?> RawElements(string graphJson, string member)
     {
         var elements = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
-        JsonNode? root;
-        try
+        foreach (var entry in RawArray(graphJson, member))
         {
-            root = string.IsNullOrWhiteSpace(graphJson) ? null : JsonNode.Parse(graphJson);
-        }
-        catch (JsonException)
-        {
-            return elements;
-        }
-
-        if (root is not JsonObject document || document[member] is not JsonArray array)
-        {
-            return elements;
-        }
-
-        foreach (var entry in array.OfType<JsonObject>())
-        {
-            if (entry["key"] is JsonValue key && key.TryGetValue<string>(out var name) && !elements.ContainsKey(name))
+            if (RawString(entry, "key") is { } name && !elements.ContainsKey(name))
             {
                 var copy = entry.DeepClone().AsObject();
                 _ = copy.Remove("position");

@@ -83,6 +83,7 @@ public sealed class GraphWorkflowDesignerServiceTests
         AssertEx.Equal(expected: 2, turn.Attempts);
         AssertEx.True(AssertEx.NotNull(turn.Validation).IsValid, "the retry's proposal is the one returned");
         AssertEx.Contains(harness.Local.LastUserMessage(callIndex: 1), "[e2]", message: "the parser's error goes back keyed by its element");
+        AssertEx.Contains(harness.Local.LastUserMessage(callIndex: 1), GraphWorkflowDesignerService.WholeChangeReply, message: "the retry's reply must describe the whole change, not the fix");
         AssertEx.True(harness.Local.IsDisposed, "the per-turn local client is disposed");
         AssertEx.Equal(expected: 220L, turn.InputTokens, "tokens are summed over every attempt");
     }
@@ -109,6 +110,7 @@ public sealed class GraphWorkflowDesignerServiceTests
         AssertEx.Equal(expected: 2, turn.Attempts);
         AssertEx.NotNull(turn.ProposalGraphJson);
         AssertEx.Contains(harness.Local.LastUserMessage(callIndex: 1), "You were asked to change the workflow");
+        AssertEx.Contains(harness.Local.LastUserMessage(callIndex: 1), GraphWorkflowDesignerService.WholeChangeReply);
     }
 
     [Test]
@@ -165,6 +167,89 @@ public sealed class GraphWorkflowDesignerServiceTests
 
         AssertEx.Equal("node:end:added, node:start:added, node:summarize:added, edge:e1:added, edge:e2:added",
             string.Join(", ", changes.Select(static change => $"{change.Kind}:{change.Key}:{change.Change}")));
+    }
+
+    /// <summary>
+    ///     A step inserted after Start, the model shifting every edge key down by one: only the rerouted edge is removed and
+    ///     the two new connections are added, under fresh keys; the edges it kept keep their working keys.
+    /// </summary>
+    [Test]
+    public async Task Turn_WhenTheModelReusesEdgeKeysForNewConnections_ReportsOnlyTheRealEdgeChanges()
+    {
+        const string working = """
+                               { "nodes": [{ "key": "start", "kind": "Start" }, {{Steps}}, { "key": "end", "kind": "End", "config": { "outcome": "completed" } }],
+                                 "edges": [{ "key": "e1", "from": "start", "to": "draft" }, { "key": "e2", "from": "draft", "to": "review" },
+                                           { "key": "e3", "from": "review", "to": "end" }] }
+                               """;
+        const string proposal = """
+                                { "nodes": [{ "key": "start", "kind": "Start" }, {{Steps}}, {{Outline}}, { "key": "end", "kind": "End", "config": { "outcome": "completed" } }],
+                                  "edges": [{ "key": "e1", "from": "start", "to": "outline" }, { "key": "e2", "from": "outline", "to": "draft" },
+                                            { "key": "e3", "from": "draft", "to": "review" }, { "key": "e4", "from": "review", "to": "end" }] }
+                                """;
+        var harness = new Harness(Envelope(WithSteps(proposal)));
+
+        var turn = await harness.TurnAsync(GraphWorkflowDesignerIntent.Change, WithSteps(working));
+
+        AssertEx.Equal("node:outline:added, edge:e1:removed, edge:e5:added, edge:e6:added",
+            string.Join(", ", turn.Changes.Select(static change => $"{change.Kind}:{change.Key}:{change.Change}")));
+        using var proposed = JsonDocument.Parse(AssertEx.NotNull(turn.ProposalGraphJson));
+        AssertEx.Equal("e5:start>outline, e6:outline>draft, e2:draft>review, e3:review>end",
+            string.Join(", ", proposed.RootElement.GetProperty("edges").EnumerateArray()
+                                      .Select(static edge => $"{edge.GetProperty("key").GetString()}:{edge.GetProperty("from").GetString()}>{edge.GetProperty("to").GetString()}")),
+            "the proposal handed back carries the aligned keys the change list names");
+
+        static string WithSteps(string graph) =>
+            graph.Replace("{{Steps}}", """
+                                       { "key": "draft", "kind": "LlmCall", "config": { "prompt": "Draft.", "inputBindings": { "doc": "run.input.document" } } },
+                                       { "key": "review", "kind": "LlmCall", "config": { "prompt": "Review.", "inputBindings": { "doc": "run.input.document" } } }
+                                       """, StringComparison.Ordinal)
+                 .Replace("{{Outline}}", """{ "key": "outline", "kind": "LlmCall", "config": { "prompt": "Outline.", "inputBindings": { "doc": "run.input.document" } } }""",
+                      StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task Turn_WhenTheModelRenumbersTheEdgesOfAnUnchangedGraph_ReportsNoChange()
+    {
+        var harness = new Harness(Envelope(ValidProposal.Replace("\"e1\"", "\"edge_b\"", StringComparison.Ordinal).Replace("\"e2\"", "\"e1\"", StringComparison.Ordinal)
+                                                        .Replace("\"edge_b\"", "\"e2\"", StringComparison.Ordinal)));
+
+        var turn = await harness.TurnAsync(GraphWorkflowDesignerIntent.Change);
+
+        AssertEx.Equal("node:summarize:modified", string.Join(", ", turn.Changes.Select(static change => $"{change.Kind}:{change.Key}:{change.Change}")),
+            "the swapped edge keys are no change; the prompt is the only one");
+    }
+
+    /// <summary>Parallel edges between the same two nodes pair with the working ones one to one, in order; one past them keeps its own new key.</summary>
+    [Test]
+    public void NormalizeEdgeKeys_PairsParallelEdgesOneToOne()
+    {
+        const string working = """
+                               { "edges": [{ "key": "e1", "from": "start", "to": "approve" }, { "key": "e2", "from": "approve", "to": "next" },
+                                           { "key": "e3", "from": "approve", "to": "next" }, { "key": "e4", "from": "next", "to": "end" }] }
+                               """;
+        var proposal = new GraphWorkflowDesignerGraph
+        {
+            Edges =
+            [
+                Edge("e1", "start", "approve"),
+                Edge("e3", "approve", "next"),
+                Edge("e3", "approve", "next"),
+                Edge("e9", "approve", "next"),
+                Edge("e4", "next", "end")
+            ]
+        };
+
+        var normalized = GraphWorkflowDesignerChanges.NormalizeEdgeKeys(working, proposal);
+
+        AssertEx.Equal("e1, e3, e2, e9, e4", string.Join(", ", AssertEx.NotNull(normalized.Edges).Select(static edge => edge.Key)));
+
+        static GraphWorkflowDesignerEdge Edge(string key, string from, string to) =>
+            new()
+            {
+                Key = key,
+                From = from,
+                To = to
+            };
     }
 
     [Test]
@@ -658,7 +743,7 @@ public sealed class GraphWorkflowDesignerServiceTests
 
         public GraphWorkflowDesignerService Service => _service ??= Build();
 
-        public static GraphWorkflowDesignerTurnRequest Request(GraphWorkflowDesignerIntent intent, string model = LocalModel) =>
+        public static GraphWorkflowDesignerTurnRequest Request(GraphWorkflowDesignerIntent intent, string model = LocalModel, string graphJson = WorkingGraph) =>
             new()
             {
                 ModelName = model,
@@ -670,13 +755,13 @@ public sealed class GraphWorkflowDesignerServiceTests
                         Text = "Make the summary three bullets."
                     }
                 ],
-                GraphJson = WorkingGraph,
+                GraphJson = graphJson,
                 Intent = intent
             };
 
-        public async Task<GraphWorkflowDesignerTurn> TurnAsync(GraphWorkflowDesignerIntent intent)
+        public async Task<GraphWorkflowDesignerTurn> TurnAsync(GraphWorkflowDesignerIntent intent, string graphJson = WorkingGraph)
         {
-            var result = await Service.TurnAsync(Request(intent));
+            var result = await Service.TurnAsync(Request(intent, graphJson: graphJson));
             return AssertEx.NotNull(result.Turn, $"the turn failed: {result.Failure} {result.FailureMessage}");
         }
 

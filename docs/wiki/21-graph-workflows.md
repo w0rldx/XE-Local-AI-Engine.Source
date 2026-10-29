@@ -1922,11 +1922,17 @@ cannot accept it.
    marked invalid; lint findings that survive the retries move from the warnings to the errors of the designer's
    report, so such a proposal reads invalid and cannot be accepted (the validate and save routes keep them as warnings).
    A reply-only answer with an empty reply counts as unusable and is retried; a proposal sent without a reply gets a
-   fixed one counting its changes.
+   fixed one counting its changes. Every retry and nudge on a `change` turn asks the model to describe the whole change
+   in `reply`, because the client shows only the last attempt's reply.
 
 **Changes.** `changes` is computed on the **parsed** typed graphs, the working graph against the proposal, so a member
 equal to its parser default, and a moved node, are no change. Nodes and edges are keyed by node key and by edge. A change to the graph-level settings (`kind`, the `chat` block) is
-one `{ kind: graph, key: settings, change: modified }` entry, and the review names each setting that differs.
+one `{ kind: graph, key: settings, change: modified }` entry, and the review names each setting that differs. Before
+validation and the diff, the proposal's edge keys are aligned to the working graph
+(`GraphWorkflowDesignerChanges.NormalizeEdgeKeys`): an edge keeps a working key only for the same `from` and `to`,
+parallel edges pair one to one in order, and a working key reused for another connection, or a key repeated in the
+proposal, becomes the next free `e<n>`. A model that shifts the keys after an inserted step therefore reports only the
+edges that really changed, and the proposal handed back, a retry included, carries the aligned keys.
 
 **Gate.** The workflow and the conversation are node-local data, so a model that leaves the node is admitted only through
 `CloudLocalDataGate` (§4.3, [Security & Privacy](12-security-and-privacy.md)). Nothing falls back to another model.

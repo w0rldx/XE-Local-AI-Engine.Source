@@ -109,8 +109,19 @@ function resolveLocalProxyTarget(value: string | undefined): string {
 	return target.toString().replace(/\/$/, "");
 }
 
-const stripOrigin: NonNullable<ProxyOptions["configure"]> = (proxy) => {
-	proxy.on("proxyReq", (proxyReq) => proxyReq.removeHeader("origin"));
+const configureLocalProxy: NonNullable<ProxyOptions["configure"]> = (proxy) => {
+	proxy.on("proxyReq", (proxyReq, _req, res) => {
+		proxyReq.removeHeader("origin");
+		// A browser abort must reach the node, or a cancelled turn keeps generating and holds its slot. The proxy's own
+		// guard destroys the upstream request only while `res.writableFinished` is false, but over HTTP/2 (Vite serves
+		// HTTPS as HTTP/2) a stream reset closes the response with `writableFinished` already true; `writableEnded` stays
+		// false until the response really ended. The WebSocket path closes its own socket and is left alone.
+		res.on("close", () => {
+			if (!res.writableEnded) {
+				proxyReq.destroy();
+			}
+		});
+	});
 	proxy.on("proxyReqWs", (proxyReq) => proxyReq.removeHeader("origin"));
 };
 
@@ -120,7 +131,7 @@ function localProxy(target: string, websocket = false): ProxyOptions {
 		secure: false,
 		changeOrigin: true,
 		ws: websocket,
-		configure: stripOrigin,
+		configure: configureLocalProxy,
 	};
 }
 
