@@ -110,7 +110,10 @@ public sealed partial class GraphWorkflowStore : IGraphWorkflowStore
             if (outcome.DeclinedBy is { } reason)
             {
                 await RollbackAsync(transaction);
-                return new GraphWorkflowConditionalWriteResult.Declined { Reason = reason };
+                return new GraphWorkflowConditionalWriteResult.Declined
+                {
+                    Reason = reason
+                };
             }
 
             // The watermark is allocated per COMMIT, not per event row: a mutation that records no event — the settle from Cancelling to Cancelled is the only one —

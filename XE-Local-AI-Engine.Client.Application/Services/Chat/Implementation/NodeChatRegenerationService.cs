@@ -136,8 +136,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
         SamplingOptions? samplingOptions,
         bool autoAcceptWebContent,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var turn = await LoadRegenerationTurnAsync(conversationId, originalMessageId, requestedSelectedPath, cancellationToken);
         var conversation = turn.Conversation;
@@ -433,22 +432,22 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         CancellationToken cancellationToken)
     {
         var variant = await _persistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest
-                          {
-                              ConversationId = conversationId,
-                              OriginalMessageId = originalMessageId,
-                              NewMessageId = newMessageId,
-                              RequestId = requestId,
-                              CreatedAtUtc = startedAtUtc,
-                              // Stamped with the model that will actually rerun, not the raw original model, so the
-                              // variant's attribution matches the rerun.
-                              Model = resolution.EffectiveModel,
-                              AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
-                              AgentName = resolution.Resolved?.AgentName,
-                              // The effort that actually drives this variant: an agent's pin wins over the request's
-                              // selection, the same precedence as the rerun's package, and it survives reload.
-                              ReasoningEffort = resolution.Resolved?.ReasoningEffort ?? reasoningEffort
-                          },
-                          cancellationToken);
+            {
+                ConversationId = conversationId,
+                OriginalMessageId = originalMessageId,
+                NewMessageId = newMessageId,
+                RequestId = requestId,
+                CreatedAtUtc = startedAtUtc,
+                // Stamped with the model that will actually rerun, not the raw original model, so the
+                // variant's attribution matches the rerun.
+                Model = resolution.EffectiveModel,
+                AgentDefinitionId = resolution.Resolved?.AgentDefinitionId,
+                AgentName = resolution.Resolved?.AgentName,
+                // The effort that actually drives this variant: an agent's pin wins over the request's
+                // selection, the same precedence as the rerun's package, and it survives reload.
+                ReasoningEffort = resolution.Resolved?.ReasoningEffort ?? reasoningEffort
+            },
+            cancellationToken);
 
         return variant.Variant;
     }

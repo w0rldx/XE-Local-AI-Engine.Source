@@ -559,8 +559,7 @@ public sealed class FrameworkApprovalGateTests
         }
 
         private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(Task<ChatResponse> responseTask,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var response = await responseTask;
             foreach (var message in response.Messages)

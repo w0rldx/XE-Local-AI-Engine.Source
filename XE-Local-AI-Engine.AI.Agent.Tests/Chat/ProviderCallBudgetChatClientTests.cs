@@ -1266,8 +1266,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             Calls++;
             MessageCounts.Add(messages.Count());
@@ -1508,8 +1507,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             ReceivedMessageSets.Add([.. messages]);
             ReceivedOptions.Add(options);
@@ -1582,8 +1580,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             foreach (var update in _updates)
@@ -1614,8 +1611,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             yield return new ChatResponseUpdate(ChatRole.Assistant, "first");

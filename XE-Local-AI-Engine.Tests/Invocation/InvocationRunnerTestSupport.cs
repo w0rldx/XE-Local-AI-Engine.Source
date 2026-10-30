@@ -758,8 +758,7 @@ internal static class InvocationRunnerTestSupport
         Task toolDone,
         TaskCompletionSource thinking,
         TaskCompletionSource toolStarted,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         yield return new AgentResponseUpdate(ChatRole.Assistant, "planning");
         thinking.TrySetResult();
@@ -772,8 +771,7 @@ internal static class InvocationRunnerTestSupport
 
     internal static async IAsyncEnumerable<AgentResponseUpdate> SlowToolUpdates(Task toolDone,
         TaskCompletionSource toolStarted,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
         {
@@ -795,8 +793,7 @@ internal static class InvocationRunnerTestSupport
     internal static async IAsyncEnumerable<AgentResponseUpdate> SlowPrefillUpdates(bool afterToolResult,
         Task prefillDone,
         TaskCompletionSource prefillStarted,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (afterToolResult)
         {
@@ -818,8 +815,7 @@ internal static class InvocationRunnerTestSupport
 
     internal static async IAsyncEnumerable<AgentResponseUpdate> ToolRoundThenSilentAfterTextUpdates(Task never,
         TaskCompletionSource textYielded,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
         {
@@ -839,8 +835,7 @@ internal static class InvocationRunnerTestSupport
 
     internal static async IAsyncEnumerable<AgentResponseUpdate> SilentAfterTextUpdates(Task never,
         TaskCompletionSource textYielded,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         yield return new AgentResponseUpdate(ChatRole.Assistant, "hi");
 
@@ -1216,8 +1211,7 @@ internal static class InvocationRunnerTestSupport
         string modelId,
         OpenAiWireRecorder recorder,
         List<IReadOnlyList<ExternalProviderBindingPin>>? pinsAtSend,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         pinsAtSend?.Add(ExternalProviderBindingPinScope.Current);
         using var client = new ExternalOpenAiChatClient(registry, modelId, recorder.CreateHandler);
@@ -1636,8 +1630,7 @@ internal static class InvocationRunnerTestSupport
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var message in response.Messages)
@@ -1683,8 +1676,7 @@ internal static class InvocationRunnerTestSupport
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var message in response.Messages)
@@ -1742,8 +1734,7 @@ internal static class InvocationRunnerTestSupport
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var message in response.Messages)
@@ -1894,8 +1885,7 @@ internal static class InvocationRunnerTestSupport
     // from a callback the test registers after the runner's, and no registration of this stream's own can run earlier.
     internal static async IAsyncEnumerable<AgentResponseUpdate> WaitForRelease(Task release,
         TaskCompletionSource started,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         started.TrySetResult();
         await release;
@@ -1979,8 +1969,7 @@ internal static class InvocationRunnerTestSupport
     // Rounds are registered BEFORE the park, so the estimate the cancelled path reports is a real one rather than zero.
     internal static async IAsyncEnumerable<AgentResponseUpdate> ToolSchemaBudgetedThenParkedUpdates(int toolSchemaTokens,
         TaskCompletionSource started,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         RegisterProviderRounds([toolSchemaTokens]);
         started.TrySetResult();

@@ -38,7 +38,6 @@ public sealed class DeleteImageJobEndpoint : Endpoint<ImageJobRouteRequest>
 
         switch (outcome)
         {
-
             case ImageJobDeleteOutcome.NotTerminal:
                 // The outcome stays machine-readable as an `outcome` extension member so the SPA can tell "still
                 // running, cancel it first" from any other conflict without matching on the message.

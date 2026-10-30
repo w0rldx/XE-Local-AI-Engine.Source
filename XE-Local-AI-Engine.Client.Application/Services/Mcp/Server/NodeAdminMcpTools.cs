@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;

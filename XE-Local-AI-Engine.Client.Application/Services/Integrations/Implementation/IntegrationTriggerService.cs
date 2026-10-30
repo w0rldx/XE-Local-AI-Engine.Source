@@ -78,7 +78,10 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
                 },
                 cancellationToken);
 
-            return new IntegrationTriggerResult.Saved { Trigger = created };
+            return new IntegrationTriggerResult.Saved
+            {
+                Trigger = created
+            };
         }
         catch (IntegrationTriggerNameConflictException)
         {
@@ -121,7 +124,10 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
 
         // Deleted between the write and this read: the caller's id no longer names anything.
         var reloaded = await _triggers.GetByIdAsync(triggerId, cancellationToken) ?? throw TriggerNotFound(triggerId);
-        return new IntegrationTriggerResult.Saved { Trigger = reloaded };
+        return new IntegrationTriggerResult.Saved
+        {
+            Trigger = reloaded
+        };
     }
 
     public async Task DeleteAsync(Guid triggerId, CancellationToken cancellationToken = default)

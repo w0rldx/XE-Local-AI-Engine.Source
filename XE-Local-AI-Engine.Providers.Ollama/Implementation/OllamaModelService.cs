@@ -60,8 +60,7 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
     }
 
     public async IAsyncEnumerable<PullProgress> PullModelAsync(string modelName,
-        [EnumeratorCancellation]
-        CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 

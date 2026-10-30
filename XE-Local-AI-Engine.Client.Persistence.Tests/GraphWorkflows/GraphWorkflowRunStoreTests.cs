@@ -660,7 +660,10 @@ public sealed class GraphWorkflowRunStoreTests
 
         var result = await DecideAsync(store, run.Id, Guid.NewGuid());
 
-        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible }, result, "the conditional write matched no row, and says so rather than raising.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined
+        {
+            Reason = GraphWorkflowWriteDecline.NodeRunNotEligible
+        }, result, "the conditional write matched no row, and says so rather than raising.");
         var after = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(before.Status, after.Status);
         AssertEx.Equal<Guid?>(before.DecisionOperationId, after.DecisionOperationId);
@@ -700,7 +703,10 @@ public sealed class GraphWorkflowRunStoreTests
 
         var eventsBefore = (await store.ListEventsAsync(run.Id)).Count;
 
-        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.RunNotActive }, await DecideAsync(store, run.Id, Guid.NewGuid()), "a run that stopped being live declines the answer.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined
+        {
+            Reason = GraphWorkflowWriteDecline.RunNotActive
+        }, await DecideAsync(store, run.Id, Guid.NewGuid()), "a run that stopped being live declines the answer.");
 
         var untouched = await store.GetNodeRunAsync(run.Id, "start");
         AssertEx.Equal(GraphWorkflowNodeRunStatus.WaitingForApproval, untouched.Status);

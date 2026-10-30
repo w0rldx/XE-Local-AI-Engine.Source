@@ -269,8 +269,7 @@ public sealed class CliCommandTests
     /// <summary>Yields one delta of <paramref name="turn" />, presses Ctrl-C, then never reaches a terminal.</summary>
     private static async IAsyncEnumerable<CliStreamEvent> NeverEndingTurnAsync(CancelMessageRequest turn,
         Action interrupt,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         yield return new CliStreamEvent
         {

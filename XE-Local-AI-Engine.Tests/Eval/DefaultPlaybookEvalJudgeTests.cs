@@ -271,8 +271,7 @@ public sealed class DefaultPlaybookEvalJudgeTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // The judge uses the non-streaming GetResponseAsync; an empty stream suffices.
             await Task.CompletedTask;

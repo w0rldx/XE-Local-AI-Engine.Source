@@ -276,13 +276,9 @@ public sealed class LlamaServerRerankerClient : IRerankerClient
         public required IReadOnlyList<string> Documents { get; init; }
     }
 
-    private sealed record RerankResponse(
-        [property: JsonPropertyName("results")]
-        IReadOnlyList<RerankResult>? Results);
+    private sealed record RerankResponse([property: JsonPropertyName("results")] IReadOnlyList<RerankResult>? Results);
 
     private sealed record RerankResult(
-        [property: JsonPropertyName("index")]
-        int Index,
-        [property: JsonPropertyName("relevance_score")]
-        double RelevanceScore);
+        [property: JsonPropertyName("index")] int Index,
+        [property: JsonPropertyName("relevance_score")] double RelevanceScore);
 }

@@ -256,8 +256,7 @@ public sealed class CliNodeIntegrationTests
 
     private static async IAsyncEnumerable<Server.ChatStreamEvent> PlayAsync(IEnumerable<Server.ChatStreamEvent> frames,
         bool holdOpen,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         foreach (var frame in frames)
         {

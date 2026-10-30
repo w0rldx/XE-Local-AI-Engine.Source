@@ -926,7 +926,10 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
 
         return _race == GraphWorkflowRace.ConcurrencyToken
             ? throw new GraphWorkflowInvalidTransitionException($"A concurrent writer moved graph workflow run '{command.RunId}' before this write could commit.")
-            : new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible };
+            : new GraphWorkflowConditionalWriteResult.Declined
+            {
+                Reason = GraphWorkflowWriteDecline.NodeRunNotEligible
+            };
     }
 
     public Task<GraphWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateGraphWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>

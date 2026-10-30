@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 using System.ClientModel;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Contracts.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -204,7 +204,7 @@ public sealed class GraphWorkflowDesignerServiceTests
                                        { "key": "review", "kind": "LlmCall", "config": { "prompt": "Review.", "inputBindings": { "doc": "run.input.document" } } }
                                        """, StringComparison.Ordinal)
                  .Replace("{{Outline}}", """{ "key": "outline", "kind": "LlmCall", "config": { "prompt": "Outline.", "inputBindings": { "doc": "run.input.document" } } }""",
-                      StringComparison.Ordinal);
+                     StringComparison.Ordinal);
     }
 
     [Test]
@@ -288,7 +288,10 @@ public sealed class GraphWorkflowDesignerServiceTests
         var harness = new Harness(Envelope(ValidProposal))
         {
             Locality = ModelTrustLocality.Cloud,
-            Grants = new ExternalProviderCloudGrants { LocalData = true }
+            Grants = new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            }
         };
 
         var result = await harness.Service.TurnAsync(Harness.Request(GraphWorkflowDesignerIntent.Change, model: "ext:conn/gpt"));
@@ -357,7 +360,12 @@ public sealed class GraphWorkflowDesignerServiceTests
         AssertEx.Equal("string", kind.GetProperty("type").GetString(), "a node kind is a non-null string");
         AssertEx.Equal(Enum.GetNames<GraphWorkflowNodeKind>().Length, kind.GetProperty("enum").GetArrayLength(), "the kind keeps its enum, without null");
         var edge = proposal.GetProperty("edges").GetProperty("items").GetProperty("properties");
-        AssertEx.Empty(new[] { "key", "from", "to" }.Where(member => edge.GetProperty(member).GetRawText() != """{"type":"string"}"""),
+        AssertEx.Empty(new[]
+            {
+                "key",
+                "from",
+                "to"
+            }.Where(member => edge.GetProperty(member).GetRawText() != """{"type":"string"}"""),
             $"an edge's key and ends are non-null strings: {edge.GetRawText()}");
         AssertEx.Equal("""{"type":["string","null"]}""", node.GetProperty("properties").GetProperty("label").GetRawText(), "every other member stays nullable");
 
@@ -482,7 +490,8 @@ public sealed class GraphWorkflowDesignerServiceTests
     [Test]
     public void ChangeList_WhenTheGraphKindChanges_ReportsTheSettings()
     {
-        var changes = GraphWorkflowDesignerChanges.Compute(WorkingGraph, WorkingGraph.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"kind\": \"Chat\",", StringComparison.Ordinal), maxNodes: 200);
+        var changes = GraphWorkflowDesignerChanges.Compute(WorkingGraph, WorkingGraph.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"kind\": \"Chat\",", StringComparison.Ordinal),
+            maxNodes: 200);
 
         AssertEx.Contains(changes, static change => change is { Kind: "graph", Key: "settings", Change: "modified" });
     }
@@ -499,7 +508,8 @@ public sealed class GraphWorkflowDesignerServiceTests
     public void ChangeList_WhenTheSettingsDifferOnlyByDefaults_ReportsNothing()
     {
         AssertEx.Empty(GraphWorkflowDesignerChanges.Compute(ChatGraph(chat: null), ChatGraph("""{ "acceptsAttachments": false, "requireRerunConfirmation": true }"""), maxNodes: 200));
-        AssertEx.Empty(GraphWorkflowDesignerChanges.Compute(WorkingGraph, WorkingGraph.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"kind\": \"Standard\", \"chat\": null,", StringComparison.Ordinal), maxNodes: 200));
+        AssertEx.Empty(GraphWorkflowDesignerChanges.Compute(WorkingGraph,
+            WorkingGraph.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"kind\": \"Standard\", \"chat\": null,", StringComparison.Ordinal), maxNodes: 200));
     }
 
     /// <summary>The raw fallback (an empty canvas does not parse) compares the settings with the same defaults.</summary>
@@ -541,7 +551,11 @@ public sealed class GraphWorkflowDesignerServiceTests
     [Test]
     public async Task Turn_WhenTheReplyIsLongerThanAMessage_CapsItWithAnEllipsis()
     {
-        var harness = new Harness(JsonSerializer.Serialize(new { reply = new string('r', 9000), proposal = (object?)null }));
+        var harness = new Harness(JsonSerializer.Serialize(new
+        {
+            reply = new string('r', 9000),
+            proposal = (object?)null
+        }));
 
         var turn = await harness.TurnAsync(GraphWorkflowDesignerIntent.Ask);
 
@@ -643,14 +657,23 @@ public sealed class GraphWorkflowDesignerServiceTests
                 ApiSurface = AzureFoundryApiSurface.OpenAiV1,
                 ApiKey = "test-key",
                 Headers = [],
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ]
             },
             httpClient);
         using var cloudClient = openAiClient.GetChatClient("gpt-4o").AsIChatClient();
         var harness = new Harness
         {
             Locality = ModelTrustLocality.Cloud,
-            Grants = new ExternalProviderCloudGrants { LocalData = true },
+            Grants = new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            },
             CloudClient = cloudClient
         };
 
@@ -705,11 +728,23 @@ public sealed class GraphWorkflowDesignerServiceTests
                 @object = "chat.completion",
                 created = 0,
                 model = "gpt-4o",
-                choices = new[] { new { index = 0, message = new { role = "assistant", content = _content }, finish_reason = "stop" } }
+                choices = new[]
+                {
+                    new
+                    {
+                        index = 0,
+                        message = new
+                        {
+                            role = "assistant",
+                            content = _content
+                        },
+                        finish_reason = "stop"
+                    }
+                }
             });
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(completion, System.Text.Encoding.UTF8, "application/json")
+                Content = new StringContent(completion, Encoding.UTF8, "application/json")
             };
         }
     }
@@ -897,8 +932,7 @@ public sealed class GraphWorkflowDesignerServiceTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // The designer is non-streaming; an empty stream suffices.
             await Task.CompletedTask;

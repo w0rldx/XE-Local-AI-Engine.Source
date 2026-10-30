@@ -49,8 +49,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
 
     private async IAsyncEnumerable<T> ExecuteStreamingCoreAsync<T>(string endpointKey,
         Func<CancellationToken, IAsyncEnumerable<T>> streamFactory,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var breaker = _options.CircuitBreakerEnabled
             ? _breakers.GetOrAdd(endpointKey, static _ => new BreakerState())

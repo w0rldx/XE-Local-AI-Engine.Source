@@ -2231,8 +2231,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             _ = await GetResponseAsync(messages, options, cancellationToken);
             yield return new ChatResponseUpdate(ChatRole.Assistant, "done");
@@ -2318,8 +2317,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken);
             var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>().SingleOrDefault(static tool => tool.Name == "submit_implementation"));
@@ -2377,8 +2375,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var update in response.ToChatResponseUpdates())

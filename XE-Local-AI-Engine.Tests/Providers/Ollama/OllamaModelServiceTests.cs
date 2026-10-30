@@ -177,8 +177,7 @@ public sealed class OllamaModelServiceTests
 
     /// <summary>An <c>/api/generate</c> stream that fails on first move, the way a non-200 response surfaces.</summary>
     private static async IAsyncEnumerable<GenerateResponseStream?> FailingStream(Exception failure,
-        [EnumeratorCancellation]
-        CancellationToken ct = default)
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         await Task.CompletedTask;

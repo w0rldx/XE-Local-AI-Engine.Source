@@ -411,8 +411,7 @@ public sealed class KnowledgeRepositoryImportService : IKnowledgeRepositoryImpor
     [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern uint GetFinalPathNameByHandle(SafeFileHandle file,
-        [Out]
-        char[] filePath,
+        [Out] char[] filePath,
         uint filePathSize,
         uint flags);
 }

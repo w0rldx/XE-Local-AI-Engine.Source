@@ -259,8 +259,7 @@ public sealed record DevWorkflowGraphNode(
     int? NodeTimeoutSeconds,
     string? RetryTarget,
     DevWorkflowMaterialization? Materialization,
-    [property: JsonConverter(typeof(DevWorkflowRequiredCapabilitiesJsonConverter))]
-    IReadOnlyDictionary<string, string>? RequiredCapabilities,
+    [property: JsonConverter(typeof(DevWorkflowRequiredCapabilitiesJsonConverter))] IReadOnlyDictionary<string, string>? RequiredCapabilities,
     string? ToolMode,
     int? MaxLoopIterations,
     JsonElement? OutputSchema = null,

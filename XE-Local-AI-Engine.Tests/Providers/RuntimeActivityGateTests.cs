@@ -152,7 +152,12 @@ public sealed class RuntimeActivityGateTests
         AssertEx.Succeeded(gate.TryAcquireJobLease(out var job));
         AssertEx.Succeeded(gate.TryAcquireSpawnReadinessLease(out var spawn));
         AssertEx.Succeeded(gate.TryAcquireResidentProcessLease(out var resident));
-        var leases = new[] { job, spawn, resident };
+        var leases = new[]
+        {
+            job,
+            spawn,
+            resident
+        };
         AssertEx.Equal(expected: 3, notifier.Count);
 
         AssertEx.False(gate.TryAcquireMutationReservation(out _));

@@ -708,8 +708,7 @@ public sealed class DefaultConfigDraftServiceTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Drafting is non-streaming; an empty stream suffices.
             await Task.CompletedTask;

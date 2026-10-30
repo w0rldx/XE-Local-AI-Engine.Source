@@ -64,8 +64,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var (client, model) = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
         var patched = ToWireOptions(options, model);

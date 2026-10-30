@@ -24,8 +24,7 @@ public sealed record BenchmarkJudgeResultV2(
     string Summary,
     int Score,
     string JudgeModelContentFingerprint,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<BenchmarkJudgeVerifierResultV1>? Verifiers = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BenchmarkJudgeVerifierResultV1>? Verifiers = null);
 
 /// <summary>The judge's output schema in two shapes.</summary>
 /// <remarks>

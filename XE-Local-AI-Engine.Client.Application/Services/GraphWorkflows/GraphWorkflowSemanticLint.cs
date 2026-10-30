@@ -98,7 +98,10 @@ internal static class GraphWorkflowSemanticLint
 
             var bypass = ReachableAvoiding(graph, decision);
             var reach = branches.ToDictionary(static branch => branch.Key,
-                branch => new HashSet<string>(graph.Descendants(branch.To), StringComparer.Ordinal) { branch.To },
+                branch => new HashSet<string>(graph.Descendants(branch.To), StringComparer.Ordinal)
+                {
+                    branch.To
+                },
                 StringComparer.Ordinal);
 
             var taken = inbound.Select(edge => BranchOf(edge, decision, branches, bypass, reach)).ToList();

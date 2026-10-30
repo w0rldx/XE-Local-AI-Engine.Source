@@ -234,8 +234,7 @@ internal sealed class DevelopmentReviewerModel : IDevelopmentReviewerModel
         }
 
         public Task<string> SearchTextAsync([Description("Fixed text to search for.")] string pattern,
-            [Description("Workspace-relative directory; empty means repository root.")]
-            string? path,
+            [Description("Workspace-relative directory; empty means repository root.")] string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("search_text", $"{path}:{pattern}", () => _tools.SearchTextAsync(pattern, path, cancellationToken));

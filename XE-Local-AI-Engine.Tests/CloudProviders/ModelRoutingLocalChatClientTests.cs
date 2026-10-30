@@ -269,8 +269,7 @@ public sealed class ModelRoutingLocalChatClientTests
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             CallCount++;
             yield return new ChatResponseUpdate(ChatRole.Assistant, "ok");

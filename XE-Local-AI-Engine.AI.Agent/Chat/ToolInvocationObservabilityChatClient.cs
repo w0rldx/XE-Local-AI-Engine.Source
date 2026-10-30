@@ -57,8 +57,7 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         // Streaming is the real chat path: one logical call streams across many updates sharing a CallId, so one pending
         // entry per CallId keeps it to exactly one requested span and one completion span.

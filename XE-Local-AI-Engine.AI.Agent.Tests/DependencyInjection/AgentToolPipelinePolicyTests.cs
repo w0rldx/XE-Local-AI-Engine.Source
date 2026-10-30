@@ -593,8 +593,7 @@ public sealed class AgentToolPipelinePolicyTests
         }
 
         private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(Task<ChatResponse> responseTask,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken)
+            [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var chatResponse = await responseTask;
             foreach (var message in chatResponse.Messages)

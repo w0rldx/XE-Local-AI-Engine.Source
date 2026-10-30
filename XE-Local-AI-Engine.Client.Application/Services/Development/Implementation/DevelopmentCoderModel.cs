@@ -249,16 +249,14 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
         }
 
         public Task<string> SearchTextAsync([Description("Fixed text to search for.")] string pattern,
-            [Description("Workspace-relative directory; empty means repository root.")]
-            string? path,
+            [Description("Workspace-relative directory; empty means repository root.")] string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("search_text", $"{path}:{pattern}", () => _tools.SearchTextAsync(pattern, path, cancellationToken));
         }
 
         public Task<string> WriteFileAsync([Description("Workspace-relative file path.")] string path,
-            [Description("Complete UTF-8 file content.")]
-            string content,
+            [Description("Complete UTF-8 file content.")] string content,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("write_file", path, () => _tools.WriteFileAsync(path, content, cancellationToken));
@@ -316,8 +314,7 @@ internal sealed class DevelopmentCoderModel : IDevelopmentCoderModel
         }
 
         public string SubmitCloudImplementation(string summary,
-            [Description("One bounded Git unified diff using repository-relative paths.")]
-            string patch,
+            [Description("One bounded Git unified diff using repository-relative paths.")] string patch,
             string[] changedFiles,
             string? notes = null)
         {

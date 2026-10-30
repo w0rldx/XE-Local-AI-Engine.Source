@@ -436,8 +436,7 @@ public sealed class IntegrationSseWriterTests
 
         public async IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId,
             long sinceSequence,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await using (cancellationToken.Register(() => _cancelled.TrySetResult()))
             {

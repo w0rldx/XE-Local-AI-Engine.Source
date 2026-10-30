@@ -167,8 +167,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningControl(ApplyReasoningBudget(ApplyThinkingSwitch(options))))));
         var reasoningControlArmed = IsReasoningControlArmed(options);

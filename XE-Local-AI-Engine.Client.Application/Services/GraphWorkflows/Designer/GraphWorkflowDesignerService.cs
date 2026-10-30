@@ -7,8 +7,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.AI;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
@@ -62,8 +62,7 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
     ///     Built here rather than by <c>GetResponseAsync&lt;T&gt;</c>, whose schema leaves members optional and writes a raw
     ///     <see cref="JsonElement" /> as <c>true</c>. A config is any object; a condition value is any JSON scalar.
     /// </remarks>
-    internal static readonly ChatResponseFormatJson ResponseFormat = ChatResponseFormat.ForJsonSchema(
-        AIJsonUtilities.CreateJsonSchema(typeof(GraphWorkflowDesignerEnvelope),
+    internal static readonly ChatResponseFormatJson ResponseFormat = ChatResponseFormat.ForJsonSchema(AIJsonUtilities.CreateJsonSchema(typeof(GraphWorkflowDesignerEnvelope),
             serializerOptions: EnvelopeOptions,
             inferenceOptions: new AIJsonSchemaCreateOptions
             {
@@ -450,7 +449,8 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
         return string.Create(CultureInfo.InvariantCulture,
             $"Proposed changes: {Count("added")} added, {Count("modified")} modified, {Count("removed")} removed.");
 
-        int Count(string change) => changes.Count(entry => string.Equals(entry.Change, change, StringComparison.Ordinal));
+        int Count(string change) =>
+            changes.Count(entry => string.Equals(entry.Change, change, StringComparison.Ordinal));
     }
 
     /// <summary>Raw JSON gets an explicit object or scalar schema; a node's or edge's identity strings lose their <c>null</c>.</summary>

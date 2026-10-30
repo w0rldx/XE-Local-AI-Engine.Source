@@ -116,6 +116,7 @@ public sealed class ProviderCallBudget
         {
             _maxProviderCalls = options.MaxProviderCallsPerInvocation;
         }
+
         _maxCumulativeInputTokens = options.MaxCumulativeInputTokens;
         _startedTimestamp = startedTimestamp;
     }

@@ -528,8 +528,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             yield return new ChatResponseUpdate
@@ -589,8 +588,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
 
@@ -637,8 +635,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // One logical tool call whose argument fragments stream across several updates under a single CallId.
             for (var index = 0; index < _updateCount; index++)

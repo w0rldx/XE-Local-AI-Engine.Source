@@ -244,8 +244,7 @@ internal sealed class IntegrationExecutionEventBuffer : IIntegrationExecutionEve
 
     public async IAsyncEnumerable<IntegrationStreamEvent> ReadAsync(Guid executionId,
         long sinceSequence,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(sinceSequence);
 

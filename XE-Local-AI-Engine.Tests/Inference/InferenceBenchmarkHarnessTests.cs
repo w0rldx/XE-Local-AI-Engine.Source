@@ -584,8 +584,7 @@ public sealed class InferenceBenchmarkHarnessTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             yield return new ChatResponseUpdate(ChatRole.Assistant, "primary");
             yield return new ChatResponseUpdate(ChatRole.Assistant, " colors");
@@ -623,8 +622,7 @@ public sealed class InferenceBenchmarkHarnessTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var call = Interlocked.Increment(ref _streamCall);
             if (call % 2 == 1)

@@ -44,7 +44,7 @@ internal sealed class PlaybookAnalysisService : IPlaybookAnalysisService
             _logger.LogInformation("Skipping playbook analysis for agent {AgentId}: feedback below the occurrence threshold.", agentDefinitionId);
             return new PlaybookAnalysisOutcome
             {
-                    MeetsThreshold = false,
+                MeetsThreshold = false,
                 CreatedSuggestions = [],
                 ProposedCount = 0,
                 RejectedCount = 0,

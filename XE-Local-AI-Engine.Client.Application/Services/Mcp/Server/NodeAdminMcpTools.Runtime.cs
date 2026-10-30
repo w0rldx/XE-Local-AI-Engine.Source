@@ -50,8 +50,7 @@ public sealed partial class NodeAdminMcpTools
     [Description("Start acquiring the managed llama.cpp runtime. Omit variant to select the best local backend automatically.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpRuntimeAcquisitionStartResponse> StartRuntimeAcquisitionAsync(CancellationToken cancellationToken,
-        [Description("Optional backend: cpu, cuda, or vulkan.")]
-        string? variant = null)
+        [Description("Optional backend: cpu, cuda, or vulkan.")] string? variant = null)
     {
         return await InvokeAuditedAsync("start_runtime_acquisition", AuditArguments(new KeyValuePair<string, object?>("variant", variant)), async () =>
         {

@@ -61,8 +61,7 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var splitter = new ThinkTagReasoningSplitter();
 

@@ -410,8 +410,7 @@ public sealed class NodeChatHubTests
         public NodeChatStreamRequest? LastRequest { get; private set; }
 
         public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             Invoked = true;
             LastRequest = request;
@@ -434,8 +433,7 @@ public sealed class NodeChatHubTests
     private sealed class DeterministicNodeChatStreamService : INodeChatStreamService
     {
         public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var messageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
             var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());

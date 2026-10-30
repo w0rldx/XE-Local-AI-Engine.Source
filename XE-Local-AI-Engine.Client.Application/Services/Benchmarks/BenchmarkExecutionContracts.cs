@@ -143,8 +143,7 @@ public sealed record BenchmarkOutputPart(
     bool? IsError = null,
     // The tool's own execution time on a tool_result part. Omitted when null, so an untimed part (and every judge copy,
     // which BenchmarkOutputParts.ForJudge strips) serializes byte-identically to the shape before the field existed.
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    long? DurationMs = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? DurationMs = null);
 
 public sealed class BenchmarkEligibleAgent
 {

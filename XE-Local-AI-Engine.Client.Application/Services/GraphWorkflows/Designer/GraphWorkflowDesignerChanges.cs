@@ -119,16 +119,19 @@ internal static class GraphWorkflowDesignerChanges
             Kind = proposal.Kind,
             Chat = proposal.Chat,
             Nodes = proposal.Nodes,
-            Edges = [.. edges.Select((edge, i) => keys[i] is not { } key || key == edge.Key
-                ? edge
-                : new GraphWorkflowDesignerEdge
-                {
-                    Key = key,
-                    From = edge.From,
-                    To = edge.To,
-                    Label = edge.Label,
-                    Condition = edge.Condition
-                })]
+            Edges =
+            [
+                .. edges.Select((edge, i) => keys[i] is not { } key || key == edge.Key
+                    ? edge
+                    : new GraphWorkflowDesignerEdge
+                    {
+                        Key = key,
+                        From = edge.From,
+                        To = edge.To,
+                        Label = edge.Label,
+                        Condition = edge.Condition
+                    })
+            ]
         };
 
         static bool SameEnds(WorkingEdge entry, GraphWorkflowDesignerEdge edge) =>

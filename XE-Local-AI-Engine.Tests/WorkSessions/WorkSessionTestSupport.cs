@@ -195,8 +195,7 @@ internal sealed class FakeNodeChatStreamService : INodeChatStreamService
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> SendCoreAsync(NodeChatStreamRequest request,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (request is { RefuseUndeclaredWrites: true, AgentDefinitionId: { } bound })
         {

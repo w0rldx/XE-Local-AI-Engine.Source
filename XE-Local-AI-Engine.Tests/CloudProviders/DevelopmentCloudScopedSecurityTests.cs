@@ -506,8 +506,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             yield return new ChatResponseUpdate(ChatRole.Assistant, "unused");
@@ -578,8 +577,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var response = await GetResponseAsync(messages, options, cancellationToken);
             foreach (var update in response.ToChatResponseUpdates())

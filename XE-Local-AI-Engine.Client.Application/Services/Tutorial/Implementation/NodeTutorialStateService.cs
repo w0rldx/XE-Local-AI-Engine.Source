@@ -143,9 +143,9 @@ public sealed class NodeTutorialStateService : INodeTutorialStateService
             }
 
             return new AiAcknowledgementResult.Acknowledged
-                {
-                    AtUtc = acknowledgedAt
-                };
+            {
+                AtUtc = acknowledgedAt
+            };
         }
         finally
         {

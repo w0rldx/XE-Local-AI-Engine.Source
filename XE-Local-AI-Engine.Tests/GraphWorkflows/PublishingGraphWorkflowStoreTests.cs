@@ -30,7 +30,7 @@ public sealed class PublishingGraphWorkflowStoreTests
     {
         var declared = typeof(IGraphWorkflowStore).GetMethods()
                                                   .Where(static method => method.ReturnType == typeof(Task<GraphWorkflowMutationResult>)
-                                                                         || method.ReturnType == typeof(Task<GraphWorkflowConditionalWriteResult>))
+                                                                          || method.ReturnType == typeof(Task<GraphWorkflowConditionalWriteResult>))
                                                   .Select(static method => method.Name)
                                                   .Distinct(StringComparer.Ordinal)
                                                   .OrderBy(static name => name, StringComparer.Ordinal);
@@ -322,7 +322,10 @@ public sealed class PublishingGraphWorkflowStoreTests
             OutputJson = """{"status":"succeeded","output":{"decision":"Approve"}}"""
         };
 
-    private static readonly GraphWorkflowConditionalWriteResult Declined = new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible };
+    private static readonly GraphWorkflowConditionalWriteResult Declined = new GraphWorkflowConditionalWriteResult.Declined
+    {
+        Reason = GraphWorkflowWriteDecline.NodeRunNotEligible
+    };
 
     private static (IGraphWorkflowStore Store, IGraphWorkflowEventPublisher Publisher, IGraphWorkflowStore Inner) Create()
     {
@@ -335,7 +338,10 @@ public sealed class PublishingGraphWorkflowStoreTests
         inner.TransitionRunAsync(Arg.Any<TransitionGraphWorkflowRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.TransitionNodeRunAsync(Arg.Any<TransitionGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
         inner.AppendEventAsync(Arg.Any<AppendGraphWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
-        var written = new GraphWorkflowConditionalWriteResult.Written { Result = result };
+        var written = new GraphWorkflowConditionalWriteResult.Written
+        {
+            Result = result
+        };
         inner.DecideNodeRunAsync(Arg.Any<DecideGraphWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(written);
         inner.MarkNodeRunPublishedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(written);
         inner.AppendNodeRunSteeringAsync(Arg.Any<AppendGraphWorkflowSteeringCommand>(), Arg.Any<CancellationToken>()).Returns(written);

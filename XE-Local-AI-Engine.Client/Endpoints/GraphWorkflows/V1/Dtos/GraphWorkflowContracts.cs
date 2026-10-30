@@ -145,8 +145,7 @@ public sealed record GraphWorkflowGraphEdge(string Key, string From, string To, 
 public sealed record GraphWorkflowEdgeCondition(
     string? Path,
     string Op,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    JsonElement Value);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] JsonElement Value);
 
 // Responses. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.
 

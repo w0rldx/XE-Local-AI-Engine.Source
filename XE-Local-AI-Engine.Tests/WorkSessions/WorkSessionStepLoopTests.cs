@@ -1593,8 +1593,7 @@ public sealed class WorkSessionStepLoopTests
         }
 
         public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var dropped = false;
             await foreach (var streamEvent in _inner.SendMessageAsync(request, cancellationToken))

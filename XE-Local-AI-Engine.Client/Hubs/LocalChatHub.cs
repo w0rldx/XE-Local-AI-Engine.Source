@@ -198,8 +198,7 @@ public sealed class LocalChatHub : Hub
     /// </param>
     private async IAsyncEnumerable<ChatStreamEvent> TrackAttachment(IAsyncEnumerable<ChatStreamEvent> source,
         bool sourceOwnsRun,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         IDisposable? attachment = null;
         Guid? invocationId = null;
@@ -265,8 +264,7 @@ public sealed class LocalChatHub : Hub
     ///     hence the manual enumeration. See docs/wiki/09-api-and-hubs.md ("Chat hub: attachment and refusals").
     /// </remarks>
     private static async IAsyncEnumerable<ChatStreamEvent> TranslateDomainRejections(IAsyncEnumerable<ChatStreamEvent> source,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var enumerator = source.GetAsyncEnumerator(cancellationToken);
         await using (enumerator)

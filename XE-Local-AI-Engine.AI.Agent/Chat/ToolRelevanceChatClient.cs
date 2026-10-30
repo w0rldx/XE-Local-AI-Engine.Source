@@ -68,8 +68,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (ToolRelevanceScope.Current is not { Active: true })
         {

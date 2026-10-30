@@ -144,20 +144,14 @@ public sealed class NodeAgentMcpTools
         [Description(
             "A globally unique UUID in canonical lowercase-or-uppercase hyphenated form. Reusing it with the same request returns the existing run; reusing it for a different request is rejected.")]
         string request_id,
-        [Description("The bounded task for the background local agent to carry out.")]
-        string task,
+        [Description("The bounded task for the background local agent to carry out.")] string task,
         CancellationToken cancellationToken,
         ClaimsPrincipal? user = null,
-        [Description("A saved agent's id or name. Mutually exclusive with model.")]
-        string? agent = null,
-        [Description("A locally installed model id. Mutually exclusive with agent.")]
-        string? model = null,
-        [Description("A local model id for an unbound saved agent such as the seeded read-only Coder.")]
-        string? model_override = null,
-        [Description("Optional system-prompt override for a bare model. It is never returned by lifecycle tools.")]
-        string? instructions = null,
-        [Description("Optional opaque id from list_workspaces. Required for the seeded read-only Coder and never a host path.")]
-        string? workspace_id = null)
+        [Description("A saved agent's id or name. Mutually exclusive with model.")] string? agent = null,
+        [Description("A locally installed model id. Mutually exclusive with agent.")] string? model = null,
+        [Description("A local model id for an unbound saved agent such as the seeded read-only Coder.")] string? model_override = null,
+        [Description("Optional system-prompt override for a bare model. It is never returned by lifecycle tools.")] string? instructions = null,
+        [Description("Optional opaque id from list_workspaces. Required for the seeded read-only Coder and never a host path.")] string? workspace_id = null)
     {
         var inboundContext = McpInboundExecutionContext.FromPrincipal(user);
         if (!TryParseRequestId(request_id, out var requestId) || string.IsNullOrWhiteSpace(task))
@@ -294,10 +288,8 @@ public sealed class NodeAgentMcpTools
     [Description(
         "List bounded content-free lifecycle metadata for durable background runs, including runs started by earlier MCP connections. An optional case-insensitive status filter may be supplied. Results never contain task text, instructions, model output, or host paths, and all workspace execution remains read-only.")]
     public async Task<McpAgentRunListResponse> ListAgentRunsAsync(CancellationToken cancellationToken,
-        [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")]
-        int? limit = null,
-        [Description("Optional lifecycle status: queued, running, succeeded, failed, cancelled, or interrupted.")]
-        string? status = null)
+        [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")] int? limit = null,
+        [Description("Optional lifecycle status: queued, running, succeeded, failed, cancelled, or interrupted.")] string? status = null)
     {
         McpAgentRunStatus? parsedStatus = null;
         if (!string.IsNullOrWhiteSpace(status))
@@ -340,10 +332,8 @@ public sealed class NodeAgentMcpTools
         IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken,
         ClaimsPrincipal? user = null,
-        [Description("A saved agent's id or name. Mutually exclusive with model.")]
-        string? agent = null,
-        [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")]
-        string? model = null,
+        [Description("A saved agent's id or name. Mutually exclusive with model.")] string? agent = null,
+        [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")] string? model = null,
         [Description(
             "A local model id for an unbound saved agent such as Coder (read-only). Rejected for an agent that already pins a model. Spelled modelOverride here; start_agent_run spells it model_override.")]
         string? modelOverride = null,

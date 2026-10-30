@@ -159,8 +159,7 @@ internal sealed class ChatSession : IAsyncDisposable
         object?[] arguments,
         ChatStreamFolder folder,
         bool openingIsResume,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var watchdog = new ChatStreamWatchdog();
         var isResume = openingIsResume;

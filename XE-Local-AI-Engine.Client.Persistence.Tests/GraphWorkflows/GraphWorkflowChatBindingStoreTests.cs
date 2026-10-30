@@ -155,7 +155,10 @@ public sealed class GraphWorkflowChatBindingStoreTests
         AssertEx.Equal(expected: 1, candidates.Count, "only a Succeeded row is a candidate.");
         AssertEx.Equal(nodeRunId, candidates[0].Id);
         AssertEx.True(await store.MarkNodeRunPublishedAsync(runId, nodeRunId, messageId) is GraphWorkflowConditionalWriteResult.Written);
-        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined { Reason = GraphWorkflowWriteDecline.NodeRunNotEligible }, await store.MarkNodeRunPublishedAsync(runId, nodeRunId, Guid.NewGuid()), "a second stamp matches no row.");
+        AssertEx.Equal<GraphWorkflowConditionalWriteResult>(new GraphWorkflowConditionalWriteResult.Declined
+        {
+            Reason = GraphWorkflowWriteDecline.NodeRunNotEligible
+        }, await store.MarkNodeRunPublishedAsync(runId, nodeRunId, Guid.NewGuid()), "a second stamp matches no row.");
 
         AssertEx.Empty(await store.ListUnpublishedNodeRunsAsync(runId));
         AssertEx.Equal(messageId, (await store.GetNodeRunAsync(runId, "agent")).PublishedMessageId);

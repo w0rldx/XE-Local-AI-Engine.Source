@@ -66,8 +66,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         // The Azure RequestFailedException can surface during enumeration (the SSE stream opens lazily), so the
         // translation has to wrap each MoveNextAsync — a try/catch cannot straddle a yield.

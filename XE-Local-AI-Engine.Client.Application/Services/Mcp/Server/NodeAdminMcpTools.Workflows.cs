@@ -17,8 +17,7 @@ public sealed partial class NodeAdminMcpTools
         "List development workflow runs as bounded lifecycle metadata — one row per work item's LATEST run, matching the operator's own list. Each row carries the run status, node tallies and pending-decision count. An optional case-insensitive run status filter may be supplied. Graphs, artifact contents, work-session transcripts and host paths are never returned, and nothing here starts, cancels or otherwise moves a run.")]
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public Task<McpWorkflowRunListResponse> ListWorkflowRunsAsync(CancellationToken cancellationToken,
-        [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")]
-        int? limit = null,
+        [Description("Maximum runs to return. Values are clamped to the server's configured bounded range.")] int? limit = null,
         [Description("Optional run status: pending, running, pausing, paused, waitingForApproval, cancelling, completed, failed, or cancelled.")]
         string? status = null) =>
         InvokeAuditedAsync("list_workflow_runs", AuditArguments(new("limit", limit), new("status", status)), async () =>

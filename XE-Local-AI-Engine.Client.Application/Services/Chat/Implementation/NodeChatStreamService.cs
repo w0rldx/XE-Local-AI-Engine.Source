@@ -151,8 +151,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> SendMessageCoreAsync(NodeChatStreamRequest request,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var harnessStartedTimestamp = Stopwatch.GetTimestamp();
 

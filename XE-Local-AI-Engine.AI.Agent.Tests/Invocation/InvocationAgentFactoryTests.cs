@@ -1914,8 +1914,7 @@ public sealed class InvocationAgentFactoryTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
             yield return new ChatResponseUpdate(ChatRole.Assistant, "ok");
@@ -1953,8 +1952,7 @@ public sealed class InvocationAgentFactoryTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             Capture(messages, options);
             await Task.Yield();

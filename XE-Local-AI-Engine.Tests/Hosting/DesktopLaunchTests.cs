@@ -125,7 +125,17 @@ public sealed class DesktopLaunchTests
         AssertEx.Null(scope);
         AssertEx.Null(scopeError);
 
-        foreach (var args in new[] { new[] { "--mcp-key" }, new[] { "--mcp-key=read" } })
+        foreach (var args in new[]
+                 {
+                     new[]
+                     {
+                         "--mcp-key"
+                     },
+                     new[]
+                     {
+                         "--mcp-key=read"
+                     }
+                 })
         {
             AssertEx.False(DesktopLaunch.TryGetMcpKeyScope(args, out var malformedScope, out var malformedError));
             AssertEx.Null(malformedScope);

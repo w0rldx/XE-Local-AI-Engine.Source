@@ -80,18 +80,13 @@ public sealed record ResolvedAgentRuntime(
     IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
     // Per-agent opt-out from the send-time tool-relevance filter. It and PlaybookWithheld are kept off the wire: this
     // record is serialized into the frozen v1 benchmark snapshot, whose bytes are re-hashed. See the wiki section above.
-    [property: JsonIgnore]
-    bool DisableToolRelevanceFilter = false,
+    [property: JsonIgnore] bool DisableToolRelevanceFilter = false,
     // Enabled playbook memory was withheld from a cloud effective model; drives the PlaybookWithheld turn notice.
-    [property: JsonIgnore]
-    bool PlaybookWithheld = false,
+    [property: JsonIgnore] bool PlaybookWithheld = false,
     // The cloud-model switches withheld these tools from this agent's offer; drives the CloudToolsWithheld turn notice.
-    [property: JsonIgnore]
-    IReadOnlyList<CloudWithheldTool>? CloudWithheldTools = null,
+    [property: JsonIgnore] IReadOnlyList<CloudWithheldTool>? CloudWithheldTools = null,
     // The definition names its own non-empty AllowedToolNames and is not the Default Assistant, so its offer is
     // configuration the composer's local-tools toggle does not gate. False, the default, keeps the toggle gate.
-    [property: JsonIgnore]
-    bool DeclaresToolList = false,
+    [property: JsonIgnore] bool DeclaresToolList = false,
     // The definition lists run_python but the node's compute switch is off; drives the compute ToolsWithheld notice.
-    [property: JsonIgnore]
-    bool ComputeWithheld = false);
+    [property: JsonIgnore] bool ComputeWithheld = false);

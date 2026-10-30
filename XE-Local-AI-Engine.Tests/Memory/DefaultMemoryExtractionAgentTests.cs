@@ -235,8 +235,7 @@ public sealed class DefaultMemoryExtractionAgentTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Not exercised by these tests (the agent uses the non-streaming GetResponseAsync); an empty stream suffices.
             await Task.CompletedTask;

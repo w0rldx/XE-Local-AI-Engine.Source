@@ -17,12 +17,9 @@ public sealed partial class NodeAdminMcpTools
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpModelPullStartResponse> StartModelPullAsync([Description("Hugging Face repository id.")] string repo_id,
         CancellationToken cancellationToken,
-        [Description("Optional exact GGUF file name.")]
-        string? file_name = null,
-        [Description("Optional quant label when file_name is omitted.")]
-        string? quant = null,
-        [Description("Optional branch, tag, or commit revision.")]
-        string? revision = null,
+        [Description("Optional exact GGUF file name.")] string? file_name = null,
+        [Description("Optional quant label when file_name is omitted.")] string? quant = null,
+        [Description("Optional branch, tag, or commit revision.")] string? revision = null,
         [Description("Whether to also pull the repo's mmproj projector when it ships one. Defaults to true; false installs the weights only.")]
         bool include_projector = true)
     {

@@ -98,8 +98,7 @@ public sealed class GraphWorkflowRunHub : Hub
     /// </remarks>
     public async IAsyncEnumerable<ChatStreamEvent> StreamNodeActivity(Guid runId,
         string nodeKey,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
         {

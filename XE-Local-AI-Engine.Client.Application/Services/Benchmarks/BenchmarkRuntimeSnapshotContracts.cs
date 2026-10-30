@@ -141,10 +141,8 @@ public sealed record BenchmarkSamplingSnapshotV1(
     IReadOnlyList<string> Stop,
     string SeedPolicy,
     string? SeedValue,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? ReasoningBudgetTokens = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    bool? ReasoningBudgetEnforceable = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? ReasoningBudgetTokens = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? ReasoningBudgetEnforceable = null);
 
 public sealed record BenchmarkFreezeDependencySetV1(
     string AgentDependencyHash,

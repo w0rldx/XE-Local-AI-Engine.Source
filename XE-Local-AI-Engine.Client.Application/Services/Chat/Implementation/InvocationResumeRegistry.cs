@@ -80,8 +80,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> ResumeCoreAsync(LiveInvocation live,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var subscriber = live.Subscribe(out var snapshot, out var toolHistory, out var noticeHistory);
         var lastContent = snapshot.StreamedContent;

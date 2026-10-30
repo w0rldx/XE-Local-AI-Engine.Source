@@ -67,8 +67,7 @@ internal static class StreamIdleWatchdog
         IdleDeadline deadline,
         string timeoutMessage,
         TimeSpan abandonmentGrace,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (deadline.Timeout <= TimeSpan.Zero)
         {

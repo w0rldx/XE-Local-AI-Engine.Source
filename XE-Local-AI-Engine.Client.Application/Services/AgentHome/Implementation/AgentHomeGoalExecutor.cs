@@ -380,8 +380,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         // Every parameter the model may legitimately omit carries a default, so AIFunctionFactory marks it optional in the
         // schema: without one a nullable parameter stays REQUIRED and the marshaller rejects the call before the body runs.
         public Task<string> ListFilesAsync([Description("Workspace-relative directory; empty means the workspace root.")] string? path = null,
-            [Description("Optional file-name glob, for example *.md.")]
-            string? glob = null,
+            [Description("Optional file-name glob, for example *.md.")] string? glob = null,
             CancellationToken cancellationToken = default)
         {
             return InvokeAsync(() => _executor._workspaceReader.ListFilesAsync(new ListFilesToolRequest
@@ -393,10 +392,8 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
 
         public Task<string> ReadFileAsync([Description("Workspace-relative file path.")] string path,
-            [Description("Optional first line to read, 1-based.")]
-            int? startLine = null,
-            [Description("Optional last line to read, 1-based.")]
-            int? endLine = null,
+            [Description("Optional first line to read, 1-based.")] int? startLine = null,
+            [Description("Optional last line to read, 1-based.")] int? endLine = null,
             CancellationToken cancellationToken = default)
         {
             return InvokeAsync(() => _executor._workspaceReader.ReadFileAsync(new ReadFileToolRequest
@@ -409,8 +406,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
 
         public Task<string> SearchTextAsync([Description("The text to search for.")] string pattern,
-            [Description("Workspace-relative directory; empty means the workspace root.")]
-            string? path = null,
+            [Description("Workspace-relative directory; empty means the workspace root.")] string? path = null,
             CancellationToken cancellationToken = default)
         {
             return InvokeAsync(() => _executor._workspaceReader.SearchTextAsync(new SearchTextToolRequest
@@ -422,8 +418,7 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
 
         public Task<string> WriteFileAsync([Description("Workspace-relative file path to replace or create.")] string path,
-            [Description("The COMPLETE new UTF-8 content of the file. The file is replaced, not appended to.")]
-            string content,
+            [Description("The COMPLETE new UTF-8 content of the file. The file is replaced, not appended to.")] string content,
             CancellationToken cancellationToken = default)
         {
             return InvokeAsync(() => WriteFileCoreAsync(path, content ?? string.Empty, cancellationToken));

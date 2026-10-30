@@ -150,8 +150,7 @@ public sealed class ToolRelevanceNonRootArrayTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation]
-            CancellationToken cancellationToken = default)
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             ReceivedOptions.Add(options);
             await Task.Yield();

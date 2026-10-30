@@ -134,12 +134,21 @@ public sealed class RunGraphWorkflowDesignerTurnEndpoint : Endpoint<RunGraphWork
             Nodes =
             [
                 .. (graph.Nodes ?? []).OfType<GraphWorkflowGraphNode>()
-                                      .Select(static node => node with { Key = node.Key ?? string.Empty, Kind = node.Kind ?? string.Empty })
+                                      .Select(static node => node with
+                                      {
+                                          Key = node.Key ?? string.Empty,
+                                          Kind = node.Kind ?? string.Empty
+                                      })
             ],
             Edges =
             [
                 .. (graph.Edges ?? []).OfType<GraphWorkflowGraphEdge>()
-                                      .Select(static edge => edge with { Key = edge.Key ?? string.Empty, From = edge.From ?? string.Empty, To = edge.To ?? string.Empty })
+                                      .Select(static edge => edge with
+                                      {
+                                          Key = edge.Key ?? string.Empty,
+                                          From = edge.From ?? string.Empty,
+                                          To = edge.To ?? string.Empty
+                                      })
             ]
         };
 

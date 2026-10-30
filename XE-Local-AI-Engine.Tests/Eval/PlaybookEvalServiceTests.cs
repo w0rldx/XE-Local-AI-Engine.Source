@@ -352,6 +352,7 @@ public sealed class PlaybookEvalServiceTests
     {
         return AssertEx.NotNull(outcome as PlaybookEvalOutcome.Recorded, $"Expected a recorded eval, got {outcome}.");
     }
+
     private static async Task AssertInvalidTurnsRecordFailedCase(string inputTurns)
     {
         var agentId = Guid.NewGuid();

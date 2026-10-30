@@ -247,15 +247,11 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
         public required IReadOnlyList<string> Input { get; init; }
     }
 
-    private sealed record EmbeddingResponse(
-        [property: JsonPropertyName("data")]
-        IReadOnlyList<EmbeddingResult>? Data);
+    private sealed record EmbeddingResponse([property: JsonPropertyName("data")] IReadOnlyList<EmbeddingResult>? Data);
 
     private sealed record EmbeddingResult(
-        [property: JsonPropertyName("index")]
-        int Index,
-        [property: JsonPropertyName("embedding")]
-        IReadOnlyList<double> Embedding);
+        [property: JsonPropertyName("index")] int Index,
+        [property: JsonPropertyName("embedding")] IReadOnlyList<double> Embedding);
 
     private sealed record RerankRequest
     {
@@ -266,13 +262,9 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
         public required IReadOnlyList<string> Documents { get; init; }
     }
 
-    private sealed record RerankResponse(
-        [property: JsonPropertyName("results")]
-        IReadOnlyList<RerankResult>? Results);
+    private sealed record RerankResponse([property: JsonPropertyName("results")] IReadOnlyList<RerankResult>? Results);
 
     private sealed record RerankResult(
-        [property: JsonPropertyName("index")]
-        int Index,
-        [property: JsonPropertyName("relevance_score")]
-        double RelevanceScore);
+        [property: JsonPropertyName("index")] int Index,
+        [property: JsonPropertyName("relevance_score")] double RelevanceScore);
 }

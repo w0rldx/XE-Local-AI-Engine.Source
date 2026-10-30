@@ -439,20 +439,14 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     }
 
     private sealed record GitHubRelease(
-        [property: JsonPropertyName("tag_name")]
-        string? TagName,
-        [property: JsonPropertyName("assets")]
-        IReadOnlyList<GitHubAsset>? Assets);
+        [property: JsonPropertyName("tag_name")] string? TagName,
+        [property: JsonPropertyName("assets")] IReadOnlyList<GitHubAsset>? Assets);
 
     private sealed record GitHubAsset(
-        [property: JsonPropertyName("name")]
-        string Name,
-        [property: JsonPropertyName("browser_download_url")]
-        string? BrowserDownloadUrl,
-        [property: JsonPropertyName("digest")]
-        string? Digest,
-        [property: JsonPropertyName("size")]
-        long Size);
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("browser_download_url")] string? BrowserDownloadUrl,
+        [property: JsonPropertyName("digest")] string? Digest,
+        [property: JsonPropertyName("size")] long Size);
 
     /// <summary>An archive file name split into its stem and its extension (<c>.tar.gz</c> counted as one extension).</summary>
     private sealed record ArchiveName(string Stem, string Ext);

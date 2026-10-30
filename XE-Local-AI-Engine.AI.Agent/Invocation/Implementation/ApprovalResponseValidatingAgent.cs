@@ -39,8 +39,7 @@ internal sealed class ApprovalResponseValidatingAgent : DelegatingAIAgent
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
         AgentRunOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var validated = Validate(messages);
         var completed = false;

@@ -444,8 +444,7 @@ public sealed class TurnRunnerTests
     private static async IAsyncEnumerable<CliStreamEvent> PlayAfterAsync(CliStreamEvent first,
         Task release,
         CliStreamEvent[] rest,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         yield return first;
         await release.WaitAsync(cancellationToken);
@@ -459,8 +458,7 @@ public sealed class TurnRunnerTests
     private static async IAsyncEnumerable<CliStreamEvent> PlayAsync(Task release,
         Action? afterFirst,
         CliStreamEvent[] events,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         for (var index = 0; index < events.Length; index++)
         {

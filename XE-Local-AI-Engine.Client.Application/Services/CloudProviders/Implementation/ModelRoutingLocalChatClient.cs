@@ -56,8 +56,7 @@ public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientC
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ResolvedClientOwnershipNote)]
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var client = await ResolveClientAsync(options, cancellationToken);
         await foreach (var update in client.GetStreamingResponseAsync(messages, options, cancellationToken))

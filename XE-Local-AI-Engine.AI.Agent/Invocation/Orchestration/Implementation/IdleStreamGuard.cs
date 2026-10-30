@@ -48,8 +48,7 @@ internal static class IdleStreamGuard
 
     private static async IAsyncEnumerable<T> IterateAsync<T>(Func<CancellationToken, IAsyncEnumerator<T>> enumeratorFactory,
         IdleGuardContext callerContext,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         // An enumeration token is folded into BOTH of the guard's own tokens rather than added as a third stop
         // condition, so it cancels the provider AND resolves the per-pull race; an absent or duplicate token is inert.

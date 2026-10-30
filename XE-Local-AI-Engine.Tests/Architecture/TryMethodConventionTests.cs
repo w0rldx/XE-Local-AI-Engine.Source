@@ -163,7 +163,8 @@ public sealed class TryMethodConventionTests
         };
     }
 
-    private static bool IsTryName(string name) => name.Length > 3 && name.StartsWith("Try", StringComparison.Ordinal) && char.IsUpper(name[3]);
+    private static bool IsTryName(string name) =>
+        name.Length > 3 && name.StartsWith("Try", StringComparison.Ordinal) && char.IsUpper(name[3]);
 
     /// <summary><c>T?</c>, <c>Nullable&lt;T&gt;</c>, or a <c>Task</c>/<c>ValueTask</c> of either.</summary>
     private static bool ReturnsNullable(NullabilityInfoContext context, ParameterInfo returnParameter)
@@ -182,7 +183,8 @@ public sealed class TryMethodConventionTests
     private static bool IsNullable(NullabilityInfo info) =>
         info.ReadState == NullabilityState.Nullable || Nullable.GetUnderlyingType(info.Type) is not null;
 
-    private static string TypeName(Type type) => (type.FullName ?? type.Name).Replace('+', '.');
+    private static string TypeName(Type type) =>
+        (type.FullName ?? type.Name).Replace('+', '.');
 
     /// <summary><c>Namespace.Type.Method(parameter)</c> entries; text after <c>#</c> is the reason.</summary>
     private static HashSet<string> Allowlist() =>

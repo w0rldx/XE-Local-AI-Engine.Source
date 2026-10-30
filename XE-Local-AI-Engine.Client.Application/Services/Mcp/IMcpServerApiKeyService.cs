@@ -50,10 +50,12 @@ public interface IMcpServerApiKeyService
 /// <summary>The trust level carried by the singleton inbound-MCP credential.</summary>
 public enum McpServerApiKeyScope
 {
-    [EnumMember(Value = "delegate")] [JsonStringEnumMemberName("delegate")]
+    [EnumMember(Value = "delegate")]
+    [JsonStringEnumMemberName("delegate")]
     Delegate = 0,
 
-    [EnumMember(Value = "agentic")] [JsonStringEnumMemberName("agentic")]
+    [EnumMember(Value = "agentic")]
+    [JsonStringEnumMemberName("agentic")]
     Agentic = 1
 }
 

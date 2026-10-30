@@ -36,7 +36,15 @@ public sealed class GraphWorkflowDesignerEndpointTests
         var body = JsonSerializer.Serialize(new
         {
             modelName = "qwen3-8b:Q4_K_M",
-            messages = new object?[] { null, new { role = "user", text = "Add a review step." } },
+            messages = new object?[]
+            {
+                null,
+                new
+                {
+                    role = "user",
+                    text = "Add a review step."
+                }
+            },
             graph = JsonDocument.Parse(GraphWorkflowGraphs.StartAgentEnd).RootElement
         });
 
@@ -113,9 +121,9 @@ public sealed class GraphWorkflowDesignerEndpointTests
         AssertEx.Equal(1234L, metadata.GetProperty("durationMs").GetInt64());
 
         await service.Received(1).TurnAsync(Arg.Is<GraphWorkflowDesignerTurnRequest>(static request => request.Intent == GraphWorkflowDesignerIntent.Change
-                                                                                                         && request.SelectedNodeKey == "analyze"
-                                                                                                         && request.Messages.Count == 1
-                                                                                                         && request.GraphJson.Contains("\"start\"")),
+                                                                                                       && request.SelectedNodeKey == "analyze"
+                                                                                                       && request.Messages.Count == 1
+                                                                                                       && request.GraphJson.Contains("\"start\"")),
             Arg.Any<CancellationToken>());
     }
 
@@ -158,8 +166,21 @@ public sealed class GraphWorkflowDesignerEndpointTests
         var body = JsonSerializer.Serialize(new
         {
             modelName = "qwen3-8b:Q4_K_M",
-            messages = new[] { new { role = "user", text = "Build a chat workflow." } },
-            graph = new { schemaVersion = 1, kind = "Chat", nodes = Array.Empty<object>(), edges = Array.Empty<object>() }
+            messages = new[]
+            {
+                new
+                {
+                    role = "user",
+                    text = "Build a chat workflow."
+                }
+            },
+            graph = new
+            {
+                schemaVersion = 1,
+                kind = "Chat",
+                nodes = Array.Empty<object>(),
+                edges = Array.Empty<object>()
+            }
         });
 
         using var response = await SendAsync(factory, body);
@@ -266,7 +287,14 @@ public sealed class GraphWorkflowDesignerEndpointTests
         JsonSerializer.Serialize(new
         {
             modelName = model,
-            messages = new[] { new { role = lastRole, text = "Add a review step." } },
+            messages = new[]
+            {
+                new
+                {
+                    role = lastRole,
+                    text = "Add a review step."
+                }
+            },
             graph = JsonDocument.Parse(GraphWorkflowGraphs.StartAgentEnd).RootElement,
             intent,
             selectedNodeKey
