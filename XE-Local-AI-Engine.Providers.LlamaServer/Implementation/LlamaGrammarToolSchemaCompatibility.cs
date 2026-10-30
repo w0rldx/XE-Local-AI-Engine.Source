@@ -24,7 +24,7 @@ internal static partial class LlamaGrammarToolSchemaCompatibility
     /// </summary>
     /// <remarks>
     ///     Integer <c>minimum</c>/<c>maximum</c> are value ranges, not repetitions, and stay unbounded. llama.cpp's
-    ///     threshold is still 2000 at b11803, which drops an upper bound above it but rejects a lower one, so 1024 stays
+    ///     threshold is still 2000 at b12014, which drops an upper bound above it but rejects a lower one, so 1024 stays
     ///     safe (1999 is the largest bound safe for every keyword). Measurements: wiki reference 03, "The grammar
     ///     repetition bound".
     /// </remarks>

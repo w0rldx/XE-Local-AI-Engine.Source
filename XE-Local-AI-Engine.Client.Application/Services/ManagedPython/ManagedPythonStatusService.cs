@@ -187,7 +187,7 @@ public sealed class ManagedPythonStatusService
         };
     }
 
-    /// <summary><c>3.13.5</c> → <c>3.13</c>; anything without two components is returned unchanged and so mismatches.</summary>
+    /// <summary><c>3.14.5</c> → <c>3.14</c>; anything without two components is returned unchanged and so mismatches.</summary>
     internal static string MinorOf(string pythonVersion)
     {
         var parts = pythonVersion.Split('.');

@@ -37,26 +37,36 @@ public static class NodeSchedulerServiceCollectionExtensions
 
         builder.Services.AddQuartz(q =>
         {
-            q.SchedulerName = "XE Local AI Engine Scheduler";
-            q.UseDefaultThreadPool(tp => tp.MaxConcurrency = options.MaxConcurrency);
+            q.ConfigureScheduler(scheduler =>
+            {
+                // Persisted as SCHED_NAME on every QRTZ_ row, so it must not change.
+                scheduler.InstanceName = "XE Local AI Engine Scheduler";
+                // The hosted service shuts down waiting for jobs, so interrupt them first: a running scheduled job then observes
+                // cancellation instead of holding the host's shutdown budget until it finishes on its own.
+                scheduler.ShutdownJobInterruption = ShutdownJobInterruption.WhenWaitingForJobs;
+            });
+            q.UseDefaultThreadPool(options.MaxConcurrency);
             q.UsePersistentStore(s =>
             {
-                s.UseProperties = true;
-                s.PerformSchemaValidation = true; // QRTZ_ tables are created by the scheduler EF migration.
-                s.UseMicrosoftSQLite(db =>
+                // QRTZ_ tables are created by the scheduler EF migrations, so the store only validates them.
+                s.ConfigureStore(store =>
+                {
+                    store.SchemaProvisioning = SchemaProvisioning.Validate;
+                    store.StoreJobDataAsStrings = true;
+                    // Quartz 4 runs the misfire handler on a foreground thread by default, so a scheduler that was never shut
+                    // down (a host stop that timed out) would keep a dying node process alive; 3.x never did.
+                    store.UseBackgroundThreads = true;
+                    store.TablePrefix = options.QuartzTablePrefix; // "QRTZ_"
+                });
+                s.UseSqlite(db =>
                 {
                     // Use the node-sqlite connection by NAME: Quartz resolves it from IConfiguration at scheduler start, and
                     // reading the literal value here throws under WebApplicationFactory. Posture: docs/wiki/06-scheduler.md.
                     db.ConnectionStringName = "node-sqlite";
-                    db.TablePrefix = options.QuartzTablePrefix; // "QRTZ_"
                 });
                 s.UseSystemTextJsonSerializer();
             });
             q.UseTimeZoneConverter();
-            q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = TimeSpan.FromMinutes(options.DefaultMaxRuntimeMinutes));
-            // The hosted service shuts down waiting for jobs, so interrupt them first: a running scheduled job then observes
-            // cancellation instead of holding the host's shutdown budget until it finishes on its own.
-            q.InterruptJobsOnShutdownWithWait = true;
         });
         builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 

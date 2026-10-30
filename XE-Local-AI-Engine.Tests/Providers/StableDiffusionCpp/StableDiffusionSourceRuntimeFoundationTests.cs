@@ -140,7 +140,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
 
         AssertEx.Equal(once, twice);
         AssertEx.Equal(StableDiffusionCppSourceBuildRequestValidation.OfficialRepository, twice.Repository);
-        AssertEx.Equal("b167b942f77ecb17e7f78e163a8c32ff7ac95c10", StableDiffusionReleasePins.PinnedSourceCommitSha);
+        AssertEx.Equal("37bc88b5e97a213821949732ea66c58ae8ffc784", StableDiffusionReleasePins.PinnedSourceCommitSha);
     }
 
     [Test]

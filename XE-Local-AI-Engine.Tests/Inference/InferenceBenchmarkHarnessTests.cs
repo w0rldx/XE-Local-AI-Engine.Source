@@ -105,6 +105,29 @@ public sealed class InferenceBenchmarkHarnessTests
     }
 
     [Test]
+    public async Task RunAsync_ChatStages_CapOutputTokensOnEveryRequest()
+    {
+        var seenOptions = new List<ChatOptions?>();
+        var chatFactory = Substitute.For<IInferenceChatClientFactory>();
+        chatFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
+                   .Returns(_ => new FakeBenchmarkChatClient(callsTool: true, seenOptions));
+        var harness = BuildHarness(modelCallsTool: true, chatFactory: chatFactory);
+        var spec = InferenceBenchmarkSpec.Golden("cuda", ctxSize: 4096) with
+        {
+            WarmupRuns = 0,
+            MeasuredRuns = 1
+        };
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat), spec, CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        // Cold, warm, both tool-loop round trips and the long-context stage.
+        AssertEx.Equal(5, seenOptions.Count);
+        AssertEx.True(seenOptions.All(options => options?.MaxOutputTokens == spec.MaxOutputTokens),
+            "every chat stage must carry the output cap");
+    }
+
+    [Test]
     public async Task RunAsync_EmbeddingRole_UsesEmbeddingsEndpoint_AndReportsCorrectnessStatistics()
     {
         using var handler = new RoleBenchmarkHandler();
@@ -558,16 +581,19 @@ public sealed class InferenceBenchmarkHarnessTests
     private sealed class FakeBenchmarkChatClient : IChatClient
     {
         private readonly bool _callsTool;
+        private readonly List<ChatOptions?>? _seenOptions;
 
-        public FakeBenchmarkChatClient(bool callsTool)
+        public FakeBenchmarkChatClient(bool callsTool, List<ChatOptions?>? seenOptions = null)
         {
             _callsTool = callsTool;
+            _seenOptions = seenOptions;
         }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
+            _seenOptions?.Add(options);
             var toolHasRun = messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>().Any();
             var tool = options?.Tools?.OfType<AIFunction>().FirstOrDefault();
             if (!_callsTool || toolHasRun || tool is null)
@@ -586,6 +612,7 @@ public sealed class InferenceBenchmarkHarnessTests
             ChatOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            _seenOptions?.Add(options);
             yield return new ChatResponseUpdate(ChatRole.Assistant, "primary");
             yield return new ChatResponseUpdate(ChatRole.Assistant, " colors");
             await Task.CompletedTask;

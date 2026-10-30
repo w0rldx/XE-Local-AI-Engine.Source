@@ -82,6 +82,13 @@ public sealed record InferenceBenchmarkSpec
     /// <summary>Fixed sampling temperature (0 = greedy/deterministic).</summary>
     public required float Temperature { get; init; }
 
+    /// <summary>Output cap for every chat stage; the rates come from the server's counters, so it bounds the run without changing what is measured.</summary>
+    /// <remarks>
+    ///     A reasoning model at temperature 0 can think until the window is full (Qwen3.5-9B spends all 4,059 free
+    ///     tokens of a 4,096 window on the cold turn), so an uncapped pass costs a whole window per stage.
+    /// </remarks>
+    public int MaxOutputTokens { get; init; } = 512;
+
     /// <summary>Untimed role-specific warm-up passes before measurements begin.</summary>
     public int WarmupRuns { get; init; } = 1;
 

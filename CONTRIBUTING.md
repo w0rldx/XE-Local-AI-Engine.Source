@@ -18,7 +18,7 @@ through uv. Without mise, install the versions listed in `mise.toml` and the SDK
 
 - .NET SDK per [`global.json`](global.json).
 - .NET 8 runtime for the pinned SBOM and dependency-license tools.
-- Node 22, the major CI uses; `pnpm run acceptance` enforces it, and the React
+- Node 26, the major CI uses; `pnpm run acceptance` enforces it, and the React
   [`package.json`](XE-Local-AI-Engine.Client.React/package.json) `engines` field is only the floor. pnpm through
   Corepack or a local install.
 - Python 3 for repository validation and lifecycle scripts.
@@ -48,7 +48,7 @@ pnpm run acceptance
 pnpm audit --prod --audit-level=high
 ```
 
-`pnpm run acceptance` first checks that you run the same Node major as CI (Node 22) and stops otherwise;
+`pnpm run acceptance` first checks that you run the same Node major as CI (Node 26) and stops otherwise;
 `XE_ALLOW_NODE_DRIFT=1` continues with a warning that the run is not CI evidence. On frontend dependency-update
 branches, also run `pnpm run dependencies:refresh`.
 

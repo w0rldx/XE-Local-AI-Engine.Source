@@ -169,7 +169,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
             // Operator cancel stamps CancellationRequestedAtUtc before interrupting; a host stop interrupts running jobs too
-            // (Quartz InterruptJobsOnShutdownWithWait); only the auto-interrupt max-runtime plugin remains as a timeout.
+            // (Quartz ShutdownJobInterruption); only the dispatch runner's max-runtime budget remains as a timeout.
             var latest = await _runStore.GetByIdAsync(run.Id, CancellationToken.None);
             var wasCancelRequested = latest?.CancellationRequestedAtUtc is not null;
             var hostStopping = _applicationLifetime.ApplicationStopping.IsCancellationRequested;

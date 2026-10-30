@@ -788,7 +788,7 @@ public sealed record StoredNodeSettings
     /// <summary>Worker response-size cap in MiB. Seed: <c>WorkerNode:MaxResponseSizeMb</c>.</summary>
     public int? MaxResponseSizeMb { get; init; }
 
-    /// <summary>The recommended llama.cpp release tag. Seed: <c>LlamaCppReleasePins.PinnedTag</c> ("b11803").</summary>
+    /// <summary>The recommended llama.cpp release tag. Seed: <c>LlamaCppReleasePins.PinnedTag</c> ("b12014").</summary>
     public string? RecommendedLlamaCppTag { get; init; }
 
     /// <summary>Orchestration idle-timeout (seconds, developer-only). Seed: <c>Agent:Orchestration:IdleTimeoutSeconds</c> (120).</summary>

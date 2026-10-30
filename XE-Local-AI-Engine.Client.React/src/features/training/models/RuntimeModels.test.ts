@@ -80,15 +80,15 @@ describe("view mapping", () => {
 			logStartSequence: 0,
 			logLines: [],
 			installed: {
-				pythonVersion: "3.13.15",
+				pythonVersion: "3.14.10",
 				torchVersion: "2.11.0+cu128",
-				uvVersion: "0.12.5",
+				uvVersion: "0.13.6",
 				contractVersion: 1,
 				installedAtUtc: 1_700_000_000_000,
 			},
 		});
 
-		expect(view.installed?.pythonVersion).toBe("3.13.15");
+		expect(view.installed?.pythonVersion).toBe("3.14.10");
 		expect(view.installed?.torchVersion).toBe("2.11.0+cu128");
 		expect(view.installed?.deviceName).toBeNull();
 	});

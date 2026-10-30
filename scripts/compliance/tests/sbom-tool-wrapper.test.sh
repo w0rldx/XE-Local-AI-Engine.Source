@@ -23,7 +23,7 @@ print(manifest["tools"]["microsoft.sbom.dotnettool"]["version"])
 PY
 )"
 
-[[ "$manifest_version" == "4.1.5" ]] || fail "Microsoft.Sbom.DotNetTool must be pinned to 4.1.5"
+[[ "$manifest_version" == "4.1.13" ]] || fail "Microsoft.Sbom.DotNetTool must be pinned to 4.1.13"
 
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
@@ -35,7 +35,7 @@ if [[ "${1:-}" == "--list-runtimes" ]]; then
   exit 0
 fi
 if [[ "${1:-}" == "sbom-tool" && "${2:-}" == "Version" ]]; then
-  printf 'Microsoft.Sbom.DotNetTool 4.1.5\n'
+  printf 'Microsoft.Sbom.DotNetTool 4.1.13\n'
   exit 0
 fi
 exit 64
@@ -43,7 +43,7 @@ SH
 chmod +x "$temporary_directory/dotnet"
 
 version_output="$(PATH="$temporary_directory:$PATH" "$wrapper" Version)"
-[[ "$version_output" == *"4.1.5"* ]] || fail "wrapper did not execute the pinned SBOM tool"
+[[ "$version_output" == *"4.1.13"* ]] || fail "wrapper did not execute the pinned SBOM tool"
 
 cat > "$temporary_directory/dotnet" <<'SH'
 #!/usr/bin/env bash

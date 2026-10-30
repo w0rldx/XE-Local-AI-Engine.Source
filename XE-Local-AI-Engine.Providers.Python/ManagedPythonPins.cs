@@ -10,16 +10,16 @@ using System.Runtime.InteropServices;
 /// </remarks>
 public static class ManagedPythonPins
 {
-    public const string UvVersion = "0.12.19";
+    public const string UvVersion = "0.13.6";
 
     /// <summary>The one CPython minor every profile runs on; each lockfile's <c>requires-python</c> must admit exactly this minor.</summary>
-    public const string PythonMinor = "3.13";
+    public const string PythonMinor = "3.14";
 
     public static readonly ManagedPythonUvAsset LinuxX64 = new()
     {
         Rid = "linux-x64",
         AssetName = "uv-x86_64-unknown-linux-gnu.tar.gz",
-        Sha256 = "23bf5552d220e0842b65c862097b2ebaeba0064b74eda5e565e77fd25969d8c8",
+        Sha256 = "f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645",
         ArchiveRootDirectory = "uv-x86_64-unknown-linux-gnu",
         ExecutableName = "uv",
         IsZip = false
@@ -30,7 +30,7 @@ public static class ManagedPythonPins
     {
         Rid = "win-x64",
         AssetName = "uv-x86_64-pc-windows-msvc.zip",
-        Sha256 = "6dbb02d79e419522f1c500f0adb1cddcff0cda7d59b0d66ea7f5e3b4a1b2f5f0",
+        Sha256 = "a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f",
         ArchiveRootDirectory = "",
         ExecutableName = "uv.exe",
         IsZip = true

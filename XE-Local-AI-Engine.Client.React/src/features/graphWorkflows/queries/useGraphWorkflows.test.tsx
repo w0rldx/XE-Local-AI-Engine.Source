@@ -463,7 +463,8 @@ describe("graph workflow mutations", () => {
 
 		// It writes nothing, so its answer is the response body the validation strip renders — there is no cache to drop.
 		expect(invalidate).not.toHaveBeenCalled();
-		expect(result.current.data?.errors).toHaveLength(1);
+		// The resolved mutation reaches the rendered result on a later turn than the act above flushes.
+		await waitFor(() => expect(result.current.data?.errors).toHaveLength(1));
 	});
 
 	it("invalidates the NEW run and the run list after a start", async () => {

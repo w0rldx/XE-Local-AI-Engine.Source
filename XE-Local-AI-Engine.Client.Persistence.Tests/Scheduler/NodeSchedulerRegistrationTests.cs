@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Scheduler;
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.Metrics;
@@ -9,7 +10,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Quartz;
-using Quartz.Impl;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -25,6 +25,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 [Category(TestCategories.Integration)]
 public sealed class NodeSchedulerRegistrationTests : IDisposable
 {
+    /// <summary>Wall-clock ceiling for a fired job to report back on a contended runner; a pass never waits this long.</summary>
+    private static readonly TimeSpan WaitBudget = TimeSpan.FromSeconds(120);
+
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-scheduler-reg-" + Guid.NewGuid().ToString("N"));
@@ -98,7 +101,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     }
 
     // Enabled=true → ISchedulerFactory resolves; scheduler starts without
-    // schema-validation error (PerformSchemaValidation=true in production config)
+    // schema-validation error (SchemaProvisioning.Validate in production config)
 
     [Test]
     public async Task AddNodeScheduler_WhenEnabled_ISchedulerFactoryResolvesAndSchedulerStartsClean()
@@ -112,12 +115,12 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         AssertEx.NotNull(factory, "ISchedulerFactory must be registered when Scheduler:Enabled=true.");
 
         // GetScheduler triggers the Quartz ADO store to connect and validate the QRTZ_ schema.
-        // PerformSchemaValidation=true means any missing table surfaces here as an exception.
+        // SchemaProvisioning.Validate means any missing table or 4.x column surfaces here as an exception.
         var scheduler = await (factory ?? throw new InvalidOperationException("factory must not be null.")).GetScheduler(CancellationToken.None);
         AssertEx.NotNull(scheduler, "IScheduler must be obtainable from the factory.");
 
         await scheduler.Start(CancellationToken.None);
-        AssertEx.True(scheduler.IsStarted, "Scheduler must report IsStarted after Start().");
+        AssertEx.Equal(SchedulerStatus.Running, scheduler.Status, "Scheduler must be running after Start().");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }
@@ -147,12 +150,24 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         // every service stopped after it reports its drain as cut short. Only the options are read; no scheduler starts.
         await using var provider = BuildEnabledProvider(GetDatabasePath("scheduler-reg-options.sqlite"));
 
-        var scheduler = provider.GetRequiredService<IOptions<QuartzOptions>>().Value;
+        var scheduler = provider.GetRequiredService<IOptions<QuartzSchedulerOptions>>().Value;
         var hosted = provider.GetRequiredService<IOptions<QuartzHostedServiceOptions>>().Value;
 
-        var interrupt = scheduler[StdSchedulerFactory.PropertySchedulerInterruptJobsOnShutdownWithWait];
-        AssertEx.True(bool.TryParse(interrupt, out var interrupts) && interrupts, $"A host stop must interrupt running scheduled jobs (got '{interrupt}').");
+        AssertEx.Equal(ShutdownJobInterruption.WhenWaitingForJobs,
+            scheduler.ShutdownJobInterruption,
+            "A host stop must interrupt running scheduled jobs.");
         AssertEx.True(hosted.WaitForJobsToComplete, "A host stop still waits for the interrupted jobs to unwind.");
+    }
+
+    [Test]
+    public async Task AddNodeScheduler_WhenEnabled_RunsTheStoreThreadsInTheBackground()
+    {
+        // A foreground misfire-handler thread keeps the process alive whenever a scheduler is never shut down.
+        await using var provider = BuildEnabledProvider(GetDatabasePath("scheduler-reg-store-options.sqlite"));
+
+        var store = provider.GetRequiredService<IOptions<AdoJobStoreOptions>>().Value;
+
+        AssertEx.True(store.UseBackgroundThreads, "The job store's misfire handler must run on a background thread.");
     }
 
     // Durable survive-restart: schedule a job+trigger, dispose, recreate from
@@ -186,7 +201,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
                                         .StartAt(DateTimeOffset.UtcNow.AddYears(10))
                                         .Build();
 
-            await sched1.ScheduleJob(job, trigger, CancellationToken.None);
+            await sched1.ScheduleJob(job, trigger, cancellationToken: CancellationToken.None);
             await sched1.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
         }
 
@@ -209,6 +224,39 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         }
     }
 
+
+    [Test]
+    public async Task AddNodeScheduler_WhenEnabled_FiresAJobAndItsInterruptReachesTheJobsToken()
+    {
+        // The Quartz 4 IJob takes its CancellationToken as a parameter; an operator cancel and the max-runtime budget both reach
+        // a running job only through InterruptFireInstance cancelling that token, so prove it against the real SQLite store.
+        var dbPath = GetDatabasePath("scheduler-fire-interrupt.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var scheduler = await provider.GetRequiredService<ISchedulerFactory>().GetScheduler(CancellationToken.None);
+        await scheduler.Start(CancellationToken.None);
+
+        var probeId = Guid.NewGuid().ToString("N");
+        var probe = CancellationProbeJob.Probes.GetOrAdd(probeId, _ => new CancellationProbe());
+        var jobKey = new JobKey("interrupt-probe-" + probeId, SchedulerJobKeys.Group);
+        await scheduler.AddJob(JobBuilder.Create<CancellationProbeJob>()
+                                         .WithIdentity(jobKey)
+                                         .UsingJobData(CancellationProbeJob.ProbeIdKey, probeId)
+                                         .StoreDurably()
+                                         .Build(),
+            cancellationToken: CancellationToken.None);
+
+        await scheduler.TriggerJob(jobKey, cancellationToken: CancellationToken.None);
+        var fireInstanceId = await probe.Started.Task.WaitAsync(WaitBudget);
+
+        AssertEx.True(await scheduler.InterruptFireInstance(fireInstanceId, CancellationToken.None),
+            "The running fire instance must accept the interrupt.");
+        await probe.Cancelled.Task.WaitAsync(WaitBudget);
+
+        await scheduler.Shutdown(waitForJobsToComplete: true, CancellationToken.None);
+        CancellationProbeJob.Probes.TryRemove(probeId, out _);
+    }
 
     private static ServiceProvider BuildEnabledProvider(string dbPath)
     {
@@ -241,7 +289,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
             SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true)
         });
 
-        return services.BuildServiceProvider();
+        return SchedulerShutdownGuard.AddTo(services);
     }
 
     // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
@@ -279,9 +327,39 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     /// </summary>
     private sealed class NoOpTestJob : IJob
     {
-        public Task Execute(IJobExecutionContext context)
+        public ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
         {
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class CancellationProbe
+    {
+        public TaskCompletionSource<string> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    /// <summary>Reports its fire instance once running, then waits on its token until an interrupt cancels it.</summary>
+    private sealed class CancellationProbeJob : IJob
+    {
+        public const string ProbeIdKey = "probeId";
+
+        public static readonly ConcurrentDictionary<string, CancellationProbe> Probes = new(StringComparer.Ordinal);
+
+        public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            var probe = Probes[context.MergedJobDataMap.GetString(ProbeIdKey) ?? string.Empty];
+            probe.Started.TrySetResult(context.FireInstanceId);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                probe.Cancelled.TrySetResult();
+                throw;
+            }
         }
     }
 

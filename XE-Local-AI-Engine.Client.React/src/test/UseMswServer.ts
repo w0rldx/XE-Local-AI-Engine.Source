@@ -9,6 +9,7 @@
 // leaking into the next one.
 
 import type { HttpHandler } from "msw";
+import { HttpNetworkFrame, WebSocketNetworkFrame } from "msw/experimental";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 
 import { server } from "@/test/msw/Server";
@@ -51,14 +52,21 @@ export function setupMswServer(...defaultHandlers: readonly HttpHandler[]): type
 		// guard's throwing stubs.
 		restoreRealTransports();
 		server.listen({
-			// Recording on top of the rejection is what makes a miss fail the test. `print.error()` is MSW's
+			// Recording on top of the rejection is what makes a miss fail the test. `defaults.error()` is MSW's
 			// `"error"` strategy — it logs and throws, and that throw does reach the caller as a rejected
 			// `fetch`. But a component reaching the API through TanStack Query catches the rejection into
 			// `query.error`, so a test whose assertions look at a different part of the DOM stays green over an
 			// API call it never stubbed. The `afterEach` below re-raises the miss against the test that made it.
-			onUnhandledRequest: (request, print) => {
-				unhandledRequests.push(`${request.method} ${request.url}`);
-				print.error();
+			// MSW 3 reports every unhandled network frame here, HTTP requests and WebSocket connections alike.
+			onUnhandledFrame: ({ frame, defaults }) => {
+				unhandledRequests.push(
+					frame instanceof HttpNetworkFrame
+						? `${frame.data.request.method} ${frame.data.request.url}`
+						: frame instanceof WebSocketNetworkFrame
+							? `WebSocket ${frame.data.connection.client.url.href}`
+							: frame.protocol,
+				);
+				defaults.error();
 			},
 		});
 		if (defaultHandlers.length > 0) {

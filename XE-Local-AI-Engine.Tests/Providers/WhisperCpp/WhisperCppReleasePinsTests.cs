@@ -5,18 +5,18 @@ using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Asset resolution: the pinned table picks the cuBLAS zip on an NVIDIA Windows box, the CPU zip on other Windows
+///     Asset resolution: the pinned table picks the CUDA zip on an NVIDIA Windows box, the CPU zip on other Windows
 ///     boxes, and the Ubuntu tarball on Linux, even for a CUDA request (no Linux CUDA prebuilt exists). Pure lookups.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class WhisperCppReleasePinsTests
 {
     [Test]
-    public void Resolve_WindowsCuda_ReturnsCublasZip()
+    public void Resolve_WindowsCuda_ReturnsCudaZip()
     {
         var pin = AssertEx.NotNull(WhisperCppReleasePins.Resolve(OSPlatform.Windows, Architecture.X64, WhisperBackend.Cuda));
 
-        AssertEx.Equal("whisper-cublas-12.4.0-bin-x64.zip", pin.AssetName);
+        AssertEx.Equal("whisper-bin-win-cuda-12.4.0-x64.zip", pin.AssetName);
         AssertEx.Equal("Release/whisper-server.exe", pin.ServerRelativePath);
         AssertEx.Equal(WhisperArchiveKind.Zip, pin.ArchiveKind);
     }
@@ -71,7 +71,7 @@ public sealed class WhisperCppReleasePinsTests
     {
         var uri = WhisperCppReleasePins.DownloadUri(WhisperCppReleasePins.PinnedTag, "whisper-bin-ubuntu-x64.tar.gz");
 
-        AssertEx.Equal("https://github.com/ggml-org/whisper.cpp/releases/download/b5130/whisper-bin-ubuntu-x64.tar.gz",
+        AssertEx.Equal("https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-ubuntu-x64.tar.gz",
             uri.ToString());
     }
 
@@ -96,9 +96,9 @@ public sealed class WhisperCppReleasePinsTests
     [Test]
     public void PinnedSourceCommitSha_IsAPeeledCommitNotTheAnnotatedTagObject()
     {
-        // v1.9.4 is an ANNOTATED tag: the refs API returns 7d75b149…, a tag object that cannot be fetched or checked
+        // v1.9.5 is an ANNOTATED tag: the refs API returns d2a764c6…, a tag object that cannot be fetched or checked
         // out. Storing that value would ship a source build whose revision does not exist.
-        AssertEx.Equal("927cfce34f31707e17f2bff35c349632fb9e2c3a", WhisperCppReleasePins.PinnedSourceCommitSha);
-        AssertEx.NotEqual("7d75b14994ae7f59623e2471445e2355fe506ed2", WhisperCppReleasePins.PinnedSourceCommitSha);
+        AssertEx.Equal("d1be6fde11ac6e0407606b4e42fe72d34add8037", WhisperCppReleasePins.PinnedSourceCommitSha);
+        AssertEx.NotEqual("d2a764c648779feb36d44363f212a29b00aad1af", WhisperCppReleasePins.PinnedSourceCommitSha);
     }
 }

@@ -38,10 +38,7 @@
          [SupportedOSPlatform] guards that keep CA1416 green on this plain net10.0 project. -->
     <PackageReference Include="NAudio.Wasapi"/>
     <PackageReference Include="Quartz"/>
-    <PackageReference Include="Quartz.Extensions.Hosting"/>
-    <PackageReference Include="Quartz.Plugins"/>
     <PackageReference Include="Quartz.Plugins.TimeZoneConverter"/>
-    <PackageReference Include="Quartz.Serialization.SystemTextJson"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="System.Numerics.Tensors"/>
     <PackageReference Include="PdfPig"/>

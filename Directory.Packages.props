@@ -18,10 +18,10 @@
     <!-- MSAL ConfidentialClientApplication for the Entra ID authorization-code sign-in flow (Postman-parity delegated
          token via a confidential client + PKCE). Not pulled in transitively by Azure.Identity 1.21.0 (which depends
          only on Azure.Core), so both packages are direct references, version-locked to the same MSAL release. -->
-    <PackageVersion Include="Microsoft.Identity.Client" Version="4.91.1" />
+    <PackageVersion Include="Microsoft.Identity.Client" Version="4.92.0" />
     <!-- OS-native encrypted MSAL token-cache persistence (DPAPI/Keychain/libsecret), mirroring the
          TokenCachePersistenceOptions Azure.Identity provides for its own credential types. -->
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.91.1" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.92.0" />
     <!-- Pure-.NET document text extraction for chat file-upload attachments (single-file-publish safe; no Python/Docker/native deps). -->
     <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.11.0-preview.1.26513.7" />
     <!-- Genuine PdfPig (Apache-2.0, github.com/UglyToad/PdfPig). NOTE: the package id is `PdfPig`, NOT `UglyToad.PdfPig`
@@ -44,7 +44,7 @@
          Its transports ship as separate `Docker.DotNet.Enhanced.{Unix,NPipe,NativeHttp,LegacyHttp}` packages that
          arrive transitively and lock-step to the same version, so they need no entry of their own. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
-    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.6.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.6.1" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.317" />
@@ -54,7 +54,7 @@
          Sits alongside NetArchTest rather than replacing it: NetArchTest governs dependency DIRECTION between
          assemblies, ArchUnitNET governs WHERE a type is allowed to live inside one. Only the core package is
          referenced; the TngTech.ArchUnitNET.TUnit adapter is deliberately not, see PlacementConventionTests. -->
-    <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.4" />
+    <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.5" />
     <!-- Syntax-only parser for NoTupleConventionTests (a text scan cannot tell a tuple type from a parameter
          list). Test-project only, MIT; no Compilation or semantic model is built. Transitive pinning makes this
          the version everywhere, and Microsoft.EntityFrameworkCore.Design requires exactly 5.0.0 through
@@ -72,14 +72,14 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.14" />
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
-    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.2" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.64.1" />
     <PackageVersion Include="OllamaSharp" Version="5.5.0" />
     <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
          floor (1.68.4 requires >= 1.62.0), so check that floor before moving either package. A Microsoft.Playwright
          bump additionally needs `playwright.ps1 install` to refresh ~/.cache/ms-playwright and CI's browser layer. -->
-    <PackageVersion Include="TUnit.Playwright" Version="1.76.28" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.76.45" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
@@ -145,13 +145,15 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
-    <PackageVersion Include="Quartz" Version="3.22.7" />
-    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.22.7" />
-    <PackageVersion Include="Quartz.Plugins" Version="3.22.7" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.22.7" />
-    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.22.7" />
+    <!-- Quartz 4 folds hosting and System.Text.Json serialization into the core package, and its JobTimeout middleware
+         replaces the Quartz.Plugins interrupt monitor, so only these two remain. -->
+    <PackageVersion Include="Quartz" Version="4.6.2" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="4.6.2" />
+    <!-- Transitive-only pin: Quartz.Plugins.TimeZoneConverter 4.x floors it at 7.1.0, and the backend license corpus keys
+         the curated MIT text on 7.2.0. -->
+    <PackageVersion Include="TimeZoneConverter" Version="7.2.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.3" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.18.5" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -165,10 +167,10 @@
     <!-- Terminal client (XE-Local-AI-Engine.Cli) only: argument parsing and console rendering. Spectre.Console is the
          core package alone; its ImageSharp add-on is deliberately not referenced. -->
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.13" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.14" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.14" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
-    <PackageVersion Include="TUnit" Version="1.76.28" />
+    <PackageVersion Include="TUnit" Version="1.76.45" />
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>

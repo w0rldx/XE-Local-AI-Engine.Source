@@ -1045,7 +1045,7 @@ default, and a literal `Step {{index}} of {{count}}` that real i18next interpola
 
 ### An MSW request no handler declared FAILS the test that made it — declare the route, never widen the guard
 
-MSW's own `onUnhandledRequest: "error"` rejects the caller's `fetch`, but TanStack Query catches the rejection into
+MSW's own `"error"` strategy (`defaults.error()` inside the `onUnhandledFrame` callback since MSW 3; `onUnhandledRequest: "error"` before) rejects the caller's `fetch`, but TanStack Query catches the rejection into
 `query.error`, so a test asserting elsewhere stayed green. The first full run under the guard found 15 such calls
 across nine files (2026-09-20).
 

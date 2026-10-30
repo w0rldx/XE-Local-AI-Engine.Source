@@ -6,11 +6,11 @@
 
 [tools]
 # The major CI's client-react job runs; scripts/CheckNodeMajor.mjs reads the same value from the workflow.
-node = "22"
+node = "26"
 # package.json "packageManager".
-pnpm = "11.27.0"
+pnpm = "12.16.1"
 # No python entry: Python comes through uv, which provisions the interpreter the scripts and tools/training ask for.
-uv = "0.11.30"
+uv = "0.13.6"
 
 [settings]
 idiomatic_version_file_enable_tools = ["dotnet"]

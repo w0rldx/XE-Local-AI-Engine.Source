@@ -227,3 +227,13 @@ plugin system for future profiles; repository build scripts; auto-tracking upstr
   toolchain may be deleted only after a successful reinstall or on remove, never inside the adopt/rollback boundary.
 - **Windows code without a product consumer.** Until the compute profile runs on Windows, the Windows toolchain layer's
   only evidence is its test class; it is kept deliberately small.
+
+## Amendment 2026-10-30: the shared minor moves to CPython 3.14
+
+`ManagedPythonPins.PythonMinor` is `3.14`, and both lockfiles declare `requires-python = ">=3.14,<3.15"`. Training
+decides the minor, as §3 intends: the training closure (torch 2.13.0 and torchvision 0.28.0 from the cu129 index,
+unsloth and unsloth_zoo 2026.10.11) ships cp314 wheels, and 3.15 stays blocked because unsloth_zoo declares
+`requires-python <3.15`. An environment provisioned on 3.13 no longer matches its expected identity
+(`pythonMinor`, and the lockfile digest) and is handled like any other identity change: Training reports
+`UpdateRequired`, the compute environment is reprovisioned. The 3.13 CPython stays in the shared store until an operator removes it
+through uv, per "No automatic pruning".

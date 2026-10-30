@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
+using System.Globalization;
 using Quartz;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
@@ -10,17 +11,23 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 /// <remarks>
 ///     A malformed or missing id is logged sanitized and swallowed rather than thrown, so a single corrupt trigger
 ///     cannot fault the scheduler. <see cref="OperationCanceledException" /> from the executor propagates instead, so
-///     Quartz observes an interrupt or shutdown.
+///     Quartz observes an interrupt or shutdown. The runner also arms the definition's maximum runtime: Quartz 4 bounds
+///     a firing only per job type, so on expiry the runner interrupts its own fire instance exactly as an operator
+///     cancel does, and the executor records the run as timed out.
 /// </remarks>
 internal static class SchedulerDispatchJobRunner
 {
     public static async Task RunAsync(ISchedulerDispatchExecutor dispatchExecutor,
         ILogger logger,
-        IJobExecutionContext context)
+        IJobExecutionContext context,
+        TimeSpan defaultMaxRuntime,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(dispatchExecutor);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         var rawScheduledJobId = SafeGetString(context, SchedulerJobKeys.ScheduledJobIdKey);
         if (!Guid.TryParse(rawScheduledJobId, out var scheduledJobId))
@@ -31,6 +38,9 @@ internal static class SchedulerDispatchJobRunner
                 SchedulerJobKeys.ScheduledJobIdKey);
             return;
         }
+
+        using var budget = new CancellationTokenSource(ResolveMaxRuntime(context, defaultMaxRuntime), timeProvider);
+        await using var interruptOnExpiry = budget.Token.Register(() => _ = InterruptAsync(context, logger));
 
         // A manual fire may carry per-fire overrides on the firing trigger's data map. Forward ONLY the whitelisted keys, which the
         // executor decides how to apply; a cron fire has none and dispatches the stored parameters unchanged.
@@ -45,7 +55,7 @@ internal static class SchedulerDispatchJobRunner
             context.FireInstanceId,
             context.ScheduledFireTimeUtc,
             context.FireTimeUtc,
-            context.CancellationToken,
+            cancellationToken,
             parameterOverrides,
             triggeredBy,
             Guid.TryParse(SafeGetString(context, SchedulerJobKeys.ManualFireIdKey), out var manualFireId) ? manualFireId : null);
@@ -90,10 +100,31 @@ internal static class SchedulerDispatchJobRunner
         return overrides.Count == 0 ? null : overrides;
     }
 
+    private static TimeSpan ResolveMaxRuntime(IJobExecutionContext context, TimeSpan defaultMaxRuntime)
+    {
+        return long.TryParse(SafeGetString(context, SchedulerJobKeys.MaxRuntimeMillisecondsKey), NumberStyles.None, CultureInfo.InvariantCulture, out var milliseconds)
+               && milliseconds > 0
+            ? TimeSpan.FromMilliseconds(milliseconds)
+            : defaultMaxRuntime;
+    }
+
+    private static async Task InterruptAsync(IJobExecutionContext context, ILogger logger)
+    {
+        try
+        {
+            // Not the fire's own token: that is what this interrupt is about to cancel.
+            await context.Scheduler.InterruptFireInstance(context.FireInstanceId, CancellationToken.None);
+        }
+        catch (SchedulerException exception)
+        {
+            logger.LogWarning(exception, "Could not interrupt fire {FireInstanceId} after it exceeded its maximum runtime.", context.FireInstanceId);
+        }
+    }
+
     /// <summary>
-    ///     Reads a string value from the merged data map WITHOUT throwing when the key is absent. Quartz's
-    ///     <see cref="JobDataMap" /> <c>GetString</c> throws <see cref="KeyNotFoundException" /> for a missing key, so a
-    ///     no-override (cron) fire — which carries none of the optional keys — must be read defensively.
+    ///     Reads a string value from the merged data map WITHOUT throwing when the key is absent: the
+    ///     <see cref="JobDataMap" /> indexer throws <see cref="KeyNotFoundException" /> for a missing key, and a
+    ///     no-override (cron) fire carries none of the optional keys.
     /// </summary>
     private static string? SafeGetString(IJobExecutionContext context, string key)
     {

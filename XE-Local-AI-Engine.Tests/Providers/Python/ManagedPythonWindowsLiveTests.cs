@@ -73,7 +73,7 @@ public sealed class ManagedPythonWindowsLiveTests : IDisposable
             [project]
             name = "xe-windows-probe"
             version = "0"
-            requires-python = ">=3.13,<3.14"
+            requires-python = ">=3.14,<3.15"
             dependencies = ["sympy==1.14.0"]
             """);
         var uvEnvironment = ManagedPythonEnvironment.BuildUvEnvironment(home, tmp, toolchain.CacheDirectory, toolchain.PythonInstallDirectory);
@@ -93,7 +93,7 @@ public sealed class ManagedPythonWindowsLiveTests : IDisposable
             StepTimeout,
             CancellationToken.None);
         AssertEx.Equal(0, importExit, string.Join('\n', output));
-        AssertEx.Contains(string.Join('\n', output), "1.14.0 (3, 13)");
+        AssertEx.Contains(string.Join('\n', output), "1.14.0 (3, 14)");
 
         await AssertCancelTreeKillsAsync(runner, uv, project, uvEnvironment);
 

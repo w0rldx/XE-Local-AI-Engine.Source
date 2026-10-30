@@ -182,20 +182,15 @@ class DependabotGroupContractTests(unittest.TestCase):
         self.assertFalse(self.pnpm_workspace["minimumReleaseAgeStrict"])
         self.assertEqual({"default-days": 7}, self.npm_update["cooldown"])
 
-    def test_unsupported_typescript_and_node_type_majors_are_temporarily_ignored(self) -> None:
+    def test_unsupported_typescript_major_is_temporarily_ignored(self) -> None:
         ignores = {entry["dependency-name"]: entry for entry in self.npm_update["ignore"]}
 
         self.assertEqual(
             {"dependency-name": "typescript", "versions": [">=7"]},
             ignores["typescript"],
         )
-        self.assertEqual(
-            {
-                "dependency-name": "@types/node",
-                "update-types": ["version-update:semver-major"],
-            },
-            ignores["@types/node"],
-        )
+        # @types/node follows the CI Node major (26) and is no longer held back.
+        self.assertNotIn("@types/node", ignores)
 
     def test_groups_are_deliberate_and_non_overlapping_for_current_dependencies(self) -> None:
         self.assertEqual(EXPECTED_GROUPS, set(self.groups))

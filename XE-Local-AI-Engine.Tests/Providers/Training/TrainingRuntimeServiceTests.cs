@@ -36,7 +36,7 @@ public sealed class TrainingRuntimeServiceTests
         AssertEx.Null(status.SanitizedError);
 
         var installed = AssertEx.NotNull(status.Installed, "A completed install must record its state.");
-        AssertEx.Equal("3.13.15", installed.PythonVersion);
+        AssertEx.Equal("3.14.10", installed.PythonVersion);
         AssertEx.Equal("2.11.0+cu128", installed.TorchVersion);
         AssertEx.Equal(ManagedPythonPins.UvVersion, installed.UvVersion);
         AssertEx.Equal(TrainingRuntimePins.ProbeContractVersion, installed.ContractVersion);
@@ -126,7 +126,7 @@ public sealed class TrainingRuntimeServiceTests
     [RunOn(OS.Linux)]
     public async Task Install_WhenTheProbeCannotReachTheGpu_RefusesToAdopt()
     {
-        using var harness = new Harness(SucceedingRunner("""{"contractVersion":1,"ready":false,"cudaAvailable":false,"python":"3.13.15"}"""));
+        using var harness = new Harness(SucceedingRunner("""{"contractVersion":1,"ready":false,"cudaAvailable":false,"python":"3.14.10"}"""));
 
         _ = await harness.Service.InstallAsync(CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
@@ -240,11 +240,11 @@ public sealed class TrainingRuntimeServiceTests
         AssertEx.True(File.Exists(marker), "The previous runtime must be back in place, not left parked in the backup.");
         AssertEx.False(Directory.Exists(TrainingRuntimeLayout.BackupVenv(harness.CacheRoot)),
             "The backup is only consumed once BOTH the swap and the state write have succeeded.");
-        AssertEx.Equal("3.13.15", AssertEx.NotNull(status.Installed, "A surviving runtime must still be reported.").PythonVersion);
+        AssertEx.Equal("3.14.10", AssertEx.NotNull(status.Installed, "A surviving runtime must still be reported.").PythonVersion);
 
         // And the record on disk, which is what a restart reads, describes the runtime that is actually there.
         using var restarted = harness.Restart();
-        AssertEx.Equal("3.13.15", AssertEx.NotNull(restarted.Service.GetStatus().Installed).PythonVersion);
+        AssertEx.Equal("3.14.10", AssertEx.NotNull(restarted.Service.GetStatus().Installed).PythonVersion);
         AssertEx.NotNull(restarted.Service.ResolveInterpreterPath());
     }
 

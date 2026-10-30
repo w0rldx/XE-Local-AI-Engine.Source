@@ -1,7 +1,7 @@
 // Vitest setup: fail fast on any network call from a test file that did not install MSW.
 //
 // MSW is installed per consumer file (src/test/UseMswServer.ts), not suite-wide. This guard holds the
-// load-bearing half of MSW's `onUnhandledRequest: "error"` for every other file: a request nobody stubbed must
+// load-bearing half of MSW's `onUnhandledFrame: "error"` for every other file: a request nobody stubbed must
 // fail loudly instead of reaching the machine's real network, where it passes for the wrong reason on a developer
 // machine and hangs in CI.
 //
@@ -16,7 +16,7 @@
 // called, which is what axios, SignalR and node callers turn into a rejection anyway.
 //
 // A file that calls `setupMswServer()` gets the real transports back for its duration; MSW installs its own
-// interceptors over them and keeps `onUnhandledRequest: "error"` there.
+// interceptors over them and keeps `onUnhandledFrame: "error"` there.
 
 import http from "node:http";
 import https from "node:https";

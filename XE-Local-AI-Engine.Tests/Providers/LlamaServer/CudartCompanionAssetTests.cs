@@ -30,7 +30,7 @@ public sealed class CudartCompanionAssetTests
     }
 
     [Test]
-    [Arguments("llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz", "cudart-llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz")]
+    [Arguments("llama-b12014-bin-ubuntu-cuda-12.8-x64.tar.gz", "cudart-llama-b12014-bin-ubuntu-cuda-12.8-x64.tar.gz")]
     [Arguments("llama-b12000-bin-ubuntu-cuda-13.4-x64.tar.gz", "cudart-llama-b12000-bin-ubuntu-cuda-13.4-x64.tar.gz")]
     public void DeriveCudartAssetName_FromLinuxCudaMainAsset_PrefixesTheWholeName(string main, string expected)
     {

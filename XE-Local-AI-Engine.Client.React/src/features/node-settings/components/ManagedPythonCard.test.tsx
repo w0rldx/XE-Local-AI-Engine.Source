@@ -42,7 +42,7 @@ function environment(profileId: string, overrides: EnvironmentOverrides = {}) {
 		installed:
 			overrides.installed === false
 				? null
-				: { pythonMinor: "3.13", profileRevision: 1, rid: "linux-x64", probeContractVersion: 1, uvVersion: "0.12.19" },
+				: { pythonMinor: "3.14", profileRevision: 1, rid: "linux-x64", probeContractVersion: 1, uvVersion: "0.13.6" },
 		mismatches: overrides.mismatches ?? [],
 	};
 }
@@ -53,9 +53,9 @@ function status(
 ) {
 	return {
 		toolchain: {
-			uvVersion: "0.12.19",
+			uvVersion: "0.13.6",
 			uvPresent: toolchain.uvPresent ?? true,
-			pythonInstalls: toolchain.pythonInstalls ?? ["cpython-3.13.15-linux-x86_64-gnu"],
+			pythonInstalls: toolchain.pythonInstalls ?? ["cpython-3.14.10-linux-x86_64-gnu"],
 		},
 		environments,
 	};
@@ -99,7 +99,7 @@ describe("ManagedPythonCard", () => {
 		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
 
 		expect(await screen.findByText(copy.uvPresent)).toBeTruthy();
-		expect(screen.getByText("cpython-3.13.15-linux-x86_64-gnu")).toBeTruthy();
+		expect(screen.getByText("cpython-3.14.10-linux-x86_64-gnu")).toBeTruthy();
 		for (const state of states) {
 			expect(screen.getByText(copy.states[state])).toBeTruthy();
 		}
@@ -384,7 +384,7 @@ describe("ManagedPythonCard", () => {
 		const loading = await screen.findByRole("status");
 		expect(loading.getAttribute("aria-live")).toBe("polite");
 		expect(within(loading).getByText(copy.loading)).toBeTruthy();
-		expect(await screen.findByText("cpython-3.13.15-linux-x86_64-gnu")).toBeTruthy();
+		expect(await screen.findByText("cpython-3.14.10-linux-x86_64-gnu")).toBeTruthy();
 		expect(screen.queryByRole("status")).toBeNull();
 	});
 

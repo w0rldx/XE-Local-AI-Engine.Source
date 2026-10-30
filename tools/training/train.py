@@ -310,7 +310,9 @@ def main():
                 per_device_train_batch_size=int(options.get("perDeviceTrainBatchSize", 2)),
                 gradient_accumulation_steps=int(options.get("gradientAccumulationSteps", 4)),
                 learning_rate=float(options.get("learningRate", 2e-4)),
-                warmup_ratio=float(options.get("warmupRatio", 0.03)),
+                # transformers 5 removed `warmup_ratio`; a float `warmup_steps` below 1 is the same ratio of total steps
+                # (the host bounds warmupRatio to [0, 0.5]).
+                warmup_steps=float(options.get("warmupRatio", 0.03)),
                 num_train_epochs=int(options.get("epochs", 1)),
                 optim=options.get("optimizer", "adamw_8bit"),
                 seed=int(options.get("seed", 3407)),

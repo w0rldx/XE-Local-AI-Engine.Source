@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 
-// Direct check for src/test/JsdomBlobStream.ts. The image tests that exposed the gap only fail under Node 22, so
-// on a Node 24 developer box nothing else would notice the polyfill going missing.
+// Direct check for src/test/JsdomBlobStream.ts. The image tests that exposed the gap threw only under Node 22; on
+// Node 24 and later the body silently becomes "[object Blob]", so this check names the polyfill going missing.
 
 describe("jsdom Blob.stream polyfill", () => {
 	it("streams the blob's bytes", async () => {

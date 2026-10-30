@@ -18,8 +18,8 @@ using OS = TUnit.Core.Enums.OS;
 [Category(TestCategories.Unit)]
 public sealed class BinaryManagerLinuxCudaCompanionTests
 {
-    private const string MainTopFolder = "llama-b11803";
-    private const string CompanionTopFolder = "cudart-llama-b11803-bin-ubuntu-cuda-12.8-x64";
+    private const string MainTopFolder = "llama-b12014";
+    private const string CompanionTopFolder = "cudart-llama-b12014-bin-ubuntu-cuda-12.8-x64";
 
     private static readonly string[] CompleteCompanionSet = ["libcudart.so.12", "libcublas.so.12", "libcublasLt.so.12"];
 

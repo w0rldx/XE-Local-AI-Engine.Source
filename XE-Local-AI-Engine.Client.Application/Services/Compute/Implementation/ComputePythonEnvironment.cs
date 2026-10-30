@@ -522,7 +522,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     ///     The final target of a linked directory, or the path itself when it is not a link or cannot be resolved.
     /// </summary>
     /// <remarks>
-    ///     uv's <c>home</c> names the minor-version alias (<c>cpython-3.13-…</c>), a link to the versioned install beside it in the same
+    ///     uv's <c>home</c> names the minor-version alias (<c>cpython-3.14-…</c>), a link to the versioned install beside it in the same
     ///     granted store. CPython cannot resolve that link inside the AppContainer boundary and warns on stderr, so the target is launched.
     /// </remarks>
     private static string ResolveFinalDirectory(string directory)
@@ -740,7 +740,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     /// <remarks>
     ///     Two, and exactly these two. The venv's <c>bin/python</c> is a symlink into the shared CPython root, where every module the
     ///     interpreter loads before reading its own configuration lives, so the venv alone cannot execute. The ROOT, not one install:
-    ///     uv addresses it through a version-alias symlink (<c>cpython-3.13-…</c> → <c>cpython-3.13.15-…</c>) beside it.
+    ///     uv addresses it through a version-alias symlink (<c>cpython-3.14-…</c> → <c>cpython-3.14.10-…</c>) beside it.
     ///     Why never the store or cache root above them: docs/wiki/19-compute-tools.md, "2.4 The filesystem boundary".
     /// </remarks>
     private ComputePythonRuntime BuildRuntime(string interpreter, string venvRoot)

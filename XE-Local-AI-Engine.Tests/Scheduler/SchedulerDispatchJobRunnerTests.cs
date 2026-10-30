@@ -5,6 +5,7 @@ using NSubstitute;
 using Quartz;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Tests for <see cref="SchedulerDispatchJobRunner" />, the Quartz <c>IJob</c> → executor hop: it forwards EVERY
@@ -30,7 +31,7 @@ public sealed class SchedulerDispatchJobRunnerTests
             [SchedulerJobKeys.ModelFitLimitOverrideKey] = "20"
         });
 
-        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+        await RunAsync(executor, context);
 
         await executor.Received(1).DispatchAsync(JobId,
             "fire-x",
@@ -54,7 +55,7 @@ public sealed class SchedulerDispatchJobRunnerTests
             [SchedulerJobKeys.ModelFitLimitOverrideKey] = "15"
         });
 
-        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+        await RunAsync(executor, context);
 
         await executor.Received(1).DispatchAsync(JobId,
             "fire-x",
@@ -76,7 +77,7 @@ public sealed class SchedulerDispatchJobRunnerTests
             [SchedulerJobKeys.ScheduledJobIdKey] = JobId.ToString()
         });
 
-        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+        await RunAsync(executor, context);
 
         await executor.Received(1).DispatchAsync(JobId,
             "fire-x",
@@ -96,7 +97,7 @@ public sealed class SchedulerDispatchJobRunnerTests
             [SchedulerJobKeys.ManualFireKey] = bool.TrueString
         });
 
-        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+        await RunAsync(executor, context);
 
         // Manual, and the marker must NOT be mistaken for a parameter override.
         await executor.Received(1).DispatchAsync(JobId,
@@ -120,7 +121,7 @@ public sealed class SchedulerDispatchJobRunnerTests
             [SchedulerJobKeys.ManualFireIdKey] = fireId.ToString("D")
         });
 
-        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+        await RunAsync(executor, context);
 
         // Correlation only: the id is not a parameter override.
         await executor.Received(1).DispatchAsync(JobId,
@@ -139,7 +140,7 @@ public sealed class SchedulerDispatchJobRunnerTests
         var executor = Substitute.For<ISchedulerDispatchExecutor>();
         var context = BuildContext(new JobDataMap());
 
-        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+        await RunAsync(executor, context);
 
         await executor.DidNotReceive().DispatchAsync(Arg.Any<Guid>(),
             Arg.Any<string>(),
@@ -148,6 +149,48 @@ public sealed class SchedulerDispatchJobRunnerTests
             Arg.Any<CancellationToken>(),
             Arg.Any<IReadOnlyDictionary<string, string>?>(),
             Arg.Any<ScheduledRunTrigger>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheDefinitionBudgetExpires_InterruptsItsOwnFireInstance()
+    {
+        // Quartz 4 bounds a firing only per job type, so the per-definition budget is the runner's: on expiry it must interrupt
+        // the fire instance through the scheduler, which cancels the executor's token the way an operator cancel does.
+        var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var context = BuildContext(new JobDataMap
+        {
+            [SchedulerJobKeys.ScheduledJobIdKey] = JobId.ToString(),
+            [SchedulerJobKeys.MaxRuntimeMillisecondsKey] = "1"
+        });
+        var scheduler = Substitute.For<IScheduler>();
+#pragma warning disable CA2012 // Configuring a substitute: the returned ValueTask is a recording artifact, not a real async operation.
+        scheduler.InterruptFireInstance("fire-x", Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     interrupted.TrySetResult();
+                     return ValueTask.FromResult(true);
+                 });
+#pragma warning restore CA2012
+        context.Scheduler.Returns(scheduler);
+        var executor = Substitute.For<ISchedulerDispatchExecutor>();
+        executor.DispatchAsync(JobId,
+                     "fire-x",
+                     Arg.Any<DateTimeOffset?>(),
+                     Arg.Any<DateTimeOffset>(),
+                     Arg.Any<CancellationToken>(),
+                     Arg.Any<IReadOnlyDictionary<string, string>?>(),
+                     Arg.Any<ScheduledRunTrigger>(),
+                     Arg.Any<Guid?>())
+                .Returns(_ => interrupted.Task.WaitAsync(TestBudgets.Contended));
+
+        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context, TimeSpan.FromDays(1), TimeProvider.System, CancellationToken.None);
+
+        await scheduler.Received(1).InterruptFireInstance("fire-x", Arg.Any<CancellationToken>());
+    }
+
+    private static Task RunAsync(ISchedulerDispatchExecutor executor, IJobExecutionContext context)
+    {
+        return SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context, TimeSpan.FromDays(1), TimeProvider.System, CancellationToken.None);
     }
 
     private static IJobExecutionContext BuildContext(JobDataMap mergedDataMap)

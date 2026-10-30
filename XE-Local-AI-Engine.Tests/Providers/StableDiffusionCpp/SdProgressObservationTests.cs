@@ -48,6 +48,36 @@ public sealed class SdProgressObservationTests
     }
 
     /// <summary>
+    ///     Since <c>master-1028-37bc88b</c> sd.cpp pads the counter and rate and appends a remaining-time suffix once a
+    ///     generation is estimated at 15 seconds or more. The rate is still the anchor; the suffix must not hide the step.
+    /// </summary>
+    [Test]
+    [Arguments("  |=====>                                            |  3/20 -    4.97s/it - ETA 01:24", 3, 20, 4.97)]
+    [Arguments("  |=====>                                            | 12/200 -   1.20s/it - ETA 1:02:05", 12, 200, 1.20)]
+    [Arguments("  |==================================================| 20/20 -    4.97s/it", 20, 20, 4.97)]
+    public void Parse_SamplerStepLineWithPaddingAndEta_ReportsSamplingWithCounters(string line, int step, int total, double secondsPerIteration)
+    {
+        var parsed = SdProgressLineParser.TryParse(line, out var observation);
+
+        AssertEx.True(parsed, $"'{line}' is a sampler step bar.");
+        AssertEx.Equal(ImageGenPhase.Sampling, observation!.Phase);
+        AssertEx.Equal(step, observation.Step);
+        AssertEx.Equal(total, observation.TotalSteps);
+        AssertEx.Equal(secondsPerIteration, observation.SecondsPerIteration);
+    }
+
+    /// <summary>The newer log layout puts the level first as one letter and the source location last.</summary>
+    [Test]
+    public void Parse_PhaseMarkerLinesInTheShortLogLayout_MapToTheirPhases()
+    {
+        AssertPhase("[I] loading model from '/models/sd15.gguf' --- diffusion_engine.cpp:685", ImageGenPhase.Loading);
+        AssertPhase("[V] loading 196/1131 tensors from /models/sd15.gguf --- model_loader.cpp:1152", ImageGenPhase.Loading);
+        AssertPhase("[I] get_learned_condition completed, taking 0.25s --- image.cpp:580", ImageGenPhase.Encoding);
+        AssertPhase("[I] sampling completed, taking 41.54s --- image.cpp:953", ImageGenPhase.Decoding);
+        AssertPhase("[I] decode_first_stage completed, taking 7.27s --- image.cpp:675", ImageGenPhase.Decoding);
+    }
+
+    /// <summary>
     ///     THE decoy. sd.cpp prints this once per generation and, at the default batch count of one, it reads
     ///     <c>1/1</c>. A parser anchored on the fraction rather than the rate token reports "step 1 of 1" and slams the
     ///     bar to 100% before a single step has run.

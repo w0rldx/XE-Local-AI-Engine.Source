@@ -305,7 +305,7 @@ again and loses the coverage; `i18next-browser-languagedetector` writes `i18next
 undeclared request calls `assertNoUnhandledRequests()`, which asserts and drains. A request fired during RTL
 unmount is dropped and charged to no test. When the generated client loses an async hop (the request validators were
 dropped on 2026-10-09), a GET that used to fire one tick after the test unmounted fires inside it and hits the strict
-guard: register the route in that test, never widen `onUnhandledRequest` or add a wait. **Authority:**
+guard: register the route in that test, never widen `onUnhandledFrame` or add a wait. **Authority:**
 `src/test/UseMswServer.ts`; `ValidationProblemProbeApi.test.ts`; `DevWorkflowDefinitionFormPanel.test.tsx`.
 
 ### Every `MantineProvider` a test mounts carries `env="test"`

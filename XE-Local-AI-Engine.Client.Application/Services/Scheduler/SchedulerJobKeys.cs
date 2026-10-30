@@ -9,9 +9,20 @@ public static class SchedulerJobKeys
 {
     /// <summary>
     ///     <c>JobDataMap</c> key under which the scheduled job definition id (a <see cref="System.Guid" /> string) is
-    ///     stored. With <c>UseProperties = true</c> the map is string-only, so the value is the <c>Guid</c>'s string form.
+    ///     stored. With <c>StoreJobDataAsStrings = true</c> the map is string-only, so the value is the <c>Guid</c>'s string form.
     /// </summary>
     public const string ScheduledJobIdKey = "scheduledJobId";
+
+    /// <summary>
+    ///     <c>JobDataMap</c> key carrying a definition's own maximum runtime, in milliseconds as an invariant string.
+    /// </summary>
+    /// <remarks>
+    ///     Quartz 4 bounds a firing only per job type (<c>[JobTimeout]</c>), so <see cref="SchedulerDispatchJobRunner" />
+    ///     arms this per-definition budget itself, falling back to <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>. The
+    ///     name matches the key the retired Quartz 3 interrupt plugin read, so job details stored before the upgrade keep
+    ///     their budget.
+    /// </remarks>
+    public const string MaxRuntimeMillisecondsKey = "MaxRunTime";
 
     /// <summary>
     ///     Quartz <c>JobKey</c> group that all scheduled-job definitions share. A stable per-definition <c>JobKey</c> name

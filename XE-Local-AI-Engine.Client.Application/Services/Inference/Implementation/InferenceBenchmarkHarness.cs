@@ -641,6 +641,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             ModelId = modelId,
             Temperature = spec.Temperature,
             Seed = spec.Seed,
+            MaxOutputTokens = spec.MaxOutputTokens,
             Tools = tools
         };
     }

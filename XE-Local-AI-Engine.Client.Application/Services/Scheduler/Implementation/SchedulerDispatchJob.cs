@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
+using Microsoft.Extensions.Options;
 using Quartz;
 
 /// <summary>
@@ -14,18 +15,26 @@ internal sealed class SchedulerDispatchJob : IJob
 {
     private readonly ISchedulerDispatchExecutor _dispatchExecutor;
     private readonly ILogger<SchedulerDispatchJob> _logger;
+    private readonly TimeSpan _defaultMaxRuntime;
+    private readonly TimeProvider _timeProvider;
 
     public SchedulerDispatchJob(ISchedulerDispatchExecutor dispatchExecutor,
+        IOptions<SchedulerOptions> options,
+        TimeProvider timeProvider,
         ILogger<SchedulerDispatchJob> logger)
     {
         ArgumentNullException.ThrowIfNull(dispatchExecutor);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
         _dispatchExecutor = dispatchExecutor;
+        _defaultMaxRuntime = TimeSpan.FromMinutes(options.Value.DefaultMaxRuntimeMinutes);
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
-    public Task Execute(IJobExecutionContext context)
+    public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
-        return SchedulerDispatchJobRunner.RunAsync(_dispatchExecutor, _logger, context);
+        await SchedulerDispatchJobRunner.RunAsync(_dispatchExecutor, _logger, context, _defaultMaxRuntime, _timeProvider, cancellationToken);
     }
 }

@@ -61,7 +61,7 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         body = build_job.group("body")
         setup = "uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0"
         self.assertIn(setup, body)
-        self.assertIn("python-version: '3.13'", body)
+        self.assertIn("python-version: '3.14'", body)
         self.assertNotIn("python3", body)
         self.assertIn("python scripts/compliance/create_bundle_input_manifest.py", body)
 

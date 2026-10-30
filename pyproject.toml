@@ -13,7 +13,7 @@
 name = "xe-python-tooling"
 version = "0.1.0"
 description = "Lint, type-check, test and security-scan the repository's Python (tools/training, scripts/**, catalog/external-apps/tools)."
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = []
 
 [tool.uv]
@@ -34,7 +34,10 @@ dev = [
 # rewrite agent-template markdown under Client.Application.
 include = ["*.py", "*.pyi", "**/pyproject.toml"]
 line-length = 120
-target-version = "py313"
+target-version = "py314"
+# scripts/** run under the host's python3 (dev-start.sh, release.yml), not this venv: keep their syntax
+# parseable on 3.13, so the formatter does not drop the parentheses of a multi-type except (PEP 758).
+per-file-target-version = { "scripts/**" = "py313" }
 src = ["tools/training", "scripts", "catalog/external-apps/tools"]
 extend-exclude = ["tools/training/.venv"]
 
@@ -69,7 +72,7 @@ select = [
 project-includes = ["tools/training", "scripts", "catalog/external-apps/tools"]
 project-excludes = ["**/.venv", "**/node_modules", "**/__pycache__"]
 search-path = ["tools/training", "scripts/compliance", "catalog/external-apps/tools"]
-python-version = "3.13"
+python-version = "3.14"
 # The training scripts import the fine-tuning stack (torch/unsloth/transformers/trl/datasets),
 # which only exists inside the 7 GB provisioned runtime venv, never in this dev venv. Those
 # imports resolve to Any; everything pure-python (trainlib, exportlib, protocol code, scripts/**)

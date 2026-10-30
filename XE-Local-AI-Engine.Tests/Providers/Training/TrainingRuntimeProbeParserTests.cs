@@ -23,7 +23,7 @@ public sealed class TrainingRuntimeProbeParserTests
         AssertEx.Equal(1, report.ContractVersion);
         AssertEx.True(report.Ready);
         AssertEx.True(report.CudaAvailable);
-        AssertEx.Equal("3.13.15", report.PythonVersion);
+        AssertEx.Equal("3.14.10", report.PythonVersion);
         AssertEx.Equal("2.11.0+cu128", report.TorchVersion);
         AssertEx.Equal("2026.8.18", report.UnslothVersion);
         AssertEx.Equal("NVIDIA GeForce RTX 5090", report.DeviceName);

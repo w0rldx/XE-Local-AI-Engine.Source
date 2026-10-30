@@ -225,7 +225,7 @@ export default defineConfig(({ command, mode }) => {
 			// `setupMswServer()` (src/test/UseMswServer.ts), so the rest no longer pay for it.
 			// Cleanup.ts unmounts every React tree a test mounted; without globals RTL never registers its own
 			// afterEach(cleanup), so mounted components used to survive into the next test — see src/test/Cleanup.ts.
-			// JsdomBlobStream.ts adds the `stream()` jsdom's Blob lacks; Node 22's Response throws on it — see that file.
+			// JsdomBlobStream.ts adds the `stream()` jsdom's Blob lacks; Node's Response misreads such a body without it — see that file.
 			//
 			// src/i18n.ts is FIRST: importing it initialises the app's own i18next instance and registers it as
 			// react-i18next's default, so every test file — not just the ones that render through

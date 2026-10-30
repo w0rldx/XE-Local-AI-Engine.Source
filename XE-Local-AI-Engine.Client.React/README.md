@@ -37,7 +37,7 @@ Before committing, run:
 pnpm run acceptance
 ```
 
-It first checks that Node runs the same major as CI (Node 22; `engines` in `package.json` is only the floor) and
+It first checks that Node runs the same major as CI (Node 26; `engines` in `package.json` is only the floor) and
 stops otherwise; `XE_ALLOW_NODE_DRIFT=1` continues with a warning that the run is not CI evidence. It then runs
 `validate`, the coverage gate, the tooling tests and `build:bundle` in order, with the static checks once.
 While iterating, run `pnpm run validate`, `pnpm test` and `pnpm run test:tooling` on their own.

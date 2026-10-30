@@ -16,7 +16,7 @@ public sealed class LinuxTrainingProcessGroupTests
     private const int Pid = 4242;
     private const int HostGroup = 777;
     private const string Setsid = "/usr/bin/setsid";
-    private const string Python = "/opt/uv/python/bin/python3.13";
+    private const string Python = "/opt/uv/python/bin/python3.14";
 
     [Test]
     public void AwaitTrainerIdentity_WhenSetsidRunsLate_WaitsForTheChildToLeadItsGroup()

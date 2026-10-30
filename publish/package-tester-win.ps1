@@ -892,8 +892,8 @@ elseif (Test-Path $rehearsalMarkerPath -PathType Leaf) {
 }
 
 # 3. Release notes (pinned git-cliff)
-$gcVersion = "2.13.1"
-$gcSha = "3AE3A5549E85C7AD5B20192EBCFEE4371269DECA51255F6F2F2E051C6541F5CA"  # x86_64-pc-windows-msvc.zip
+$gcVersion = "2.14.2"
+$gcSha = "6ECE2112B3F4AF462190ECBEA4AEB1315FFF6AF415629B597F84319073C31131"  # x86_64-pc-windows-msvc.zip
 $gcZip = "git-cliff-$gcVersion-x86_64-pc-windows-msvc.zip"
 $gcCacheDir = Join-Path ([IO.Path]::GetTempPath()) "xe-local-ai-engine-git-cliff-$gcVersion"
 $gcZipPath = Join-Path $gcCacheDir $gcZip

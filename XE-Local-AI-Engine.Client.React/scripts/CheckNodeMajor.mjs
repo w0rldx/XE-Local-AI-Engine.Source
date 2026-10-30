@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // First step of `pnpm run acceptance`: refuse to run on a Node major other than the one CI's client-react job uses.
-// package.json `engines` (>=22.13.0) lets a newer major through, and a green acceptance run on that major is not CI
+// package.json `engines` (>=26.0.0) lets a newer major through, and a green acceptance run on that major is not CI
 // evidence: develop went red on 2026-10-02 from a Node-22-only runtime difference (src/test/JsdomBlobStream.ts).
 // The major is read from the workflow, never hard-coded, so bumping CI's Node moves this check with it.
 // XE_ALLOW_NODE_DRIFT=1 runs anyway on another major, with a warning that the run is not CI evidence.

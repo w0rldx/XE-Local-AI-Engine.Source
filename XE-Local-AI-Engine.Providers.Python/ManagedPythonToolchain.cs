@@ -47,7 +47,7 @@ public sealed class ManagedPythonToolchain
     public string PinnedUvExecutable => ManagedPythonPins.Current.ExecutablePath(Root);
 
     /// <summary>
-    ///     The managed CPython installs present in the store, by directory name (<c>cpython-3.13.15-linux-x86_64-gnu</c>).
+    ///     The managed CPython installs present in the store, by directory name (<c>cpython-3.14.10-linux-x86_64-gnu</c>).
     ///     Reads the directory only: uv's minor-version alias symlinks and its dot-prefixed lock and temp entries are skipped.
     /// </summary>
     public IReadOnlyList<string> ListPythonInstalls()

@@ -13,7 +13,7 @@ internal static class TrainingRuntimeTestInfrastructure
 {
     /// <summary>A handshake line in the shape the real probe emits (synthetic values).</summary>
     public const string ValidHandshake =
-        """{"bitsandbytes":"0.50.1","contractVersion":1,"cudaAvailable":true,"cudaVersion":"12.8","deviceCapability":"12.0","deviceName":"NVIDIA GeForce RTX 5090","numpy":"2.5.2","platform":"linux","python":"3.13.15","ready":true,"torch":"2.11.0+cu128","transformers":"4.57.6","unsloth":"2026.8.18"}""";
+        """{"bitsandbytes":"0.50.1","contractVersion":1,"cudaAvailable":true,"cudaVersion":"12.8","deviceCapability":"12.0","deviceName":"NVIDIA GeForce RTX 5090","numpy":"2.5.2","platform":"linux","python":"3.14.10","ready":true,"torch":"2.11.0+cu128","transformers":"4.57.6","unsloth":"2026.8.18"}""";
 
     /// <summary>
     ///     Writes the three files the runtime install reads out of the scripts directory. Contents are irrelevant — the
@@ -69,7 +69,7 @@ internal static class TrainingRuntimeTestInfrastructure
         if (pythonInstallDirectory is not null)
         {
             File.WriteAllText(Path.Combine(venvDirectory, ".venv", "pyvenv.cfg"),
-                $"home = {Path.Combine(pythonInstallDirectory, "cpython-3.13-linux-x86_64-gnu", "bin")}\nversion_info = 3.13\n");
+                $"home = {Path.Combine(pythonInstallDirectory, "cpython-3.14-linux-x86_64-gnu", "bin")}\nversion_info = 3.14\n");
         }
     }
 

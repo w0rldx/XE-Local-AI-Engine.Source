@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
-using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -525,7 +524,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         // Quartz: job exists in the ADO store.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Quartz job must be scheduled after CreateJobAsync.");
 
         // Quartz: at least one trigger attached.
@@ -587,7 +586,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         // Quartz: job exists.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Quartz job must be scheduled for a non-overlapping job.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -634,7 +633,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         // The durable job exists ...
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "A Manual job must be registered as a durable Quartz job.");
 
         // ... but it has NO trigger (a Manual job never auto-fires).
@@ -670,7 +669,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
         var fireId = await service.TriggerNowAsync(record.Id);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "The durable Manual job must remain registered and triggerable after TriggerNowAsync.");
 
         // The scheduler is not started, so the fire's trigger is still stored: it carries the id the caller got back.
@@ -699,13 +698,13 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var record = await service.CreateJobAsync(ManualInput());
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Manual job must be registered before disabling.");
 
         var disabled = await service.SetEnabledAsync(record.Id, enabled: false);
         AssertEx.Equal(expected: false, disabled.Enabled);
 
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.False(await scheduler.Exists(jobKey, CancellationToken.None),
             "Disabling a Manual job must remove the durable Quartz job.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -734,17 +733,18 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await CorruptJobClassNameAsync(dbPath, record.Id,
             "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
-        // Before the heal, Quartz cannot materialize the job detail because its stored type does not resolve.
-        _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
-            scheduler.GetJobDetail(jobKey, CancellationToken.None));
+        // Before the heal the stored type does not resolve; Quartz 4 loads the detail and defers the failure to the fire.
+        var staleDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
+        AssertEx.False(staleDetail.JobType.TryResolve(out _), "The corrupted JOB_CLASS_NAME must not resolve before the heal.");
 
         // TriggerNowAsync re-adds the durable detail with the current type, then fires — it must NOT throw a type-load error.
         await service.TriggerNowAsync(record.Id);
 
         // After the heal the detail resolves again and the durable job remains registered.
         var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
+        AssertEx.True(healedDetail.JobType.TryResolve(out _), "The healed detail must name a type that resolves.");
         AssertEx.True(healedDetail.Durable, "The healed Manual job detail must remain durable.");
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "The job must remain registered after healing.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -768,15 +768,16 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await CorruptJobClassNameAsync(dbPath, record.Id,
             "XE_Local_AI_Engine.Client.Services.Scheduler.SchedulerDispatchJob, XE-Local-AI-Engine.Client.Application");
 
-        // Stale detail does not resolve before reconciliation.
-        _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
-            scheduler.GetJobDetail(jobKey, CancellationToken.None));
+        // Stale detail does not resolve before reconciliation; Quartz 4 loads it and defers the failure to the fire.
+        var staleDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
+        AssertEx.False(staleDetail.JobType.TryResolve(out _), "The corrupted JOB_CLASS_NAME must not resolve before reconciliation.");
 
         var healed = await service.ReconcileDurableJobsAsync();
         AssertEx.Equal(expected: 1, healed, "Exactly one stale durable job detail must be reconciled.");
 
         // The detail resolves again, the job is still registered, and its trigger schedule is untouched (still present).
         var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
+        AssertEx.True(healedDetail.JobType.TryResolve(out _), "The healed detail must name a type that resolves.");
         AssertEx.True(healedDetail.Durable, "The healed job detail must be durable.");
 
         var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
@@ -829,7 +830,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Equal("Updated Job", updated.DisplayName);
 
         // Quartz: job still exists (rescheduled, not removed).
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Quartz job must still exist after update.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -873,7 +874,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var created = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Job must be scheduled before disabling.");
 
         var disabled = await service.SetEnabledAsync(created.Id, enabled: false);
@@ -881,7 +882,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.True(disabled.DisabledAtUtc.HasValue, "DisabledAtUtc must be stamped on disable.");
 
         // Quartz: job must be removed.
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.False(await scheduler.Exists(jobKey, CancellationToken.None),
             "Quartz job must be unscheduled after SetEnabled(false).");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -903,14 +904,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
         await service.SetEnabledAsync(created.Id, enabled: false);
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.False(await scheduler.Exists(jobKey, CancellationToken.None),
             "Job must be unscheduled after disable.");
 
         var enabled = await service.SetEnabledAsync(created.Id, enabled: true);
         AssertEx.Equal(expected: true, enabled.Enabled);
         AssertEx.Null(enabled.DisabledAtUtc, "DisabledAtUtc must be cleared on re-enable.");
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Quartz job must be rescheduled after SetEnabled(true).");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -958,7 +959,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.NotNull(reloaded, "The definition must still exist after a rejected enable.");
         AssertEx.Equal(expected: false, reloaded!.Enabled, "A rejected enable must not persist Enabled=true.");
 
-        AssertEx.False(await scheduler.CheckExists(new JobKey(stored.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None),
+        AssertEx.False(await scheduler.Exists(new JobKey(stored.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None),
             "A rejected enable must not schedule anything in Quartz.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -980,13 +981,13 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var created = await service.CreateJobAsync(ValidCronInput());
         var jobKey = new JobKey(created.Id.ToString("N"), SchedulerJobKeys.Group);
 
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "Job must be scheduled before delete.");
 
         await service.DeleteJobAsync(created.Id);
 
         // Quartz: job removed.
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.False(await scheduler.Exists(jobKey, CancellationToken.None),
             "Quartz job must be removed after DeleteJobAsync.");
 
         // Store: definition excluded from default list (soft-deleted).
@@ -1049,7 +1050,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.SetEnabledAsync(created.Id, enabled: false));
         _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.UpdateJobAsync(created.Id, ValidCronInput()));
         _ = await AssertEx.ThrowsAsync<ScheduledJobNotFoundException>(() => service.TriggerNowAsync(created.Id));
-        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.False(await scheduler.Exists(jobKey, CancellationToken.None),
             "No action on a soft-deleted job may re-schedule its Quartz job.");
 
         // A second delete is an idempotent success: it neither throws nor re-stamps.
@@ -1119,29 +1120,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
 
     [Test]
-    public async Task CreateJobAsync_OptsJobIntoAutoInterrupt()
-    {
-        var dbPath = GetDatabasePath("create-autointerrupt.sqlite");
-        await MigrateAsync(dbPath);
-
-        await using var provider = BuildEnabledProvider(dbPath);
-        var service = provider.GetRequiredService<IScheduledJobManagementService>();
-        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
-        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
-        await scheduler.Start(CancellationToken.None);
-
-        var record = await service.CreateJobAsync(ValidCronInput());
-
-        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
-        AssertEx.Equal("true",
-            jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable),
-            "Every dispatch job must opt into the auto-interrupt monitor, else max-runtime enforcement is a no-op.");
-
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
-    }
-
-    [Test]
     public async Task CreateJobAsync_WithMaxRuntimeSeconds_StoresPerJobMaxRunTimeInMilliseconds()
     {
         var dbPath = GetDatabasePath("create-maxruntime.sqlite");
@@ -1157,9 +1135,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
         var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
-        // The plugin parses MaxRunTime as a millisecond long from its string form: 120 s → "120000".
+        // The dispatch runner parses the budget as a millisecond long from its string form: 120 s → "120000".
         AssertEx.Equal("120000",
-            jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            jobDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
             "Per-job max runtime must be persisted as milliseconds.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -1182,10 +1160,10 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
         var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
         // (600 s node timeout × 2 turn budgets) + 300 s slack → 1 500 000 ms. Without this the job fell back to the
-        // global 5-minute default and the auto-interrupt killed an unattended run long before its own invocation
+        // global 5-minute default and the max-runtime interrupt killed an unattended run long before its own invocation
         // deadline — which does not even start until the run holds the shared invocation slot.
         AssertEx.Equal("1500000",
-            jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            jobDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
             "A run-agent schedule with no operator ceiling must derive one from the node message timeout.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -1213,12 +1191,12 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var derivedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(derived.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("3900000",
-            derivedDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            derivedDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
             "Raising the node message timeout must raise the run-agent ceiling with it ((1800 s × 2) + 300 s slack).");
 
         var explicitDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(explicitCeiling.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("90000",
-            explicitDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            explicitDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
             "An operator-set per-schedule ceiling is authoritative and is never widened by the node setting.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -1248,12 +1226,12 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var legacyDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(legacy.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("1500000",
-            legacyDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            legacyDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
             "A stored 600 on run-agent is the removed template default and must be re-derived from the node timeout.");
 
         var otherDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(otherTemplate.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("600000",
-            otherDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
+            otherDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
             "The legacy-default carve-out belongs to the run-agent template alone.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
@@ -1479,7 +1457,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             services.AddSingleton(eventPublisher);
         }
 
-        return services.BuildServiceProvider();
+        return SchedulerShutdownGuard.AddTo(services);
     }
 
     private static IConfiguration BuildConfig(string connectionString)

@@ -67,7 +67,7 @@ public sealed class ManagedPythonToolchainLiveTests : IDisposable
                  [project]
                  name = "xe-store-{name}"
                  version = "0"
-                 requires-python = ">=3.13,<3.14"
+                 requires-python = ">=3.14,<3.15"
                  dependencies = ["six==1.17.0"]
                  """);
             var exit = await runner.RunAsync(uv,
@@ -94,10 +94,10 @@ public sealed class ManagedPythonToolchainLiveTests : IDisposable
                 StepTimeout,
                 CancellationToken.None);
             AssertEx.Equal(0, exit, string.Join('\n', output));
-            AssertEx.Contains(string.Join('\n', output), "1.17.0 (3, 13)");
+            AssertEx.Contains(string.Join('\n', output), "1.17.0 (3, 14)");
         }
 
-        var installs = Directory.GetDirectories(toolchain.PythonInstallDirectory, "cpython-3.13.*");
+        var installs = Directory.GetDirectories(toolchain.PythonInstallDirectory, "cpython-3.14.*");
         AssertEx.Equal(1, installs.Length, "one CPython minor serves both environments: " + string.Join(", ", installs));
     }
 }

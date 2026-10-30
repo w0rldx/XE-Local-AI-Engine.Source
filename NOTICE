@@ -46,8 +46,8 @@ components detected in a particular build.
      assets come from the pinned nightly release tag recorded in
      `WhisperCppReleasePins.PinnedTag`; managed source builds check out the
      pinned commit in `WhisperCppReleasePins.PinnedSourceCommitSha`
-     (927cfce34f31707e17f2bff35c349632fb9e2c3a, the peeled commit of tag
-     v1.9.4).
+     (d1be6fde11ac6e0407606b4e42fe72d34add8037, the peeled commit of tag
+     v1.9.5).
    - Silero VAD — MIT — https://github.com/snakers4/silero-vad
      The voice-activity model `whisper-server` is launched with. The ggml
      conversion the application downloads (`ggml-silero-v6.2.0.bin`) is

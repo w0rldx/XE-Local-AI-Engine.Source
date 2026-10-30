@@ -177,3 +177,38 @@ restarts and re-counts the links already followed whenever anything on the box m
 reliably resolvable while other tests launch sandboxes. **Prevents:** a fixture that resolves alone and fails `stat`
 with ELOOP inside a gate, as `SandboxedMcpStdioTransport.MaxLinkHops` did at 40 in the 2026-10-22 gate reds.
 **Authority:** `SandboxedMcpStdioTransport.MaxLinkHops`; `SandboxedMcpStdioTransportTests`.
+
+### A Quartz 4 scheduler a test starts must be shut down, or the test host never exits
+
+**Rule:** a test that builds a provider with `AddNodeScheduler` registers `SchedulerShutdownGuard.AddTo` and disposes
+it, so every scheduler the provider started is shut down even when the test fails before its own `Shutdown`.
+Production keeps `store.UseBackgroundThreads = true` in `ConfigureStore`. **Prevents:** a Quartz 4 ADO store's misfire
+handler, a foreground thread by default (3.x never was), keeping the test host alive after one failed scheduler test,
+so the whole run hangs instead of reporting the red (Quartz 4.6.2 round, 2026-10-30). **Authority:**
+`SchedulerShutdownGuard`; `NodeSchedulerServiceCollectionExtensions.AddNodeScheduler`.
+
+### Backend and contract gates run on the plain login `PATH`, never with toolchain shims first
+
+**Rule:** run `scripts/run-backend-tests.sh` and the contract lane from a shell whose `PATH` does not start with the
+`mise` shims directory. Only a live dev-host shell puts the shims first, and one that also sets a scratch
+`XDG_DATA_HOME` exports `MISE_DATA_DIR` back to the user-level data directory, because the scratch value moves
+`mise`'s own data directory and its installed tools with it. **Prevents:** `dotnet` and `python3` resolving through a
+shim the dev-workflow sandbox cannot reach, which fails the sandbox tests with `runner_not_installed`, and the contract
+lane failing on an untrusted `mise.toml` (dependency majors round, 2026-10-30). **Authority:** `mise.toml`;
+`DevelopmentTestResultAdapter.RunnerNotInstalled`.
+
+### pnpm 12 writes `minimumReleaseAgeExclude` entries on its own; revert them
+
+**Rule:** after a `pnpm add` or `pnpm update` that requests a version younger than `minimumReleaseAge` (7 days), diff
+`XE-Local-AI-Engine.Client.React/pnpm-workspace.yaml` and revert any `minimumReleaseAgeExclude` entry you did not mean
+to add; every entry carries a comment saying why it is exempt. Wait out the age instead, or pick the newest version
+that is old enough. **Prevents:** a lockfile that silently bypasses the maturity hold for whatever the update touched
+(pnpm 12.16.1, 2026-10-30). **Authority:** `minimumReleaseAge` and `minimumReleaseAgeExclude` in
+`XE-Local-AI-Engine.Client.React/pnpm-workspace.yaml`.
+
+### Ruff's `py314` target rewrites multi-type `except`; `scripts/**` keep `py313`
+
+**Rule:** keep `per-file-target-version = { "scripts/**" = "py313" }` in the root `pyproject.toml` `[tool.ruff]` table
+while any script runs under the host's `python3` rather than a uv-managed 3.14. **Prevents:** the formatter rewriting
+`except (A, B):` to the PEP 758 parenthesis-free form, which is a `SyntaxError` on a 3.13 host (`dev-start.sh`,
+`release.yml`) (Python 3.14 round, 2026-10-30). **Authority:** the root `pyproject.toml` `[tool.ruff]`.

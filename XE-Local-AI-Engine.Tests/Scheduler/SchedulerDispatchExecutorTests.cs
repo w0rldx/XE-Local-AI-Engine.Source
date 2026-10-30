@@ -303,7 +303,7 @@ public sealed class SchedulerDispatchExecutorTests
     }
 
     // Quartz interrupts running jobs on a host stop, and that cancellation is recorded as Cancelled, never
-    // as "exceeded its maximum runtime"; only the max-runtime plugin's interrupt is a timeout.
+    // as "exceeded its maximum runtime"; only the dispatch runner's max-runtime interrupt is a timeout.
     [Test]
     [Arguments(true, ScheduledRunStatus.Cancelled, "shutting down")]
     [Arguments(false, ScheduledRunStatus.TimedOut, "maximum runtime")]

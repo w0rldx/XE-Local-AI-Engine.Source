@@ -13,7 +13,8 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// <remarks>
 ///     The rate token is the anchor, NOT the fraction: three different sd.cpp lines carry an <c>N/M</c> pair and only the one ending in
 ///     a per-iteration rate is a sampler step. Captured by hexdump at <c>master-742-1a13107</c> (the capture behind
-///     <see cref="SdOutputFrameSplitter" />); the printer and anchor lines are source-identical at <c>master-913-b167b94</c>. See
+///     <see cref="SdOutputFrameSplitter" />); since <c>master-1028-37bc88b</c> the step bar may end in an <c>- ETA mm:ss</c> suffix
+///     after the rate, and log lines put the source location last (<c>[I] message --- file.cpp:123</c>). See
 ///     docs/wiki/14-image-generation.md ("The rate token is the anchor, not the fraction").
 /// </remarks>
 internal static partial class SdProgressLineParser
@@ -119,7 +120,8 @@ internal static partial class SdProgressLineParser
     ///     The sampler step bar. Anchored at end-of-line on the iteration-rate token, which is what separates it from
     ///     the tensor-loader bar (<c>MB/s</c>) and the batch counter (no rate at all).
     /// </summary>
-    [GeneratedRegex(@"(?<step>\d+)\s*/\s*(?<total>\d+)\s*-\s*(?<rate>\d+(?:\.\d+)?)\s*(?<unit>s/it|it/s)\s*$",
+    /// <remarks>An optional <c>- ETA mm:ss</c> (or <c>h:mm:ss</c>) follows the rate once a generation is estimated at 15 s or more.</remarks>
+    [GeneratedRegex(@"(?<step>\d+)\s*/\s*(?<total>\d+)\s*-\s*(?<rate>\d+(?:\.\d+)?)\s*(?<unit>s/it|it/s)(?:\s*-\s*ETA\s+\d+(?::\d{2}){1,2})?\s*$",
         RegexOptions.ExplicitCapture,
         RegexTimeoutMilliseconds)]
     private static partial Regex SamplerStepPattern();

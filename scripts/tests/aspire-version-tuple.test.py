@@ -11,7 +11,7 @@ APPHOST_PROJECT = REPO_ROOT / "XE-Local-AI-Engine.AppHost" / "XE-Local-AI-Engine
 
 ASPIRE_RELEASE_VERSION = "13.6.4"
 ASPIRE_BROWSERS_VERSION = "13.6.4-preview.1.26523.11"
-SQLITE_TOOLKIT_VERSION = "13.6.0"
+SQLITE_TOOLKIT_VERSION = "13.6.1"
 
 
 def central_package_versions() -> dict[str, str]:

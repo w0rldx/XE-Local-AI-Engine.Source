@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using System.Globalization;
 using System.Text.Json;
 using Quartz;
-using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -251,7 +250,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(definition.Id);
-        if (!await scheduler.CheckExists(jobKey, cancellationToken))
+        if (!await scheduler.Exists(jobKey, cancellationToken))
         {
             throw new ScheduledJobValidationException("This job is not currently scheduled and cannot be triggered.");
         }
@@ -260,7 +259,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         // refreshes JOB_CLASS_NAME, is a no-op for a current job and never fires it. Best-effort — a transient failure logs and continues.
         try
         {
-            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), replace: true, cancellationToken);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), AddJobOptions.Replacing, cancellationToken);
         }
         catch (SchedulerException ex)
         {
@@ -321,14 +320,14 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             }
 
             var jobKey = BuildJobKey(definition.Id);
-            if (!await scheduler.CheckExists(jobKey, cancellationToken))
+            if (!await scheduler.Exists(jobKey, cancellationToken))
             {
                 // No persisted JobDetail yet (e.g. the scheduler is enabling for the first time after the definition was
                 // stored). Leave creation to CreateJobAsync/SetEnabledAsync — reconciliation only refreshes existing rows.
                 continue;
             }
 
-            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), replace: true, cancellationToken);
+            await scheduler.AddJob(await BuildJobDetailAsync(definition, cancellationToken), AddJobOptions.Replacing, cancellationToken);
             healedCount++;
         }
 
@@ -372,7 +371,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
 
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
-        var wasInterrupted = await scheduler.Interrupt(run.QuartzFireInstanceId, cancellationToken);
+        var wasInterrupted = await scheduler.InterruptFireInstance(run.QuartzFireInstanceId, cancellationToken);
 
         _logger.LogInformation("Cancellation requested for run {RunId} (job {ScheduledJobId}); Quartz interrupt active={WasInterrupted}.",
             runId,
@@ -513,7 +512,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
                     throw new ScheduledJobValidationException("A cron expression is required for a cron schedule.");
                 }
 
-                if (!CronExpression.IsValidExpression(input.CronExpression) || ContainsQuartzWildcardValue(input.CronExpression))
+                if (!CronExpression.TryParse(input.CronExpression, out _) || ContainsQuartzWildcardValue(input.CronExpression))
                 {
                     throw new ScheduledJobValidationException("The cron expression is not valid.");
                 }
@@ -596,11 +595,8 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
 
         // Quartz computes a cron trigger's first fire from one second before its start.
-        var cron = new CronExpression(input.CronExpression!)
-        {
-            TimeZone = timeZone
-        };
-        if (cron.GetTimeAfter(start.AddSeconds(-1)) is not { } firstFire || firstFire > end)
+        var cron = new CronExpression(input.CronExpression!, timeZone);
+        if (cron.GetNextValidTimeAfter(start.AddSeconds(-1)) is not { } firstFire || firstFire > end)
         {
             throw new ScheduledJobValidationException("The schedule never fires before its end time.");
         }
@@ -693,13 +689,13 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         {
             // A Manual job is a durable on-demand job with NO trigger: it never auto-fires, only TriggerNowAsync fires it. AddJob
             // requires a durable detail, which BuildJobDetail already stores, so it registers a trigger-less job.
-            await scheduler.AddJob(jobDetail, replace: true, cancellationToken);
+            await scheduler.AddJob(jobDetail, AddJobOptions.Replacing, cancellationToken);
             return;
         }
 
         var trigger = BuildTrigger(record, _timeProvider); // pass TimeProvider for SimpleInterval StartAt default
 
-        _ = await scheduler.ScheduleJob(jobDetail, trigger, cancellationToken);
+        _ = await scheduler.ScheduleJob(jobDetail, trigger, cancellationToken: cancellationToken);
     }
 
     private static JobKey BuildJobKey(Guid definitionId)
@@ -718,21 +714,18 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             ? typeof(NonOverlappingSchedulerDispatchJob)
             : typeof(SchedulerDispatchJob);
 
-        var builder = JobBuilder.Create(jobType)
+        var builder = JobBuilder.Create().OfType(jobType)
                                 .WithIdentity(BuildJobKey(record.Id))
                                 .UsingJobData(SchedulerJobKeys.ScheduledJobIdKey, record.Id.ToString())
-                                // Opt this job into the auto-interrupt monitor, as the string "true" because the job
-                                // store persists only strings. Without this key the global DefaultMaxRunTime never applies.
-                                .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable, "true")
                                 .StoreDurably();
 
-        // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling. The plugin parses
-        // MaxRunTime as a millisecond long from its string form, and with neither value the global default applies.
+        // Per-job max-runtime: the operator's explicit value when set, otherwise the template's derived ceiling. The dispatch runner
+        // parses it as a millisecond long from its string form, and with neither value the global default applies.
         var maxRuntimeSeconds = await ResolveMaxRuntimeSecondsAsync(record, cancellationToken);
 
         if (maxRuntimeSeconds is > 0)
         {
-            builder = builder.UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime,
+            builder = builder.UsingJobData(SchedulerJobKeys.MaxRuntimeMillisecondsKey,
                 (maxRuntimeSeconds.Value * 1000L).ToString(CultureInfo.InvariantCulture));
         }
 
@@ -773,7 +766,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     private static ITrigger BuildTrigger(ScheduledJobDefinitionRecord record, TimeProvider timeProvider)
     {
         var jobKey = BuildJobKey(record.Id);
-        var builder = TriggerBuilder.Create()
+        var builder = TriggerBuilder.Create(timeProvider)
                                     .WithIdentity(BuildTriggerKey(record.Id))
                                     .ForJob(jobKey);
 
@@ -788,7 +781,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return builder.Build();
     }
 
-    private static TriggerBuilder ApplyCronSchedule(TriggerBuilder builder, ScheduledJobDefinitionRecord record)
+    private static TriggerBuilder<IJob> ApplyCronSchedule(TriggerBuilder<IJob> builder, ScheduledJobDefinitionRecord record)
     {
         var cron = record.CronExpression
                    ?? throw new ScheduledJobValidationException("A cron expression is required for a cron schedule.");
@@ -813,7 +806,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return builder;
     }
 
-    private static TriggerBuilder ApplySimpleSchedule(TriggerBuilder builder, ScheduledJobDefinitionRecord record, TimeProvider timeProvider)
+    private static TriggerBuilder<IJob> ApplySimpleSchedule(TriggerBuilder<IJob> builder, ScheduledJobDefinitionRecord record, TimeProvider timeProvider)
     {
         var intervalSeconds = record.IntervalSeconds
                               ?? throw new ScheduledJobValidationException("An interval is required for a simple-interval schedule.");
@@ -846,7 +839,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return builder;
     }
 
-    private static TriggerBuilder ApplyOneShotSchedule(TriggerBuilder builder, ScheduledJobDefinitionRecord record)
+    private static TriggerBuilder<IJob> ApplyOneShotSchedule(TriggerBuilder<IJob> builder, ScheduledJobDefinitionRecord record)
     {
         var startAt = record.StartAtUtc
                       ?? throw new ScheduledJobValidationException("A start time is required for a one-shot schedule.");
@@ -862,11 +855,11 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         switch (policy)
         {
             case SchedulerMisfirePolicy.SkipMissed:
-                _ = builder.WithMisfireHandlingInstructionDoNothing();
+                _ = builder.WithMisfireInstruction(CronTriggerMisfireInstruction.DoNothing);
                 break;
 
             case SchedulerMisfirePolicy.FireOnceNow:
-                _ = builder.WithMisfireHandlingInstructionFireAndProceed();
+                _ = builder.WithMisfireInstruction(CronTriggerMisfireInstruction.FireAndProceed);
                 break;
 
             case SchedulerMisfirePolicy.Smart:
@@ -881,11 +874,11 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         switch (policy)
         {
             case SchedulerMisfirePolicy.SkipMissed:
-                _ = builder.WithMisfireHandlingInstructionNextWithRemainingCount();
+                _ = builder.WithMisfireInstruction(SimpleTriggerMisfireInstruction.NextWithRemainingCount);
                 break;
 
             case SchedulerMisfirePolicy.FireOnceNow:
-                _ = builder.WithMisfireHandlingInstructionFireNow();
+                _ = builder.WithMisfireInstruction(SimpleTriggerMisfireInstruction.FireNow);
                 break;
 
             case SchedulerMisfirePolicy.Smart:

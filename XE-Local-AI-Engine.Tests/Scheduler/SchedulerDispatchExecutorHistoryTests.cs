@@ -232,7 +232,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             return Task.CompletedTask;
         });
         var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
-        // No cancellation requested → the only token-cancel source is the auto-interrupt max-runtime plugin.
+        // No cancellation requested → the only token-cancel source is the dispatch runner's max-runtime budget.
         runStore.GetByIdAsync(RunId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running)));
 

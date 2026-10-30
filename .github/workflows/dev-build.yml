@@ -56,7 +56,7 @@ jobs:
       - name: Setup pinned Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Compute Development build identity
         id: identity
@@ -87,8 +87,8 @@ jobs:
         if: steps.identity.outputs.skip != 'true'
         shell: bash
         env:
-          GIT_CLIFF_VERSION: "2.13.1"
-          GIT_CLIFF_SHA256: "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546"
+          GIT_CLIFF_VERSION: "2.14.2"
+          GIT_CLIFF_SHA256: "24f397c733add5390fdceee3a2088588ab0d5f944ce00d34cb7029b888cf2db4"
         run: |
           set -euo pipefail
           TARBALL="git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
@@ -502,7 +502,7 @@ jobs:
       - name: Setup pinned Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.13'
+          python-version: '3.14'
 
       - name: Delete superseded Development releases, never their tags
         shell: bash

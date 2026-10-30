@@ -40,7 +40,7 @@ public sealed class WhisperAssetPin
 ///     bring-your-own override is active.
 /// </summary>
 /// <remarks>
-///     Pinned tag <c>b5130</c>, fetched from <c>https://github.com/ggml-org/whisper.cpp/releases/download/{tag}/{asset}</c>.
+///     Pinned tag <c>b5454</c>, fetched from <c>https://github.com/ggml-org/whisper.cpp/releases/download/{tag}/{asset}</c>.
 ///     whisper.cpp ships release binaries ONLY on its nightly <c>b&lt;n&gt;</c> tags — the semantic <c>v1.9.x</c> tags carry zero
 ///     assets — and it publishes no <c>.sha256</c> sidecars, so digests come from the GitHub release-assets API <c>digest</c> field. It
 ///     ships NO prebuilt Linux CUDA asset either. See docs/wiki/24-audio-transcription.md
@@ -49,35 +49,36 @@ public sealed class WhisperAssetPin
 public static class WhisperCppReleasePins
 {
     /// <summary>The pinned whisper.cpp nightly release tag every prebuilt asset below is taken from.</summary>
-    public const string PinnedTag = "b5130";
+    public const string PinnedTag = "b5454";
 
     /// <summary>
     ///     The exact canonical source revision official managed builds check out — a <b>peeled commit SHA</b>, never a
     ///     tag object.
     /// </summary>
     /// <remarks>
-    ///     <c>v1.9.4</c> is an ANNOTATED tag: the Git refs API returns the tag object
-    ///     <c>7d75b14994ae7f59623e2471445e2355fe506ed2</c>, which is not a commit and which nothing can fetch or check
+    ///     <c>v1.9.5</c> is an ANNOTATED tag: the Git refs API returns the tag object
+    ///     <c>d2a764c648779feb36d44363f212a29b00aad1af</c>, which is not a commit and which nothing can fetch or check
     ///     out. Dereferencing it yields this value, which is also <see cref="PinnedTag" />'s <c>target_commitish</c>.
     ///     The source build fetches this SHA directly and must never re-derive it from a tag name at build time.
     /// </remarks>
-    public const string PinnedSourceCommitSha = "927cfce34f31707e17f2bff35c349632fb9e2c3a";
+    public const string PinnedSourceCommitSha = "d1be6fde11ac6e0407606b4e42fe72d34add8037";
 
     // Both Windows archives nest the executable under Release/; the Linux tarball under its single top-level dir.
     private const string WindowsServerPath = "Release/whisper-server.exe";
     private const string LinuxServerPath = "whisper-bin-ubuntu-x64/whisper-server";
 
-    // Keyed by (os, arch, backend). Verified against the b5130 release-assets digest API on 2026-09-11; the two
-    // downloadable assets were additionally fetched and re-hashed locally, and both matched.
+    // Keyed by (os, arch, backend). Verified against the b5454 release-assets digest API on 2026-10-30; the Linux tarball
+    // was additionally fetched and re-hashed locally and matched, and every archive's server path was listed remotely.
     private static readonly IReadOnlyDictionary<PinKey, WhisperAssetPin> Pins =
         new Dictionary<PinKey, WhisperAssetPin>
         {
-            // Windows x64 — the cuBLAS build bundles its own CUDA runtime DLLs, so there is no companion archive.
+            // Windows x64 — the CUDA build bundles its own CUDA runtime DLLs, so there is no companion archive. Upstream
+            // renamed this asset from whisper-cublas-12.4.0-bin-x64.zip after b5130; the layout is unchanged.
             [new PinKey(OSPlatform.Windows, Architecture.X64, WhisperBackend.Cuda)] =
                 new()
                 {
-                    AssetName = "whisper-cublas-12.4.0-bin-x64.zip",
-                    Sha256 = "af520ddd034d985b55dfeea3e465ed93653ba2aee1a55e865033edc548c272a7",
+                    AssetName = "whisper-bin-win-cuda-12.4.0-x64.zip",
+                    Sha256 = "afef0b881c500958921c3f5523b50e59ee2ec9b6f5cbd25b324c51ed308a957a",
                     ServerRelativePath = WindowsServerPath,
                     ArchiveKind = WhisperArchiveKind.Zip
                 },
@@ -85,7 +86,7 @@ public static class WhisperCppReleasePins
                 new()
                 {
                     AssetName = "whisper-bin-x64.zip",
-                    Sha256 = "f9ec6c52a2e949b62ab51fa21d0d497958f9e41c3010c157c4e42932d5316f3c",
+                    Sha256 = "6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb",
                     ServerRelativePath = WindowsServerPath,
                     ArchiveKind = WhisperArchiveKind.Zip
                 },
@@ -95,7 +96,7 @@ public static class WhisperCppReleasePins
                 new()
                 {
                     AssetName = "whisper-bin-ubuntu-x64.tar.gz",
-                    Sha256 = "53e7fd8b5764edad916b8848dd0af6abb1ff1d3b86c899e79c78652412536c32",
+                    Sha256 = "a72becf15d7917f990f6313867a52638b82b7f9ef237fb0c980dac56a135781c",
                     ServerRelativePath = LinuxServerPath,
                     ArchiveKind = WhisperArchiveKind.TarGz
                 }

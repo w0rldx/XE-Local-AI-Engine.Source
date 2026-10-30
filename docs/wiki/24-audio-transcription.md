@@ -1137,7 +1137,7 @@ a link.
 ## The pinned whisper.cpp prebuilt release table
 
 `WhisperCppReleasePins` is the acquisition source `WhisperCppBinaryManager` uses when no managed source-built runtime
-is selected and no bring-your-own override is active. The pinned tag is **`b5130`**, and assets come from
+is selected and no bring-your-own override is active. The pinned tag is **`b5454`**, and assets come from
 `https://github.com/ggml-org/whisper.cpp/releases/download/{tag}/{asset}`.
 
 whisper.cpp ships release binaries **only** on its nightly `b<n>` tags; the semantic `v1.9.x` tags carry zero assets,
@@ -1146,7 +1146,7 @@ release-assets API `digest` field, because whisper.cpp publishes no `.sha256` si
 
 **Constraint:** whisper.cpp ships no prebuilt Linux CUDA asset. A Linux NVIDIA box therefore resolves the Ubuntu CPU
 tarball, and the CUDA lane on Linux is the managed source build or the `XE_WHISPERCPP_SERVER_PATH` override. Unlike
-stable-diffusion.cpp there is no separate cudart companion archive: the Windows cuBLAS zip bundles `cudart64_12.dll`,
+stable-diffusion.cpp there is no separate cudart companion archive: the Windows CUDA zip bundles `cudart64_12.dll`,
 `cublas64_12.dll`, `cublasLt64_12.dll` and the `nvrtc` pair itself.
 
 ## The bring-your-own whisper-server override

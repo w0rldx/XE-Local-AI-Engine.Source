@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act, renderHook } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { createElement, type ReactNode, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -170,13 +171,18 @@ function cancelRouteFails(calls: string[]): void {
 	);
 }
 
+/** Every QueryClient a test rendered with, so teardown can wait out the mutations its unmount started. */
+const renderedClients: QueryClient[] = [];
+
 function renderCapture() {
-	const { wrapper } = createProvidersWrapper();
+	const { wrapper, queryClient } = createProvidersWrapper();
+	renderedClients.push(queryClient);
 	return renderHook(() => useLiveCapture(sessionId), { wrapper });
 }
 
 function renderCaptureStrict() {
-	const { wrapper: Providers } = createProvidersWrapper();
+	const { wrapper: Providers, queryClient } = createProvidersWrapper();
+	renderedClients.push(queryClient);
 	const wrapper = ({ children }: { children: ReactNode }) =>
 		createElement(StrictMode, null, createElement(Providers, null, children));
 	return renderHook(() => useLiveCapture(sessionId), { wrapper });
@@ -213,7 +219,23 @@ describe("useLiveCapture", () => {
 		hub.terminal = null;
 	});
 
-	afterEach(() => {
+	// Unmounting a capture that is still open cancels its session over REST, and MSW resolves that request
+	// asynchronously: left to the suite's own cleanup it would land on the NEXT test's cancel route and be counted
+	// there. So this file unmounts itself and waits until every mutation the unmount started has settled. The
+	// unmount issues the cancel only after its sources' `stop()` promises, so one macrotask turn drains that
+	// microtask chain first; it is an ordering point, not a timed wait.
+	afterEach(async () => {
+		cleanup();
+		await new Promise((resolve) => setImmediate(resolve));
+		await vi.waitFor(() => {
+			const unsettled = renderedClients
+				.flatMap((client) => client.getMutationCache().getAll())
+				.filter((mutation) => mutation.state.status === "idle" || mutation.state.status === "pending").length;
+			if (unsettled > 0) {
+				throw new Error(`${unsettled} mutation(s) still in flight after unmount`);
+			}
+		});
+		renderedClients.length = 0;
 		vi.clearAllMocks();
 	});
 
@@ -1089,7 +1111,8 @@ describe("useLiveCapture", () => {
 		});
 
 		expect(result.current.error).toBe("disconnected");
-		expect(result.current.state).toBe("idle");
+		// Idle only once the REST cancel has answered, which MSW resolves on a later turn than this act flushes.
+		await vi.waitFor(() => expect(result.current.state).toBe("idle"));
 		expect(sources.get("microphone")?.stopped).toBe(true);
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
 		expect(hub.endSession).not.toHaveBeenCalled();

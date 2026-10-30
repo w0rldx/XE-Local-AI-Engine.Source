@@ -28,7 +28,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     ///     Absolute hard ceiling on a single runtime download.
     /// </summary>
     /// <remarks>
-    ///     The largest pinned asset is the 674 MB cuBLAS zip, so this is a disk-exhaustion guard against a hostile or
+    ///     The largest pinned asset is the 685 MB Windows CUDA zip, so this is a disk-exhaustion guard against a hostile or
     ///     buggy server streaming an unbounded body, not a limit any honest asset approaches.
     /// </remarks>
     private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;

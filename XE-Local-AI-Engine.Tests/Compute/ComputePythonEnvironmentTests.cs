@@ -296,7 +296,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
     {
         // uv names the alias directory as home; CPython cannot resolve that link inside the AppContainer boundary and warns on stderr.
         var versioned = StoreInterpreterDirectory();
-        var alias = Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13-windows-x86_64-none");
+        var alias = Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.14-windows-x86_64-none");
         _ = Directory.CreateSymbolicLink(alias, versioned);
         var interpreter = WriteLauncherVenv(alias);
 
@@ -329,7 +329,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
     // A store CPython directory holding python.exe, the directory uv names as `home` in a Windows venv.
     private string StoreInterpreterDirectory()
     {
-        var directory = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13.15-windows-x86_64-none")).FullName;
+        var directory = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.14.10-windows-x86_64-none")).FullName;
         File.WriteAllText(Path.Combine(directory, "python.exe"), string.Empty);
         return directory;
     }
@@ -340,7 +340,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         var scripts = Directory.CreateDirectory(Path.Combine(VenvRoot, "Scripts")).FullName;
         var interpreter = Path.Combine(scripts, "python.exe");
         File.WriteAllText(interpreter, "launcher");
-        File.WriteAllText(Path.Combine(VenvRoot, "pyvenv.cfg"), $"implementation = CPython\nhome = {home}\nversion_info = 3.13.15\n");
+        File.WriteAllText(Path.Combine(VenvRoot, "pyvenv.cfg"), $"implementation = CPython\nhome = {home}\nversion_info = 3.14.10\n");
         return interpreter;
     }
 
@@ -883,7 +883,7 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         AssertEx.Equal("The pinned compute runtime lockfile is missing from this installation. The previous compute runtime stays in service.", status.Reason);
     }
 
-    private string StoreInterpreter => Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13.15-linux-x86_64-gnu", "bin", "python3.13");
+    private string StoreInterpreter => Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.14.10-linux-x86_64-gnu", "bin", "python3.14");
 
     /// <summary>Like <see cref="SucceedingRunner" />, but bin/python is a real symlink into the store, as uv writes it.</summary>
     private FakeProcessRunner StoreLinkedRunner()

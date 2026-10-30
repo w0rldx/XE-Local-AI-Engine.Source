@@ -44,11 +44,11 @@ test("fails clearly when the value is missing, unreadable or inconsistent", () =
 });
 
 test("passes on CI's major, refuses another and names the command to run instead", () => {
-	assert.deepEqual(checkNodeMajor({ runningVersion: "22.23.2", ciMajor: 22, allowDrift: false }), { status: "ok" });
-	const refused = checkNodeMajor({ runningVersion: "24.21.0", ciMajor: 22, allowDrift: false });
+	assert.deepEqual(checkNodeMajor({ runningVersion: "26.13.0", ciMajor: 26, allowDrift: false }), { status: "ok" });
+	const refused = checkNodeMajor({ runningVersion: "24.21.0", ciMajor: 26, allowDrift: false });
 	assert.equal(refused.status, "fail");
-	assert.match(refused.message, /Running Node 24\.21\.0 \(major 24\); CI runs acceptance on Node 22\./);
-	assert.match(refused.message, /mise exec node@22 -- pnpm run acceptance/);
+	assert.match(refused.message, /Running Node 24\.21\.0 \(major 24\); CI runs acceptance on Node 26\./);
+	assert.match(refused.message, /mise exec node@26 -- pnpm run acceptance/);
 	assert.match(refused.message, /XE_ALLOW_NODE_DRIFT=1/);
 });
 

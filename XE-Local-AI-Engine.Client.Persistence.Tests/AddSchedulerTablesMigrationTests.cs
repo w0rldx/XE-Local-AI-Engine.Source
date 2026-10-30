@@ -27,12 +27,13 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
         "QRTZ_LOCKS"
     ];
 
+    // The up tests migrate to head, where UpgradeQuartzSchemaTo46 has renamed the cascade triggers to the 4.x QRTZ_ names.
     private static readonly string[] ExpectedDeleteTriggers =
     [
-        "DELETE_SIMPLE_TRIGGER",
-        "DELETE_SIMPROP_TRIGGER",
-        "DELETE_CRON_TRIGGER",
-        "DELETE_BLOB_TRIGGER"
+        "QRTZ_DELETE_SIMPLE_TRIGGER",
+        "QRTZ_DELETE_SIMPROP_TRIGGER",
+        "QRTZ_DELETE_CRON_TRIGGER",
+        "QRTZ_DELETE_BLOB_TRIGGER"
     ];
 
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();

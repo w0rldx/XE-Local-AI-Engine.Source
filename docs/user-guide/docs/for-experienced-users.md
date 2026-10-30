@@ -12,7 +12,7 @@ guessing.
 
 | | |
 |---|---|
-| **Engine** | llama.cpp, pinned to upstream tag **`b11803`** |
+| **Engine** | llama.cpp, pinned to upstream tag **`b12014`** |
 | **Backends** | CUDA (Windows, Linux x64), Vulkan (Windows/Linux), CPU |
 | **Runtime integrity** | Each binary pinned to an exact upstream asset + **SHA-256 verified before extraction**; mismatch aborts |
 | **Default context** | **8192 tokens** |
@@ -55,7 +55,7 @@ The app manages llama.cpp itself; you don't install a server. Binaries are pinne
 (OS, arch, backend) with their upstream asset name **and SHA-256**, verified before extraction — a
 mismatch aborts rather than running.
 
-**Windows** gets a prebuilt CUDA runtime (`llama-b11803-bin-win-cuda-12.4-x64.zip`) or Vulkan.
+**Windows** gets a prebuilt CUDA runtime (`llama-b12014-bin-win-cuda-12.4-x64.zip`) or Vulkan.
 
 **Linux x64** with an NVIDIA GPU gets a prebuilt CUDA 12.8 runtime (needs an NVIDIA driver from the 525
 series or newer); Linux arm64 uses Vulkan. For a custom fork or a specific commit there's an in-app

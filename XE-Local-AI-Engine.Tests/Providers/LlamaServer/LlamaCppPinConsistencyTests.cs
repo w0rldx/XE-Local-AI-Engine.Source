@@ -75,17 +75,17 @@ public sealed class LlamaCppPinConsistencyTests
     }
 
     [Test]
-    public void LinuxX64CudaPin_CarriesTheVerifiedB11803AssetsAndATagPrefixedCompanion()
+    public void LinuxX64CudaPin_CarriesTheVerifiedB12014AssetsAndATagPrefixedCompanion()
     {
         // Outside PinnedCombinations (whose tuples are frozen), so asserted exactly here. Digests from the release-assets digest API;
         // unlike Windows, the Linux companion IS tag-prefixed upstream.
         var pin = AssertEx.NotNull(LlamaCppReleasePins.ResolveExactOrNull(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda));
 
-        AssertEx.Equal("llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.AssetName);
-        AssertEx.Equal("4594be0afdddcfdf15e82f4fbd6805c60c399eaa62b181432ccaf3de87ef36d0", pin.Sha256);
+        AssertEx.Equal("llama-b12014-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.AssetName);
+        AssertEx.Equal("d1c5fd043805c78ed6a4a43ae4d54584ff144dbdaa106acf0c278c150b8d640b", pin.Sha256);
         AssertEx.Equal("build/bin/llama-server", pin.ServerRelativePath);
-        AssertEx.Equal("cudart-llama-b11803-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.CudartAssetName);
-        AssertEx.Equal("38af6ae05c2d7313a577e1dafc5527950b16ad62193e2a0e7c278b504ea5d7e4", pin.CudartSha256);
+        AssertEx.Equal("cudart-llama-b12014-bin-ubuntu-cuda-12.8-x64.tar.gz", pin.CudartAssetName);
+        AssertEx.Equal("b8a469b60dbf9e39621b56f66af6ddd4618f110ab1eac9ff1c055eec52f5d864", pin.CudartSha256);
     }
 
     [Test]

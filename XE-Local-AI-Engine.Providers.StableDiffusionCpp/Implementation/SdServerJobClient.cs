@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 /// </summary>
 /// <remarks>
 ///     Prompts pass through the request body but are NEVER logged here. Frozen field-level against
-///     stable-diffusion.cpp @ <c>master-913-b167b94</c>.
+///     stable-diffusion.cpp @ <c>master-1028-37bc88b</c>.
 /// </remarks>
 internal sealed class SdServerJobClient
 {
@@ -106,8 +106,9 @@ internal sealed class SdServerJobClient
     }
 
     /// <summary>
-    ///     Requests cancellation of one job (<c>POST /sdcpp/v1/jobs/{id}/cancel</c>). <c>200</c> (queued/terminal)→
-    ///     <see cref="SdCancelOutcome.Cancelled" />, <c>409</c> (generating)→<see cref="SdCancelOutcome.Generating" />,
+    ///     Requests cancellation of one job (<c>POST /sdcpp/v1/jobs/{id}/cancel</c>). <c>200</c> (queued/terminal, or generating
+    ///     on builds that interrupt a running job)→<see cref="SdCancelOutcome.Cancelled" />, <c>409</c> (generating on older builds)→
+    ///     <see cref="SdCancelOutcome.Generating" />,
     ///     <c>404</c>/<c>410</c>→<see cref="SdCancelOutcome.NotFoundOrGone" />.
     /// </summary>
     public async Task<SdCancelOutcome> CancelAsync(Uri baseAddress, string jobId, CancellationToken ct)

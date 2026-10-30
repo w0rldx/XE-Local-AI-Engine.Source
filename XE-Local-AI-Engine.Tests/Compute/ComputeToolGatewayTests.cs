@@ -681,7 +681,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public void StripRealpathWarning_DropsOnlyTheLineNamingTheLaunchedInterpreter()
     {
-        const string Interpreter = @"C:\store\pythons\cpython-3.13.15-windows-x86_64-none\python.exe";
+        const string Interpreter = @"C:\store\pythons\cpython-3.14.10-windows-x86_64-none\python.exe";
 
         AssertEx.Equal(string.Empty, ComputeToolGateway.StripRealpathWarning($"Failed to find real location of {Interpreter}\r\n", Interpreter),
             "the CR/LF-terminated warning alone leaves stderr empty");

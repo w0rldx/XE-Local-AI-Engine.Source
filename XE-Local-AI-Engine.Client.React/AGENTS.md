@@ -62,6 +62,3 @@ pnpm install --frozen-lockfile
   with the client and license generators and stages their output. Both bundles are lazy chunks: `src/i18n.ts` exports
   `i18nReady`, `Main.tsx` holds the first render on it and the vitest setup awaits it.
 - Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`.
-  The exact `@types/node` and `jsdom` versions in `package.json` are deliberate: the first sits behind pnpm's
-  trust-downgrade gate, the second waits for vitest-dev/vitest#11336 (a newer jsdom hides the Blob impl symbol, so
-  Vitest's jsdom `Request` shim throws on Blob/FormData bodies). Bump either only with that reason resolved.

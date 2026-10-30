@@ -183,8 +183,8 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
     }
 
     /// <summary>
-    ///     Two-mode cancel: ask sd-server to cancel, and if the job is already generating (409) and so cannot be
-    ///     interrupted, tree-kill + restart the daemon to drop it.
+    ///     Two-mode cancel: ask sd-server to cancel, and if the job is already generating and the build cannot interrupt
+    ///     it (409, before <c>master-1028-37bc88b</c>), tree-kill + restart the daemon to drop it.
     /// </summary>
     /// <remarks>
     ///     Runs on <see cref="CancellationToken.None" />: the caller's token is already cancelled, but the cleanup HTTP

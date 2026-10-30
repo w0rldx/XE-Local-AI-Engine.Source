@@ -47,6 +47,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > under `/tmp`, group-writable, or inside a protected folder) is left out and logged, and a validation that then misses
 > its runner says the runner was unreachable behind the boundary and names the tree, instead of "not installed".
 
+> **Breaking (pre-release): dependency and runtime majors.** The node applies the new EF migration
+> `UpgradeQuartzSchemaTo46` at startup (Quartz 4.6.2 refuses to start on an unmigrated `QRTZ_` schema; job and
+> trigger rows are kept). The managed Python minor is 3.14: an installed 3.13 training runtime shows `UpdateRequired`
+> and needs a reinstall, and the compute environment reprovisions itself. The training lane moves to torch 2.13 on
+> the cu129 index, so training needs an NVIDIA driver that supports CUDA 12.9. Frontend development needs Node 26.
+
 ### Added
 
 - **Python repositories validate with pytest in Development Mode** — a repository with no .NET solution or project and
@@ -261,6 +267,20 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Dependency and runtime modernization** (closes issue #25; supersedes Dependabot #101, #102, #103, #124 and
+  #125). Quartz 4.6.2: the dispatch runner arms each definition's maximum runtime itself, since Quartz 4 dropped
+  `JobInterruptMonitorPlugin`, and a timeout still records `TimedOut` (wiki 06). Managed Python 3.14 (ADR 0016
+  amendment) with torch 2.13.0 / torchvision 0.28.0 on cu129, unsloth 2026.10.11, transformers 5.17.0 and trl 1.15.0.
+  Native pins: llama.cpp b12014, whisper.cpp b5454, stable-diffusion.cpp `master-1028-37bc88b` (the sd progress parser
+  accepts the new `- ETA` suffix, and a generating image job now cancels over HTTP instead of a daemon restart).
+  Toolchain: Node 26, pnpm 12.16.1, uv 0.13.6 (also the shipped managed uv), SDK 10.0.403, msw 3, jsdom 30,
+  `@types/node` 26, TUnit 1.76.45 on Microsoft.Testing.Platform 2.5.2, plus the patch and minor set. TypeScript 7 stays
+  held. The license manifest drops three dev-only peers (`typescript`, `@types/react-dom`, `react-is` 17) and gains the
+  transitive `Microsoft.Extensions.Diagnostics.HealthChecks` and `.Abstractions` 10.0.0 (MIT).
+- **Inference-profile benchmarks cap every chat stage at 512 output tokens.** A reasoning model at temperature 0 could
+  think until the window was full, so the benchmark of a 4,096-token profile on Qwen3.5-9B ran past three minutes.
+  Latency figures of a model that used to hit the window are not comparable with its older benchmark rows; nothing
+  that gates a profile reads them.
 - **Background memory extraction, distillation and automatic compaction give way to your next turn.** They share the
   chat model's single llama-server slot, so a turn sent right after the previous one used to wait behind them (about
   0.7 s after an extraction and 2.9 s after a distill on a 27B model). Each now starts only once the node has been idle

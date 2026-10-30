@@ -118,9 +118,9 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
     }
 
     [Test]
-    [Arguments("bbbb", "3.13.15", TrainingRuntimePins.ProbeContractVersion, "lockfile")]
+    [Arguments("bbbb", "3.14.10", TrainingRuntimePins.ProbeContractVersion, "lockfile")]
     [Arguments(InstalledLockfileSha, "3.12.9", TrainingRuntimePins.ProbeContractVersion, "pythonMinor")]
-    [Arguments(InstalledLockfileSha, "3.13.15", TrainingRuntimePins.ProbeContractVersion + 1, "probeContract")]
+    [Arguments(InstalledLockfileSha, "3.14.10", TrainingRuntimePins.ProbeContractVersion + 1, "probeContract")]
     public async Task Training_WhenTheIdentityDiffers_IsUpdateRequired_AndNamesTheField(string shippedSha,
         string pythonVersion,
         int contractVersion,
@@ -279,8 +279,8 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         AssertEx.False((await service.GetStatusAsync(CancellationToken.None)).Toolchain.UvPresent);
 
         SeedCachedUv(Toolchain.Root);
-        var install = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13.15-linux-x86_64-gnu"));
-        _ = Directory.CreateSymbolicLink(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13-linux-x86_64-gnu"), install.FullName);
+        var install = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.14.10-linux-x86_64-gnu"));
+        _ = Directory.CreateSymbolicLink(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.14-linux-x86_64-gnu"), install.FullName);
         _ = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, ".temp"));
         await File.WriteAllTextAsync(Path.Combine(Toolchain.PythonInstallDirectory, ".lock"), string.Empty);
 
@@ -288,7 +288,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
 
         AssertEx.True(toolchain.UvPresent);
         AssertEx.Equal(ManagedPythonPins.UvVersion, toolchain.UvVersion);
-        AssertEx.Equal("cpython-3.13.15-linux-x86_64-gnu", string.Join(",", toolchain.PythonInstalls));
+        AssertEx.Equal("cpython-3.14.10-linux-x86_64-gnu", string.Join(",", toolchain.PythonInstalls));
     }
 
     [Test]
@@ -348,7 +348,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
             () => platformSupported);
     }
 
-    private static InstalledTrainingRuntimeState Installed(string pythonVersion = "3.13.15",
+    private static InstalledTrainingRuntimeState Installed(string pythonVersion = "3.14.10",
         int contractVersion = TrainingRuntimePins.ProbeContractVersion,
         string uvVersion = ManagedPythonPins.UvVersion)
     {

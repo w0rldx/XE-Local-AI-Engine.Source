@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 from bundle_input_evidence import load_publish_evidence, shipment_evidence_hash
 
-NUGET_LICENSE_VERSION = "4.0.16"
+NUGET_LICENSE_VERSION = "4.0.18"
 INVALID_LICENSES = {"", "UNKNOWN", "NOASSERTION"}
 TERM_FILE_PATTERN = re.compile(
     r"^(?:(?:licen[cs]e|notice|copyright)s?|copying)(?:$|[-_. ])"
@@ -95,9 +95,9 @@ UPSTREAM_PACKAGE_LICENSE_TEXTS = {
             "FastEndpoints.Swagger",
         )
     },
-    ("scalar.aspnetcore", "2.18.3", "MIT"): (
-        Path("nuget/upstream/Scalar.AspNetCore-2.18.3-LICENSE"),
-        Path("nuget/upstream/Scalar.AspNetCore-2.18.3-LICENSE.source.txt"),
+    ("scalar.aspnetcore", "2.18.5", "MIT"): (
+        Path("nuget/upstream/Scalar.AspNetCore-2.18.5-LICENSE"),
+        Path("nuget/upstream/Scalar.AspNetCore-2.18.5-LICENSE.source.txt"),
     ),
     ("scrutor", "7.0.0", "MIT"): (
         Path("nuget/upstream/Scrutor-7.0.0-LICENSE"),

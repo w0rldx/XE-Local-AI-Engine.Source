@@ -30,10 +30,10 @@ internal enum SdJobStatus
 /// <summary>The outcome of a <c>POST /sdcpp/v1/jobs/{id}/cancel</c> call.</summary>
 internal enum SdCancelOutcome
 {
-    /// <summary><c>200</c> — the job was queued (now cancelled) or already terminal (idempotent).</summary>
+    /// <summary><c>200</c> — the job was queued (now cancelled), already terminal (idempotent), or generating and asked to stop (since <c>master-1028-37bc88b</c>).</summary>
     Cancelled,
 
-    /// <summary><c>409 Conflict</c> — the job is generating and cannot be interrupted over HTTP; abort by tree-kill + restart.</summary>
+    /// <summary><c>409 Conflict</c> — an older build cannot interrupt a generating job over HTTP; abort by tree-kill + restart.</summary>
     Generating,
 
     /// <summary><c>404</c>/<c>410</c> — the server no longer tracks this job; nothing to cancel.</summary>

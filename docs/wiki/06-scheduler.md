@@ -13,7 +13,7 @@
 - [Templates, handlers, and the registry](#templates-handlers-and-the-registry)
 - [The execution path](#the-execution-path)
 - [Run history & retention](#run-history--retention)
-- [Cancellation & auto-interrupt](#cancellation--auto-interrupt)
+- [Cancellation & maximum runtime](#cancellation--maximum-runtime)
 - [DI registration & two key gotchas](#di-registration--two-key-gotchas)
 - [SignalR hub (live run updates)](#signalr-hub-live-run-updates)
 - [REST surface](#rest-surface)
@@ -21,7 +21,7 @@
 - [Maintainer checklist](#maintainer-checklist)
 - [Related pages](#related-pages)
 
-The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
+The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + maximum-runtime timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 
 This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Application/Services/Scheduler/*` + the Client host wiring), the SignalR hub (`XE-Local-AI-Engine.Client/Hubs/*`), and the React scheduler feature (`XE-Local-AI-Engine.Client.React/src/features/scheduler/*`).
 
@@ -96,7 +96,7 @@ the fire.
 Unlike the model-fit template it carries **no** per-template runtime default — its descriptor sets
 `DefaultMaxRuntimeSeconds: null` — because a fixed value here becomes the form's pre-filled ceiling and would
 silently cap every unattended run below a raised node "Maximum message request timeout". The effective ceiling is
-resolved live instead; see [Cancellation & auto-interrupt](#cancellation--auto-interrupt) below. The run's own turn deadline comes
+resolved live instead; see [Cancellation & maximum runtime](#cancellation--maximum-runtime) below. The run's own turn deadline comes
 from the same node setting: `RunSavedAgentHandler.ExecuteAsync` passes
 `nodeSettings.MaxMessageRequestTimeoutSeconds` into the runtime package it builds.
 
@@ -167,7 +167,7 @@ Runtime invariants:
   fails without starting anything.
 - **It polls, on the injected `TimeProvider`.** The run hub has no service-side subscription, so the handler reads
   `GetRunAsync` once a second until the run is terminal, reporting each status change as progress. At
-  `timeoutSeconds`, or when the job is cancelled or auto-interrupted, it cancels the run. Its descriptor's
+  `timeoutSeconds`, or when the job is cancelled or hits its maximum runtime, it cancels the run. Its descriptor's
   `DefaultMaxRuntimeSeconds` of 660 keeps the Quartz ceiling above the default timeout; the lower of the two wins.
 - **Structural reasons only.** Success records the End node's declared outcome, never its result. Failure and
   cancellation report the run's failure class and the failing node's key and class, never a node's output or error text.
@@ -186,9 +186,9 @@ Two Quartz `IJob` types, both deliberately trivial — all logic lives in the ex
 | `SchedulerDispatchJob` | `PreventOverlap == false` | `Implementation/SchedulerDispatchJob.cs` |
 | `NonOverlappingSchedulerDispatchJob` | `PreventOverlap == true` | `Implementation/NonOverlappingSchedulerDispatchJob.cs` |
 
-The only difference is `[DisallowConcurrentExecution]` on the non-overlapping variant. That attribute is **keyed per `JobKey`**, so distinct definitions still run concurrently — only re-entrant fires of the *same* definition are serialized. Both delegate to `SchedulerDispatchJobRunner.RunAsync(executor, logger, context)`.
+The only difference is `[DisallowConcurrentExecution]` on the non-overlapping variant. That attribute is **keyed per `JobKey`**, so distinct definitions still run concurrently — only re-entrant fires of the *same* definition are serialized. Both implement Quartz 4's `ValueTask Execute(IJobExecutionContext, CancellationToken)` and delegate to `SchedulerDispatchJobRunner.RunAsync(dispatchExecutor, logger, context, defaultMaxRuntime, timeProvider, cancellationToken)`, which also arms the maximum runtime ([below](#cancellation--maximum-runtime)).
 
-The management service stamps the definition id into the `JobDataMap` under `SchedulerJobKeys.ScheduledJobIdKey = "scheduledJobId"`, and every job lives in the Quartz group `SchedulerJobKeys.Group = "scheduled-jobs"` (`SchedulerJobKeys.cs`). With `UseProperties = true` the data map is string-only, so the `Guid` is stored as its string form.
+The management service stamps the definition id into the `JobDataMap` under `SchedulerJobKeys.ScheduledJobIdKey = "scheduledJobId"`, and every job lives in the Quartz group `SchedulerJobKeys.Group = "scheduled-jobs"` (`SchedulerJobKeys.cs`). With `StoreJobDataAsStrings = true` the data map is string-only, so the `Guid` is stored as its string form.
 
 ### `SchedulerDispatchExecutor.DispatchAsync`
 
@@ -219,11 +219,11 @@ Run history is owned by `IScheduledJobRunStore` (`XE-Local-AI-Engine.Client.Pers
 
 ---
 
-## Cancellation & auto-interrupt
+## Cancellation & maximum runtime
 
 There are **two ways** a run reaches the handler's `CancellationToken`:
 
-1. **Operator cancel** — `IScheduledJobManagementService.CancelRunAsync(runId)` (`Implementation/ScheduledJobManagementService.cs`). It records intent first (`RequestCancellationAsync` stamps `CancellationRequestedAtUtc`), *then* `scheduler.Interrupt(QuartzFireInstanceId)`. Recording intent first lets the dispatcher distinguish an operator cancel (→ `Cancelled`) from an auto-interrupt timeout (→ `TimedOut`) when the token trips. An unknown run id throws `ScheduledJobNotFoundException` (404); otherwise the method returns a `RunCancellationOutcome`:
+1. **Operator cancel** — `IScheduledJobManagementService.CancelRunAsync(runId)` (`Implementation/ScheduledJobManagementService.cs`). It records intent first (`RequestCancellationAsync` stamps `CancellationRequestedAtUtc`), *then* `scheduler.Interrupt(QuartzFireInstanceId)`. Recording intent first lets the dispatcher distinguish an operator cancel (→ `Cancelled`) from a maximum-runtime timeout (→ `TimedOut`) when the token trips. An unknown run id throws `ScheduledJobNotFoundException` (404); otherwise the method returns a `RunCancellationOutcome`:
 
    | Outcome | Meaning |
    |---|---|
@@ -233,7 +233,7 @@ There are **two ways** a run reaches the handler's `CancellationToken`:
 
    (`Services/Scheduler/RunCancellationOutcome.cs`)
 
-2. **Auto-interrupt (timeout)** — budgeted **per job**. `AddNodeScheduler` registers `q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = options.DefaultMaxRuntimeMinutes)` (`NodeSchedulerServiceCollectionExtensions.cs`), but Quartz's auto-interrupt plugin only acts on jobs that **opt in**: `ScheduledJobManagementService` stamps `JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable` on every job it builds, and the per-job budget as `JobDataMapKeyMaxRunTime` (milliseconds, as a string — `UseProperties=true` persists only strings).
+2. **Maximum runtime (timeout)** — budgeted **per definition**. Quartz 4 dropped `JobInterruptMonitorPlugin` and bounds a firing only per job type, so the dispatch runner arms the budget itself: `SchedulerDispatchJobRunner.RunAsync(dispatchExecutor, logger, context, defaultMaxRuntime, timeProvider, cancellationToken)` reads the `SchedulerJobKeys.MaxRuntimeMillisecondsKey` (`"MaxRunTime"`) entry that `ScheduledJobManagementService` stamps on the job (milliseconds, as a string — `StoreJobDataAsStrings = true` persists only strings), falls back to `SchedulerOptions.DefaultMaxRuntimeMinutes`, and on expiry interrupts its own fire instance (`InterruptFireInstance`) exactly as an operator cancel does. The executor records `TimedOut`, and Quartz counts the interrupt as a cancellation, not a retryable failure — the same semantics the 3.x plugin had.
 
    The budget itself comes from `ScheduledJobManagementService.ResolveMaxRuntimeSecondsAsync`, re-resolved on every schedule/reconcile, in this order:
 
@@ -247,7 +247,7 @@ There are **two ways** a run reaches the handler's `CancellationToken`:
 
    **Gotcha — a stored `600` on a `run-agent` schedule is treated as unset.** 600 is exactly what the removed template default used to pre-fill into the form, so it is indistinguishable from a deliberate ten-minute cap; the resolver (`LegacyRunAgentTemplateDefaultMaxRuntimeSeconds`) deliberately derives the ceiling instead, which is never lower. The React form says so — the run-agent variant of the max-runtime help text reads "Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes). A value of 600 is treated as blank." (`ScheduledJobForm.tsx`).
 
-   **Gotcha:** a descriptor's `DefaultMaxRuntimeSeconds` (600 for the model-fit template) only **pre-fills the React form** (`ScheduledJobForm.tsx`) — it is surfaced through the template DTO and is never read at fire time. Every job this service builds does opt into the monitor, so a definition that ends up with no explicit or derived budget is still auto-interrupted, at the global `SchedulerOptions.DefaultMaxRuntimeMinutes`.
+   **Gotcha:** a descriptor's `DefaultMaxRuntimeSeconds` (600 for the model-fit template) only **pre-fills the React form** (`ScheduledJobForm.tsx`) — it is surfaced through the template DTO and is never read at fire time. The runner arms a budget on every fire, so a definition that ends up with no explicit or derived budget is still interrupted, at the global `SchedulerOptions.DefaultMaxRuntimeMinutes`.
 
 Either way, the handler must actually *observe* the token. The dispatcher records the terminal state once the handler throws `OperationCanceledException`.
 
@@ -255,7 +255,7 @@ Either way, the handler must actually *observe* the token. The dispatcher record
 
 ## DI registration & two key gotchas
 
-`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs`) wires the whole subsystem behind the `SchedulerEnabled` node setting (**Node Settings → General → Features**, restart), which `NodeStartupSettings` reads from `node-settings.json` before the host is built, seeded from `Scheduler:Enabled`. When disabled, nothing Quartz-related is registered (no jobs fire), the Scheduler navigation entry is hidden and the persistence tables remain; a refusing `IScheduledJobManagementService` is registered instead, and the host skips `ModelRecommendationScheduleSeeder`. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, `InterruptJobsOnShutdownWithWait = true` and `AddQuartzHostedService(WaitForJobsToComplete = true)`: a host stop interrupts a running job and waits for it to unwind, so a long scheduled run cannot hold the host's whole shutdown budget. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators. The API side reads the switch per request: while the stored `SchedulerEnabled` is off, `FeatureSwitchMiddleware` answers 404 for the whole `scheduler/*` family, hub negotiate included, so turning it off closes the API at once while running jobs stop only at the restart. Turned on but not yet restarted, the requests pass and the refusing service answers 400 "The scheduler is disabled on this node."
+`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs`) wires the whole subsystem behind the `SchedulerEnabled` node setting (**Node Settings → General → Features**, restart), which `NodeStartupSettings` reads from `node-settings.json` before the host is built, seeded from `Scheduler:Enabled`. When disabled, nothing Quartz-related is registered (no jobs fire), the Scheduler navigation entry is hidden and the persistence tables remain; a refusing `IScheduledJobManagementService` is registered instead, and the host skips `ModelRecommendationScheduleSeeder`. It configures `AddQuartz` with `ConfigureScheduler` (`InstanceName`, persisted as `SCHED_NAME` on every `QRTZ_` row, and `ShutdownJobInterruption.WhenWaitingForJobs`), a persistent store whose `ConfigureStore` sets `SchemaProvisioning.Validate` (the `QRTZ_` tables are created by the scheduler EF migrations), `StoreJobDataAsStrings = true`, `UseBackgroundThreads = true` and the table prefix, then `UseSqlite` (Microsoft.Data.Sqlite), `UseSystemTextJsonSerializer`, `UseTimeZoneConverter` and `AddQuartzHostedService(WaitForJobsToComplete = true)`: a host stop interrupts a running job and waits for it to unwind, so a long scheduled run cannot hold the host's whole shutdown budget. `UseBackgroundThreads = true` matters because Quartz 4 runs the job store's misfire handler on a foreground thread by default: a scheduler that was never shut down (a host stop that timed out, a test that failed before `Shutdown`) would keep the process alive. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators. The API side reads the switch per request: while the stored `SchedulerEnabled` is off, `FeatureSwitchMiddleware` answers 404 for the whole `scheduler/*` family, hub negotiate included, so turning it off closes the API at once while running jobs stop only at the restart. Turned on but not yet restarted, the requests pass and the refusing service answers 400 "The scheduler is disabled on this node."
 
 ### Gotcha 1 — Quartz `ConnectionStringName` is resolved lazily, by name
 
@@ -287,7 +287,7 @@ Quartz's fluent config exposes **no per-connection PRAGMA hook**. If evidence of
 | `HistoryRetentionDays` | `30` | retention sweep cutoff; seeds the `SchedulerHistoryRetentionDays` node setting, read per sweep |
 | `RetentionSweepIntervalMinutes` | `60` | sweep cadence |
 | `DefaultTimeZoneId` | `"UTC"` | IANA id; non-blank |
-| `DefaultMaxRuntimeMinutes` | `5` | auto-interrupt default budget |
+| `DefaultMaxRuntimeMinutes` | `5` | maximum-runtime fallback the dispatch runner arms when a definition stamps no `MaxRunTime` |
 | `QuartzTablePrefix` | `"QRTZ_"` | matches the migration's embedded QRTZ DDL |
 
 ---
@@ -365,6 +365,7 @@ It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` 
 - Keep `run-agent` node-local unless `AllowCloudModelUnattendedRuns` is on, strip approval-required tools, and keep prompts/output/tool payloads out of scheduler history.
 - Keep dispatch jobs thin — logic belongs in `ISchedulerDispatchExecutor`.
 - Reference `node-sqlite` by *name* in Quartz config; never inline the connection string.
+- A Quartz minor bump may need a new EF migration for the `QRTZ_` schema (`UpgradeQuartzSchemaTo46` brought it to 4.6; 4.7 is documented to add a mandatory column): `SchemaProvisioning.Validate` refuses to start on a schema that lacks a column, so diff the upstream `tables_sqlite.sql` on every Quartz bump.
 - Run `ReconcileDurableJobsAsync` once at startup after any change to a dispatch job's type/namespace.
 - Privacy-sensitive work (the model-fit advisor) runs node-local only — see [Security & Privacy](12-security-and-privacy.md).
 

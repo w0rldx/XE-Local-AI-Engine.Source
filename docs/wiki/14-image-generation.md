@@ -137,7 +137,7 @@ Limits, stated as current behaviour: the node does not apply EXIF orientation (a
 
 `StableDiffusionCppRuntime` (`IImageRuntime`) is the orchestration boundary: it ensures a resident `sd-server` via the supervisor, submits the job and polls it over `SdServerJobClient`, maps coarse status transitions to `ImageGenProgress`, and decodes the base64 image inline on completion. **No sd-server flag, route, or HTTP shape escapes this project** (architecture invariant §3).
 
-**Cancellation is two-mode.** When the token is signalled the runtime asks sd-server to cancel the job: a still-*queued* job cancels cleanly (HTTP 200); a job already *generating* cannot be interrupted (HTTP 409), so the runtime asks the supervisor to **tree-kill + restart** the daemon, dropping the one active job. Because the coordinator serializes to one job, a kill+restart can only ever affect that single job.
+**Cancellation is two-mode.** When the token is signalled the runtime asks sd-server to cancel the job: a still-*queued* job cancels cleanly (HTTP 200), and since `master-1028-37bc88b` so does a *generating* one (sd-server interrupts it and answers 200); an older bring-your-own build answers HTTP 409 for a generating job, so the runtime then asks the supervisor to **tree-kill + restart** the daemon, dropping the one active job. Because the coordinator serializes to one job, a kill+restart can only ever affect that single job.
 
 The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeActivityGate`) also serializes runtime mutation against generation, spawn/readiness, and resident-daemon eviction. A source build or removal returns `409 runtime-busy` while one of those leases is active. Eject the resident image runtime first, then build/remove.
 
@@ -243,8 +243,11 @@ fraction reads it as "step 1 of 1, complete" and slams the bar to 100% before sa
 by an explicit must-not-match test.
 
 All of this was verified against the build `master-742-1a13107` by running the daemon and hexdumping a real
-generation — the same capture that pinned the framing above. At the current pin `master-913-b167b94` the progress
-printer is source-identical, and every anchor line still logs at INFO. The tensor-loader line moved from DEBUG to
+generation — the same capture that pinned the framing above. At `master-913-b167b94` the progress
+printer was source-identical, and every anchor line still logs at INFO. Since `master-1028-37bc88b` the sampler bar pads
+its counter and rate and appends `- ETA mm:ss` (or `h:mm:ss`) once a generation is estimated at 15 s or more, so the
+end-anchored step pattern accepts that optional suffix after the rate token; log lines put the source location last
+(`[I] message --- file.cpp:123`), which the substring-matched phase markers do not care about. The tensor-loader line moved from DEBUG to
 VERBOSE, and the builder's `-v` still shows VERBOSE.
 
 ## Framing sd-server's progress bar
@@ -296,7 +299,7 @@ reaching the next job's tracker.
 ## The pinned prebuilt release table
 
 `StableDiffusionReleasePins` is the recommended-pinned acquisition source `StableDiffusionCppBinaryManager` uses when no
-managed source-built runtime is selected. The pinned tag is **`master-913-b167b94`** (commit `b167b94`), and assets are
+managed source-built runtime is selected. The pinned tag is **`master-1028-37bc88b`** (commit `37bc88b`), and assets are
 fetched from `https://github.com/leejet/stable-diffusion.cpp/releases/download/{tag}/{asset}`.
 
 SHA256 digests come from the GitHub release-assets API `digest` field, because stable-diffusion.cpp publishes **no**

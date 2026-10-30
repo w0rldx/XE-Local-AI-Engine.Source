@@ -62,7 +62,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
         var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
         var jobKey = new JobKey(seeded[0].Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
+        AssertEx.True(await scheduler.Exists(jobKey, CancellationToken.None),
             "The seeded Manual job must be registered as a durable Quartz job.");
         var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
         AssertEx.Equal(expected: 0, triggers.Count, "The seeded Manual job must have no trigger.");

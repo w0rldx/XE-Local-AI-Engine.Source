@@ -31,7 +31,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         The control is synthetic, not the raw production offer, because the production offer's large bounds are all
 ///         upper bounds, and llama.cpp from b11669 (upstream #26613) silently drops an upper bound above 2000 instead of
-///         failing. A <c>minLength</c> above 2000 still fails on every build from the b10201 floor through b11803.
+///         failing. A <c>minLength</c> above 2000 still fails on every build from the b10201 floor through b12014.
 ///     </para>
 ///     <para>
 ///         The server is launched with <c>--jinja</c> because that is what production does
@@ -62,7 +62,7 @@ public sealed class LlamaGrammarLiveSmokeTests
 
     /// <summary>
     ///     The negative control's one bound: a <c>minLength</c> above llama.cpp's repetition threshold (2000). Every build
-    ///     from the b10201 floor through b11803 rejects it, and the compatibility pass strips it.
+    ///     from the b10201 floor through b12014 rejects it, and the compatibility pass strips it.
     /// </summary>
     private const int NegativeControlMinLength = 4096;
 
