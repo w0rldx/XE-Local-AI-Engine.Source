@@ -116,7 +116,7 @@ public sealed class NodeChatConcurrencyTests : IDisposable
                                                ReplaceContent = false
                                            });
                                        }
-                                       catch (InvalidOperationException)
+                                       catch (NodeChatMessageCorrelationNotFoundException)
                                        {
                                            // The row was purged before this flush acquired its locks.
                                        }
