@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
 
 internal static class AddNodeChatExtensions
 {
@@ -57,6 +58,9 @@ internal static class AddNodeChatExtensions
             sp.GetRequiredService<ConversationMaintenanceDispatcher>(),
             sp.GetRequiredService<IOptions<ConversationCompactionOptions>>(),
             sp.GetRequiredService<TimeProvider>(),
+            new BackgroundInvocationYield(sp.GetRequiredService<IWorkerEventDispatcher>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BackgroundInvocationYield>>()),
             sp.GetRequiredService<ILogger<ConversationMaintenanceWorker>>()));
 
         // Chat retention defaults to disabled because it permanently deletes user chat history: it must be opted into through the

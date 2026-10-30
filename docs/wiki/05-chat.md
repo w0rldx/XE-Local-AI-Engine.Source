@@ -627,7 +627,13 @@ conversation is still distilled — memory exclusion governs the cross-conversat
 what a single conversation keeps of itself, so its own state survives independently of that flag.
 `ConversationMaintenanceWorker` runs one job at a time regardless of kind, because a fold and a distillation call
 both take the node's single llama-server inference slot; `Distill` and `Compact` therefore queue rather than run
-concurrently.
+concurrently. The same slot serves the user's turns, so each job runs through `BackgroundInvocationYield`: it starts
+only once the node invocation slot has stayed free for `BackgroundInvocationYield.IdleWindow` (2 s), and a turn (or a
+graph, scheduler, integration or benchmark run) taking the slot mid-call cancels it. The job then reruns whole at the
+next idle window, as often as it takes; it is never dropped and never logged as a failure. A cancelled distillation
+leaves `ConversationStateCoversToSequence` where its last persisted call put it, so the rerun picks up the rest. Only
+these post-turn jobs yield: a compaction a turn awaits (`ConversationStepContextBound`, the manual compact endpoint)
+calls `IConversationCompactionService` directly, since it holds the slot it would wait for.
 
 **Persistence.** The state lives on `NodeConversation.ConversationState` (encrypted, AAD `conversation_state`)
 alongside `ConversationStateCoversToSequence` — an anchor-space watermark in the same space as

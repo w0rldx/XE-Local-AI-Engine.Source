@@ -385,6 +385,12 @@ cancels it. Without that, a client-side cancel or a disposed request scope would
 one thing this pipeline exists to capture. A host stop completes the queue's writer instead, so the read loop drains
 what is buffered and exits on its own.
 
+The extraction's model call shares the chat's llama-server slot, so it runs through `BackgroundInvocationYield`
+(`Services/Events/`): it waits until the node invocation slot has stayed free for two seconds, and a turn taking the
+slot mid-call cancels it on a token linked to the drain-deadline token. The job then reruns whole at the next idle
+window; the lexical dedup absorbs any candidate the cancelled attempt already wrote, and a yield is logged at
+Information, never as a failure. Only a drain-deadline cancel ends the job.
+
 The shutdown drain, the post-deadline grace and the abandoned-job accounting are on the reference page. See [the reference page](reference/04-application-services.md#27-post-run-adaptive-memory-the-extraction-workers-shutdown-contract).
 
 ---

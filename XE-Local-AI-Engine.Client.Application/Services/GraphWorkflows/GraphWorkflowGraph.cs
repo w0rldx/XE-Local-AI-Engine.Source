@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -159,6 +160,8 @@ internal sealed class GraphWorkflowGraph
 
     private IReadOnlyList<GraphWorkflowValidationError>? _responseSchemaWarnings;
 
+    private IReadOnlyList<GraphWorkflowValidationError>? _semanticLintErrors;
+
     private IReadOnlyList<GraphWorkflowValidationError>? _semanticLintWarnings;
 
     private GraphWorkflowGraph(GraphWorkflowDefinitionKind kind,
@@ -239,7 +242,38 @@ internal sealed class GraphWorkflowGraph
     internal IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings => _responseSchemaWarnings ??= BuildResponseSchemaWarnings();
 
     /// <summary>The <see cref="GraphWorkflowSemanticLint" /> half of <see cref="Warnings" />, exposed on its own because the workflow designer treats it as must-fix.</summary>
-    internal IReadOnlyList<GraphWorkflowValidationError> SemanticLintWarnings => _semanticLintWarnings ??= GraphWorkflowSemanticLint.Check(this);
+    internal IReadOnlyList<GraphWorkflowValidationError> SemanticLintWarnings
+    {
+        get
+        {
+            RunSemanticLint();
+            return _semanticLintWarnings;
+        }
+    }
+
+    /// <summary>The <see cref="GraphWorkflowSemanticLint" /> errors: not part of the parse, so a stored graph still routes; the save-time validation adds them.</summary>
+    internal IReadOnlyList<GraphWorkflowValidationError> SemanticLintErrors
+    {
+        get
+        {
+            RunSemanticLint();
+            return _semanticLintErrors;
+        }
+    }
+
+    /// <summary>One lint pass fills both halves, on the first ask of either.</summary>
+    [MemberNotNull(nameof(_semanticLintErrors), nameof(_semanticLintWarnings))]
+    private void RunSemanticLint()
+    {
+        if (_semanticLintErrors is not null && _semanticLintWarnings is not null)
+        {
+            return;
+        }
+
+        var errors = new List<GraphWorkflowValidationError>();
+        _semanticLintWarnings = GraphWorkflowSemanticLint.Check(this, errors);
+        _semanticLintErrors = errors;
+    }
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];

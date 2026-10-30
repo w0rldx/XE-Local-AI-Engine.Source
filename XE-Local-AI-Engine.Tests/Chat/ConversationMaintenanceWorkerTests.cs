@@ -1,7 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The background worker behind automatic compaction: one job at a time, each in its own DI scope, a failing job
@@ -64,6 +71,43 @@ public sealed class ConversationMaintenanceWorkerTests
         await harness.Worker.StopAsync(CancellationToken.None);
 
         AssertEx.False(harness.Logger.AllText.Contains("fold blew up", StringComparison.Ordinal), "Only the exception type is logged, never its message.");
+    }
+
+    [Test]
+    public async Task Worker_WhenATurnTakesTheSlotMidFold_RerunsTheFoldAtTheNextIdleWindow_AndRecordsNoFailure()
+    {
+        var slot = new WorkerEventDispatcher(Substitute.For<IInvocationRunner>(),
+            Substitute.For<IInvocationHistory>(),
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
+        var clock = new ManualTimeProvider();
+        await using var harness = new ConversationMaintenanceHarness(invocationYield: new BackgroundInvocationYield(slot, clock, NullLogger<BackgroundInvocationYield>.Instance));
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.OnCompact = async (_, token) =>
+        {
+            if (harness.Compactions.Count == 1)
+            {
+                firstEntered.TrySetResult();
+                await new TaskCompletionSource().Task.WaitAsync(token);
+            }
+        };
+        await harness.Worker.StartAsync(CancellationToken.None);
+
+        harness.Dispatcher.Dispatch(ConversationMaintenanceHarness.Job(Guid.NewGuid()));
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == 1, Wait, "The job should wait out the idle window.");
+        clock.Advance(BackgroundInvocationYield.IdleWindow);
+        await firstEntered.Task.WaitAsync(Wait);
+
+        var lease = await slot.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).WithConversationId(Guid.NewGuid()).Build());
+        await lease.DisposeAsync();
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == 1, Wait, "The yielded job should wait for the next idle window.");
+        clock.Advance(BackgroundInvocationYield.IdleWindow);
+        await AssertEx.EventuallyAsync(() => harness.Compactions.Count == 2, Wait, "The yielded fold reruns.");
+        await harness.Worker.StopAsync(CancellationToken.None);
+
+        AssertEx.False(harness.Logger.Entries.Any(static entry => entry.Level >= LogLevel.Warning), harness.Logger.AllText);
+        AssertEx.False(harness.Logger.AllText.Contains("interrupted", StringComparison.Ordinal), "A yield is neither a failure nor a shutdown.");
+        AssertEx.Contains(harness.Logger.AllText, "automatic compaction reported Compacted");
     }
 
     [Test]

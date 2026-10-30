@@ -31,6 +31,9 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     // The invocation whose lease holds the slot, or null while the slot is free. Guarded by _syncRoot.
     private Guid? _slotHolderId;
 
+    // Completed and replaced on every take or release of the slot (SignalSlotChanged). Guarded by _syncRoot.
+    private TaskCompletionSource _slotChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
         IInvocationHistory invocationHistory,
         ILogger<WorkerEventDispatcher> logger,
@@ -63,6 +66,17 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             lock (_syncRoot)
             {
                 return _slotHolderId is { } holderId ? FindState(holderId)?.Clone() : null;
+            }
+        }
+    }
+
+    public Task SlotChanged
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _slotChanged.Task;
             }
         }
     }

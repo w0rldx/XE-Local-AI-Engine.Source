@@ -418,7 +418,7 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
 
     /// <summary>
     ///     The designer's own report: lint findings left after the retries move to the errors, so the proposal reads as
-    ///     invalid and cannot be accepted. The validate and save routes keep them as warnings.
+    ///     invalid and cannot be accepted. L1 and L2 already arrive in the validation's errors.
     /// </summary>
     private static GraphWorkflowValidationResult WithLintAsErrors(GraphWorkflowValidationResult validation, IReadOnlyList<GraphWorkflowValidationError> lint) =>
         lint.Count == 0

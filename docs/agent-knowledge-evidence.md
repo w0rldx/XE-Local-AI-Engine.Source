@@ -695,11 +695,13 @@ is `true` under the no-op (an empty list is a successful query); nothing reads i
 only non-cancellation catch is `InvalidOperationException or IOException`, so a real dead daemon's `HttpRequestException`
 escapes the backfill; the gate-off path does not reach it.
 
-### The post-turn maintenance queue shares the chat's single llama-server slot, so its cost lands on the NEXT turn
+### Post-turn background model work shares the chat's single llama-server slot, so it yields to every turn
 
 Live round 2026-09-25 (40 turns, 13 Distill jobs, 3 automatic compactions under a `numCtx=8192` per-send override):
 about 5 s after a Distill (every `DistillEveryMessages` = 6 messages) and 20-30 s while a multi-pass compaction fold runs
-on a 27B Q4 model on a high-end GPU; longer on weaker hardware.
+on a 27B Q4 model on a high-end GPU; longer on weaker hardware. A/B 2026-10-30, before the yield (turn sent the moment the
+previous one completed, background on vs off), median first-output: 27B 963 vs 256 ms after an extraction and 3114 vs
+258 ms after a distill; 9B 351 vs 112 and 1491 vs 112 ms.
 
 ### Measure free disk through `IFreeSpaceProbe`, never on `Path.GetPathRoot` of a path
 

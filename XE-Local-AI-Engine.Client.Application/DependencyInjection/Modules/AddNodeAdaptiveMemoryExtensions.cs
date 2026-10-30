@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
@@ -58,6 +59,9 @@ internal static class AddNodeAdaptiveMemoryExtensions
         builder.Services.AddHostedService(sp => new MemoryExtractionWorker(sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<MemoryExtractionDispatcher>(),
             sp.GetRequiredService<IOptions<MemoryExtractionOptions>>(),
+            new BackgroundInvocationYield(sp.GetRequiredService<IWorkerEventDispatcher>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BackgroundInvocationYield>>()),
             sp.GetRequiredService<ILogger<MemoryExtractionWorker>>()));
 
         // Execution-log retention policy plus its sweeper: agent_execution_logs is append-only and grows unbounded without a sweep.

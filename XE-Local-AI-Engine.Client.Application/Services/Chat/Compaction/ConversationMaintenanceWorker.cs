@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
@@ -14,10 +15,10 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 ///     the worker's drain token rather than the chat send token.
 /// </summary>
 /// <remarks>
-///     Concurrency is 1 by design: a fold runs on the node's local model, and llama-server serves one sequence per
-///     model. Shutdown drains queued jobs inside <see cref="ConversationCompactionOptions.MaintenanceShutdownDrainTimeoutSeconds" />,
-///     then cancels the running one and drops the rest; a dropped fold simply runs at the next trigger. Failures log the
-///     exception type name only, never conversation content.
+///     Concurrency is 1: llama-server serves one sequence per model, and each job yields the slot to turns
+///     (<see cref="BackgroundInvocationYield" />). Shutdown drains queued jobs inside
+///     <see cref="ConversationCompactionOptions.MaintenanceShutdownDrainTimeoutSeconds" />, then cancels the running one and
+///     drops the rest; a dropped fold runs at the next trigger. Failures log the exception type name only.
 /// </remarks>
 public sealed class ConversationMaintenanceWorker : BackgroundService
 {
@@ -29,6 +30,7 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
     private readonly IOptions<ConversationCompactionOptions> _options;
     private readonly TimeSpan _drainTimeout;
     private readonly TimeProvider _timeProvider;
+    private readonly BackgroundInvocationYield _invocationYield;
     private readonly ILogger<ConversationMaintenanceWorker> _logger;
 
     // Cancelled only when the shutdown drain window elapses, so ordinary operation never interrupts a fold.
@@ -38,10 +40,12 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
         ConversationMaintenanceDispatcher dispatcher,
         IOptions<ConversationCompactionOptions> options,
         TimeProvider timeProvider,
+        BackgroundInvocationYield invocationYield,
         ILogger<ConversationMaintenanceWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _invocationYield = invocationYield ?? throw new ArgumentNullException(nameof(invocationYield));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -101,14 +105,17 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
     {
         try
         {
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var work = job.Kind switch
+            // A yielded job reruns whole: its due check re-reads the watermark, which a cancelled call never advanced.
+            Func<IServiceProvider, ConversationMaintenanceJob, CancellationToken, Task> work = job.Kind switch
             {
-                ConversationMaintenanceKind.Compact => CompactWhenOverThresholdAsync(scope.ServiceProvider, job, cancellationToken),
-                ConversationMaintenanceKind.Distill => DistillWhenDueAsync(scope.ServiceProvider, job, cancellationToken),
+                ConversationMaintenanceKind.Compact => CompactWhenOverThresholdAsync,
+                ConversationMaintenanceKind.Distill => DistillWhenDueAsync,
                 _ => throw new ArgumentOutOfRangeException(nameof(job), job.Kind, "Unknown conversation maintenance kind.")
             };
-            await work;
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            await _invocationYield.RunWhenIdleAsync(job.Kind == ConversationMaintenanceKind.Compact ? "compaction" : "distillation",
+                token => work(scope.ServiceProvider, job, token),
+                cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

@@ -177,7 +177,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
     }
 
-    /// <summary>The parse and the tool gate, adding per-node errors to <paramref name="errors" />; whole-document and structural failures still throw.</summary>
+    /// <summary>The parse, the semantic lint errors and the tool gate, adding per-node errors to <paramref name="errors" />; whole-document and structural failures still throw.</summary>
     private async Task<GraphWorkflowGraph> ParseCollectingErrorsAsync(string graphJson,
         bool allowsActions,
         List<GraphWorkflowValidationError> errors,
@@ -189,6 +189,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         }
 
         var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition, errors);
+        errors.AddRange(graph.SemanticLintErrors);
         errors.AddRange(await GraphWorkflowToolGate.ErrorsAsync(graph, allowsActions, _tools, _runtimeSettings, cancellationToken));
         return graph;
     }

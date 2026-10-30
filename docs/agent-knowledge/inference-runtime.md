@@ -84,17 +84,19 @@ map: it says where a model would be served, not where it is resident. **Prevents
 **Authority:** `ServiceProviderValidationTests`, `OllamaRuntimeGateStartupTests`.
 [evidence](../agent-knowledge-evidence.md#the-ollama-gate-off-branch-registers-no-op-imodelcapabilityclient-and-iollamamodelservice-so-the-node-still-boots)
 
-### The post-turn maintenance queue shares the chat's single llama-server slot, so its cost lands on the NEXT turn
+### Post-turn background model work shares the chat's single llama-server slot, so it yields to every turn
 
-**Rule:** `ConversationMaintenanceWorker` runs Distill/Compact on the chat's slot (`--parallel 1`), so the next turn's first
-token waits for the job the previous turn queued. Do not read that delay as a regression, and account for it before tuning
-`DistillEveryMessages`/`AutoCompactFraction`. **Prevents:** misdiagnosed latency and mis-tuned knobs. **Authority:**
-`ConversationMaintenanceWorker`.
-[evidence](../agent-knowledge-evidence.md#the-post-turn-maintenance-queue-shares-the-chats-single-llama-server-slot-so-its-cost-lands-on-the-next-turn)
+**Rule:** `ConversationMaintenanceWorker` (Distill/Compact) and `MemoryExtractionWorker` run on the chat's slot
+(`--parallel 1`), so each runs its model work through `BackgroundInvocationYield`: it starts only once the node
+invocation slot stayed free for `IdleWindow` (2 s), and a turn taking the slot cancels it and reruns it whole at the next
+idle window. Only a post-turn worker may use it: a path a turn awaits while holding the slot (`ConversationStepContextBound`,
+the manual compact endpoint) would wait for itself. A yield is never a failure. **Prevents:** the next turn queueing
+behind the previous turn's job. **Authority:** `BackgroundInvocationYield`, `IWorkerEventDispatcher.SlotChanged`.
+[evidence](../agent-knowledge-evidence.md#post-turn-background-model-work-shares-the-chats-single-llama-server-slot-so-it-yields-to-every-turn)
 
 ### "Idle" by lease is not idle right after a turn: a background request holds the model for seconds
 
-**Rule:** a rule that acts on a chat process having no inference lease (unload it, refuse around it) treats "leased" as "wait, bounded", not as "unavailable": memory extraction and the other post-turn jobs take a lease on the model the moment the user's turn ends. Live-check any such rule with a turn on model A followed at once by a turn on model B. **Prevents:** the ordinary "switch model right after a turn" being refused with "Eject one of them" because the first model was busy for a few seconds (seen live, 2026-10-05). **Authority:** `PooledRoleLaunchAdmission.AdmitChatAsync` (`BusyResidentWaitCap`), `IdleChatEvictionResult`; model-matrix follow-ups W1.
+**Rule:** a rule that acts on a chat process having no inference lease (unload it, refuse around it) treats "leased" as "wait, bounded", not as "unavailable": memory extraction and the other post-turn jobs take a lease on the model once the invocation slot has been idle for `BackgroundInvocationYield.IdleWindow` after the user's turn. Live-check any such rule with a turn on model A followed at once by a turn on model B. **Prevents:** the ordinary "switch model right after a turn" being refused with "Eject one of them" because the first model was busy for a few seconds (seen live, 2026-10-05). **Authority:** `PooledRoleLaunchAdmission.AdmitChatAsync` (`BusyResidentWaitCap`), `IdleChatEvictionResult`; model-matrix follow-ups W1.
 
 ### A work session is chat turns in a loop, and a running step takes the node's only invocation slot
 
@@ -169,3 +171,4 @@ Superseded claims; the entries above are the active rules.
 | A `maxLength` in a response schema never reaches llama.cpp, because the MEAI OpenAI strict-schema transform rewrote it into a `description` first. | Still true of every other provider (validate bounds downstream); on llama-server `ApplyResponseSchemaPassthrough` writes the schema onto the body, so the grammar enforces it. |
 | Every non-chat llama-server role takes a role flag (`--embeddings --pooling …` or `--rerank`), and there are three roles. | `ModelRole.Decision` is a fourth, pooled companion role launched with NO role flag (the server reads `decision.type` from the GGUF) and `-b`/`-ub` pinned to its context (wiki 03, "`ModelRole` and the external-endpoint option"). |
 | Two companion slots: the embedder and the reranker. | `MaxLoadedCompanionProcesses` defaults to 3, the third for one decision model. |
+| A turn sent right after the previous one waits for that turn's memory extraction or distill inside llama-server. | Stale since 2026-10-30: both workers wait for an idle invocation slot and yield it to a turn mid-call (`BackgroundInvocationYield`). |

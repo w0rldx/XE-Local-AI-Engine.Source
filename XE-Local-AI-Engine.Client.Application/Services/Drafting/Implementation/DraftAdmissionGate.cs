@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// </summary>
 /// <remarks>
 ///     A draft is a foreground generation on the same single local runtime an invocation uses, so it refuses rather
-///     than waits, and the slot is process-wide. simplified: best-effort check-then-run — an invocation starting
-///     between the check and the call still overlaps, as does background memory extraction, which bypasses the gate;
-///     llama-server queues both, and the real fix is a cross-path admission service.
+///     than waits, and the slot is process-wide. Accepted ceiling: best-effort check-then-run, so an invocation starting
+///     between the check and the call still overlaps and llama-server queues it. Post-turn background work never
+///     overlaps a turn: it yields the slot (<see cref="BackgroundInvocationYield" />), but it does not yield to a draft.
 /// </remarks>
 internal sealed class DraftAdmissionGate : IDisposable
 {

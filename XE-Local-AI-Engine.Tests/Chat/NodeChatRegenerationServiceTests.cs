@@ -4264,6 +4264,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public InvocationState? SlotHolder => CurrentInvocation is { } current && current.InvocationId == _slotHolderId && !NodeChatInvocationPump.IsTerminal(current.Status) ? current : null;
 
+        // No background worker reads this fake's slot changes.
+        public Task SlotChanged { get; } = new TaskCompletionSource().Task;
+
         public IReadOnlyList<InvocationState> GetLiveInvocations() =>
             CurrentInvocation is { } current && !NodeChatInvocationPump.IsTerminal(current.Status) ? [current] : [];
 

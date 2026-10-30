@@ -277,8 +277,9 @@ over, found on the parsed graph and keyed on the node that suffers:
 
 - **L1.** A node with `joinPolicy` `All` whose inbound edges all come from mutually exclusive branches of one
   `Condition` or `DecisionModel`: one inbound edge never fires, so the node is always skipped. Branches count as
-  exclusive only as `Eq` on one path with different values, or `Exists` / `NotExists`; anything else is not guessed at.
-  The advice is `joinPolicy` `Any`.
+  exclusive only as `Eq` on one path with different non-number or long-integer values (the runtime compares other numbers
+  through decimal or double, where two distinct values can both match), or `Exists` / `NotExists`; anything else is not
+  guessed at. The advice is `joinPolicy` `Any`.
 - **L2.** An `upstream.<key>` path in `inputBindings`, `argumentBindings` or `resultPath` naming a node with no edge into
   this one. The `upstream` map holds only immediate predecessors (§4.2a), so the path is missing at run time and the node
   fails.
@@ -288,7 +289,9 @@ over, found on the parsed graph and keyed on the node that suffers:
   map of the predecessors' outputs keyed by node key, not one node's output. `input` alone and
   `input.<predecessorKey>…` are fine.
 
-They warn for every graph, hand-edited ones included, and never block; the designer (§12) treats each as must-fix.
+L1 and L2 are validation errors: `GraphWorkflowDefinitionService` adds them to the validate, save and import answers, so
+such a graph cannot be saved. They are not part of the parse, so a graph stored before 2026-10-30 still starts and runs.
+L3 warns for every graph, hand-edited ones included, and never blocks. The designer (§12) treats each as must-fix.
 
 **The service adds warnings about pinned models**, in `GraphWorkflowDefinitionService.WarningsForRuntimeAsync`, because
 only it reaches the model catalog and the node settings. Each judges a node's OWN `model` pin and skips an unpinned
@@ -1920,7 +1923,7 @@ cannot accept it.
    `allowsActions`, then the semantic lint (§2.4). Errors and lint findings go back to the model up to two times
    (`MaxFixUpRetries`); a `change` turn that returned no proposal is nudged once. A proposal still invalid is returned
    marked invalid; lint findings that survive the retries move from the warnings to the errors of the designer's
-   report, so such a proposal reads invalid and cannot be accepted (the validate and save routes keep them as warnings).
+   report, so such a proposal reads invalid and cannot be accepted (L1 and L2 already arrive as validation errors).
    A reply-only answer with an empty reply counts as unusable and is retried; a proposal sent without a reply gets a
    fixed one counting its changes. Every retry and nudge on a `change` turn asks the model to describe the whole change
    in `reply`, because the client shows only the last attempt's reply.

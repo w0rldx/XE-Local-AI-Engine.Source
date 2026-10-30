@@ -267,8 +267,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             SupportsThinking = supportsThinking,
             ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
             Skills = resolved.Skills,
-            // The one place this flag is set: stripping approval-required tools from the OFFER cannot cover skill tools, which arrive
-            // through MAF's AIContextProviders, so the flag fails their approval request at once instead of parking the run for MaxPendingToolCallAge.
+            // Stripping approval-required tools from the OFFER cannot cover skill tools, which arrive through MAF's
+            // AIContextProviders, so the flag fails their approval request at once instead of parking the run for MaxPendingToolCallAge.
             IsUnattended = true
         });
     }

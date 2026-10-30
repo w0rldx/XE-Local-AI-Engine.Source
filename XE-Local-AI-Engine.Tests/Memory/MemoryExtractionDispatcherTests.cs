@@ -185,6 +185,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         using var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             NullLogger<MemoryExtractionWorker>.Instance);
         await worker.StartAsync(CancellationToken.None);
         try
@@ -236,6 +237,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         using var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             NullLogger<MemoryExtractionWorker>.Instance);
         await worker.StartAsync(CancellationToken.None);
 
@@ -267,6 +269,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         using var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             NullLogger<MemoryExtractionWorker>.Instance);
         await worker.StartAsync(CancellationToken.None);
         await worker.StopAsync(CancellationToken.None);
@@ -309,6 +312,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             logger);
         await worker.StartAsync(CancellationToken.None);
 
@@ -353,6 +357,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             logger);
         await worker.StartAsync(CancellationToken.None);
 
@@ -411,6 +416,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             logger);
         await worker.StartAsync(CancellationToken.None);
 
@@ -487,6 +493,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
             optionsAccessor,
+            IdleInvocationYield.Create(),
             logger);
         await worker.StartAsync(CancellationToken.None);
 
@@ -626,6 +633,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
                 dispatcher,
                 optionsAccessor,
+                IdleInvocationYield.Create(),
                 NullLogger<MemoryExtractionWorker>.Instance);
             await worker.StartAsync(CancellationToken.None);
             return new Pipeline(dispatcher, worker);

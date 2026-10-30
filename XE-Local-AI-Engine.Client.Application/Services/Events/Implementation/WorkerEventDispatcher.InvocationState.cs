@@ -125,6 +125,7 @@ public sealed partial class WorkerEventDispatcher
             if (_slotHolderId == invocationId)
             {
                 _slotHolderId = null;
+                SignalSlotChanged();
                 release = true;
             }
 
@@ -149,6 +150,7 @@ public sealed partial class WorkerEventDispatcher
             }
 
             _slotHolderId = null;
+            SignalSlotChanged();
             snapshot = FindState(invocationId)?.Clone();
         }
 
@@ -170,6 +172,7 @@ public sealed partial class WorkerEventDispatcher
         lock (_syncRoot)
         {
             _slotHolderId = invocationId;
+            SignalSlotChanged();
             snapshot = FindState(invocationId)?.Clone();
         }
 
@@ -177,6 +180,14 @@ public sealed partial class WorkerEventDispatcher
         {
             PublishStateChanged(snapshot);
         }
+    }
+
+    // Caller must hold _syncRoot. Its continuations run asynchronously, so completing it under the lock runs no waiter here.
+    private void SignalSlotChanged()
+    {
+        var changed = _slotChanged;
+        _slotChanged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = changed.TrySetResult();
     }
 
     private void PublishStateChanged(InvocationState state)

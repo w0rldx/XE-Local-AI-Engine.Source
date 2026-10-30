@@ -4,22 +4,24 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
 ///     Background worker draining the <see cref="MemoryExtractionDispatcher" /> queue, running each job in its own
 ///     scope on the drain-deadline token rather than the chat send token.
 /// </summary>
 /// <remarks>
-///     Concurrency is bounded by <see cref="MemoryExtractionOptions.MaxConcurrentExtractions" />, and the
-///     drain-deadline token means neither a client-side cancel nor a disposed request scope loses a completed run's
-///     memory. Shutdown drains QUEUED as well as in-flight work, since the queue is in-memory and a dropped job is
-///     lost for good; a job ignoring cancellation past the grace is ABANDONED, counted and metered. Every failure
-///     logs the exception TYPE NAME only. Shutdown contract: <see cref="StopAsync" />.
+///     Bounded by <see cref="MemoryExtractionOptions.MaxConcurrentExtractions" />; each model call yields the slot to
+///     turns (<see cref="BackgroundInvocationYield" />). Neither a client cancel nor a disposed request scope loses a
+///     run's memory. Shutdown drains QUEUED and in-flight work (the queue is in-memory); a job ignoring cancellation
+///     past the grace is ABANDONED, counted and metered. Failures log the exception TYPE NAME only. Shutdown contract:
+///     <see cref="StopAsync" />.
 /// </remarks>
 public sealed class MemoryExtractionWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly MemoryExtractionDispatcher _dispatcher;
+    private readonly BackgroundInvocationYield _invocationYield;
     private readonly SemaphoreSlim _concurrency;
     private readonly TimeSpan _drainTimeout;
     private readonly ILogger<MemoryExtractionWorker> _logger;
@@ -39,10 +41,12 @@ public sealed class MemoryExtractionWorker : BackgroundService
     internal MemoryExtractionWorker(IServiceScopeFactory scopeFactory,
         MemoryExtractionDispatcher dispatcher,
         IOptions<MemoryExtractionOptions> options,
+        BackgroundInvocationYield invocationYield,
         ILogger<MemoryExtractionWorker> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _invocationYield = invocationYield ?? throw new ArgumentNullException(nameof(invocationYield));
         ArgumentNullException.ThrowIfNull(options);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -136,8 +140,9 @@ public sealed class MemoryExtractionWorker : BackgroundService
             // must be written even if extraction is a no-op (temp chat / no model / no lesson).
             await WriteExecutionLogAsync(scope.ServiceProvider, job.Telemetry, cancellationToken);
 
+            // The model call yields to any turn; a yielded run reruns whole, and the lexical dedup absorbs a partial earlier write.
             var extractionService = scope.ServiceProvider.GetRequiredService<IMemoryExtractionService>();
-            _ = await extractionService.ExtractAsync(job.Run, cancellationToken);
+            await _invocationYield.RunWhenIdleAsync("memory extraction", token => extractionService.ExtractAsync(job.Run, token), cancellationToken);
         }
         catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
         {

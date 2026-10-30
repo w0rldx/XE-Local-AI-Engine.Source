@@ -28,6 +28,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > "Re-create this Development project to adopt the current command profiles". Create a new project on the same
 > repository; it detects and stores the current profile. There is no in-place upgrade.
 
+> **Breaking (pre-release): two graph workflow lint findings now refuse validate, save and import.** An `All` join fed
+> only by mutually exclusive branches of one Condition or DecisionModel (always skipped), and an `upstream.<key>`
+> binding where `<key>` has no edge into the node (fails at run time), are validation errors instead of warnings. A
+> stored graph with either defect still runs as before, but it can no longer be saved or imported until fixed: set the
+> join's `joinPolicy` to `Any`, and add an edge from `<key>` to the node or read the value through a node that has one.
+> The `input.<x>` shortcut finding stays a warning.
+
 > **Breaking (pre-release): Development Mode runs inside the filesystem boundary where the host has one.** On Linux
 > with bubblewrap, the coder and validation sandboxes now see only the workspace (or validation tree), their runtime
 > directories, and read-only views of the package folder, `.git/config`, committed-credential shadows and the host
@@ -254,6 +261,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Background memory extraction, distillation and automatic compaction give way to your next turn.** They share the
+  chat model's single llama-server slot, so a turn sent right after the previous one used to wait behind them (about
+  0.7 s after an extraction and 2.9 s after a distill on a 27B model). Each now starts only once the node has been idle
+  for two seconds, and a turn starting mid-call cancels it; the job reruns at the next idle moment and is never lost.
 - **A request on something in the wrong state answers 409, not 404.** A missing id still answers the same bodyless
   404 everywhere. Calls that used to answer 404 (or 401/400) for a different failure now say what went wrong:
   - Playbook actions: the manual edit of an analysis-provenance action is 409 `NotManual`; reject, suggested edit, eval

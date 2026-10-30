@@ -24,6 +24,7 @@ public sealed partial class WorkerEventDispatcher
                 CurrentInvocation = CreateInvocationState(package);
                 _live[package.InvocationId] = CurrentInvocation;
                 _slotHolderId = package.InvocationId;
+                SignalSlotChanged();
                 snapshot = CurrentInvocation.Clone();
             }
         }

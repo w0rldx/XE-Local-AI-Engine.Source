@@ -22,6 +22,10 @@ public interface IWorkerEventDispatcher
     /// <summary>A clone of the invocation whose lease holds the node's invocation slot, or null while the slot is free.</summary>
     InvocationState? SlotHolder { get; }
 
+    /// <summary>Completes at the next take or release of the invocation slot; read it again for the change after that.</summary>
+    /// <remarks>Read it BEFORE <see cref="SlotHolder" />, so a change between the two reads completes the task already in hand.</remarks>
+    Task SlotChanged { get; }
+
     /// <summary>Clones of every invocation assigned and not yet terminal, the slot holder among them.</summary>
     IReadOnlyList<InvocationState> GetLiveInvocations();
 

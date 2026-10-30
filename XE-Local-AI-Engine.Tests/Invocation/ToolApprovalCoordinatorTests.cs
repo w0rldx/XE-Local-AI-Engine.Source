@@ -830,6 +830,8 @@ public sealed class ToolApprovalCoordinatorTests
 
         public InvocationState? SlotHolder => _inner.SlotHolder;
 
+        public Task SlotChanged => _inner.SlotChanged;
+
         public IReadOnlyList<InvocationState> GetLiveInvocations() =>
             _inner.GetLiveInvocations();
 

@@ -8,9 +8,11 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
@@ -22,7 +24,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
     private readonly ServiceProvider _provider;
 
     public ConversationMaintenanceHarness(ConversationCompactionOptions? options = null, int projectedTokens = 100_000, double observedCorrection = 1.0,
-        TimeProvider? timeProvider = null, INodeRuntimeSettings? runtimeSettings = null)
+        TimeProvider? timeProvider = null, INodeRuntimeSettings? runtimeSettings = null, BackgroundInvocationYield? invocationYield = null)
     {
         var accessor = Options.Create(options ?? new ConversationCompactionOptions());
         Estimator = new FixedTokenEstimator(projectedTokens, observedCorrection);
@@ -42,7 +44,8 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
         });
 
         Dispatcher = new ConversationMaintenanceDispatcher(accessor, new RecordingLogger<ConversationMaintenanceDispatcher>());
-        Worker = new ConversationMaintenanceWorker(_provider.GetRequiredService<IServiceScopeFactory>(), Dispatcher, accessor, timeProvider ?? TimeProvider.System, Logger);
+        Worker = new ConversationMaintenanceWorker(_provider.GetRequiredService<IServiceScopeFactory>(), Dispatcher, accessor, timeProvider ?? TimeProvider.System,
+            invocationYield ?? IdleInvocationYield.Create(), Logger);
     }
 
     public INodeChatPersistenceService Persistence { get; } = Substitute.For<INodeChatPersistenceService>();

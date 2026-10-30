@@ -14,6 +14,9 @@
 - **Amends:** the "Operator-authored" invariant of [Graph Workflows](../wiki/21-graph-workflows.md) §1 ("Nothing
   generates one, and no agent may edit one"). That invariant is a wiki statement, not an ADR, so no ADR is amended;
   the wiki carries the amendment and links here.
+- **Amended 2026-10-30:** L1 and L2 (Decision 4) are validation errors that refuse validate, save and import; L3 stays a
+  warning, a stored graph is not re-checked at run start, and L1 counts an `Eq` pair as exclusive only over non-numbers
+  or integers that fit a long.
 
 ## Context
 

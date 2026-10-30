@@ -4,28 +4,30 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Three mistakes the parser accepts and a run then trips over, raised as warnings: a graph carrying them still
-///     saves, validates as valid and runs.
+///     Three mistakes the parser accepts and a run then trips over. The first two are errors that refuse validate, save
+///     and import; the third is a warning. A stored graph is not re-checked, so one saved earlier still runs.
 /// </summary>
 /// <remarks>
-///     An <c>All</c> join fed only by branches of one decision node, two of them exclusive (always skipped); an
-///     <c>upstream.&lt;key&gt;</c> binding to a node that is not an immediate predecessor (missing, the node fails); an
-///     <c>input.&lt;not a predecessor&gt;</c> binding where several predecessors can succeed (a map by key). Narrow on
-///     purpose: branches are exclusive only as <c>Eq</c> on one path with different values, or <c>Exists</c>/<c>NotExists</c>.
-///     The workflow designer treats every finding as must-fix. Rules: docs/wiki/21-graph-workflows.md ("Whole-graph rules").
+///     Errors: an <c>All</c> join fed only by branches of one decision node, two of them exclusive (always skipped); an
+///     <c>upstream.&lt;key&gt;</c> binding to a node that is not an immediate predecessor (missing, the node fails). Warning:
+///     an <c>input.&lt;not a predecessor&gt;</c> binding where several predecessors can succeed (a map by key). Narrow on
+///     purpose, see <see cref="Exclusive" />. The workflow designer treats every finding as must-fix.
+///     Rules: docs/wiki/21-graph-workflows.md ("Whole-graph rules").
 /// </remarks>
 internal static class GraphWorkflowSemanticLint
 {
-    public static IReadOnlyList<GraphWorkflowValidationError> Check(GraphWorkflowGraph graph)
+    /// <summary>The warnings, adding the errors to <paramref name="errors" />.</summary>
+    public static IReadOnlyList<GraphWorkflowValidationError> Check(GraphWorkflowGraph graph, List<GraphWorkflowValidationError> errors)
     {
         ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(errors);
 
         var warnings = new List<GraphWorkflowValidationError>();
         foreach (var node in graph.Nodes.Values.OrderBy(static node => node.NodeKey, StringComparer.Ordinal))
         {
             if (node.JoinPolicy == GraphWorkflowJoinPolicy.All && ExclusiveBranchSource(graph, node, everyPair: false) is { } decision)
             {
-                warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
+                errors.Add(new GraphWorkflowValidationError(node.NodeKey,
                     $"Node '{node.NodeKey}' waits for every inbound edge (joinPolicy 'All'), but they come from mutually exclusive branches of '{decision}', "
                     + "so one of them never fires and the node is always skipped. Set its joinPolicy to 'Any'."));
             }
@@ -40,7 +42,7 @@ internal static class GraphWorkflowSemanticLint
                 var segments = path.Split('.');
                 if (segments is ["upstream", var source, ..] && !predecessors.Contains(source))
                 {
-                    warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
+                    errors.Add(new GraphWorkflowValidationError(node.NodeKey,
                         $"Node '{node.NodeKey}' reads '{path}' in {member}, but '{source}' has no edge into '{node.NodeKey}'. The 'upstream' map holds only "
                         + "immediate predecessors, so the path is missing at run time and the node fails. Add an edge from "
                         + $"'{source}' to '{node.NodeKey}', or read the value through a node that has one."));
@@ -169,6 +171,10 @@ internal static class GraphWorkflowSemanticLint
     }
 
     /// <summary>Whether two out-edges of one node can never both fire on the same output document.</summary>
+    /// <remarks>
+    ///     <c>Eq</c> pairs count only over non-numbers or integers that fit a long: the runtime compares other numbers
+    ///     through decimal or double, so two distinct values (0.1…01 and 0.1…02, or 1.5e30 and 1.5000…1e30) can both match.
+    /// </remarks>
     private static bool Exclusive(GraphWorkflowGraphEdge first, GraphWorkflowGraphEdge second)
     {
         if (first.Condition is not { } a || second.Condition is not { } b || !string.Equals(a.Path, b.Path, StringComparison.Ordinal))
@@ -178,12 +184,15 @@ internal static class GraphWorkflowSemanticLint
 
         return (a.Operator, b.Operator) switch
         {
-            (GraphWorkflowConditionOperator.Eq, GraphWorkflowConditionOperator.Eq) => !JsonElement.DeepEquals(a.Value, b.Value),
+            (GraphWorkflowConditionOperator.Eq, GraphWorkflowConditionOperator.Eq) => ComparedExactly(a.Value) && ComparedExactly(b.Value) && !JsonElement.DeepEquals(a.Value, b.Value),
             (GraphWorkflowConditionOperator.Exists, GraphWorkflowConditionOperator.NotExists) => true,
             (GraphWorkflowConditionOperator.NotExists, GraphWorkflowConditionOperator.Exists) => true,
             _ => false
         };
     }
+
+    private static bool ComparedExactly(JsonElement value) =>
+        value.ValueKind != JsonValueKind.Number || value.TryGetInt64(out _);
 
     private readonly record struct BindingPath(string Member, string Path);
 }
