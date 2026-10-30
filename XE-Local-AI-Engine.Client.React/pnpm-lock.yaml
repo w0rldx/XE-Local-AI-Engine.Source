@@ -223,11 +223,11 @@ importers:
         specifier: ^14.6.0
         version: 14.6.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       i18next:
-        specifier: ^26.5.6
-        version: 26.5.6(typescript@6.0.3)
+        specifier: ^26.5.7
+        version: 26.5.7(typescript@6.0.3)
       i18next-browser-languagedetector:
-        specifier: ^8.2.1
-        version: 8.2.1
+        specifier: ^8.2.2
+        version: 8.2.2
       idb:
         specifier: ^8.0.4
         version: 8.0.4
@@ -244,8 +244,8 @@ importers:
         specifier: ^6.1.6
         version: 6.1.6(@types/react@19.3.0)(react@19.3.1)
       react-i18next:
-        specifier: ^17.1.4
-        version: 17.1.4(i18next@26.5.6(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
+        specifier: ^17.1.5
+        version: 17.1.5(i18next@26.5.7(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
       react-joyride:
         specifier: 3.2.0
         version: 3.2.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -3742,11 +3742,11 @@ packages:
     resolution: {integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==}
     engines: {node: '>= 6'}
 
-  i18next-browser-languagedetector@8.2.1:
-    resolution: {integrity: sha512-bZg8+4bdmaOiApD7N7BPT9W8MLZG+nPTOFlLiJiT8uzKXFjhxw4v2ierCXOwB5sFDMtuA5G4kgYZ0AznZxQ/cw==}
+  i18next-browser-languagedetector@8.2.2:
+    resolution: {integrity: sha512-99PKPDVeLj7s4nDJAz+z664/6IWEb2EyssTsknyzc1MY+mmtAXpx3BP862MrKLGRtmSJnlUioPuOE22F+RR+ng==}
 
-  i18next@26.5.6:
-    resolution: {integrity: sha512-GFWrDwGmYhOQS3bKvjA2Ir2ob9ScEdyY1UbeQJ10jyVACGQ6XxmDYqC/lxEj/IPEJlPQYNRnYffDET6TM8mnFg==}
+  i18next@26.5.7:
+    resolution: {integrity: sha512-mY9cECbKtiOqpcB8d8ijNsiPZQoTFULehBlWXZzzURpTm9aLbE2c3T2FKdGZhdEjlTvXUGd0TvCisL06YafO0Q==}
     peerDependencies:
       typescript: ^5 || ^6 || ^7
     peerDependenciesMeta:
@@ -4615,8 +4615,8 @@ packages:
       '@types/react':
         optional: true
 
-  react-i18next@17.1.4:
-    resolution: {integrity: sha512-1qGDcWXQ99pd5aPA9oikycr9lLoa6Iu79/aHS4pzgi3NLbM1hDE8RaAb1U/82vsssav9fsQARpcUtnmeGpFwEQ==}
+  react-i18next@17.1.5:
+    resolution: {integrity: sha512-dRSwnd2pACasvcZXR+uP+60vW61CJKw9ZUM12B4ZucrY9SEIIsLBWgpo8UneOUXQcUtvjQmHMeOJ03Vursl1Ag==}
     peerDependencies:
       i18next: '>= 26.2.0'
       react: '>= 16.8.0'
@@ -8718,11 +8718,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  i18next-browser-languagedetector@8.2.1:
+  i18next-browser-languagedetector@8.2.2:
     dependencies:
       '@babel/runtime': 7.29.7
 
-  i18next@26.5.6(typescript@6.0.3):
+  i18next@26.5.7(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
 
@@ -9839,11 +9839,11 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  react-i18next@17.1.4(i18next@26.5.6(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3):
+  react-i18next@17.1.5(i18next@26.5.7(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.29.7
       html-parse-stringify: 4.0.1
-      i18next: 26.5.6(typescript@6.0.3)
+      i18next: 26.5.7(typescript@6.0.3)
       react: 19.3.1
       use-sync-external-store: 1.6.0(react@19.3.1)
     optionalDependencies:
