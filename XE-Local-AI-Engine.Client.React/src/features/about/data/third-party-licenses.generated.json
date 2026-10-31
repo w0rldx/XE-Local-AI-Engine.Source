@@ -1266,9 +1266,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:follow-redirects@1.16.1",
+			"id": "frontend:follow-redirects@1.16.2",
 			"name": "follow-redirects",
-			"version": "1.16.1",
+			"version": "1.16.2",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/follow-redirects/follow-redirects",
 			"source": "frontend"

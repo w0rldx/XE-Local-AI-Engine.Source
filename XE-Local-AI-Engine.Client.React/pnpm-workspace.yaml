@@ -15,6 +15,8 @@ overrides:
   # fast-uri GHSA-hrr3-gc8f-f4qj, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h and GHSA-333x-w4r6-6crp
   # cover <3.1.9 (dev-only, via ajv under stylelint and react-doctor); 3.1.9 is the fixed patch.
   'fast-uri@<3.1.9': '3.1.9'
+  # follow-redirects (prod, via axios) GHSA-mrwp-f3q8-3g9p covers >=1.16.0 <=1.16.1; 1.16.2 is the fixed patch.
+  'follow-redirects@>=1.16.0 <1.16.2': '1.16.2'
 
 allowBuilds:
   msgpackr-extract: true
@@ -28,3 +30,5 @@ trustPolicyExclude:
 minimumReleaseAgeExclude:
   # Security patch for the fast-uri advisories above; wanted fresh, so exempt from the 7-day maturity hold.
   - 'fast-uri@3.1.9'
+  # Security patch for the follow-redirects advisory above; published inside the 7-day hold.
+  - 'follow-redirects@1.16.2'
