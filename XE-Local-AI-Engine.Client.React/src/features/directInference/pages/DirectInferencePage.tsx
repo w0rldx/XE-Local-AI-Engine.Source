@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { toChatModelOptions, toExternalModelOptions } from "@/core/models/ChatModelOptions";
+import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { type ChatSamplingOptions, toWireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -16,6 +17,7 @@ import {
 	applyDirectInferenceEvent,
 	type DirectInferenceRequest,
 	type DirectInferenceResult,
+	directInferenceDefaultMaxOutputTokens,
 	emptyDirectInferenceResult,
 } from "@/features/directInference/models/DirectInferenceModels";
 
@@ -28,7 +30,7 @@ interface ModelGroup {
 	items: { value: string; label: string }[];
 }
 
-function useDirectInferenceModelGroups(): ModelGroup[] {
+function useDirectInferenceModels(): { modelGroups: ModelGroup[]; llamaCppModels: Set<string> } {
 	const { t } = useTranslation();
 	const { data } = useQuery({ ...listLocalModelsOptions(), staleTime: 30_000 });
 	return useMemo(() => {
@@ -36,10 +38,11 @@ function useDirectInferenceModelGroups(): ModelGroup[] {
 		// Availability is not filtered here: the server refuses a model it cannot run with a classified error event.
 		const toItems = (options: { value: string; label: string; displayName?: string }[]) =>
 			options.map((option) => ({ value: option.value, label: option.displayName ?? option.label }));
+		const localOptions = toChatModelOptions(items, data?.isAvailable ?? false);
 		const groups: ModelGroup[] = [
 			{
 				group: t("pages.directInference.modelGroups.local", "Local"),
-				items: toItems(toChatModelOptions(items, data?.isAvailable ?? false)),
+				items: toItems(localOptions),
 			},
 			{ group: t("pages.directInference.modelGroups.external", "External"), items: toItems(toExternalModelOptions(items, true)) },
 			{
@@ -49,14 +52,19 @@ function useDirectInferenceModelGroups(): ModelGroup[] {
 					.map((item) => ({ value: item.modelName ?? "", label: item.displayLabel ?? item.modelName ?? "" })),
 			},
 		];
-		return groups.filter((group) => group.items.length > 0);
+		return {
+			modelGroups: groups.filter((group) => group.items.length > 0),
+			llamaCppModels: new Set(
+				localOptions.filter((option) => option.provider === LLAMACPP_PROVIDER).map((option) => option.value),
+			),
+		};
 	}, [data, t]);
 }
 
 /** One explicit prompt to one model: no agent, tools, history, persona, memory or knowledge base, and nothing saved. */
 export function DirectInferencePage() {
 	const { t } = useTranslation();
-	const modelGroups = useDirectInferenceModelGroups();
+	const { modelGroups, llamaCppModels } = useDirectInferenceModels();
 	const [modelId, setModelId] = useState<string | null>(null);
 	const [systemPrompt, setSystemPrompt] = useState("");
 	const [prompt, setPrompt] = useState("");
@@ -94,11 +102,22 @@ export function DirectInferencePage() {
 				controller.signal,
 			);
 		} catch (error) {
-			setResult({ ...accumulated, errorMessage: error instanceof Error ? error.message : String(error) });
+			if (!controller.signal.aborted) {
+				setResult({ ...accumulated, errorMessage: error instanceof Error ? error.message : String(error) });
+			}
 		} finally {
-			setRunning(false);
-			abortRef.current = undefined;
+			// A stopped attempt already went idle, and by now the page may belong to a newer Send: see the catch too.
+			if (!controller.signal.aborted) {
+				setRunning(false);
+				abortRef.current = undefined;
+			}
 		}
+	};
+
+	// Idle at once: while the hub is still connecting, the attempt only settles when the connection does.
+	const stop = (): void => {
+		abortRef.current?.abort();
+		setRunning(false);
 	};
 
 	const errorText =
@@ -149,13 +168,20 @@ export function DirectInferencePage() {
 						onChange={(event) => setPrompt(event.currentTarget.value)}
 						disabled={running}
 					/>
-					<DirectInferenceSamplingFields value={sampling} onChange={setSampling} disabled={running} />
+					<DirectInferenceSamplingFields
+						value={sampling}
+						onChange={setSampling}
+						disabled={running}
+						defaultMaxOutputTokens={
+							modelId !== null && llamaCppModels.has(modelId) ? directInferenceDefaultMaxOutputTokens : undefined
+						}
+					/>
 					<Group>
 						<Button onClick={run} loading={running} disabled={modelId === null || prompt.trim().length === 0}>
 							{t("pages.directInference.send", "Send")}
 						</Button>
 						{running && (
-							<Button variant="default" onClick={() => abortRef.current?.abort()}>
+							<Button variant="default" onClick={stop}>
 								{t("pages.directInference.stop", "Stop")}
 							</Button>
 						)}

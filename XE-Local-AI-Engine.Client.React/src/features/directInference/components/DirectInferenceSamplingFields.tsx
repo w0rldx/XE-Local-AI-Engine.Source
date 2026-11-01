@@ -3,18 +3,24 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type ChatSamplingOptions, samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
-import { directInferenceDefaultMaxOutputTokens } from "@/features/directInference/models/DirectInferenceModels";
 
 interface DirectInferenceSamplingFieldsProps {
 	value: ChatSamplingOptions;
 	onChange: (value: ChatSamplingOptions) => void;
 	disabled?: boolean;
+	/** The server's output cap for the selected model; undefined when it applies none. */
+	defaultMaxOutputTokens?: number;
 }
 
 // The chat sampling dialog's field table rendered inline as plain number inputs. A deliberate small copy rather than an
 // import: the dialog belongs to the chat feature. The server refuses an out-of-range value, so the inputs clamp to the
 // same ranges the table declares.
-export function DirectInferenceSamplingFields({ value, onChange, disabled }: DirectInferenceSamplingFieldsProps) {
+export function DirectInferenceSamplingFields({
+	value,
+	onChange,
+	disabled,
+	defaultMaxOutputTokens,
+}: DirectInferenceSamplingFieldsProps) {
 	const { t } = useTranslation();
 	// The textarea keeps what was typed, empty lines included, so Enter starts a new line; only the value it reports is normalised.
 	const [stopText, setStopText] = useState(() => (value.stop ?? []).join("\n"));
@@ -39,12 +45,18 @@ export function DirectInferenceSamplingFields({ value, onChange, disabled }: Dir
 								clampBehavior="strict"
 								disabled={disabled}
 								placeholder={
-									meta.key === "maxOutputTokens"
+									meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
 										? t("pages.directInference.maxOutputTokensDefault", "Default: {{tokens}}", {
-												tokens: directInferenceDefaultMaxOutputTokens.toLocaleString(),
+												tokens: defaultMaxOutputTokens.toLocaleString(),
 											})
 										: t("pages.chat.samplingOptions.modelDefault", "Model default")
 								}
+								description={
+									meta.key === "maxOutputTokens" && defaultMaxOutputTokens !== undefined
+										? t("pages.directInference.maxOutputTokensThinking", "Thinking counts toward this limit.")
+										: undefined
+								}
+								inputWrapperOrder={["label", "input", "description", "error"]}
 								value={(value[meta.key] as number | undefined) ?? ""}
 								onChange={(next) => onChange({ ...value, [meta.key]: typeof next === "number" ? next : undefined })}
 							/>

@@ -59,9 +59,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   prompt to a chosen local, external or cloud model with no agent, tools, history or persona, and persists nothing. It
   shows token usage and, for llama.cpp models, prompt/generation timings, tokens/s and time to first token. Out-of-range
   sampling values are refused (chat keeps skipping them). A request runs under the node's maximum message request
-  timeout, counted from when it takes the slot, and ends with a `Timeout` error; with no Max output tokens it is capped
-  at 8,192 tokens, and an answer cut off by a limit says so. The Codex subscription backend takes no output limit, so
-  only the timeout bounds it. New `LocalChatHub.StreamDirectInference` hub method.
+  timeout, counted from when it takes the slot, and ends with a `Timeout` error. With no Max output tokens, a llama.cpp
+  model is capped at 16,384 tokens, thinking included, and an answer cut off by a limit says so. Cloud and external
+  models get no default: only the timeout and any value you type apply, and the Codex subscription backend ignores a
+  typed value too. New `LocalChatHub.StreamDirectInference` hub method.
 
 - **GGUF tensor inspector** — the model details dialog has an **Inspect** tab for installed llama.cpp models: header
   metadata plus every tensor (name, shape, ggml type, size) grouped per block. New

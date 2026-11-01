@@ -3,8 +3,11 @@
 
 import type { WireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 
-/** The cap the server applies when a request sets none (`DirectInferenceService.DefaultMaxOutputTokens`). */
-export const directInferenceDefaultMaxOutputTokens = 8192;
+/**
+ * The cap the server applies to a llama.cpp model when a request sets none; thinking counts toward it. Other models get no
+ * default. `DirectInferenceServiceTests.ThePageStatesTheServersDefaultCap` holds this to `DirectInferenceService.DefaultMaxOutputTokens`.
+ */
+export const directInferenceDefaultMaxOutputTokens = 16384;
 
 export interface DirectInferenceRequest {
 	modelId: string;

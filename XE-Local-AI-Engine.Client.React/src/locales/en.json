@@ -3903,6 +3903,7 @@
 			"errorTitle": "The request failed",
 			"gpuWorkExclusive": "A training run, evaluation or export holds the GPU. Try again when it has finished.",
 			"maxOutputTokensDefault": "Default: {{tokens}}",
+			"maxOutputTokensThinking": "Thinking counts toward this limit.",
 			"metrics": {
 				"cachedTokens": "Cached tokens",
 				"firstToken": "Time to first token (ms)",

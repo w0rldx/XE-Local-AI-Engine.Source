@@ -3903,6 +3903,7 @@
 			"errorTitle": "Die Anfrage ist fehlgeschlagen",
 			"gpuWorkExclusive": "Ein Training, eine Evaluierung oder ein Export belegt die GPU. Versuchen Sie es erneut, wenn der Vorgang abgeschlossen ist.",
 			"maxOutputTokensDefault": "Standard: {{tokens}}",
+			"maxOutputTokensThinking": "Das Nachdenken zählt zu diesem Limit.",
 			"metrics": {
 				"cachedTokens": "Zwischengespeicherte Tokens",
 				"firstToken": "Zeit bis zum ersten Token (ms)",

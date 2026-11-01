@@ -9,12 +9,22 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 describe("DirectInferenceSamplingFields", () => {
 	afterEach(() => cleanup());
 
-	it("states the server's default output cap on the empty field", () => {
+	it("states a given default output cap on the empty field, and that thinking counts toward it", () => {
+		renderWithProviders(<DirectInferenceSamplingFields value={{}} onChange={vi.fn()} defaultMaxOutputTokens={16384} />);
+
+		const maxOutput = screen.getByLabelText("Max output tokens") as HTMLInputElement;
+
+		expect(maxOutput.placeholder).toBe(`Default: ${(16384).toLocaleString()}`);
+		expect(screen.getByText("Thinking counts toward this limit.")).toBeTruthy();
+	});
+
+	it("states no default when the model has none", () => {
 		renderWithProviders(<DirectInferenceSamplingFields value={{}} onChange={vi.fn()} />);
 
 		const maxOutput = screen.getByLabelText("Max output tokens") as HTMLInputElement;
 
-		expect(maxOutput.placeholder).toBe(`Default: ${(8192).toLocaleString()}`);
+		expect(maxOutput.placeholder).toBe("Model default");
+		expect(screen.queryByText("Thinking counts toward this limit.")).toBeNull();
 	});
 
 	it("keeps a typed newline so a second stop sequence can follow, and reports only non-empty lines", () => {

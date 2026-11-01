@@ -3,11 +3,14 @@
 // The Direct Inference page against a stubbed models route (MSW) and a faked shared-hub seam: it sends the request the
 // form describes, folds the streamed events into output and metrics, and shows an error event.
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DirectInferenceEvent } from "@/features/directInference/models/DirectInferenceModels";
+import {
+	type DirectInferenceEvent,
+	directInferenceDefaultMaxOutputTokens,
+} from "@/features/directInference/models/DirectInferenceModels";
 import { DirectInferencePage } from "@/features/directInference/pages/DirectInferencePage";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -36,7 +39,28 @@ const hub = vi.hoisted(() => {
 		}),
 	};
 	const handle = { connection, whenStarted: Promise.resolve(), release: vi.fn() };
-	return { state, connection, handle, dispose };
+	let finishStart: () => void = () => undefined;
+	let rejectStart: (error: Error) => void = () => undefined;
+	return {
+		state,
+		connection,
+		handle,
+		dispose,
+		/** Holds every acquire's `whenStarted` open, like a hub still negotiating. */
+		pendingStart(): void {
+			handle.whenStarted = new Promise<void>((resolve, reject) => {
+				finishStart = resolve;
+				rejectStart = reject;
+			});
+		},
+		failStart(error: Error): void {
+			rejectStart(error);
+		},
+		async finishStart(): Promise<void> {
+			finishStart();
+			await handle.whenStarted;
+		},
+	};
 });
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
@@ -51,19 +75,22 @@ function stubModels(): void {
 			HttpResponse.json({
 				isAvailable: true,
 				items: [
-					{
-						modelName: "qwen3",
-						displayLabel: null,
-						isSelected: false,
-						kind: "Chat",
-						detectedKind: "Chat",
-						capabilities: [],
-						isReasoningCapable: false,
-						isToolCapable: true,
-						isOverridden: false,
-						provider: "llamacpp",
-					},
-				],
+					["qwen3", "llamacpp"],
+					["gpt-6", "CodexOAuth"],
+					["ext:lan/qwen3", "external"],
+					["ollama-model", "ollama"],
+				].map(([modelName, provider]) => ({
+					modelName,
+					displayLabel: null,
+					isSelected: false,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: [],
+					isReasoningCapable: false,
+					isToolCapable: true,
+					isOverridden: false,
+					provider,
+				})),
 			}),
 		),
 	);
@@ -84,6 +111,97 @@ describe("DirectInferencePage", () => {
 		hub.state.requests = [];
 		hub.state.hang = false;
 		hub.dispose.mockClear();
+		hub.handle.release.mockClear();
+		hub.handle.whenStarted = Promise.resolve();
+	});
+
+	it.each(["gpt-6", "ext:lan/qwen3", "ollama-model"])(
+		"states the default output cap for a llama.cpp model, not for %s",
+		async (other) => {
+			stubModels();
+			renderWithProviders(<DirectInferencePage />);
+			const maxOutput = screen.getByLabelText("Max output tokens") as HTMLInputElement;
+			const pick = async (name: string): Promise<void> => {
+				fireEvent.click(screen.getByTestId("direct-inference-model"));
+				fireEvent.click(await screen.findByRole("option", { name, hidden: true }));
+			};
+			expect(maxOutput.placeholder).toBe("Model default");
+
+			await pick("qwen3");
+			expect(maxOutput.placeholder).toBe(`Default: ${directInferenceDefaultMaxOutputTokens.toLocaleString()}`);
+			expect(screen.getByText("Thinking counts toward this limit.")).toBeTruthy();
+
+			await pick(other);
+			expect(maxOutput.placeholder).toBe("Model default");
+			expect(screen.queryByText("Thinking counts toward this limit.")).toBeNull();
+		},
+	);
+
+	it("goes idle as soon as Stop is pressed while connecting, and the late connection sends nothing", async () => {
+		stubModels();
+		hub.pendingStart();
+		renderWithProviders(<DirectInferencePage />);
+
+		await fillAndSend();
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+		expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+		expect(screen.getByRole("button", { name: "Send" }).hasAttribute("data-loading")).toBe(false);
+		expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).disabled).toBe(false);
+
+		await hub.finishStart();
+
+		await waitFor(() => expect(hub.handle.release).toHaveBeenCalledTimes(1));
+		expect(hub.connection.stream).not.toHaveBeenCalled();
+		expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+	});
+
+	it("keeps a Send made right after Stop running when the stopped attempt settles", async () => {
+		stubModels();
+		hub.pendingStart();
+		renderWithProviders(<DirectInferencePage />);
+
+		await fillAndSend();
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+		hub.state.hang = true;
+		hub.state.events = [{ type: "delta", textDelta: "second" }] satisfies DirectInferenceEvent[];
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		await hub.finishStart();
+
+		await waitFor(() => expect(screen.getByTestId("direct-inference-output").textContent).toBe("second"));
+		await waitFor(() => expect(hub.handle.release).toHaveBeenCalledTimes(1));
+		expect(hub.state.requests).toHaveLength(1);
+		expect(hub.dispose).not.toHaveBeenCalled();
+
+		// Still running, and Stop still reaches the second attempt: the first one's finish took neither from it.
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+		expect(hub.dispose).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId("direct-inference-output").textContent).toBe("second");
+	});
+
+	it("keeps a newer Send's output when the stopped attempt's connection fails late", async () => {
+		stubModels();
+		hub.pendingStart();
+		renderWithProviders(<DirectInferencePage />);
+
+		await fillAndSend();
+		fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+		// The second attempt holds a connection that is already up; only the stopped one is still waiting on its negotiation.
+		hub.handle.whenStarted = Promise.resolve();
+		hub.state.hang = true;
+		hub.state.events = [{ type: "delta", textDelta: "second" }] satisfies DirectInferenceEvent[];
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+		await waitFor(() => expect(screen.getByTestId("direct-inference-output").textContent).toBe("second"));
+
+		hub.failStart(new Error("negotiation failed"));
+		await waitFor(() => expect(hub.handle.release).toHaveBeenCalledTimes(1));
+		// The page's own continuation runs after the lease is released.
+		await act(() => new Promise((resolve) => setTimeout(resolve)));
+
+		expect(screen.getByTestId("direct-inference-output").textContent).toBe("second");
+		expect(screen.queryByText("negotiation failed")).toBeNull();
+		expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
 	});
 
 	it("cancels a running request when the page unmounts", async () => {

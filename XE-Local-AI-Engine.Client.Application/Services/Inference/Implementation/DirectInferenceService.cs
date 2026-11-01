@@ -11,9 +11,13 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Sends <c>[System?, User]</c> straight to the node's <see cref="IChatClient" /> and relays what comes back.</summary>
@@ -21,16 +25,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     The singleton client is the cloud/local router, so model routing and its egress checks are the chat path's own.
 ///     The request takes the node's invocation slot like a chat turn, but writes no conversation and no run row; the
 ///     terminal state it reports only closes the slot's live entry. Generation runs under the node's message deadline and,
-///     unless the request sets its own, a default output cap.
+///     for an installed llama.cpp model whose request sets no limit of its own, a default output cap.
 /// </remarks>
 public sealed class DirectInferenceService : IDirectInferenceService
 {
-    /// <summary>The output cap for a request that sets none. The Direct Inference page states the same value.</summary>
-    internal const int DefaultMaxOutputTokens = 8_192;
+    /// <summary>The output cap for a llama.cpp request that sets none; thinking counts toward it. A test holds the Direct Inference page's copy to this value.</summary>
+    internal const int DefaultMaxOutputTokens = 16_384;
 
     private readonly IChatClient _chatClient;
     private readonly IWorkerEventDispatcher _dispatcher;
+    private readonly IGgufModelStore _ggufModelStore;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly ILocalModelProviderResolver _localModelProviderResolver;
+    private readonly IModelTrustResolver _modelTrustResolver;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<DirectInferenceService> _logger;
@@ -39,6 +46,9 @@ public sealed class DirectInferenceService : IDirectInferenceService
         IWorkerEventDispatcher dispatcher,
         IGpuWorkGate gpuWorkGate,
         INodeSettingsStore nodeSettingsStore,
+        IGgufModelStore ggufModelStore,
+        IModelTrustResolver modelTrustResolver,
+        ILocalModelProviderResolver localModelProviderResolver,
         TimeProvider timeProvider,
         ILogger<DirectInferenceService> logger)
     {
@@ -46,12 +56,18 @@ public sealed class DirectInferenceService : IDirectInferenceService
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
         ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        ArgumentNullException.ThrowIfNull(ggufModelStore);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
+        ArgumentNullException.ThrowIfNull(localModelProviderResolver);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
         _chatClient = chatClient;
         _dispatcher = dispatcher;
         _gpuWorkGate = gpuWorkGate;
         _nodeSettingsStore = nodeSettingsStore;
+        _ggufModelStore = ggufModelStore;
+        _modelTrustResolver = modelTrustResolver;
+        _localModelProviderResolver = localModelProviderResolver;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -78,8 +94,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             AdditionalProperties = additionalProperties
         };
         InvocationSamplingRules.Apply(options, additionalProperties, sampling);
-        ReasoningOptionsResolver.ApplyDefaultOutputCap(options, additionalProperties, DefaultMaxOutputTokens);
-        return StreamCoreAsync(modelId, messages, options, cancellationToken);
+        return StreamCoreAsync(modelId, messages, options, additionalProperties, cancellationToken);
     }
 
     private static InvocationSamplingOptions? ValidateAndMapSampling(DirectInferenceRequest request)
@@ -112,6 +127,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
     private async IAsyncEnumerable<DirectInferenceEvent> StreamCoreAsync(string modelId,
         List<ChatMessage> messages,
         ChatOptions options,
+        AdditionalPropertiesDictionary additionalProperties,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var invocationId = Guid.NewGuid();
@@ -125,6 +141,13 @@ public sealed class DirectInferenceService : IDirectInferenceService
 
         // Read before admission: past it, a failed read would leave the live entry open.
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
+
+        // An unknown id takes no default either: it is not installed, so the provider refuses it before generating anything.
+        if (await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(modelId, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
+        {
+            ReasoningOptionsResolver.ApplyDefaultOutputCap(options, additionalProperties, DefaultMaxOutputTokens);
+        }
+
         await using var lease = await InvocationSlotAdmission.AcquireAsync(_dispatcher, AdmissionPackage(invocationId, modelId, messages), cancellationToken);
 
         // Started only now: time queued behind another turn is not generation time.

@@ -1,19 +1,26 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -24,6 +31,11 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 public sealed class DirectInferenceServiceTests
 {
     private const string ModelId = "qwen3.5-9b";
+    private const string CodexModelId = "gpt-6";
+    private const string AzureDeploymentName = "my-azure-deployment";
+    private const string LocalExternalModelId = "ext:lan/qwen3";
+    private const string CloudExternalModelId = "ext:hosted/qwen3";
+    private const string UnknownModelId = "no-such-model";
 
     [Test]
     public async Task StreamAsync_SendsSystemThenUser_WithNoTools_AndTheMappedSampling()
@@ -260,15 +272,78 @@ public sealed class DirectInferenceServiceTests
     }
 
     [Test]
-    [Arguments(ModelId)]
-    [Arguments("gpt-6")]
-    public async Task StreamAsync_WithNoOutputLimit_SendsTheDefaultCap(string modelId)
+    public async Task StreamAsync_AnInstalledLlamaModelWithNoOutputLimit_SendsTheDefaultCap()
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+
+        AssertEx.Equal(16_384, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+    }
+
+    [Test]
+    [Arguments(CodexModelId)]
+    [Arguments(AzureDeploymentName)]
+    [Arguments(LocalExternalModelId)]
+    [Arguments(CloudExternalModelId)]
+    [Arguments(UnknownModelId)]
+    public async Task StreamAsync_AModelNotServedByLlamaCppWithNoOutputLimit_SendsNoCap(string modelId)
     {
         var harness = new Harness(Updates(Text("x"), Finish()));
 
         _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = modelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
 
-        AssertEx.Equal(8_192, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+        var options = AssertEx.NotNull(harness.SentOptions);
+        AssertEx.Null(options.MaxOutputTokens);
+        AssertEx.False(AssertEx.NotNull(options.AdditionalProperties).ContainsKey(InvocationAgentDefinition.DefaultOutputCapMarkerKey), "no default limit, so no default-limit marker");
+    }
+
+    [Test]
+    public async Task StreamAsync_AnInstalledModelMappedToOllamaWithNoOutputLimit_SendsNoCap()
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns(OllamaLocalModelProvider.OllamaProviderName);
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+
+        AssertEx.Null(AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+    }
+
+    [Test]
+    [Arguments(ModelId)]
+    [Arguments(CodexModelId)]
+    [Arguments(AzureDeploymentName)]
+    [Arguments(LocalExternalModelId)]
+    [Arguments(CloudExternalModelId)]
+    [Arguments(UnknownModelId)]
+    public async Task StreamAsync_ATypedLimit_IsSentForEveryModel(string modelId)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+                                 {
+                                     ModelId = modelId,
+                                     Prompt = "Hi",
+                                     SamplingOptions = new SamplingOptions { MaxOutputTokens = 100 }
+                                 },
+                                 CancellationToken.None)
+                             .ToListAsync();
+
+        AssertEx.Equal(100, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+    }
+
+    [Test]
+    public async Task ThePageStatesTheServersDefaultCap()
+    {
+        var source = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React",
+            "src",
+            "features",
+            "directInference",
+            "models",
+            "DirectInferenceModels.ts"));
+
+        var declaration = string.Create(CultureInfo.InvariantCulture, $"directInferenceDefaultMaxOutputTokens = {DirectInferenceService.DefaultMaxOutputTokens};");
+        AssertEx.True(source.Contains(declaration, StringComparison.Ordinal), $"DirectInferenceModels.ts must declare '{declaration}'");
     }
 
     [Test]
@@ -363,10 +438,17 @@ public sealed class DirectInferenceServiceTests
                 History,
                 NullLogger<WorkerEventDispatcher>.Instance,
                 TimeProvider.System);
-            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Settings, Time, NullLogger<DirectInferenceService>.Instance);
+            // The gate is real over its seams: only ModelId is installed, and an unmapped id routes to llamacpp as in production.
+            var models = Substitute.For<IGgufModelStore>();
+            models.ExistsAsync(ModelId, Arg.Any<CancellationToken>()).Returns(true);
+            Providers.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(LlamaServerProviderConstants.ProviderName);
+            var trust = new FakeModelTrustResolver().Register("lan", "qwen3").Register("hosted", "qwen3", ExternalProviderLocality.Cloud);
+            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Settings, models, trust, Providers, Time, NullLogger<DirectInferenceService>.Instance);
         }
 
         public Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>> Stream { get; set; }
+
+        public ILocalModelProviderResolver Providers { get; } = Substitute.For<ILocalModelProviderResolver>();
 
         public ManualTimeProvider Time { get; } = new();
 
