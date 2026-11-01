@@ -1,6 +1,8 @@
-// What the next request would resolve, so the pre-send estimate matches the turn: model (blank = node default), agent,
-// the local-tools toggle and the developer-mode output reserve and window overrides.
+// What the next request would resolve, so the pre-send estimate matches the turn: the conversation (a plain one has its
+// own prompt and no tools), model (blank = node default), agent, the local-tools toggle and the developer-mode output
+// reserve and window overrides.
 export interface ContextEstimateRequest {
+	conversationId?: string;
 	modelName: string;
 	agentId?: string;
 	useLocalTools: boolean;
@@ -27,12 +29,13 @@ export const nodeChatQueryKeys = {
 	// invalidation reaches it; the compact mutation invalidates it explicitly so an open panel refreshes after a fold.
 	conversationContextState: (conversationId: string) =>
 		[...nodeChatQueryKeys.conversation(conversationId), "context-state"] as const,
-	// Pre-send estimate of the fixed context parts for a model and agent. Not under a conversation: it depends only
-	// on what the next request would resolve, so a new conversation reuses it.
-	contextEstimate: ({ modelName, agentId, useLocalTools, maxOutputTokens, numCtx }: ContextEstimateRequest) =>
+	// Prefix of one conversation's pre-send estimates. Not under the detail key: a turn's refresh must not refetch them.
+	contextEstimates: (conversationId: string | undefined) =>
+		[...nodeChatQueryKeys.all, "context-estimate", conversationId ?? null] as const,
+	// Pre-send estimate of the fixed context parts for a conversation, model and agent.
+	contextEstimate: ({ conversationId, modelName, agentId, useLocalTools, maxOutputTokens, numCtx }: ContextEstimateRequest) =>
 		[
-			...nodeChatQueryKeys.all,
-			"context-estimate",
+			...nodeChatQueryKeys.contextEstimates(conversationId),
 			modelName,
 			agentId ?? null,
 			useLocalTools,

@@ -329,6 +329,37 @@ describe("Chat workflow mode", () => {
 		expect(bodies).toHaveLength(0);
 	});
 
+	it("sends a plain conversation through the chat stream despite a workflow pick, and keeps the pick", async () => {
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation({ isPlain: true })] });
+		adapter.getConversation.mockResolvedValue(conversation({ isPlain: true }));
+		useChatWorkflowStore.getState().actions.selectDefinition(conversationId, definitionId);
+		server.use(runsRoute([]));
+		const bodies = messagesRoute();
+		adapter.sendMessage.mockImplementation(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				yield {
+					type: nodeChatStreamEventTypes.assistantCompleted,
+					conversationId,
+					messageId: "assistant-1",
+					requestId: "request-1",
+					status: "completed",
+					sequence: 1,
+					occurredAtUtc: 1_700_000_000_000,
+					content: "hi",
+				};
+			},
+		}));
+		renderChat();
+		await screen.findByTestId("chat-plain-notice");
+
+		await typeAndSend("hello");
+
+		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
+		expect(bodies).toHaveLength(0);
+		// Turning plain off restores workflow mode, so the stored pick stays.
+		expect(useChatWorkflowStore.getState().selectedDefinitionByConversation[conversationId]).toBe(definitionId);
+	});
+
 	it("says the conversation is running a workflow when the hub refuses a normal send for it", async () => {
 		server.use(runsRoute([]));
 		adapter.sendMessage.mockImplementation(() => ({
@@ -514,7 +545,7 @@ describe("Chat workflow mode", () => {
 	});
 
 	it("keeps the pick made on the empty composer when the conversation is created before the first send", async () => {
-		// An upload (ensureConversationId) or "New plain chat" creates the conversation ahead of the send; the pick follows it.
+		// An upload (ensureConversationId) or "New chat" creates the conversation ahead of the send; the pick follows it.
 		const created = conversation({ title: "New conversation" });
 		adapter.listConversations.mockResolvedValue({ conversations: [] });
 		adapter.createConversation.mockResolvedValue(created);

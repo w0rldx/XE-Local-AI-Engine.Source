@@ -568,6 +568,7 @@
 		"devWorkflows": "Workflow Runs",
 		"development": "Development",
 		"diagnostics": "Diagnostics",
+		"directInference": "Direct inference",
 		"externalAppsCatalog": "Catalog",
 		"externalAppsGroup": "External Apps",
 		"externalAppsInstalled": "Installed",
@@ -2338,7 +2339,7 @@
 			"modelUnavailable": "Unavailable",
 			"modelUnloadingIn": "Unloading in {{time}}",
 			"nativeReasoningLabel": "Native reasoning",
-			"newConversation": "New plain chat",
+			"newConversation": "New chat",
 			"newEncryptedConversation": "New encrypted chat",
 			"noMessages": "No messages yet.",
 			"noModelGuidance": {
@@ -2352,6 +2353,15 @@
 			"nodeDefaultModel": "Node default",
 			"nodeReply": "Node reply",
 			"pendingApprovalLabel": "Pending approval",
+			"plainMode": {
+				"editPrompt": "Edit system prompt",
+				"label": "Plain",
+				"notice": "Plain chat: no agent, tools or knowledge base. Only your system prompt, if any, is sent.",
+				"promptDescription": "Sent verbatim on every later turn. Leave it empty to send no system prompt.",
+				"promptLabel": "System prompt",
+				"save": "Save",
+				"tooltip": "Plain chat: no agent, tools, knowledge base or memory. Only your system prompt, if any, is sent."
+			},
 			"queued": "Queued — starts after the node's current chat, work session step, benchmark or training run",
 			"reasoning": {
 				"effort": {
@@ -3885,6 +3895,39 @@
 				"retry": "Check the workflow again",
 				"unreadable": "The status of the development workflow that created this task could not be read, so it is not known whether that workflow still owns the decision. This page stays read-only until it can be."
 			}
+		},
+		"directInference": {
+			"copied": "Copied",
+			"copyJson": "Copy as JSON",
+			"errorTitle": "The request failed",
+			"gpuWorkExclusive": "A training run, evaluation or export holds the GPU. Try again when it has finished.",
+			"metrics": {
+				"cachedTokens": "Cached tokens",
+				"firstToken": "Time to first token (ms)",
+				"generationMs": "Generation ms",
+				"generationRate": "Generation tok/s",
+				"inputTokens": "Input tokens",
+				"notAvailable": "n/a",
+				"outputTokens": "Output tokens",
+				"promptMs": "Prompt ms",
+				"promptRate": "Prompt tok/s",
+				"reasoningTokens": "Reasoning tokens",
+				"total": "Total (ms)"
+			},
+			"model": "Model",
+			"modelGroups": {
+				"cloud": "Cloud",
+				"external": "External",
+				"local": "Local"
+			},
+			"modelPlaceholder": "Choose a model",
+			"output": "Output",
+			"prompt": "Prompt",
+			"send": "Send",
+			"stop": "Stop",
+			"subtitle": "Send one prompt straight to a model: no agent, tools, history, memory or knowledge base. Nothing is saved.",
+			"systemPrompt": "System prompt (optional)",
+			"title": "Direct inference"
 		},
 		"externalAccess": {
 			"custom": {
@@ -6426,6 +6469,34 @@
 					"storageUnknown": "Available storage could not be verified.",
 					"warnings": "Warnings"
 				}
+			},
+			"inspect": {
+				"architecture": "Architecture",
+				"block": "Block {{index}}",
+				"blockSummary": "{{count}} tensors · {{size}}",
+				"chatTemplate": "Chat template",
+				"columns": {
+					"name": "Name",
+					"shape": "Shape",
+					"size": "Size",
+					"type": "Type"
+				},
+				"context": "Context length",
+				"embedding": "Embedding width",
+				"headerBytes": "Header size",
+				"heads": "Attention heads (KV)",
+				"layers": "Layers",
+				"loadError": "Failed to read the model file.",
+				"metadata": "Metadata",
+				"nonBlock": "Outside blocks",
+				"parameters": "Parameters",
+				"quant": "Quantization",
+				"readFailure": "The file could not be read completely ({{reason}}). Only the header metadata is shown.",
+				"split": "This model is split into {{count}} files; only the first file's tensors are listed.",
+				"tab": "Inspect",
+				"tensorBytes": "Tensor data",
+				"tensorCount": "Tensors",
+				"unknownType": "type {{id}}"
 			},
 			"launchArgs": {
 				"description": "Space-separated flags, for example ",

@@ -23,6 +23,8 @@ internal static class LocalChatMapper
             SelectedPath = conversation.SelectedPath,
             AgentDefinitionId = conversation.AgentDefinitionId,
             MemoryExcluded = conversation.MemoryExcluded,
+            IsPlain = conversation.IsPlain,
+            PlainSystemPrompt = conversation.PlainSystemPrompt,
             Messages = conversation.Messages.Select(static message => message.ToResponse()).ToArray()
         };
     }

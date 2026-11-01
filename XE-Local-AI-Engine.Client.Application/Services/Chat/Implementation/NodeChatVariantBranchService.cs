@@ -65,8 +65,8 @@ internal sealed class NodeChatVariantBranchService
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.Transaction = dbTransaction;
                 conversationCommand.CommandText = """
-                                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id)
-                                                  VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id);
+                                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, is_plain, plain_system_prompt)
+                                                  VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id, $is_plain, $plain_system_prompt);
                                                   """;
                 AddParameter(conversationCommand, "$conversation_id", branchedConversationId);
                 AddParameter(conversationCommand, "$title", EncryptTitle(source.Title, dbContext, branchedConversationId));
@@ -76,6 +76,10 @@ internal sealed class NodeChatVariantBranchService
                 // A branch is always a fresh node-local conversation, even when branched from a remote mirror.
                 AddParameter(conversationCommand, "$origin", NodeChatOriginValues.Local);
                 AddParameter(conversationCommand, "$branch_of_conversation_id", request.ConversationId);
+                // A branch of a plain conversation stays plain. The prompt's AAD binds the conversation id, so it is
+                // re-encrypted for the branch, like the title above.
+                AddParameter(conversationCommand, "$is_plain", source.IsPlain ? 1 : 0);
+                AddParameter(conversationCommand, "$plain_system_prompt", dbContext.EncryptConversationPlainSystemPrompt(source.PlainSystemPrompt, branchedConversationId));
                 await OpenIfNeededAsync(conversationCommand.Connection, token);
                 await conversationCommand.ExecuteNonQueryAsync(token);
 

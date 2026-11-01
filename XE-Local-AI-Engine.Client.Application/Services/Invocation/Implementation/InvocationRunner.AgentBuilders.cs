@@ -710,7 +710,7 @@ public sealed partial class InvocationRunner
     ///     <see cref="InvocationSamplingOptions" /> the factory consumes (.AI.Agent cannot reference Client.Models).
     ///     Returns null when no overrides were requested so the no-override path stays byte-identical.
     /// </summary>
-    private static InvocationSamplingOptions? MapSamplingOptions(SamplingOptions? sampling)
+    internal static InvocationSamplingOptions? MapSamplingOptions(SamplingOptions? sampling)
     {
         if (sampling is null)
         {

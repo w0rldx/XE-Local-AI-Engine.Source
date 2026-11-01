@@ -21,7 +21,7 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
 {
     private const string ChatInputPlaceholder = "Type your message";
     private const string SendButtonTestId = "chat-send-button";
-    private const string NewConversationButtonName = "New plain chat";
+    private const string NewConversationButtonName = "New chat";
 
     /// <summary>
     ///     The FakeOllama chat model this suite sends against. It must be picked EXPLICITLY in the composer:
@@ -91,7 +91,8 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
 
         var newButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = NewConversationButtonName
+            Name = NewConversationButtonName,
+            Exact = true
         });
         await Expect(newButton).ToBeVisibleAsync();
         await newButton.ClickAsync();

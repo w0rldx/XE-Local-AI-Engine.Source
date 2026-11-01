@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -187,6 +188,22 @@ internal sealed class NodeChatConversationCommands
 
                 await OpenIfNeededAsync(command.Connection, token);
                 return await command.ExecuteScalarAsync(token) as string;
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Whether the conversation is plain; false when it does not exist or was soft-deleted.</summary>
+    public async Task<bool> IsConversationPlainAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT is_plain FROM conversations WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$conversation_id", conversationId);
+
+                await OpenIfNeededAsync(command.Connection, token);
+                return await command.ExecuteScalarAsync(token) is long isPlain && isPlain != 0;
             },
             cancellationToken);
     }
@@ -446,6 +463,42 @@ internal sealed class NodeChatConversationCommands
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET memory_excluded = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.MemoryExcluded, request.UpdatedAtUtc, request.ConversationId],
                     token);
+
+                return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
+            },
+            cancellationToken);
+    }
+
+    public async Task<NodeChatConversationDto> SetConversationPlainAsync(NodeChatSetConversationPlainRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.PlainSystemPrompt?.Length > NodeChatSetConversationPlainRequest.MaxPlainSystemPromptLength)
+        {
+            throw new NodeChatInvalidRequestException(
+                $"The system prompt is longer than {NodeChatSetConversationPlainRequest.MaxPlainSystemPromptLength} characters.");
+        }
+
+        var prompt = string.IsNullOrWhiteSpace(request.PlainSystemPrompt) ? null : request.PlainSystemPrompt;
+
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
+            async (dbContext, token) =>
+            {
+                // Raw ADO.NET for the same DBNull reason as SetCompactionSummaryAsync; the prompt is encrypted first.
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                // Only an ordinary chat can be plain: a work session or another owned conversation runs its owner's agent.
+                command.CommandText =
+                    "UPDATE conversations SET is_plain = $is_plain, plain_system_prompt = $prompt, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0 AND kind = $kind;";
+                AddParameter(command, "$is_plain", request.IsPlain ? 1 : 0);
+                AddParameter(command, "$prompt", dbContext.EncryptConversationPlainSystemPrompt(prompt, request.ConversationId));
+                AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                AddParameter(command, "$kind", NodeConversationKind.Chat);
+                await OpenIfNeededAsync(command.Connection, token);
+                var updated = await command.ExecuteNonQueryAsync(token);
+                if (updated == 0 && await ReadConversationRowAsync(dbContext, request.ConversationId, token) is { Purged: false })
+                {
+                    throw new NodeChatInvalidRequestException("Only an ordinary chat conversation can be plain.");
+                }
 
                 return await ReadUpdatedConversationAsync(dbContext, updated, request.ConversationId, token);
             },

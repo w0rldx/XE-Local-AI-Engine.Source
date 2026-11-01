@@ -413,6 +413,8 @@ export function ChatComposerToolbar({
 					<Group gap={4} wrap="nowrap">
 						<ContextUsagePopover
 							usage={contextUsage}
+							// No conversation is selected yet: a fresh turn, whose first send creates one.
+							conversationId={conversationId || undefined}
 							// The send path's model rule: the local-default sentinel travels as no model, which the node resolves itself.
 							modelName={toNodeChatRequestModel(selectedModel) ?? ""}
 							// The send path's rule: an agent applies only in agent mode and while it is still listed.

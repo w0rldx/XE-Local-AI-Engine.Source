@@ -47,7 +47,7 @@ describe("deriveChatMessageDisplay agent name", () => {
 		await i18next.changeLanguage("en");
 	});
 
-	function agentNameFor(agentName: string | undefined): string | undefined {
+	function agentNameFor(agentName: string | undefined, isPlainConversation = false): string | undefined {
 		return deriveChatMessageDisplay({
 			message: {
 				id: "m1",
@@ -62,6 +62,7 @@ describe("deriveChatMessageDisplay agent name", () => {
 			isStreaming: false,
 			showFeedbackControls: false,
 			isWorkSessionConversation: false,
+			isPlainConversation,
 			t: i18next.t,
 		}).agentDisplayName;
 	}
@@ -74,5 +75,12 @@ describe("deriveChatMessageDisplay agent name", () => {
 		expect(agentNameFor("Default Assistant")).toBe(de.pages.chat.defaultAgentName);
 		expect(agentNameFor(undefined)).toBe(de.pages.chat.defaultAgentName);
 		expect(agentNameFor("Mathematician")).toBe("Mathematician");
+	});
+
+	// A plain turn runs no agent, so the node stamps none; labelling it "Default Assistant" would claim a persona it never had.
+	it("shows no agent on an unattributed turn of a plain conversation but keeps a stamped one", () => {
+		expect(agentNameFor(undefined, true)).toBeUndefined();
+		expect(agentNameFor("Mathematician", true)).toBe("Mathematician");
+		expect(agentNameFor(undefined, false)).toBe("Default Assistant");
 	});
 });

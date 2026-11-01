@@ -84,6 +84,7 @@ export interface ChatMessageDisplayInput {
 	// Live failure classification (e.g. "inter-chunk-stall") from the stream state.
 	failureCategory?: string;
 	isWorkSessionConversation: boolean;
+	isPlainConversation?: boolean;
 	t: TFunction;
 }
 
@@ -125,6 +126,7 @@ export function deriveChatMessageDisplay({
 	onSubmitFeedback,
 	failureCategory,
 	isWorkSessionConversation,
+	isPlainConversation = false,
 	t,
 }: ChatMessageDisplayInput): ChatMessageDisplay {
 	const label = roleLabel(message.role, t);
@@ -137,11 +139,13 @@ export function deriveChatMessageDisplay({
 	// time (see appendOptimisticNodeChatSend) and carried through every stream-state rebuild, so the correct
 	// agent shows live. The fallback only covers legacy turns and turns sent with no agent selected.
 	// The seeded default persona's stored name is English data, not copy, so it is shown in the reader's language too.
-	const agentDisplayName = assistantMessage
-		? message.agentName == null || message.agentName === seededDefaultAgentName
-			? t("pages.chat.defaultAgentName", "Default Assistant")
-			: message.agentName
-		: undefined;
+	// A plain conversation's turns run no agent at all, so an unattributed one there gets no label instead.
+	const agentDisplayName =
+		assistantMessage && !(isPlainConversation && message.agentName == null)
+			? message.agentName == null || message.agentName === seededDefaultAgentName
+				? t("pages.chat.defaultAgentName", "Default Assistant")
+				: message.agentName
+			: undefined;
 	// Model that produced the turn (ground truth from the persisted message — Ollama id or Codex/cloud id).
 	// Shown on every assistant turn that carries a model so multiple-provider threads stay auditable. Absent for
 	// legacy turns with no persisted model and for user turns → omitted.

@@ -23,5 +23,8 @@ public static partial class LocalApiRoutes
         // Developer/advanced per-model extra llama-server launch-argument override. The literal "launch-args" segment
         // follows the model name, mirroring "kind"/"unload", so it stays distinct from ModelByName.
         public const string ModelLaunchArguments = "models/{modelName}/launch-args";
+
+        // Read-only header metadata + tensor list of an installed GGUF. The literal "gguf-inspection" segment keeps it distinct from ModelByName.
+        public const string GgufInspection = "models/{modelName}/gguf-inspection";
     }
 }

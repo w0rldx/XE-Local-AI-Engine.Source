@@ -122,6 +122,7 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.models,
 			nodeRoutePaths.modelRecommendations,
 			nodeRoutePaths.loadedModels,
+			nodeRoutePaths.directInference,
 		]);
 		// cloudSettings and externalProviders are both on by default (each is a node-local provider-credential
 		// surface needing no Central Platform); they share the one Cloud Providers entry.
@@ -143,11 +144,11 @@ describe("navigationLinks", () => {
 		]);
 	});
 
-	it("keeps only Installed under Models when modelFit and loadedModels are off", async () => {
+	it("keeps only the ungated Installed and Direct inference under Models when modelFit and loadedModels are off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ modelFit: false, loadedModels: false });
 		const models = gatedLinks.find((link) => link.id === "models");
 
-		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.models]);
+		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.models, nodeRoutePaths.directInference]);
 	});
 
 	it("drops the loaded-models child from Models when loadedModels is off", async () => {

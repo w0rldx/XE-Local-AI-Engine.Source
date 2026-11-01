@@ -456,6 +456,79 @@ public sealed class ChatContextEstimateServiceTests
         }));
     }
 
+    [Test]
+    public async Task Estimate_ForAPlainConversationWithoutAPrompt_ChargesNothingAndNeverResolvesAnAgent()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+        var conversationId = harness.AddConversation(isPlain: true, plainSystemPrompt: null);
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ConversationId = conversationId,
+            ModelName = LocalModel,
+            AgentId = Guid.NewGuid()
+        }));
+
+        var expected = AssertEx.NotNull(estimate.Estimated);
+        AssertEx.Equal(0, expected.SystemPromptTokens);
+        AssertEx.Equal(0, expected.ToolSchemaTokens);
+        AssertEx.Equal(0, expected.ToolTemplatePreambleTokens);
+        AssertEx.Equal(0, expected.TotalTokens);
+        AssertEx.Empty(estimate.Tools);
+        await harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(Guid?), default, default, default, default, default, default);
+    }
+
+    [Test]
+    public async Task Estimate_ForAPlainConversationWithAPrompt_ChargesThePromptAndNoTools()
+    {
+        const string prompt = "Answer in one sentence.";
+        var harness = new Harness(CreateTool("get_time"));
+        var conversationId = harness.AddConversation(isPlain: true, prompt);
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ConversationId = conversationId,
+            ModelName = LocalModel
+        }));
+
+        var expected = AssertEx.NotNull(estimate.Estimated);
+        AssertEx.Equal(ConversationContextBudgeter.EstimateSystemPromptTokens(harness.Estimator, prompt, harness.Estimator.ResolveDivisor(LocalModel)), expected.SystemPromptTokens);
+        AssertEx.Equal(expected.SystemPromptTokens, expected.TotalTokens);
+        AssertEx.Empty(estimate.Tools);
+    }
+
+    [Test]
+    public async Task Estimate_ForAnOrdinaryConversation_MatchesTheEstimateWithoutOne()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+        var conversationId = harness.AddConversation(isPlain: false, plainSystemPrompt: "Stored but inactive.");
+
+        var withConversation = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ConversationId = conversationId,
+            ModelName = LocalModel
+        }));
+        var without = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel
+        }));
+
+        AssertEx.Equal(AssertEx.NotNull(without.Estimated).TotalTokens, AssertEx.NotNull(withConversation.Estimated).TotalTokens);
+        AssertEx.Equal("get_time", string.Join(",", withConversation.Tools.Select(static tool => tool.Name)));
+    }
+
+    [Test]
+    public async Task Estimate_ForAConversationTheNodeDoesNotKnow_IsNull()
+    {
+        var harness = new Harness(CreateTool("get_time"));
+
+        AssertEx.Null(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ConversationId = Guid.NewGuid(),
+            ModelName = LocalModel
+        }));
+    }
+
     private static AllowedToolDto CreateTool(string name)
     {
         return new AllowedToolDto
@@ -541,7 +614,8 @@ public sealed class ChatContextEstimateServiceTests
                 Options.Create(new LocalChatAgentOptions()),
                 details,
                 Estimator,
-                Options.Create(new ConversationContextBudgetOptions()));
+                Options.Create(new ConversationContextBudgetOptions()),
+                Persistence);
         }
 
         private static LocalModelDescriptor CreateGgufDescriptor(string name)
@@ -557,7 +631,27 @@ public sealed class ChatContextEstimateServiceTests
             };
         }
 
+        public Guid AddConversation(bool isPlain, string? plainSystemPrompt)
+        {
+            var conversationId = Guid.NewGuid();
+            Persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationDto
+            {
+                ConversationId = conversationId,
+                Title = "conversation",
+                UserId = null,
+                CreatedAtUtc = 1,
+                LastSeenUtc = 1,
+                Purged = false,
+                Messages = [],
+                IsPlain = isPlain,
+                PlainSystemPrompt = plainSystemPrompt
+            });
+            return conversationId;
+        }
+
         public IAgentDefinitionResolver AgentResolver { get; } = Substitute.For<IAgentDefinitionResolver>();
+
+        public INodeChatPersistenceService Persistence { get; } = Substitute.For<INodeChatPersistenceService>();
 
         public HeuristicTokenEstimator Estimator { get; }
 

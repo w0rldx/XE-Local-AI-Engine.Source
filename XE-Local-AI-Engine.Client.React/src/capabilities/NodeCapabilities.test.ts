@@ -113,6 +113,7 @@ describe("nodeCapabilities", () => {
 			transcription: "/transcription",
 			transcriptionSession: "/transcription/$sessionId",
 			diagnostics: "/diagnostics",
+			directInference: "/direct-inference",
 		});
 	});
 });

@@ -4493,6 +4493,11 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMe
 	memoryExcluded: z.boolean().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest = z.object({
+	isPlain: z.boolean().optional(),
+	plainSystemPrompt: z.string().min(0).max(16000).nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = z.object({
 	rating: z.string(),
 	comment: z.string().nullish(),
@@ -4515,7 +4520,58 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelRespons
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetModelGgufInspectionRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto = z.object({
+	name: z.string(),
+	shape: z.array(z.int()),
+	ggmlType: z.string().nullable(),
+	ggmlTypeId: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	offset: z.int(),
+	byteSize: z.int().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorBlockDto = z.object({
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	byteSize: z.int().nullable(),
+	tensors: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse = z.object({
+	modelName: z.string(),
+	readFailure: z.string().nullable(),
+	ggufVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	architecture: z.string().nullable(),
+	displayName: z.string().nullable(),
+	parameterCount: z.int().nullable(),
+	fileType: z.string().nullable(),
+	blockCount: z.int().nullable(),
+	attentionHeadCount: z.int().nullable(),
+	attentionHeadCountKv: z.int().nullable(),
+	embeddingLength: z.int().nullable(),
+	contextLength: z.int().nullable(),
+	expertCount: z.int().nullable(),
+	chatTemplate: z.string().nullable(),
+	splitCount: z.int().nullable(),
+	tensorCount: z.int(),
+	totalTensorBytes: z.int().nullable(),
+	headerBytes: z.int(),
+	fileSizeBytes: z.int(),
+	blocks: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorBlockDto),
+	nonBlockTensors: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto),
+});
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = z.object({
 	modelName: z.string(),
@@ -7714,6 +7770,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespo
 	selectedPath: z.record(z.string(), z.guid()).nullish(),
 	memoryExcluded: z.boolean(),
 	agentDefinitionId: z.guid().nullish(),
+	isPlain: z.boolean(),
+	plainSystemPrompt: z.string().nullish(),
 	messages: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse),
 });
 
@@ -10707,6 +10765,7 @@ export const zCancelNodeChatMessageResponse = zXeLocalAiEngineClientEndpointsLoc
 
 export const zGetNodeChatContextEstimateQuery = z.object({
 	modelName: z.string().nullish(),
+	conversationId: z.guid().nullish(),
 	agentId: z.guid().nullish(),
 	useLocalTools: z.boolean().nullish(),
 	maxOutputTokens: z
@@ -10876,6 +10935,17 @@ export const zPinNodeChatConversationPath = z.object({
  * Success
  */
 export const zPinNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
+export const zSetNodeChatConversationPlainBody = zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest;
+
+export const zSetNodeChatConversationPlainPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zSetNodeChatConversationPlainResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
 
 export const zRenameNodeChatConversationBody = zXeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest;
 
@@ -12850,6 +12920,15 @@ export const zGetLocalModelDetailsPath = z.object({
  * Success
  */
 export const zGetLocalModelDetailsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
+
+export const zGetModelGgufInspectionPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelGgufInspectionResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse;
 
 export const zDeleteModelKindPath = z.object({
 	modelName: z.string(),

@@ -357,7 +357,8 @@ internal sealed class GgufHeaderReader
     {
     }
 
-    private static GgufHeaderMetadata Build(IReadOnlyDictionary<string, object> values)
+    /// <summary>Projects parsed key-value pairs onto the standardized metadata; shared with <see cref="GgufTensorBlockReader" />.</summary>
+    internal static GgufHeaderMetadata Build(IReadOnlyDictionary<string, object> values)
     {
         var architecture = GetString(values, "general.architecture");
 

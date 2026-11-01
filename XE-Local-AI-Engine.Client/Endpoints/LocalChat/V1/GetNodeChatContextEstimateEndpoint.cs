@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     Estimates the fixed parts of the next chat request (system prompt, offered tools, output reserve, safety margin)
 ///     for a model and agent before anything is sent.
 /// </summary>
-/// <remarks>Read-only, content-free, Operator-gated; 404 when the node does not know the model.</remarks>
+/// <remarks>Read-only, content-free, Operator-gated; 404 when the node does not know the model or the conversation.</remarks>
 public sealed class GetNodeChatContextEstimateEndpoint : Endpoint<GetNodeChatContextEstimateRequest, NodeChatContextWindowResponse>
 {
     private readonly IChatContextEstimateService _estimateService;
@@ -31,6 +31,7 @@ public sealed class GetNodeChatContextEstimateEndpoint : Endpoint<GetNodeChatCon
     {
         var estimate = await _estimateService.EstimateAsync(new ChatContextEstimateRequest
             {
+                ConversationId = req.ConversationId,
                 ModelName = req.ModelName,
                 AgentId = req.AgentId,
                 UseLocalTools = req.UseLocalTools ?? true,

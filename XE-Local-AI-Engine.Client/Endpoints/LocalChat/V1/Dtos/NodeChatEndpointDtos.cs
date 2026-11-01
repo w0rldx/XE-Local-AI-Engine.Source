@@ -93,6 +93,19 @@ public sealed class SetNodeChatConversationMemoryExcludedRequest
 }
 
 /// <summary>
+///     Sets the per-conversation plain mode and its optional custom system prompt. The conversation id travels in the
+///     route; a blank or absent prompt means a plain turn sends no system prompt.
+/// </summary>
+public sealed class SetNodeChatConversationPlainRequest
+{
+    public Guid ConversationId { get; init; }
+
+    public bool IsPlain { get; init; }
+
+    public string? PlainSystemPrompt { get; init; }
+}
+
+/// <summary>
 ///     Triggers non-destructive compaction of a conversation: its older turns are summarized (local model) into an
 ///     encrypted synopsis sent in their place on later turns. The conversation id travels in the route; there is no body.
 /// </summary>
@@ -151,6 +164,10 @@ public sealed class GetNodeChatContextEstimateRequest
     // fails binding with a 400 before the handler runs.
     [QueryParam]
     public string? ModelName { get; init; }
+
+    /// <summary>The conversation the next request goes to; a plain one changes the prompt and tools. An unknown one is a 404.</summary>
+    [QueryParam]
+    public Guid? ConversationId { get; init; }
 
     [QueryParam]
     public Guid? AgentId { get; init; }
@@ -413,6 +430,12 @@ public sealed class NodeChatConversationResponse
 
     /// <summary>The agent definition the conversation is bound to; a send without its own agent pick runs as this agent.</summary>
     public Guid? AgentDefinitionId { get; init; }
+
+    /// <summary>Plain mode: turns run with no agent, persona, BaseScaffold, tools, knowledge base, skills or memory extraction.</summary>
+    public required bool IsPlain { get; init; }
+
+    /// <summary>The plain conversation's custom system prompt; null means a plain turn sends no system prompt.</summary>
+    public string? PlainSystemPrompt { get; init; }
 
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
 }

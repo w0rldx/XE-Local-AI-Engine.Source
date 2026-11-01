@@ -281,7 +281,8 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
 
         var newConversation = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = "New plain chat"
+            Name = "New chat",
+            Exact = true
         });
         await Expect(newConversation).ToBeVisibleAsync();
         await newConversation.ClickAsync();

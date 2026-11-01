@@ -50,7 +50,7 @@ export function ConversationListCollapsedRail({
 				size={40}
 				radius="md"
 				onClick={onCreateConversation}
-				aria-label={t("pages.chat.newConversation", "New plain chat")}
+				aria-label={t("pages.chat.newConversation", "New chat")}
 			>
 				<IconPlus size={16} />
 			</ActionIcon>

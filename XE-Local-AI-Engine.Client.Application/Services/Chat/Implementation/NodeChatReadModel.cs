@@ -57,7 +57,7 @@ internal sealed class NodeChatReadModel
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.CommandText = """
-                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc, conversation_state, conversation_state_covers_to_sequence, conversation_state_updated_at_utc
+                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc, conversation_state, conversation_state_covers_to_sequence, conversation_state_updated_at_utc, is_plain, plain_system_prompt
                                                   FROM conversations
                                                   WHERE conversation_id = $conversation_id AND purged = 0;
                                                   """;
@@ -115,7 +115,12 @@ internal sealed class NodeChatReadModel
                             : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 16, token),
                         conversationId),
                     ConversationStateCoversToSequence = await conversationReader.IsDBNullAsync(ordinal: 17, token) ? null : conversationReader.GetInt32(17),
-                    ConversationStateUpdatedAtUtc = await conversationReader.IsDBNullAsync(ordinal: 18, token) ? null : conversationReader.GetInt64(18)
+                    ConversationStateUpdatedAtUtc = await conversationReader.IsDBNullAsync(ordinal: 18, token) ? null : conversationReader.GetInt64(18),
+                    IsPlain = conversationReader.GetBoolean(19),
+                    PlainSystemPrompt = dbContext.DecryptConversationPlainSystemPrompt(await conversationReader.IsDBNullAsync(ordinal: 20, token)
+                            ? null
+                            : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 20, token),
+                        conversationId)
                 };
 
                 return dto;

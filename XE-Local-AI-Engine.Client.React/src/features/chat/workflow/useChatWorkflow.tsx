@@ -75,6 +75,8 @@ interface UseChatWorkflowOptions {
 	readonly attachmentFileIds: readonly string[];
 	/** A normal chat reply is streaming: the picker is locked while it runs. */
 	readonly isSending: boolean;
+	/** A plain conversation: sends ignore any workflow selection, which is kept for when plain is turned off. */
+	readonly plain?: boolean;
 }
 
 export interface ChatWorkflowMode {
@@ -106,6 +108,7 @@ export function useChatWorkflow({
 	markConversationTitled,
 	attachmentFileIds,
 	isSending,
+	plain = false,
 }: UseChatWorkflowOptions): ChatWorkflowMode {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
@@ -126,7 +129,7 @@ export function useChatWorkflow({
 	// The hub's fallback cadence, fed back into the queries that must keep moving while it is down.
 	const [pollIntervalMs, setPollIntervalMs] = useState<number | undefined>();
 
-	// A conversation can appear BEFORE the first send (an upload's ensureConversationId, "New plain chat"): the pick made
+	// A conversation can appear BEFORE the first send (an upload's ensureConversationId, "New chat"): the pick made
 	// on the empty composer follows it, or that first send would slip into the normal stream with the workflow still shown.
 	const previousConversationId = useRef(conversationId);
 	useEffect(() => {
@@ -154,7 +157,7 @@ export function useChatWorkflow({
 	// send after a reload cannot slip into the normal stream.
 	const selectedExists =
 		definitionsQuery.data === undefined || chatDefinitions.some((definition) => definition.id === selectedDefinitionId);
-	const active = enabled && selectedDefinitionId !== "" && selectedExists;
+	const active = enabled && !plain && selectedDefinitionId !== "" && selectedExists;
 	const definitionQuery = useGraphWorkflowDefinition(active ? selectedDefinitionId : undefined);
 	const acceptsAttachments = graphAcceptsAttachments(definitionQuery.data?.graph);
 
@@ -235,7 +238,12 @@ export function useChatWorkflow({
 	// false and a send would slip into the normal model stream past a live run. The composer stays usable (a fast
 	// switch-then-Enter must not be dropped); the send waits for the list instead — see `sendWhenResolved`.
 	const bindingUnresolved =
-		enabled && conversationId.length > 0 && explicitSelection === undefined && runsQuery.data === undefined && !runsNotFound;
+		enabled &&
+		!plain &&
+		conversationId.length > 0 &&
+		explicitSelection === undefined &&
+		runsQuery.data === undefined &&
+		!runsNotFound;
 	const composerDisabled = active && busy;
 	const sendAttachments = acceptsAttachments && pendingInput === undefined;
 	// An answer goes to the PARKED run, whatever the picker says: the server refuses a mismatched definition.

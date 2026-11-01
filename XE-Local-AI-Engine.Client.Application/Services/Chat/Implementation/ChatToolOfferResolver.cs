@@ -21,6 +21,16 @@ internal static class ChatToolOfferResolver
         IToolApprovalPolicy toolApprovalPolicy,
         CancellationToken cancellationToken)
     {
+        // A plain turn offers nothing, and nothing was withheld: the conversation opted out of tools altogether.
+        if (resolution.IsPlain)
+        {
+            return new ChatToolOffer
+            {
+                OfferTools = false,
+                AllowedTools = null
+            };
+        }
+
         var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken);
         var toolsRequested = useLocalTools || resolution.Resolved is { DeclaresToolList: true };
         if (!(toolsRequested && enableTools && resolution.SupportsTools))

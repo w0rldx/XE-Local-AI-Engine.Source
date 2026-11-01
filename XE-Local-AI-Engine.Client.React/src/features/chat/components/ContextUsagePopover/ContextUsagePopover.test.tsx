@@ -280,6 +280,29 @@ describe("ContextUsagePopover", () => {
 		expect(within(dropdown).queryByTestId("context-usage-tools")).toBeNull();
 	});
 
+	it("names the conversation, so the node can read its plain mode", async () => {
+		let requested: URL | undefined;
+		server.use(
+			http.get(localApiPath("chat/context-estimate"), ({ request }) => {
+				requested = new URL(request.url);
+				return HttpResponse.json(preSend);
+			}),
+		);
+		const conversationId = "0f7f6d5e-1c1a-4a54-9c0c-3f0a2b6f7a11";
+		renderWithProviders(
+			<ContextUsagePopover
+				usage={usage({ usedTokens: undefined, isAuthoritative: false })}
+				conversationId={conversationId}
+				modelName="qwen3-4b"
+				useLocalTools={true}
+			/>,
+		);
+		const dropdown = await open();
+
+		expect(await within(dropdown).findByTestId("context-usage-row-systemPrompt")).not.toBeNull();
+		expect(requested?.searchParams.get("conversationId")).toBe(conversationId);
+	});
+
 	it("requests the estimate for the node default model without a model name", async () => {
 		let requested: URL | undefined;
 		server.use(
@@ -296,6 +319,7 @@ describe("ContextUsagePopover", () => {
 		expect(await within(dropdown).findByTestId("context-usage-row-systemPrompt")).not.toBeNull();
 		expect(requested?.searchParams.has("modelName")).toBe(false);
 		expect(requested?.searchParams.has("agentId")).toBe(false);
+		expect(requested?.searchParams.has("conversationId")).toBe(false);
 	});
 
 	it("shows the no-data state with an unknown window when the node has no estimate", async () => {

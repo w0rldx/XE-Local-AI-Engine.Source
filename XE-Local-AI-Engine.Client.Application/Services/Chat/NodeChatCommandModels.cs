@@ -307,6 +307,23 @@ public sealed class NodeChatSetConversationMemoryExcludedRequest
 }
 
 /// <summary>
+///     Sets the conversation's plain flag and its optional custom system prompt; a blank prompt is stored as null.
+/// </summary>
+public sealed class NodeChatSetConversationPlainRequest
+{
+    /// <summary>The longest custom system prompt a plain conversation stores, in UTF-16 characters.</summary>
+    public const int MaxPlainSystemPromptLength = 16_000;
+
+    public required Guid ConversationId { get; init; }
+
+    public required bool IsPlain { get; init; }
+
+    public required string? PlainSystemPrompt { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+/// <summary>
 ///     Writes (or clears) the conversation's non-destructive compaction synopsis. The summary is encrypted at rest; the
 ///     covered sequence and timestamp are plaintext. A null <see cref="Summary" /> clears both but STAMPS the timestamp.
 /// </summary>

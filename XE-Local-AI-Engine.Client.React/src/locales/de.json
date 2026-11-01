@@ -568,6 +568,7 @@
 		"devWorkflows": "Workflow-Läufe",
 		"development": "Entwicklung",
 		"diagnostics": "Diagnose",
+		"directInference": "Direkte Inferenz",
 		"externalAppsCatalog": "Katalog",
 		"externalAppsGroup": "Externe Apps",
 		"externalAppsInstalled": "Installiert",
@@ -2338,7 +2339,7 @@
 			"modelUnavailable": "Nicht verfügbar",
 			"modelUnloadingIn": "Entladen in {{time}}",
 			"nativeReasoningLabel": "Natives Denken",
-			"newConversation": "Neuer normaler Chat",
+			"newConversation": "Neuer Chat",
 			"newEncryptedConversation": "Neuer verschlüsselter Chat",
 			"noMessages": "Noch keine Nachrichten.",
 			"noModelGuidance": {
@@ -2352,6 +2353,15 @@
 			"nodeDefaultModel": "Node-Standard",
 			"nodeReply": "Node-Antwort",
 			"pendingApprovalLabel": "Ausstehende Freigabe",
+			"plainMode": {
+				"editPrompt": "Systemprompt bearbeiten",
+				"label": "Schlicht",
+				"notice": "Schlichter Chat: kein Agent, keine Tools und keine Wissensdatenbank. Nur Ihr Systemprompt wird gesendet, sofern Sie einen festgelegt haben.",
+				"promptDescription": "Wird bei jeder folgenden Nachricht unverändert gesendet. Lassen Sie das Feld leer, um keinen Systemprompt zu senden.",
+				"promptLabel": "Systemprompt",
+				"save": "Speichern",
+				"tooltip": "Schlichter Chat: kein Agent, keine Tools, keine Wissensdatenbank und kein Gedächtnis. Nur Ihr Systemprompt wird gesendet, sofern Sie einen festgelegt haben."
+			},
 			"queued": "In Warteschlange — startet nach dem laufenden Chat, Arbeitssitzungsschritt, Benchmark oder Training",
 			"reasoning": {
 				"effort": {
@@ -3885,6 +3895,39 @@
 				"retry": "Workflow erneut prüfen",
 				"unreadable": "Der Status des Entwicklungs-Workflows, der diese Aufgabe erstellt hat, konnte nicht gelesen werden. Ob dieser Workflow die Entscheidung noch besitzt, ist daher unbekannt. Diese Seite bleibt schreibgeschützt, bis er gelesen werden kann."
 			}
+		},
+		"directInference": {
+			"copied": "Kopiert",
+			"copyJson": "Als JSON kopieren",
+			"errorTitle": "Die Anfrage ist fehlgeschlagen",
+			"gpuWorkExclusive": "Ein Training, eine Evaluierung oder ein Export belegt die GPU. Versuchen Sie es erneut, wenn der Vorgang abgeschlossen ist.",
+			"metrics": {
+				"cachedTokens": "Zwischengespeicherte Tokens",
+				"firstToken": "Zeit bis zum ersten Token (ms)",
+				"generationMs": "Generierung ms",
+				"generationRate": "Generierung Tok/s",
+				"inputTokens": "Eingabe-Tokens",
+				"notAvailable": "k. A.",
+				"outputTokens": "Ausgabe-Tokens",
+				"promptMs": "Prompt ms",
+				"promptRate": "Prompt Tok/s",
+				"reasoningTokens": "Reasoning-Tokens",
+				"total": "Gesamt (ms)"
+			},
+			"model": "Modell",
+			"modelGroups": {
+				"cloud": "Cloud",
+				"external": "Extern",
+				"local": "Lokal"
+			},
+			"modelPlaceholder": "Modell auswählen",
+			"output": "Ausgabe",
+			"prompt": "Prompt",
+			"send": "Senden",
+			"stop": "Stoppen",
+			"subtitle": "Senden Sie einen Prompt direkt an ein Modell: ohne Agent, Tools, Verlauf, Gedächtnis oder Wissensdatenbank. Es wird nichts gespeichert.",
+			"systemPrompt": "Systemprompt (optional)",
+			"title": "Direkte Inferenz"
 		},
 		"externalAccess": {
 			"custom": {
@@ -6426,6 +6469,34 @@
 					"storageUnknown": "Der verfügbare Speicher konnte nicht geprüft werden.",
 					"warnings": "Warnungen"
 				}
+			},
+			"inspect": {
+				"architecture": "Architektur",
+				"block": "Block {{index}}",
+				"blockSummary": "{{count}} Tensoren · {{size}}",
+				"chatTemplate": "Chat-Vorlage",
+				"columns": {
+					"name": "Name",
+					"shape": "Form",
+					"size": "Größe",
+					"type": "Typ"
+				},
+				"context": "Kontextlänge",
+				"embedding": "Embedding-Breite",
+				"headerBytes": "Header-Größe",
+				"heads": "Attention-Heads (KV)",
+				"layers": "Schichten",
+				"loadError": "Die Modelldatei konnte nicht gelesen werden.",
+				"metadata": "Metadaten",
+				"nonBlock": "Außerhalb der Blöcke",
+				"parameters": "Parameter",
+				"quant": "Quantisierung",
+				"readFailure": "Die Datei konnte nicht vollständig gelesen werden ({{reason}}). Es werden nur die Kopfdaten angezeigt.",
+				"split": "Dieses Modell ist auf {{count}} Dateien aufgeteilt; nur die Tensoren der ersten Datei werden aufgeführt.",
+				"tab": "Untersuchen",
+				"tensorBytes": "Tensordaten",
+				"tensorCount": "Tensoren",
+				"unknownType": "Typ {{id}}"
 			},
 			"launchArgs": {
 				"description": "Durch Leerzeichen getrennte Flags, zum Beispiel ",

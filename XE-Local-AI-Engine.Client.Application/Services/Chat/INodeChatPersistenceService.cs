@@ -52,6 +52,9 @@ public interface INodeChatPersistenceService
     /// <summary>The conversation's <c>kind</c> (<c>NodeConversationKind</c>), or null when it does not exist or was deleted.</summary>
     Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether the conversation is plain; false when it does not exist or was deleted.</summary>
+    Task<bool> IsConversationPlainAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
     /// <summary>Writes a Completed user or assistant message under a deterministic id at most once; a repeat answers the standing row.</summary>
     Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default);
 
@@ -101,6 +104,12 @@ public interface INodeChatPersistenceService
     ///     <see cref="NodeChatConversationNotFoundException" /> when it does not exist or was purged.
     /// </summary>
     Task<NodeChatConversationDto> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Sets the conversation's plain flag and custom system prompt, and returns the conversation. Later turns only;
+    ///     throws <see cref="NodeChatConversationNotFoundException" /> when it does not exist or was purged.
+    /// </summary>
+    Task<NodeChatConversationDto> SetConversationPlainAsync(NodeChatSetConversationPlainRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Writes (or clears with a null summary) the conversation's non-destructive compaction synopsis.

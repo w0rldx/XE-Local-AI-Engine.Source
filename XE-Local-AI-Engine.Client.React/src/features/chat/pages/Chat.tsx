@@ -182,8 +182,12 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		pinnedAgentModelProfile,
 		scopedModelPending,
 	});
+	// A plain conversation runs no agent: the send carries no agent pick, which the server would reject.
+	const selectedConversationPlain =
+		selectedConversationData?.id === selectedConversationId && selectedConversationData?.isPlain === true;
+	const sendAgentModeEnabled = agentModeEnabled && !selectedConversationPlain;
 	// The agent the next request resolves, by the send path's rule: agent mode on and the agent still listed.
-	const contextAgentLabel = agentModeEnabled ? agentOptions.find((agent) => agent.id === selectedAgentId)?.name : undefined;
+	const contextAgentLabel = sendAgentModeEnabled ? agentOptions.find((agent) => agent.id === selectedAgentId)?.name : undefined;
 	const [streamError, setStreamError] = useState<string | undefined>();
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
 	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
@@ -286,7 +290,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 	);
 
 	// Resolve the conversation a file should attach to. When a conversation is already on screen — including a
-	// freshly-created empty one from "New plain chat" — attach to IT directly. Going through the create-or-load
+	// freshly-created empty one from "New chat" — attach to IT directly. Going through the create-or-load
 	// path here would race an in-flight conversation creation (the new thread's full payload hasn't settled yet)
 	// and spawn a duplicate empty conversation. Only when nothing is selected (true empty state) do we lazily
 	// create one, mirroring the send path.
@@ -361,7 +365,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		displayConversations,
 		modelOptions,
 		cloudModelOptions,
-		agentModeEnabled,
+		agentModeEnabled: sendAgentModeEnabled,
 		selectedAgentId,
 		agentOptions,
 		activeRevisionByGroup,
@@ -418,6 +422,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		markConversationTitled,
 		attachmentFileIds,
 		isSending,
+		plain: selectedConversationPlain,
 	});
 
 	const runConversationMutation = useCallback(
@@ -484,6 +489,19 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 			).catch((error: unknown) => setStreamError(errorMessage(error)));
 		},
 		[runConversationMutation],
+	);
+
+	// Set a conversation's plain mode and custom system prompt; later turns only. Same mutation path as pin/archive.
+	const handleSetConversationPlain = useCallback(
+		(conversationId: string, isPlain: boolean, plainSystemPrompt: string | undefined): void => {
+			runConversationMutation(conversationId, () =>
+				nodeChatAdapter.setConversationPlain(conversationId, isPlain, plainSystemPrompt),
+			)
+				// The estimate's key does not carry the mode or the prompt, so a cached one is now wrong.
+				.then(() => queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.contextEstimates(conversationId) }))
+				.catch((error: unknown) => setStreamError(errorMessage(error)));
+		},
+		[queryClient, runConversationMutation],
 	);
 
 	const deleteConversationMutation = useMutation({
@@ -828,6 +846,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 				onToggleConversationArchived={isScoped ? undefined : handleToggleConversationArchived}
 				boundAgentMemoryEnabled={boundAgentMemoryEnabled}
 				onToggleConversationMemoryExcluded={handleToggleConversationMemoryExcluded}
+				onSetConversationPlain={isScoped || isRemoteConversation ? undefined : handleSetConversationPlain}
 				onDeleteConversation={isScoped ? undefined : handleDeleteConversation}
 				onBranchFromMessage={isScoped || isRemoteConversation ? undefined : handleBranch}
 				activeRevisionByGroup={activeRevisionByGroup}

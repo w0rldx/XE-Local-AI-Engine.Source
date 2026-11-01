@@ -439,3 +439,30 @@ describe("ConversationList truncated page footer", () => {
 		expect(screen.queryByTestId("conversation-list-truncated")).toBeNull();
 	});
 });
+
+describe("ConversationList new conversation button", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	// It creates an ordinary conversation, so it must not read as the Plain mode beside it.
+	it("is labelled New chat and creates a conversation", () => {
+		const onCreateConversation = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[]}
+				onCreateConversation={onCreateConversation}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+
+		expect(onCreateConversation).toHaveBeenCalledTimes(1);
+	});
+});

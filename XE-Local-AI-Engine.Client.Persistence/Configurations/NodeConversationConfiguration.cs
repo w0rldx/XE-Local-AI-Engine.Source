@@ -63,6 +63,14 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
                .HasColumnName("memory_excluded")
                .HasDefaultValue(false);
 
+        // Plain-conversation flag (plaintext bool, default false) and its optional custom system prompt (encrypted BLOB).
+        builder.Property(entity => entity.IsPlain)
+               .HasColumnName("is_plain")
+               .HasDefaultValue(false);
+
+        builder.Property(entity => entity.PlainSystemPrompt)
+               .HasColumnName("plain_system_prompt");
+
         // Non-destructive compaction synopsis (encrypted BLOB) + the highest message sequence it folds in + its
         // last-updated timestamp. All nullable and additive; a pre-feature conversation reads all three as NULL.
         builder.Property(entity => entity.CompactionSummary)

@@ -5,7 +5,7 @@ using System.Text;
 
 /// <summary>
 ///     Builds canned little-endian GGUF v3 header bytes for offline header-read tests (magic, version, tensor/kv counts,
-///     then typed metadata KV pairs). Mirrors the ggml GGUF spec the production reader parses.
+///     then typed metadata KV pairs, then tensor infos). Mirrors the ggml GGUF spec the production readers parse.
 /// </summary>
 internal sealed class GgufHeaderBytesBuilder
 {
@@ -16,6 +16,22 @@ internal sealed class GgufHeaderBytesBuilder
     private const uint TypeUint64 = 10;
 
     private readonly List<(string Key, uint Type, object Value)> _kv = [];
+    private readonly List<TensorSpec> _tensors = [];
+    private ulong? _declaredTensorCount;
+
+    /// <summary>Appends one tensor-info record (name, dimensions, ggml type id, data offset) after the KV section.</summary>
+    public GgufHeaderBytesBuilder WithTensor(string name, ulong[] dimensions, uint ggmlType, ulong offset)
+    {
+        _tensors.Add(new TensorSpec(name, dimensions, ggmlType, offset));
+        return this;
+    }
+
+    /// <summary>Writes this tensor_count instead of the number of appended tensors.</summary>
+    public GgufHeaderBytesBuilder WithDeclaredTensorCount(ulong count)
+    {
+        _declaredTensorCount = count;
+        return this;
+    }
 
     public GgufHeaderBytesBuilder WithStringArray(string key, string[] values)
     {
@@ -46,7 +62,7 @@ internal sealed class GgufHeaderBytesBuilder
         using var stream = new MemoryStream();
         WriteUint32(stream, GgufMagic);
         WriteUint32(stream, value: 3); // version
-        WriteUint64(stream, value: 0); // tensor_count
+        WriteUint64(stream, _declaredTensorCount ?? (ulong)_tensors.Count); // tensor_count
         WriteUint64(stream, (ulong)_kv.Count);
 
         foreach (var (key, type, value) in _kv)
@@ -72,8 +88,23 @@ internal sealed class GgufHeaderBytesBuilder
             }
         }
 
+        foreach (var tensor in _tensors)
+        {
+            WriteGgufString(stream, tensor.Name);
+            WriteUint32(stream, (uint)tensor.Dimensions.Length);
+            foreach (var dimension in tensor.Dimensions)
+            {
+                WriteUint64(stream, dimension);
+            }
+
+            WriteUint32(stream, tensor.GgmlType);
+            WriteUint64(stream, tensor.Offset);
+        }
+
         return stream.ToArray();
     }
+
+    private readonly record struct TensorSpec(string Name, ulong[] Dimensions, uint GgmlType, ulong Offset);
 
     private static void WriteUint32(Stream stream, uint value)
     {

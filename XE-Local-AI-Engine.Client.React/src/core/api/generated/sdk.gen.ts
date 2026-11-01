@@ -652,6 +652,9 @@ import type {
 	GetModelCatalogInfoData,
 	GetModelCatalogInfoErrors,
 	GetModelCatalogInfoResponses,
+	GetModelGgufInspectionData,
+	GetModelGgufInspectionErrors,
+	GetModelGgufInspectionResponses,
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsErrors,
 	GetModelLaunchArgumentsResponses,
@@ -1255,6 +1258,9 @@ import type {
 	SetNodeChatConversationMemoryExcludedData,
 	SetNodeChatConversationMemoryExcludedErrors,
 	SetNodeChatConversationMemoryExcludedResponses,
+	SetNodeChatConversationPlainData,
+	SetNodeChatConversationPlainErrors,
+	SetNodeChatConversationPlainResponses,
 	SetNodeChatMessageFeedbackData,
 	SetNodeChatMessageFeedbackErrors,
 	SetNodeChatMessageFeedbackResponses,
@@ -1658,6 +1664,7 @@ import {
 	zGetMcpServerResponse,
 	zGetMcpServerToolsResponse,
 	zGetModelCatalogInfoResponse,
+	zGetModelGgufInspectionResponse,
 	zGetModelLaunchArgumentsResponse,
 	zGetNodeChatContextEstimateResponse,
 	zGetNodeChatConversationContextStateResponse,
@@ -1858,6 +1865,7 @@ import {
 	zSetLogLevelResponse,
 	zSetMcpServerEnabledResponse,
 	zSetNodeChatConversationMemoryExcludedResponse,
+	zSetNodeChatConversationPlainResponse,
 	zSetNodeChatMessageFeedbackResponse,
 	zSetNodeChatSelectedPathResponse,
 	zStartBenchmarkRunBatchResponse,
@@ -4442,6 +4450,32 @@ export const pinNodeChatConversation = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/pin",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const setNodeChatConversationPlain = <ThrowOnError extends boolean = true>(
+	options: Options<SetNodeChatConversationPlainData, ThrowOnError>,
+): RequestResult<SetNodeChatConversationPlainResponses, SetNodeChatConversationPlainErrors, ThrowOnError> =>
+	(options.client ?? client).patch<SetNodeChatConversationPlainResponses, SetNodeChatConversationPlainErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zSetNodeChatConversationPlainResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/plain",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
@@ -9869,6 +9903,28 @@ export const getLocalModelDetails = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/models/{modelName}/details",
+		...options,
+	});
+
+export const getModelGgufInspection = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelGgufInspectionData, ThrowOnError>,
+): RequestResult<GetModelGgufInspectionResponses, GetModelGgufInspectionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelGgufInspectionResponses, GetModelGgufInspectionErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelGgufInspectionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/models/{modelName}/gguf-inspection",
 		...options,
 	});
 

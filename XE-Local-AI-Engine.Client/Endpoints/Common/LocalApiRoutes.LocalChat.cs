@@ -15,6 +15,10 @@ public static partial class LocalApiRoutes
         // segment keeps it distinct from the other conversation action routes.
         public const string MemoryExcludedConversation = "chat/conversations/{conversationId}/memory-excluded";
 
+        // Per-conversation plain mode (no agent, persona, tools, knowledge base, skills or memory) plus its optional custom
+        // system prompt. PATCH, literal "plain" segment.
+        public const string PlainConversation = "chat/conversations/{conversationId}/plain";
+
         // Non-destructive compaction: summarize the older turns into a synopsis sent in their place. POST (an action that
         // mutates derived state), distinct literal "compact" segment.
         public const string CompactConversation = "chat/conversations/{conversationId}/compact";

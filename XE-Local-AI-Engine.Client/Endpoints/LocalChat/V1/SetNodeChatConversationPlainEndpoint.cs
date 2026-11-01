@@ -1,0 +1,59 @@
+namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
+
+using FastEndpoints;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
+
+/// <summary>
+///     Sets the per-conversation plain mode and its optional custom system prompt; later turns only.
+/// </summary>
+/// <remarks>
+///     Same auth path and read-only mutation guard as <see cref="SetNodeChatConversationMemoryExcludedEndpoint" />.
+/// </remarks>
+public sealed class SetNodeChatConversationPlainEndpoint : Endpoint<SetNodeChatConversationPlainRequest, NodeChatConversationResponse>
+{
+    private readonly INodeChatPersistenceService _chatPersistence;
+    private readonly TimeProvider _timeProvider;
+
+    public SetNodeChatConversationPlainEndpoint(INodeChatPersistenceService chatPersistence,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(chatPersistence);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _chatPersistence = chatPersistence;
+        _timeProvider = timeProvider;
+    }
+
+    public override void Configure()
+    {
+        Patch(LocalApiRoutes.LocalChat.PlainConversation);
+        Policies(NodeAuthorizationPolicies.Operator);
+        Description(static x => x.ProducesConflictProblemDetails());
+    }
+
+    public override async Task HandleAsync(SetNodeChatConversationPlainRequest req, CancellationToken ct)
+    {
+        NodeChatConversationDto updated;
+        try
+        {
+            updated = await _chatPersistence.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+            {
+                ConversationId = req.ConversationId,
+                IsPlain = req.IsPlain,
+                PlainSystemPrompt = req.PlainSystemPrompt,
+                UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            }, ct);
+        }
+        catch (NodeChatInvalidRequestException exception)
+        {
+            // A work session or other owned conversation cannot be plain: the request's fault, in the validation shape.
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
+
+        await Send.OkAsync(updated.ToResponse(), ct);
+    }
+}

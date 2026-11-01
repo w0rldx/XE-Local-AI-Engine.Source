@@ -62,6 +62,12 @@ public sealed record NodeChatConversationDto
 
     public bool MemoryExcluded { get; init; }
 
+    /// <summary>Plain conversation: no agent, persona, BaseScaffold, tools, knowledge base, skills or memory extraction.</summary>
+    public bool IsPlain { get; init; }
+
+    /// <summary>The decrypted custom system prompt of a plain conversation; null sends no system prompt.</summary>
+    public string? PlainSystemPrompt { get; init; }
+
     // The decrypted compaction synopsis plus the highest ANCHOR sequence it folds in, never a chosen sibling's own
     // sequence. Null until compacted; the send path substitutes it for the covered messages, which stay in Messages.
     public string? CompactionSummary { get; init; }

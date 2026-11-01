@@ -8,7 +8,7 @@ public interface IChatContextEstimateService
 {
     /// <summary>
     ///     The pre-send estimate for the request's model and agent, or <see langword="null" /> when the node cannot
-    ///     resolve the model.
+    ///     resolve the model or does not know the named conversation.
     /// </summary>
     /// <remarks>
     ///     Read-only: it runs the send path's model head, turn resolution and tool-offer gate, then estimates with the
@@ -21,6 +21,12 @@ public interface IChatContextEstimateService
 /// <summary>What the composer would send that shapes the fixed parts of the next request.</summary>
 public sealed record ChatContextEstimateRequest
 {
+    /// <summary>
+    ///     The conversation the next request goes to; a plain one takes its own prompt and offers no agent or tools. Null
+    ///     means a fresh turn, resolved from the other fields alone.
+    /// </summary>
+    public Guid? ConversationId { get; init; }
+
     /// <summary>The picked model; blank means the node's local default chat model.</summary>
     public string? ModelName { get; init; }
 

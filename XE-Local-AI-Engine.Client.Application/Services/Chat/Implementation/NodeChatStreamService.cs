@@ -429,6 +429,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // Earlier turns' tool calls are replayed (each result capped at the historical excerpt) so a follow-up can build on
         // what the tools returned; they are node-local data, so a cloud model gets them only under the attachment gate.
         var package = await BuildRuntimePackageAsync(request,
+            conversation,
             resolution,
             ConversationContextBuilder.Build(conversation,
                 userMessage,
@@ -669,6 +670,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         var conversation = await _persistence.GetConversationForTurnAsync(request.ConversationId, cancellationToken)
                            ?? throw new NodeChatConversationNotFoundException(request.ConversationId);
 
+        // A plain conversation runs no agent: a per-send agent pick is a contradiction the caller must resolve, not a
+        // setting to drop silently. Refused before the user message persists.
+        if (conversation.IsPlain && request.AgentDefinitionId is not null)
+        {
+            throw new NodeChatInvalidRequestException("This conversation is plain, so it cannot run an agent. Turn plain mode off to pick an agent.");
+        }
+
         return new ChatTurnLoad
         {
             Conversation = conversation,
@@ -789,7 +797,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         if (attachmentsAllowed)
         {
-            if (request.UseKnowledgeBase && !await _turnContextBuilder.IsKnowledgeEmbeddingAvailableAsync(cancellationToken))
+            if (UsesKnowledgeBase(request, resolution) && !await _turnContextBuilder.IsKnowledgeEmbeddingAvailableAsync(cancellationToken))
             {
                 await _eventDispatcher.ReportTurnNoticeAsync(KnowledgeUnavailableNotice.For(requestId));
             }
@@ -838,7 +846,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         // KB grounding rides the SAME cloud-egress gate as attachments. Plain chat only — agent mode reaches the data
         // through the gated search_knowledge_base tool, withheld by the offer provider, so the notice is not duplicated.
-        if (request.UseKnowledgeBase && !toolOffer.OfferTools)
+        if (UsesKnowledgeBase(request, resolution) && !toolOffer.OfferTools)
         {
             await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken);
         }
@@ -932,7 +940,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
             // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
             // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
-            if (request.UseKnowledgeBase)
+            if (UsesKnowledgeBase(request, resolution))
             {
                 var knowledge = await _turnContextBuilder.BuildKnowledgeContextAsync(knowledgeQuery, isRegeneratedTurn: false, runCancellation.Token);
                 if (knowledge is not null)
@@ -967,6 +975,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     // Assembles the runtime package the invocation runs from; the active model, effective agent and orchestration spec
     // were settled by ResolveTurnAsync and are reused unchanged. Only the invocation timeout is operator-controlled.
     private async Task<RuntimePackage> BuildRuntimePackageAsync(NodeChatStreamRequest request,
+        NodeChatConversationDto conversation,
         ChatTurnResolution resolution,
         IReadOnlyList<ConversationMessageDto> conversationContext,
         IReadOnlyList<AllowedToolDto>? allowedTools,
@@ -978,7 +987,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         {
             InvocationId = requestId,
             ConversationId = request.ConversationId,
-            ResolvedSystemPrompt = resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
+            // A plain turn sends its custom prompt verbatim (no BaseScaffold, no persona), or no system message at all.
+            ResolvedSystemPrompt = resolution.IsPlain
+                ? conversation.PlainSystemPrompt ?? string.Empty
+                : resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
+            OmitSystemPrompt = resolution.IsPlain && conversation.PlainSystemPrompt is null,
             ConversationContext = conversationContext,
             ModelProfile = resolution.EffectiveModel,
             AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -1094,6 +1107,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
     }
 
+    // A plain conversation ignores the knowledge-base opt-in: its turns carry only what the user sent.
+    private static bool UsesKnowledgeBase(NodeChatStreamRequest request, ChatTurnResolution resolution) => request.UseKnowledgeBase && !resolution.IsPlain;
+
     private static bool OffersAgentHomeTools(IReadOnlyList<AllowedToolDto>? allowedTools)
     {
         return allowedTools is not null && allowedTools.Any(tool => AgentHomeCapableToolNames.Contains(tool.Name));
@@ -1141,16 +1157,19 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             requiresInstalledChatModel = activeModel is null;
         }
 
-        // Effective-agent precedence: the per-send selection, then the conversation binding, then the seeded Default
-        // Assistant. The default id is memoized for the process lifetime so the mode-off hot path skips a DB read.
-        var effectiveAgentId = request.AgentDefinitionId
-                               ?? conversation.AgentDefinitionId
-                               ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
+        // Effective-agent precedence: the per-send selection, the conversation binding, the (memoized) Default Assistant.
+        // A plain conversation is the one early branch: no agent at all, so no persona, pin, skills, memory or tools.
+        var effectiveAgentId = conversation.IsPlain
+            ? null
+            : request.AgentDefinitionId
+              ?? conversation.AgentDefinitionId
+              ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
 
         // The just-sent user turn is the relevance-retrieval query, inert below the threshold or unbound. The shared
         // resolver gates thinking and tools by capability and returns the effective model both stamps come from.
         return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken,
-            conversationAgentId: request.AgentDefinitionId is null ? conversation.AgentDefinitionId : null);
+            conversationAgentId: request.AgentDefinitionId is null ? conversation.AgentDefinitionId : null,
+            isPlain: conversation.IsPlain);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

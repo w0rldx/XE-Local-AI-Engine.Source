@@ -91,6 +91,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _conversations.GetConversationKindAsync(conversationId, cancellationToken);
     }
 
+    public Task<bool> IsConversationPlainAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return _conversations.IsConversationPlainAsync(conversationId, cancellationToken);
+    }
+
     public Task<NodeChatInsertMessageIfAbsentResult> InsertMessageIfAbsentAsync(NodeChatInsertMessageIfAbsentRequest request, CancellationToken cancellationToken = default)
     {
         return _messages.InsertMessageIfAbsentAsync(request, cancellationToken);
@@ -176,6 +181,13 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         ArgumentNullException.ThrowIfNull(request);
         await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
         return await _conversations.SetConversationMemoryExcludedAsync(request, cancellationToken);
+    }
+
+    public async Task<NodeChatConversationDto> SetConversationPlainAsync(NodeChatSetConversationPlainRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
+        return await _conversations.SetConversationPlainAsync(request, cancellationToken);
     }
 
     public Task<NodeChatGuardedWriteOutcome> SetCompactionSummaryAsync(NodeChatSetCompactionSummaryRequest request, CancellationToken cancellationToken = default)

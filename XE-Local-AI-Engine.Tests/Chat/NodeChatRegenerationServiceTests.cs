@@ -823,6 +823,70 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenConversationPlain_RerunsWithoutAgentToolsOrKnowledge()
+    {
+        // A plain conversation reruns plain even though its bound agent and the Default Assistant both resolve: the custom
+        // prompt verbatim, no tools despite the toggle, no knowledge grounding, and the resolver is never consulted.
+        await using var provider = await BuildProviderAsync("regeneration-plain.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence);
+        await persistence.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+        {
+            ConversationId = conversation.ConversationId,
+            IsPlain = true,
+            PlainSystemPrompt = "Plain lab prompt.",
+            UpdatedAtUtc = 14
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var defaultAgentId = Guid.NewGuid();
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Persona prompt.", [CreateLocalToolDto("Calculate", "{\"type\":\"object\"}")], ModelProfile: null, ReasoningEffort: null,
+                    AgentDefinitionVersion: 3));
+        var turnContextBuilder = Substitute.For<IChatTurnContextBuilder>();
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
+            CreateDefaultAgentProvider(defaultAgentId),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            turnContextBuilder,
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance,
+            new GpuWorkGate());
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true, useKnowledgeBase: true))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.Equal("Plain lab prompt.", runner.LastSystemPrompt);
+        AssertEx.Empty(runner.LastAllowedTools, "A plain rerun offers no tools.");
+        await resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(Guid?), default, default, default, default, default, default);
+        await turnContextBuilder.DidNotReceiveWithAnyArgs().BuildKnowledgeContextAsync(default!, default, default);
+    }
+
+    [Test]
     public async Task Regenerate_WhenOriginalCarriesConcreteModel_SuppressesAgentPin_StampsOriginalModel()
     {
         // Parity with the send path: the original turn recorded a CONCRETE model ("model-x") — an explicit user pick —

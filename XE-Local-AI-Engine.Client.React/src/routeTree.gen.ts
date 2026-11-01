@@ -29,6 +29,7 @@ import { Route as LayoutCommandsRouteImport } from './routes/_layout/commands'
 import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-tools'
 import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
+import { Route as LayoutDirectInferenceRouteImport } from './routes/_layout/direct-inference'
 import { Route as LayoutExternalProvidersRouteImport } from './routes/_layout/external-providers'
 import { Route as LayoutGraphWorkflowsRouteImport } from './routes/_layout/graph-workflows'
 import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
@@ -159,6 +160,11 @@ const LayoutDevelopmentRoute = LayoutDevelopmentRouteImport.update({
 const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
   id: '/diagnostics',
   path: '/diagnostics',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutDirectInferenceRoute = LayoutDirectInferenceRouteImport.update({
+  id: '/direct-inference',
+  path: '/direct-inference',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutExternalProvidersRoute = LayoutExternalProvidersRouteImport.update({
@@ -355,6 +361,7 @@ export interface FileRoutesByFullPath {
   '/custom-tools': typeof LayoutCustomToolsRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
+  '/direct-inference': typeof LayoutDirectInferenceRoute
   '/external-providers': typeof LayoutExternalProvidersRoute
   '/graph-workflows': typeof LayoutGraphWorkflowsRoute
   '/images': typeof LayoutImagesRoute
@@ -407,6 +414,7 @@ export interface FileRoutesByTo {
   '/custom-tools': typeof LayoutCustomToolsRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
+  '/direct-inference': typeof LayoutDirectInferenceRoute
   '/external-providers': typeof LayoutExternalProvidersRoute
   '/graph-workflows': typeof LayoutGraphWorkflowsRoute
   '/images': typeof LayoutImagesRoute
@@ -462,6 +470,7 @@ export interface FileRoutesById {
   '/_layout/custom-tools': typeof LayoutCustomToolsRoute
   '/_layout/development': typeof LayoutDevelopmentRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
+  '/_layout/direct-inference': typeof LayoutDirectInferenceRoute
   '/_layout/external-providers': typeof LayoutExternalProvidersRoute
   '/_layout/graph-workflows': typeof LayoutGraphWorkflowsRoute
   '/_layout/images': typeof LayoutImagesRoute
@@ -518,6 +527,7 @@ export interface FileRouteTypes {
     | '/custom-tools'
     | '/development'
     | '/diagnostics'
+    | '/direct-inference'
     | '/external-providers'
     | '/graph-workflows'
     | '/images'
@@ -570,6 +580,7 @@ export interface FileRouteTypes {
     | '/custom-tools'
     | '/development'
     | '/diagnostics'
+    | '/direct-inference'
     | '/external-providers'
     | '/graph-workflows'
     | '/images'
@@ -624,6 +635,7 @@ export interface FileRouteTypes {
     | '/_layout/custom-tools'
     | '/_layout/development'
     | '/_layout/diagnostics'
+    | '/_layout/direct-inference'
     | '/_layout/external-providers'
     | '/_layout/graph-workflows'
     | '/_layout/images'
@@ -811,6 +823,13 @@ declare module '@tanstack/react-router' {
       path: '/diagnostics'
       fullPath: '/diagnostics'
       preLoaderRoute: typeof LayoutDiagnosticsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/direct-inference': {
+      id: '/_layout/direct-inference'
+      path: '/direct-inference'
+      fullPath: '/direct-inference'
+      preLoaderRoute: typeof LayoutDirectInferenceRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/external-providers': {
@@ -1051,6 +1070,7 @@ interface LayoutRouteChildren {
   LayoutCustomToolsRoute: typeof LayoutCustomToolsRoute
   LayoutDevelopmentRoute: typeof LayoutDevelopmentRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
+  LayoutDirectInferenceRoute: typeof LayoutDirectInferenceRoute
   LayoutExternalProvidersRoute: typeof LayoutExternalProvidersRoute
   LayoutGraphWorkflowsRoute: typeof LayoutGraphWorkflowsRoute
   LayoutImagesRoute: typeof LayoutImagesRoute
@@ -1097,6 +1117,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutCustomToolsRoute: LayoutCustomToolsRoute,
   LayoutDevelopmentRoute: LayoutDevelopmentRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
+  LayoutDirectInferenceRoute: LayoutDirectInferenceRoute,
   LayoutExternalProvidersRoute: LayoutExternalProvidersRoute,
   LayoutGraphWorkflowsRoute: LayoutGraphWorkflowsRoute,
   LayoutImagesRoute: LayoutImagesRoute,

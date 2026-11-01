@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
+using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Client.Services.Interaction;
 using XE_Local_AI_Engine.Client.Services.Interaction.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -92,6 +94,7 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddHostedService<DetachedInvocationReaper>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
+        builder.Services.AddSingleton<IDirectInferenceService, DirectInferenceService>();
         builder.Services.AddSingleton<ModelCapabilityProber>();
         builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));

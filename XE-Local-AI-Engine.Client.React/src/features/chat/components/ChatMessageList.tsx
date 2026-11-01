@@ -58,6 +58,7 @@ interface ChatMessageListProps {
 	// The conversation is owned by a work session. Only used to render a step that ended on its own provider-call
 	// cap as a neutral notice rather than a failure (see ChatMessage).
 	isWorkSessionConversation?: boolean;
+	isPlainConversation?: boolean;
 	// Rendered right after a persisted message row (chat workflow mode's activity blocks). Absent = nothing extra.
 	renderAfterMessage?: (messageId: string) => ReactNode;
 	// Advanced UI mode: each finished assistant turn shows its time to first token, decode rate and cached tokens.
@@ -91,6 +92,7 @@ export function ChatMessageList({
 	onRetryLoadMessages,
 	reasoningEffort,
 	isWorkSessionConversation = false,
+	isPlainConversation = false,
 	renderAfterMessage,
 	showTurnThroughput = false,
 }: ChatMessageListProps) {
@@ -202,6 +204,7 @@ export function ChatMessageList({
 		onSubmitFeedback,
 		reasoningEffort,
 		isWorkSessionConversation,
+		isPlainConversation,
 		renderAfterMessage,
 		showTurnThroughput,
 	};

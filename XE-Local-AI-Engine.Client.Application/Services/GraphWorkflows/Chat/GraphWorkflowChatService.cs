@@ -19,6 +19,8 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 /// </remarks>
 internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
 {
+    internal const string PlainConversationRefusal = "This conversation is plain, so it cannot run a workflow. Turn plain mode off to use one.";
+
     private const int MaxCancelAttempts = 3;
 
     private static readonly JsonSerializerOptions JsonOptions = JsonSerializerOptions.Web;
@@ -71,6 +73,12 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
         }
 
         await EnsureChatConversationAsync(conversationId, cancellationToken);
+        // A plain conversation runs no agent, and a workflow's nodes are agents: refuse the start and the answer alike.
+        if (await _persistence.IsConversationPlainAsync(conversationId, cancellationToken))
+        {
+            throw new GraphWorkflowValidationException(PlainConversationRefusal);
+        }
+
         await _guard.EnsureMutableAsync(conversationId, cancellationToken);
         var attachments = await ResolveAttachmentsAsync(conversationId, GraphWorkflowGraph.Parse(definition.GraphJson), request.AttachmentFileIds, cancellationToken);
         if (_resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId, out _))

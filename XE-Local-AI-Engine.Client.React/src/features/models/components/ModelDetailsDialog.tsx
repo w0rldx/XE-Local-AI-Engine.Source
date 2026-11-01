@@ -7,6 +7,7 @@ import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ModelFitPanel } from "@/features/models/components/ModelFitPanel";
+import { ModelInspectPanel } from "@/features/models/components/ModelInspectPanel";
 import { ModelLaunchArgumentsPanel } from "@/features/models/components/ModelLaunchArgumentsPanel";
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
 import { buildKindOptions, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
@@ -55,6 +56,8 @@ function ModelDetailsBody({
 	// llamacpp models — an Ollama/Codex/Azure entry would report success but the override would be silently ineffective
 	// (and could bleed onto a same-named GGUF). Gated behind developer mode too.
 	const showLaunchArgs = developerMode && model.provider === "llamacpp";
+	// The GGUF inspector reads the registered file, which only a llama.cpp-served model has.
+	const showInspect = model.provider === "llamacpp";
 
 	// Fit content is computed here (not as a chained JSX ternary) to keep the panel readable: when model-fit is off
 	// show a disabled note; otherwise mount the cache-only llmfit query only while the Fit tab is the active one.
@@ -72,6 +75,11 @@ function ModelDetailsBody({
 				<Tabs.Tab value="type">{t("pages.models.type.columnHeader", "Type")}</Tabs.Tab>
 				<Tabs.Tab value="license">{t("pages.models.details.tabs.license", "License & template")}</Tabs.Tab>
 				<Tabs.Tab value="fit">{t("pages.models.details.tabs.fit", "Fit")}</Tabs.Tab>
+				{showInspect ? (
+					<Tabs.Tab value="inspect" data-testid="model-inspect-tab">
+						{t("pages.models.inspect.tab", "Inspect")}
+					</Tabs.Tab>
+				) : null}
 				{showLaunchArgs ? (
 					<Tabs.Tab value="advanced" data-testid="model-advanced-tab">
 						{t("pages.models.launchArgs.tab", "Advanced")}
@@ -193,6 +201,12 @@ function ModelDetailsBody({
 			<Tabs.Panel value="fit" pt="md">
 				{fitContent}
 			</Tabs.Panel>
+
+			{showInspect ? (
+				<Tabs.Panel value="inspect" pt="md">
+					{tab === "inspect" ? <ModelInspectPanel modelName={model.modelName} /> : <span />}
+				</Tabs.Panel>
+			) : null}
 
 			{showLaunchArgs ? (
 				<Tabs.Panel value="advanced" pt="md">

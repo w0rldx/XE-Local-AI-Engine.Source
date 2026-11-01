@@ -378,6 +378,40 @@ public sealed class GraphWorkflowChatEndpointTests
     }
 
     [Test]
+    public async Task Send_ToAPlainConversation_Answers400AndWritesNothing()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync(ChatInputGraph());
+        var conversationId = await CreateConversationAsync(harness.Services);
+        await SetPlainAsync(harness.Services, conversationId, isPlain: true);
+
+        using var response = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "hello"));
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "This conversation is plain, so it cannot run a workflow. Turn plain mode off to use one.");
+        AssertEx.Empty(await MessagesAsync(harness.Services, conversationId));
+        using var runsResponse = await GetRunsAsync(Host.Factory, conversationId);
+        using var runs = await ReadJsonAsync(runsResponse);
+        AssertEx.Equal(0, runs.RootElement.GetProperty("runs").GetArrayLength());
+    }
+
+    [Test]
+    public async Task Send_AfterPlainIsTurnedOff_StartsARunAgain()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync(ChatInputGraph());
+        var conversationId = await CreateConversationAsync(harness.Services);
+        await SetPlainAsync(harness.Services, conversationId, isPlain: true);
+        await SetPlainAsync(harness.Services, conversationId, isPlain: false);
+
+        using var response = await PostMessageAsync(Host.Factory, conversationId, Body(definitionId, "hello"));
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        using var body = await ReadJsonAsync(response);
+        AssertEx.Equal("started", body.RootElement.GetProperty("action").GetString());
+    }
+
+    [Test]
     public async Task Send_ToAnUnknownDefinition_Answers404()
     {
         await using var harness = new GraphWorkflowHarness(Host);
@@ -602,4 +636,13 @@ public sealed class GraphWorkflowChatEndpointTests
             ]
           }
           """;
+
+    private static Task<NodeChatConversationDto> SetPlainAsync(IServiceProvider services, Guid conversationId, bool isPlain) =>
+        services.GetRequiredService<INodeChatPersistenceService>().SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+        {
+            ConversationId = conversationId,
+            IsPlain = isPlain,
+            PlainSystemPrompt = null,
+            UpdatedAtUtc = 1
+        });
 }

@@ -214,6 +214,8 @@ function SnapshotDetails({ snapshot }: { snapshot: ContextWindowSnapshot }) {
 
 interface ContextUsagePopoverProps {
 	usage: ContextUsageModel;
+	// The conversation the next request goes to; the node reads its plain mode and prompt for the estimate.
+	conversationId?: string;
 	// The model and agent the next request resolves; they key the pre-send estimate.
 	modelName: string;
 	agentId?: string;
@@ -223,7 +225,7 @@ interface ContextUsagePopoverProps {
 
 // The composer's context badge as a popover trigger: the last provider round's breakdown, or before the first response
 // a labeled estimate of the fixed parts for the selected model and agent.
-export function ContextUsagePopover({ usage, modelName, agentId, useLocalTools }: ContextUsagePopoverProps) {
+export function ContextUsagePopover({ usage, conversationId, modelName, agentId, useLocalTools }: ContextUsagePopoverProps) {
 	const { t } = useTranslation();
 	const [opened, setOpened] = useState(false);
 	// A last round of another model says nothing about the selected one: fall back to the selected model's estimate.
@@ -233,7 +235,7 @@ export function ContextUsagePopover({ usage, modelName, agentId, useLocalTools }
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
 	const wire = developerMode ? toWireSamplingOptions(samplingOptions) : undefined;
 	const estimateQuery = useContextEstimate(
-		{ modelName, agentId, useLocalTools, maxOutputTokens: wire?.maxOutputTokens, numCtx: wire?.numCtx },
+		{ conversationId, modelName, agentId, useLocalTools, maxOutputTokens: wire?.maxOutputTokens, numCtx: wire?.numCtx },
 		{ enabled: opened && lastRound === undefined },
 	);
 	const snapshot = lastRound ?? estimateQuery.data ?? undefined;

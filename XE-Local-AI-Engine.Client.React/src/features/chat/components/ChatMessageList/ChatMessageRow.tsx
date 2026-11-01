@@ -32,6 +32,7 @@ interface ChatMessageRowProps {
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 	reasoningEffort?: ReasoningEffort;
 	isWorkSessionConversation: boolean;
+	isPlainConversation: boolean;
 	renderAfterMessage?: (messageId: string) => ReactNode;
 	showTurnThroughput: boolean;
 }
@@ -56,6 +57,7 @@ export function ChatMessageRow({
 	onSubmitFeedback,
 	reasoningEffort,
 	isWorkSessionConversation,
+	isPlainConversation,
 	renderAfterMessage,
 	showTurnThroughput,
 }: ChatMessageRowProps) {
@@ -109,6 +111,7 @@ export function ChatMessageRow({
 				reasoningEffort={reasoningEffort}
 				failureCategory={scopedStreamingMessage.failureCategory}
 				isWorkSessionConversation={isWorkSessionConversation}
+				isPlainConversation={isPlainConversation}
 				bubbleStatus={isStatusInBubble ? streamingIndicator : undefined}
 				footer={isStatusInBubble ? undefined : streamingIndicator}
 			/>
@@ -150,6 +153,7 @@ export function ChatMessageRow({
 			reasoningEffort={reasoningEffort}
 			failureCategory={(isStreamingTarget ? scopedStreamingMessage?.failureCategory : undefined) ?? message.failureCategory}
 			isWorkSessionConversation={isWorkSessionConversation}
+			isPlainConversation={isPlainConversation}
 			showTurnThroughput={showTurnThroughput}
 			bubbleStatus={isStreamingTarget && isStatusInBubble ? streamingIndicator : undefined}
 			footer={isStreamingTarget && !isStatusInBubble ? streamingIndicator : undefined}

@@ -274,6 +274,7 @@ describe("CommandPage", () => {
 					isPinned: false,
 					archived: false,
 					memoryExcluded: false,
+					isPlain: false,
 					messages: [],
 				});
 			}),

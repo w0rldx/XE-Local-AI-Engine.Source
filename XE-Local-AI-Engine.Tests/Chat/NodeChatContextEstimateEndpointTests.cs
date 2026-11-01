@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Endpoint contract for the pre-send context estimate: Operator-gated, the content-free window shape labeled
-///     <c>PreSendEstimate</c>, 404 for a model the node does not know and 400 for an unparsable agent id.
+///     <c>PreSendEstimate</c>, 404 for a model or conversation the node does not know and 400 for an unparsable id.
 /// </summary>
 /// <remarks>Everything downstream of the faked model facts is the real send-path composition.</remarks>
 [Category(TestCategories.Integration)]
@@ -119,6 +119,68 @@ public sealed class NodeChatContextEstimateEndpointTests
     }
 
     [Test]
+    public async Task Get_ForAConversationTheNodeDoesNotKnow_ReturnsNotFound()
+    {
+        await using var factory = CreateFactory();
+        using var response = await SendAsync(factory, $"?modelName={KnownModel}&conversationId={Guid.NewGuid()}");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    public async Task Get_WithAnUnparsableConversationId_ReturnsBadRequest()
+    {
+        await using var factory = CreateFactory();
+        using var response = await SendAsync(factory, $"?modelName={KnownModel}&conversationId=not-a-guid");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task Get_ForAPlainConversationWithoutAPrompt_ChargesNothing()
+    {
+        await using var factory = CreateFactory();
+        var conversationId = await CreatePlainConversationAsync(factory, prompt: null);
+
+        using var response = await SendAsync(factory, $"?modelName={KnownModel}&conversationId={conversationId}");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(0, document.RootElement.GetProperty("tools").GetArrayLength());
+        AssertEx.Equal(0, document.RootElement.GetProperty("estimated").GetProperty("totalTokens").GetInt32());
+    }
+
+    [Test]
+    public async Task Get_ForABranchOfAPlainConversation_ChargesItsPromptAndNoTools()
+    {
+        await using var factory = CreateFactory();
+        var sourceId = await CreatePlainConversationAsync(factory, "Answer in one sentence.");
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var message = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = sourceId,
+            MessageId = Guid.NewGuid(),
+            Content = "hello",
+            CreatedAtUtc = 30
+        });
+        var branch = await persistence.BranchConversationAsync(new NodeChatBranchConversationRequest
+        {
+            ConversationId = sourceId,
+            MessageId = message.MessageId,
+            CreatedAtUtc = 40
+        });
+
+        using var response = await SendAsync(factory, $"?modelName={KnownModel}&conversationId={branch.BranchedConversationId}");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(0, document.RootElement.GetProperty("tools").GetArrayLength());
+        var estimated = document.RootElement.GetProperty("estimated");
+        AssertEx.True(estimated.GetProperty("systemPromptTokens").GetInt32() > 0, "the inherited prompt costs tokens");
+        AssertEx.Equal(estimated.GetProperty("systemPromptTokens").GetInt32(), estimated.GetProperty("totalTokens").GetInt32());
+    }
+
+    [Test]
     public async Task Get_WithoutABearerToken_IsUnauthorized()
     {
         await using var factory = CreateFactory();
@@ -129,6 +191,25 @@ public sealed class NodeChatContextEstimateEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    private static async Task<Guid> CreatePlainConversationAsync(TestServerWebAppFactory factory, string? prompt)
+    {
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Plain estimate",
+            UserId = null,
+            CreatedAtUtc = 10
+        });
+        await persistence.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+        {
+            ConversationId = conversation.ConversationId,
+            IsPlain = true,
+            PlainSystemPrompt = prompt,
+            UpdatedAtUtc = 20
+        });
+        return conversation.ConversationId;
     }
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string query)

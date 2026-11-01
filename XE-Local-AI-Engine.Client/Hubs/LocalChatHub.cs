@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
@@ -12,6 +13,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
@@ -57,6 +59,32 @@ public sealed class LocalChatHub : Hub
         }
 
         return TrackAttachment(RejectInvalidRequest(() => _streamService.SendMessageAsync(request, cancellationToken)), sourceOwnsRun: true, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Streams one explicit prompt to one model with no agent, tools, history or persona, and persists nothing.
+    /// </summary>
+    /// <remarks>
+    ///     The service resolves from the method's own services, not the constructor, so no existing caller of this hub
+    ///     changes. A request the caller got wrong is refused before the stream exists; a provider failure ends the stream
+    ///     with an <c>error</c> event instead. Cancelling the stream cancels the request.
+    /// </remarks>
+    public IAsyncEnumerable<DirectInferenceEvent> StreamDirectInference(DirectInferenceRequest request,
+        [FromServices] IDirectInferenceService directInference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(directInference);
+        EnsureMessageWithinSizeCap(request.SystemPrompt);
+        EnsureMessageWithinSizeCap(request.Prompt);
+        try
+        {
+            return directInference.StreamAsync(request, cancellationToken);
+        }
+        catch (DirectInferenceInvalidRequestException exception)
+        {
+            throw new HubException(exception.Message, exception);
+        }
     }
 
     /// <summary>

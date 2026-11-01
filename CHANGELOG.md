@@ -55,6 +55,25 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Direct Inference** — a new page (Models → Direct inference, Advanced only) streams one optional system prompt and one
+  prompt to a chosen local, external or cloud model with no agent, tools, history or persona, and persists nothing. It
+  shows token usage and, for llama.cpp models, prompt/generation timings, tokens/s and time to first token. Out-of-range
+  sampling values are refused (chat keeps skipping them). New `LocalChatHub.StreamDirectInference` hub method.
+
+- **GGUF tensor inspector** — the model details dialog has an **Inspect** tab for installed llama.cpp models: header
+  metadata plus every tensor (name, shape, ggml type, size) grouped per block. New
+  `GET /api/local/v1/models/{modelName}/gguf-inspection`.
+
+- **Plain conversations** — a chat conversation can be switched to plain mode from its header. A plain turn runs with
+  no agent (not even the Default Assistant), no persona or BaseScaffold, no tools, knowledge base, skills or memory
+  extraction, and sends the conversation's optional custom system prompt verbatim, or no system message at all.
+  History, attachments, compaction, sampling and reasoning effort are unchanged, and toggling affects later turns only.
+  A send that picks an agent on a plain conversation is refused, and a branch of a plain conversation stays plain. New
+  `PATCH /api/local/v1/chat/conversations/{conversationId}/plain` and an optional `conversationId` on
+  `GET /api/local/v1/chat/context-estimate`, so the pre-send estimate charges the custom prompt or nothing, and no
+  tools; the `AddPlainConversations` migration adds the `is_plain` flag and the encrypted `plain_system_prompt` column
+  to `conversations`.
+
 - **Python repositories validate with pytest in Development Mode** — a repository with no .NET solution or project and
   a `pyproject.toml`, `pytest.ini`, `setup.cfg` or Python files under `tests/` is detected as the new `python-pytest`
   profile. Its gate runs `git diff --check` and pytest through an isolated `python3 -I -B` with an engine-owned launch,

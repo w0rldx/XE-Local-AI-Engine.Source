@@ -118,6 +118,7 @@ export const allNavigationLinks: INavigationLink[] = [
 				simple: true,
 			},
 			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels", simple: true },
+			{ translationKey: "navigation.directInference", to: nodeRoutePaths.directInference, simple: false },
 		],
 	},
 	// Settings group: node settings (always) + cloud providers, shown while either of its capabilities is on (both are

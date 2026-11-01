@@ -42,6 +42,8 @@ interface ChatMessageProps {
 	// The conversation belongs to a work session. Scopes the step-cap notice below so the same text in an ordinary
 	// chat still renders as the red failure it is there.
 	isWorkSessionConversation?: boolean;
+	// A plain conversation runs no agent, so its unattributed turns show no agent label.
+	isPlainConversation?: boolean;
 	// Advanced UI mode only: show the turn's time to first token, decode rate and cached prompt tokens.
 	showTurnThroughput?: boolean;
 }
@@ -68,6 +70,7 @@ export const ChatMessage = memo(function ChatMessage({
 	reasoningEffort,
 	failureCategory,
 	isWorkSessionConversation = false,
+	isPlainConversation = false,
 	showTurnThroughput = false,
 }: ChatMessageProps) {
 	const { t } = useTranslation();
@@ -85,6 +88,7 @@ export const ChatMessage = memo(function ChatMessage({
 		onSubmitFeedback,
 		failureCategory,
 		isWorkSessionConversation,
+		isPlainConversation,
 		t,
 	});
 

@@ -209,6 +209,8 @@ export const nodeRoutePaths = {
 	scheduler: "/scheduler",
 	modelRecommendations: "/model-recommendations",
 	loadedModels: "/loaded-models",
+	// One explicit prompt to one model, streamed over the chat hub; nothing is saved. Ungated like usage.
+	directInference: "/direct-inference",
 	knowledgeBase: "/knowledge-base",
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.

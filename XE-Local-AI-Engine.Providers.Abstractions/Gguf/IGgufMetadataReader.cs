@@ -40,4 +40,7 @@ public interface IGgufMetadataReader
 {
     /// <summary>Reads <paramref name="filePath" />'s GGUF header and projects the optimizer's metadata inputs.</summary>
     Task<GgufModelMetadata> ReadMetadataAsync(string filePath, CancellationToken ct);
+
+    /// <summary>Stream-parses <paramref name="filePath" />'s header and tensor-info block; a bad file yields a set <see cref="GgufTensorInspection.Failure" />.</summary>
+    Task<GgufTensorInspection> ReadTensorsAsync(string filePath, CancellationToken ct);
 }

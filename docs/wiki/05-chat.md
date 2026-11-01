@@ -12,6 +12,7 @@
 - [End-to-end turn flow](#end-to-end-turn-flow)
 - [Model resolution (the per-turn RuntimeChatClient seam)](#model-resolution-the-per-turn-runtimechatclient-seam)
 - [Per-message agent attribution](#per-message-agent-attribution)
+- [Plain conversations](#plain-conversations)
 - [Ordered parts: reasoning ↔ tool ↔ answer](#ordered-parts-reasoning--tool--answer)
 - [MCP & local tools offered during a chat run](#mcp--local-tools-offered-during-a-chat-run)
 - [Plain-chat knowledge-base grounding](#plain-chat-knowledge-base-grounding)
@@ -162,6 +163,26 @@ Design note (`LocalDefaultChatModelResolver.cs`): this reads **only** `IModelCla
 ## Per-message agent attribution
 
 The assistant placeholder is minted **after** `ResolveTurnAsync` so it can be stamped with the resolved agent's snapshot. Effective-agent precedence: `request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? memoized Default Assistant id`. The placeholder carries `AgentDefinitionId`, `AgentName`, and the effort that actually drives the turn (an agent's pinned effort wins over the request selection). A missing seed / deleted definition degrades to the embedded default persona with the full tool offer and version 1 — never failing the turn; a deleted bound definition also raises one `AgentUnavailable` turn notice carrying the missing id (`ChatTurnResolution.AgentUnavailableNotice`, send and regenerate). The conversation response carries the binding (`agentDefinitionId`), and the composer's agent control shows it whenever the composer itself picks no agent. Agent resolution internals (prompt composition, tool intersection, skills, orchestration) live in [Agent Mode](04-agent-mode.md).
+
+## Plain conversations
+
+A conversation can be switched to **plain** mode (`NodeConversation.IsPlain`, PATCH
+`chat/conversations/{conversationId}/plain`, `SetNodeChatConversationPlainEndpoint`). This is a per-conversation
+setting, distinct from the "plain chat" of a tool-less turn elsewhere on this page. A plain turn takes one early branch in
+`ResolveTurnAsync` of both `NodeChatStreamService` and `NodeChatRegenerationService`: no effective agent and no Default
+Assistant lookup, and `ChatTurnResolver.ResolveAsync(isPlain: true)` never calls the agent resolver. The resulting
+`ChatTurnResolution.IsPlain` makes `ChatToolOfferResolver` return an empty offer and the turn ignore `UseKnowledgeBase`.
+With no resolved agent there are no skills, custom tools, orchestration or memory-extraction hook.
+
+The system prompt is the conversation's `PlainSystemPrompt` verbatim (no BaseScaffold, no persona), or, when it is
+unset, `OmitSystemPrompt = true` with a blank prompt, the invariant `LocalChatRuntimePackageBuilder` already enforces.
+The prompt is capped at 16 000 characters, stored blank as null, and encrypted at rest under AAD column
+`plain_system_prompt`. A send that names an `AgentDefinitionId` on a plain conversation is refused before the user
+message persists. Attachments, history shaping, compaction, context budgeting, per-send sampling and reasoning effort
+are unchanged. Toggling plain affects later turns only; the composer hides the agent picker and the tools and
+knowledge-base toggles while it is on. A branch of a plain conversation stays plain, its prompt re-encrypted for the new
+conversation id. The pre-send estimate follows the mode too: with the conversation's id it charges the custom prompt or
+nothing, and no tools.
 
 ## Ordered parts: reasoning ↔ tool ↔ answer
 
@@ -732,12 +753,12 @@ load took. The `assistant-phase` event carries both as `runtimePhaseReason` and 
 indicator shows them beside "Loading <model>…" and keeps the plain text when they are absent.
 
 **Before the first send.** With no assistant message there is no snapshot, so the popover fetches
-`GET chat/context-estimate?modelName&agentId&useLocalTools` (`GetNodeChatContextEstimateEndpoint`, Operator policy,
+`GET chat/context-estimate?conversationId&modelName&agentId&useLocalTools` (`GetNodeChatContextEstimateEndpoint`, Operator policy,
 `ChatContextEstimateService`). A blank model means the node's local default chat model (the composer sends the
 picker's local-default sentinel as no model, as a send does), no agent means the Default Assistant, and
 `useLocalTools` mirrors the composer's "Local tools" toggle (absent means on), so tools are offered only when a
 send would offer them. The toggle gates the node-wide offer (Default Assistant and agents without an allowed-tools list);
-an agent's own allowed-tools list is offered whatever the toggle says. In developer mode the SPA also sends the sampling preferences' `maxOutputTokens`, which widens the output
+an agent's own allowed-tools list is offered whatever the toggle says. `conversationId` names the conversation the next request goes to; a plain one ignores the agent and the toggle and charges its custom prompt or nothing, and no tools, the same way a send resolves it. In developer mode the SPA also sends the sampling preferences' `maxOutputTokens`, which widens the output
 reserve above the node floor by the send path's `TurnPolicy.ResolveReservedOutputTokens` rule, and `numCtx`, the
 requested window, which a known launched window caps and which is otherwise taken as is (`TurnPolicy.WithEffectiveContext`).
 Non-positive values are ignored. The service reuses the send path's turn resolution and tool offer, so the figures follow what a
@@ -745,7 +766,7 @@ first send would resolve, and measures them with the outer budgeter's estimator 
 parts only: system prompt (the embedded `LocalChatDefaultPrompt` when the turn resolves no prompt of its own), the
 offered tools with the template preamble, the default output reserve and the safety margin. Instructions,
 knowledge, attachments, compaction and conversation are zero, and the response has kind `PreSendEstimate`, no
-provider counts and no trim counters. **404** when no model resolves (no installed chat model for a blank request)
+provider counts and no trim counters. **404** when the named conversation does not exist, when no model resolves (no installed chat model for a blank request)
 or when the model is not a cloud model and the node has no local details for it; a model that is known but declares
 no context length takes the node default window, and a cold local GGUF takes the smaller of its train ceiling
 and the node default, matching what a pre-launch turn is budgeted against (the first round's snapshot corrects it). The SPA shows the estimate with the "estimated" label until the
@@ -892,7 +913,7 @@ The `metadata_json` blob (`NodeChatMessageMetadata`, serialized by `NodeChatMeta
 
 `NodeChatVariantBranchService.BranchConversationAsync` copies a conversation up to a cutoff message into a new local thread, and the copy is a **linear** thread: exactly one revision per variant group, positioned at the group's **anchor** (its earliest member's sequence). That mirrors the frontend, which renders a variant group at its oldest sibling and lets any sibling be the active revision (`MessageRevisionGrouping.ts`).
 
-Anchoring by group rather than by each message's own sequence is what makes late regenerations branch correctly: regenerating an early turn *after* later turns exist mints a sibling whose sequence lands past them, yet that sibling still belongs to the early turn and must branch at the early position. The same holds for the cutoff itself and for the caller-supplied selected-revision map, which is validated on the group anchor, not on the selected message's sequence. A group with no valid selection falls back to its newest member, and the branch-point turn always contributes exactly the cutoff message, overriding any caller entry for its group. Without the collapse the copied siblings would render as duplicate stacked assistant turns, since `variant_group_id` is dropped on copy.
+Anchoring by group rather than by each message's own sequence is what makes late regenerations branch correctly: regenerating an early turn *after* later turns exist mints a sibling whose sequence lands past them, yet that sibling still belongs to the early turn and must branch at the early position. The same holds for the cutoff itself and for the caller-supplied selected-revision map, which is validated on the group anchor, not on the selected message's sequence. A group with no valid selection falls back to its newest member, and the branch-point turn always contributes exactly the cutoff message, overriding any caller entry for its group. Without the collapse the copied siblings would render as duplicate stacked assistant turns, since `variant_group_id` is dropped on copy. The branch inherits [plain mode](#plain-conversations) and its custom prompt.
 
 ### Encryption of titles and content (at-rest)
 

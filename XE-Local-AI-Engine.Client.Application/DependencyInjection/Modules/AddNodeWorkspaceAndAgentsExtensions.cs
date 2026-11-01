@@ -143,6 +143,8 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<IModelLaunchArgumentsStore, ModelLaunchArgumentsStore>();
         // The LocalModels launch-argument endpoints' only path to that store. Scoped, matching the store it wraps.
         builder.Services.AddScoped<ModelLaunchArgumentsService>();
+        // The GGUF inspection endpoint's path from a registered model name to its tensor list; both collaborators are singletons.
+        builder.Services.AddSingleton<GgufInspectionService>();
         // Feedback-insights read store. Pure analytics over node-local feedback/tool-event rows; it reads only
         // plaintext columns and writes nothing.
         builder.Services.AddScoped<IFeedbackInsightsStore, FeedbackInsightsStore>();

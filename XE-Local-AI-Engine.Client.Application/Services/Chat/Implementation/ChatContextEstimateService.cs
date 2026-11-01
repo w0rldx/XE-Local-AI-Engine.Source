@@ -25,6 +25,7 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILocalModelDetailsResolver _modelDetailsResolver;
     private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly INodeChatPersistenceService _persistence;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
     private readonly ChatTurnResolver _turnResolver;
@@ -39,7 +40,8 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
         IOptions<LocalChatAgentOptions> localChatOptions,
         ILocalModelDetailsResolver modelDetailsResolver,
         ITokenEstimator estimator,
-        IOptions<ConversationContextBudgetOptions> budgetOptions)
+        IOptions<ConversationContextBudgetOptions> budgetOptions,
+        INodeChatPersistenceService persistence)
     {
         ArgumentNullException.ThrowIfNull(budgetOptions);
         _turnResolver = turnResolver ?? throw new ArgumentNullException(nameof(turnResolver));
@@ -53,12 +55,24 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
         _modelDetailsResolver = modelDetailsResolver ?? throw new ArgumentNullException(nameof(modelDetailsResolver));
         _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
         _budgetOptions = budgetOptions.Value;
+        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
     }
 
     public async Task<NodeChatContextWindowDto?> EstimateAsync(ChatContextEstimateRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var inputs = await ResolveAsync(request.ModelName, request.AgentId, request.UseLocalTools, cancellationToken);
+        NodeChatConversationDto? conversation = null;
+        if (request.ConversationId is { } conversationId)
+        {
+            // The send path's read; a send to a conversation it cannot find fails, so there is nothing to estimate.
+            conversation = await _persistence.GetConversationForTurnAsync(conversationId, cancellationToken);
+            if (conversation is null)
+            {
+                return null;
+            }
+        }
+
+        var inputs = await ResolveAsync(request.ModelName, request.AgentId, request.UseLocalTools, cancellationToken, conversation);
         var resolution = inputs.Resolution;
         var systemPrompt = inputs.SystemPrompt;
         var offer = inputs.Offer;
@@ -74,7 +88,8 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
         }
 
         var divisor = _estimator.ResolveDivisor(model);
-        var systemPromptTokens = ConversationContextBudgeter.EstimateSystemPromptTokens(_estimator, systemPrompt, divisor);
+        // An empty prompt (a plain turn without one) sends no system message, and the budgeter charges nothing for it.
+        var systemPromptTokens = systemPrompt.Length > 0 ? ConversationContextBudgeter.EstimateSystemPromptTokens(_estimator, systemPrompt, divisor) : 0;
 
         // Same rendering and per-tool charge the outer budgeter applies to the package's offer, so the estimate and the
         // first round's fixed overhead agree; the preamble is charged once when any tool is offered, as there.
@@ -136,7 +151,8 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
     internal async Task<ResolvedEstimateInputs> ResolveAsync(string? modelName,
         Guid? agentId,
         bool useLocalTools,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        NodeChatConversationDto? conversation = null)
     {
         // The send path's head minus the conversation binding: an explicit model is a concrete user pick; blank takes
         // the installed-GGUF local default, and a null resolve flags the turn as needing an installed chat model.
@@ -145,13 +161,16 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
             ? modelName
             : await _localDefaultChatModelResolver.ResolveAsync((await _nodeSettingsStore.LoadAsync(cancellationToken)).DefaultModelName, cancellationToken);
         var requiresInstalledChatModel = activeModel is null;
-        var effectiveAgentId = agentId ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
+        var isPlain = conversation?.IsPlain == true;
+        var effectiveAgentId = isPlain ? null : agentId ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
 
         // No user turn exists yet, so a null retrieval query takes the playbook fast path, which never builds an
         // embedding client (as the Default Assistant offer read does).
-        var resolution = await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery: null, userPickedConcreteModel, cancellationToken);
+        var resolution = await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery: null, userPickedConcreteModel, cancellationToken, isPlain: isPlain);
         var offer = await ChatToolOfferResolver.ResolveAsync(useLocalTools, resolution, _runtimeSettings, _localToolOfferProvider, _toolApprovalPolicy, cancellationToken);
-        var systemPrompt = resolution.Resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value);
+        var systemPrompt = isPlain
+            ? conversation?.PlainSystemPrompt ?? string.Empty
+            : resolution.Resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value);
         return new ResolvedEstimateInputs
         {
             Resolution = resolution,

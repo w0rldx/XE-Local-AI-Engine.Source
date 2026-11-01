@@ -146,7 +146,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         // Developer-gated per-send sampling overrides. Null (the default, mode-off) leaves chatOptions byte-identical to
         // the pre-sampling path — the no-override guarantee.
-        ApplySamplingOptions(chatOptions, additionalProperties, definition.Sampling);
+        InvocationSamplingRules.Apply(chatOptions, additionalProperties, definition.Sampling);
 
         // Constrained decoding. Null (every path but the benchmark judge) leaves ResponseFormat unset, which is what
         // keeps `response_format` off the wire entirely rather than sending a permissive one.
@@ -256,107 +256,6 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             },
             loggerFactory,
             services));
-    }
-
-    /// <summary>
-    ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />.
-    /// </summary>
-    /// <remarks>
-    ///     Native knobs ride the strongly-typed properties; the four without one travel as
-    ///     <see cref="AdditionalPropertiesDictionary" /> entries keyed by <see cref="SamplingOptionKeys" />, and reach
-    ///     BOTH runtimes. Each field is applied only when set and only when it passes a defensive range guard, so
-    ///     NaN, negative or out-of-range keeps the model default. See docs/wiki/04-agent-mode.md ("Per-send sampling
-    ///     reaches two runtimes").
-    /// </remarks>
-    private static void ApplySamplingOptions(ChatOptions chatOptions,
-        AdditionalPropertiesDictionary additionalProperties,
-        InvocationSamplingOptions? sampling)
-    {
-        if (sampling is null)
-        {
-            return;
-        }
-
-        // Temperature is accepted in [0, 2] (the UI cap); out-of-range → skip and keep the model default.
-        if (IsValidRangedFloat(sampling.Temperature, min: 0f, max: 2f))
-        {
-            chatOptions.Temperature = sampling.Temperature;
-        }
-
-        if (IsValidUnitFloat(sampling.TopP))
-        {
-            chatOptions.TopP = sampling.TopP;
-        }
-
-        if (sampling.TopK is { } topK && topK > 0)
-        {
-            chatOptions.TopK = topK;
-        }
-
-        // Penalties are accepted in [-2, 2] (the UI cap); out-of-range → skip and keep the model default.
-        if (IsValidRangedFloat(sampling.PresencePenalty, min: -2f, max: 2f))
-        {
-            chatOptions.PresencePenalty = sampling.PresencePenalty;
-        }
-
-        if (IsValidRangedFloat(sampling.FrequencyPenalty, min: -2f, max: 2f))
-        {
-            chatOptions.FrequencyPenalty = sampling.FrequencyPenalty;
-        }
-
-        // Seed floor mirrors the UI: -1 is Ollama's "random seed" sentinel, anything below is invalid → skip.
-        if (sampling.Seed is { } seed && seed >= -1)
-        {
-            chatOptions.Seed = seed;
-        }
-
-        if (sampling.Stop is { Count: > 0 } stop)
-        {
-            var sequences = stop.Where(static value => !string.IsNullOrWhiteSpace(value)).ToList();
-            if (sequences.Count > 0)
-            {
-                chatOptions.StopSequences = sequences;
-            }
-        }
-
-        // num_ctx is read first so the output cap below can be clamped to a valid context window.
-        var numCtx = sampling.NumCtx is { } ctx && ctx > 0 ? ctx : (int?)null;
-        if (numCtx is { } resolvedCtx)
-        {
-            additionalProperties[SamplingOptionKeys.NumCtx] = resolvedCtx;
-        }
-
-        if (sampling.MaxOutputTokens is { } maxOutputTokens && maxOutputTokens > 0)
-        {
-            // Safety clamp: an output budget larger than the context window would be rejected/truncated by the model.
-            var clamped = numCtx is { } window ? Math.Min(maxOutputTokens, window) : maxOutputTokens;
-            chatOptions.MaxOutputTokens = clamped;
-        }
-
-        if (IsValidUnitFloat(sampling.MinP))
-        {
-            additionalProperties[SamplingOptionKeys.MinP] = sampling.MinP!.Value;
-        }
-
-        if (sampling.RepeatPenalty is { } repeatPenalty && !float.IsNaN(repeatPenalty) && repeatPenalty >= 0f)
-        {
-            additionalProperties[SamplingOptionKeys.RepeatPenalty] = repeatPenalty;
-        }
-
-        if (sampling.RepeatLastN is { } repeatLastN && repeatLastN >= -1)
-        {
-            additionalProperties[SamplingOptionKeys.RepeatLastN] = repeatLastN;
-        }
-    }
-
-    private static bool IsValidRangedFloat(float? value, float min, float max)
-    {
-        return value is { } resolved && !float.IsNaN(resolved) && resolved >= min && resolved <= max;
-    }
-
-    private static bool IsValidUnitFloat(float? value)
-    {
-        return IsValidRangedFloat(value, min: 0f, max: 1f);
     }
 
     /// <summary>

@@ -2,7 +2,7 @@ import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tool
 import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -11,6 +11,7 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import { ConversationList } from "@/features/chat/components/ConversationList";
+import { PlainConversationControls } from "@/features/chat/components/PlainConversationControls";
 import { usePaneFileDrop } from "@/features/chat/hooks/usePaneFileDrop";
 import { answerNowMessageId } from "@/features/chat/models/ChatAnswerNow";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
@@ -81,6 +82,7 @@ export function ChatDisplayShell({
 	onToggleConversationArchived,
 	boundAgentMemoryEnabled = false,
 	onToggleConversationMemoryExcluded,
+	onSetConversationPlain,
 	onDeleteConversation,
 	onBranchFromMessage,
 	activeRevisionByGroup,
@@ -104,6 +106,20 @@ export function ChatDisplayShell({
 	const { data: nodeSettings } = useQuery({ ...getNodeSettingsOptions(), enabled: false });
 	const showTurnThroughput = nodeSettings?.uiMode !== "simple";
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
+	// A plain conversation runs no agent, tools or knowledge base, so the composer hides those pickers; the server
+	// enforces the same rule and rejects an agent pick on a plain conversation.
+	const isPlainConversation = conversation?.isPlain === true;
+	const composerCapabilities = useMemo(
+		() =>
+			isPlainConversation ? { ...capabilities, showLocalToolControls: false, showKnowledgeBaseControls: false } : capabilities,
+		[capabilities, isPlainConversation],
+	);
+	// A workflow runs agent nodes, which plain mode opts out of, so its picker goes too. Without that picker the toolbar
+	// has no labelled picker to prefer over the context readout, so the readout and its buttons keep their place.
+	const composerWorkflow = useMemo(
+		() => (isPlainConversation && workflow ? { ...workflow, selector: undefined } : workflow),
+		[workflow, isPlainConversation],
+	);
 	const answerNowTarget = answerNowMessageId(
 		streamingMessage,
 		modelOptions.find((option) => option.value === selectedModel),
@@ -228,6 +244,13 @@ export function ChatDisplayShell({
 						/>
 					</Tooltip>
 				) : null}
+				{onSetConversationPlain && conversation ? (
+					<PlainConversationControls
+						conversation={conversation}
+						disabled={inputStatus.isSending}
+						onSetConversationPlain={onSetConversationPlain}
+					/>
+				) : null}
 			</Group>
 		</Stack>
 	);
@@ -293,13 +316,22 @@ export function ChatDisplayShell({
 					onRetryLoadMessages={onRetryLoadMessages}
 					reasoningEffort={reasoningEffort}
 					isWorkSessionConversation={isWorkSessionConversation}
+					isPlainConversation={isPlainConversation}
 					renderAfterMessage={workflow?.renderAfterMessage}
 					showTurnThroughput={showTurnThroughput}
 				/>
 				{workflow?.composerHeader}
+				{isPlainConversation ? (
+					<Text size="xs" c="dimmed" data-testid="chat-plain-notice">
+						{t(
+							"pages.chat.plainMode.notice",
+							"Plain chat: no agent, tools or knowledge base. Only your system prompt, if any, is sent.",
+						)}
+					</Text>
+				) : null}
 				<ChatInputArea
 					availableReasoningEfforts={availableReasoningEfforts}
-					capabilities={capabilities}
+					capabilities={composerCapabilities}
 					contextUsage={contextUsage}
 					maxMessageSizeKb={maxMessageSizeKb}
 					disabled={inputStatus.chatInputDisabled || workflow?.composerDisabled === true}
@@ -317,8 +349,8 @@ export function ChatDisplayShell({
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
-					agentControlsAvailable={agentControlsAvailable}
-					agentModeEnabled={agentModeEnabled}
+					agentControlsAvailable={agentControlsAvailable && !isPlainConversation}
+					agentModeEnabled={agentModeEnabled && !isPlainConversation}
 					conversationAgentBound={conversationAgentBound}
 					selectedAgentId={selectedAgentId}
 					agentOptions={agentOptions}
@@ -335,7 +367,7 @@ export function ChatDisplayShell({
 					onToggleKnowledgeBase={onToggleKnowledgeBase}
 					onSelectAgent={onSelectAgent}
 					onSend={onSend}
-					workflow={workflow}
+					workflow={composerWorkflow}
 				/>
 			</Stack>
 		</Paper>

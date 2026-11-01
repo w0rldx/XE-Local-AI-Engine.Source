@@ -427,6 +427,34 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
+    ///     Encrypts a plain conversation's custom system prompt for raw-SQL persistence, returning null when the prompt is
+    ///     null so the database column writes NULL.
+    /// </summary>
+    /// <remarks>AAD mirrors <see cref="EncryptConversationCompactionSummary" /> under the column name <c>plain_system_prompt</c>.</remarks>
+    public byte[]? EncryptConversationPlainSystemPrompt(string? prompt, Guid conversationId)
+    {
+        if (prompt is null)
+        {
+            return null;
+        }
+
+        var plaintext = Encoding.UTF8.GetBytes(prompt);
+        return NodePayloadProtector.Encrypt(plaintext, NodeEncryptionKey.Span, conversationId, conversationId, "plain_system_prompt");
+    }
+
+    /// <summary>Decrypts a raw plain-system-prompt blob back to a string. Returns null when the blob is null.</summary>
+    public string? DecryptConversationPlainSystemPrompt(byte[]? encrypted, Guid conversationId)
+    {
+        if (encrypted is null)
+        {
+            return null;
+        }
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, conversationId, "plain_system_prompt");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
     ///     Encrypts the distilled conversation-state JSON for raw-SQL persistence, returning null when the state is null
     ///     so the database column writes NULL.
     /// </summary>

@@ -159,7 +159,7 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
         await EnableLocalToolsToggleAsync();
 
         // Start a fresh conversation. The PerTestSession SQLite retains prior conversations from
-        // the shared host; clicking "New plain chat" creates a new empty conversation and selects
+        // the shared host; clicking "New chat" creates a new empty conversation and selects
         // it via TanStack client-side routing (no full navigation — WaitForURLAsync won't work).
         // Wait for a new conversation-item to appear in the list instead.
         var conversationItems = Page.Locator("[data-testid^='conversation-item-']");
@@ -167,7 +167,8 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
 
         var newButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = "New plain chat"
+            Name = "New chat",
+            Exact = true
         });
         await Expect(newButton).ToBeVisibleAsync();
         await newButton.ClickAsync();

@@ -75,6 +75,22 @@ internal sealed record class NodeConversation
     public bool MemoryExcluded { get; set; }
 
     /// <summary>
+    ///     Plain-conversation flag: turns run with no agent, persona, BaseScaffold, tools, knowledge base, skills or memory
+    ///     extraction. Plaintext (a bool); default false.
+    /// </summary>
+    /// <remarks>Read and written by the raw ADO paths, like <see cref="MemoryExcluded" />; toggling it affects later turns only.</remarks>
+    public bool IsPlain { get; set; }
+
+    /// <summary>
+    ///     The optional custom system prompt of a plain conversation; null means a plain turn sends no system prompt.
+    /// </summary>
+    /// <remarks>
+    ///     UTF-8 bytes encrypted at rest under AAD column name <c>plain_system_prompt</c>, the same posture as
+    ///     <see cref="CompactionSummary" />: it is user-authored text like an agent's instructions.
+    /// </remarks>
+    public byte[]? PlainSystemPrompt { get; set; }
+
+    /// <summary>
     ///     Derived, non-destructive compaction synopsis: a local-model summary of the older turns, sent in their place
     ///     so a long conversation keeps its gist within the context window. Null until the user compacts.
     /// </summary>

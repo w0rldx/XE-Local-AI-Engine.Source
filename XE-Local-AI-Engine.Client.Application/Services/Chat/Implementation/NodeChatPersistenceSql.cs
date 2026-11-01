@@ -111,7 +111,7 @@ internal static class NodeChatPersistenceSql
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
-                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc, conversation_state, conversation_state_covers_to_sequence, conversation_state_updated_at_utc
+                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, agent_definition_id, memory_excluded, compaction_summary, compaction_summary_covers_to_sequence, compaction_summary_updated_at_utc, conversation_state, conversation_state_covers_to_sequence, conversation_state_updated_at_utc, is_plain, plain_system_prompt
                               FROM conversations
                               WHERE conversation_id = $conversation_id;
                               """;
@@ -151,7 +151,11 @@ internal static class NodeChatPersistenceSql
                 await reader.IsDBNullAsync(ordinal: 15, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 15, cancellationToken),
                 conversationId),
             ConversationStateCoversToSequence = await reader.IsDBNullAsync(ordinal: 16, cancellationToken) ? null : reader.GetInt32(16),
-            ConversationStateUpdatedAtUtc = await reader.IsDBNullAsync(ordinal: 17, cancellationToken) ? null : reader.GetInt64(17)
+            ConversationStateUpdatedAtUtc = await reader.IsDBNullAsync(ordinal: 17, cancellationToken) ? null : reader.GetInt64(17),
+            IsPlain = reader.GetBoolean(18),
+            PlainSystemPrompt = dbContext.DecryptConversationPlainSystemPrompt(
+                await reader.IsDBNullAsync(ordinal: 19, cancellationToken) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 19, cancellationToken),
+                conversationId)
         };
     }
 

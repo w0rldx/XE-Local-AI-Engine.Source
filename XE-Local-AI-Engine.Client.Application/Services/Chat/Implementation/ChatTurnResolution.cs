@@ -43,6 +43,12 @@ internal sealed class ChatTurnResolution
     /// </remarks>
     public bool AllowAutoModelSwap { get; init; }
 
+    /// <summary>
+    ///     A plain-conversation turn: no agent was resolved and none may be, the tool offer is empty, and the caller
+    ///     sends the conversation's custom system prompt or none.
+    /// </summary>
+    public bool IsPlain { get; init; }
+
     /// <summary>The bound agent definition id that resolved to nothing (a deleted definition), or <see langword="null" />.</summary>
     public Guid? MissingAgentDefinitionId { get; init; }
 

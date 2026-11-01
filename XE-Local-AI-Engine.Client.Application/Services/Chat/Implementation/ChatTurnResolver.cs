@@ -51,8 +51,15 @@ public sealed class ChatTurnResolver
         string? retrievalQuery,
         bool userPickedConcreteModel,
         CancellationToken cancellationToken,
-        Guid? conversationAgentId = null)
+        Guid? conversationAgentId = null,
+        bool isPlain = false)
     {
+        // A plain turn never resolves an agent, whatever head the caller derived: no persona, pin, skills or memory.
+        if (isPlain)
+        {
+            effectiveAgentId = null;
+        }
+
         // Capabilities resolve ONCE, with unknown meaning NOT-capable so a plain chat works instead of tripping a
         // provider 400, and the same pass classifies the provider LOCALITY the egress gates reuse.
         var resolveStartTimestamp = Stopwatch.GetTimestamp();
@@ -89,8 +96,10 @@ public sealed class ChatTurnResolver
         ResolvedAgentRuntime? resolved;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_agent"))
         {
-            resolved = await _agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
-                cancellationToken);
+            resolved = isPlain
+                ? null
+                : await _agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
+                    cancellationToken);
         }
 
         var agentMs = Stopwatch.GetElapsedTime(agentStart).TotalMilliseconds;
@@ -152,6 +161,7 @@ public sealed class ChatTurnResolver
             EffectiveModelCloudGrants = effectiveCapabilities.CloudGrants,
             ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
             AllowAutoModelSwap = allowAutoModelSwap,
+            IsPlain = isPlain,
             // Null for a non-null id means the definition is gone; only the conversation's own agent earns the notice's wording.
             MissingAgentDefinitionId = resolved is null && conversationAgentId is not null && effectiveAgentId == conversationAgentId ? effectiveAgentId : null
         };

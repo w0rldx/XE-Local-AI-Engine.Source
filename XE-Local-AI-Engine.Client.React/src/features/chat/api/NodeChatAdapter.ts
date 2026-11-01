@@ -14,6 +14,7 @@ import {
 	pinNodeChatConversation,
 	renameNodeChatConversation,
 	setNodeChatConversationMemoryExcluded,
+	setNodeChatConversationPlain,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
@@ -104,6 +105,12 @@ export interface NodeChatAdapter {
 	setConversationMemoryExcluded(
 		conversationId: string,
 		memoryExcluded: boolean,
+		options?: RequestOptions,
+	): Promise<ChatConversationModel>;
+	setConversationPlain(
+		conversationId: string,
+		isPlain: boolean,
+		plainSystemPrompt: string | undefined,
 		options?: RequestOptions,
 	): Promise<ChatConversationModel>;
 	branchConversation(
@@ -256,6 +263,14 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		const { data } = await setNodeChatConversationMemoryExcluded({
 			path: { conversationId },
 			body: { memoryExcluded },
+			signal: options?.signal,
+		});
+		return mapConversation(data);
+	},
+	async setConversationPlain(conversationId, isPlain, plainSystemPrompt, options) {
+		const { data } = await setNodeChatConversationPlain({
+			path: { conversationId },
+			body: { isPlain, plainSystemPrompt: plainSystemPrompt ?? null },
 			signal: options?.signal,
 		});
 		return mapConversation(data);

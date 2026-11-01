@@ -225,6 +225,7 @@ import {
 	getMcpServerApiKey,
 	getMcpServerTools,
 	getModelCatalogInfo,
+	getModelGgufInspection,
 	getModelLaunchArguments,
 	getNodeChatContextEstimate,
 	getNodeChatConversation,
@@ -427,6 +428,7 @@ import {
 	setLogLevel,
 	setMcpServerEnabled,
 	setNodeChatConversationMemoryExcluded,
+	setNodeChatConversationPlain,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	startBenchmarkRun,
@@ -1027,6 +1029,9 @@ import type {
 	GetMcpServerToolsResponse,
 	GetModelCatalogInfoData,
 	GetModelCatalogInfoResponse,
+	GetModelGgufInspectionData,
+	GetModelGgufInspectionError,
+	GetModelGgufInspectionResponse,
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsError,
 	GetModelLaunchArgumentsResponse,
@@ -1518,6 +1523,9 @@ import type {
 	SetNodeChatConversationMemoryExcludedData,
 	SetNodeChatConversationMemoryExcludedError,
 	SetNodeChatConversationMemoryExcludedResponse,
+	SetNodeChatConversationPlainData,
+	SetNodeChatConversationPlainError,
+	SetNodeChatConversationPlainResponse,
 	SetNodeChatMessageFeedbackData,
 	SetNodeChatMessageFeedbackError,
 	SetNodeChatMessageFeedbackResponse,
@@ -4323,6 +4331,30 @@ export const pinNodeChatConversationMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await pinNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setNodeChatConversationPlainMutation = (
+	options?: Partial<Options<SetNodeChatConversationPlainData>>,
+): UseMutationOptions<
+	SetNodeChatConversationPlainResponse,
+	AxiosError<SetNodeChatConversationPlainError>,
+	Options<SetNodeChatConversationPlainData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SetNodeChatConversationPlainResponse,
+		AxiosError<SetNodeChatConversationPlainError>,
+		Options<SetNodeChatConversationPlainData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setNodeChatConversationPlain({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -9635,6 +9667,28 @@ export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetail
 			return data;
 		},
 		queryKey: getLocalModelDetailsQueryKey(options),
+	});
+
+export const getModelGgufInspectionQueryKey = (options: Options<GetModelGgufInspectionData>) =>
+	createQueryKey("getModelGgufInspection", options, false, ["Models"]);
+
+export const getModelGgufInspectionOptions = (options: Options<GetModelGgufInspectionData>) =>
+	queryOptions<
+		GetModelGgufInspectionResponse,
+		AxiosError<GetModelGgufInspectionError>,
+		GetModelGgufInspectionResponse,
+		ReturnType<typeof getModelGgufInspectionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelGgufInspection({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelGgufInspectionQueryKey(options),
 	});
 
 export const deleteModelKindMutation = (

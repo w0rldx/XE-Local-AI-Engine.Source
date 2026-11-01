@@ -279,7 +279,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
             // rerun does not lose its sources strip. Agent mode grounds through the gated tool instead, never inline.
-            var knowledge = useKnowledgeBase && !offerTools
+            var knowledge = useKnowledgeBase && !offerTools && !resolution.IsPlain
                 ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, requestId, runCancellation.Token, cancellationToken)
                 : null;
 
@@ -287,7 +287,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             {
                 InvocationId = requestId,
                 ConversationId = conversationId,
-                ResolvedSystemPrompt = resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
+                // Plain reruns exactly as a plain send: the custom prompt verbatim, or no system message.
+                ResolvedSystemPrompt = resolution.IsPlain
+                    ? conversation.PlainSystemPrompt ?? string.Empty
+                    : resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
+                OmitSystemPrompt = resolution.IsPlain && conversation.PlainSystemPrompt is null,
                 ConversationContext = BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
                 ModelProfile = resolution.EffectiveModel,
                 AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -778,16 +782,19 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             requiresInstalledChatModel = activeModel is null;
         }
 
-        // A regenerate reuses the ORIGINAL turn's agent so the rerun stays on the same persona; fall back to the
-        // conversation binding, then the seeded Default Assistant (process-memoized id).
-        var effectiveAgentId = original.AgentDefinitionId
-                               ?? conversation.AgentDefinitionId
-                               ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
+        // A regenerate reuses the ORIGINAL turn's agent, then the conversation binding, then the Default Assistant; a
+        // plain conversation reruns plain whatever agent the original ran as, since plain applies to every later turn.
+        var effectiveAgentId = conversation.IsPlain
+            ? null
+            : original.AgentDefinitionId
+              ?? conversation.AgentDefinitionId
+              ?? await _defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken);
 
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
 
         return await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery, userPickedConcreteModel, cancellationToken,
-            conversationAgentId: original.AgentDefinitionId ?? conversation.AgentDefinitionId);
+            conversationAgentId: original.AgentDefinitionId ?? conversation.AgentDefinitionId,
+            isPlain: conversation.IsPlain);
     }
 
     /// <summary>

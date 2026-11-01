@@ -82,10 +82,11 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
         // Conversation list panel.
         await Expect(Page.GetByTestId("conversation-list")).ToBeVisibleAsync();
 
-        // New-conversation button: aria-label from en.json key "pages.chat.newConversation" = "New plain chat".
+        // New-conversation button: aria-label from en.json key "pages.chat.newConversation" = "New chat".
         await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
             {
-                Name = "New plain chat"
+                Name = "New chat",
+                Exact = true
             }))
             .ToBeVisibleAsync();
 
@@ -133,7 +134,8 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
 
         var newConversationButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = "New plain chat"
+            Name = "New chat",
+            Exact = true
         });
         await Expect(newConversationButton).ToBeVisibleAsync();
 
@@ -240,7 +242,8 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
 
         var newConversationButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
-            Name = "New plain chat"
+            Name = "New chat",
+            Exact = true
         });
         await newConversationButton.ClickAsync();
 

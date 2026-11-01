@@ -307,6 +307,8 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		isPinned: dto.isPinned ?? false,
 		isArchived: dto.archived ?? false,
 		memoryExcluded: dto.memoryExcluded ?? false,
+		isPlain: dto.isPlain ?? false,
+		plainSystemPrompt: dto.plainSystemPrompt ?? undefined,
 		agentDefinitionId: dto.agentDefinitionId ?? undefined,
 		origin: toOrigin(dto.origin),
 		branchOfConversationId: dto.branchOfConversationId ?? undefined,

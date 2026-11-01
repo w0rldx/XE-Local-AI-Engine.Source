@@ -52,4 +52,11 @@ public sealed class GgufMetadataReader : IGgufMetadataReader
             DecisionType = header.DecisionType
         };
     }
+
+    /// <inheritdoc />
+    public Task<GgufTensorInspection> ReadTensorsAsync(string filePath, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        return GgufTensorBlockReader.ReadFileAsync(filePath, ct);
+    }
 }

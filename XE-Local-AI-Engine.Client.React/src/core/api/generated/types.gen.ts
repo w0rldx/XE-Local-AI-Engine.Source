@@ -4126,6 +4126,8 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespons
 	} | null;
 	memoryExcluded: boolean;
 	agentDefinitionId?: string | null;
+	isPlain: boolean;
+	plainSystemPrompt?: string | null;
 	messages: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
 };
 
@@ -4242,6 +4244,11 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemo
 	memoryExcluded?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest = {
+	isPlain?: boolean;
+	plainSystemPrompt?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = {
 	rating: string;
 	comment?: string | null;
@@ -4267,6 +4274,10 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse 
 };
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1GetModelGgufInspectionRequest = {
 	[key: string]: never;
 };
 
@@ -4324,6 +4335,45 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	isToolCapable: boolean;
 	isMultimodalCapable?: boolean;
 	isOverridden: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse = {
+	modelName: string;
+	readFailure: string | null;
+	ggufVersion: number | null;
+	architecture: string | null;
+	displayName: string | null;
+	parameterCount: number | null;
+	fileType: string | null;
+	blockCount: number | null;
+	attentionHeadCount: number | null;
+	attentionHeadCountKv: number | null;
+	embeddingLength: number | null;
+	contextLength: number | null;
+	expertCount: number | null;
+	chatTemplate: string | null;
+	splitCount: number | null;
+	tensorCount: number;
+	totalTensorBytes: number | null;
+	headerBytes: number;
+	fileSizeBytes: number;
+	blocks: Array<XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorBlockDto>;
+	nonBlockTensors: Array<XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorBlockDto = {
+	index: number;
+	byteSize: number | null;
+	tensors: Array<XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto = {
+	name: string;
+	shape: Array<number>;
+	ggmlType: string | null;
+	ggmlTypeId: number;
+	offset: number;
+	byteSize: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelKindResponse = {
@@ -10478,6 +10528,7 @@ export type GetNodeChatContextEstimateData = {
 	path?: never;
 	query?: {
 		modelName?: string | null;
+		conversationId?: string | null;
 		agentId?: string | null;
 		useLocalTools?: boolean | null;
 		maxOutputTokens?: number | null;
@@ -10968,6 +11019,43 @@ export type PinNodeChatConversationResponses = {
 };
 
 export type PinNodeChatConversationResponse = PinNodeChatConversationResponses[keyof PinNodeChatConversationResponses];
+
+export type SetNodeChatConversationPlainData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/plain";
+};
+
+export type SetNodeChatConversationPlainErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type SetNodeChatConversationPlainError = SetNodeChatConversationPlainErrors[keyof SetNodeChatConversationPlainErrors];
+
+export type SetNodeChatConversationPlainResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+};
+
+export type SetNodeChatConversationPlainResponse =
+	SetNodeChatConversationPlainResponses[keyof SetNodeChatConversationPlainResponses];
 
 export type RenameNodeChatConversationData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest;
@@ -18418,6 +18506,41 @@ export type GetLocalModelDetailsResponses = {
 };
 
 export type GetLocalModelDetailsResponse = GetLocalModelDetailsResponses[keyof GetLocalModelDetailsResponses];
+
+export type GetModelGgufInspectionData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/gguf-inspection";
+};
+
+export type GetModelGgufInspectionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetModelGgufInspectionError = GetModelGgufInspectionErrors[keyof GetModelGgufInspectionErrors];
+
+export type GetModelGgufInspectionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse;
+};
+
+export type GetModelGgufInspectionResponse = GetModelGgufInspectionResponses[keyof GetModelGgufInspectionResponses];
 
 export type DeleteModelKindData = {
 	body?: never;

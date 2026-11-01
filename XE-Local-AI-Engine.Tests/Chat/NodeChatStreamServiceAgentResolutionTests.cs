@@ -1302,7 +1302,8 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
             localChatOptions,
             detailsResolver,
             estimator,
-            Options.Create(new ConversationContextBudgetOptions()));
+            Options.Create(new ConversationContextBudgetOptions()),
+            persistence);
 
         var drained = 0;
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,

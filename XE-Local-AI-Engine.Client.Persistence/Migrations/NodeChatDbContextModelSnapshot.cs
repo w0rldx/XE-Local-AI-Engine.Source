@@ -6121,6 +6121,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDefaultValue(false)
                         .HasColumnName("is_pinned");
 
+                    b.Property<bool>("IsPlain")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_plain");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -6145,6 +6151,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Local")
                         .HasColumnName("origin");
+
+                    b.Property<byte[]>("PlainSystemPrompt")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("plain_system_prompt");
 
                     b.Property<bool>("Purged")
                         .HasColumnType("INTEGER")

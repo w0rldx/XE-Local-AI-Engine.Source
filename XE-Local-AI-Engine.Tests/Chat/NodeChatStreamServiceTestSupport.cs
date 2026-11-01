@@ -1694,10 +1694,14 @@ internal static partial class NodeChatStreamServiceTestSupport
         // The timeout block carried on the runtime package; the node-settings test asserts the operator's
         // "Maximum message request timeout" reaches the invocation instead of the TimeoutSettings default.
         public TimeoutSettings? LastTimeouts { get; private set; }
+
+        // The whole package, for assertions on fields the named captures above do not cover (skills, omitted prompt).
+        public RuntimePackage? LastPackage { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
+            LastPackage = context.Package;
             LastSystemPrompt = context.Package.ResolvedSystemPrompt;
             LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
             LastReasoningEffort = context.Package.ReasoningEffort;

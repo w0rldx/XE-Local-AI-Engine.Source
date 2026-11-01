@@ -241,6 +241,10 @@ export interface ChatConversationModel {
 	// When true this conversation is "temporary" — it won't teach the bound agent new adaptive memory (existing
 	// memory is still used). Toggled per-conversation in the chat header; defaults from the agent's defaultTemporaryChat.
 	memoryExcluded?: boolean;
+	// Plain mode: turns run with no agent, persona, tools, knowledge base or memory, and send plainSystemPrompt verbatim
+	// (or no system prompt when it is unset).
+	isPlain?: boolean;
+	plainSystemPrompt?: string;
 	// The agent the conversation is bound to; a send that picks no agent of its own runs as this one.
 	agentDefinitionId?: string;
 	origin?: ChatOrigin;
@@ -474,6 +478,8 @@ export interface ChatDisplayShellProps {
 	// Toggle the selected conversation "temporary" (memory-excluded). Only wired/rendered when the bound agent has
 	// adaptive memory enabled.
 	onToggleConversationMemoryExcluded?: (conversationId: string, memoryExcluded: boolean) => void;
+	// Set the selected conversation's plain mode and custom system prompt; renders the plain controls when wired.
+	onSetConversationPlain?: (conversationId: string, isPlain: boolean, plainSystemPrompt: string | undefined) => void;
 	onDeleteConversation?: (conversationId: string, skipConfirm: boolean) => void;
 	onBranchFromMessage?: (messageId: string) => void;
 	activeRevisionByGroup?: Readonly<Record<string, string>>;

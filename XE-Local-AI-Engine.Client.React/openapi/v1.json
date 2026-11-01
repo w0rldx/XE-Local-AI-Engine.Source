@@ -5636,6 +5636,15 @@
             }
           },
           {
+            "name": "conversationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
             "name": "agentId",
             "in": "query",
             "schema": {
@@ -6561,6 +6570,84 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/plain": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "setNodeChatConversationPlain",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetNodeChatConversationPlainRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -18900,6 +18987,60 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1LocalModelDetailsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/{modelName}/gguf-inspection": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "getModelGgufInspection",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse"
                 }
               }
             }
@@ -41447,6 +41588,7 @@
           "isPinned",
           "archived",
           "memoryExcluded",
+          "isPlain",
           "messages"
         ],
         "properties": {
@@ -41499,6 +41641,13 @@
           "agentDefinitionId": {
             "type": "string",
             "format": "guid",
+            "nullable": true
+          },
+          "isPlain": {
+            "type": "boolean"
+          },
+          "plainSystemPrompt": {
+            "type": "string",
             "nullable": true
           },
           "messages": {
@@ -41949,6 +42098,21 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatConversationPlainRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isPlain": {
+            "type": "boolean"
+          },
+          "plainSystemPrompt": {
+            "type": "string",
+            "maxLength": 16000,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -42011,6 +42175,10 @@
         }
       },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetModelGgufInspectionRequest": {
         "type": "object",
         "additionalProperties": false
       },
@@ -42223,6 +42391,183 @@
           },
           "isOverridden": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "readFailure",
+          "ggufVersion",
+          "architecture",
+          "displayName",
+          "parameterCount",
+          "fileType",
+          "blockCount",
+          "attentionHeadCount",
+          "attentionHeadCountKv",
+          "embeddingLength",
+          "contextLength",
+          "expertCount",
+          "chatTemplate",
+          "splitCount",
+          "tensorCount",
+          "totalTensorBytes",
+          "headerBytes",
+          "fileSizeBytes",
+          "blocks",
+          "nonBlockTensors"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "readFailure": {
+            "type": "string",
+            "nullable": true
+          },
+          "ggufVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "parameterCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "fileType": {
+            "type": "string",
+            "nullable": true
+          },
+          "blockCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attentionHeadCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attentionHeadCountKv": {
+            "type": "integer",
+            "nullable": true
+          },
+          "embeddingLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "contextLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expertCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "chatTemplate": {
+            "type": "string",
+            "nullable": true
+          },
+          "splitCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "tensorCount": {
+            "type": "integer"
+          },
+          "totalTensorBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "headerBytes": {
+            "type": "integer"
+          },
+          "fileSizeBytes": {
+            "type": "integer"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufTensorBlockDto"
+            }
+          },
+          "nonBlockTensors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufTensorDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufTensorBlockDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "byteSize",
+          "tensors"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "byteSize": {
+            "type": "integer",
+            "nullable": true
+          },
+          "tensors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufTensorDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelGgufTensorDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "shape",
+          "ggmlType",
+          "ggmlTypeId",
+          "offset",
+          "byteSize"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "shape": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "ggmlType": {
+            "type": "string",
+            "nullable": true
+          },
+          "ggmlTypeId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "byteSize": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },
