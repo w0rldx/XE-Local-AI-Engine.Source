@@ -8,41 +8,6 @@ internal static class GgufStrictHeaderParser
     private const uint Magic = 0x4655_4747;
     private const long MaximumHeaderBytes = 64L * 1024 * 1024;
 
-    private static readonly IReadOnlyDictionary<long, string> Quantizations = new Dictionary<long, string>
-    {
-        [0] = "F32",
-        [1] = "F16",
-        [2] = "Q4_0",
-        [3] = "Q4_1",
-        [6] = "Q5_0",
-        [7] = "Q5_1",
-        [8] = "Q8_0",
-        [10] = "Q2_K",
-        [11] = "Q3_K_S",
-        [12] = "Q3_K_M",
-        [13] = "Q3_K_L",
-        [14] = "Q4_K_S",
-        [15] = "Q4_K_M",
-        [16] = "Q5_K_S",
-        [17] = "Q5_K_M",
-        [18] = "Q6_K",
-        [19] = "IQ2_XXS",
-        [20] = "IQ2_XS",
-        [21] = "IQ3_XXS",
-        [22] = "IQ1_S",
-        [23] = "IQ4_NL",
-        [24] = "IQ3_S",
-        [25] = "IQ2_S",
-        [26] = "IQ4_XS",
-        [27] = "I8",
-        [28] = "I16",
-        [29] = "I32",
-        [30] = "I64",
-        [31] = "F64",
-        [32] = "IQ1_M",
-        [33] = "BF16"
-    };
-
     public static async Task<StrictHeader> ReadAsync(string path, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1,
@@ -110,9 +75,12 @@ internal static class GgufStrictHeaderParser
         };
     }
 
+    // A name the rest of the app cannot parse counts as undetected: the import refuses it instead of storing that label.
     public static string? ResolveQuantization(StrictHeader header)
     {
-        return header.TryGetInt64("general.file_type", out var fileType) && Quantizations.TryGetValue(fileType, out var quant)
+        return header.TryGetInt64("general.file_type", out var fileType)
+               && GgufQuantDetector.FileTypeNames.TryGetValue(fileType, out var quant)
+               && GgufQuantDetector.IsCanonical(quant)
             ? quant
             : null;
     }

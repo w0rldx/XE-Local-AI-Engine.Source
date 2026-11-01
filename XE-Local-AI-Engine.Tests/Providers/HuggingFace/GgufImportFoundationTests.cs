@@ -761,6 +761,82 @@ public sealed class GgufImportFoundationTests
         AssertEx.Equal(GgufImportRejectionCode.UnsupportedQuantization, mismatch.Reason);
     }
 
+    // The header's general.file_type is llama_ftype, whose ids differ from ggml_type's: a file named without a quant token
+    // used to be labelled through the wrong table.
+    [Test]
+    [Arguments(7u, "Q8_0")]
+    [Arguments(8u, "Q5_0")]
+    [Arguments(9u, "Q5_1")]
+    [Arguments(21u, "Q2_K_S")]
+    [Arguments(30u, "IQ4_XS")]
+    [Arguments(31u, "IQ1_M")]
+    [Arguments(32u, "BF16")]
+    [Arguments(41u, "Q2_0")]
+    public async Task Classify_HeaderFileType_UsesTheLlamaFtypeName(uint fileType, string expected)
+    {
+        var inspection = await ClassifyAsync("model.gguf", fileType);
+
+        AssertEx.Equal(expected, inspection.DetectedQuantization);
+        AssertEx.True(inspection.IsAccepted);
+    }
+
+    // Removed ids and names GgufQuantParser cannot parse are refused: the app could not use the label anyway.
+    [Test]
+    [Arguments(6u)]
+    [Arguments(33u)]
+    [Arguments(36u)]
+    [Arguments(38u)]
+    [Arguments(999u)]
+    public async Task Classify_HeaderFileTypeWithoutACanonicalName_IsUnsupported(uint fileType)
+    {
+        var inspection = await ClassifyAsync("model.gguf", fileType);
+
+        AssertEx.Null(inspection.DetectedQuantization);
+        AssertEx.Contains(inspection.Rejections, GgufImportRejectionCode.UnsupportedQuantization);
+    }
+
+    [Test]
+    public async Task Classify_FileNameToken_WinsOverTheHeader()
+    {
+        var inspection = await ClassifyAsync("model-Q6_K.gguf", fileType: 7);
+
+        AssertEx.Equal("Q6_K", inspection.DetectedQuantization);
+    }
+
+    // The first look reads the header and has to match the destination. The second look, after the copy, reads the token in
+    // the final file name, so it proves only that a destination named for the corrected label is accepted.
+    [Test]
+    public async Task Importer_HeaderDetectedQuant_MatchesItsDestinationAndIsCarriedThroughPrepare()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(fileType: 7), "model.gguf");
+        var options = Infra.Options(paths.ModelsDirectory);
+        using var registry = Infra.Registry(options);
+        var importer = NewImporter(options, registry);
+
+        var prepared = await importer.PrepareAsync(new GgufImportSource
+        {
+            AbsolutePath = source
+        }, Destination() with
+        {
+            CanonicalModelName = "Local/Demo:Q8_0",
+            CanonicalQuant = "Q8_0",
+            RelativeGgufPath = "local-demo-Q8_0-0123456789abcdef01234567.gguf",
+            RelativeSidecarPath = "local-demo-Q8_0-0123456789abcdef01234567.gguf.xe-model.json"
+        }, progress: null, CancellationToken.None);
+
+        AssertEx.Equal("Q8_0", prepared.RegistryEntry.Quant);
+        await importer.DiscardPreparedAsync(prepared, CancellationToken.None);
+    }
+
+    private static async Task<GgufImportInspection> ClassifyAsync(string displayName, uint fileType)
+    {
+        var bytes = BuildCausalGguf(fileType: fileType);
+        using var stream = new MemoryStream(bytes);
+        var header = await GgufStrictHeaderParser.ReadAsync(stream, CancellationToken.None);
+        return GgufImportInspector.Classify(displayName, bytes.Length, header);
+    }
+
     [Test]
     public async Task Importer_CommitRejectsCaseOnlyCollisionCreatedAfterPrepare()
     {
@@ -1058,14 +1134,14 @@ public sealed class GgufImportFoundationTests
                .Build();
     }
 
-    private static byte[] BuildCausalGguf(string architecture = "llama", bool includeFileType = true)
+    private static byte[] BuildCausalGguf(string architecture = "llama", bool includeFileType = true, uint fileType = 15)
     {
         var builder = new GgufHeaderBytesBuilder()
                       .WithString("general.architecture", architecture)
                       .WithString("general.type", "model");
         if (includeFileType)
         {
-            builder.WithUint32("general.file_type", value: 15);
+            builder.WithUint32("general.file_type", fileType);
         }
 
         return builder.Build();

@@ -62,7 +62,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 - **GGUF tensor inspector** — the model details dialog has an **Inspect** tab for installed llama.cpp models: header
   metadata plus every tensor (name, shape, ggml type, size) grouped per block. New
-  `GET /api/local/v1/models/{modelName}/gguf-inspection`.
+  `GET /api/local/v1/models/{modelName}/gguf-inspection`. A strip shows each block's kind (linear or full attention,
+  MTP) and marks MoE expert blocks, and a table the bytes per tensor type.
 
 - **Plain conversations** — a chat conversation can be switched to plain mode from its header. A plain turn runs with
   no agent (not even the Default Assistant), no persona or BaseScaffold, no tools, knowledge base, skills or memory
@@ -515,6 +516,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **A GGUF named without a quant token imports under its real quantization** — the header's `general.file_type` was read
+  through a table with the wrong ids, so for example a Q8_0 file was labelled Q5_1, in the model name and the file name
+  too. A file with a removed id or a type the app has no quant name for (TQ1_0, TQ2_0, MXFP4_MOE, Q1_0, F8_E4M3) is
+  refused as an unsupported quantization. Models already imported keep their stored label.
 - **A stable-diffusion.cpp source build is adopted under the same link policy as whisper.cpp** — every link in the
   build tree must be relative and stay inside it, or the adoption fails; permissions are no longer set through a link,
   which could change a file outside the tree. A build tree with an absolute or escaping link that was adopted before is

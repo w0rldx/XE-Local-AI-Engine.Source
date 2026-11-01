@@ -6473,11 +6473,22 @@
 			"inspect": {
 				"architecture": "Architektur",
 				"block": "Block {{index}}",
+				"blockCell": "Block {{index}}: {{kind}}",
+				"blockCellExpert": "Block {{index}}: {{kind}}, MoE-Experte",
+				"blockKinds": {
+					"fullAttention": "Volle Attention",
+					"linearAttention": "Lineare Attention",
+					"moeExpert": "MoE-Experte",
+					"mtp": "MTP",
+					"other": "Sonstige"
+				},
+				"blockStrip": "Blocktypen",
 				"blockSummary": "{{count}} Tensoren · {{size}}",
 				"chatTemplate": "Chat-Vorlage",
 				"columns": {
 					"name": "Name",
 					"shape": "Form",
+					"share": "Anteil",
 					"size": "Größe",
 					"type": "Typ"
 				},
@@ -6490,12 +6501,14 @@
 				"metadata": "Metadaten",
 				"nonBlock": "Außerhalb der Blöcke",
 				"parameters": "Parameter",
+				"partlyUnknownSize": "{{size}} + {{count}} mit unbekannter Größe",
 				"quant": "Quantisierung",
 				"readFailure": "Die Datei konnte nicht vollständig gelesen werden ({{reason}}). Es werden nur die Kopfdaten angezeigt.",
 				"split": "Dieses Modell ist auf {{count}} Dateien aufgeteilt; nur die Tensoren der ersten Datei werden aufgeführt.",
 				"tab": "Untersuchen",
 				"tensorBytes": "Tensordaten",
 				"tensorCount": "Tensoren",
+				"typeBytes": "Bytes pro Tensortyp",
 				"unknownType": "Typ {{id}}"
 			},
 			"launchArgs": {

@@ -1,4 +1,4 @@
-import { Accordion, Alert, Group, Loader, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import { Accordion, Alert, Box, Group, Loader, Progress, SimpleGrid, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -10,10 +10,49 @@ import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
+import { type BlockKind, blockKind, hasExperts, tensorTypeRows } from "@/features/models/models/GgufInspectInsights";
+
 type TensorDto = XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto;
 
 interface ModelInspectPanelProps {
 	modelName: string;
+}
+
+const blockKindColors: Record<BlockKind, string> = {
+	linearAttention: "teal",
+	fullAttention: "blue",
+	mtp: "violet",
+	other: "gray",
+};
+
+// The ring reads as a shape on any kind colour, in both colour schemes.
+const expertMarker = "inset 0 0 0 2px var(--mantine-color-text)";
+
+// Real files reach 14 types; past that the colours repeat, and the table's rows still name each type.
+const tensorTypeColors = [
+	"blue",
+	"teal",
+	"orange",
+	"violet",
+	"pink",
+	"lime",
+	"cyan",
+	"gray",
+	"red",
+	"yellow",
+	"green",
+	"indigo",
+	"grape",
+	"dark.4",
+];
+
+function blockKindLabels(t: TFunction): Record<BlockKind, string> {
+	return {
+		linearAttention: t("pages.models.inspect.blockKinds.linearAttention", "Linear attention"),
+		fullAttention: t("pages.models.inspect.blockKinds.fullAttention", "Full attention"),
+		mtp: t("pages.models.inspect.blockKinds.mtp", "MTP"),
+		other: t("pages.models.inspect.blockKinds.other", "Other"),
+	};
 }
 
 function sizeLabel(t: TFunction, bytes: number | null | undefined): string {
@@ -80,6 +119,126 @@ function MetadataItem({ label, value }: { label: string; value: string }) {
 	);
 }
 
+function BlockStrip({ blocks }: { blocks: { index: number; tensors: TensorDto[] }[] }) {
+	const { t } = useTranslation();
+	const labels = blockKindLabels(t);
+	const cells = blocks.map((block) => ({
+		index: block.index,
+		kind: blockKind(block.tensors),
+		expert: hasExperts(block.tensors),
+	}));
+	const kinds = (Object.keys(blockKindColors) as BlockKind[])
+		.map((kind) => ({ kind, count: cells.filter((cell) => cell.kind === kind).length }))
+		.filter(({ count }) => count > 0);
+	const expertCount = cells.filter((cell) => cell.expert).length;
+	return (
+		<Stack gap="xs" data-testid="model-inspect-block-strip">
+			<Text fw={600} size="sm">
+				{t("pages.models.inspect.blockStrip", "Block types")}
+			</Text>
+			<Group gap={2}>
+				{cells.map(({ index, kind, expert }) => {
+					const label = expert
+						? t("pages.models.inspect.blockCellExpert", "Block {{index}}: {{kind}}, MoE expert", { index, kind: labels[kind] })
+						: t("pages.models.inspect.blockCell", "Block {{index}}: {{kind}}", { index, kind: labels[kind] });
+					return (
+						<Tooltip key={index} label={label} withArrow={true}>
+							<Box
+								w={12}
+								h={12}
+								bg={blockKindColors[kind]}
+								role="img"
+								aria-label={label}
+								style={{ borderRadius: 2, boxShadow: expert ? expertMarker : undefined }}
+							/>
+						</Tooltip>
+					);
+				})}
+			</Group>
+			<Group gap="md">
+				{kinds.map(({ kind, count }) => (
+					<Group key={kind} gap={6} wrap="nowrap" data-testid={`model-inspect-kind-${kind}`}>
+						<Box w={8} h={8} bg={blockKindColors[kind]} style={{ borderRadius: 2 }} aria-hidden="true" />
+						<Text size="xs">{labels[kind]}</Text>
+						<Text size="xs" c="dimmed">
+							{count}
+						</Text>
+					</Group>
+				))}
+				{expertCount > 0 ? (
+					<Group gap={6} wrap="nowrap" data-testid="model-inspect-kind-moeExpert">
+						<Box w={12} h={12} style={{ borderRadius: 2, boxShadow: expertMarker }} aria-hidden="true" />
+						<Text size="xs">{t("pages.models.inspect.blockKinds.moeExpert", "MoE expert")}</Text>
+						<Text size="xs" c="dimmed">
+							{expertCount}
+						</Text>
+					</Group>
+				) : null}
+			</Group>
+		</Stack>
+	);
+}
+
+function TensorTypeBytes({ tensors }: { tensors: TensorDto[] }) {
+	const { t } = useTranslation();
+	const rows = tensorTypeRows(tensors);
+	const unknown = t("pages.models.details.unknown", "Unknown");
+	const colored = rows.map((row, position) => ({ ...row, color: tensorTypeColors[position % tensorTypeColors.length] }));
+	const typeLabel = (row: (typeof rows)[number]) =>
+		row.ggmlType ?? t("pages.models.inspect.unknownType", "type {{id}}", { id: row.ggmlTypeId });
+	return (
+		<Stack gap="xs" data-testid="model-inspect-type-bytes">
+			<Text fw={600} size="sm">
+				{t("pages.models.inspect.typeBytes", "Bytes per tensor type")}
+			</Text>
+			{colored.some((row) => row.bytes > 0) ? (
+				<Progress.Root size="lg">
+					{colored
+						.filter((row) => row.bytes > 0)
+						.map((row) => (
+							<Progress.Section key={row.ggmlTypeId} value={row.percent} color={row.color} aria-label={typeLabel(row)} />
+						))}
+				</Progress.Root>
+			) : null}
+			<Table striped={true} withTableBorder={true} fz="xs">
+				<Table.Thead>
+					<Table.Tr>
+						<Table.Th>{t("pages.models.inspect.columns.type", "Type")}</Table.Th>
+						<Table.Th>{t("pages.models.inspect.tensorCount", "Tensors")}</Table.Th>
+						<Table.Th>{t("pages.models.inspect.columns.size", "Size")}</Table.Th>
+						<Table.Th>{t("pages.models.inspect.columns.share", "Share")}</Table.Th>
+					</Table.Tr>
+				</Table.Thead>
+				<Table.Tbody>
+					{colored.map((row) => {
+						const noneKnown = row.unknownSizeCount === row.tensorCount;
+						return (
+							<Table.Tr key={row.ggmlTypeId} data-testid={`model-inspect-type-${row.ggmlTypeId}`}>
+								<Table.Td>
+									<Group gap={6} wrap="nowrap">
+										<Box w={8} h={8} bg={row.color} style={{ borderRadius: 2, flexShrink: 0 }} aria-hidden="true" />
+										{typeLabel(row)}
+									</Group>
+								</Table.Td>
+								<Table.Td>{row.tensorCount.toLocaleString()}</Table.Td>
+								<Table.Td>
+									{noneKnown || row.unknownSizeCount === 0
+										? sizeLabel(t, noneKnown ? null : row.bytes)
+										: t("pages.models.inspect.partlyUnknownSize", "{{size}} + {{count}} of unknown size", {
+												size: humanizeBytes(row.bytes),
+												count: row.unknownSizeCount,
+											})}
+								</Table.Td>
+								<Table.Td>{noneKnown ? unknown : `${row.percent.toFixed(1)}%`}</Table.Td>
+							</Table.Tr>
+						);
+					})}
+				</Table.Tbody>
+			</Table>
+		</Stack>
+	);
+}
+
 // Read-only GGUF inspector: header metadata plus the tensor list grouped per transformer block. Self-contained like
 // ModelLaunchArgumentsPanel, and mounted only while its tab is active, so the file is read on demand.
 export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
@@ -103,6 +262,8 @@ export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
 		inspection.attentionHeadCount === null
 			? unknown
 			: `${inspection.attentionHeadCount} (${inspection.attentionHeadCountKv ?? unknown})`;
+	const allTensors = [...inspection.nonBlockTensors, ...inspection.blocks.flatMap((block) => block.tensors)];
+	const showInsights = !inspection.readFailure && allTensors.length > 0;
 
 	return (
 		<Stack gap="md" data-testid="model-inspect-panel">
@@ -152,6 +313,9 @@ export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
 				/>
 				<MetadataItem label={t("pages.models.inspect.headerBytes", "Header size")} value={sizeLabel(t, inspection.headerBytes)} />
 			</SimpleGrid>
+
+			{showInsights && inspection.blocks.length > 0 ? <BlockStrip blocks={inspection.blocks} /> : null}
+			{showInsights ? <TensorTypeBytes tensors={allTensors} /> : null}
 
 			<Accordion multiple={true} variant="contained" chevronPosition="left">
 				{inspection.chatTemplate ? (

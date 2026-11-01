@@ -114,6 +114,115 @@ describe("ModelInspectPanel", () => {
 		expect(await within(block1).findByText("type 99")).toBeTruthy();
 	});
 
+	it("colours a cell per block kind, labels it and counts the kinds in the legend", async () => {
+		inspectionSpy.mockResolvedValue({
+			...inspection,
+			blocks: [
+				{ index: 0, byteSize: 1024, tensors: [tensor("blk.0.ssm_a.weight", [256], "F32", 1024)] },
+				{ index: 1, byteSize: 1024, tensors: [tensor("blk.1.ssm_a.weight", [256], "F32", 1024)] },
+				{ index: 2, byteSize: 1024, tensors: [tensor("blk.2.attn_q.weight", [256], "F32", 1024)] },
+				{ index: 3, byteSize: 1024, tensors: [tensor("blk.3.nextn.enorm.weight", [256], "F32", 1024)] },
+			],
+		});
+
+		renderPanel();
+
+		const strip = await screen.findByTestId("model-inspect-block-strip");
+		const mtpCell = within(strip).getByRole("img", { name: "Block 3: MTP" });
+		expect(within(strip).getByRole("img", { name: "Block 0: Linear attention" })).toBeTruthy();
+		expect(within(within(strip).getByTestId("model-inspect-kind-linearAttention")).getByText("2")).toBeTruthy();
+		expect(within(within(strip).getByTestId("model-inspect-kind-fullAttention")).getByText("1")).toBeTruthy();
+		expect(within(strip).queryByTestId("model-inspect-kind-other")).toBeNull();
+
+		fireEvent.mouseEnter(mtpCell);
+		expect((await screen.findByRole("tooltip")).textContent).toBe("Block 3: MTP");
+	});
+
+	it("marks expert blocks on top of their kind and counts them in the legend", async () => {
+		inspectionSpy.mockResolvedValue({
+			...inspection,
+			blocks: [
+				{
+					index: 0,
+					byteSize: 1024,
+					tensors: [tensor("blk.0.ssm_a.weight", [256], "F32", 1024), tensor("blk.0.ffn_up_exps.weight", [256], "F32", 1024)],
+				},
+				{
+					index: 1,
+					byteSize: 1024,
+					tensors: [tensor("blk.1.attn_q.weight", [256], "F32", 1024), tensor("blk.1.ffn_up_exps.weight", [256], "F32", 1024)],
+				},
+				{ index: 2, byteSize: 1024, tensors: [tensor("blk.2.attn_q.weight", [256], "F32", 1024)] },
+				{ index: 3, byteSize: 1024, tensors: [tensor("blk.3.ffn_up_exps.weight", [256], "F32", 1024)] },
+			],
+		});
+
+		renderPanel();
+
+		const strip = await screen.findByTestId("model-inspect-block-strip");
+		const expertCell = within(strip).getByRole("img", { name: "Block 0: Linear attention, MoE expert" });
+		const denseCell = within(strip).getByRole("img", { name: "Block 2: Full attention" });
+		expect(within(strip).getByRole("img", { name: "Block 1: Full attention, MoE expert" })).toBeTruthy();
+		expect(within(strip).getByRole("img", { name: "Block 3: Other, MoE expert" })).toBeTruthy();
+		expect(expertCell.getAttribute("style")).toContain("box-shadow");
+		expect(denseCell.getAttribute("style")).not.toContain("box-shadow");
+		expect(within(within(strip).getByTestId("model-inspect-kind-fullAttention")).getByText("2")).toBeTruthy();
+		expect(within(within(strip).getByTestId("model-inspect-kind-moeExpert")).getByText("3")).toBeTruthy();
+	});
+
+	it("has no expert legend entry when no block has experts", async () => {
+		inspectionSpy.mockResolvedValue(inspection);
+
+		renderPanel();
+
+		const strip = await screen.findByTestId("model-inspect-block-strip");
+		expect(within(strip).queryByTestId("model-inspect-kind-moeExpert")).toBeNull();
+	});
+
+	it("totals the bytes per type over all tensors and states what it cannot size", async () => {
+		inspectionSpy.mockResolvedValue({
+			...inspection,
+			blocks: [
+				{
+					index: 0,
+					byteSize: null,
+					tensors: [
+						{ ...tensor("blk.0.a.weight", [256], "F32", 1024), ggmlTypeId: 0 },
+						{ ...tensor("blk.0.b.weight", [256], "F32", null), ggmlTypeId: 0 },
+					],
+				},
+				{ index: 1, byteSize: null, tensors: [tensor("blk.1.future.weight", [256, 4], null, null)] },
+			],
+			nonBlockTensors: [tensor("token_embd.weight", [4096, 248320], "Q4_K", 3072)],
+		});
+
+		renderPanel();
+
+		const section = await screen.findByTestId("model-inspect-type-bytes");
+		const cells = (id: number) =>
+			within(within(section).getByTestId(`model-inspect-type-${id}`))
+				.getAllByRole("cell")
+				.map((cell) => cell.textContent);
+		expect(cells(12)).toEqual(["Q4_K", "1", "3 KB", "75.0%"]);
+		expect(cells(0)).toEqual(["F32", "2", "1 KB + 1 of unknown size", "25.0%"]);
+		expect(cells(99)).toEqual(["type 99", "1", "Unknown", "Unknown"]);
+	});
+
+	it("hides the insights when the read failed or no tensor was listed", async () => {
+		inspectionSpy.mockResolvedValue({ ...inspection, readFailure: "truncated" });
+		renderPanel();
+		await screen.findByTestId("model-inspect-panel");
+		expect(screen.queryByTestId("model-inspect-block-strip")).toBeNull();
+		expect(screen.queryByTestId("model-inspect-type-bytes")).toBeNull();
+		cleanup();
+
+		inspectionSpy.mockResolvedValue({ ...inspection, blocks: [], nonBlockTensors: [] });
+		renderPanel();
+		await screen.findByTestId("model-inspect-panel");
+		expect(screen.queryByTestId("model-inspect-block-strip")).toBeNull();
+		expect(screen.queryByTestId("model-inspect-type-bytes")).toBeNull();
+	});
+
 	it("warns when the tensor block could not be read completely", async () => {
 		inspectionSpy.mockResolvedValue({
 			...inspection,
