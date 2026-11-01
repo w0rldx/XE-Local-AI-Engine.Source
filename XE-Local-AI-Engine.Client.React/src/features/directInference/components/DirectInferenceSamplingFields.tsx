@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type ChatSamplingOptions, samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
+import { directInferenceDefaultMaxOutputTokens } from "@/features/directInference/models/DirectInferenceModels";
 
 interface DirectInferenceSamplingFieldsProps {
 	value: ChatSamplingOptions;
@@ -37,7 +38,13 @@ export function DirectInferenceSamplingFields({ value, onChange, disabled }: Dir
 								allowDecimal={meta.allowDecimal}
 								clampBehavior="strict"
 								disabled={disabled}
-								placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
+								placeholder={
+									meta.key === "maxOutputTokens"
+										? t("pages.directInference.maxOutputTokensDefault", "Default: {{tokens}}", {
+												tokens: directInferenceDefaultMaxOutputTokens.toLocaleString(),
+											})
+										: t("pages.chat.samplingOptions.modelDefault", "Model default")
+								}
 								value={(value[meta.key] as number | undefined) ?? ""}
 								onChange={(next) => onChange({ ...value, [meta.key]: typeof next === "number" ? next : undefined })}
 							/>

@@ -187,6 +187,14 @@ export function DirectInferencePage() {
 					<Text style={{ whiteSpace: "pre-wrap" }} data-testid="direct-inference-output">
 						{result.text}
 					</Text>
+					{result.finishReason === "length" && (
+						<Alert color="yellow" data-testid="direct-inference-cut-off">
+							{t(
+								"pages.directInference.cutOff",
+								"The answer was cut off, at the output limit or because the context is full. Raise Max output tokens for the first; shorten the prompt or load the model with a larger context for the second.",
+							)}
+						</Alert>
+					)}
 					<DirectInferenceMetrics result={result} />
 				</Stack>
 			</Paper>

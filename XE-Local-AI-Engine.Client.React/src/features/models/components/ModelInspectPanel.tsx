@@ -10,25 +10,38 @@ import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
-import { type BlockKind, blockKind, hasExperts, tensorTypeRows } from "@/features/models/models/GgufInspectInsights";
+import { ModelInspectComparison } from "@/features/models/components/ModelInspectComparison";
+import { ModelInspectMetadataItem } from "@/features/models/components/ModelInspectMetadataItem";
+import {
+	type BlockKind,
+	blockKind,
+	hasExperts,
+	shortTensorName,
+	tensorSizeLabel,
+	tensorTypeLabel,
+	tensorTypeRows,
+} from "@/features/models/models/GgufInspectInsights";
 
 type TensorDto = XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto;
 
 interface ModelInspectPanelProps {
 	modelName: string;
+	// Other installed variants of the same repo; none hides the comparison.
+	compareCandidates: string[];
 }
 
 const blockKindColors: Record<BlockKind, string> = {
 	linearAttention: "teal",
 	fullAttention: "blue",
 	mtp: "violet",
-	other: "gray",
+	other: "gray.6",
 };
 
 // The ring reads as a shape on any kind colour, in both colour schemes.
 const expertMarker = "inset 0 0 0 2px var(--mantine-color-text)";
 
-// Real files reach 14 types; past that the colours repeat, and the table's rows still name each type.
+// Real files reach 14 types; past that the colours repeat, and the table's rows still name each type. Bare "gray" and
+// "dark" shades sink into a dark background, so those two take fixed mid-tone shades that read in both schemes.
 const tensorTypeColors = [
 	"blue",
 	"teal",
@@ -37,13 +50,13 @@ const tensorTypeColors = [
 	"pink",
 	"lime",
 	"cyan",
-	"gray",
+	"gray.6",
 	"red",
 	"yellow",
 	"green",
 	"indigo",
 	"grape",
-	"dark.4",
+	"orange.9",
 ];
 
 function blockKindLabels(t: TFunction): Record<BlockKind, string> {
@@ -53,10 +66,6 @@ function blockKindLabels(t: TFunction): Record<BlockKind, string> {
 		mtp: t("pages.models.inspect.blockKinds.mtp", "MTP"),
 		other: t("pages.models.inspect.blockKinds.other", "Other"),
 	};
-}
-
-function sizeLabel(t: TFunction, bytes: number | null | undefined): string {
-	return bytes === null || bytes === undefined ? t("pages.models.details.unknown", "Unknown") : humanizeBytes(bytes);
 }
 
 function numberLabel(t: TFunction, value: number | null | undefined): string {
@@ -70,12 +79,6 @@ function parameterLabel(t: TFunction, count: number | null | undefined): string 
 	}
 	const compact = count >= 1e9 ? `${(count / 1e9).toFixed(1)}B` : `${(count / 1e6).toFixed(0)}M`;
 	return `${compact} (${count.toLocaleString()})`;
-}
-
-// "blk.12.attn_q.weight" reads as "attn_q.weight" inside its own block row.
-function shortName(name: string, blockIndex: number | undefined): string {
-	const prefix = blockIndex === undefined ? "" : `blk.${blockIndex}.`;
-	return prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name;
 }
 
 function TensorTable({ tensors, blockIndex }: { tensors: TensorDto[]; blockIndex?: number }) {
@@ -93,12 +96,10 @@ function TensorTable({ tensors, blockIndex }: { tensors: TensorDto[]; blockIndex
 			<Table.Tbody>
 				{tensors.map((tensor) => (
 					<Table.Tr key={tensor.name}>
-						<Table.Td ff="monospace">{shortName(tensor.name, blockIndex)}</Table.Td>
+						<Table.Td ff="monospace">{shortTensorName(tensor.name, blockIndex)}</Table.Td>
 						<Table.Td ff="monospace">{tensor.shape.join(" × ")}</Table.Td>
-						<Table.Td>
-							{tensor.ggmlType ?? t("pages.models.inspect.unknownType", "type {{id}}", { id: tensor.ggmlTypeId })}
-						</Table.Td>
-						<Table.Td>{sizeLabel(t, tensor.byteSize)}</Table.Td>
+						<Table.Td>{tensorTypeLabel(t, tensor.ggmlType, tensor.ggmlTypeId)}</Table.Td>
+						<Table.Td>{tensorSizeLabel(t, tensor.byteSize)}</Table.Td>
 					</Table.Tr>
 				))}
 			</Table.Tbody>
@@ -106,17 +107,11 @@ function TensorTable({ tensors, blockIndex }: { tensors: TensorDto[]; blockIndex
 	);
 }
 
-function MetadataItem({ label, value }: { label: string; value: string }) {
-	return (
-		<Stack gap={0}>
-			<Text size="xs" c="dimmed">
-				{label}
-			</Text>
-			<Text size="sm" fw={500}>
-				{value}
-			</Text>
-		</Stack>
-	);
+function blockLabel(t: TFunction, block: { index: number; tensors: TensorDto[] }): string {
+	const kind = blockKindLabels(t)[blockKind(block.tensors)];
+	return hasExperts(block.tensors)
+		? t("pages.models.inspect.blockCellExpert", "Block {{index}}: {{kind}}, MoE expert", { index: block.index, kind })
+		: t("pages.models.inspect.blockCell", "Block {{index}}: {{kind}}", { index: block.index, kind });
 }
 
 function BlockStrip({ blocks }: { blocks: { index: number; tensors: TensorDto[] }[] }) {
@@ -126,6 +121,7 @@ function BlockStrip({ blocks }: { blocks: { index: number; tensors: TensorDto[] 
 		index: block.index,
 		kind: blockKind(block.tensors),
 		expert: hasExperts(block.tensors),
+		label: blockLabel(t, block),
 	}));
 	const kinds = (Object.keys(blockKindColors) as BlockKind[])
 		.map((kind) => ({ kind, count: cells.filter((cell) => cell.kind === kind).length }))
@@ -137,23 +133,18 @@ function BlockStrip({ blocks }: { blocks: { index: number; tensors: TensorDto[] 
 				{t("pages.models.inspect.blockStrip", "Block types")}
 			</Text>
 			<Group gap={2}>
-				{cells.map(({ index, kind, expert }) => {
-					const label = expert
-						? t("pages.models.inspect.blockCellExpert", "Block {{index}}: {{kind}}, MoE expert", { index, kind: labels[kind] })
-						: t("pages.models.inspect.blockCell", "Block {{index}}: {{kind}}", { index, kind: labels[kind] });
-					return (
-						<Tooltip key={index} label={label} withArrow={true}>
-							<Box
-								w={12}
-								h={12}
-								bg={blockKindColors[kind]}
-								role="img"
-								aria-label={label}
-								style={{ borderRadius: 2, boxShadow: expert ? expertMarker : undefined }}
-							/>
-						</Tooltip>
-					);
-				})}
+				{cells.map(({ index, kind, expert, label }) => (
+					<Tooltip key={index} label={label} withArrow={true}>
+						<Box
+							w={12}
+							h={12}
+							bg={blockKindColors[kind]}
+							role="img"
+							aria-label={label}
+							style={{ borderRadius: 2, boxShadow: expert ? expertMarker : undefined }}
+						/>
+					</Tooltip>
+				))}
 			</Group>
 			<Group gap="md">
 				{kinds.map(({ kind, count }) => (
@@ -184,8 +175,7 @@ function TensorTypeBytes({ tensors }: { tensors: TensorDto[] }) {
 	const rows = tensorTypeRows(tensors);
 	const unknown = t("pages.models.details.unknown", "Unknown");
 	const colored = rows.map((row, position) => ({ ...row, color: tensorTypeColors[position % tensorTypeColors.length] }));
-	const typeLabel = (row: (typeof rows)[number]) =>
-		row.ggmlType ?? t("pages.models.inspect.unknownType", "type {{id}}", { id: row.ggmlTypeId });
+	const typeLabel = (row: (typeof rows)[number]) => tensorTypeLabel(t, row.ggmlType, row.ggmlTypeId);
 	return (
 		<Stack gap="xs" data-testid="model-inspect-type-bytes">
 			<Text fw={600} size="sm">
@@ -223,7 +213,7 @@ function TensorTypeBytes({ tensors }: { tensors: TensorDto[] }) {
 								<Table.Td>{row.tensorCount.toLocaleString()}</Table.Td>
 								<Table.Td>
 									{noneKnown || row.unknownSizeCount === 0
-										? sizeLabel(t, noneKnown ? null : row.bytes)
+										? tensorSizeLabel(t, noneKnown ? null : row.bytes)
 										: t("pages.models.inspect.partlyUnknownSize", "{{size}} + {{count}} of unknown size", {
 												size: humanizeBytes(row.bytes),
 												count: row.unknownSizeCount,
@@ -241,7 +231,7 @@ function TensorTypeBytes({ tensors }: { tensors: TensorDto[] }) {
 
 // Read-only GGUF inspector: header metadata plus the tensor list grouped per transformer block. Self-contained like
 // ModelLaunchArgumentsPanel, and mounted only while its tab is active, so the file is read on demand.
-export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
+export function ModelInspectPanel({ modelName, compareCandidates }: ModelInspectPanelProps) {
 	const { t } = useTranslation();
 	const query = useQuery(getModelGgufInspectionOptions({ path: { modelName } }));
 
@@ -290,32 +280,48 @@ export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
 				{t("pages.models.inspect.metadata", "Metadata")}
 			</Text>
 			<SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-				<MetadataItem label={t("pages.models.inspect.architecture", "Architecture")} value={inspection.architecture ?? unknown} />
-				<MetadataItem
+				<ModelInspectMetadataItem
+					label={t("pages.models.inspect.architecture", "Architecture")}
+					value={inspection.architecture ?? unknown}
+				/>
+				<ModelInspectMetadataItem
 					label={t("pages.models.inspect.parameters", "Parameters")}
 					value={parameterLabel(t, inspection.parameterCount)}
 				/>
-				<MetadataItem label={t("pages.models.inspect.layers", "Layers")} value={numberLabel(t, inspection.blockCount)} />
-				<MetadataItem label={t("pages.models.inspect.heads", "Attention heads (KV)")} value={heads} />
-				<MetadataItem
+				<ModelInspectMetadataItem
+					label={t("pages.models.inspect.layers", "Layers")}
+					value={numberLabel(t, inspection.blockCount)}
+				/>
+				<ModelInspectMetadataItem label={t("pages.models.inspect.heads", "Attention heads (KV)")} value={heads} />
+				<ModelInspectMetadataItem
 					label={t("pages.models.inspect.embedding", "Embedding width")}
 					value={numberLabel(t, inspection.embeddingLength)}
 				/>
-				<MetadataItem
+				<ModelInspectMetadataItem
 					label={t("pages.models.inspect.context", "Context length")}
 					value={numberLabel(t, inspection.contextLength)}
 				/>
-				<MetadataItem label={t("pages.models.inspect.quant", "Quantization")} value={inspection.fileType ?? unknown} />
-				<MetadataItem label={t("pages.models.inspect.tensorCount", "Tensors")} value={numberLabel(t, inspection.tensorCount)} />
-				<MetadataItem
-					label={t("pages.models.inspect.tensorBytes", "Tensor data")}
-					value={sizeLabel(t, inspection.totalTensorBytes)}
+				<ModelInspectMetadataItem
+					label={t("pages.models.inspect.quant", "Quantization")}
+					value={inspection.fileType ?? unknown}
 				/>
-				<MetadataItem label={t("pages.models.inspect.headerBytes", "Header size")} value={sizeLabel(t, inspection.headerBytes)} />
+				<ModelInspectMetadataItem
+					label={t("pages.models.inspect.tensorCount", "Tensors")}
+					value={numberLabel(t, inspection.tensorCount)}
+				/>
+				<ModelInspectMetadataItem
+					label={t("pages.models.inspect.tensorBytes", "Tensor data")}
+					value={tensorSizeLabel(t, inspection.totalTensorBytes)}
+				/>
+				<ModelInspectMetadataItem
+					label={t("pages.models.inspect.headerBytes", "Header size")}
+					value={tensorSizeLabel(t, inspection.headerBytes)}
+				/>
 			</SimpleGrid>
 
 			{showInsights && inspection.blocks.length > 0 ? <BlockStrip blocks={inspection.blocks} /> : null}
 			{showInsights ? <TensorTypeBytes tensors={allTensors} /> : null}
+			<ModelInspectComparison modelName={modelName} inspection={inspection} candidates={compareCandidates} />
 
 			<Accordion multiple={true} variant="contained" chevronPosition="left">
 				{inspection.chatTemplate ? (
@@ -341,7 +347,7 @@ export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
 								<Text size="xs" c="dimmed">
 									{t("pages.models.inspect.blockSummary", "{{count}} tensors · {{size}}", {
 										count: inspection.nonBlockTensors.length,
-										size: sizeLabel(
+										size: tensorSizeLabel(
 											t,
 											inspection.nonBlockTensors.every((tensor) => tensor.byteSize !== null)
 												? inspection.nonBlockTensors.reduce((sum, tensor) => sum + (tensor.byteSize ?? 0), 0)
@@ -360,11 +366,12 @@ export function ModelInspectPanel({ modelName }: ModelInspectPanelProps) {
 					<Accordion.Item key={block.index} value={`blk-${block.index}`} data-testid={`model-inspect-block-${block.index}`}>
 						<Accordion.Control>
 							<Group justify="space-between" wrap="nowrap" pr="sm">
-								<Text size="sm">{t("pages.models.inspect.block", "Block {{index}}", { index: block.index })}</Text>
+								{/* The strip's cells stay out of the tab order: this row carries the same label for keyboard and touch. */}
+								<Text size="sm">{blockLabel(t, block)}</Text>
 								<Text size="xs" c="dimmed">
 									{t("pages.models.inspect.blockSummary", "{{count}} tensors · {{size}}", {
 										count: block.tensors.length,
-										size: sizeLabel(t, block.byteSize),
+										size: tensorSizeLabel(t, block.byteSize),
 									})}
 								</Text>
 							</Group>

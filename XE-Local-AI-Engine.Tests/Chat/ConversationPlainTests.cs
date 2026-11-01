@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -184,6 +185,72 @@ public sealed class ConversationPlainTests : IDisposable
         var forTurn = AssertEx.NotNull(await service.GetConversationForTurnAsync(branch.BranchedConversationId));
         AssertEx.Equal(isPlain, forTurn.IsPlain);
         AssertEx.Equal<string?>(prompt, forTurn.PlainSystemPrompt);
+    }
+
+    [Test]
+    public async Task ATurnInABranchOfAPlainConversation_RunsPlain_WithTheDecryptedPromptAndNoAgentOrTools()
+    {
+        const string prompt = "You are a terse lab assistant.";
+        await using var provider = await BuildProviderAsync("plain-branch-turn.sqlite");
+        var service = CreateService(provider);
+        var source = await CreateConversationAsync(service);
+        await service.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+        {
+            ConversationId = source.ConversationId,
+            IsPlain = true,
+            PlainSystemPrompt = prompt,
+            UpdatedAtUtc = 20
+        });
+        var message = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = source.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "hello",
+            CreatedAtUtc = 30
+        });
+        var branch = await service.BranchConversationAsync(new NodeChatBranchConversationRequest
+        {
+            ConversationId = source.ConversationId,
+            MessageId = message.MessageId,
+            CreatedAtUtc = 40
+        });
+        var harness = new NodeChatStreamServicePlainTests.Harness(branch.BranchedConversationId, service);
+
+        await harness.SendAsync(new NodeChatStreamRequest(branch.BranchedConversationId,
+            "hello again",
+            MessageId: harness.AssistantMessageId,
+            RequestId: harness.RequestId,
+            UseLocalTools: true));
+
+        var package = AssertEx.NotNull(harness.Runner.LastPackage, "The branch's turn must run.");
+        AssertEx.Equal(prompt, package.ResolvedSystemPrompt, "The prompt decrypts under the branch's id and goes out verbatim.");
+        AssertEx.False(package.OmitSystemPrompt);
+        AssertEx.Empty(package.AllowedTools, "A plain turn offers no tools, whatever the composer toggle says.");
+        AssertEx.Null(package.Skills);
+        await harness.DefaultAgentProvider.DidNotReceive().GetDefaultAgentIdAsync(Arg.Any<CancellationToken>());
+        await harness.AgentResolver.DidNotReceiveWithAnyArgs().ResolveAsync(default(Guid?), default, default, default, default, default, default);
+    }
+
+    [Test]
+    public async Task GetConversationPlainMode_ReadsTheDecryptedPrompt_AndNullForAnUnknownConversation()
+    {
+        const string prompt = "You are a terse lab assistant.";
+        await using var provider = await BuildProviderAsync("plain-narrow-read.sqlite");
+        var service = CreateService(provider);
+        var created = await CreateConversationAsync(service);
+
+        AssertEx.Equal(new NodeChatConversationPlainMode { IsPlain = false, PlainSystemPrompt = null }, await service.GetConversationPlainModeAsync(created.ConversationId));
+
+        await service.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
+        {
+            ConversationId = created.ConversationId,
+            IsPlain = true,
+            PlainSystemPrompt = prompt,
+            UpdatedAtUtc = 20
+        });
+
+        AssertEx.Equal(new NodeChatConversationPlainMode { IsPlain = true, PlainSystemPrompt = prompt }, await service.GetConversationPlainModeAsync(created.ConversationId));
+        AssertEx.Null(await service.GetConversationPlainModeAsync(Guid.NewGuid()));
     }
 
     private static Task<NodeChatConversationDto> CreateConversationAsync(NodeChatPersistenceService service)

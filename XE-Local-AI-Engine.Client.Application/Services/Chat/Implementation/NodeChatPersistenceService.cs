@@ -69,6 +69,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _readModel.GetConversationForTurnAsync(conversationId, cancellationToken);
     }
 
+    public Task<NodeChatConversationPlainMode?> GetConversationPlainModeAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return _conversations.GetConversationPlainModeAsync(conversationId, cancellationToken);
+    }
+
     public Task<string?> GetConversationOriginAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         return _conversations.GetConversationOriginAsync(conversationId, cancellationToken);

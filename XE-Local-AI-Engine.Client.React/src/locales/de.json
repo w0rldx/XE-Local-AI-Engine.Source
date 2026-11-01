@@ -3899,8 +3899,10 @@
 		"directInference": {
 			"copied": "Kopiert",
 			"copyJson": "Als JSON kopieren",
+			"cutOff": "Die Antwort wurde abgeschnitten, am Ausgabelimit oder weil der Kontext voll ist. Erhöhen Sie im ersten Fall die maximalen Ausgabe-Tokens; kürzen Sie im zweiten den Prompt oder laden Sie das Modell mit einem größeren Kontext.",
 			"errorTitle": "Die Anfrage ist fehlgeschlagen",
 			"gpuWorkExclusive": "Ein Training, eine Evaluierung oder ein Export belegt die GPU. Versuchen Sie es erneut, wenn der Vorgang abgeschlossen ist.",
+			"maxOutputTokensDefault": "Standard: {{tokens}}",
 			"metrics": {
 				"cachedTokens": "Zwischengespeicherte Tokens",
 				"firstToken": "Zeit bis zum ersten Token (ms)",
@@ -6472,7 +6474,6 @@
 			},
 			"inspect": {
 				"architecture": "Architektur",
-				"block": "Block {{index}}",
 				"blockCell": "Block {{index}}: {{kind}}",
 				"blockCellExpert": "Block {{index}}: {{kind}}, MoE-Experte",
 				"blockKinds": {
@@ -6491,6 +6492,18 @@
 					"share": "Anteil",
 					"size": "Größe",
 					"type": "Typ"
+				},
+				"compare": {
+					"absent": "nicht in dieser Datei",
+					"block": "Block {{index}}",
+					"changedTypes": "Tensoren mit geändertem Typ",
+					"difference": "Differenz",
+					"groupSummary": "{{difference}} · {{count}} geändert",
+					"label": "Vergleichen mit",
+					"onlyIn": "Nur in {{model}}",
+					"placeholder": "Variante auswählen",
+					"readFailure": "{{model}} konnte nicht vollständig gelesen werden ({{reason}}), daher wird nichts verglichen.",
+					"split": "Ein geteiltes Modell wird nur anhand seiner ersten Datei verglichen."
 				},
 				"context": "Kontextlänge",
 				"embedding": "Embedding-Breite",

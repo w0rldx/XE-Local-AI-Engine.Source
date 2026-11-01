@@ -142,6 +142,24 @@ describe("DirectInferencePage", () => {
 		expect(screen.getByTestId("direct-inference-metric-generationRate").textContent).toBe("n/a");
 	});
 
+	it("says the answer was cut off only for a length finish", async () => {
+		stubModels();
+		hub.state.events = [
+			{ type: "delta", textDelta: "Partial" },
+			{ type: "done", elapsedMs: 20, finishReason: "length" },
+		] satisfies DirectInferenceEvent[];
+		renderWithProviders(<DirectInferencePage />);
+
+		await fillAndSend();
+
+		expect((await screen.findByTestId("direct-inference-cut-off")).textContent).toContain("cut off");
+
+		hub.state.events = [{ type: "done", elapsedMs: 20, finishReason: "stop" }] satisfies DirectInferenceEvent[];
+		fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+		await waitFor(() => expect(screen.queryByTestId("direct-inference-cut-off")).toBeNull());
+	});
+
 	it("shows the error event's message, and the localized notice for an exclusive GPU holder", async () => {
 		stubModels();
 		hub.state.events = [

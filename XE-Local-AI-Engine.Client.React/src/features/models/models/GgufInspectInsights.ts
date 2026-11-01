@@ -1,14 +1,18 @@
+import type { TFunction } from "i18next";
+
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto } from "@/core/api/generated";
+import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 
 type TensorDto = XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto;
 
 export type BlockKind = "fullAttention" | "linearAttention" | "mtp" | "other";
 
-// First match wins: an MTP block is also a full-attention block, and a linear block also carries attn_qkv.
+// First match wins: an MTP block is also a full-attention block, and a linear block also carries attn_qkv, which outside
+// a linear block is full attention fused into one tensor.
 const kindPatterns: readonly (readonly [BlockKind, RegExp])[] = [
 	["mtp", /\.nextn\./],
 	["linearAttention", /\.ssm_/],
-	["fullAttention", /\.attn_q\./],
+	["fullAttention", /\.attn_(?:q|qkv)\./],
 ];
 
 export function blockKind(tensors: readonly TensorDto[]): BlockKind {
@@ -52,4 +56,18 @@ export function tensorTypeRows(tensors: readonly TensorDto[]): TensorTypeRow[] {
 	const sorted = [...rows.values()].sort((left, right) => right.bytes - left.bytes);
 	const total = sorted.reduce((sum, row) => sum + row.bytes, 0);
 	return sorted.map((row) => ({ ...row, percent: total > 0 ? (row.bytes / total) * 100 : 0 }));
+}
+
+export function tensorSizeLabel(t: TFunction, bytes: number | null | undefined): string {
+	return bytes === null || bytes === undefined ? t("pages.models.details.unknown", "Unknown") : humanizeBytes(bytes);
+}
+
+export function tensorTypeLabel(t: TFunction, ggmlType: string | null, ggmlTypeId: number): string {
+	return ggmlType ?? t("pages.models.inspect.unknownType", "type {{id}}", { id: ggmlTypeId });
+}
+
+// "blk.12.attn_q.weight" reads as "attn_q.weight" inside its own block row.
+export function shortTensorName(name: string, blockIndex: number | undefined): string {
+	const prefix = blockIndex === undefined ? "" : `blk.${blockIndex}.`;
+	return prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name;
 }

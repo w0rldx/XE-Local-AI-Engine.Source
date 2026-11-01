@@ -58,12 +58,17 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **Direct Inference** — a new page (Models → Direct inference, Advanced only) streams one optional system prompt and one
   prompt to a chosen local, external or cloud model with no agent, tools, history or persona, and persists nothing. It
   shows token usage and, for llama.cpp models, prompt/generation timings, tokens/s and time to first token. Out-of-range
-  sampling values are refused (chat keeps skipping them). New `LocalChatHub.StreamDirectInference` hub method.
+  sampling values are refused (chat keeps skipping them). A request runs under the node's maximum message request
+  timeout, counted from when it takes the slot, and ends with a `Timeout` error; with no Max output tokens it is capped
+  at 8,192 tokens, and an answer cut off by a limit says so. The Codex subscription backend takes no output limit, so
+  only the timeout bounds it. New `LocalChatHub.StreamDirectInference` hub method.
 
 - **GGUF tensor inspector** — the model details dialog has an **Inspect** tab for installed llama.cpp models: header
   metadata plus every tensor (name, shape, ggml type, size) grouped per block. New
   `GET /api/local/v1/models/{modelName}/gguf-inspection`. A strip shows each block's kind (linear or full attention,
-  MTP) and marks MoE expert blocks, and a table the bytes per tensor type.
+  MTP) and marks MoE expert blocks, and a table the bytes per tensor type. Each block's accordion row names the same kind
+  and expert state, so keyboard and touch users get it too. **Compare with** lists the other installed variants of the
+  same repo and shows the total bytes, the difference and the tensors that changed type, per block, with no API change.
 
 - **Plain conversations** — a chat conversation can be switched to plain mode from its header. A plain turn runs with
   no agent (not even the Default Assistant), no persona or BaseScaffold, no tools, knowledge base, skills or memory

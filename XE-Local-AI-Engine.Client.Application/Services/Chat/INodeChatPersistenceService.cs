@@ -49,6 +49,9 @@ public interface INodeChatPersistenceService
     /// </summary>
     Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Lightweight plain-mode lookup (no messages loaded), or null when the conversation does not exist or was deleted.</summary>
+    Task<NodeChatConversationPlainMode?> GetConversationPlainModeAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
     /// <summary>The conversation's <c>kind</c> (<c>NodeConversationKind</c>), or null when it does not exist or was deleted.</summary>
     Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default);
 

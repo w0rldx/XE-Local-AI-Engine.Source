@@ -9,7 +9,7 @@ import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ModelFitPanel } from "@/features/models/components/ModelFitPanel";
 import { ModelInspectPanel } from "@/features/models/components/ModelInspectPanel";
 import { ModelLaunchArgumentsPanel } from "@/features/models/components/ModelLaunchArgumentsPanel";
-import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
+import { type LocalModelViewModel, sameRepoVariants } from "@/features/models/models/LocalModelModel";
 import { buildKindOptions, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
 
 type LocalModelDetails = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
@@ -18,6 +18,7 @@ interface ModelDetailsDialogProps {
 	opened: boolean;
 	onClose: () => void;
 	model: LocalModelViewModel | undefined;
+	installedModels: LocalModelViewModel[];
 	details: LocalModelDetails | undefined;
 	detailsLoading: boolean;
 	isActionPending: boolean;
@@ -28,6 +29,7 @@ interface ModelDetailsDialogProps {
 
 interface ModelDetailsBodyProps {
 	model: LocalModelViewModel;
+	installedModels: LocalModelViewModel[];
 	details: LocalModelDetails | undefined;
 	detailsLoading: boolean;
 	isActionPending: boolean;
@@ -41,6 +43,7 @@ interface ModelDetailsBodyProps {
 // only fires once the operator opens the dialog and switches to that tab.
 function ModelDetailsBody({
 	model,
+	installedModels,
 	details,
 	detailsLoading,
 	isActionPending,
@@ -204,7 +207,14 @@ function ModelDetailsBody({
 
 			{showInspect ? (
 				<Tabs.Panel value="inspect" pt="md">
-					{tab === "inspect" ? <ModelInspectPanel modelName={model.modelName} /> : <span />}
+					{tab === "inspect" ? (
+						<ModelInspectPanel
+							modelName={model.modelName}
+							compareCandidates={sameRepoVariants(model.modelName, installedModels)}
+						/>
+					) : (
+						<span />
+					)}
 				</Tabs.Panel>
 			) : null}
 
@@ -224,6 +234,7 @@ export function ModelDetailsDialog({
 	opened,
 	onClose,
 	model,
+	installedModels,
 	details,
 	detailsLoading,
 	isActionPending,
@@ -244,6 +255,7 @@ export function ModelDetailsDialog({
 				<ModelDetailsBody
 					key={model.modelName}
 					model={model}
+					installedModels={installedModels}
 					details={details}
 					detailsLoading={detailsLoading}
 					isActionPending={isActionPending}

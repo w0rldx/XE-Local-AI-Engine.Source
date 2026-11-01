@@ -3899,8 +3899,10 @@
 		"directInference": {
 			"copied": "Copied",
 			"copyJson": "Copy as JSON",
+			"cutOff": "The answer was cut off, at the output limit or because the context is full. Raise Max output tokens for the first; shorten the prompt or load the model with a larger context for the second.",
 			"errorTitle": "The request failed",
 			"gpuWorkExclusive": "A training run, evaluation or export holds the GPU. Try again when it has finished.",
+			"maxOutputTokensDefault": "Default: {{tokens}}",
 			"metrics": {
 				"cachedTokens": "Cached tokens",
 				"firstToken": "Time to first token (ms)",
@@ -6472,7 +6474,6 @@
 			},
 			"inspect": {
 				"architecture": "Architecture",
-				"block": "Block {{index}}",
 				"blockCell": "Block {{index}}: {{kind}}",
 				"blockCellExpert": "Block {{index}}: {{kind}}, MoE expert",
 				"blockKinds": {
@@ -6491,6 +6492,18 @@
 					"share": "Share",
 					"size": "Size",
 					"type": "Type"
+				},
+				"compare": {
+					"absent": "not in this file",
+					"block": "Block {{index}}",
+					"changedTypes": "Tensors that changed type",
+					"difference": "Difference",
+					"groupSummary": "{{difference}} · {{count}} changed",
+					"label": "Compare with",
+					"onlyIn": "Only in {{model}}",
+					"placeholder": "Choose a variant",
+					"readFailure": "{{model}} could not be read completely ({{reason}}), so nothing is compared.",
+					"split": "A split model is compared by its first file only."
 				},
 				"context": "Context length",
 				"embedding": "Embedding width",

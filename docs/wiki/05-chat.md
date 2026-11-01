@@ -182,7 +182,7 @@ message persists. Attachments, history shaping, compaction, context budgeting, p
 are unchanged. Toggling plain affects later turns only; the composer hides the agent picker and the tools and
 knowledge-base toggles while it is on. A branch of a plain conversation stays plain, its prompt re-encrypted for the new
 conversation id. The pre-send estimate follows the mode too: with the conversation's id it charges the custom prompt or
-nothing, and no tools.
+nothing, and no tools. It reads only those two columns (`GetConversationPlainModeAsync`), never the messages.
 
 ## Ordered parts: reasoning ↔ tool ↔ answer
 

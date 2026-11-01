@@ -54,12 +54,12 @@ const inspection = {
 	nonBlockTensors: [tensor("token_embd.weight", [4096, 248320], "Q4_K", 572_129_280)],
 };
 
-function renderPanel() {
+function renderPanel(compareCandidates: string[] = []) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
 			<MantineProvider env="test" theme={testMantineTheme}>
-				<ModelInspectPanel modelName="org/Tiny-GGUF:Q4_K_M" />
+				<ModelInspectPanel modelName="org/Tiny-GGUF:Q4_K_M" compareCandidates={compareCandidates} />
 			</MantineProvider>
 		</QueryClientProvider>,
 	);
@@ -78,6 +78,15 @@ describe("ModelInspectPanel", () => {
 				removeEventListener: vi.fn(),
 				dispatchEvent: vi.fn(),
 			})),
+		});
+		// The compare Select's dropdown scrolls in a ScrollArea, which observes its size.
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class ResizeObserverMock {
+				observe = vi.fn();
+				unobserve = vi.fn();
+				disconnect = vi.fn();
+			},
 		});
 	});
 
@@ -105,12 +114,12 @@ describe("ModelInspectPanel", () => {
 
 		const block0 = screen.getByTestId("model-inspect-block-0");
 		expect(within(block0).getByText("1 tensors · 1 KB")).toBeTruthy();
-		fireEvent.click(within(block0).getByText("Block 0"));
+		fireEvent.click(within(block0).getByText("Block 0: Other"));
 		expect(await within(block0).findByText("attn_norm.weight")).toBeTruthy();
 
 		const block1 = screen.getByTestId("model-inspect-block-1");
 		expect(within(block1).getByText("1 tensors · Unknown")).toBeTruthy();
-		fireEvent.click(within(block1).getByText("Block 1"));
+		fireEvent.click(within(block1).getByText("Block 1: Other"));
 		expect(await within(block1).findByText("type 99")).toBeTruthy();
 	});
 
@@ -168,6 +177,11 @@ describe("ModelInspectPanel", () => {
 		expect(denseCell.getAttribute("style")).not.toContain("box-shadow");
 		expect(within(within(strip).getByTestId("model-inspect-kind-fullAttention")).getByText("2")).toBeTruthy();
 		expect(within(within(strip).getByTestId("model-inspect-kind-moeExpert")).getByText("3")).toBeTruthy();
+
+		// The strip's cells are not focusable; each block's accordion row names the same kind and expert state.
+		expect(expertCell.getAttribute("tabindex")).toBeNull();
+		expect(screen.getByRole("button", { name: /Block 0: Linear attention, MoE expert/ })).toBeTruthy();
+		expect(screen.getByRole("button", { name: /Block 2: Full attention/ })).toBeTruthy();
 	});
 
 	it("has no expert legend entry when no block has experts", async () => {
@@ -177,6 +191,7 @@ describe("ModelInspectPanel", () => {
 
 		const strip = await screen.findByTestId("model-inspect-block-strip");
 		expect(within(strip).queryByTestId("model-inspect-kind-moeExpert")).toBeNull();
+		expect(within(strip).getByRole("img", { name: "Block 0: Other" }).getAttribute("style")).toContain("--mantine-color-gray-6");
 	});
 
 	it("totals the bytes per type over all tensors and states what it cannot size", async () => {
@@ -246,5 +261,141 @@ describe("ModelInspectPanel", () => {
 		renderPanel();
 
 		expect(await screen.findByRole("alert")).toBeTruthy();
+	});
+
+	describe("comparison", () => {
+		const q3 = "org/Tiny-GGUF:Q3_K_XL";
+		const blocks = [
+			{
+				index: 0,
+				byteSize: 3072,
+				tensors: [tensor("blk.0.attn_q.weight", [256], "Q4_K", 2048), tensor("blk.0.same.weight", [256], "F32", 1024)],
+			},
+			{ index: 1, byteSize: 1024, tensors: [tensor("blk.1.same.weight", [256], "F32", 1024)] },
+		];
+		const nonBlockTensors = [tensor("token_embd.weight", [256], "F32", 1024)];
+		const other = {
+			...inspection,
+			modelName: q3,
+			blocks: [
+				{
+					index: 0,
+					byteSize: 2048,
+					tensors: [
+						{ ...tensor("blk.0.attn_q.weight", [256], "Q3_K", 1024), ggmlTypeId: 11 },
+						tensor("blk.0.same.weight", [256], "F32", 1024),
+					],
+				},
+				blocks[1],
+			],
+			nonBlockTensors,
+		};
+
+		function stubInspections(otherResult: () => unknown = () => other) {
+			inspectionSpy.mockImplementation((modelName: string) =>
+				modelName === q3 ? otherResult() : { ...inspection, blocks, nonBlockTensors },
+			);
+		}
+
+		async function pick() {
+			const select = (await screen.findByTestId("model-inspect-compare-select")) as HTMLInputElement;
+			fireEvent.click(select);
+			fireEvent.click(await screen.findByRole("option", { name: "Q3_K_XL", hidden: true }));
+		}
+
+		it("is hidden with no other variant", async () => {
+			stubInspections();
+
+			renderPanel();
+
+			await screen.findByTestId("model-inspect-panel");
+			expect(screen.queryByTestId("model-inspect-compare")).toBeNull();
+		});
+
+		it("reads the other file only once it is picked, and summarises the difference", async () => {
+			stubInspections();
+
+			renderPanel([q3]);
+
+			await screen.findByTestId("model-inspect-compare");
+			expect(inspectionSpy).not.toHaveBeenCalledWith(q3);
+
+			await pick();
+
+			const result = await screen.findByTestId("model-inspect-compare-result");
+			expect(inspectionSpy).toHaveBeenCalledWith(q3);
+			const value = (label: string) => within(result).getByText(label).nextElementSibling?.textContent;
+			expect(value("Q4_K_M")).toBe("5 KB");
+			expect(value("Q3_K_XL")).toBe("4 KB");
+			expect(value("Difference")).toBe("−1 KB");
+			expect(value("Tensors that changed type")).toBe("1");
+		});
+
+		it("expands a block to its changed tensors only, and leaves an unchanged block closed", async () => {
+			stubInspections();
+
+			renderPanel([q3]);
+			await pick();
+
+			const block0 = await screen.findByTestId("model-inspect-compare-blk-0");
+			expect(within(block0).getByText("−1 KB · 1 changed")).toBeTruthy();
+			expect(within(block0).queryByText("attn_q.weight")).toBeNull();
+			const block1 = screen.getByTestId("model-inspect-compare-blk-1");
+			expect(within(block1).getByText("0 B · 0 changed")).toBeTruthy();
+			expect(within(block1).getByRole("button").hasAttribute("disabled")).toBe(true);
+
+			fireEvent.click(within(block0).getByText("Block 0"));
+
+			expect(await within(block0).findByText("attn_q.weight")).toBeTruthy();
+			expect(within(block0).getByText("Q4_K → Q3_K")).toBeTruthy();
+			expect(within(block0).getByText("2 KB → 1 KB")).toBeTruthy();
+			expect(within(block0).queryByText("same.weight")).toBeNull();
+		});
+
+		it("shows a failed read of the other file and no comparison", async () => {
+			stubInspections(() => ({ ...other, readFailure: "truncated" }));
+
+			renderPanel([q3]);
+			await pick();
+
+			expect((await screen.findByTestId("model-inspect-compare-failure")).textContent).toBe(
+				`${q3} could not be read completely (truncated), so nothing is compared.`,
+			);
+			expect(screen.queryByTestId("model-inspect-compare-result")).toBeNull();
+		});
+
+		it("shows a failed read of this file and no comparison", async () => {
+			inspectionSpy.mockImplementation((modelName: string) =>
+				modelName === q3 ? other : { ...inspection, readFailure: "malformed", blocks: [], nonBlockTensors: [] },
+			);
+
+			renderPanel([q3]);
+			await pick();
+
+			expect((await screen.findByTestId("model-inspect-compare-failure")).textContent).toContain("org/Tiny-GGUF:Q4_K_M");
+			expect(screen.queryByTestId("model-inspect-compare-result")).toBeNull();
+		});
+
+		it("shows a request error for the other file and no comparison", async () => {
+			stubInspections(() => {
+				throw new Error("boom");
+			});
+
+			renderPanel([q3]);
+			await pick();
+
+			const compare = screen.getByTestId("model-inspect-compare");
+			expect(await within(compare).findByRole("alert")).toBeTruthy();
+			expect(screen.queryByTestId("model-inspect-compare-result")).toBeNull();
+		});
+
+		it("states that a split model is compared by its first file only", async () => {
+			stubInspections(() => ({ ...other, splitCount: 2 }));
+
+			renderPanel([q3]);
+			await pick();
+
+			expect(await screen.findByText("A split model is compared by its first file only.")).toBeTruthy();
+		});
 	});
 });

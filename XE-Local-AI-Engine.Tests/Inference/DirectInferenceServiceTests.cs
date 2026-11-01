@@ -13,7 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     What Direct Inference sends and relays, over the real invocation slot and GPU gate; only the provider is substituted.
@@ -168,6 +170,155 @@ public sealed class DirectInferenceServiceTests
         AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(harness.Dispatcher.CurrentInvocation).Status);
     }
 
+    [Test]
+    public async Task StreamAsync_PastTheDeadline_EndsWithOneTimeoutError_AndFreesTheSlot()
+    {
+        var harness = new Harness(null);
+        harness.Stream = token => Hanging(harness, token);
+
+        var received = await RunPastTheDeadlineAsync(harness);
+
+        AssertEx.Equal("delta,error", string.Join(",", received.Select(static e => e.Type)), "the error is the only terminal event");
+        AssertTimedOut(harness, received[^1]);
+    }
+
+    [Test]
+    public async Task StreamAsync_AProviderThrowingSomethingElseOnTheDeadline_IsStillOneTimeoutError()
+    {
+        var harness = new Harness(null);
+        harness.Stream = token => ThrowingOnCancellation(harness, token);
+
+        var received = await RunPastTheDeadlineAsync(harness);
+
+        AssertEx.Equal("delta,error", string.Join(",", received.Select(static e => e.Type)));
+        AssertTimedOut(harness, received[^1]);
+    }
+
+    [Test]
+    public async Task StreamAsync_AProviderEndingQuietlyOnTheDeadline_IsATimeoutAndNeverDone()
+    {
+        var harness = new Harness(null);
+        harness.Stream = token => EndingQuietlyOnCancellation(harness, token);
+
+        var received = await RunPastTheDeadlineAsync(harness);
+
+        AssertEx.Equal("delta,error", string.Join(",", received.Select(static e => e.Type)));
+        AssertTimedOut(harness, received[^1]);
+    }
+
+    [Test]
+    public async Task StreamAsync_PastTheDeadlineBeforeTheFirstToken_IsOneTimeoutError()
+    {
+        var harness = new Harness(null);
+        var providerWaiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.Stream = token => HangingBeforeTheFirstToken(harness, providerWaiting, token);
+
+        var stream = harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync().AsTask();
+        await providerWaiting.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        harness.Time.Advance(TimeSpan.FromSeconds(harness.Settings.Current.MaxMessageRequestTimeoutSeconds));
+        var received = await stream.WaitAsync(TimeSpan.FromSeconds(30));
+
+        AssertTimedOut(harness, received.Single());
+    }
+
+    [Test]
+    public async Task StreamAsync_TheDeadlineStartsAfterAdmission_SoQueueingCannotExpireIt()
+    {
+        var harness = new Harness(Updates(Text("late"), Finish()));
+        var holder = await harness.Dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+        var stream = harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync().AsTask();
+        AssertEx.False(stream.IsCompleted, "the request queues behind the slot's holder");
+
+        AssertEx.Equal(0, harness.Time.ArmedTimerCount, "no deadline is armed while queued");
+        harness.Time.Advance(TimeSpan.FromSeconds(harness.Settings.Current.MaxMessageRequestTimeoutSeconds * 2));
+        await holder.DisposeAsync();
+        var events = await stream.WaitAsync(TimeSpan.FromSeconds(30));
+
+        AssertEx.Equal("delta,done", string.Join(",", events.Select(static e => e.Type)));
+    }
+
+    [Test]
+    public async Task StreamAsync_StoppedByTheUser_IsNeverATimeout_EvenWithTheDeadlinePassed()
+    {
+        var harness = new Harness(null);
+        harness.Stream = token => Hanging(harness, token);
+        using var cancellation = new CancellationTokenSource();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, cancellation.Token))
+            {
+                await cancellation.CancelAsync();
+                harness.Time.Advance(TimeSpan.FromSeconds(harness.Settings.Current.MaxMessageRequestTimeoutSeconds));
+            }
+        });
+
+        AssertEx.Null(harness.Dispatcher.SlotHolder);
+        var terminal = harness.Recorded.Single(static state => state.CompletedAt is not null);
+        AssertEx.Equal(InvocationStatus.Cancelled, terminal.Status);
+        AssertEx.Equal(FailureCategory.Cancelled, terminal.FailureCategory);
+    }
+
+    [Test]
+    [Arguments(ModelId)]
+    [Arguments("gpt-6")]
+    public async Task StreamAsync_WithNoOutputLimit_SendsTheDefaultCap(string modelId)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = modelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+
+        AssertEx.Equal(8_192, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+    }
+
+    [Test]
+    [Arguments(100, null, 100)]
+    [Arguments(20_000, null, 20_000)]
+    [Arguments(null, 4_096, 4_096)]
+    public async Task StreamAsync_AnExplicitLimitOrSmallerWindow_WinsOverTheDefaultCap(int? maxOutputTokens, int? numCtx, int expected)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+                                 {
+                                     ModelId = ModelId,
+                                     Prompt = "Hi",
+                                     SamplingOptions = new SamplingOptions { MaxOutputTokens = maxOutputTokens, NumCtx = numCtx }
+                                 },
+                                 CancellationToken.None)
+                             .ToListAsync();
+
+        AssertEx.Equal(expected, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+    }
+
+    private static async Task<List<DirectInferenceEvent>> RunPastTheDeadlineAsync(Harness harness)
+    {
+        List<DirectInferenceEvent> received = [];
+        await foreach (var streamEvent in harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None))
+        {
+            received.Add(streamEvent);
+            if (received.Count == 1)
+            {
+                harness.Time.Advance(TimeSpan.FromSeconds(harness.Settings.Current.MaxMessageRequestTimeoutSeconds));
+            }
+        }
+
+        return received;
+    }
+
+    private static void AssertTimedOut(Harness harness, DirectInferenceEvent last)
+    {
+        AssertEx.Equal(DirectInferenceEventTypes.Error, last.Type);
+        AssertEx.Equal(nameof(FailureCategory.Timeout), last.ErrorCode);
+        AssertEx.NotNullOrEmpty(last.ErrorMessage);
+        AssertEx.True(harness.ProviderObservedCancellation, "the deadline reaches the provider");
+        AssertEx.Null(harness.Dispatcher.SlotHolder);
+        AssertEx.Empty(harness.Dispatcher.GetLiveSnapshot().Live);
+        var terminal = harness.Recorded.Single(static state => state.CompletedAt is not null);
+        AssertEx.Equal(InvocationStatus.Failed, terminal.Status);
+        AssertEx.Equal(FailureCategory.Timeout, terminal.FailureCategory);
+    }
+
     private static ChatResponseUpdate Text(string text) =>
         new(ChatRole.Assistant, text);
 
@@ -212,10 +363,14 @@ public sealed class DirectInferenceServiceTests
                 History,
                 NullLogger<WorkerEventDispatcher>.Instance,
                 TimeProvider.System);
-            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, NullLogger<DirectInferenceService>.Instance);
+            Service = new DirectInferenceService(chatClient, Dispatcher, Gate, Settings, Time, NullLogger<DirectInferenceService>.Instance);
         }
 
         public Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>> Stream { get; set; }
+
+        public ManualTimeProvider Time { get; } = new();
+
+        public FakeNodeSettingsStore Settings { get; } = new(new StoredNodeSettings());
 
         public GpuWorkGate Gate { get; } = new();
 
@@ -247,5 +402,50 @@ public sealed class DirectInferenceServiceTests
             harness.ProviderObservedCancellation = true;
             throw;
         }
+    }
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> ThrowingOnCancellation(Harness harness, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return Text("first");
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException exception)
+        {
+            harness.ProviderObservedCancellation = true;
+            throw new IOException("The connection was aborted.", exception);
+        }
+    }
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> EndingQuietlyOnCancellation(Harness harness, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return Text("first");
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            harness.ProviderObservedCancellation = true;
+        }
+    }
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> HangingBeforeTheFirstToken(Harness harness,
+        TaskCompletionSource providerWaiting,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        providerWaiting.SetResult();
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            harness.ProviderObservedCancellation = true;
+            throw;
+        }
+
+        yield break;
     }
 }

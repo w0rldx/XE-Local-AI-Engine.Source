@@ -3,6 +3,9 @@
 
 import type { WireSamplingOptions } from "@/core/runtime/ChatSamplingOptions";
 
+/** The cap the server applies when a request sets none (`DirectInferenceService.DefaultMaxOutputTokens`). */
+export const directInferenceDefaultMaxOutputTokens = 8192;
+
 export interface DirectInferenceRequest {
 	modelId: string;
 	systemPrompt?: string;

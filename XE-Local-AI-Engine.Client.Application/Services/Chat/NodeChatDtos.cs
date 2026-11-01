@@ -29,6 +29,14 @@ public sealed class NodeChatConversationSummaryDto
     public bool Archived { get; init; }
 }
 
+/// <summary>A conversation's plain mode and its decrypted custom system prompt, read without its messages.</summary>
+public sealed record NodeChatConversationPlainMode
+{
+    public required bool IsPlain { get; init; }
+
+    public required string? PlainSystemPrompt { get; init; }
+}
+
 /// <summary>
 ///     Transport DTO for node chat conversation data.
 /// </summary>

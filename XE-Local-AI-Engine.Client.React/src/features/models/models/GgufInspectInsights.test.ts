@@ -33,8 +33,9 @@ describe("blockKind", () => {
 		expect([blockKind(experts), hasExperts(experts)]).toEqual(["other", true]);
 	});
 
-	it("does not take attn_qkv or attn_q_norm for full attention", () => {
-		expect(blockKind(block(2, "attn_qkv", "attn_q_norm", "ffn_up"))).toBe("other");
+	it("reads fused attention as full attention, and a lone norm as neither", () => {
+		expect(blockKind(block(2, "attn_qkv", "attn_q_norm", "ffn_up"))).toBe("fullAttention");
+		expect(blockKind(block(2, "attn_q_norm", "ffn_up"))).toBe("other");
 		expect(blockKind([])).toBe("other");
 	});
 });

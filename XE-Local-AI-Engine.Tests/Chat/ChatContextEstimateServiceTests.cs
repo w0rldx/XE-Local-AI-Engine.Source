@@ -495,6 +495,7 @@ public sealed class ChatContextEstimateServiceTests
         AssertEx.Equal(ConversationContextBudgeter.EstimateSystemPromptTokens(harness.Estimator, prompt, harness.Estimator.ResolveDivisor(LocalModel)), expected.SystemPromptTokens);
         AssertEx.Equal(expected.SystemPromptTokens, expected.TotalTokens);
         AssertEx.Empty(estimate.Tools);
+        await harness.Persistence.DidNotReceiveWithAnyArgs().GetConversationForTurnAsync(Guid.Empty, CancellationToken.None);
     }
 
     [Test]
@@ -634,18 +635,7 @@ public sealed class ChatContextEstimateServiceTests
         public Guid AddConversation(bool isPlain, string? plainSystemPrompt)
         {
             var conversationId = Guid.NewGuid();
-            Persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationDto
-            {
-                ConversationId = conversationId,
-                Title = "conversation",
-                UserId = null,
-                CreatedAtUtc = 1,
-                LastSeenUtc = 1,
-                Purged = false,
-                Messages = [],
-                IsPlain = isPlain,
-                PlainSystemPrompt = plainSystemPrompt
-            });
+            Persistence.GetConversationPlainModeAsync(conversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationPlainMode { IsPlain = isPlain, PlainSystemPrompt = plainSystemPrompt });
             return conversationId;
         }
 

@@ -26,6 +26,32 @@ export type LocalModelOrigin = XeLocalAiEngineProvidersAbstractionsContractsLoca
 
 export const emptyModelValue = "—";
 
+// An installed GGUF model is named `{repo}:{quant}`, so the part before the last colon is its repo; null without a colon.
+export function modelRepoId(modelName: string): string | null {
+	const colon = modelName.lastIndexOf(":");
+	return colon < 0 ? null : modelName.slice(0, colon).toLowerCase();
+}
+
+// What tells a repo's variants apart: the quant after the colon, or the whole name without one.
+export function modelVariantLabel(modelName: string): string {
+	return modelName.slice(modelName.lastIndexOf(":") + 1);
+}
+
+/** The other installed llama.cpp models of `modelName`'s repo: the files the Inspect tab can compare it with. */
+export function sameRepoVariants(
+	modelName: string,
+	models: readonly Pick<LocalModelViewModel, "modelName" | "provider">[],
+): string[] {
+	const repo = modelRepoId(modelName);
+	return repo === null
+		? []
+		: models
+				.filter(
+					(model) => model.provider === "llamacpp" && model.modelName !== modelName && modelRepoId(model.modelName) === repo,
+				)
+				.map((model) => model.modelName);
+}
+
 export function formatModelSize(sizeBytes: number | null | undefined): string {
 	if (sizeBytes === null || sizeBytes === undefined || !Number.isFinite(sizeBytes) || sizeBytes < 0) {
 		return emptyModelValue;

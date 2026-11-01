@@ -176,6 +176,32 @@ internal sealed class NodeChatConversationCommands
             cancellationToken);
     }
 
+    public async Task<NodeChatConversationPlainMode?> GetConversationPlainModeAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT is_plain, plain_system_prompt FROM conversations WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$conversation_id", conversationId);
+
+                await OpenIfNeededAsync(command.Connection, token);
+                await using var reader = await command.ExecuteReaderAsync(token);
+                if (!await reader.ReadAsync(token))
+                {
+                    return null;
+                }
+
+                var prompt = await reader.IsDBNullAsync(ordinal: 1, token) ? null : await reader.GetFieldValueAsync<byte[]>(ordinal: 1, token);
+                return new NodeChatConversationPlainMode
+                {
+                    IsPlain = reader.GetBoolean(0),
+                    PlainSystemPrompt = dbContext.DecryptConversationPlainSystemPrompt(prompt, conversationId)
+                };
+            },
+            cancellationToken);
+    }
+
     /// <summary>The conversation's <c>kind</c>, or null when it does not exist or was soft-deleted.</summary>
     public async Task<string?> GetConversationKindAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {

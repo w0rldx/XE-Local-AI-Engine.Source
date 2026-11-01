@@ -33,6 +33,7 @@ import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDia
 import { useGgufAcquisitionFlow } from "@/features/models/hooks/useGgufAcquisitionFlow";
 import { useModelDetailsDialog } from "@/features/models/hooks/useModelDetailsDialog";
 import { isInstalledLocalModel, toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
+import { modelRepoId } from "@/features/models/models/LocalModelModel";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
@@ -63,14 +64,8 @@ export function ModelManagement() {
 	// before the view-models are built, so no action on this page can address one.
 	const modelItems = useMemo(() => (modelsResponse?.items ?? []).filter(isInstalledLocalModel), [modelsResponse]);
 	const modelViewModels = useMemo(() => modelItems.map(toLocalModelViewModel), [modelItems]);
-	// An installed GGUF model is named `{repo}:{quant}`, so the part before the last colon marks its repo as installed.
 	const installedRepoIds = useMemo(
-		() =>
-			new Set(
-				modelViewModels
-					.filter((model) => model.modelName.includes(":"))
-					.map((model) => model.modelName.slice(0, model.modelName.lastIndexOf(":")).toLowerCase()),
-			),
+		() => new Set(modelViewModels.map((model) => modelRepoId(model.modelName)).filter((repo) => repo !== null)),
 		[modelViewModels],
 	);
 
@@ -230,6 +225,7 @@ export function ModelManagement() {
 				opened={detailsDialog.opened}
 				onClose={detailsDialog.close}
 				model={detailsModel}
+				installedModels={modelViewModels}
 				details={detailsDialog.details}
 				detailsLoading={detailsDialog.isFetching}
 				isActionPending={isActionPending}

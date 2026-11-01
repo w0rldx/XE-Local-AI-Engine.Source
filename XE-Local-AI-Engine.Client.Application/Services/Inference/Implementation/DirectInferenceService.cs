@@ -13,33 +13,46 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>Sends <c>[System?, User]</c> straight to the node's <see cref="IChatClient" /> and relays what comes back.</summary>
 /// <remarks>
 ///     The singleton client is the cloud/local router, so model routing and its egress checks are the chat path's own.
 ///     The request takes the node's invocation slot like a chat turn, but writes no conversation and no run row; the
-///     terminal state it reports only closes the slot's live entry.
+///     terminal state it reports only closes the slot's live entry. Generation runs under the node's message deadline and,
+///     unless the request sets its own, a default output cap.
 /// </remarks>
 public sealed class DirectInferenceService : IDirectInferenceService
 {
+    /// <summary>The output cap for a request that sets none. The Direct Inference page states the same value.</summary>
+    internal const int DefaultMaxOutputTokens = 8_192;
+
     private readonly IChatClient _chatClient;
     private readonly IWorkerEventDispatcher _dispatcher;
     private readonly IGpuWorkGate _gpuWorkGate;
+    private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<DirectInferenceService> _logger;
 
     public DirectInferenceService(IChatClient chatClient,
         IWorkerEventDispatcher dispatcher,
         IGpuWorkGate gpuWorkGate,
+        INodeSettingsStore nodeSettingsStore,
+        TimeProvider timeProvider,
         ILogger<DirectInferenceService> logger)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(gpuWorkGate);
+        ArgumentNullException.ThrowIfNull(nodeSettingsStore);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
         _chatClient = chatClient;
         _dispatcher = dispatcher;
         _gpuWorkGate = gpuWorkGate;
+        _nodeSettingsStore = nodeSettingsStore;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -65,6 +78,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             AdditionalProperties = additionalProperties
         };
         InvocationSamplingRules.Apply(options, additionalProperties, sampling);
+        ReasoningOptionsResolver.ApplyDefaultOutputCap(options, additionalProperties, DefaultMaxOutputTokens);
         return StreamCoreAsync(modelId, messages, options, cancellationToken);
     }
 
@@ -109,7 +123,13 @@ public sealed class DirectInferenceService : IDirectInferenceService
             yield break;
         }
 
+        // Read before admission: past it, a failed read would leave the live entry open.
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
         await using var lease = await InvocationSlotAdmission.AcquireAsync(_dispatcher, AdmissionPackage(invocationId, modelId, messages), cancellationToken);
+
+        // Started only now: time queued behind another turn is not generation time.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(nodeSettings.MaxMessageRequestTimeoutSeconds), _timeProvider);
+        using var generation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         var terminalReported = false;
         try
         {
@@ -118,7 +138,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             string? finishReason = null;
             UsageDetails? usage = null;
 
-            var updates = Defer(() => _chatClient.GetStreamingResponseAsync(messages, options, cancellationToken), cancellationToken).GetAsyncEnumerator(cancellationToken);
+            var updates = Defer(() => _chatClient.GetStreamingResponseAsync(messages, options, generation.Token), generation.Token).GetAsyncEnumerator(generation.Token);
             await using (updates)
             {
                 while (true)
@@ -131,13 +151,13 @@ public sealed class DirectInferenceService : IDirectInferenceService
                             break;
                         }
                     }
+                    // The consumer's own token keeps its propagation: a Stop stays Cancelled even if the deadline fired beside it.
                     catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
                     {
                         _logger.LogWarning(exception, "Direct inference {InvocationId} failed.", invocationId);
-                        var (category, message) = InvocationFailureClassifier.MapFailure(exception);
-                        await _dispatcher.ReportInvocationFailedAsync(invocationId, message, category);
+                        // Past the deadline, whatever the provider threw is how its cancelled request surfaced.
+                        failure = await ReportFailureAsync(invocationId, deadline.IsCancellationRequested ? new TimeoutException() : exception);
                         terminalReported = true;
-                        failure = ErrorEvent(category.ToString(), message);
                     }
 
                     if (failure is not null)
@@ -214,6 +234,16 @@ public sealed class DirectInferenceService : IDirectInferenceService
                 }
             }
 
+            // A provider may answer its cancelled token by simply ending the enumeration: that is a timeout, not a finished answer.
+            if (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning("Direct inference {InvocationId} reached its deadline.", invocationId);
+                var timedOut = await ReportFailureAsync(invocationId, new TimeoutException());
+                terminalReported = true;
+                yield return timedOut;
+                yield break;
+            }
+
             var elapsedMs = ElapsedMs(startedTimestamp);
             await _dispatcher.ReportInvocationCompletedAsync(invocationId,
                 ToInt(usage?.InputTokenCount),
@@ -241,6 +271,13 @@ public sealed class DirectInferenceService : IDirectInferenceService
         }
     }
 
+    private async Task<DirectInferenceEvent> ReportFailureAsync(Guid invocationId, Exception exception)
+    {
+        var (category, message) = InvocationFailureClassifier.MapFailure(exception);
+        await _dispatcher.ReportInvocationFailedAsync(invocationId, message, category);
+        return ErrorEvent(category.ToString(), message);
+    }
+
     /// <summary>Moves a synchronous throw out of <see cref="IChatClient.GetStreamingResponseAsync" /> (a refused egress) into the first <c>MoveNextAsync</c>.</summary>
     private static async IAsyncEnumerable<ChatResponseUpdate> Defer(Func<IAsyncEnumerable<ChatResponseUpdate>> start,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -264,7 +301,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             ConversationContext = [],
             AllowedTools = [],
             ModelProfile = modelId,
-            // Never run by the invocation runner, so neither is read: the timeout is the stream token, the hash names no agent.
+            // Never run by the invocation runner, so neither is read: this service holds the deadline, the hash names no agent.
             Timeouts = new TimeoutSettings(),
             ConfigHash = string.Empty
         };

@@ -140,8 +140,7 @@ public sealed class NodeChatStreamServicePlainTests
             ConversationId = harness.ConversationId,
             ModelName = model
         }));
-        var conversation = await harness.Persistence.GetConversationForTurnAsync(harness.ConversationId);
-        var inputs = await estimateService.ResolveAsync(model, agentId: null, useLocalTools: true, CancellationToken.None, conversation);
+        var inputs = await estimateService.ResolveAsync(model, agentId: null, useLocalTools: true, CancellationToken.None, new NodeChatConversationPlainMode { IsPlain = true, PlainSystemPrompt = prompt });
 
         var package = AssertEx.NotNull(harness.Runner.LastPackage);
         AssertEx.Equal(package.ResolvedSystemPrompt, inputs.SystemPrompt);
@@ -154,14 +153,14 @@ public sealed class NodeChatStreamServicePlainTests
             AssertEx.NotNull(estimate.Estimated).SystemPromptTokens);
     }
 
-    private sealed class Harness
+    internal sealed class Harness
     {
         private readonly ChatTurnResolver _turnResolver;
         private readonly NodeChatStreamService _service;
 
         public Harness(bool isPlain, string? plainSystemPrompt)
+            : this(Guid.NewGuid(), persistence: null)
         {
-            Persistence = CreatePersistence(ConversationId, AssistantMessageId, RequestId, _ => { }, placeholderObserver: request => Placeholder = request);
             var conversation = new NodeChatConversationDto
             {
                 ConversationId = ConversationId,
@@ -175,7 +174,14 @@ public sealed class NodeChatStreamServicePlainTests
                 PlainSystemPrompt = plainSystemPrompt
             };
             Persistence.GetConversationForTurnAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+            Persistence.GetConversationPlainModeAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationPlainMode { IsPlain = isPlain, PlainSystemPrompt = plainSystemPrompt });
+        }
 
+        /// <summary>A turn into <paramref name="conversationId" /> over the given persistence, or a substitute that stores nothing when null.</summary>
+        public Harness(Guid conversationId, INodeChatPersistenceService? persistence)
+        {
+            ConversationId = conversationId;
+            Persistence = persistence ?? CreatePersistence(ConversationId, AssistantMessageId, RequestId, _ => { }, placeholderObserver: request => Placeholder = request);
             DefaultAgentProvider = CreateDefaultAgentProvider(DefaultAgentId);
             AgentResolver = Substitute.For<IAgentDefinitionResolver>();
             AgentResolver.ResolveAsync(DefaultAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -220,7 +226,7 @@ public sealed class NodeChatStreamServicePlainTests
                 new GpuWorkGate());
         }
 
-        public Guid ConversationId { get; } = Guid.NewGuid();
+        public Guid ConversationId { get; }
 
         public Guid AssistantMessageId { get; } = Guid.NewGuid();
 
