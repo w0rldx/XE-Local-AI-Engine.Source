@@ -583,6 +583,7 @@
 		"knowledgeBase": "Wissensdatenbank",
 		"loadedModels": "Geladen",
 		"mcp": "MCP",
+		"modelLab": "Model Lab",
 		"modelRecommendations": "Modellempfehlungen",
 		"models": "Modelle",
 		"modelsInstalled": "Installiert",
@@ -3902,6 +3903,23 @@
 			"cutOff": "Die Antwort wurde abgeschnitten, am Ausgabelimit oder weil der Kontext voll ist. Erhöhen Sie im ersten Fall die maximalen Ausgabe-Tokens; kürzen Sie im zweiten den Prompt oder laden Sie das Modell mit einem größeren Kontext.",
 			"errorTitle": "Die Anfrage ist fehlgeschlagen",
 			"gpuWorkExclusive": "Ein Training, eine Evaluierung oder ein Export belegt die GPU. Versuchen Sie es erneut, wenn der Vorgang abgeschlossen ist.",
+			"logprobs": {
+				"columns": {
+					"alternatives": "Alternativen",
+					"probability": "Wahrscheinlichkeit",
+					"text": "Eintrag"
+				},
+				"countNote": "Einträge: {{entries}}. Vom Server gemeldete erzeugte Tokens: {{tokens}}.",
+				"entriesNote": "Einträge sind keine Tokens. Mehrbyte-Text kann mehrere Tokens zu einem Eintrag zusammenfassen, dessen Werte zum letzten Token gehören, und Einträge können fehlen, besonders wenn das Modell nachdenkt. Die Liste muss daher nicht zum Text oder zu den Token-Zahlen passen.",
+				"explanation": "Wahrscheinlichkeiten, die das Modell vor dem Sampling vergeben hat. Sie sind Modellausgabe, keine Erklärung seiner Überlegungen, und eine per Sampling gewählte Option kann unwahrscheinlich wirken.",
+				"field": "Token-Wahrscheinlichkeiten",
+				"fieldDescription": "Anzuzeigende Alternativen pro Eintrag, 1 bis {{max}}. Lassen Sie das Feld leer, wenn Sie keine wünschen. Nur für installierte llama.cpp-Modelle.",
+				"leftOutAnswer": "Antwort: Es werden die ersten {{kept}} Einträge angezeigt; {{leftOut}} weitere wurden ausgelassen.",
+				"leftOutReasoning": "Nachdenken: Es werden die ersten {{kept}} Einträge angezeigt; {{leftOut}} weitere wurden ausgelassen.",
+				"none": "Der Server hat für diese Anfrage keine Wahrscheinlichkeiten geliefert.",
+				"thinking": "Nachdenken",
+				"title": "Token-Wahrscheinlichkeiten"
+			},
 			"maxOutputTokensDefault": "Standard: {{tokens}}",
 			"maxOutputTokensThinking": "Das Nachdenken zählt zu diesem Limit.",
 			"metrics": {
@@ -6313,6 +6331,25 @@
 					"reasoning": "Schlussfolgern"
 				}
 			}
+		},
+		"modelLab": {
+			"compare": {
+				"modelA": "Modell A",
+				"modelB": "Modell B",
+				"notEvidence": "Ein Unterschied allein ist kein Beleg für einen bedeutsamen Effekt. Die Ausgabe ändert sich auch aus Gründen, die nichts mit Ihrem Vergleich zu tun haben.",
+				"notIdentical": "Identische Einstellungen garantieren keine identischen Ergebnisse: Modelldatei, Laufzeitvariante oder Hintergrundlast können die Ausgabe trotzdem verändern.",
+				"notRun": "Nicht ausgeführt: gestoppt, bevor dieses Modell begann.",
+				"run": "Beide ausführen",
+				"scope": "Beide Läufe verwenden diesen Knoten und seinen aktuellen llama.cpp-Build, nacheinander. Die Zeiten eines Laufs können das Laden seines Modells enthalten.",
+				"seed": "Seed für beide Läufe: {{seed}}",
+				"tab": "A/B mit gleichem Prompt",
+				"waiting": "Wartet auf das Ende des ersten Laufs."
+			},
+			"inspectModel": "Installiertes Modell",
+			"modelsFailed": "Die installierten Modelle konnten nicht geladen werden.",
+			"noModels": "Es ist kein installiertes llama.cpp-Modell verfügbar. Bitte installieren Sie zuerst eines unter Modelle.",
+			"subtitle": "Vergleichen Sie zwei lokale Modelle mit einem Prompt, oder untersuchen Sie die Datei eines installierten Modells. Es wird nichts gespeichert.",
+			"title": "Model Lab"
 		},
 		"models": {
 			"details": {

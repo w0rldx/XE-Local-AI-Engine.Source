@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Hubs;
 
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Inference;
@@ -56,6 +58,43 @@ public sealed class LocalChatHubDirectInferenceTests
                             .ToListAsync());
 
         AssertEx.Contains(exception.Message, "Top P must be between 0 and 1.");
+    }
+
+    [Test]
+    public async Task StreamDirectInference_ALogprobsEvent_CrossesTheWireIntact()
+    {
+        // The fake chat client is no llama.cpp model, so the service is the seam: this test is about the hub's JSON protocol.
+        var service = Substitute.For<IDirectInferenceService>();
+        service.StreamAsync(Arg.Any<DirectInferenceRequest>(), Arg.Any<CancellationToken>())
+               .Returns(new[]
+                   {
+                       new DirectInferenceEvent
+                       {
+                           Type = DirectInferenceEventTypes.Logprobs,
+                           Logprobs =
+                           [
+                               new DirectInferenceLogprobEntry
+                               {
+                                   Text = "🌏",
+                                   Logprob = -0.5f,
+                                   IsReasoning = true,
+                                   Alternatives = [new DirectInferenceLogprobAlternative { Text = "�", Logprob = -float.MaxValue }]
+                               }
+                           ]
+                       }
+                   }.ToAsyncEnumerable());
+        await using var factory = new TestServerWebAppFactory { ConfigureAdditionalTestServices = services => services.AddSingleton(service) };
+        await using var connection = CreateHubConnection(factory, authorized: true);
+        await connection.StartAsync();
+
+        var received = await connection.StreamAsync<DirectInferenceEvent>(Method, new DirectInferenceRequest { ModelId = "m", Prompt = "hello", TopLogprobs = 1 }).ToListAsync();
+
+        var entry = AssertEx.NotNull(received.Single().Logprobs).Single();
+        AssertEx.Equal("🌏", entry.Text);
+        AssertEx.Equal(-0.5f, entry.Logprob);
+        AssertEx.True(entry.IsReasoning);
+        AssertEx.Equal(-float.MaxValue, entry.Alternatives.Single().Logprob, "llama-server's stand-in for a zero probability survives the protocol");
+        AssertEx.Equal(1, service.ReceivedCalls().Single().GetArguments().OfType<DirectInferenceRequest>().Single().TopLogprobs);
     }
 
     [Test]

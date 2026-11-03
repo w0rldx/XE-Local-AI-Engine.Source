@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { compareSpy } = vi.hoisted(() => ({ compareSpy: vi.fn() }));
-vi.mock("@/features/models/models/GgufInspectComparison", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@/features/models/models/GgufInspectComparison")>();
+vi.mock("@/core/models/inspect/GgufInspectComparison", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/core/models/inspect/GgufInspectComparison")>();
 	return {
 		...actual,
 		compareInspections: (...args: Parameters<typeof actual.compareInspections>) => {
@@ -28,7 +28,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 import { MantineProvider } from "@mantine/core";
 import { QueryClientProvider } from "@tanstack/react-query";
 
-import { ModelInspectComparison } from "@/features/models/components/ModelInspectComparison";
+import { ModelInspectComparison } from "@/core/models/inspect/ModelInspectComparison";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 import { createTestQueryClient } from "@/test/RenderWithProviders";
 

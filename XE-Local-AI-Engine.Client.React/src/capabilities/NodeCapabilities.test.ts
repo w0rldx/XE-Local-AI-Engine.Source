@@ -114,6 +114,7 @@ describe("nodeCapabilities", () => {
 			transcriptionSession: "/transcription/$sessionId",
 			diagnostics: "/diagnostics",
 			directInference: "/direct-inference",
+			modelLab: "/model-lab",
 		});
 	});
 });

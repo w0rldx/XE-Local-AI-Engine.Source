@@ -14,6 +14,9 @@ public static class DirectInferenceEventTypes
     /// <summary>llama-server's own prompt/generation timings; never sent for a model that is not served by llama-server.</summary>
     public const string Timings = "timings";
 
+    /// <summary>Probability entries of the text just streamed; only for a request that set <see cref="DirectInferenceRequest.TopLogprobs" />.</summary>
+    public const string Logprobs = "logprobs";
+
     /// <summary>The terminal event of a request that ran to its end.</summary>
     public const string Done = "done";
 
@@ -26,6 +29,9 @@ public static class DirectInferenceErrorCodes
 {
     /// <summary>A training run, evaluation or export holds the GPU exclusively.</summary>
     public const string GpuWorkExclusive = "GpuWorkExclusive";
+
+    /// <summary>Token probabilities were requested for a model that is not an installed llama.cpp model.</summary>
+    public const string LogprobsLocalOnly = "LogprobsLocalOnly";
 }
 
 /// <summary>One explicit prompt to one model: no agent, tools, history, persona, memory or knowledge base.</summary>
@@ -40,6 +46,9 @@ public sealed class DirectInferenceRequest
 
     /// <summary>Optional overrides, in the same ranges chat accepts; an out-of-range value is refused, not skipped.</summary>
     public SamplingOptions? SamplingOptions { get; init; }
+
+    /// <summary>Alternatives per probability entry, 1 to 20; null requests none. For an installed llama.cpp model only.</summary>
+    public int? TopLogprobs { get; init; }
 }
 
 /// <summary>One frame of a Direct Inference stream; <see cref="Type" /> says which members are set.</summary>
@@ -55,6 +64,8 @@ public sealed class DirectInferenceEvent
 
     public DirectInferenceTimings? Timings { get; init; }
 
+    public IReadOnlyList<DirectInferenceLogprobEntry>? Logprobs { get; init; }
+
     /// <summary>On <c>done</c>: milliseconds from admission to the end of the stream.</summary>
     public long? ElapsedMs { get; init; }
 
@@ -67,6 +78,27 @@ public sealed class DirectInferenceEvent
     public string? ErrorCode { get; init; }
 
     public string? ErrorMessage { get; init; }
+}
+
+/// <summary>One entry of llama-server's pre-sampling probabilities. Not a token: see <c>LlamaServerLogprobs</c>.</summary>
+public sealed class DirectInferenceLogprobEntry
+{
+    public string? Text { get; init; }
+
+    public float Logprob { get; init; }
+
+    /// <summary>The entry came with reasoning text rather than answer text.</summary>
+    public bool IsReasoning { get; init; }
+
+    public IReadOnlyList<DirectInferenceLogprobAlternative> Alternatives { get; init; } = [];
+}
+
+/// <summary>One alternative of a <see cref="DirectInferenceLogprobEntry" />, most likely first.</summary>
+public sealed class DirectInferenceLogprobAlternative
+{
+    public string? Text { get; init; }
+
+    public float Logprob { get; init; }
 }
 
 /// <summary>The provider-reported token usage; any member the provider did not report is null.</summary>

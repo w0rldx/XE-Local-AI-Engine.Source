@@ -10,8 +10,8 @@ import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
-import { ModelInspectComparison } from "@/features/models/components/ModelInspectComparison";
-import { ModelInspectMetadataItem } from "@/features/models/components/ModelInspectMetadataItem";
+import { ModelInspectComparison } from "@/core/models/inspect/ModelInspectComparison";
+import { ModelInspectMetadataItem } from "@/core/models/inspect/ModelInspectMetadataItem";
 import {
 	type BlockKind,
 	blockKind,
@@ -20,7 +20,7 @@ import {
 	tensorSizeLabel,
 	tensorTypeLabel,
 	tensorTypeRows,
-} from "@/features/models/models/GgufInspectInsights";
+} from "@/core/models/inspect/GgufInspectInsights";
 
 type TensorDto = XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto;
 

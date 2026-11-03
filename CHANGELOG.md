@@ -55,6 +55,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Model Lab** — a new page (Models → Model Lab, Advanced only). Same-prompt A/B runs one prompt with one seed and the same
+  sampling against two installed llama.cpp models, one after the other, and shows outputs, token counts and timings side by
+  side. Nothing is saved. The page states that identical settings do not guarantee identical results and that a difference
+  alone is not evidence of a meaningful effect. An Inspect tab opens the GGUF inspector for a chosen installed model; the
+  tab in the model details dialog stays.
+- **Token probabilities in Direct Inference** — for an installed llama.cpp model, a request can ask for 1 to 20 alternatives
+  per entry and the page lists what the model returned, labelled as pre-sampling output rather than an explanation. Entries
+  are not tokens, and the list says so: multi-byte text merges, and a stream can omit entries.
 - **Direct Inference** — a new page (Models → Direct inference, Advanced only) streams one optional system prompt and one
   prompt to a chosen local, external or cloud model with no agent, tools, history or persona, and persists nothing. It
   shows token usage and, for llama.cpp models, prompt/generation timings, tokens/s and time to first token. Out-of-range

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
+using System.ClientModel.Primitives;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using OpenAI.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -20,9 +23,14 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+// OpenAI.Chat also declares ChatMessage and ChatFinishReason; this file speaks MEAI's.
+using ChatFinishReason = Microsoft.Extensions.AI.ChatFinishReason;
+using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 /// <summary>
 ///     What Direct Inference sends and relays, over the real invocation slot and GPU gate; only the provider is substituted.
@@ -36,6 +44,15 @@ public sealed class DirectInferenceServiceTests
     private const string LocalExternalModelId = "ext:lan/qwen3";
     private const string CloudExternalModelId = "ext:hosted/qwen3";
     private const string UnknownModelId = "no-such-model";
+
+    // Shaped from a captured b12014 chunk: the merged entry's alternatives are the last token's, and -3.4028235E+38 is what llama-server sends for a zero probability.
+    private const string MultiByteChunkJson = """
+                                              {"id":"c","object":"chat.completion.chunk","created":1,"model":"m",
+                                               "choices":[{"index":0,"finish_reason":null,"delta":{"content":"🌏"},
+                                                "logprobs":{"content":[{"id":237,"token":"🌏","bytes":[240,159,140,143],"logprob":-0.5,
+                                                 "top_logprobs":[{"id":237,"token":"�","bytes":[143],"logprob":-0.5},
+                                                                 {"id":243,"token":"�","bytes":[149],"logprob":-3.4028235E+38}]}]}}]}
+                                              """;
 
     [Test]
     public async Task StreamAsync_SendsSystemThenUser_WithNoTools_AndTheMappedSampling()
@@ -337,9 +354,8 @@ public sealed class DirectInferenceServiceTests
     {
         var source = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React",
             "src",
-            "features",
+            "core",
             "directInference",
-            "models",
             "DirectInferenceModels.ts"));
 
         var declaration = string.Create(CultureInfo.InvariantCulture, $"directInferenceDefaultMaxOutputTokens = {DirectInferenceService.DefaultMaxOutputTokens};");
@@ -364,6 +380,130 @@ public sealed class DirectInferenceServiceTests
                              .ToListAsync();
 
         AssertEx.Equal(expected, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    [Arguments(21)]
+    [Arguments(1000)]
+    public void StreamAsync_TopLogprobsOutOfRange_IsRefusedBeforeAnyStream(int topLogprobs)
+    {
+        var harness = new Harness(Updates(Text("never")));
+
+        var exception = AssertEx.Throws<DirectInferenceInvalidRequestException>(() => harness.Service.StreamAsync(new DirectInferenceRequest
+            {
+                ModelId = ModelId,
+                Prompt = "Hi",
+                TopLogprobs = topLogprobs
+            },
+            CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "between 1 and 20");
+        AssertEx.Null(harness.SentMessages, "the provider is never called");
+    }
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(20)]
+    public async Task StreamAsync_TopLogprobsInRange_ReachesTheWireThroughTheProvidersOwnPatches(int topLogprobs)
+    {
+        var harness = new Harness(Updates(Text("x"), Finish()));
+
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+                                 {
+                                     ModelId = ModelId,
+                                     Prompt = "Hi",
+                                     TopLogprobs = topLogprobs,
+                                     SamplingOptions = new SamplingOptions { TopK = 40 }
+                                 },
+                                 CancellationToken.None)
+                             .ToListAsync();
+
+        // The deferred client's body patches run on top of what the service sends, as they do on the real path.
+        var sent = AssertEx.NotNull(DeferredLlamaServerChatClient.ApplySamplingPassthrough(AssertEx.NotNull(harness.SentOptions)));
+        using var body = JsonDocument.Parse(await LlamaGrammarToolOffer.CaptureWireBodyAsync(sent, CancellationToken.None));
+        AssertEx.True(body.RootElement.GetProperty("logprobs").GetBoolean());
+        AssertEx.Equal(topLogprobs, body.RootElement.GetProperty("top_logprobs").GetInt32());
+        AssertEx.Equal(40, body.RootElement.GetProperty("top_k").GetInt32(), "the provider's patch composes with this one");
+        AssertEx.Equal(16_384, body.RootElement.GetProperty("max_completion_tokens").GetInt32(), "the default cap survives the clone");
+    }
+
+    [Test]
+    public async Task StreamAsync_WithoutTopLogprobs_RequestsNoneAndRelaysNone()
+    {
+        var harness = new Harness(Updates(Chunk(MultiByteChunkJson), Finish()));
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+
+        var options = AssertEx.NotNull(harness.SentOptions);
+        AssertEx.Null(options.RawRepresentationFactory, "the request stays byte-identical to one without the feature");
+        AssertEx.Empty(events.Where(static e => e.Type == DirectInferenceEventTypes.Logprobs), "entries a provider volunteers are not read unless asked for");
+    }
+
+    [Test]
+    [Arguments(CodexModelId)]
+    [Arguments(AzureDeploymentName)]
+    [Arguments(LocalExternalModelId)]
+    [Arguments(CloudExternalModelId)]
+    [Arguments(UnknownModelId)]
+    public async Task StreamAsync_TopLogprobsForAModelNotServedByLlamaCpp_IsRefusedWithoutCallingIt(string modelId)
+    {
+        var harness = new Harness(Updates(Text("never")));
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = modelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
+
+        var refusal = events.Single();
+        AssertEx.Equal(DirectInferenceEventTypes.Error, refusal.Type);
+        AssertEx.Equal(DirectInferenceErrorCodes.LogprobsLocalOnly, refusal.ErrorCode);
+        AssertEx.Null(harness.SentMessages);
+        AssertEx.Null(harness.Dispatcher.SlotHolder);
+    }
+
+    [Test]
+    public async Task StreamAsync_TopLogprobsForAnInstalledModelMappedToOllama_IsRefused()
+    {
+        var harness = new Harness(Updates(Text("never")));
+        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns(OllamaLocalModelProvider.OllamaProviderName);
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
+
+        AssertEx.Equal(DirectInferenceErrorCodes.LogprobsLocalOnly, events.Single().ErrorCode);
+    }
+
+    [Test]
+    public async Task StreamAsync_TopLogprobs_RelaysEntries_ToleratesGaps_AndKeepsUsageFromTheUsageEvent()
+    {
+        var reasoningChunk = Chunk(MultiByteChunkJson);
+        reasoningChunk.Contents = [new TextReasoningContent("thinking")];
+        var harness = new Harness(Updates(reasoningChunk, Chunk(MultiByteChunkJson), Text("no entry for this delta"), Usage(), Finish()));
+
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
+
+        var relayed = events.Where(static e => e.Type == DirectInferenceEventTypes.Logprobs).Select(static e => AssertEx.NotNull(e.Logprobs).Single()).ToList();
+        AssertEx.Equal(2, relayed.Count, "the delta with no entry adds nothing and fails nothing");
+        AssertEx.True(relayed[0].IsReasoning);
+        AssertEx.False(relayed[1].IsReasoning);
+        var merged = relayed[1];
+        AssertEx.Equal("🌏", merged.Text, "a merged multi-byte entry keeps its whole text");
+        AssertEx.Equal(-0.5f, merged.Logprob);
+        AssertEx.Equal("�", merged.Alternatives[0].Text, "an alternative can be a partial token");
+        AssertEx.Equal(-float.MaxValue, merged.Alternatives[1].Logprob, "llama-server's stand-in for a zero probability reads as a number");
+        AssertEx.Equal(3L, AssertEx.NotNull(events.Single(static e => e.Type == DirectInferenceEventTypes.Usage).Usage).OutputTokens);
+        AssertEx.Equal(DirectInferenceEventTypes.Done, events[^1].Type);
+    }
+
+    [Test]
+    public async Task ThePageStatesTheServersTopLogprobsLimit()
+    {
+        var source = await File.ReadAllTextAsync(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React",
+            "src",
+            "core",
+            "directInference",
+            "DirectInferenceModels.ts"));
+
+        var declaration = string.Create(CultureInfo.InvariantCulture, $"directInferenceMaxTopLogprobs = {DirectInferenceService.MaxTopLogprobs};");
+        AssertEx.True(source.Contains(declaration, StringComparison.Ordinal), $"DirectInferenceModels.ts must declare '{declaration}'");
     }
 
     private static async Task<List<DirectInferenceEvent>> RunPastTheDeadlineAsync(Harness harness)
@@ -393,6 +533,12 @@ public sealed class DirectInferenceServiceTests
         AssertEx.Equal(InvocationStatus.Failed, terminal.Status);
         AssertEx.Equal(FailureCategory.Timeout, terminal.FailureCategory);
     }
+
+    private static ChatResponseUpdate Chunk(string chunkJson) =>
+        new(ChatRole.Assistant, "text")
+        {
+            RawRepresentation = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(chunkJson))
+        };
 
     private static ChatResponseUpdate Text(string text) =>
         new(ChatRole.Assistant, text);

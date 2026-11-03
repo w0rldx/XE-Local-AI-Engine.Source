@@ -1,7 +1,7 @@
 import { SimpleGrid, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import { type DirectInferenceResult, tokensPerSecond } from "@/features/directInference/models/DirectInferenceModels";
+import { type DirectInferenceResult, tokensPerSecond } from "@/core/directInference/DirectInferenceModels";
 
 interface DirectInferenceMetricsProps {
 	result: DirectInferenceResult;

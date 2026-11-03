@@ -583,6 +583,7 @@
 		"knowledgeBase": "Knowledge Base",
 		"loadedModels": "Loaded",
 		"mcp": "MCP",
+		"modelLab": "Model Lab",
 		"modelRecommendations": "Model Recommendations",
 		"models": "Models",
 		"modelsInstalled": "Installed",
@@ -3902,6 +3903,23 @@
 			"cutOff": "The answer was cut off, at the output limit or because the context is full. Raise Max output tokens for the first; shorten the prompt or load the model with a larger context for the second.",
 			"errorTitle": "The request failed",
 			"gpuWorkExclusive": "A training run, evaluation or export holds the GPU. Try again when it has finished.",
+			"logprobs": {
+				"columns": {
+					"alternatives": "Alternatives",
+					"probability": "Probability",
+					"text": "Entry"
+				},
+				"countNote": "Entries: {{entries}}. Generated tokens the server reported: {{tokens}}.",
+				"entriesNote": "Entries are not tokens. Multi-byte text can merge several tokens into one entry, whose values belong to its last token, and entries can be missing, especially with thinking on. So the list may not match the text or the token counts.",
+				"explanation": "Probabilities the model assigned before sampling. They are model output, not an explanation of its reasoning, and a sampled pick can look unlikely.",
+				"field": "Token probabilities",
+				"fieldDescription": "Alternatives to show per entry, 1 to {{max}}. Leave empty for none. For installed llama.cpp models only.",
+				"leftOutAnswer": "Answer: showing the first {{kept}} entries; {{leftOut}} more were left out.",
+				"leftOutReasoning": "Thinking: showing the first {{kept}} entries; {{leftOut}} more were left out.",
+				"none": "The server returned no probabilities for this request.",
+				"thinking": "Thinking",
+				"title": "Token probabilities"
+			},
 			"maxOutputTokensDefault": "Default: {{tokens}}",
 			"maxOutputTokensThinking": "Thinking counts toward this limit.",
 			"metrics": {
@@ -6313,6 +6331,25 @@
 					"reasoning": "Reasoning"
 				}
 			}
+		},
+		"modelLab": {
+			"compare": {
+				"modelA": "Model A",
+				"modelB": "Model B",
+				"notEvidence": "A difference alone is not evidence of a meaningful effect. Output also changes for reasons unrelated to what you are comparing.",
+				"notIdentical": "Identical settings do not guarantee identical results: a model file, runtime variant or background load can still change the output.",
+				"notRun": "Not run: stopped before this model started.",
+				"run": "Run both",
+				"scope": "Both runs use this node and its current llama.cpp build, one after the other. Timings of a run can include loading its model.",
+				"seed": "Seed for both runs: {{seed}}",
+				"tab": "Same-prompt A/B",
+				"waiting": "Waiting for the first run to finish."
+			},
+			"inspectModel": "Installed model",
+			"modelsFailed": "The installed models could not be loaded.",
+			"noModels": "No installed llama.cpp model is available. Install one under Models first.",
+			"subtitle": "Compare two local models on one prompt, or inspect an installed model's file. Nothing is saved.",
+			"title": "Model Lab"
 		},
 		"models": {
 			"details": {

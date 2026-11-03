@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { compareInspections } from "@/features/models/models/GgufInspectComparison";
+import { compareInspections } from "@/core/models/inspect/GgufInspectComparison";
 
 function tensor(name: string, ggmlTypeId = 12, byteSize: number | null = 100, ggmlType: string | null = "Q4_K") {
 	return { name, shape: [256], ggmlType, ggmlTypeId, offset: 0, byteSize };

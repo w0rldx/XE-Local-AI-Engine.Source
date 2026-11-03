@@ -20,7 +20,7 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 	),
 }));
 
-import { ModelInspectPanel } from "@/features/models/components/ModelInspectPanel";
+import { ModelInspectPanel } from "@/core/models/inspect/ModelInspectPanel";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function tensor(name: string, shape: number[], ggmlType: string | null, byteSize: number | null) {

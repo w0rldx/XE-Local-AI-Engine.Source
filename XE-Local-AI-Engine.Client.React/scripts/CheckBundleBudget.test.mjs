@@ -6,17 +6,24 @@ import test from "node:test";
 
 import { evaluateBundleBudget, findEagerlyLoadedLazyAssets, measureJavaScriptAssets } from "./CheckBundleBudget.mjs";
 
-test("flags lazy editor and scene viewer assets that index.html loads eagerly", () => {
+test("flags lazy editor, scene viewer and model lab assets that index.html loads eagerly", () => {
 	const indexHtml = [
 		'<script type="module" crossorigin src="/assets/index-Ab12.js"></script>',
 		'<link rel="modulepreload" crossorigin href="/assets/preload-helper-Cd34.js">',
 		'<link rel="modulepreload" crossorigin href="/assets/monaco-editor-Ef56.js">',
 		'<link rel="modulepreload" crossorigin href="/assets/three-Gh78.js">',
+		'<link rel="modulepreload" crossorigin href="/assets/model-lab-Kl12.js">',
+		'<link rel="modulepreload" crossorigin href="/assets/ModelInspectPanel-Mn34.js">',
 		'<link rel="stylesheet" crossorigin href="/assets/index-Ij90.css">',
 	].join("\n");
 
-	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml), ["/assets/monaco-editor-Ef56.js", "/assets/three-Gh78.js"]);
-	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml.replace(/.*(monaco|three).*\n?/g, "")), []);
+	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml), [
+		"/assets/monaco-editor-Ef56.js",
+		"/assets/three-Gh78.js",
+		"/assets/model-lab-Kl12.js",
+		"/assets/ModelInspectPanel-Mn34.js",
+	]);
+	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml.replace(/.*(monaco|three|model-lab|ModelInspect).*\n?/g, "")), []);
 });
 
 test("recursively measures all deployed js/mjs", (context) => {
@@ -35,12 +42,15 @@ test("recursively measures all deployed js/mjs", (context) => {
 	writeFileSync(join(root, "assets", "MonacoCodeEditor-Ij90Kl12.js"), "i".repeat(7));
 	writeFileSync(join(root, "assets", "three-Mn34Op56.js"), "j".repeat(500));
 	writeFileSync(join(root, "assets", "BenchmarkSceneViewer-Qr78St90.js"), "k".repeat(3));
+	writeFileSync(join(root, "assets", "model-lab-Uv12Wx34.js"), "l".repeat(60));
+	writeFileSync(join(root, "assets", "ModelInspectPanel-Yz56Ab78.js"), "m".repeat(5));
 
 	const measurements = measureJavaScriptAssets(root);
 
 	assert.equal(measurements.applicationJavaScriptBytes, 150);
 	assert.equal(measurements.lazyEditorJavaScriptBytes, 1207);
 	assert.equal(measurements.lazySceneViewerJavaScriptBytes, 503);
+	assert.equal(measurements.lazyModelLabJavaScriptBytes, 65);
 	assert.deepEqual(evaluateBundleBudget(measurements, { applicationJavaScriptBytes: 149, lazyEditorJavaScriptBytes: 1207 }), [
 		{ name: "applicationJavaScriptBytes", limit: 149, actual: 150 },
 	]);
@@ -49,5 +59,8 @@ test("recursively measures all deployed js/mjs", (context) => {
 	]);
 	assert.deepEqual(evaluateBundleBudget(measurements, { lazySceneViewerJavaScriptBytes: 502 }), [
 		{ name: "lazySceneViewerJavaScriptBytes", limit: 502, actual: 503 },
+	]);
+	assert.deepEqual(evaluateBundleBudget(measurements, { lazyModelLabJavaScriptBytes: 64 }), [
+		{ name: "lazyModelLabJavaScriptBytes", limit: 64, actual: 65 },
 	]);
 });

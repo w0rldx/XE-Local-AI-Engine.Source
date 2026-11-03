@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { blockKind, hasExperts, tensorTypeRows } from "@/features/models/models/GgufInspectInsights";
+import { blockKind, hasExperts, tensorTypeRows } from "@/core/models/inspect/GgufInspectInsights";
 
 function tensor(name: string, ggmlType: string | null = "Q4_K", ggmlTypeId = 12, byteSize: number | null = 100) {
 	return { name, shape: [256], ggmlType, ggmlTypeId, offset: 0, byteSize };

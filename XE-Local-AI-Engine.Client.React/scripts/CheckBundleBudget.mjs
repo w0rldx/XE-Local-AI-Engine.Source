@@ -21,16 +21,20 @@ function collectJavaScriptAssets(root, directory = root) {
 const lazyEditorAssetPattern = /(^|\/)(monaco-editor|editor\.worker|MonacoCodeEditor)-[^/]*\.(?:js|mjs)$/;
 // `three` and the benchmark scene viewer, fetched only when a run of a sceneSpec rubric is opened. Same reasoning.
 const lazySceneViewerAssetPattern = /(^|\/)(three|BenchmarkSceneViewer)-[^/]*\.(?:js|mjs)$/;
+// The /model-lab route and the GGUF inspector it shares with the model details dialog, fetched only when one of them opens.
+const lazyModelLabAssetPattern = /(^|\/)(model-lab|ModelInspectPanel)-[^/]*\.(?:js|mjs)$/;
 
 export function measureJavaScriptAssets(distDirectory) {
 	const assets = collectJavaScriptAssets(distDirectory);
 	const sum = (subset) => subset.reduce((total, asset) => total + asset.bytes, 0);
 	const lazyEditorAssets = assets.filter((asset) => lazyEditorAssetPattern.test(asset.name));
 	const lazySceneViewerAssets = assets.filter((asset) => lazySceneViewerAssetPattern.test(asset.name));
+	const lazyModelLabAssets = assets.filter((asset) => lazyModelLabAssetPattern.test(asset.name));
 	return {
-		applicationJavaScriptBytes: sum(assets) - sum(lazyEditorAssets) - sum(lazySceneViewerAssets),
+		applicationJavaScriptBytes: sum(assets) - sum(lazyEditorAssets) - sum(lazySceneViewerAssets) - sum(lazyModelLabAssets),
 		lazyEditorJavaScriptBytes: sum(lazyEditorAssets),
 		lazySceneViewerJavaScriptBytes: sum(lazySceneViewerAssets),
+		lazyModelLabJavaScriptBytes: sum(lazyModelLabAssets),
 		largestAssets: assets.toSorted((left, right) => right.bytes - left.bytes).slice(0, 5),
 	};
 }
@@ -46,7 +50,9 @@ export function evaluateBundleBudget(measurements, budget) {
 export function findEagerlyLoadedLazyAssets(indexHtml) {
 	return [...indexHtml.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+)"/g)]
 		.map((match) => match[1])
-		.filter((url) => lazyEditorAssetPattern.test(url) || lazySceneViewerAssetPattern.test(url));
+		.filter(
+			(url) => lazyEditorAssetPattern.test(url) || lazySceneViewerAssetPattern.test(url) || lazyModelLabAssetPattern.test(url),
+		);
 }
 
 export function checkBundleBudget({
@@ -67,7 +73,7 @@ if (isMain) {
 		const appBudget = budget.applicationJavaScriptBytes;
 		process.stdout.write(`app: ${app} of ${appBudget} (${((appBudget - app) / 1_000).toFixed(1)} kB headroom)\n`);
 		process.stdout.write(
-			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy editor ${(measurements.lazyEditorJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy scene viewer ${(measurements.lazySceneViewerJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
+			`Bundle budget: app ${(measurements.applicationJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy editor ${(measurements.lazyEditorJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy scene viewer ${(measurements.lazySceneViewerJavaScriptBytes / 1_000_000).toFixed(2)} MB, lazy model lab ${(measurements.lazyModelLabJavaScriptBytes / 1_000_000).toFixed(2)} MB. Largest deployed scripts:\n` +
 				`${measurements.largestAssets.map((asset) => `  ${asset.name} ${(asset.bytes / 1_000).toFixed(1)} kB`).join("\n")}\n`,
 		);
 		if (violations.length > 0) {

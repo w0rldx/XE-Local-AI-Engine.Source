@@ -1,7 +1,13 @@
 import { HubConnectionState } from "@microsoft/signalr";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import type { DirectInferenceEvent, DirectInferenceRequest } from "@/features/directInference/models/DirectInferenceModels";
+import {
+	applyDirectInferenceEvent,
+	type DirectInferenceEvent,
+	type DirectInferenceRequest,
+	type DirectInferenceResult,
+	emptyDirectInferenceResult,
+} from "@/core/directInference/DirectInferenceModels";
 
 const chatHubPath = "chat/hub";
 
@@ -19,6 +25,7 @@ export async function streamDirectInference(
 		return;
 	}
 	const hub = acquireHubConnection(chatHubPath);
+	let onAbort: (() => void) | undefined;
 	try {
 		await hub.whenStarted;
 		if (signal.aborted) {
@@ -33,7 +40,7 @@ export async function streamDirectInference(
 				error: reject,
 				complete: resolve,
 			});
-			const onAbort = (): void => {
+			onAbort = (): void => {
 				subscription.dispose();
 				resolve();
 			};
@@ -41,6 +48,34 @@ export async function streamDirectInference(
 			signal.addEventListener("abort", onAbort, { once: true });
 		});
 	} finally {
+		// A caller can reuse the signal for its next run: a finished stream must not answer that run's abort.
+		if (onAbort) {
+			signal.removeEventListener("abort", onAbort);
+		}
 		hub.release();
+	}
+}
+
+/** Streams one request, reporting the result folded so far after every event; a hub failure becomes its error message unless the signal aborted. */
+export async function runDirectInference(
+	request: DirectInferenceRequest,
+	onResult: (result: DirectInferenceResult) => void,
+	signal: AbortSignal,
+): Promise<void> {
+	let accumulated = emptyDirectInferenceResult;
+	onResult(accumulated);
+	try {
+		await streamDirectInference(
+			request,
+			(event) => {
+				accumulated = applyDirectInferenceEvent(accumulated, event);
+				onResult(accumulated);
+			},
+			signal,
+		);
+	} catch (error) {
+		if (!signal.aborted) {
+			onResult({ ...accumulated, errorMessage: error instanceof Error ? error.message : String(error) });
+		}
 	}
 }

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { streamDirectInference } from "@/features/directInference/api/DirectInferenceApi";
+import { streamDirectInference } from "@/core/directInference/DirectInferenceApi";
 
 const hub = vi.hoisted(() => {
 	let start: () => void = () => undefined;

@@ -19,18 +19,24 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+// Aliased so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this file speaks.
+using ChatTokenLogProbabilityDetails = OpenAI.Chat.ChatTokenLogProbabilityDetails;
 
 /// <summary>Sends <c>[System?, User]</c> straight to the node's <see cref="IChatClient" /> and relays what comes back.</summary>
 /// <remarks>
 ///     The singleton client is the cloud/local router, so model routing and its egress checks are the chat path's own.
 ///     The request takes the node's invocation slot like a chat turn, but writes no conversation and no run row; the
 ///     terminal state it reports only closes the slot's live entry. Generation runs under the node's message deadline and,
-///     for an installed llama.cpp model whose request sets no limit of its own, a default output cap.
+///     for an installed llama.cpp model whose request sets no limit of its own, a default output cap. Token probabilities
+///     are requested and read only when the request asks, and refused for any other model.
 /// </remarks>
 public sealed class DirectInferenceService : IDirectInferenceService
 {
     /// <summary>The output cap for a llama.cpp request that sets none; thinking counts toward it. A test holds the Direct Inference page's copy to this value.</summary>
     internal const int DefaultMaxOutputTokens = 16_384;
+
+    /// <summary>The most alternatives one request may ask for per entry. Upstream sets no limit, so this is ours (OpenAI's documented maximum). A test holds the page's copy to it.</summary>
+    internal const int MaxTopLogprobs = 20;
 
     private readonly IChatClient _chatClient;
     private readonly IWorkerEventDispatcher _dispatcher;
@@ -94,7 +100,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
             AdditionalProperties = additionalProperties
         };
         InvocationSamplingRules.Apply(options, additionalProperties, sampling);
-        return StreamCoreAsync(modelId, messages, options, additionalProperties, cancellationToken);
+        return StreamCoreAsync(modelId, messages, options, additionalProperties, request.TopLogprobs, cancellationToken);
     }
 
     private static InvocationSamplingOptions? ValidateAndMapSampling(DirectInferenceRequest request)
@@ -121,6 +127,11 @@ public sealed class DirectInferenceService : IDirectInferenceService
             errors.AddRange(InvocationSamplingRules.Validate(sampling));
         }
 
+        if (request.TopLogprobs is < 1 or > MaxTopLogprobs)
+        {
+            errors.Add($"Token probabilities must be between 1 and {MaxTopLogprobs}.");
+        }
+
         return errors.Count > 0 ? throw new DirectInferenceInvalidRequestException(string.Join(" ", errors)) : sampling;
     }
 
@@ -128,6 +139,7 @@ public sealed class DirectInferenceService : IDirectInferenceService
         List<ChatMessage> messages,
         ChatOptions options,
         AdditionalPropertiesDictionary additionalProperties,
+        int? topLogprobs,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var invocationId = Guid.NewGuid();
@@ -146,6 +158,15 @@ public sealed class DirectInferenceService : IDirectInferenceService
         if (await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(modelId, _ggufModelStore, _modelTrustResolver, _localModelProviderResolver, cancellationToken))
         {
             ReasoningOptionsResolver.ApplyDefaultOutputCap(options, additionalProperties, DefaultMaxOutputTokens);
+            if (topLogprobs is { } count)
+            {
+                options = LlamaServerLogprobs.Request(options, count);
+            }
+        }
+        else if (topLogprobs is not null)
+        {
+            yield return ErrorEvent(DirectInferenceErrorCodes.LogprobsLocalOnly, "Token probabilities are available for installed llama.cpp models only.");
+            yield break;
         }
 
         await using var lease = await InvocationSlotAdmission.AcquireAsync(_dispatcher, AdmissionPackage(invocationId, modelId, messages), cancellationToken);
@@ -236,6 +257,15 @@ public sealed class DirectInferenceService : IDirectInferenceService
                             Type = DirectInferenceEventTypes.Delta,
                             TextDelta = string.IsNullOrEmpty(text) ? null : text,
                             ReasoningDelta = reasoning is { Length: > 0 } ? reasoning.ToString() : null
+                        };
+                    }
+
+                    if (topLogprobs is not null && LlamaServerLogprobs.Read(update.RawRepresentation) is { Count: > 0 } entries)
+                    {
+                        yield return new DirectInferenceEvent
+                        {
+                            Type = DirectInferenceEventTypes.Logprobs,
+                            Logprobs = ToLogprobEntries(entries, isReasoning: reasoning is { Length: > 0 })
                         };
                     }
 
@@ -346,6 +376,24 @@ public sealed class DirectInferenceService : IDirectInferenceService
             ReasoningTokens = details.ReasoningTokenCount,
             CachedInputTokens = details.CachedInputTokenCount
         };
+
+    private static DirectInferenceLogprobEntry[] ToLogprobEntries(IReadOnlyList<ChatTokenLogProbabilityDetails> entries, bool isReasoning) =>
+    [
+        .. entries.Select(entry => new DirectInferenceLogprobEntry
+        {
+            Text = entry.Token,
+            Logprob = entry.LogProbability,
+            IsReasoning = isReasoning,
+            Alternatives =
+            [
+                .. entry.TopLogProbabilities.Select(static alternative => new DirectInferenceLogprobAlternative
+                {
+                    Text = alternative.Token,
+                    Logprob = alternative.LogProbability
+                })
+            ]
+        })
+    ];
 
     private static long ElapsedMs(long startedTimestamp) =>
         (long)Stopwatch.GetElapsedTime(startedTimestamp).TotalMilliseconds;

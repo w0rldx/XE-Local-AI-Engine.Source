@@ -211,6 +211,8 @@ export const nodeRoutePaths = {
 	loadedModels: "/loaded-models",
 	// One explicit prompt to one model, streamed over the chat hub; nothing is saved. Ungated like usage.
 	directInference: "/direct-inference",
+	// Same-prompt A/B and the GGUF inspector, in their own lazy chunk; nothing is saved. Ungated like directInference.
+	modelLab: "/model-lab",
 	knowledgeBase: "/knowledge-base",
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.

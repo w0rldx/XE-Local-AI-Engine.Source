@@ -12,10 +12,10 @@ import type {
 import { getModelGgufInspectionOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { ModelInspectMetadataItem } from "@/features/models/components/ModelInspectMetadataItem";
-import { type ComparedGroup, compareInspections } from "@/features/models/models/GgufInspectComparison";
-import { shortTensorName, tensorSizeLabel, tensorTypeLabel } from "@/features/models/models/GgufInspectInsights";
-import { modelVariantLabel } from "@/features/models/models/LocalModelModel";
+import { ModelInspectMetadataItem } from "@/core/models/inspect/ModelInspectMetadataItem";
+import { type ComparedGroup, compareInspections } from "@/core/models/inspect/GgufInspectComparison";
+import { shortTensorName, tensorSizeLabel, tensorTypeLabel } from "@/core/models/inspect/GgufInspectInsights";
+import { modelVariantLabel } from "@/core/models/ModelVariants";
 
 type Inspection = XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufInspectionResponse;
 

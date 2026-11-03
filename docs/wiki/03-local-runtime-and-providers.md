@@ -85,6 +85,8 @@ This is the default dev + production runtime. It maps `ILocalModelProvider` onto
 
 See [the reference page](reference/03-llama-server-clients.md#deferred-chat--embedding-clients) for the rest of this section.
 
+**Token probabilities (`LlamaServerLogprobs`).** Direct Inference requests them through `ChatOptions.RawRepresentationFactory`, composed by `OpenAICompatibleRequestBody.Chain`, and reads `update.RawRepresentation`; the deferred client passes the same update object through. Measured on b12014: values are pre-sampling, so they do not move with temperature. An entry is not a token: partial UTF-8 tokens merge into one entry whose values belong to the last token, a stream omits the final entry and, with thinking on, some newline entries the non-streaming response keeps, and text can arrive with no entry. `top_logprobs` has no upstream limit (1000 returned 1000 alternatives), 0 and below return nothing with no error, and combining `logprobs` with tools and streaming is an HTTP 400. Exact values differ between llama.cpp builds on the same GGUF, so a pin bump can move them.
+
 #### Request-body patches on the llama.cpp path
 
 MEAI's OpenAI adapter maps only part of what llama-server accepts, so `DeferredLlamaServerChatClient` patches the outbound body through `OpenAICompatibleRequestBody.Chain`. Each patch is a no-op without its trigger, so every other request stays byte-identical, and a pre-existing `ChatOptions.RawRepresentationFactory` is composed rather than dropped.

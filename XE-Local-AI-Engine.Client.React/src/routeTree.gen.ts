@@ -37,6 +37,7 @@ import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocati
 import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
 import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
 import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
+import { Route as LayoutModelLabRouteImport } from './routes/_layout/model-lab'
 import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
 import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
@@ -200,6 +201,11 @@ const LayoutLoadedModelsRoute = LayoutLoadedModelsRouteImport.update({
 const LayoutMcpRoute = LayoutMcpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutModelLabRoute = LayoutModelLabRouteImport.update({
+  id: '/model-lab',
+  path: '/model-lab',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutModelRecommendationsRoute =
@@ -369,6 +375,7 @@ export interface FileRoutesByFullPath {
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
   '/mcp': typeof LayoutMcpRoute
+  '/model-lab': typeof LayoutModelLabRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
@@ -422,6 +429,7 @@ export interface FileRoutesByTo {
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
   '/mcp': typeof LayoutMcpRoute
+  '/model-lab': typeof LayoutModelLabRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
@@ -478,6 +486,7 @@ export interface FileRoutesById {
   '/_layout/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/_layout/loaded-models': typeof LayoutLoadedModelsRoute
   '/_layout/mcp': typeof LayoutMcpRoute
+  '/_layout/model-lab': typeof LayoutModelLabRoute
   '/_layout/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/_layout/models': typeof LayoutModelsRoute
   '/_layout/node-settings': typeof LayoutNodeSettingsRoute
@@ -535,6 +544,7 @@ export interface FileRouteTypes {
     | '/knowledge-base'
     | '/loaded-models'
     | '/mcp'
+    | '/model-lab'
     | '/model-recommendations'
     | '/models'
     | '/node-settings'
@@ -588,6 +598,7 @@ export interface FileRouteTypes {
     | '/knowledge-base'
     | '/loaded-models'
     | '/mcp'
+    | '/model-lab'
     | '/model-recommendations'
     | '/models'
     | '/node-settings'
@@ -643,6 +654,7 @@ export interface FileRouteTypes {
     | '/_layout/knowledge-base'
     | '/_layout/loaded-models'
     | '/_layout/mcp'
+    | '/_layout/model-lab'
     | '/_layout/model-recommendations'
     | '/_layout/models'
     | '/_layout/node-settings'
@@ -881,6 +893,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutMcpRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/model-lab': {
+      id: '/_layout/model-lab'
+      path: '/model-lab'
+      fullPath: '/model-lab'
+      preLoaderRoute: typeof LayoutModelLabRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/model-recommendations': {
       id: '/_layout/model-recommendations'
       path: '/model-recommendations'
@@ -1078,6 +1097,7 @@ interface LayoutRouteChildren {
   LayoutKnowledgeBaseRoute: typeof LayoutKnowledgeBaseRoute
   LayoutLoadedModelsRoute: typeof LayoutLoadedModelsRoute
   LayoutMcpRoute: typeof LayoutMcpRoute
+  LayoutModelLabRoute: typeof LayoutModelLabRoute
   LayoutModelRecommendationsRoute: typeof LayoutModelRecommendationsRoute
   LayoutModelsRoute: typeof LayoutModelsRoute
   LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
@@ -1125,6 +1145,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutKnowledgeBaseRoute: LayoutKnowledgeBaseRoute,
   LayoutLoadedModelsRoute: LayoutLoadedModelsRoute,
   LayoutMcpRoute: LayoutMcpRoute,
+  LayoutModelLabRoute: LayoutModelLabRoute,
   LayoutModelRecommendationsRoute: LayoutModelRecommendationsRoute,
   LayoutModelsRoute: LayoutModelsRoute,
   LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,

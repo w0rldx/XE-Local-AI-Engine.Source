@@ -1,16 +1,21 @@
 import { Alert, Badge, Button, Code, Group, Loader, Select, Stack, Tabs, Text } from "@mantine/core";
 import { IconArrowBackUp } from "@tabler/icons-react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse } from "@/core/api/generated";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { sameRepoVariants } from "@/core/models/ModelVariants";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ModelFitPanel } from "@/features/models/components/ModelFitPanel";
-import { ModelInspectPanel } from "@/features/models/components/ModelInspectPanel";
 import { ModelLaunchArgumentsPanel } from "@/features/models/components/ModelLaunchArgumentsPanel";
-import { type LocalModelViewModel, sameRepoVariants } from "@/features/models/models/LocalModelModel";
+import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
 import { buildKindOptions, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
+
+// Shared with Model Lab and measured under its lazy budget, so opening a model's details does not fetch it.
+const ModelInspectPanel = lazy(() =>
+	import("@/core/models/inspect/ModelInspectPanel").then((module) => ({ default: module.ModelInspectPanel })),
+);
 
 type LocalModelDetails = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse;
 
@@ -208,10 +213,12 @@ function ModelDetailsBody({
 			{showInspect ? (
 				<Tabs.Panel value="inspect" pt="md">
 					{tab === "inspect" ? (
-						<ModelInspectPanel
-							modelName={model.modelName}
-							compareCandidates={sameRepoVariants(model.modelName, installedModels)}
-						/>
+						<Suspense fallback={<Loader size="sm" />}>
+							<ModelInspectPanel
+								modelName={model.modelName}
+								compareCandidates={sameRepoVariants(model.modelName, installedModels)}
+							/>
+						</Suspense>
 					) : (
 						<span />
 					)}

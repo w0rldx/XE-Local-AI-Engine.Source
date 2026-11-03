@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DirectInferenceSamplingFields } from "@/features/directInference/components/DirectInferenceSamplingFields";
+import { DirectInferenceSamplingFields } from "@/core/directInference/DirectInferenceSamplingFields";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 describe("DirectInferenceSamplingFields", () => {
