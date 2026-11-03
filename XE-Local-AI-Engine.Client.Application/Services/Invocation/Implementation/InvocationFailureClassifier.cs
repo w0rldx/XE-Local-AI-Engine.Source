@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.ClientModel;
+using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -34,7 +35,7 @@ internal static class InvocationFailureClassifier
     private const string ProviderUnavailableMessage = "Provider unreachable.";
 
     private const string ResponseEndedMessage =
-        "The model server stopped before the answer was finished; it may have exited. Send the message again: a local model is reloaded automatically.";
+        "The model server stopped before the answer was finished; it may have exited. Send the message again.";
 
     // Surfaced when an endpoint's circuit breaker is open (recent consecutive transient failures): a fixed, path-free
     // message that tells the operator to retry shortly rather than reporting a hard provider outage.
@@ -68,7 +69,7 @@ internal static class InvocationFailureClassifier
     // A provider or gateway HTTP 404: nothing is installed locally, so the node's "not installed" text would mislead.
     private const string ProviderModelNotOfferedMessage = "The provider does not offer the selected model. Check the model id on the connection.";
 
-    // A provider or gateway HTTP 401/403. Fixed and path-free: only the sanitized body detail is appended, never the URL or credential.
+    // A provider or gateway HTTP 401, or a 403 whose code blames the credential. Fixed and path-free: only the sanitized body detail is appended, never the URL or credential.
     private const string ProviderAuthFailedMessage =
         "The provider rejected the credentials. Replace the API key, bearer token or secret headers in the connection settings.";
 
@@ -93,6 +94,12 @@ internal static class InvocationFailureClassifier
 
     private const string ProviderRateLimitedMessage = "The provider rate-limited this request";
 
+    // A period's quota, not a per-minute limit: told apart by the code, under the same category.
+    private const string ProviderQuotaExhaustedMessage = "The token quota for this connection is used up";
+
+    // From here a count of seconds stops being readable: 2678400 is a month.
+    private const int MinSecondsForReadableWait = 120;
+
     // Longer Retry-After values are dropped rather than cut: an HTTP-date is 29 characters, delta-seconds far fewer.
     private const int MaxRetryAfterLength = 64;
 
@@ -102,7 +109,7 @@ internal static class InvocationFailureClassifier
     private static readonly Regex ModelWordPattern = new(@"\bmodel\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
 
     private static readonly string[] ModelRefusalPhrases =
-        ["not assigned", "not allowed", "not available", "not enabled", "not permitted", "no access", "does not exist", "not found", "unknown"];
+        ["not assigned", "not approved", "not allowed", "not available", "not enabled", "not permitted", "no access", "does not exist", "not found", "unknown"];
 
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
@@ -158,6 +165,9 @@ internal static class InvocationFailureClassifier
             NotSupportedException notSupportedException => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
             InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>
                 new FailureClassification(FailureCategory.Unexpected, invalidOperationException.Message),
+            // Foundry's 429 reads like the generic path's. The status and header are on the SDK exception the translator wraps.
+            _ when FindInChain<AzureFoundryProviderException>(exception) is { Kind: AzureFoundryProviderErrorKind.Transport, InnerException: ClientResultException { Status: 429 } azureRateLimited } =>
+                new FailureClassification(FailureCategory.ProviderRateLimited, BuildRateLimitedMessage(azureRateLimited)),
             // The Azure translator already sanitized its auth text (mode-aware). Other Azure kinds keep their old landing, so the
             // ClientResultException arms below skip any chain that holds an AzureFoundryProviderException.
             _ when FindInChain<AzureFoundryProviderException>(exception) is { Kind: AzureFoundryProviderErrorKind.AuthFailed or AzureFoundryProviderErrorKind.AuthRequired } azureAuth =>
@@ -180,8 +190,10 @@ internal static class InvocationFailureClassifier
             _ when FindProviderClientResult(exception) is { Status: 401 } tokenRejected
                    && ReadBodyDetail(tokenRejected).Code == ExternalProviderErrorDetail.InvalidTokenCode =>
                 new FailureClassification(FailureCategory.ProviderAuthFailed, AppendDetail(ProviderTokenRejectedMessage, tokenRejected)),
-            _ when FindProviderClientResult(exception) is { Status: 401 or 403 } authFailed =>
+            _ when FindProviderClientResult(exception) is { Status: 401 or 403 } authFailed && (authFailed.Status == 401 || ReadBodyDetail(authFailed).ReportsBadCredential) =>
                 new FailureClassification(FailureCategory.ProviderAuthFailed, AppendDetail(ProviderAuthFailedMessage, authFailed)),
+            _ when FindProviderClientResult(exception) is { Status: 403 } denied =>
+                new FailureClassification(FailureCategory.ProviderAuthFailed, AppendDetail(ExternalProviderErrorDetail.DeniedMessage, denied)),
             _ when FindProviderClientResult(exception) is { Status: 404 } wrongSurface
                    && ReadBodyDetail(wrongSurface).Code == ExternalProviderErrorDetail.ApiNotSupportedCode =>
                 new FailureClassification(FailureCategory.ModelUnavailable, AppendDetail(ProviderApiSurfaceNotSupportedMessage, wrongSurface)),
@@ -346,22 +358,50 @@ internal static class InvocationFailureClassifier
         return null;
     }
 
-    /// <summary>The fixed rate-limit message, plus the response's <c>Retry-After</c> value when it is short and plain.</summary>
+    /// <summary>The fixed rate-limit or quota message, the response's <c>Retry-After</c> when it is short and plain, then the body's sanitized detail.</summary>
     /// <remarks>
-    ///     The value is quoted verbatim (delta-seconds or an HTTP-date) only when it fits <see cref="MaxRetryAfterLength" />
-    ///     and holds letters, digits, spaces and <c>,:+-.</c>; anything else is dropped, so a hostile header cannot inject text.
+    ///     The value is quoted (delta-seconds or an HTTP-date) only when it fits <see cref="MaxRetryAfterLength" /> and holds letters, digits, spaces and
+    ///     <c>,:+-.</c>; anything else is dropped, so a hostile header cannot inject text. A long delta is phrased in minutes, hours or days, and a body message
+    ///     counting the same seconds gives way to its reason, so the raw number does not come back in the quote.
     /// </remarks>
     private static string BuildRateLimitedMessage(ClientResultException exception)
     {
         string? retryAfter = null;
         _ = exception.GetRawResponse()?.Headers.TryGetValue("Retry-After", out retryAfter);
         retryAfter = retryAfter?.Trim();
+        if (string.IsNullOrEmpty(retryAfter)
+            || retryAfter.Length > MaxRetryAfterLength
+            || !retryAfter.All(static c => char.IsAsciiLetterOrDigit(c) || c is ' ' or ',' or ':' or '+' or '-' or '.'))
+        {
+            retryAfter = null;
+        }
 
-        return string.IsNullOrEmpty(retryAfter)
-               || retryAfter.Length > MaxRetryAfterLength
-               || !retryAfter.All(static c => char.IsAsciiLetterOrDigit(c) || c is ' ' or ',' or ':' or '+' or '-' or '.')
-            ? $"{ProviderRateLimitedMessage}."
-            : $"{ProviderRateLimitedMessage}, retry after {retryAfter}.";
+        var detail = ReadBodyDetail(exception);
+        var readableWait = ReadableWait(retryAfter);
+        if (readableWait is not null && detail.Message?.Contains("second", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            detail = detail with { Message = detail.Reason, Reason = null };
+        }
+
+        var limit = detail.Code == ExternalProviderErrorDetail.TokenQuotaExceededCode ? ProviderQuotaExhaustedMessage : ProviderRateLimitedMessage;
+        var wait = retryAfter is null ? string.Empty : $", retry after {readableWait ?? retryAfter}";
+        return detail.Text is { } text ? $"{limit}{wait}. ({text})" : $"{limit}{wait}.";
+    }
+
+    /// <summary>A delta-seconds wait of at least <see cref="MinSecondsForReadableWait" /> in minutes, hours or days, rounded up; otherwise <see langword="null" />.</summary>
+    private static string? ReadableWait(string? retryAfter)
+    {
+        if (!long.TryParse(retryAfter, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) || seconds < MinSecondsForReadableWait)
+        {
+            return null;
+        }
+
+        return seconds switch
+        {
+            < 2 * 3600 => $"about {Math.Ceiling(seconds / 60d)} minutes",
+            < 2 * 86400 => $"about {Math.Ceiling(seconds / 3600d)} hours",
+            _ => $"about {Math.Ceiling(seconds / 86400d)} days"
+        };
     }
 
     /// <summary>A fixed server-error message naming the HTTP status, plus the response reason phrase when it is short and plain.</summary>

@@ -197,6 +197,14 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                         return SendFailureKind.NotRetryable;
                     }
 
+                    // A used-up quota with no wait named: a blind retry cannot help. One that names a short wait is at the end of its period, so it waits like any 429.
+                    if (statusError.Status == 429
+                        && detail.Code == ExternalProviderErrorDetail.TokenQuotaExceededCode
+                        && ProviderRetryAfter.Find(statusError, DateTimeOffset.UnixEpoch) is null)
+                    {
+                        return SendFailureKind.NotRetryable;
+                    }
+
                     return statusError.Status == 429 ? SendFailureKind.RateLimited : SendFailureKind.Transient;
             }
         }

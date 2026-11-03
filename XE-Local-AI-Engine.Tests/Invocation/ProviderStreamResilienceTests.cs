@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -20,6 +21,9 @@ public sealed class ProviderStreamResilienceTests
 {
     private const string UnsupportedOperationBody = """{"error":{"message":"The requested operation is unsupported."}}""";
     private const string NoRouteBody = """{"error":{"code":"apim_policy_error","message":"Unable to match incoming request to an operation."}}""";
+
+    private const string QuotaBody = """{"error":"token_quota_exceeded","message":"Token limit is exceeded. Try again in 2678400 seconds.","reason":"project-quota"}""";
+    private const string TokenRateBody = """{"error":"token_rate_limit_exceeded","message":"Token limit is exceeded. Try again in 7 seconds.","reason":"rate-limit"}""";
 
     private const string TpmBody = """{"error":"unsupported_tpm_configuration","message":"TokensPerMinute must be one of 10000, 30000."}""";
 
@@ -368,6 +372,101 @@ public sealed class ProviderStreamResilienceTests
         AssertEx.Equal(expected: 1, callCount.Value);
         AssertEx.Equal(expected: 0, snapshot.ProviderRetries);
         AssertEx.Equal(expected: 0, time.Delays.Count);
+    }
+
+    // With the SDK's own retries off, Foundry's 429 relies on this seam: the translator's wrapper must not hide the status or the header.
+    [Test]
+    [Arguments("7", 2, 1)]
+    [Arguments("120", 1, 0)]
+    public async Task ExecuteStreamingAsync_WhenFoundryIsRateLimited_HonoursRetryAfterThroughTheTranslatedException(string retryAfter, int expectedCalls, int expectedDelays)
+    {
+        var time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            MaxRetryAfterSeconds = 30,
+            CircuitBreakerEnabled = false
+        }, time, maxRetries: 2);
+
+        IAsyncEnumerable<int> Attempt(CancellationToken _)
+        {
+            callCount.Value++;
+            return callCount.Value == 1 || retryAfter == "120" ? ThrowFoundry429(retryAfter) : Yield(1);
+        }
+
+        if (retryAfter == "120")
+        {
+            await AssertEx.ThrowsAsync<AzureFoundryProviderException>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", Attempt, CancellationToken.None)));
+        }
+        else
+        {
+            await CollectAsync(sut.ExecuteStreamingAsync("endpoint", Attempt, CancellationToken.None));
+        }
+
+        AssertEx.Equal(expectedCalls, callCount.Value);
+        AssertEx.Equal(expectedDelays, time.Delays.Count);
+    }
+
+    private static async IAsyncEnumerable<int> ThrowFoundry429(string? retryAfter, string? body = null)
+    {
+        await Task.Yield();
+        yield return await Task.FromException<int>(new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport,
+            "The Azure Foundry endpoint returned an error (HTTP 429).",
+            body is null ? FakeClientResultException.Create(429, retryAfter) : FakeClientResultException.Create(429, retryAfter, "Too Many Requests", body)));
+    }
+
+    // A monthly quota's wait is weeks: one call, no wait, no retry recorded, and the breaker stays closed, on both paths. Without a header a quota is still not retried blindly.
+    [Test]
+    [Arguments("2678400", false)]
+    [Arguments("2678400", true)]
+    [Arguments(null, false)]
+    [Arguments(null, true)]
+    public async Task ExecuteStreamingAsync_WhenTheQuotaIsUsedUp_FailsAtOnceAndKeepsTheBreakerClosed(string? retryAfter, bool foundry)
+    {
+        var time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(BreakerAtTwo(), time, maxRetries: 2);
+        var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1),
+            () => foundry ? ThrowFoundry429(retryAfter, QuotaBody) : ThrowStatus(429, retryAfter, QuotaBody));
+        ProviderCallEfficiencySnapshot snapshot;
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            for (var send = 0; send < 3; send++)
+            {
+                await AssertEx.ThrowsAsync<Exception>(() => CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None)));
+            }
+
+            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+        }
+
+        AssertEx.Equal(expected: 3, callCount.Value, "one call per send, and no send was fast-failed by the breaker");
+        AssertEx.Equal(expected: 0, snapshot.ProviderRetries);
+        AssertEx.Equal(expected: 0, time.Delays.Count);
+    }
+
+    // A per-minute limit is the case Retry-After exists for, and it still retries, with or without the header.
+    [Test]
+    [Arguments("7", 2, 1)]
+    [Arguments(null, 2, 0)]
+    public async Task ExecuteStreamingAsync_WhenTheTokenRateLimitHits_StillRetries(string? retryAfter, int expectedCalls, int expectedDelays)
+    {
+        var time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = CreateSut(new ProviderResilienceOptions
+        {
+            BaseDelayMilliseconds = 0,
+            CircuitBreakerEnabled = false
+        }, time, maxRetries: 2);
+
+        var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint",
+            FactoryFailing(failures: 1, callCount, () => Yield(1), () => ThrowStatus(429, retryAfter, TokenRateBody)),
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, result.Count);
+        AssertEx.Equal(expectedCalls, callCount.Value);
+        AssertEx.Equal(expectedDelays, time.Delays.Count);
     }
 
     [Test]

@@ -33,7 +33,7 @@ API keys and secrets are stored encrypted on this computer and are never shown a
    - **Base URL:** the endpoint's OpenAI-compatible address, with or without the trailing `/v1`.
    - **API key or bearer token:** optional. Leave it blank for a server that needs no authentication.
    - **Custom headers:** only if your gateway asks for extra headers, such as a project or tenant header. The
-     enterprise AI gateway template starts with a `project-id` row; enter its value, rename it, or remove it. Mark a
+     enterprise AI gateway template starts with an `x-project-id` row; enter its value, rename it, or remove it. Mark a
      value **secret** to store it write-only.
 3. Choose the **Trust** of the connection (see below).
 4. Click **Test connection**. The app asks the endpoint for its model list. If the endpoint lists models, pick one
@@ -47,8 +47,8 @@ API keys and secrets are stored encrypted on this computer and are never shown a
 Pick **Enterprise AI gateway**. Enter the gateway's OpenAI address, which usually ends in `/openai/v1`, for example
 `https://<gateway host>/<path>/openai/v1`. If your requests get no answer, check this address first: a gateway answers
 only on the exact path it publishes. Put your gateway token in **API key or bearer token**; the app sends it as
-`Authorization: Bearer`. The template adds one empty header row: if the gateway also wants a project or tenant
-header, enter the name and value your gateway team gives you; otherwise remove the row. Gateways usually run hosted
+`Authorization: Bearer`. The template adds one `x-project-id` header row with no value: enter the project id your gateway team
+gives you, rename the row if the gateway uses another header, or remove it if the gateway needs none. Gateways usually run hosted
 models, so leave **Trust** on **Cloud**.
 
 ### Azure OpenAI with an API key

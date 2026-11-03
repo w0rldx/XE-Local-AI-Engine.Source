@@ -25,5 +25,8 @@ public enum FakeOpenAiGatewayFailure
     PermissionDenied,
 
     /// <summary>A 401 for an expired or refused bearer token.</summary>
-    InvalidToken
+    InvalidToken,
+
+    /// <summary>A 429 for a used-up monthly token quota, in this gateway's shape, whose <c>Retry-After</c> runs to the end of the month.</summary>
+    TokenQuotaExceeded
 }

@@ -151,6 +151,45 @@ public sealed class CloudSettingsEndpointTests
         AssertEx.Equal(128_000, AssertEx.NotNull(settings.AzureFoundry).Models.Single().ContextLength);
     }
 
+    // The store refuses such a host with an ArgumentException, which would surface as an unexplained 500.
+    [Test]
+    public async Task SaveCloudSettings_WhenTheHostIsNotAllowed_Returns400NamingTheFix()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        await using var factory = CreateFactory(cloudCredentialStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(CreateSaveRequestWithContextLength(contextLength: null) with
+        {
+            Endpoint = "https://contoso.azure-api.net/gw"
+        });
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, "allowed host suffix");
+        await cloudCredentialStore.DidNotReceive().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenTheHostIsCoveredByAnOperatorSuffix_Saves()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        await using var factory = CreateFactory(cloudCredentialStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(CreateSaveRequestWithContextLength(contextLength: null) with
+        {
+            Endpoint = "https://contoso.azure-api.net/gw",
+            AdditionalAllowedHostSuffixes = [".azure-api.net"]
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private static SaveCloudSettingsRequest CreateSaveRequestWithContextLength(int? contextLength)
     {
         return new SaveCloudSettingsRequest

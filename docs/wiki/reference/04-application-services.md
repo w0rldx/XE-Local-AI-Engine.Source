@@ -509,7 +509,7 @@ segment (`ProviderStreamResilience`). A transport failure, a 5xx and a 429 are r
 OpenAI SDK's `ClientResultException` anywhere in the exception chain; other 4xx are not. A 429 never counts toward
 the circuit breaker, because rate limiting is not an outage. A 429 or 503 carrying `Retry-After` (delta-seconds or
 an HTTP-date) waits exactly that long instead of the exponential backoff, up to `MaxRetryAfterSeconds` (default 30);
-a longer request is not retried, so the send fails at once with the classifier's "retry after" message. `MaxToolIterationsPerRequest` and
+a longer request is not retried, so the send fails at once with the classifier's "retry after" message. A `token_quota_exceeded` 429 naming no wait is not retried either. `MaxToolIterationsPerRequest` and
 `MaxConsecutiveInvalidToolCallsPerTool` are the node-global tool-pipeline ceilings that the DI-wired
 `FunctionInvokingChatClient` and `ToolArgumentRepairAIFunction` apply; they ride the record as read-only
 reference values, so one place documents the whole turn's bounds.

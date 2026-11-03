@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
@@ -586,7 +588,15 @@ public sealed partial class InvocationRunner
             var toolsAreTheCause = toolBudgetDefinitions.Count > 0
                                    && !_contextBudgeter.Budget(messages, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, package.ResolvedSystemPrompt, [], resolvedModel)
                                                        .ExceedsBudget;
-            throw new ContextBudgetExceededException(toolsAreTheCause ? ToolOfferExceedsWindowMessage : ContextBudgetExceededMessage);
+            if (toolsAreTheCause)
+            {
+                throw new ContextBudgetExceededException(ToolOfferExceedsWindowMessage);
+            }
+
+            // The compaction service summarizes only on an installed local chat model, so the advice is offered only where it can work.
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var localChatModel = await scope.ServiceProvider.GetRequiredService<ILocalDefaultChatModelResolver>().ResolveAsync(persistedDefault: null, CancellationToken.None);
+            throw new ContextBudgetExceededException(localChatModel is null ? ContextBudgetExceededNoLocalModelMessage : ContextBudgetExceededMessage);
         }
 
         if (!gate.NoticeEmitted)

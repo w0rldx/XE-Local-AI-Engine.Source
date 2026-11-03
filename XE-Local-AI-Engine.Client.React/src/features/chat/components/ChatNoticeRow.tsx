@@ -57,6 +57,7 @@ function noticeIcon(noticeKind: string) {
 		case "CloudToolsWithheld":
 			return IconCloudOff;
 		case "OutputLimitReached":
+		case "AnswerIncomplete":
 			return IconCut;
 		case "KnowledgeUnavailable":
 			return IconBookOff;
@@ -107,6 +108,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.cloudToolsWithheld";
 		case "OutputLimitReached":
 			return "chat.notices.outputLimitReached";
+		case "AnswerIncomplete":
+			return "chat.notices.answerIncomplete";
 		case "KnowledgeUnavailable":
 			return "chat.notices.knowledgeUnavailable";
 		case "AttachmentShortened":
@@ -131,7 +134,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 }
 
 // Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
-// StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage,
+// StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, AnswerIncompleteNoticeMessage,
+// StreamEndedEmptyNoticeMessage, ToolCallInReasoningNoticeMessage,
 // ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage, and
 // NodeChatStreamService's AttachmentsNotSentNoticeMessage and AttachmentsTruncatedNoticeMessage, ChatTurnResolution's
 // AgentUnavailableNoticeMessage, the retired QueuedBehindParkedTurn text kept for persisted replies, HumanPark's
@@ -148,6 +152,9 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"The model stopped while thinking before it could answer; its thoughts are kept above.":
 		"chat.notices.stoppedWhileThinkingText",
 	"The answer stopped at the length limit before the model finished.": "chat.notices.outputLimitReachedText",
+	"The answer ended without a finish signal from the provider, so it may be incomplete.": "chat.notices.answerIncompleteText",
+	"The provider ended the stream without an answer or a finish signal. A gateway may have answered a streaming request with a plain JSON body.":
+		"chat.notices.streamEndedEmptyText",
 	"run_python was not offered because Compute tools is turned off. Turn it on in Node Settings, Features.":
 		"chat.notices.computeWithheldText",
 	"The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.":

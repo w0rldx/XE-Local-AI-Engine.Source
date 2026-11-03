@@ -7,6 +7,8 @@ using System.Text.Json;
 using Azure;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     Wraps the inner chat client so an Azure <see cref="RequestFailedException" />, the v1 surface's
@@ -14,9 +16,9 @@ using Microsoft.Extensions.AI;
 ///     <see cref="AzureFoundryProviderException" />.
 /// </summary>
 /// <remarks>
-///     The message is sanitized: no API key or Entra token can leak into it, and it never carries a stack trace or the exception's
+///     The message is sanitized: a body echoing one of the connection's credentials is dropped whole, and it never carries a stack trace or the exception's
 ///     full content. Content-filter blocks (HTTP 400, <c>content_filter</c>) and 401/403 auth failures map to their own
-///     <see cref="AzureFoundryProviderErrorKind" /> values; anything else is <see cref="AzureFoundryProviderErrorKind.Transport" />.
+///     <see cref="AzureFoundryProviderErrorKind" /> values, a 403 worded as a denial unless its code blames the credential; anything else is <see cref="AzureFoundryProviderErrorKind.Transport" />.
 ///     Disposal is left to the base <see cref="DelegatingChatClient" />: the inner MEAI client owns the pipeline and this wrapper
 ///     owns nothing disposable. Mapping table and the AADSTS line-selection rule: docs/wiki/03-local-runtime-and-providers.md, "Azure Foundry error translation".
 /// </remarks>
@@ -24,14 +26,22 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
 {
     private const string ContentFilterErrorCode = "content_filter";
     private const int MaxSanitizedDetailLength = 300;
+
+    // A 403 for the identity itself, in Azure's own body or, with an identity configured, a bare one. A gateway's backend gets the same refusal, so its admin is named too.
+    private const string RbacDeniedMessage =
+        "Azure Foundry denied this identity the model or operation. Check its RBAC role on the resource, or ask the gateway's admin if a gateway fronts it.";
+
     private static readonly char[] NewlineSeparators = ['\n', '\r'];
 
     private readonly string _authFailedMessage;
+    private readonly string _bareDenialMessage;
 
-    /// <param name="authMode">The connection's auth mode; picks the 401/403 text (API key versus a rejected bearer token).</param>
-    public AzureFoundryErrorTranslatingChatClient(IChatClient innerClient, AzureFoundryAuthMode authMode = AzureFoundryAuthMode.ApiKey)
+    /// <param name="authMode">The connection's auth mode; picks the credential text (API key versus a rejected bearer token) and what a 403 with no readable reason says.</param>
+    /// <param name="sentSecrets">The connection's credentials. A body echoing one is neither quoted nor kept on the exception chain.</param>
+    public AzureFoundryErrorTranslatingChatClient(IChatClient innerClient, AzureFoundryAuthMode authMode = AzureFoundryAuthMode.ApiKey, IReadOnlyList<string>? sentSecrets = null)
         : base(innerClient)
     {
+        SentSecrets = sentSecrets ?? [];
         _authFailedMessage = authMode switch
         {
             AzureFoundryAuthMode.EntraId =>
@@ -40,7 +50,10 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
                 "Azure Foundry rejected the managed-identity bearer token (check the identity's RBAC role and the token scope).",
             _ => "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role)."
         };
+        _bareDenialMessage = authMode == AzureFoundryAuthMode.ApiKey ? ExternalProviderErrorDetail.DeniedMessage : RbacDeniedMessage;
     }
+
+    internal IReadOnlyList<string> SentSecrets { get; }
 
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
@@ -114,6 +127,11 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
     /// </remarks>
     private AzureFoundryProviderException Translate(RequestFailedException exception)
     {
+        if (exception.GetRawResponse()?.Content is { } content && SecretEchoGuardHandler.Echoes(content.ToMemory(), SentSecrets))
+        {
+            return TranslateEcho(exception.Status);
+        }
+
         if (exception.Status == 400
             && string.Equals(exception.ErrorCode, ContentFilterErrorCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -125,7 +143,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         if (exception.Status is 401 or 403)
         {
             return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed,
-                _authFailedMessage,
+                BuildAuthFailedMessage(exception.Status, exception.GetRawResponse()?.Content),
                 exception);
         }
 
@@ -143,6 +161,11 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
     /// </remarks>
     private AzureFoundryProviderException Translate(ClientResultException exception)
     {
+        if (exception.GetRawResponse()?.Content is { } content && SecretEchoGuardHandler.Echoes(content.ToMemory(), SentSecrets))
+        {
+            return TranslateEcho(exception.Status);
+        }
+
         var detail = ExtractErrorBodyDetail(exception.GetRawResponse()?.Content);
 
         if (exception.Status == 400 && string.Equals(detail.Code, ContentFilterErrorCode, StringComparison.OrdinalIgnoreCase))
@@ -155,13 +178,38 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         if (exception.Status is 401 or 403)
         {
             return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed,
-                _authFailedMessage,
+                BuildAuthFailedMessage(exception.Status, exception.GetRawResponse()?.Content),
                 exception);
         }
 
         return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport,
             BuildTransportMessage(exception.Status, detail.Message),
             exception);
+    }
+
+    // A body echoing a credential: fixed text only, and no inner exception, as the SDK's message quotes the body raw into logs and a 429 is quoted from it later.
+    // A 429 that does this also loses its retry and its rate-limited category, which is the safe side of a gateway this broken.
+    private AzureFoundryProviderException TranslateEcho(int status)
+    {
+        return status is 401 or 403
+            ? new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed, BuildAuthFailedMessage(status, content: null))
+            : new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport, BuildTransportMessage(status, detailMessage: null));
+    }
+
+    // Only a 401 or a credential code blames the credential; a gateway in front of the deployment denies for its own reasons, which a new key would not change.
+    // The strict grammar, not SanitizeSingleLine: a 401 or 403 body is the likeliest to echo what was sent.
+    private string BuildAuthFailedMessage(int status, BinaryData? content)
+    {
+        var detail = ExternalProviderErrorDetail.Parse(content?.ToMemory() ?? default);
+        var message = detail switch
+        {
+            _ when status == 401 || detail.ReportsBadCredential => _authFailedMessage,
+            { Code: ExternalProviderErrorDetail.PermissionDeniedCode } => RbacDeniedMessage,
+            { Text: null } => _bareDenialMessage,
+            _ => ExternalProviderErrorDetail.DeniedMessage
+        };
+
+        return detail.Text is { } text ? $"{message} ({text})" : message;
     }
 
     private static string BuildTransportMessage(int status, string? detailMessage)

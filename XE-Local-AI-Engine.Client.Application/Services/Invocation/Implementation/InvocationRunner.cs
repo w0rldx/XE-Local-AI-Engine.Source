@@ -81,6 +81,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // A turn whose answer ended on the output cap or the window rather than where the model chose to stop.
     private const string OutputLimitReachedNoticeMessage = "The answer stopped at the length limit before the model finished.";
 
+    // A remote stream that ended cleanly with text and no finish reason. The SPA localizes this exact sentence; change both together.
+    private const string AnswerIncompleteNoticeMessage = "The answer ended without a finish signal from the provider, so it may be incomplete.";
+
+    // The EmptyAnswer variant for a remote stream with neither text nor a finish reason. The SDK reads a whole JSON body as such a stream. The SPA localizes it.
+    private const string StreamEndedEmptyNoticeMessage =
+        "The provider ended the stream without an answer or a finish signal. A gateway may have answered a streaming request with a plain JSON body.";
+
     private const string CpuFallbackNoticeMessage = "This answer ran on the CPU although a GPU was expected, so it is slower.";
 
     /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
@@ -94,6 +101,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // the two-pass truncation. A fixed, path-free constant carrying no token counts, model names, or content.
     private const string ContextBudgetExceededMessage =
         "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
+
+    // The same hard stop on a node with no local chat model, where compaction refuses to run.
+    private const string ContextBudgetExceededNoLocalModelMessage =
+        "Conversation exceeds the model's context window even after truncation — Start a new chat, or switch to a larger-context model.";
 
     // The hard stop when the cause is the tool offer, which compacting cannot shrink.
     private const string ToolOfferExceedsWindowMessage =
@@ -980,7 +991,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             await RunSegmentAsync(loop, package, resolvedModel, transport, stream, turnPolicy, invocationToken);
         } while (loop.PendingApprovals.Count > 0 || loop.RepromptPending);
 
-        await CompleteSingleAgentTurnAsync(loop, package, transport, stream, outputCap, invocationToken);
+        await CompleteSingleAgentTurnAsync(loop, package, transport, stream, outputCap, _localRuntimeWarmer.IsRemoteModel(resolvedModel), invocationToken);
     }
 
     // A small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps

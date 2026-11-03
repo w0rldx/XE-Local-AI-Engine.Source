@@ -49,8 +49,8 @@ public enum FailureCategory
     ContextWindowExceeded = 11,
 
     /// <summary>
-    ///     The provider or gateway rejected the connection's credentials (HTTP 401/403, or a failed Azure sign-in). The
-    ///     operator must replace the API key or bearer token, or sign in again.
+    ///     The provider or gateway refused the connection (HTTP 401/403, or a failed Azure sign-in). The message says whether to
+    ///     replace the credential or names a denial no new key would change.
     /// </summary>
     ProviderAuthFailed = 12,
 

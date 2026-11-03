@@ -164,6 +164,88 @@ public sealed class ActiveCloudChatClientFactoryTests
         AssertEx.True(harness.Factory.IsCloudProviderSelected());
     }
 
+    // Every gateway key has one length, so a rotated key or an edited project header must still rebuild the client on the next send.
+    [Test]
+    [Arguments("key")]
+    [Arguments("header-value")]
+    [Arguments("header-name")]
+    [Arguments("header-secret-flag")]
+    [Arguments("entra-secret")]
+    public void TryCreate_WhenASecretOrHeaderChangesWithoutChangingLength_RebuildsClient(string edit)
+    {
+        using var first = new StubChatClient();
+        using var second = new StubChatClient();
+        var original = new StoredAzureFoundryConnection
+        {
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = AzureFoundryAuthMode.ApiKey,
+            ApiKey = "agw_aaaaaaaa",
+            EntraClientSecret = "secret-a",
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "x-project-id",
+                    Value = "proj-000001"
+                }
+            ],
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        };
+        var edited = edit switch
+        {
+            "key" => original with
+            {
+                ApiKey = "agw_bbbbbbbb"
+            },
+            "entra-secret" => original with
+            {
+                EntraClientSecret = "secret-b"
+            },
+            "header-value" => original with
+            {
+                Headers = [original.Headers[0] with { Value = "proj-000002" }]
+            },
+            "header-secret-flag" => original with
+            {
+                Headers = [original.Headers[0] with { IsSecret = true }]
+            },
+            _ => original with
+            {
+                Headers = [original.Headers[0] with { Name = "y-project-id" }]
+            }
+        };
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            DefaultModelName = "gpt-4o"
+        });
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(new StoredCloudProviderConfig
+        {
+            AzureFoundry = original
+        });
+        harness.AzureFactory.Create(original, "gpt-4o").Returns(first);
+        harness.AzureFactory.Create(edited, "gpt-4o").Returns(second);
+
+        var factory = harness.Factory;
+        factory.TryCreateActiveCloudChatClient(null, out var before);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(new StoredCloudProviderConfig
+        {
+            AzureFoundry = edited
+        });
+        factory.InvalidateSelectionCache();
+        factory.TryCreateActiveCloudChatClient(null, out var after);
+
+        AssertEx.True(ReferenceEquals(first, before));
+        AssertEx.True(ReferenceEquals(second, after), "The client built for the old secret or header was reused.");
+    }
+
     [Test]
     public void TryCreate_WhenSelectionUnchanged_ReusesCachedClient_WithoutRebuildingOrReReadingStore()
     {

@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
@@ -410,5 +412,150 @@ public sealed class InvocationRunnerAnswerTests
 
         AssertEx.Equal("reasoning:plan|text:Let me search. |tool:Requested|tool:Completed|text:done",
             string.Join('|', order));
+    }
+
+    private const string ExternalModel = "ext:demo-gateway/gateway-demo-model";
+    private const string IncompleteNotice = "The answer ended without a finish signal from the provider, so it may be incomplete.";
+    private const string NoFinishEmptyNotice = "The provider ended the stream without an answer or a finish signal. A gateway may have answered a streaming request with a plain JSON body.";
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> UpdatesThen(IAsyncEnumerable<AgentResponseUpdate> first, params AgentResponseUpdate[] then)
+    {
+        await foreach (var update in first)
+        {
+            yield return update;
+        }
+
+        foreach (var update in then)
+        {
+            yield return update;
+            await Task.Yield();
+        }
+    }
+
+    private static AgentResponseUpdate Finish(string reason)
+    {
+        return new AgentResponseUpdate(ChatRole.Assistant, [])
+        {
+            FinishReason = new ChatFinishReason(reason)
+        };
+    }
+
+    private static Task<IWorkerEventDispatcher> RunExternalAsync(IAsyncEnumerable<AgentResponseUpdate> updates)
+    {
+        return RunModelAsync(updates, ExternalModel, activeCloudFactory: null);
+    }
+
+    private static async Task<IWorkerEventDispatcher> RunModelAsync(IAsyncEnumerable<AgentResponseUpdate> updates, string model, IActiveCloudChatClientFactory? activeCloudFactory)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: updates, activeCloudFactory: activeCloudFactory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(model).Build());
+        return dispatcher;
+    }
+
+    private static Task AssertIncompleteNoticeAsync(IWorkerEventDispatcher dispatcher, int count)
+    {
+        return dispatcher.Received(count).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.AnswerIncomplete && payload.Message == IncompleteNotice));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenARemoteStreamEndsWithTextAndNoFinishReason_FlagsTheAnswerIncomplete()
+    {
+        var dispatcher = await RunExternalAsync(CreateUpdates("partial", " stream"));
+
+        await AssertIncompleteNoticeAsync(dispatcher, 1);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheCloudSelectedStreamEndsWithNoFinishReason_FlagsTheAnswerIncomplete()
+    {
+        var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        cloudFactory.IsCloudProviderSelected("gpt-4o").Returns(true);
+
+        var dispatcher = await RunModelAsync(CreateUpdates("partial"), "gpt-4o", cloudFactory);
+
+        await AssertIncompleteNoticeAsync(dispatcher, 1);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenARemoteStreamFinishes_DoesNotFlagIt()
+    {
+        var dispatcher = await RunExternalAsync(ReasoningThenContentFinishing("stop", "thought", "Hello."));
+
+        await AssertIncompleteNoticeAsync(dispatcher, 0);
+    }
+
+    // The reasoning and think-tag rewriters flush held text after the terminal chunk, in an update that carries no reason of its own.
+    [Test]
+    public async Task RunAsync_WhenTextIsFlushedAfterTheFinishReason_DoesNotFlagIt()
+    {
+        var dispatcher = await RunExternalAsync(UpdatesThen(CreateUpdates("Hello"), Finish("stop"), new AgentResponseUpdate(ChatRole.Assistant, " held")));
+
+        await AssertIncompleteNoticeAsync(dispatcher, 0);
+    }
+
+    // A tool round's own finish reason must not vouch for the answer that follows it.
+    [Test]
+    public async Task RunAsync_WhenOnlyTheToolRoundFinished_FlagsTheAnswerAfterIt()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolRoundThenCutOffAnswer());
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(ExternalModel).WithAllowedTool("test-tool").Build());
+
+        await AssertIncompleteNoticeAsync(dispatcher, 1);
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolRoundThenCutOffAnswer()
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-1", "test-tool")
+        })
+        {
+            FinishReason = ChatFinishReason.ToolCalls
+        };
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-1", "ok")
+        });
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "partial");
+    }
+
+    // Limited to remote providers: a local server that dies mid-answer surfaces as an exception, and the local paths could not be run from here.
+    [Test]
+    public async Task RunAsync_WhenALocalStreamEndsWithNoFinishReason_DoesNotFlagIt()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello."));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await AssertIncompleteNoticeAsync(dispatcher, 0);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenARemoteStreamIsEmptyWithNoFinishReason_SaysTheProviderEndedIt()
+    {
+        var dispatcher = await RunExternalAsync(CreateUpdates());
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EmptyAnswer && payload.Message == NoFinishEmptyNotice));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenALocalStreamIsEmpty_KeepsThePlainNotice()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates());
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EmptyAnswer && payload.Message == "The model stopped without an answer."));
     }
 }

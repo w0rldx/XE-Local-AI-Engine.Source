@@ -208,27 +208,36 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             return Answered($"The endpoint answered with a redirect (HTTP {status}), which is not followed. Enter the address it redirects to.");
         }
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-        {
-            var rejected = $"The endpoint rejected the model listing with HTTP {status}. Check the API key or the connection's custom headers.";
-            return Answered((await ReadErrorDetailAsync(response, sentSecrets, cancellationToken, callerToken)).Text is { } detail ? $"{rejected} ({detail})" : rejected);
-        }
-
-        // A wrong base URL path: nothing is routed there. Some servers also 404 a missing listing, which is why the save stays allowed.
-        if (response.StatusCode == HttpStatusCode.NotFound
-            || (status >= 500 && (await ReadErrorDetailAsync(response, sentSecrets, cancellationToken, callerToken)).ReportsNoRoute))
-        {
-            return new ExternalProviderProbeResult
-            {
-                Outcome = ExternalProviderProbeOutcome.Answered,
-                Error = NoRouteError,
-                NoRoute = true
-            };
-        }
-
         if (!response.IsSuccessStatusCode)
         {
-            return Answered($"The endpoint answered with HTTP {status} and served no model listing. Add model ids by hand.");
+            // Read once: the body is a one-shot stream.
+            var detail = await ReadErrorDetailAsync(response, sentSecrets, cancellationToken, callerToken);
+            var quoted = detail.Text is { } text ? $" ({text})" : string.Empty;
+
+            // The chat path's rule: a 403 that does not blame the credential is a project, membership or RBAC denial a new key would not change.
+            if (response.StatusCode == HttpStatusCode.Forbidden && !detail.ReportsBadCredential)
+            {
+                return Answered($"The endpoint denied the model listing with HTTP {status}. Check with its admin what this connection may use.{quoted}");
+            }
+
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                return Answered($"The endpoint rejected the model listing with HTTP {status}. Check the API key or the connection's custom headers.{quoted}");
+            }
+
+            // A wrong base URL path: nothing is routed there. Some servers also 404 a missing listing, which is why the save stays allowed.
+            // A no-route 5xx's body is the fixed text that flagged it, so only a 404's is news.
+            if (response.StatusCode == HttpStatusCode.NotFound || (status >= 500 && detail.ReportsNoRoute))
+            {
+                return new ExternalProviderProbeResult
+                {
+                    Outcome = ExternalProviderProbeOutcome.Answered,
+                    Error = response.StatusCode == HttpStatusCode.NotFound ? NoRouteError + quoted : NoRouteError,
+                    NoRoute = true
+                };
+            }
+
+            return Answered($"The endpoint answered with HTTP {status} and served no model listing.{quoted} Add model ids by hand.");
         }
 
         var payload = await ReadBoundedAsync(response, cancellationToken);
@@ -237,13 +246,18 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             return Answered("The endpoint's model listing was too large to read. Add model ids by hand.");
         }
 
-        return TryParseModels(payload, out var models)
-            ? new ExternalProviderProbeResult
+        if (!TryParseModels(payload, out var models))
+        {
+            return Answered("The endpoint answered, but its model listing could not be understood. Add model ids by hand.");
+        }
+
+        return models.Count == 0
+            ? Answered("The endpoint listed nothing, so no models are available for this connection or project.")
+            : new ExternalProviderProbeResult
             {
                 Outcome = ExternalProviderProbeOutcome.Answered,
                 Models = models
-            }
-            : Answered("The endpoint answered, but its model listing could not be understood. Add model ids by hand.");
+            };
     }
 
     /// <summary>The sanitized code and message of an error body, or an empty detail when there is none to quote.</summary>

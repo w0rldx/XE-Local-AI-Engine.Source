@@ -35,6 +35,8 @@ public sealed class ExternalGatewayIntegrationTests
     private const string PlainValue = "demo-tenant";
     private const string SecretHeader = "X-Demo-Gateway-Key";
     private const string SecretValue = "demo-gateway-secret";
+    private const string LettersOnlyKey = "lettersonlykeyvalue";
+    private const string LettersOnlyHeaderSecret = "lettersonlyheadersecret";
 
     [Test]
     public async Task AuthenticatedGateway_EveryCallPathCarriesTheBearerAndBothHeaders()
@@ -246,6 +248,7 @@ public sealed class ExternalGatewayIntegrationTests
     [Arguments(FakeOpenAiGatewayFailure.Unauthorized, FailureCategory.ProviderAuthFailed, null)]
     [Arguments(FakeOpenAiGatewayFailure.UnknownModel, FailureCategory.ModelUnavailable, null)]
     [Arguments(FakeOpenAiGatewayFailure.RateLimited, FailureCategory.ProviderRateLimited, "retry after 7")]
+    [Arguments(FakeOpenAiGatewayFailure.TokenQuotaExceeded, FailureCategory.ProviderRateLimited, "retry after about 31 days. (token_quota_exceeded: project-quota)")]
     public async Task GatewayRejection_IsClassifiedForTheOperator(FakeOpenAiGatewayFailure failure, FailureCategory expected, string? fragment)
     {
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
@@ -389,6 +392,195 @@ public sealed class ExternalGatewayIntegrationTests
 
         AssertEx.Equal(FailureCategory.ProviderAuthFailed, classification.Category);
         AssertEx.Contains(classification.Message, "(missing_required_header: Missing or invalid required header 'X-Model-Token'.)");
+    }
+
+    // This gateway's real denial bodies (flat error code, message, optional reason) through the real SDK's streaming send: a working
+    // key is never blamed for a project, membership, tenant or quota denial, and each code and reason reaches the operator.
+    [Test]
+    [Arguments(401, """{"error":"api-key-revoked","message":"The API key has been revoked."}""", FailureCategory.ProviderAuthFailed, true,
+        "(api-key-revoked: The API key has been revoked.)")]
+    [Arguments(401, """{"error":"api-key-expired","message":"The API key has expired."}""", FailureCategory.ProviderAuthFailed, true,
+        "(api-key-expired: The API key has expired.)")]
+    [Arguments(403, """{"error":"project-archived","message":"The project is archived."}""", FailureCategory.ProviderAuthFailed, false,
+        "(project-archived: The project is archived.)")]
+    [Arguments(403, """{"error":"project-not-started","message":"The project has not started yet."}""", FailureCategory.ProviderAuthFailed, false,
+        "(project-not-started: The project has not started yet.)")]
+    [Arguments(403, """{"error":"not-a-member","message":"The user is not a member of the project."}""", FailureCategory.ProviderAuthFailed, false,
+        "(not-a-member: The user is not a member of the project.)")]
+    [Arguments(403, """{"error":"user-disabled","message":"The user is disabled."}""", FailureCategory.ProviderAuthFailed, false,
+        "(user-disabled: The user is disabled.)")]
+    [Arguments(403, """{"error":"tenant-mismatch","message":"The token's tenant is not served by this gateway."}""", FailureCategory.ProviderAuthFailed, false,
+        "(tenant-mismatch: The token's tenant is not served by this gateway.)")]
+    [Arguments(403, """{"error":"token_quota_exceeded","message":"Token limit is exceeded. Try again in 3540 seconds.","reason":"project-quota"}""", FailureCategory.ProviderAuthFailed, false,
+        "(token_quota_exceeded: Token limit is exceeded. Try again in 3540 seconds. (reason: project-quota))")]
+    [Arguments(403, """{"error":"model-not-approved","message":"The model is not approved for the project."}""", FailureCategory.ModelUnavailable, false,
+        "(model-not-approved: The model is not approved for the project.)")]
+    [Arguments(403, """{"error":"disabled-project","message":"The model is currently not available for the project."}""", FailureCategory.ModelUnavailable, false,
+        "(disabled-project: The model is currently not available for the project.)")]
+    public async Task GatewayDenialBody_StreamingSend_NamesTheCauseAndBlamesTheKeyOnlyWhenItIs(int status, string body, FailureCategory expectedCategory, bool blamesTheKey, string detail)
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token
+        }, Token, []);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        rig.Gateway.State.EnqueueRawResponse(status, body);
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
+            await client.GetStreamingResponseAsync("hello", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token));
+        var classification = InvocationFailureClassifier.MapFailure(thrown);
+
+        AssertEx.Equal(expectedCategory, classification.Category);
+        AssertEx.Contains(classification.Message, detail);
+        AssertEx.Equal(blamesTheKey, classification.Message.Contains("Replace the API key", StringComparison.Ordinal));
+    }
+
+    // A credential of letters alone passes the word grammar, and a body the grammar refuses falls through to the SDK's own message, which quotes
+    // the body raw. Neither may reach the operator or the exception chain a log prints; the status and its fixed text remain.
+    [Test]
+    [MatrixDataSource]
+    public async Task GatewayEchoingACredential_ReachesNeitherTheOperatorNorTheChain(
+        [Matrix(400, 401, 403, 404, 429, 500)] int status,
+        [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""", """{"error":{"message":"Key: sk/%s/x"}}""", """{"seen":["\u006c%s"]}""", "Invalid key %s")] string shape,
+        [Matrix(LettersOnlyKey, LettersOnlyHeaderSecret)] string secret)
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = LettersOnlyKey
+        }, LettersOnlyKey, [Secret(LettersOnlyHeaderSecret)]);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        // The JSON-escaped shape spells the secret's first letter, an l in both, as an escape.
+        rig.Gateway.State.EnqueueRawResponse(status, shape.Replace("%s", shape.Contains("\\u", StringComparison.Ordinal) ? secret[1..] : secret, StringComparison.Ordinal));
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () => await client.GetResponseAsync("hello", cancellationToken: deadline.Token));
+        var classification = InvocationFailureClassifier.MapFailure(thrown);
+
+        AssertEx.False(classification.Message.Contains(secret, StringComparison.OrdinalIgnoreCase), $"The operator was shown the credential: {classification.Message}");
+        AssertEx.False(thrown.ToString().Contains(secret, StringComparison.OrdinalIgnoreCase), $"The chain a log prints carried the credential: {thrown}");
+        AssertEx.Equal(FailureCategoryOf(status), classification.Category);
+    }
+
+    // A streaming send, and the secret values of a rotation: the client is rebuilt with what it now sends.
+    [Test]
+    public async Task GatewayEchoingARotatedSecret_StreamingSend_IsStillDropped()
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, [Secret("firstsecretvalue")]);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        _ = await client.GetResponseAsync("before", cancellationToken: deadline.Token);
+
+        var rotated = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, apiKey: null, [Secret("secondsecretvalue")]), deadline.Token);
+        AssertEx.True(rotated is ExternalProviderWriteResult.Committed, $"The rotation was not committed: {rotated}");
+        rig.Gateway.State.EnqueueRawResponse(401, """{"message":"Invalid key secondsecretvalue"}""");
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
+            await client.GetStreamingResponseAsync("after", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token));
+
+        AssertEx.False(thrown.ToString().Contains("secondsecretvalue", StringComparison.Ordinal), $"The chain carried the rotated secret: {thrown}");
+        AssertEx.Equal(FailureCategory.ProviderAuthFailed, InvocationFailureClassifier.MapFailure(thrown).Category);
+    }
+
+    // A plain header is no credential: a reason quoting the project keeps its detail, and a key the body does not carry changes nothing.
+    [Test]
+    public async Task GatewayQuotingAPlainHeaderValue_KeepsTheDetail()
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), LettersOnlyKey, [Plain("projectalpha"), Secret(LettersOnlyHeaderSecret)]);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        rig.Gateway.State.EnqueueRawResponse(403, """{"error":"project-archived","message":"Project projectalpha is archived."}""");
+
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () => await client.GetResponseAsync("hello", cancellationToken: deadline.Token));
+
+        AssertEx.Contains(InvocationFailureClassifier.MapFailure(thrown).Message, "(project-archived: Project projectalpha is archived.)");
+    }
+
+    // Test connection on the same body: the reason shows at probe time instead of after saving and sending.
+    [Test]
+    public async Task GatewayMissingProjectHeader_ProbeQuotesTheReason()
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, []);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        rig.Gateway.State.EnqueueRawResponse(400, """{"error":"missing_project_id","message":"Missing x-project-id header"}""");
+
+        var probe = await new ExternalProviderProbeService(rig.Store, NullLogger<ExternalProviderProbeService>.Instance)
+            .ProbeAsync(new ExternalProviderProbeQuery(ConnectionId, BaseUrl: null, ApiKey: null), deadline.Token);
+
+        AssertEx.Contains(AssertEx.NotNull(probe.Error), "(missing_project_id: Missing x-project-id header)");
+    }
+
+    // What the runner's finish-reason rule stands on, through the real SDK adapters: a normal stream ends with a reason on both API
+    // surfaces, a stream cut off cleanly ends without one, and a whole JSON body answering a stream reads as an empty stream.
+    [Test]
+    [Arguments(ExternalProviderApiSurface.ChatCompletions)]
+    [Arguments(ExternalProviderApiSurface.Responses)]
+    public async Task NormalStream_EndsWithAFinishReason(ExternalProviderApiSurface surface)
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            Models =
+            [
+                new FakeOpenAiGatewayModel
+                {
+                    Id = WireId,
+                    ContextLength = 32768
+                },
+                new FakeOpenAiGatewayModel
+                {
+                    Id = ResponsesWireId,
+                    ContextLength = 32768
+                }
+            ]
+        }, apiKey: null, [], TwoModels(surface));
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
+
+        var reply = await client.GetStreamingResponseAsync("hello", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token);
+
+        AssertEx.False(string.IsNullOrEmpty(reply.Text));
+        AssertEx.True(reply.FinishReason is not null, "A normal stream ended without a finish reason.");
+    }
+
+    [Test]
+    public async Task StreamCutOffCleanly_EndsWithTextAndNoFinishReason()
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, []);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        rig.Gateway.State.EnqueueFailure(FakeOpenAiGatewayFailure.PartialStream);
+
+        var reply = await client.GetStreamingResponseAsync("hello", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token);
+
+        AssertEx.Equal("partial stream", reply.Text);
+        AssertEx.True(reply.FinishReason is null, $"Unexpected finish reason {reply.FinishReason}.");
+    }
+
+    [Test]
+    public async Task WholeJsonBodyAnsweringAStream_ReadsAsAnEmptyStream()
+    {
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, []);
+        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
+        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
+        rig.Gateway.State.EnqueueRawResponse(200,
+            """{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"whole"},"finish_reason":"stop"}]}""");
+
+        var reply = await client.GetStreamingResponseAsync("hello", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token);
+
+        AssertEx.Equal(string.Empty, reply.Text);
+        AssertEx.True(reply.FinishReason is null, $"Unexpected finish reason {reply.FinishReason}.");
+    }
+
+    private static FailureCategory FailureCategoryOf(int status)
+    {
+        return status switch
+        {
+            400 => FailureCategory.Unexpected,
+            401 or 403 => FailureCategory.ProviderAuthFailed,
+            404 => FailureCategory.ModelUnavailable,
+            429 => FailureCategory.ProviderRateLimited,
+            _ => FailureCategory.ProviderUnreachable
+        };
     }
 
     private static StoredExternalProviderHeader Plain(string value)

@@ -301,6 +301,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **The enterprise AI gateway template starts its header row as `x-project-id`**, not `project-id`. Stored connections
+  keep the header they were saved with.
 - **Dependency and runtime modernization** (closes issue #25; supersedes Dependabot #101, #102, #103, #124 and
   #125). Quartz 4.6.2: the dispatch runner arms each definition's maximum runtime itself, since Quartz 4 dropped
   `JobInterruptMonitorPlugin`, and a timeout still records `TimedOut` (wiki 06). Managed Python 3.14 (ADR 0016
@@ -530,6 +532,31 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **A gateway denial no longer tells the operator to replace a working key** — only a 401 or a recognised credential
+  code says so. Any other 403 (an archived project, a removed member, a quota, a tenant mismatch) reports that the
+  provider or gateway denied the request and quotes why, a body's `reason` beside its `message`, and hyphenated codes
+  and apostrophes now survive sanitizing. "not approved" counts as a model refusal. The failure badge reads "Provider
+  denied access". Azure Foundry and Test connection follow the same rule and quote the sanitized reason; Foundry keeps
+  its RBAC guidance for Azure's own `PermissionDenied`.
+- **An error body echoing a credential is dropped whole** — a key or secret header of letters alone passed the sanitizer
+  that quotes gateway reasons, and any body the sanitizer refused reached logs and the fallback message raw through the
+  SDK's exception text. External connections and Azure Foundry now drop a body carrying the connection's API key, Entra
+  client secret or secret header value, keeping the status and its fixed text. Plain headers do not count, so a reason
+  naming the project still shows.
+- **A rate limit says how long, in words** — Azure Foundry's 429 is now rate-limited and quotes the wait as the generic
+  path does, a wait of two minutes or more reads "about 31 days" rather than a count of seconds, and the body's reason
+  stays. A gateway's `token_quota_exceeded` reads as a used-up quota, and with no wait named is not retried.
+- **Test connection says why** — every 4xx and 5xx quotes the sanitized body, and an empty model list says no models
+  are available for this connection or project. Saving stays allowed.
+- **Azure Foundry picks up a rotated key or an edited header on the next send** — the client was rebuilt only when the
+  key's length changed, so a same-length key or any header edit was ignored until a restart. It also no longer
+  multiplies a failing send through the SDK's own retries (one send made 12 calls where the generic path makes 3), and
+  a host outside the allowlist is a 400 naming the fix rather than an unexplained 500.
+- **A remote answer cut off without a finish reason says so** — an external, Azure Foundry or Codex stream that ends
+  cleanly with text and no finish reason carries an "Answer may be incomplete" notice, and one that delivers nothing
+  (a gateway answering a streaming request with a whole JSON body reads like this) says the provider ended it.
+- **Context-window failures no longer advise compacting when no local chat model can do it**, and a dropped stream no
+  longer promises that a local model reloads, which meant nothing on an external provider.
 - **A GGUF named without a quant token imports under its real quantization** — the header's `general.file_type` was read
   through a table with the wrong ids, so for example a Q8_0 file was labelled Q5_1, in the model name and the file name
   too. A file with a removed id or a type the app has no quant name for (TQ1_0, TQ2_0, MXFP4_MOE, Q1_0, F8_E4M3) is

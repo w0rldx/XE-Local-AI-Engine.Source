@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 public sealed class FakeOpenAiGatewayState
 {
     private readonly ConcurrentQueue<FakeOpenAiGatewayFailure> _failures = new();
+    private readonly ConcurrentQueue<FakeOpenAiGatewayRawResponse> _rawResponses = new();
     private readonly ConcurrentQueue<FakeOpenAiGatewayRequest> _requests = new();
     private readonly Lock _scriptLock = new();
     private FakeOpenAiGatewayScript? _script;
@@ -24,6 +25,17 @@ public sealed class FakeOpenAiGatewayState
     public void EnqueueFailure(FakeOpenAiGatewayFailure failure)
     {
         _failures.Enqueue(failure);
+    }
+
+    /// <summary>Answer the next API request with exactly this status and JSON body, for a gateway's own error shape.</summary>
+    public void EnqueueRawResponse(int status, string body)
+    {
+        _rawResponses.Enqueue(new FakeOpenAiGatewayRawResponse(status, body));
+    }
+
+    public bool TryDequeueRawResponse(out FakeOpenAiGatewayRawResponse response)
+    {
+        return _rawResponses.TryDequeue(out response);
     }
 
     public void ClearFailures()
@@ -72,3 +84,6 @@ public sealed class FakeOpenAiGatewayState
         _requests.Clear();
     }
 }
+
+/// <summary>A canned answer: exactly this status and JSON body.</summary>
+public readonly record struct FakeOpenAiGatewayRawResponse(int Status, string Body);

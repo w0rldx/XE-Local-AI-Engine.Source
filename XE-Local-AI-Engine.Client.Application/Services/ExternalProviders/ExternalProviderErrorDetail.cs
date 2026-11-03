@@ -2,18 +2,20 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalProviders;
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     The code and message an OpenAI-compatible provider or gateway put in an error body, reduced to text the operator
 ///     may see.
 /// </summary>
 /// <remarks>
-///     Only a JSON object is read: message from <c>error.message</c>, <c>message</c> or <c>reason</c>; code from
-///     <c>error.code</c>, a string <c>error</c> or <c>code</c>. A message survives only as plain words (letters with inner
-///     hyphens, or digits, edged by <c>.,;:()'</c>) and a code only as a lowercase identifier or one of
-///     <see cref="KnownMixedCaseCodes" />, so a key, token, URL or path is dropped whole. A secret of letters alone still passes; only a caller knowing the credential can drop it.
+///     Only a JSON object is read: message from <c>error.message</c> or <c>message</c>; reason from <c>reason</c>, standing in
+///     for a missing message; code from <c>error.code</c>, a string <c>error</c> or <c>code</c>. A message or reason survives
+///     only as plain words (letters with inner hyphens or apostrophes, or digits, edged by <c>.,;:()'</c>) and a code only as a
+///     lowercase identifier, hyphenated words of letters after a first word of at least three (<c>sk-live-abc</c> stays out), or one of
+///     <see cref="KnownMixedCaseCodes" />, so a key, token, URL or path is dropped whole. A secret of letters alone still passes; only a caller knowing the credential can drop it, through <c>forbidden</c> or <see cref="SecretEchoGuardHandler" />.
 /// </remarks>
-internal readonly record struct ExternalProviderErrorDetail(string? Code, string? Message)
+internal readonly record struct ExternalProviderErrorDetail(string? Code, string? Message, string? Reason = null)
 {
     internal const int MaxLength = 300;
 
@@ -26,15 +28,41 @@ internal readonly record struct ExternalProviderErrorDetail(string? Code, string
     /// <summary>The bearer token was refused, typically because it expired.</summary>
     internal const string InvalidTokenCode = "invalid_token";
 
-    private static readonly Regex Word = new("^(?:[A-Za-z]+(?:-[A-Za-z]+)*|[0-9]+)$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    /// <summary>A period's token quota is used up, as opposed to a per-minute limit, which a short wait clears.</summary>
+    internal const string TokenQuotaExceededCode = "token_quota_exceeded";
 
-    private static readonly Regex CodeIdentifier = new("^[a-z][a-z0-9_]{0,39}$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    /// <summary>What to say about a 403 that does not blame the credential: a project, membership, tenant, quota or organization rule a new key would not change.</summary>
+    internal const string DeniedMessage = "The provider or gateway denied this request. Check with its admin what this connection may use.";
+
+    private static readonly Regex Word = new("^(?:[A-Za-z]+(?:[-'][A-Za-z]+)*|[0-9]+)$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    private static readonly Regex CodeIdentifier = new("^(?=.{1,40}$)(?:[a-z][a-z0-9_]*|[a-z]{3,}(?:-[a-z]+)+)$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     // Mixed-case codes a real gateway sends, kept by exact match because the lowercase rule would drop them.
     private static readonly string[] KnownMixedCaseCodes = [PermissionDeniedCode];
 
-    /// <summary>"code: message", the message alone, the code alone, or <see langword="null" /> when the body carried neither; capped at <see cref="MaxLength" />.</summary>
-    public string? Text => Cap(Code is null || Message is null ? Message ?? Code : $"{Code}: {Message}");
+    // Codes that blame the credential itself: a gateway's own, and the common provider spellings of a bad key or token.
+    private static readonly string[] BadCredentialCodes =
+    [
+        InvalidTokenCode, "invalid_api_key", "invalid_key", "expired_token", "token_expired", "invalid_authentication", "authentication_error",
+        "api-key-invalid", "api-key-revoked", "api-key-expired"
+    ];
+
+    /// <summary>
+    ///     "code: message", the message alone, the code alone, or <see langword="null" /> when the body carried neither, then the reason when a
+    ///     message left it over; capped at <see cref="MaxLength" />.
+    /// </summary>
+    public string? Text
+    {
+        get
+        {
+            var text = Code is null || Message is null ? Message ?? Code : $"{Code}: {Message}";
+            return Cap(Reason is null ? text : $"{text} (reason: {Reason})");
+        }
+    }
+
+    /// <summary>Whether the code says the credential itself is bad, so replacing it can help. Any other 403 is a denial a new key would not change.</summary>
+    public bool ReportsBadCredential => Code is not null && BadCredentialCodes.Contains(Code, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     ///     Whether an API gateway said no operation matches the request path: a wrong base URL, which no retry can fix.
@@ -49,10 +77,10 @@ internal readonly record struct ExternalProviderErrorDetail(string? Code, string
     public bool ReportsUnsupportedOperation => Message?.Contains("The requested operation is unsupported", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <param name="body">The raw error body.</param>
-    /// <param name="forbidden">Values (sent credentials) that void the whole detail when any decoded candidate contains one, before sanitizing.</param>
+    /// <param name="forbidden">Values (sent credentials) that void the whole detail when the body carries one anywhere, decoded, before sanitizing.</param>
     public static ExternalProviderErrorDetail Parse(ReadOnlyMemory<byte> body, IReadOnlyList<string>? forbidden = null)
     {
-        if (body.IsEmpty)
+        if (body.IsEmpty || (forbidden is not null && SecretEchoGuardHandler.Echoes(body, forbidden)))
         {
             return default;
         }
@@ -69,7 +97,7 @@ internal readonly record struct ExternalProviderErrorDetail(string? Code, string
             var error = root.TryGetProperty("error", out var errorElement) ? errorElement : default;
             var errorMessage = error.ValueKind == JsonValueKind.Object ? GetString(error, "message") : null;
             var rootMessage = GetString(root, "message");
-            var reason = GetString(root, "reason");
+            var rawReason = GetString(root, "reason");
             var rawCode = error.ValueKind switch
             {
                 JsonValueKind.Object => GetString(error, "code"),
@@ -77,16 +105,16 @@ internal readonly record struct ExternalProviderErrorDetail(string? Code, string
                 _ => GetString(root, "code")
             };
 
-            string?[] candidates = [errorMessage, rootMessage, reason, rawCode];
-            if (forbidden is not null
-                && candidates.Any(candidate => candidate is not null
-                                               && forbidden.Any(value => !string.IsNullOrWhiteSpace(value) && candidate.Contains(value, StringComparison.OrdinalIgnoreCase))))
+            var code = SanitizeCode(rawCode);
+            var message = SanitizeMessage(errorMessage) ?? SanitizeMessage(rootMessage);
+            var reason = SanitizeMessage(rawReason);
+            if (message is null)
             {
-                return default;
+                message = reason;
+                reason = null;
             }
 
-            var message = SanitizeMessage(errorMessage) ?? SanitizeMessage(rootMessage) ?? SanitizeMessage(reason);
-            return new ExternalProviderErrorDetail(SanitizeCode(rawCode), message);
+            return new ExternalProviderErrorDetail(code, message == code ? null : message, reason == message || reason == code ? null : reason);
         }
         catch (JsonException)
         {

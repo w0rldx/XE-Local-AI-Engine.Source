@@ -102,13 +102,30 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             ? BuildOpenAiV1Client(endpoint, connection).GetChatClient(deploymentName).AsIChatClient()
             : BuildAzureDeploymentsClient(endpoint, connection).GetChatClient(deploymentName).AsIChatClient();
 
-        return new AzureFoundryErrorTranslatingChatClient(innerClient, connection.AuthMode);
+        return new AzureFoundryErrorTranslatingChatClient(innerClient, connection.AuthMode, SentSecrets(connection));
+    }
+
+    // The probe's rule (ExternalProviderProbeService): plain header values stay out, or a reason quoting the project would be dropped.
+    private static string[] SentSecrets(StoredAzureFoundryConnection connection)
+    {
+        return
+        [
+            .. connection.Headers.Where(static header => header.IsSecret).Select(static header => header.Value)
+                         .Append(connection.ApiKey)
+                         .Append(connection.EntraClientSecret)
+                         .OfType<string>()
+                         .Where(static value => !string.IsNullOrWhiteSpace(value))
+        ];
     }
 
     // The classic Azure deployments surface (default, ApiSurface.AzureDeployments): {endpoint}/openai/deployments/{deployment}/....
-    private AzureOpenAIClient BuildAzureDeploymentsClient(Uri endpoint, StoredAzureFoundryConnection connection)
+    private AzureOpenAIClient BuildAzureDeploymentsClient(Uri endpoint, StoredAzureFoundryConnection connection, HttpClient? transportHttpClient = null)
     {
         var options = BuildClientOptions(connection.Headers);
+        if (transportHttpClient is not null)
+        {
+            options.Transport = new HttpClientPipelineTransport(transportHttpClient);
+        }
 
         return connection.AuthMode switch
         {
@@ -139,7 +156,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         var v1Endpoint = new Uri(endpoint.AbsoluteUri.TrimEnd('/') + OpenAiV1PathSegment);
         var options = new OpenAIClientOptions
         {
-            Endpoint = v1Endpoint
+            Endpoint = v1Endpoint,
+            RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
         };
         AddCustomHeaderPolicy(options, connection.Headers);
         if (transportHttpClient is not null)
@@ -170,6 +188,15 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
         var endpoint = ResolveEndpoint(connection.Endpoint, connection.AdditionalAllowedHostSuffixes);
         return BuildOpenAiV1Client(endpoint, connection, transportHttpClient);
+    }
+
+    /// <summary>Test-only seam: <see cref="CreateOpenAiV1ClientForTesting" /> for the Azure deployments surface.</summary>
+    internal AzureOpenAIClient CreateAzureDeploymentsClientForTesting(StoredAzureFoundryConnection connection, HttpClient transportHttpClient)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transportHttpClient);
+
+        return BuildAzureDeploymentsClient(ResolveEndpoint(connection.Endpoint, connection.AdditionalAllowedHostSuffixes), connection, transportHttpClient);
     }
 
     /// <summary>Builds the v1 key-credential client, setting the real key on the <c>api-key</c> header.</summary>
@@ -250,7 +277,11 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     /// </remarks>
     private static AzureOpenAIClientOptions BuildClientOptions(IReadOnlyList<StoredAzureFoundryHeader> headers)
     {
-        var options = new AzureOpenAIClientOptions();
+        // Non-idempotent completion, and ProviderStreamResilience owns retries and Retry-After: an SDK retry would multiply each of its attempts.
+        var options = new AzureOpenAIClientOptions
+        {
+            RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
+        };
         AddCustomHeaderPolicy(options, headers);
         return options;
     }

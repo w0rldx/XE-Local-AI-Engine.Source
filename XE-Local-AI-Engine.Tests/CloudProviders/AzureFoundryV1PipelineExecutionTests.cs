@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.ClientModel;
 using System.Net;
 using System.Text;
 using Azure.Core;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -152,6 +155,122 @@ public sealed class AzureFoundryV1PipelineExecutionTests
         AssertEx.Equal("real-secret-key", apiKeyValues!.Single());
         AssertEx.True(request.Headers.TryGetValues("X-Tenant", out var tenantValues));
         AssertEx.Equal("tenant-a", tenantValues!.Single());
+    }
+
+    // The engine's own resilience owns retries; an SDK retry inside each attempt multiplied one send by four, and waited out a long Retry-After.
+    [Test]
+    [Arguments(HttpStatusCode.ServiceUnavailable)]
+    [Arguments(HttpStatusCode.TooManyRequests)]
+    public async Task OneSend_OnTheV1Surface_IsOneRequest(HttpStatusCode status)
+    {
+        using var transport = new FailingTransport(status);
+        using var httpClient = new HttpClient(transport);
+        var openAiClient = new AzureFoundryChatClientFactory().CreateOpenAiV1ClientForTesting(CreateApiKeyConnection(), httpClient);
+
+        await AssertEx.ThrowsAsync<ClientResultException>(() => openAiClient.GetChatClient("gpt-4o").AsIChatClient().GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+    }
+
+    [Test]
+    [Arguments(HttpStatusCode.ServiceUnavailable)]
+    [Arguments(HttpStatusCode.TooManyRequests)]
+    public async Task OneSend_OnTheDeploymentsSurface_IsOneRequest(HttpStatusCode status)
+    {
+        using var transport = new FailingTransport(status);
+        using var httpClient = new HttpClient(transport);
+        var azureClient = new AzureFoundryChatClientFactory().CreateAzureDeploymentsClientForTesting(CreateApiKeyConnection(), httpClient);
+
+        await AssertEx.ThrowsAsync<ClientResultException>(() => azureClient.GetChatClient("gpt-4o").AsIChatClient().GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+    }
+
+    // The real SDK over each surface, buffered and streaming: the translated quota 429 keeps its status, header and body for the classifier, and the send is one request.
+    [Test]
+    [Arguments(false, false)]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    [Arguments(true, true)]
+    public async Task AQuota429_ThroughTheTranslator_IsOneRequestAndNamesTheWait(bool deployments, bool streaming)
+    {
+        using var transport = new FailingTransport(HttpStatusCode.TooManyRequests,
+            """{"error":"token_quota_exceeded","message":"Token limit is exceeded. Try again in 2678400 seconds.","reason":"project-quota"}""", "2678400");
+        using var httpClient = new HttpClient(transport);
+        var factory = new AzureFoundryChatClientFactory();
+        var inner = deployments
+            ? factory.CreateAzureDeploymentsClientForTesting(CreateApiKeyConnection(), httpClient).GetChatClient("gpt-4o").AsIChatClient()
+            : factory.CreateOpenAiV1ClientForTesting(CreateApiKeyConnection(), httpClient).GetChatClient("gpt-4o").AsIChatClient();
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var thrown = await AssertEx.ThrowsAsync<AzureFoundryProviderException>(async () =>
+        {
+            if (streaming)
+            {
+                await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+                {
+                    // The 429 surfaces before any update.
+                }
+            }
+            else
+            {
+                await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]);
+            }
+        });
+        var classification = InvocationFailureClassifier.MapFailure(thrown);
+
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+        AssertEx.Equal(FailureCategory.ProviderRateLimited, classification.Category);
+        AssertEx.Equal("The token quota for this connection is used up, retry after about 31 days. (token_quota_exceeded: project-quota)", classification.Message);
+    }
+
+    private static StoredAzureFoundryConnection CreateApiKeyConnection()
+    {
+        return new StoredAzureFoundryConnection
+        {
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = AzureFoundryAuthMode.ApiKey,
+            ApiKey = "real-secret-key",
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        };
+    }
+
+    private sealed class FailingTransport : HttpMessageHandler
+    {
+        private readonly string _body;
+        private readonly string? _retryAfter;
+        private readonly HttpStatusCode _status;
+        private int _requestCount;
+
+        public FailingTransport(HttpStatusCode status, string body = "{}", string? retryAfter = null)
+        {
+            _status = status;
+            _body = body;
+            _retryAfter = retryAfter;
+        }
+
+        public int RequestCount => _requestCount;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _requestCount);
+            var response = new HttpResponseMessage(_status)
+            {
+                Content = new StringContent(_body, Encoding.UTF8, "application/json")
+            };
+            if (_retryAfter is not null)
+            {
+                response.Headers.TryAddWithoutValidation("Retry-After", _retryAfter);
+            }
+
+            return Task.FromResult(response);
+        }
     }
 
     private static async Task SendCannedChatRequestAsync(OpenAIClient openAiClient)

@@ -425,7 +425,12 @@ a turn whose window is unknown (cloud, Ollama) is not capped. The default limit 
 and `ProviderCallBudgetChatClient` keeps reserving only its floor: reserving it would have halved what the history may use.
 When an answer that produced text ends on `finish_reason: length` (the cap or the window), the turn carries an
 `OutputLimitReached` notice, "The answer stopped at the length limit before the model finished.", unless the variant
-is `off`. The SPA localizes that sentence. An orchestration participant is capped the same way against the window of
+is `off`. The SPA localizes that sentence. A remote model's stream (external, Azure Foundry, Codex) that ends cleanly
+with text and no finish reason for its final round carries an `AnswerIncomplete` notice whatever the variant, and one
+with neither text nor a finish reason (a gateway answering a stream with a whole JSON body reads as this) an
+`EmptyAnswer` notice naming the provider. The turn stays completed: the text is all there is. A local model is exempt,
+since a local server that dies mid-answer surfaces as an exception. An orchestration turn and direct inference do not
+apply this rule. An orchestration participant is capped the same way against the window of
 its own model (`OrchestrationAgentFactory.BuildAgentAsync`); one on another local llama.cpp model that is not loaded yet
 has no window to read, and nothing recomputes the cap after its deferred load, so under `cap` it takes the ceiling
 `chatOutputCapMaxTokens` (`ChatOutputCap.TokensForUnlaunchedLocalModel`), while a cloud or external participant stays
@@ -530,7 +535,8 @@ Two rules are load-bearing:
 - **Summarization stays on the node.** The requested model is used only when it is an installed *local* chat
   model; a cloud or unknown selection is transparently downgraded to a node-local default so conversation
   content never leaves the machine, and the result reports `ModelUsed` + `UsedFallbackModel` so the UI can say
-  so. With no local chat model installed, compaction refuses (`NoLocalModel`) rather than going to the cloud.
+  so. With no local chat model installed, compaction refuses (`NoLocalModel`) rather than going to the cloud, and the
+  context-window failure leaves the compact advice out.
 - **Send and regenerate splice identically.** Both call the shared `CompactionContextResolver.Resolve`, which
   mints the one synthetic `[Summary of the earlier conversation, …]` user message and returns the sequence it
   covers; each caller prepends it and drops every message at or below that covered sequence

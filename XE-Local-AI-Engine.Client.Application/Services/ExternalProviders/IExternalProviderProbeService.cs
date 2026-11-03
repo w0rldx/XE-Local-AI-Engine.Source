@@ -65,7 +65,8 @@ public sealed record ExternalProviderProbeResult
 
     /// <summary>
     ///     An operator-safe explanation, or <see langword="null" /> when the listing came back cleanly. NEVER carries
-    ///     the API key, the raw exception text (which can embed the address and credentials), or a response body.
+    ///     the API key, the raw exception text (which can embed the address and credentials), or a raw response body:
+    ///     only a body's detail sanitized by <see cref="ExternalProviderErrorDetail" />.
     /// </summary>
     public string? Error { get; init; }
 

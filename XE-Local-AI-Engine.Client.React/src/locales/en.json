@@ -159,6 +159,8 @@
 		"notices": {
 			"agentUnavailable": "Agent unavailable",
 			"agentUnavailableText": "The agent this conversation uses no longer exists, so the default assistant answered.",
+			"answerIncomplete": "Answer may be incomplete",
+			"answerIncompleteText": "The answer ended without a finish signal from the provider, so it may be incomplete.",
 			"attachmentShortened": "Attachment shortened",
 			"attachmentShortenedText": "The attached file was shortened to fit this model's context window; the model was told it is incomplete.",
 			"attachmentsNotSent": "Attachments not sent",
@@ -191,6 +193,7 @@
 			"resumeQueuedBehindTurn": "Waiting for another reply",
 			"resumeQueuedBehindTurnText": "After your answer, this reply was queued behind another running reply.",
 			"stoppedWhileThinkingText": "The model stopped while thinking before it could answer; its thoughts are kept above.",
+			"streamEndedEmptyText": "The provider ended the stream without an answer or a finish signal. A gateway may have answered a streaming request with a plain JSON body.",
 			"toolCallAsTextText": "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.",
 			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.",
 			"toolDisabled": "Tool disabled",
@@ -2249,7 +2252,7 @@
 					"ModelLoadFailed": "Model load failed",
 					"ModelNotInstalled": "Model not installed",
 					"ModelUnavailable": "Model unavailable",
-					"ProviderAuthFailed": "Provider sign-in failed",
+					"ProviderAuthFailed": "Provider denied access",
 					"ProviderRateLimited": "Provider rate limit",
 					"ProviderUnreachable": "Provider unreachable",
 					"Timeout": "Timeout"
@@ -2625,7 +2628,7 @@
 				},
 				"gateway": {
 					"description": "A company gateway in front of hosted models, with a bearer token and often a project header.",
-					"editorHint": "Enter the gateway's OpenAI v1 address, which usually ends in /openai/v1. Put the bearer token in the API key field: it is sent as \"Authorization: Bearer\". The header row below starts as project-id: enter the project id as its value, rename the row if the gateway uses another header, or remove it if the gateway needs none.",
+					"editorHint": "Enter the gateway's OpenAI v1 address, which usually ends in /openai/v1. Put the bearer token in the API key field: it is sent as \"Authorization: Bearer\". The header row below starts as x-project-id: enter the project id as its value, rename the row if the gateway uses another header, or remove it if the gateway needs none.",
 					"headerNamePlaceholder": "Header name from your gateway",
 					"label": "Enterprise AI gateway"
 				},

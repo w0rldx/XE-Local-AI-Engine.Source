@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -272,11 +274,11 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             return null;
         }
 
-        // Folds every Entra ID field too (tenant/client/secret-length/scope/sign-in method), so an operator edit to any of
-        // them — including a fresh device-code sign-in followed by a settings save — rebuilds the cached client instead of reusing a stale credential.
+        // Folds every Entra ID field too (tenant/client/scope/sign-in method), so an operator edit to any of them — including a fresh
+        // device-code sign-in followed by a settings save — rebuilds the cached client instead of reusing a stale credential.
         var fingerprint = string.Create(CultureInfo.InvariantCulture,
-            $"{AzureFingerprintPrefix}|{connection.Endpoint}|{connection.AuthMode}|{matchedDeployment}|{connection.ApiKey?.Length ?? 0}" +
-            $"|{connection.EntraTenantId}|{connection.EntraClientId}|{connection.EntraClientSecret?.Length ?? 0}" +
+            $"{AzureFingerprintPrefix}|{connection.Endpoint}|{connection.AuthMode}|{matchedDeployment}|{HashCredentialsAndHeaders(connection)}" +
+            $"|{connection.EntraTenantId}|{connection.EntraClientId}" +
             $"|{connection.EntraTokenScope}|{connection.EntraSignInMethod}");
         var cacheKey = string.Create(CultureInfo.InvariantCulture, $"{AzureFingerprintPrefix}|{matchedDeployment}");
 
@@ -287,6 +289,16 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             ProviderName = AzureFingerprintPrefix,
             Build = () => _azureFactory.Create(connection, matchedDeployment)
         };
+    }
+
+    /// <summary>A one-way hash of the key, the Entra secret and the custom headers, so an edit to any of them rebuilds the client and the fingerprint holds no secret.</summary>
+    private static string HashCredentialsAndHeaders(StoredAzureFoundryConnection connection)
+    {
+        // JSON frames the values, so moving text between two fields changes the hash. The secret flag joins too: it decides what the built client's error guard redacts.
+        return Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]
+        {
+            new[] { connection.ApiKey, connection.EntraClientSecret }
+        }.Concat(connection.Headers.Select(static header => new[] { header.Name, header.Value, header.IsSecret ? "secret" : "plain" })))));
     }
 
     /// <summary>Builds a Codex selection for the given session and the (already-resolved) model id to build it with.</summary>

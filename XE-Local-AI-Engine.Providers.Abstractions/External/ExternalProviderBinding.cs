@@ -60,4 +60,7 @@ public sealed class ExternalProviderTransportBinding
     ///     generation as <see cref="ApiKey" />. Empty when none are configured.
     /// </summary>
     public IReadOnlyList<KeyValuePair<string, string>> Headers { get; init; } = [];
+
+    /// <summary>The values in <see cref="Headers" /> the operator marked secret, so a response echoing one can be dropped.</summary>
+    public IReadOnlyList<string> SecretHeaderValues { get; init; } = [];
 }

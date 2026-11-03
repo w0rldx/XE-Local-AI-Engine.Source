@@ -273,6 +273,11 @@ public sealed class LocalRuntimeWarmer
     ///     Any other provider (Ollama, cloud, external) or a resolution failure answers <see langword="null" /> so the
     ///     warm phase is skipped; a genuine cancellation propagates.
     /// </remarks>
+    public bool IsRemoteModel(string resolvedModel)
+    {
+        return ExternalModelId.HasExternalScheme(resolvedModel) || _activeCloudFactory.IsCloudProviderSelected(resolvedModel);
+    }
+
     public async Task<ILocalModelProvider?> ResolveWarmableProviderAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
     {
         // A cloud-routed model must never warm locally: the resolver maps any UNMAPPED name to llamacpp, so a cloud id

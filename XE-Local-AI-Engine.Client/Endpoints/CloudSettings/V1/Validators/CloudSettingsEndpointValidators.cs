@@ -19,7 +19,12 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
             .NotEmpty()
             .Must(static endpoint => Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
                                      && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            .WithMessage("Endpoint must be an absolute HTTPS URL.");
+            .WithMessage("Endpoint must be an absolute HTTPS URL.")
+            // The store's own check throws, which would reach the operator as an unexplained 500.
+            .Must(static (request, endpoint) => !Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
+                                                || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                                                || AzureFoundryEndpoints.IsAllowedHost(uri, request.AdditionalAllowedHostSuffixes ?? []))
+            .WithMessage("Endpoint host is not an allowed Azure endpoint. For a gateway, add its domain as an additional allowed host suffix, for example .azure-api.net.");
 
         RuleFor(static request => request.AuthMode)
             .Must(static authMode => Enum.TryParse<AzureFoundryAuthMode>(authMode?.Trim(), ignoreCase: true, out _))

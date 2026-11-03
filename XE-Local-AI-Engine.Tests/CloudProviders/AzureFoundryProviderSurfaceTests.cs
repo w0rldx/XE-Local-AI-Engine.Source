@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -22,6 +23,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class AzureFoundryProviderSurfaceTests
 {
+    private const string ApiKeyText = "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role).";
+    private const string DeniedText = "The provider or gateway denied this request. Check with its admin what this connection may use.";
+
+    private const string RbacDeniedText =
+        "Azure Foundry denied this identity the model or operation. Check its RBAC role on the resource, or ask the gateway's admin if a gateway fronts it.";
+
     [Test]
     public void ToAzureFoundryCloudModelResponses_MapsEachDeployment_TaggedAzureFoundryAndToolCapable()
     {
@@ -244,9 +251,11 @@ public sealed class AzureFoundryProviderSurfaceTests
     [Test]
     [Arguments(AzureFoundryAuthMode.ApiKey, 401, "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role).")]
     [Arguments(AzureFoundryAuthMode.EntraId, 401, "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).")]
-    [Arguments(AzureFoundryAuthMode.EntraId, 403, "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).")]
-    [Arguments(AzureFoundryAuthMode.ManagedIdentity, 403,
+    [Arguments(AzureFoundryAuthMode.ManagedIdentity, 401,
         "Azure Foundry rejected the managed-identity bearer token (check the identity's RBAC role and the token scope).")]
+    [Arguments(AzureFoundryAuthMode.ApiKey, 403, DeniedText)]
+    [Arguments(AzureFoundryAuthMode.EntraId, 403, RbacDeniedText)]
+    [Arguments(AzureFoundryAuthMode.ManagedIdentity, 403, RbacDeniedText)]
     public async Task ErrorTranslatingChatClient_WhenAuthRejected_NamesTheCredentialOfTheAuthMode(AzureFoundryAuthMode authMode, int status, string expectedMessage)
     {
         using var response = new FakePipelineResponse(status, content: null);
@@ -258,6 +267,121 @@ public sealed class AzureFoundryProviderSurfaceTests
 
         AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
         AssertEx.Equal(expectedMessage, error.Message);
+    }
+
+    // A gateway in front of the deployment denies for reasons of its own, and a new key would not change them: only a 401 or a credential code blames the
+    // credential. An Azure RBAC refusal keeps its guidance; bodies below are this gateway's and real-shaped Azure ones. Hostile text is never quoted.
+    [Test]
+    [Arguments(401, """{"error":{"code":"Unauthorized","message":"Access denied due to invalid subscription key."}}""", ApiKeyText + " (Access denied due to invalid subscription key.)")]
+    [Arguments(401, """{"error":"api-key-revoked","message":"The API key has been revoked."}""", ApiKeyText + " (api-key-revoked: The API key has been revoked.)")]
+    [Arguments(403, """{"error":"api-key-invalid","message":"The API key is not valid."}""", ApiKeyText + " (api-key-invalid: The API key is not valid.)")]
+    [Arguments(403, """{"error":"project-archived","message":"The project is archived."}""", DeniedText + " (project-archived: The project is archived.)")]
+    [Arguments(403, """{"error":"model-not-approved","message":"The model is not approved for the project."}""", DeniedText + " (model-not-approved: The model is not approved for the project.)")]
+    [Arguments(403, """{"error":"token_quota_exceeded","message":"Token limit is exceeded.","reason":"project-quota"}""", DeniedText + " (token_quota_exceeded: Token limit is exceeded. (reason: project-quota))")]
+    [Arguments(403, """{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation."}}""", RbacDeniedText + " (PermissionDenied)")]
+    [Arguments(403, """{"error":{"code":"PermissionDenied","message":"The principal `00000000-1111-2222-3333-444444444444` lacks the required data action `Microsoft.CognitiveServices/accounts/OpenAI/responses/write` to perform `POST /openai/v1/responses` operation."}}""", RbacDeniedText + " (PermissionDenied)")]
+    [Arguments(403, """{"error":{"code":"AuthenticationTypeDisabled","message":"Key based authentication is disabled for this resource."}}""", DeniedText + " (Key based authentication is disabled for this resource.)")]
+    [Arguments(403, """{"error":{"code":"403","message":"Access denied due to Virtual Network/Firewall rules."}}""", DeniedText)]
+    [Arguments(403, """{"message":"See https://gateway.example/why with key sk-abc123."}""", DeniedText)]
+    [Arguments(403, "<html>Forbidden</html>", DeniedText)]
+    public async Task ErrorTranslatingChatClient_WhenAuthRejectedWithABody_OnlyACredentialFailureBlamesTheCredential(int status, string body, string expectedMessage)
+    {
+        using var response = new FakePipelineResponse(status, BinaryData.FromString(body));
+        using var inner = new ThrowingChatClient(new ClientResultException(response, innerException: null));
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
+        AssertEx.Equal(expectedMessage, error.Message);
+    }
+
+    // A body echoing a credential is not quoted, wherever the credential sits, on either SDK's exception and on both statuses; the fixed text stays.
+    [Test]
+    [MatrixDataSource]
+    public async Task ErrorTranslatingChatClient_WhenAnAuthBodyEchoesACredential_KeepsOnlyTheFixedText(
+        [Matrix(401, 403)] int status,
+        [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""", """{"detail":{"seen":["%s"]}}""")] string shape,
+        [Matrix(false, true)] bool azureSdkException)
+    {
+        const string secret = "lettersonlysecret";
+        var body = BinaryData.FromString(shape.Replace("%s", secret, StringComparison.Ordinal));
+        using var clientResponse = new FakePipelineResponse(status, body);
+        using var azureResponse = new FakeAzureResponse(status, body);
+        Exception thrown = azureSdkException ? new RequestFailedException(azureResponse) : new ClientResultException(clientResponse, innerException: null);
+        using var inner = new ThrowingChatClient(thrown);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, AzureFoundryAuthMode.ApiKey, ["another-value", secret]);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
+        AssertEx.Equal(status == 401 ? ApiKeyText : DeniedText, error.Message);
+        AssertEx.False(error.ToString().Contains(secret, StringComparison.Ordinal), $"The chain a log prints carried the credential: {error}");
+    }
+
+    // The same streaming, where a chat turn meets it.
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenAStreamingAuthBodyEchoesACredential_KeepsOnlyTheFixedText()
+    {
+        const string secret = "lettersonlysecret";
+        using var response = new FakePipelineResponse(401, BinaryData.FromString($$"""{"message":"Invalid key {{secret}}"}"""));
+        using var inner = new ThrowingChatClient(new ClientResultException(response, innerException: null));
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, AzureFoundryAuthMode.ApiKey, [secret]);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() => client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]).ToChatResponseAsync());
+
+        AssertEx.Equal(ApiKeyText, error.Message);
+    }
+
+    // Knowing the credentials changes nothing for a body that does not carry one.
+    [Test]
+    [Arguments(401, """{"error":"api-key-revoked","message":"The API key has been revoked."}""", ApiKeyText + " (api-key-revoked: The API key has been revoked.)")]
+    [Arguments(403, """{"message":"Project alpha is archived."}""", DeniedText + " (Project alpha is archived.)")]
+    public async Task ErrorTranslatingChatClient_WhenTheBodyCarriesNoCredential_StillQuotesTheReason(int status, string body, string expectedMessage)
+    {
+        using var response = new FakePipelineResponse(status, BinaryData.FromString(body));
+        var thrown = new ClientResultException(response, innerException: null);
+        using var inner = new ThrowingChatClient(thrown);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, AzureFoundryAuthMode.ApiKey, ["lettersonlysecret"]);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(expectedMessage, error.Message);
+        AssertEx.True(ReferenceEquals(thrown, error.InnerException), "The SDK exception stays on the chain when the body is clean.");
+    }
+
+    // The 5xx path quotes a raw message with no word grammar, so even a key shaped like a key got through; a 429 quotes the body later, in the classifier, off the inner exception.
+    [Test]
+    [Arguments(500, "sk-live-abc123")]
+    [Arguments(503, "lettersonlysecret")]
+    [Arguments(429, "lettersonlysecret")]
+    public async Task ErrorTranslatingChatClient_WhenATransportBodyEchoesACredential_NothingReachesTheOperatorOrTheChain(int status, string secret)
+    {
+        using var response = new FakePipelineResponse(status, BinaryData.FromString($$$"""{"error":{"message":"Bad key {{{secret}}} sent"}}"""));
+        using var inner = new ThrowingChatClient(new ClientResultException(response, innerException: null));
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, AzureFoundryAuthMode.ApiKey, [secret]);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() => client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.Transport, error.Kind);
+        AssertEx.Equal($"The Azure Foundry endpoint returned an error (HTTP {status}).", error.Message);
+        AssertEx.False(InvocationFailureClassifier.MapFailure(error).Message.Contains(secret, StringComparison.Ordinal), "The classified message carried the credential.");
+        AssertEx.False(error.ToString().Contains(secret, StringComparison.Ordinal), $"The chain a log prints carried the credential: {error}");
+    }
+
+    // With an Entra or managed identity, a gateway's own reason still outranks the RBAC guidance a bare 403 gets.
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenAnIdentityIsDeniedForAGatewayReason_QuotesTheDenial()
+    {
+        using var response = new FakePipelineResponse(403, BinaryData.FromString("""{"error":"project-archived","message":"The project is archived."}"""));
+        using var inner = new ThrowingChatClient(new ClientResultException(response, innerException: null));
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, AzureFoundryAuthMode.EntraId);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(DeniedText + " (project-archived: The project is archived.)", error.Message);
     }
 
     [Test]

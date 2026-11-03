@@ -208,5 +208,10 @@ public enum TurnNoticeKind
     ///     continues. Emitted only when the slot is not free at once.
     /// </summary>
     /// <remarks><see cref="TurnNoticePayload.Detail" /> carries the conversation id that holds the slot.</remarks>
-    ResumeQueuedBehindTurn = 23
+    ResumeQueuedBehindTurn = 23,
+
+    /// <summary>
+    ///     A remote provider's stream ended cleanly with answer text but no finish reason, so the answer may have been cut off.
+    /// </summary>
+    AnswerIncomplete = 24
 }

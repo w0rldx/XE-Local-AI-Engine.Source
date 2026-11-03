@@ -56,6 +56,27 @@ public sealed class InvocationRunnerContextBudgetTests
             FailureCategory.ContextWindowExceeded);
     }
 
+    // Compaction summarizes only on an installed local chat model, so on a gateway-only node the advice would be a dead end.
+    [Test]
+    public async Task RunAsync_WhenNoLocalChatModelExists_DoesNotAdviseCompacting()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            localChatModel: null,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 1,
+                ReservedOutputTokenFloor = 0
+            });
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "Conversation exceeds the model's context window even after truncation — Start a new chat, or switch to a larger-context model.",
+            FailureCategory.ContextWindowExceeded);
+    }
+
     /// <summary>
     ///     At a 4096 window about 19 tool schemas alone overflow, failing every first message with advice to compact a
     ///     conversation that has no history. The offer is narrowed to what fits.

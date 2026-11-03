@@ -592,6 +592,41 @@ public sealed class AzureFoundryChatClientFactoryTests
             "gpt-4o"));
     }
 
+    // The probe's rule: the key, the Entra secret and secret headers, never a plain header, or a reason quoting the project would vanish. Each
+    // client carries its own list, so the rebuild a rotation triggers (ActiveCloudChatClientFactoryTests) brings the new values and only those.
+    [Test]
+    public void Create_GivesTheTranslatorTheConnectionsSecretsOnly()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+        var connection = new StoredAzureFoundryConnection
+        {
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = AzureFoundryAuthMode.ApiKey,
+            ApiKey = "key-v1",
+            EntraClientSecret = "entra-v1",
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "x-project-id",
+                    Value = "project-alpha"
+                },
+                new StoredAzureFoundryHeader
+                {
+                    Name = "x-gateway-key",
+                    Value = "header-v1",
+                    IsSecret = true
+                }
+            ]
+        };
+
+        using var before = (AzureFoundryErrorTranslatingChatClient)factory.Create(connection, "gpt-4o");
+        using var after = (AzureFoundryErrorTranslatingChatClient)factory.Create(connection with { ApiKey = "key-v2" }, "gpt-4o");
+
+        AssertEx.Equal("entra-v1,header-v1,key-v1", string.Join(',', before.SentSecrets.Order(StringComparer.Ordinal)));
+        AssertEx.Equal("entra-v1,header-v1,key-v2", string.Join(',', after.SentSecrets.Order(StringComparer.Ordinal)));
+    }
+
     // Create's contract: the provider client is wrapped in the error-translating adapter (so SDK failures reach the
     // caller as typed AzureFoundryProviderException) and is bound to the requested deployment.
     private static void AssertIsTheErrorTranslatingAdapterForTheDeployment(IChatClient chatClient)

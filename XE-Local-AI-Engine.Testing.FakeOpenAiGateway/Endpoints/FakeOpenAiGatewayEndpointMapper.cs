@@ -143,6 +143,14 @@ internal static class FakeOpenAiGatewayEndpointMapper
 
     private static async Task<bool> TryApplyFailureAsync(HttpContext context, FakeOpenAiGatewayState state, string? model)
     {
+        if (state.TryDequeueRawResponse(out var raw))
+        {
+            context.Response.StatusCode = raw.Status;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(raw.Body, context.RequestAborted);
+            return true;
+        }
+
         if (!state.TryDequeueFailure(out var failure))
         {
             return false;
@@ -164,6 +172,16 @@ internal static class FakeOpenAiGatewayEndpointMapper
                 context.Response.Headers.RetryAfter = "7";
                 await WriteErrorAsync(context, StatusCodes.Status429TooManyRequests,
                     "Rate limit reached for requests. Please try again in 7s.", "requests", "rate_limit_exceeded");
+                break;
+            case FakeOpenAiGatewayFailure.TokenQuotaExceeded:
+                context.Response.Headers.RetryAfter = "2678400";
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await WriteJsonAsync(context, new JsonObject
+                {
+                    ["error"] = "token_quota_exceeded",
+                    ["message"] = "Token limit is exceeded. Try again in 2678400 seconds.",
+                    ["reason"] = "project-quota"
+                });
                 break;
             case FakeOpenAiGatewayFailure.Http500:
                 await WriteErrorAsync(context, StatusCodes.Status500InternalServerError,

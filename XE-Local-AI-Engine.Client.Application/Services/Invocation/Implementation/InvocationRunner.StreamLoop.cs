@@ -44,6 +44,7 @@ public sealed partial class InvocationRunner
         loop.PendingApprovals.Clear();
         loop.PendingApprovalKeys.Clear();
         loop.RepromptPending = false;
+        loop.FinalRoundFinished = false;
         var segmentUpdates = new List<AgentResponseUpdate>();
 
         // A provider round's wait for its first output is prompt prefill, which streams nothing and grows with the prompt, so the idle bound is suspended
@@ -128,6 +129,7 @@ public sealed partial class InvocationRunner
         if (update.FinishReason is { } finishReason && !string.IsNullOrEmpty(finishReason.Value))
         {
             stream.FinishReason = finishReason.Value;
+            loop.FinalRoundFinished = true;
         }
 
         // Folded on ARRIVAL, not once per drained stream: a tool-calling turn is several llama-server requests inside ONE RunStreamingAsync, which
@@ -339,6 +341,7 @@ public sealed partial class InvocationRunner
 
         // A result starts a new model round, which must produce its own text or call to count as an answer.
         loop.FinalRoundHasOutput = false;
+        loop.FinalRoundFinished = false;
         loop.AwaitingRoundOutput = true;
         loop.FinalRoundContentStart = stream.ResponseBuilder.Length;
         loop.FinalRoundReasoningStart = stream.ReasoningBuilder.Length;
@@ -520,12 +523,13 @@ public sealed partial class InvocationRunner
     }
 
     // The end-of-turn checks on the final round: leaked think text moves to the reasoning, then at most one of the empty-answer,
-    // tool-call-as-text and output-limit notices.
+    // tool-call-as-text, answer-incomplete and output-limit notices. Only a remote round must end on a finish reason (wiki 05).
     private static async Task CompleteSingleAgentTurnAsync(SingleAgentLoop loop,
         RuntimePackage package,
         StreamTransport transport,
         StreamState stream,
         ChatOutputCap outputCap,
+        bool isRemoteModel,
         CancellationToken invocationToken)
     {
         // A thinking model leaks its deliberation into the answer with thinking off too (LFM2.5 at effort none, for one),
@@ -548,6 +552,10 @@ public sealed partial class InvocationRunner
             {
                 message = ToolCallInReasoningNoticeMessage;
             }
+            else if (isRemoteModel && !finalRoundReasoned && !loop.FinalRoundFinished)
+            {
+                message = StreamEndedEmptyNoticeMessage;
+            }
 
             await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, message, stream.FinishReason);
         }
@@ -555,6 +563,10 @@ public sealed partial class InvocationRunner
         else if (loop.FinalRoundHasOutput && !invocationToken.IsCancellationRequested && AnswerIsOnlyToolCallMarkup(stream, loop.FinalRoundContentStart))
         {
             await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, ToolCallAsTextNoticeMessage, stream.FinishReason);
+        }
+        else if (loop.FinalRoundHasOutput && isRemoteModel && !loop.FinalRoundFinished && !invocationToken.IsCancellationRequested)
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.AnswerIncomplete, AnswerIncompleteNoticeMessage);
         }
         else if (loop.FinalRoundHasOutput)
         {
@@ -769,6 +781,9 @@ public sealed partial class InvocationRunner
         public bool AwaitingRoundOutput { get; set; }
 
         public bool FinalRoundHasOutput { get; set; }
+
+        // Whether the final round carried a finish reason. A later text flush from a rewriting client carries none, so this is not "the last update had one".
+        public bool FinalRoundFinished { get; set; }
 
         public int FinalRoundContentStart { get; set; }
 

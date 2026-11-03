@@ -101,8 +101,64 @@ public sealed class ExternalProviderProbeServiceTests
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.False(result.NoRoute);
-        AssertEx.Equal("The endpoint answered with HTTP 500 and served no model listing. Add model ids by hand.", result.Error);
+        AssertEx.Equal("The endpoint answered with HTTP 500 and served no model listing. (apim_policy_error: Token limit exceeded.) Add model ids by hand.", result.Error);
         AssertEx.Equal("http://127.0.0.1:18099/v1/models", result.RequestedUrl);
+    }
+
+    // The same rule as a rejection, on every other 4xx and 5xx: the sanitized reason is quoted, HTML and sent secrets are not, and the save stays allowed.
+    [Test]
+    [Arguments(HttpStatusCode.BadRequest, """{"error":"missing_project_id","message":"Missing x-project-id header"}""",
+        "The endpoint answered with HTTP 400 and served no model listing. (missing_project_id: Missing x-project-id header) Add model ids by hand.")]
+    [Arguments(HttpStatusCode.ServiceUnavailable, """{"error":"gateway-unavailable","message":"The gateway is unavailable."}""",
+        "The endpoint answered with HTTP 503 and served no model listing. (gateway-unavailable: The gateway is unavailable.) Add model ids by hand.")]
+    [Arguments(HttpStatusCode.BadGateway, "<html><body>Bad gateway</body></html>",
+        "The endpoint answered with HTTP 502 and served no model listing. Add model ids by hand.")]
+    [Arguments(HttpStatusCode.BadRequest, $$"""{"error":"bad_request","message":"Key {{StoredKey}} rejected"}""",
+        "The endpoint answered with HTTP 400 and served no model listing. Add model ids by hand.")]
+    public async Task Probe_WhenTheServerAnswersAnotherError_QuotesTheSanitizedReason(HttpStatusCode status, string body, string expected)
+    {
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(status)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport, CreateConfig());
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
+
+        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
+        AssertEx.False(result.NoRoute);
+        AssertEx.Equal(expected, result.Error);
+    }
+
+    [Test]
+    public async Task Probe_WhenNothingIsRoutedAndTheBodySaysWhy_QuotesIt()
+    {
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent("""{"error":"no_listing","message":"This gateway serves no model listing."}""", Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport);
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
+
+        AssertEx.True(result.NoRoute);
+        AssertEx.Equal($"{ExternalProviderProbeService.NoRouteError} (no_listing: This gateway serves no model listing.)", result.Error);
+    }
+
+    [Test]
+    public async Task Probe_WhenTheListingIsEmpty_HintsThatNoModelsAreAvailableToThisConnection()
+    {
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"object":"list","data":[]}""", Encoding.UTF8, "application/json")
+        });
+        var service = CreateService(transport);
+
+        var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
+
+        AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
+        AssertEx.Empty(result.Models);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "no models are available for this connection or project");
     }
 
     [Test]
@@ -145,12 +201,19 @@ public sealed class ExternalProviderProbeServiceTests
     [Arguments(HttpStatusCode.Unauthorized, """{"error":"invalid_token","message":"Access token is expired or invalid."}""",
         "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers. (invalid_token: Access token is expired or invalid.)")]
     [Arguments(HttpStatusCode.Forbidden, "<html><body>Forbidden</body></html>",
-        "The endpoint rejected the model listing with HTTP 403. Check the API key or the connection's custom headers.")]
+        "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use.")]
+    // Only a credential code blames the key on a 403; a project or RBAC denial is reported as a denial, with its reason.
+    [Arguments(HttpStatusCode.Forbidden, """{"error":"api-key-invalid","message":"The API key is not valid."}""",
+        "The endpoint rejected the model listing with HTTP 403. Check the API key or the connection's custom headers. (api-key-invalid: The API key is not valid.)")]
+    [Arguments(HttpStatusCode.Forbidden, """{"error":"project-archived","message":"The project is archived."}""",
+        "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use. (project-archived: The project is archived.)")]
+    [Arguments(HttpStatusCode.Forbidden, """{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation."}}""",
+        "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use. (PermissionDenied)")]
     // The stored key and secret header are letters and hyphens, so the grammar alone would let an echo of either through.
     [Arguments(HttpStatusCode.Unauthorized, $$"""{"error":"invalid_token","message":"Key {{StoredKey}} rejected"}""",
         "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.")]
     [Arguments(HttpStatusCode.Forbidden, $$"""{"reason":"Header value {{StoredHeaderValue}} is wrong."}""",
-        "The endpoint rejected the model listing with HTTP 403. Check the API key or the connection's custom headers.")]
+        "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use.")]
     public async Task Probe_WhenTheListingIsRejected_NamesKeyAndHeadersAndQuotesTheSanitizedReason(HttpStatusCode status, string body, string expected)
     {
         var transport = new ProbeTransport(_ => new HttpResponseMessage(status)
@@ -191,7 +254,9 @@ public sealed class ExternalProviderProbeServiceTests
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
 
         AssertEx.Equal(headerValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
-        AssertEx.Equal($"The endpoint rejected the model listing with HTTP {(longKey ? 401 : 403)}. Check the API key or the connection's custom headers.", result.Error);
+        AssertEx.Equal(longKey
+            ? "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers."
+            : "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use.", result.Error);
     }
 
     // A JSON escape hides the key from the raw bytes but not from the decoded message, which is where the check runs.

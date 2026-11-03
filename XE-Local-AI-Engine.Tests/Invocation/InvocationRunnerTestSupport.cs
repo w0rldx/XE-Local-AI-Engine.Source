@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -875,6 +876,7 @@ internal static class InvocationRunnerTestSupport
         IOrchestrationAgentFactory? orchestrationAgentFactory = null,
         ILocalModelProviderResolver? providerResolver = null,
         IActiveCloudChatClientFactory? activeCloudFactory = null,
+        string? localChatModel = "local-chat-model",
         IProviderStreamResilience? providerStreamResilience = null,
         ConversationContextBudgetOptions? contextBudgetOptions = null,
         UserQuestionAnswerStash? userQuestionAnswerStash = null,
@@ -1004,7 +1006,7 @@ internal static class InvocationRunnerTestSupport
             externalProviderRegistry ?? new FakeExternalProviderRegistry(),
             // The runner opens ONE scope per `auto` turn and resolves the dispatcher from it. The default provider
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
-            CreateScopeFactory(reasoningEffortDispatcherFactory),
+            CreateScopeFactory(reasoningEffortDispatcherFactory, localChatModel),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
             reasoningControl ?? new InvocationReasoningControl(Substitute.For<ILlamaServerNativeClient>(), NullLogger<InvocationReasoningControl>.Instance),
             logger ?? NullLogger<InvocationRunner>.Instance,
@@ -1015,9 +1017,12 @@ internal static class InvocationRunnerTestSupport
     ///     A real container holding only the reasoning-effort dispatcher, registered SCOPED exactly as the composition
     ///     root registers it — so a test drives the same resolve-from-a-scope path the product does.
     /// </summary>
-    internal static IServiceScopeFactory CreateScopeFactory(Func<IServiceProvider, IReasoningEffortDispatcher>? dispatcherFactory)
+    internal static IServiceScopeFactory CreateScopeFactory(Func<IServiceProvider, IReasoningEffortDispatcher>? dispatcherFactory, string? localChatModel = "local-chat-model")
     {
         var services = new ServiceCollection();
+        var localChatModels = Substitute.For<ILocalDefaultChatModelResolver>();
+        localChatModels.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(localChatModel);
+        services.AddScoped(_ => localChatModels);
         if (dispatcherFactory is not null)
         {
             services.AddScoped(dispatcherFactory);

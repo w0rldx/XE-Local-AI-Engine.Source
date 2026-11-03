@@ -262,6 +262,7 @@ describe("ChatNoticeRow", () => {
 		["ToolsWithheld", "Tools not offered", ".tabler-icon-tools-off"],
 		["CloudToolsWithheld", "Tools withheld from cloud model", ".tabler-icon-cloud-off"],
 		["OutputLimitReached", "Answer cut off", ".tabler-icon-cut"],
+		["AnswerIncomplete", "Answer may be incomplete", ".tabler-icon-cut"],
 		["KnowledgeUnavailable", "Knowledge base unavailable", ".tabler-icon-book-off"],
 		["AttachmentShortened", "Attachment shortened", ".tabler-icon-file-text"],
 		["AttachmentsNotSent", "Attachments not sent", ".tabler-icon-file-off"],

@@ -30,6 +30,8 @@ public sealed class InvocationFailureClassifierTests
     private const string BackendNotPermittedMessage = "The gateway's backend is not permitted to use this model or operation. Contact the gateway admin.";
 
 
+    private const string DeniedMessage = "The provider or gateway denied this request. Check with its admin what this connection may use.";
+
     private const string UnsupportedOperationBody = """{"error":{"message":"The requested operation is unsupported."}}""";
 
     private const string TenantId = "tenant-0f3c9a";
@@ -42,7 +44,7 @@ public sealed class InvocationFailureClassifierTests
 
     [Test]
     [Arguments(401, null, FailureCategory.ProviderAuthFailed, AuthFailedMessage)]
-    [Arguments(403, null, FailureCategory.ProviderAuthFailed, AuthFailedMessage)]
+    [Arguments(403, null, FailureCategory.ProviderAuthFailed, DeniedMessage)]
     [Arguments(404, null, FailureCategory.ModelUnavailable, "The provider does not offer the selected model. Check the model id on the connection.")]
     [Arguments(429, null, FailureCategory.ProviderRateLimited, "The provider rate-limited this request.")]
     [Arguments(429, "30", FailureCategory.ProviderRateLimited, "The provider rate-limited this request, retry after 30.")]
@@ -149,7 +151,7 @@ public sealed class InvocationFailureClassifierTests
 
     // Other Azure kinds keep their earlier landing even when the wrapped SDK exception carries a mapped status.
     [Test]
-    [Arguments(AzureFoundryProviderErrorKind.Transport, 429)]
+    [Arguments(AzureFoundryProviderErrorKind.Transport, 500)]
     [Arguments(AzureFoundryProviderErrorKind.ContentFiltered, 400)]
     [Arguments(AzureFoundryProviderErrorKind.Configuration, 404)]
     public void MapFailure_OtherAzureKinds_KeepTheCatchAll(AzureFoundryProviderErrorKind kind, int innerStatus)
@@ -240,7 +242,7 @@ public sealed class InvocationFailureClassifierTests
         TokenRejectedMessage + " (invalid_token: Access token is expired or invalid.)")]
     [Arguments(401, """{"error":{"message":"Incorrect API key provided.","type":"invalid_request_error","code":"invalid_api_key"}}""", FailureCategory.ProviderAuthFailed,
         AuthFailedMessage + " (invalid_api_key: Incorrect API key provided.)")]
-    [Arguments(403, """{"code":"denied","message":"Denied by policy."}""", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (denied: Denied by policy.)")]
+    [Arguments(403, """{"code":"denied","message":"Denied by policy."}""", FailureCategory.ProviderAuthFailed, DeniedMessage + " (denied: Denied by policy.)")]
     [Arguments(500, "<html><body><h1>502 Bad Gateway</h1></body></html>", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
     [Arguments(500, "", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
     [Arguments(500, "[\"not an object\"]", FailureCategory.ProviderUnreachable, ServerErrorMessage)]
@@ -295,10 +297,10 @@ public sealed class InvocationFailureClassifierTests
     [Test]
     [Arguments("Model is not assigned to this project.", FailureCategory.ModelUnavailable,
         "The provider does not offer the selected model to this connection (Model is not assigned to this project.). Check the model id on the connection.")]
-    [Arguments("Project does not exist.", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (Project does not exist.)")]
+    [Arguments("Project does not exist.", FailureCategory.ProviderAuthFailed, DeniedMessage + " (Project does not exist.)")]
     [Arguments("Missing or invalid required header 'X-Model-Token'.", FailureCategory.ProviderAuthFailed,
-        AuthFailedMessage + " (Missing or invalid required header 'X-Model-Token'.)")]
-    [Arguments("Your model quota is exhausted.", FailureCategory.ProviderAuthFailed, AuthFailedMessage + " (Your model quota is exhausted.)")]
+        DeniedMessage + " (Missing or invalid required header 'X-Model-Token'.)")]
+    [Arguments("Your model quota is exhausted.", FailureCategory.ProviderAuthFailed, DeniedMessage + " (Your model quota is exhausted.)")]
     public void MapFailure_PolicyGateway403_SplitsModelFromCredentialAndNeverSurfacesTheEchoedIds(string reason, FailureCategory expectedCategory, string expectedMessage)
     {
         var body = PolicyBodyTemplate.Replace("{0}", reason, StringComparison.Ordinal);
@@ -339,5 +341,100 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Contains(classification.Message, "may have exited");
         AssertEx.Contains(classification.Message, "Send the message again");
         AssertEx.False(classification.Message.Contains("ResponseEnded", StringComparison.Ordinal), classification.Message);
+    }
+
+    // Only a 401 or a credential code tells the operator to replace a key; any other 403 quotes the denial. The classifier is shared
+    // by every external provider, so generic OpenAI-style 403s are pinned beside this gateway's bodies.
+    [Test]
+    [Arguments(401, """{"error":"api-key-revoked","message":"The API key has been revoked."}""", FailureCategory.ProviderAuthFailed,
+        AuthFailedMessage + " (api-key-revoked: The API key has been revoked.)")]
+    [Arguments(403, """{"error":"api-key-invalid","message":"The API key is not valid."}""", FailureCategory.ProviderAuthFailed,
+        AuthFailedMessage + " (api-key-invalid: The API key is not valid.)")]
+    [Arguments(403, """{"error":{"message":"Incorrect API key provided.","type":"invalid_request_error","code":"invalid_api_key"}}""", FailureCategory.ProviderAuthFailed,
+        AuthFailedMessage + " (invalid_api_key: Incorrect API key provided.)")]
+    [Arguments(403, """{"error":"project-archived","message":"The project is archived."}""", FailureCategory.ProviderAuthFailed,
+        DeniedMessage + " (project-archived: The project is archived.)")]
+    [Arguments(403, """{"error":"user-disabled","message":"The user is disabled."}""", FailureCategory.ProviderAuthFailed,
+        DeniedMessage + " (user-disabled: The user is disabled.)")]
+    [Arguments(403, """{"error":"model-not-approved","message":"The model is not approved for the project."}""", FailureCategory.ModelUnavailable,
+        "The provider does not offer the selected model to this connection (model-not-approved: The model is not approved for the project.). Check the model id on the connection.")]
+    [Arguments(403, """{"error":{"message":"You are not allowed to sample from this model","type":"invalid_request_error","code":"model_not_allowed"}}""", FailureCategory.ModelUnavailable,
+        "The provider does not offer the selected model to this connection (model_not_allowed: You are not allowed to sample from this model). Check the model id on the connection.")]
+    [Arguments(403, """{"error":{"message":"You have insufficient permissions for this operation.","type":"insufficient_permissions","code":"insufficient_permissions"}}""", FailureCategory.ProviderAuthFailed,
+        DeniedMessage + " (insufficient_permissions: You have insufficient permissions for this operation.)")]
+    [Arguments(403, """{"error":{"message":"Country, region, or territory not supported","type":"request_forbidden","code":"unsupported_country_region_territory"}}""", FailureCategory.ProviderAuthFailed,
+        DeniedMessage + " (unsupported_country_region_territory: Country, region, or territory not supported)")]
+    // The organization id makes the real message fail the grammar: the reader is told it was denied, and to rotate nothing.
+    [Arguments(403, """{"error":{"message":"Project `proj_abc123` does not have access to model `gpt-5`","type":"invalid_request_error"}}""", FailureCategory.ProviderAuthFailed,
+        DeniedMessage)]
+    public void MapFailure_AuthStatus_OnlyACredentialFailureSaysToReplaceTheKey(int status, string body, FailureCategory expectedCategory, string expectedMessage)
+    {
+        var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(status, retryAfter: null, reasonPhrase: "", body));
+
+        AssertEx.Equal(expectedCategory, classification.Category);
+        AssertEx.Equal(expectedMessage, classification.Message);
+    }
+
+    private const string QuotaMonthlyBody = """{"error":"token_quota_exceeded","message":"Token limit is exceeded. Try again in 2678400 seconds.","reason":"project-quota"}""";
+    private const string QuotaPlainBody = """{"error":"token_quota_exceeded","message":"Token limit exceeded.","reason":"project-quota"}""";
+    private const string TpmBody = """{"error":"token_rate_limit_exceeded","message":"Token limit is exceeded. Try again in 12 seconds.","reason":"rate-limit"}""";
+    private const string QuotaMessage = "The token quota for this connection is used up";
+    private const string RateLimitedMessage = "The provider rate-limited this request";
+
+    // The gateway's 429 bodies, the same on the generic and the Foundry path. A monthly quota is told from a per-minute limit by its code, a wait a person
+    // would have to convert is phrased readably, and a body quoting the same wait in raw seconds gives way to its reason.
+    [Test]
+    [Arguments(QuotaMonthlyBody, "2678400", $"{QuotaMessage}, retry after about 31 days. (token_quota_exceeded: project-quota)")]
+    [Arguments(QuotaPlainBody, "2678400", $"{QuotaMessage}, retry after about 31 days. (token_quota_exceeded: Token limit exceeded. (reason: project-quota))")]
+    [Arguments(QuotaPlainBody, "30", $"{QuotaMessage}, retry after 30. (token_quota_exceeded: Token limit exceeded. (reason: project-quota))")]
+    [Arguments(QuotaPlainBody, null, $"{QuotaMessage}. (token_quota_exceeded: Token limit exceeded. (reason: project-quota))")]
+    [Arguments(TpmBody, "12", $"{RateLimitedMessage}, retry after 12. (token_rate_limit_exceeded: Token limit is exceeded. Try again in 12 seconds. (reason: rate-limit))")]
+    public void MapFailure_Gateway429_NamesTheLimitAndKeepsTheReason(string body, string? retryAfter, string expectedMessage)
+    {
+        var inner = FakeClientResultException.Create(429, retryAfter, "Too Many Requests", body);
+        var generic = InvocationFailureClassifier.MapFailure(new InvalidOperationException("agent run failed", inner));
+        var foundry = InvocationFailureClassifier.MapFailure(new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport,
+            "The Azure Foundry endpoint returned an error (HTTP 429).", inner));
+
+        AssertEx.Equal(FailureCategory.ProviderRateLimited, generic.Category);
+        AssertEx.Equal(expectedMessage, generic.Message);
+        AssertEx.Equal(FailureCategory.ProviderRateLimited, foundry.Category);
+        AssertEx.Equal(expectedMessage, foundry.Message);
+    }
+
+    [Test]
+    [Arguments("119", "119")]
+    [Arguments("120", "about 2 minutes")]
+    [Arguments("3540", "about 59 minutes")]
+    [Arguments("7200", "about 2 hours")]
+    [Arguments("90001", "about 26 hours")]
+    [Arguments("172800", "about 2 days")]
+    [Arguments("Wed, 21 Oct 2026 07:28:00 GMT", "Wed, 21 Oct 2026 07:28:00 GMT")]
+    public void MapFailure_RateLimitWait_IsReadableOnceACountOfSecondsIsNot(string retryAfter, string expectedWait)
+    {
+        var classification = InvocationFailureClassifier.MapFailure(FakeClientResultException.Create(429, retryAfter));
+
+        AssertEx.Equal($"{RateLimitedMessage}, retry after {expectedWait}.", classification.Message);
+    }
+
+    [Test]
+    public void MapFailure_Foundry429_WithoutAWaitOrBody_IsStillRateLimited()
+    {
+        var classification = InvocationFailureClassifier.MapFailure(new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport,
+            "The Azure Foundry endpoint returned an error (HTTP 429).", FakeClientResultException.Create(429, retryAfter: null)));
+
+        AssertEx.Equal(FailureCategory.ProviderRateLimited, classification.Category);
+        AssertEx.Equal($"{RateLimitedMessage}.", classification.Message);
+    }
+
+    [Test]
+    public void MapFailure_ResponseEnded_DoesNotPromiseALocalReload()
+    {
+        var ended = new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely.");
+
+        var classification = InvocationFailureClassifier.MapFailure(ended);
+
+        AssertEx.Equal(FailureCategory.ProviderUnreachable, classification.Category);
+        AssertEx.False(classification.Message.Contains("local model", StringComparison.OrdinalIgnoreCase), classification.Message);
     }
 }
