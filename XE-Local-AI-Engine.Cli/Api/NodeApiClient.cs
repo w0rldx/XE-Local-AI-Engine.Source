@@ -57,7 +57,7 @@ internal sealed class NodeApiClient
         SendAsync<LocalModelList>(HttpMethod.Get, "models", body: null, cancellationToken);
 
     public Task<RunningModelList> ListRunningModelsAsync(CancellationToken cancellationToken) =>
-        SendAsync<RunningModelList>(HttpMethod.Get, "models/running", body: null, cancellationToken);
+        SendAsync<RunningModelList>(HttpMethod.Get, "model-fit/running", body: null, cancellationToken);
 
     public Task<AgentDefinitionList> ListAgentsAsync(CancellationToken cancellationToken) =>
         SendAsync<AgentDefinitionList>(HttpMethod.Get, "agents", body: null, cancellationToken);

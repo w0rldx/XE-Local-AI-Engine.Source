@@ -11,7 +11,7 @@ function formatNumber(value: number | null | undefined, digits = 0): string | un
 	return value == null ? undefined : value.toLocaleString(undefined, { maximumFractionDigits: digits });
 }
 
-// Usage comes from the provider; the prompt/generation split exists only for llama-server, so a cloud or Ollama run
+// Usage comes from the provider; the prompt/generation split exists only for llama-server, so a cloud run
 // shows "n/a" there rather than a number derived from the wall clock.
 export function DirectInferenceMetrics({ result }: DirectInferenceMetricsProps) {
 	const { t } = useTranslation();

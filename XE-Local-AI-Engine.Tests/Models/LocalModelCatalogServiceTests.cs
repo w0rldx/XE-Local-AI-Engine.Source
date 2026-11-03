@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -15,12 +15,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The catalog's five sources fail independently, and that policy, not the endpoint's mapping, keeps a node with no
-///     Ollama, no cloud session and an unreadable GGUF registry able to answer a picker query. Each test kills one.
+///     The catalog's sources fail independently, and that policy, not the endpoint's mapping, keeps a node with no cloud
+///     session and an unreadable GGUF registry able to answer a picker query. Each test kills one.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelCatalogServiceTests
@@ -31,19 +30,19 @@ public sealed class LocalModelCatalogServiceTests
     public async Task GetCatalog_WhenEverySourceAnswers_CarriesAllOfThem()
     {
         var harness = new Harness();
-        harness.WithOllamaModels("orca-mini:latest");
         harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.WithCodexSession(Now.AddHours(1));
         harness.WithAzureDeployment("gpt-5");
         harness.WithExternalModel();
+        harness.WithOverride("local/gguf:Q4_K_M", ModelKind.Embedding);
 
         var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
         AssertEx.Equal(expected: 1, catalog.InstalledGgufModels.Count);
         AssertEx.True(catalog.HasUsableCodexSession);
         AssertEx.NotNull(catalog.AzureFoundryConnection);
         AssertEx.Equal(expected: 1, catalog.ExternalModels.Count);
+        AssertEx.Equal(ModelKind.Embedding, catalog.Classifications["LOCAL/GGUF:Q4_K_M"].OverrideKind);
         AssertEx.Equal("selected:model", catalog.SelectedModelName);
         AssertEx.Equal(harness.ConfiguredDefaultModel, catalog.ConfiguredDefaultModelName);
     }
@@ -51,33 +50,30 @@ public sealed class LocalModelCatalogServiceTests
     [Test]
     public async Task GetCatalog_WhenTheExternalRegistryThrows_DegradesToNoExternalEntriesOnly()
     {
-        // An unreadable encrypted external store must not take the local picker down with it: the four other sources
+        // An unreadable encrypted external store must not take the local picker down with it: the other sources
         // have nothing to do with it, and a node whose external file is corrupt still has its GGUFs.
         var harness = new Harness();
-        harness.WithOllamaModels("orca-mini:latest");
+        harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
                .Returns<Task<IReadOnlyList<ExternalProviderModelRegistration>>>(_ => throw new IOException("external store unreadable"));
 
         var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.Empty(catalog.ExternalModels);
-        AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
+        AssertEx.Equal(expected: 1, catalog.InstalledGgufModels.Count);
     }
 
     [Test]
-    public async Task GetCatalog_WhenOllamaIsUnreachable_ReportsNullModelsAndKeepsTheOtherSources()
+    public async Task GetCatalog_WhenTheClassificationStoreFails_LosesTheOverridesAndKeepsTheOtherSources()
     {
-        // Null models — not an empty list — is the unavailability signal the list endpoint degrades on. An empty list
-        // would render as "available, nothing installed" and hide the outage.
         var harness = new Harness();
-        harness.ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-               .Returns<Task<IEnumerable<OllamaModelSummary>>>(_ => throw new HttpRequestException("connection refused"));
+        harness.ClassificationStore.ListAsync(Arg.Any<CancellationToken>())
+               .Returns<Task<IReadOnlyList<ModelClassificationRecord>>>(_ => throw new InvalidOperationException("database unreadable"));
         harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.WithCodexSession(Now.AddHours(1));
 
         var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
-        AssertEx.Null(catalog.OllamaModels);
         AssertEx.Empty(catalog.Classifications);
         AssertEx.Equal(expected: 1, catalog.InstalledGgufModels.Count);
         AssertEx.True(catalog.HasUsableCodexSession);
@@ -87,14 +83,14 @@ public sealed class LocalModelCatalogServiceTests
     public async Task GetCatalog_WhenTheGgufRegistryFails_DegradesToNoGgufEntriesOnly()
     {
         var harness = new Harness();
-        harness.WithOllamaModels("orca-mini:latest");
+        harness.WithCodexSession(Now.AddHours(1));
         harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new IOException("registry unreadable"));
 
         var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.Empty(catalog.InstalledGgufModels);
-        AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
+        AssertEx.True(catalog.HasUsableCodexSession);
     }
 
     [Test]
@@ -114,21 +110,19 @@ public sealed class LocalModelCatalogServiceTests
     public async Task GetCatalog_WhenTheCodexStoreThrows_OffersNoCodexModelsRatherThanFailing()
     {
         var harness = new Harness();
-        harness.WithOllamaModels("orca-mini:latest");
+        harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
                .Returns<Task<CodexTokens?>>(_ => throw new InvalidOperationException("token store unreadable"));
 
         var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None);
 
         AssertEx.False(catalog.HasUsableCodexSession);
-        AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
+        AssertEx.Equal(expected: 1, catalog.InstalledGgufModels.Count);
     }
 
     private sealed class Harness
     {
         public string ConfiguredDefaultModel { get; } = new LocalChatAgentOptions().DefaultModel;
-
-        public IOllamaModelService ModelService { get; } = Substitute.For<IOllamaModelService>();
 
         public IGgufModelStore GgufModelStore { get; } = Substitute.For<IGgufModelStore>();
 
@@ -136,7 +130,7 @@ public sealed class LocalModelCatalogServiceTests
 
         public IExternalProviderRegistry ExternalProviderRegistry { get; } = Substitute.For<IExternalProviderRegistry>();
 
-        private IModelClassificationService ClassificationService { get; } = Substitute.For<IModelClassificationService>();
+        public IModelClassificationStore ClassificationStore { get; } = Substitute.For<IModelClassificationStore>();
 
         private ICloudModelResolver CloudModelResolver { get; } = Substitute.For<ICloudModelResolver>();
 
@@ -145,33 +139,28 @@ public sealed class LocalModelCatalogServiceTests
         public Harness()
         {
             RuntimeSettings.GetDefaultModelNameAsync(Arg.Any<CancellationToken>()).Returns("selected:model");
-            ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<OllamaModelSummary>().AsEnumerable());
+            ClassificationStore.ListAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<ModelClassificationRecord>());
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<LocalModelDescriptor>());
             CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
             CloudModelResolver.ResolveAzureFoundryConnectionAsync(Arg.Any<CancellationToken>()).Returns((StoredAzureFoundryConnection?)null);
             ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
                                     .Returns<IReadOnlyList<ExternalProviderModelRegistration>>([]);
-            ClassificationService.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
-                                 .Returns(call => call.Arg<IEnumerable<ModelIdentity>>()
-                                                      .ToDictionary(entry => entry.ModelName,
-                                                          entry => new ModelClassificationResult
-                                                          {
-                                                              ModelName = entry.ModelName,
-                                                              Kind = ModelKind.Chat,
-                                                              DetectedKind = ModelKind.Chat,
-                                                              Capabilities = [],
-                                                              IsOverridden = false
-                                                          },
-                                                          StringComparer.OrdinalIgnoreCase)
-                                     as IReadOnlyDictionary<string, ModelClassificationResult>);
         }
 
-        public void WithOllamaModels(params string[] modelNames) =>
-            ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-                        .Returns(modelNames.Select(static name => new OllamaModelSummary
-                        {
-                            Name = name
-                        }).AsEnumerable());
+        public void WithOverride(string modelName, ModelKind kind) =>
+            ClassificationStore.ListAsync(Arg.Any<CancellationToken>())
+                               .Returns<IReadOnlyList<ModelClassificationRecord>>([
+                                   new ModelClassificationRecord
+                                   {
+                                       ModelName = modelName,
+                                       Digest = null,
+                                       DetectedKind = ModelKind.Unknown,
+                                       DetectedCapabilitiesJson = null,
+                                       OverrideKind = kind,
+                                       DetectedAtUtc = null,
+                                       UpdatedAtUtc = 1
+                                   }
+                               ]);
 
         public void WithInstalledGguf(string modelName) =>
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
@@ -225,8 +214,7 @@ public sealed class LocalModelCatalogServiceTests
                                     ]);
 
         public LocalModelCatalogService CreateService() =>
-            new(ModelService,
-                ClassificationService,
+            new(ClassificationStore,
                 GgufModelStore,
                 RuntimeSettings,
                 Options.Create(new LocalChatAgentOptions()),

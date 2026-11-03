@@ -51,7 +51,7 @@ internal static class ParticipantReasoningOptions
         if (supportsThinking)
         {
             // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high"). minimal/xhigh
-            // collapse to think:true here because Ollama 400s on an unknown think level (see ResolveThinkOption).
+            // collapse to think:true here; the Codex boundary reads the raw level from its own key (see ResolveThinkOption).
             properties["think"] = ReasoningOptionsResolver.ResolveThinkOption(reasoningEffort);
 
             var codexEffort = ReasoningOptionsResolver.ResolveCodexReasoningEffort(reasoningEffort);

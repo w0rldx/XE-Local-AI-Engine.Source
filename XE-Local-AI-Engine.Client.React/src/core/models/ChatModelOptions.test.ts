@@ -19,6 +19,7 @@ type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelRespon
 function model(overrides: Partial<LocalModelDto>): LocalModelDto {
 	return {
 		modelName: "qwen3:8b",
+		provider: "llamacpp",
 		kind: "Chat",
 		detectedKind: "Chat",
 		isSelected: false,
@@ -32,21 +33,21 @@ function model(overrides: Partial<LocalModelDto>): LocalModelDto {
 
 describe("toModelOption capability mapping", () => {
 	it("maps isReasoningCapable to isReasoningModel and isToolCapable through", () => {
-		const option = toModelOption(model({ isReasoningCapable: true, isToolCapable: true }), true);
+		const option = toModelOption(model({ isReasoningCapable: true, isToolCapable: true }));
 
 		expect(option.isReasoningModel).toBe(true);
 		expect(option.isToolCapable).toBe(true);
 	});
 
 	it("treats a model that lacks the capability flags as not reasoning/tool capable", () => {
-		const option = toModelOption(model({ isReasoningCapable: false, isToolCapable: false }), true);
+		const option = toModelOption(model({ isReasoningCapable: false, isToolCapable: false }));
 
 		expect(option.isReasoningModel).toBe(false);
 		expect(option.isToolCapable).toBe(false);
 	});
 
 	it("coalesces undefined capability flags to false", () => {
-		const option = toModelOption(model({ isReasoningCapable: undefined, isToolCapable: undefined }), true);
+		const option = toModelOption(model({ isReasoningCapable: undefined, isToolCapable: undefined }));
 
 		expect(option.isReasoningModel).toBe(false);
 		expect(option.isNativeReasoningModel).toBe(false);
@@ -57,14 +58,14 @@ describe("toModelOption capability mapping", () => {
 	// switch. It must surface as its OWN capability and must NOT be folded into isReasoningModel — that flag drives
 	// the graded think:<level> menu and the backend branch that writes `think` / `enable_thinking=false`.
 	it("maps isNativeReasoningCapable to its own flag without setting isReasoningModel", () => {
-		const option = toModelOption(model({ isNativeReasoningCapable: true, isReasoningCapable: false }), true);
+		const option = toModelOption(model({ isNativeReasoningCapable: true, isReasoningCapable: false }));
 
 		expect(option.isNativeReasoningModel).toBe(true);
 		expect(option.isReasoningModel).toBe(false);
 	});
 
 	it("keeps a graded reasoning model out of the native flag", () => {
-		const option = toModelOption(model({ isReasoningCapable: true, isNativeReasoningCapable: false }), true);
+		const option = toModelOption(model({ isReasoningCapable: true, isNativeReasoningCapable: false }));
 
 		expect(option.isReasoningModel).toBe(true);
 		expect(option.isNativeReasoningModel).toBe(false);
@@ -73,13 +74,10 @@ describe("toModelOption capability mapping", () => {
 
 describe("toChatModelOptions capability mapping", () => {
 	it("carries per-model capabilities through the chat-capable filter", () => {
-		const options = toChatModelOptions(
-			[
-				model({ modelName: "qwen3:8b", isReasoningCapable: true, isToolCapable: true }),
-				model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: false }),
-			],
-			true,
-		);
+		const options = toChatModelOptions([
+			model({ modelName: "qwen3:8b", isReasoningCapable: true, isToolCapable: true }),
+			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: false }),
+		]);
 
 		expect(options).toHaveLength(2);
 		expect(options[0]).toMatchObject({ value: "qwen3:8b", isReasoningModel: true, isToolCapable: true });
@@ -87,10 +85,9 @@ describe("toChatModelOptions capability mapping", () => {
 	});
 
 	it("excludes non-chat models before mapping", () => {
-		const options = toChatModelOptions(
-			[model({ modelName: "embed", kind: "Embedding", isReasoningCapable: true, isToolCapable: true })],
-			true,
-		);
+		const options = toChatModelOptions([
+			model({ modelName: "embed", kind: "Embedding", isReasoningCapable: true, isToolCapable: true }),
+		]);
 
 		expect(options).toHaveLength(0);
 	});
@@ -105,9 +102,9 @@ describe("reasoning control (Answer now)", () => {
 			false,
 		],
 		["a model that does not reason", { provider: "llamacpp", isReasoningCapable: false }, false],
-		["an Ollama model", { provider: "Ollama", isReasoningCapable: true }, false],
+		["an external model", { provider: "external", isReasoningCapable: true }, false],
 	])("is offered only for %s", (_case, overrides, expected) => {
-		expect(toModelOption(model(overrides), true).isReasoningControllable).toBe(expected);
+		expect(toModelOption(model(overrides)).isReasoningControllable).toBe(expected);
 		expect(resolveLocalDefaultModelCapabilities([model({ ...overrides, isSelected: true })]).isReasoningControllable).toBe(
 			expected,
 		);
@@ -122,7 +119,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
-			isReasoningControllable: false,
+			isReasoningControllable: true,
 			isReasoningModel: true,
 			isNativeReasoningModel: false,
 			isToolCapable: true,
@@ -154,7 +151,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
-			isReasoningControllable: false,
+			isReasoningControllable: true,
 			isReasoningModel: true,
 			isNativeReasoningModel: false,
 			isToolCapable: true,
@@ -169,7 +166,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
-			isReasoningControllable: false,
+			isReasoningControllable: true,
 			isReasoningModel: true,
 			isNativeReasoningModel: false,
 			isToolCapable: false,
@@ -244,19 +241,19 @@ describe("external-provider containment (D10)", () => {
 		});
 
 	it("keeps external models out of the local chat list", () => {
-		const options = toChatModelOptions([model({ modelName: "qwen3:8b" }), externalModel()], true);
+		const options = toChatModelOptions([model({ modelName: "qwen3:8b" }), externalModel()]);
 
 		expect(options.map((option) => option.value)).toEqual(["qwen3:8b"]);
 	});
 
 	it("keeps declared-cloud external models out of the local chat list too", () => {
-		const options = toChatModelOptions([externalModel({ declaredLocality: "cloud" })], true);
+		const options = toChatModelOptions([externalModel({ declaredLocality: "cloud" })]);
 
 		expect(options).toHaveLength(0);
 	});
 
 	it("never offers an external model as a speculative draft model", () => {
-		const options = toDraftModelOptions([model({ modelName: "qwen3:1.7b", kind: "Draft" }), externalModel()], true);
+		const options = toDraftModelOptions([model({ modelName: "qwen3:1.7b", kind: "Draft" }), externalModel()]);
 
 		expect(options.map((option) => option.value)).toEqual(["qwen3:1.7b"]);
 	});
@@ -272,7 +269,7 @@ describe("external-provider containment (D10)", () => {
 	});
 
 	it("carries the connection identity and declared locality onto external options", () => {
-		const [option] = toExternalModelOptions([externalModel({ displayLabel: "Qwen3 27B" })], true);
+		const [option] = toExternalModelOptions([externalModel({ displayLabel: "Qwen3 27B" })]);
 
 		expect(option?.provider).toBe("external");
 		expect(option?.externalConnectionId).toBe("unsloth-box");
@@ -282,46 +279,40 @@ describe("external-provider containment (D10)", () => {
 	});
 
 	it("carries a declared graded-effort capability, and leaves it undeclared for every other provider", () => {
-		const [graded] = toExternalModelOptions([externalModel({ isReasoningCapable: true, isReasoningEffortCapable: true })], true);
-		const [binaryOnly] = toExternalModelOptions(
-			[externalModel({ isReasoningCapable: true, isReasoningEffortCapable: false })],
-			true,
-		);
+		const [graded] = toExternalModelOptions([externalModel({ isReasoningCapable: true, isReasoningEffortCapable: true })]);
+		const [binaryOnly] = toExternalModelOptions([externalModel({ isReasoningCapable: true, isReasoningEffortCapable: false })]);
 
 		expect(graded?.isReasoningEffortCapable).toBe(true);
 		expect(binaryOnly?.isReasoningEffortCapable).toBe(false);
 
 		// Undefined, not false: the backend reports null for a local model, and reading that as "no graded effort"
 		// would demote every thinking model to the binary control.
-		expect(toModelOption(model({ isReasoningCapable: true }), true).isReasoningEffortCapable).toBeUndefined();
+		expect(toModelOption(model({ isReasoningCapable: true })).isReasoningEffortCapable).toBeUndefined();
 	});
 
 	it("leaves isCloud unset on external options so they never get the Codex effort vocabulary", () => {
-		const options = toExternalModelOptions([externalModel({ declaredLocality: "cloud" })], true);
+		const options = toExternalModelOptions([externalModel({ declaredLocality: "cloud" })]);
 
 		expect(options[0]?.isCloud).toBeUndefined();
 	});
 
 	it("takes only external chat models, ignoring every other provider", () => {
-		const options = toExternalModelOptions([model({ modelName: "qwen3:8b" }), externalModel()], true);
+		const options = toExternalModelOptions([model({ modelName: "qwen3:8b" }), externalModel()]);
 
 		expect(options.map((option) => option.value)).toEqual(["ext:unsloth-box/qwen3-27b"]);
 	});
 
 	it("groups external options one section per connection, in first-seen order", () => {
-		const options = toExternalModelOptions(
-			[
-				externalModel({ modelName: "ext:a/one", externalConnectionId: "a", externalConnectionName: "Box A" }),
-				externalModel({
-					modelName: "ext:b/one",
-					externalConnectionId: "b",
-					externalConnectionName: "Gateway B",
-					declaredLocality: "cloud",
-				}),
-				externalModel({ modelName: "ext:a/two", externalConnectionId: "a", externalConnectionName: "Box A" }),
-			],
-			true,
-		);
+		const options = toExternalModelOptions([
+			externalModel({ modelName: "ext:a/one", externalConnectionId: "a", externalConnectionName: "Box A" }),
+			externalModel({
+				modelName: "ext:b/one",
+				externalConnectionId: "b",
+				externalConnectionName: "Gateway B",
+				declaredLocality: "cloud",
+			}),
+			externalModel({ modelName: "ext:a/two", externalConnectionId: "a", externalConnectionName: "Box A" }),
+		]);
 
 		const groups = groupExternalModelOptions(options);
 
@@ -333,7 +324,7 @@ describe("external-provider containment (D10)", () => {
 	});
 
 	it("treats a missing or unrecognized locality as cloud, matching the backend's fail-closed direction", () => {
-		const options = toExternalModelOptions([externalModel({ declaredLocality: null })], true);
+		const options = toExternalModelOptions([externalModel({ declaredLocality: null })]);
 
 		expect(groupExternalModelOptions(options)[0]?.isDeclaredCloud).toBe(true);
 	});
@@ -349,7 +340,7 @@ describe("model picker strings in German", () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
 
-		const option = toModelOption(model({ isSelected: true, parameterSize: "8B" }), true);
+		const option = toModelOption(model({ isSelected: true, parameterSize: "8B" }));
 
 		expect(option.statusLabel).toBe("Node-Standard · 8B");
 	});

@@ -767,7 +767,7 @@ public sealed class GgufStoreTests
     }
 
     /// <summary>
-    ///     The Models page's family, size and quant come from the same single header read: architecture as Ollama's
+    ///     The Models page's family, size and quant come from the same single header read: architecture as the
     ///     family, the converter's <c>general.size_label</c> as the size, the registry quant as the quant.
     /// </summary>
     [Test]

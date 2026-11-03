@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Persisted mapping of a single local model name to the provider that serves it (for example
-///     <c>"llamacpp"</c> for a supervisor-served GGUF or <c>"ollama"</c> for an Ollama-managed model). Keyed by
+///     <c>"llamacpp"</c> for a supervisor-served GGUF or <c>"external"</c> for a registered external model). Keyed by
 ///     model name (<c>NOCASE</c>).
 /// </summary>
 /// <remarks>
@@ -15,7 +15,7 @@ internal sealed record class ModelProviderMap
     /// <summary>Model name (primary key, <c>NOCASE</c> collation). The stable routing key.</summary>
     public string ModelName { get; set; } = string.Empty;
 
-    /// <summary>Provider key that serves this model (for example <c>"llamacpp"</c> or <c>"ollama"</c>).</summary>
+    /// <summary>Provider key that serves this model (for example <c>"llamacpp"</c> or <c>"external"</c>).</summary>
     public string ProviderName { get; set; } = string.Empty;
 
     /// <summary>Unix ms of the last row write.</summary>

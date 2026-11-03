@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     The agent only PROPOSES; it persists and decides nothing, while the service gates temp chats, dedupes and
 ///     writes <c>Suggested</c> actions for human review. Implementations run a node-local model, never the shared
 ///     cloud-capable client, so conversation content never leaves the node. The seam keeps the model off the hot send
-///     path and lets tests substitute a deterministic fake, so CI needs no Ollama.
+///     path and lets tests substitute a deterministic fake, so CI needs no model runtime.
 /// </remarks>
 public interface IMemoryExtractionAgent
 {

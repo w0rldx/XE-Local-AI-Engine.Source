@@ -31,7 +31,6 @@
     <PackageReference Include="Microsoft.Testing.Platform"/>
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="NSubstitute.Analyzers.CSharp" PrivateAssets="all"/>
-    <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TUnit"/>
     <PackageReference Include="TUnit.Playwright"/>
   </ItemGroup>
@@ -41,8 +40,7 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOpenAiGateway\XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Testing\XE-Local-AI-Engine.Client.Testing.csproj"/>
   </ItemGroup>
 
@@ -51,6 +49,7 @@
        Client.Testing so the rule lives next to the tests it serves. -->
   <ItemGroup>
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\LoopbackPort.cs" Link="Testing\LoopbackPort.cs"/>
+    <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\FakeGatewayLocalModelProvider.cs" Link="Testing\FakeGatewayLocalModelProvider.cs"/>
   </ItemGroup>
 
   <!-- The live-capture E2E points Chromium's fake microphone at the repository's own speech fixture. A LINK,

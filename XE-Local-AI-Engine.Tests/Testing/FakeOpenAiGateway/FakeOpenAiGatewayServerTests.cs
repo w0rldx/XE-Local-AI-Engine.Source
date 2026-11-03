@@ -456,6 +456,179 @@ public sealed class FakeOpenAiGatewayServerTests
         AssertEx.Equal(HttpStatusCode.OK, rightResponse.StatusCode);
     }
 
+    [Test]
+    public async Task Embeddings_AnswerAStableVectorPerInputInOrder()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            EmbeddingDimensions = 3
+        });
+        using var client = Client(gateway);
+
+        using var response = await PostJsonAsync(client, new Uri("embeddings", UriKind.Relative), $$"""{"model":"{{Model}}","input":["stable input","other input"]}""");
+        using var json = await ReadJsonAsync(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("list", json.RootElement.GetProperty("object").GetString());
+        var data = json.RootElement.GetProperty("data").EnumerateArray().ToArray();
+        AssertEx.Equal(expected: 2, data.Length);
+        AssertEx.Equal(expected: 1, data[1].GetProperty("index").GetInt32());
+        var first = data[0].GetProperty("embedding").EnumerateArray().Select(static component => component.GetDouble()).ToArray();
+
+        // Literal, so the vectors cannot drift with the generator: stored test vectors and rankings depend on them.
+        AssertEx.Equal(expected: 3, first.Length);
+        AssertEx.True(Math.Abs(first[0] - -0.46578440192199855) < 1e-12, $"The first component drifted: {first[0]}.");
+        AssertEx.True(Math.Abs(first[2] - -0.44799446323531544) < 1e-12, $"The third component drifted: {first[2]}.");
+        AssertEx.True(Math.Abs(data[1].GetProperty("embedding")[0].GetDouble() - first[0]) > 1e-6, "Different text must embed differently.");
+    }
+
+    [Test]
+    public async Task Embeddings_Base64Format_EncodesTheSameVectorAsLittleEndianFloats()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            EmbeddingDimensions = 3
+        });
+        using var client = Client(gateway);
+
+        using var response = await PostJsonAsync(client, new Uri("embeddings", UriKind.Relative), $$"""{"model":"{{Model}}","input":"stable input","encoding_format":"base64"}""");
+        using var json = await ReadJsonAsync(response);
+
+        var bytes = Convert.FromBase64String(json.RootElement.GetProperty("data")[0].GetProperty("embedding").GetString()!);
+        AssertEx.Equal(expected: 3 * sizeof(float), bytes.Length);
+        AssertEx.Equal((float)-0.46578440192199855, BitConverter.ToSingle(bytes, startIndex: 0));
+    }
+
+    [Test]
+    public async Task Embeddings_RunTheSameGatesAsChat()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(GatedOptions());
+        using var anonymous = Client(gateway);
+        using var authorized = GatedClient(gateway);
+
+        using var rejected = await PostJsonAsync(anonymous, new Uri("embeddings", UriKind.Relative), $$"""{"model":"{{Model}}","input":"x"}""");
+        using var unknown = await PostJsonAsync(authorized, new Uri("embeddings", UriKind.Relative), """{"model":"no-such-model","input":"x"}""");
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+    }
+
+    [Test]
+    public async Task Models_AreLiveState_ForTheListAndForWhatIsServed()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync();
+        using var client = Client(gateway);
+        gateway.State.Models =
+        [
+            new FakeOpenAiGatewayModel
+            {
+                Id = "added",
+                ContextLength = 8192
+            }
+        ];
+
+        using var listed = await client.GetAsync(new Uri("models", UriKind.Relative));
+        using var json = await ReadJsonAsync(listed);
+        using var added = await PostChatAsync(client, stream: false, model: "added");
+        using var removed = await PostChatAsync(client, stream: false);
+
+        AssertEx.Equal("added", json.RootElement.GetProperty("data").EnumerateArray().Single().GetProperty("id").GetString());
+        AssertEx.Equal(HttpStatusCode.OK, added.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NotFound, removed.StatusCode);
+    }
+
+    [Test]
+    public async Task AllowUnlistedModels_ServesANameTheListDoesNotHold()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            AllowUnlistedModels = true
+        });
+        using var client = Client(gateway);
+
+        using var response = await PostChatAsync(client, stream: false, model: "any-model");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Test]
+    public async Task EchoPrefix_RepliesWithTheLastUserMessage()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            EchoPrefix = "[echo]"
+        });
+        using var client = Client(gateway);
+
+        using var response = await PostChatAsync(client, stream: false);
+        using var json = await ReadJsonAsync(response);
+
+        AssertEx.Equal("[echo] hello", json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
+    }
+
+    [Test]
+    public async Task ChatResponder_SeesTheTurn_WinsOverTheScript_AndFallsThroughOnNull()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync();
+        gateway.State.SetScript(new FakeOpenAiGatewayScript
+        {
+            CompletionText = "scripted"
+        });
+        var turns = new List<FakeOpenAiGatewayChatTurn>();
+        gateway.State.ChatResponder = (turn, _) =>
+        {
+            turns.Add(turn);
+            return Task.FromResult(turns.Count == 1
+                ? new FakeOpenAiGatewayScript
+                {
+                    CompletionText = "answered"
+                }
+                : null);
+        };
+        using var client = Client(gateway);
+
+        using var first = await PostChatAsync(client, stream: false, toolCount: 1);
+        using var firstJson = await ReadJsonAsync(first);
+        using var second = await PostChatAsync(client, stream: false);
+        using var secondJson = await ReadJsonAsync(second);
+
+        AssertEx.Equal("answered", firstJson.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
+        AssertEx.Equal("scripted", secondJson.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
+        AssertEx.Equal(Model, turns[0].Model);
+        AssertEx.Equal("hello", turns[0].Messages.Single().Text);
+        AssertEx.Equal("tool0", turns[0].OfferedToolNames.Single());
+        AssertEx.Empty(turns[1].OfferedToolNames);
+    }
+
+    [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal",
+        Justification = "The pending request is awaited before the client leaves scope.")]
+    public async Task ChatResponder_ParksTheReplyUntilItsGateOpens()
+    {
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync();
+        var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway.State.ChatResponder = async (_, ct) =>
+        {
+            reached.TrySetResult();
+            await gate.Task.WaitAsync(ct);
+            return new FakeOpenAiGatewayScript
+            {
+                CompletionText = "released"
+            };
+        };
+        using var client = Client(gateway);
+
+        var pending = PostChatAsync(client, stream: true);
+        await AssertEx.CompletesAsync(reached.Task, TestBudgets.Contended, "The request never reached the responder.");
+        await AssertEx.StaysIncompleteAsync(pending, "The reply started before the gate opened.");
+        gate.SetResult();
+
+        await AssertEx.CompletesAsync(pending, TestBudgets.Contended, "The reply never arrived after the gate opened.");
+        using var response = await pending;
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private static FakeOpenAiGatewayOptions GatedOptions()
     {
         return new FakeOpenAiGatewayOptions

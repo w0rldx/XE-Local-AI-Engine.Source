@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -129,21 +128,6 @@ public sealed class GgufCapabilityDetectorTests
             "harmony carries no <think>/enable_thinking/reasoning_content marker, so it must NOT report graded reasoning");
         AssertEx.False(result.Capabilities.Any(static c => c == "thinking"),
             "the graded `thinking` token must never be emitted for a harmony template");
-    }
-
-    /// <summary>
-    ///     The regression that would break real inference. <c>ModelKindDetector.SupportsThinking</c> is the seam that
-    ///     decides whether the invocation factory writes the <c>think</c> field: it matches the <c>thinking</c> token by
-    ///     EXACT equality, so the deliberately distinct <c>native_reasoning</c> token can never flip a harmony model into
-    ///     the graded branch. Pinned here on the detector's real output, not a hand-built capability list.
-    /// </summary>
-    [Test]
-    public void Detect_HarmonyTemplate_DoesNotResolveAsThinkingCapableDownstream()
-    {
-        var result = GgufCapabilityDetector.Detect(HarmonyNativeReasoningTemplate);
-
-        AssertEx.False(ModelKindDetector.SupportsThinking(result.Capabilities),
-            "a native-reasoning model must resolve SupportsThinking=false so the factory keeps it on the omit-think path");
     }
 
     [Test]

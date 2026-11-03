@@ -1,14 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
-using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Browser-driven E2E for the work-session happy path: create a session from the list page, land on the detail
@@ -29,7 +28,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     <para>
 ///         Serial (<see cref="XESerialE2ETestBase" />) because a work session holds the node's single invocation slot
 ///         for the length of its run, and because it writes shared node state (the seeded agent's pinned model and the
-///         model-provider map).
+///         tool-capable model list).
 ///     </para>
 ///     <para>
 ///         The seeded personas are the only agents that can run a session — the four state tools are held out of the
@@ -43,25 +42,19 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
 {
     private const string GeneralAgentName = "Work Session — General";
     private const string GeneralAgentSlug = "work-session-general";
-    private const string FakeChatModel = "qwen3.5:0.8b";
+    private const string FakeChatModel = FakeGatewayLocalModelProvider.ChatModel;
     private const string PlannedTaskTitle = "Decide between the two candidate specs";
 
     private IReadOnlyList<string>? _previousToolCapableModels;
     private bool _toolCapableModelsChanged;
 
     /// <summary>
-    ///     Pins the fixture's chat model on the seeded General persona, which the create path REQUIRES here.
+    ///     Pins the fixture's chat model on the seeded General persona, so the step runs on a named model.
     ///     <para>
     ///         An agent that pins no model (both seeded personas ship that way) makes the service fall back to
-    ///         <c>ILocalDefaultChatModelResolver</c>, and that resolver answers from installed <b>GGUF</b> models only —
-    ///         never Ollama, by design, since llama.cpp is the node's default runtime. This fixture is an Ollama-only
-    ///         node with no GGUF installed, so the fallback resolves to nothing and create is refused with "This node
-    ///         has no chat model a work session could run on. Install one, or pin a model on the agent."
-    ///     </para>
-    ///     <para>
-    ///         Pinning is the second half of that message, so this stays a fixture concession rather than a product
-    ///         change. FakeOllama's <c>/api/show</c> advertises <c>tools</c>, so the tool-capability gate the service
-    ///         applies next passes on the pinned name.
+    ///         <c>ILocalDefaultChatModelResolver</c>, whose answer depends on what else the shared host lists. Its
+    ///         installed-model descriptor advertises <c>tools</c>, so the tool-capability gate the service applies next
+    ///         passes on the pinned name.
     ///     </para>
     /// </summary>
     private async Task PinChatModelOnSeededAgentAsync()
@@ -99,39 +92,13 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     }
 
     /// <summary>
-    ///     Routes the fixture's chat model to the Ollama provider, which the tool-capability gate then needs.
-    ///     <para>
-    ///         An UNMAPPED model falls through to the node's default provider — llama.cpp — and
-    ///         <c>ModelCapabilityResolver</c> answers for a llama.cpp model from the GGUF's own chat template rather
-    ///         than probing Ollama. With no GGUF on disk that read yields nothing and the model reads as not
-    ///         tool-capable, so create is refused a second time. On a real node an installed Ollama model carries this
-    ///         mapping row; nothing writes it here because the sync worker is an <c>IHostedService</c> and the E2E host
-    ///         removes those. Writing it directly is the fixture standing in for that worker.
-    ///     </para>
-    /// </summary>
-    private async Task MapChatModelToOllamaAsync()
-    {
-        using var scope = Factory.Services.CreateScope();
-        var coordinator = scope.ServiceProvider.GetRequiredService<IModelProviderMapLeaseCoordinator>();
-        var mapStore = scope.ServiceProvider.GetRequiredService<ICoordinatedModelProviderMapStore>();
-
-        await using (var lease = await coordinator.AcquireMapMutationAsync(FakeChatModel, ModelProviderMapMutationKind.MapUpsert))
-        {
-            _ = await mapStore.TryUpsertAsync(lease, FakeChatModel, OllamaLocalModelProvider.OllamaProviderName);
-        }
-
-        // The resolver caches provider names for a TTL, so drop the entry written before this mapping existed.
-        Factory.Services.GetRequiredService<ILocalModelProviderResolver>().InvalidateModelProviderMap();
-    }
-
-    /// <summary>
     ///     Adds the fixture's chat model to the node's tool-capable allow-list, which is what actually decides whether a
     ///     step is OFFERED the four state tools.
     ///     <para>
     ///         <c>LocalToolOfferProvider.IsToolCapable</c> answers from
     ///         <c>INodeRuntimeSettings.GetToolCapableModels()</c> — the operator-maintained allow-list seeded from
-    ///         <c>AgentHome:ToolCapableModels</c>, which lists neither FakeOllama model. That is a DIFFERENT source from
-    ///         the <c>/api/show</c> capability probe the create path consults, so create succeeds while a model outside
+    ///         <c>AgentHome:ToolCapableModels</c>, which lists neither fake model. That is a DIFFERENT source from
+    ///         the descriptor capability the create path consults, so create succeeds while a model outside
     ///         the list still drops to the non-capable offer: no state tools, no <c>ask_user</c>. The step then runs, the
     ///         model asks for <c>update_work_plan</c>, and the invocation pipeline answers "Requested function
     ///         update_work_plan not found" — a silent no-op that leaves the plan empty and the session running to its
@@ -165,11 +132,28 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         });
     }
 
+    /// <summary>
+    ///     Takes the fixture's chat model off the allow-list. An earlier chat turn on the shared host self-heals an
+    ///     installed tool-capable GGUF onto it (<c>LocalToolOfferProvider</c>), so the refusal's premise must be stated.
+    /// </summary>
+    private async Task UnlistChatModelAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
+
+        var stored = await store.LoadAsync();
+        _previousToolCapableModels = stored.ToolCapableModels;
+        _toolCapableModelsChanged = true;
+        await store.SaveAsync(stored with
+        {
+            ToolCapableModels = [.. (stored.ToolCapableModels ?? []).Where(static model => !string.Equals(model, FakeChatModel, StringComparison.Ordinal))]
+        });
+    }
+
     [After(Test)]
     public void ResetScripts()
     {
-        Factory.FakeOllamaState.ChatScript = null;
-        Factory.FakeOllamaState.ToolCallScript = null;
+        Factory.FakeGatewayState.ChatResponder = null;
     }
 
     [After(Test)]
@@ -192,11 +176,8 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     }
 
     /// <summary>
-    ///     Drives one whole server-initiated step, through the agent's pinned Ollama model, to a <c>Completed</c>
-    ///     session. Since <c>ChatTurnResolver</c> clears the "no chat model installed" guard whenever the agent's
-    ///     pinned <c>ModelProfile</c> resolves a model, a step on this GGUF-less FakeOllama node runs through the pin
-    ///     (hence <see cref="PinChatModelOnSeededAgentAsync" /> + <see cref="MapChatModelToOllamaAsync" /> +
-    ///     <see cref="MarkChatModelToolCapableAsync" />).
+    ///     Drives one whole server-initiated step, through the agent's pinned model, to a <c>Completed</c>
+    ///     session (hence <see cref="PinChatModelOnSeededAgentAsync" /> + <see cref="MarkChatModelToolCapableAsync" />).
     ///     <para>
     ///         What the scripted turn proves: the supervisor starts a step on its own, the step's provider calls reach
     ///         the pinned model, both work-session tool round trips land (<c>update_work_plan</c> writes a task the plan
@@ -204,8 +185,8 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     ///         session at step end, and every hop of that reaches the browser live — badge, plan panel, Events feed.
     ///     </para>
     ///     <para>
-    ///         What it does NOT prove: any model reasoning. FakeOllama ignores the offered <c>tools</c> array and
-    ///         replays whatever the script hands it, so tool CHOICE, argument quality, and the step's stopping logic
+    ///         What it does NOT prove: any model reasoning. The fake replays whatever the responder hands it, so tool
+    ///         CHOICE, argument quality, and the step's stopping logic
     ///         are the test's, not a model's. Whether a real model would pick these tools is out of scope here.
     ///     </para>
     /// </summary>
@@ -214,7 +195,6 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     public async Task Work_Session_Starts_And_Streams_Its_Lifecycle_To_The_Panes()
     {
         await PinChatModelOnSeededAgentAsync();
-        await MapChatModelToOllamaAsync();
         await MarkChatModelToolCapableAsync();
 
         await Page.GotoAsync($"{NodeAppUrl}/work-sessions", new PageGotoOptions
@@ -267,18 +247,17 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         await Expect(Page.GetByTestId("work-session-status-badge")).ToHaveTextAsync("Draft");
 
         // Script the step's provider calls BEFORE Start — the supervisor picks the session up immediately, so a script
-        // assigned after the click can miss the first call. FakeOllama ignores the offered `tools` array and checks
-        // this closure on every /api/chat request, so sequencing is ours: turn 1 writes the plan, turn 2 closes the
+        // assigned after the click can miss the first call. Only a request offering the state tools counts, so the node's
+        // background requests cannot consume a turn: turn 1 writes the plan, turn 2 closes the
         // session, everything after falls through to the text echo. Both tool calls land inside the SAME step
         // (MaxProviderCallsPerStep is 10) and neither sits behind an approval gate, so the step runs unattended and
         // `complete_work_session`'s CompletionRequested settles the session at step end. [After(Test)] nulls it again.
         var providerTurn = 0;
-        Factory.FakeOllamaState.ToolCallScript = _ => Interlocked.Increment(ref providerTurn) switch
-        {
-            1 => new FakeOllamaToolCall
+        Factory.FakeGatewayState.ChatResponder = (turn, _) => Task.FromResult(!turn.OfferedToolNames.Contains("update_work_plan", StringComparer.Ordinal)
+            ? null
+            : Interlocked.Increment(ref providerTurn) switch
             {
-                Name = "update_work_plan",
-                Arguments = new
+                1 => ToolCallScript("update_work_plan", new
                 {
                     operations = new[]
                     {
@@ -288,18 +267,13 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
                             title = PlannedTaskTitle
                         }
                     }
-                }
-            },
-            2 => new FakeOllamaToolCall
-            {
-                Name = "complete_work_session",
-                Arguments = new
+                }),
+                2 => ToolCallScript("complete_work_session", new
                 {
                     summary = "Picked spec B; findings recorded."
-                }
-            },
-            _ => null
-        };
+                }),
+                _ => null
+            });
 
         var start = Page.GetByTestId("work-session-start");
         await Expect(start).ToBeEnabledAsync();
@@ -340,6 +314,18 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
             });
     }
 
+    private static FakeOpenAiGatewayScript ToolCallScript(string name, object arguments)
+    {
+        return new FakeOpenAiGatewayScript
+        {
+            ToolCall = new FakeOpenAiGatewayToolCall
+            {
+                Name = name,
+                Arguments = JsonSerializer.Serialize(arguments)
+            }
+        };
+    }
+
     /// <summary>
     ///     The other side of <see cref="MarkChatModelToolCapableAsync" />, which this test deliberately does NOT call:
     ///     a model the operator has not listed is refused at the dialog, in words that name the model and the list.
@@ -350,8 +336,8 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     ///         found" until the session had spent its whole step budget with an empty plan. Nothing in the UI said why.
     ///     </para>
     ///     <para>
-    ///         The model is still pinned and mapped: those are the two fixture concessions that get the create path PAST
-    ///         its earlier refusals, so the one under test is the only one left to fail.
+    ///         The model is still pinned: that names the model the refusal must name, so the one under test is the only
+    ///         one left to fail.
     ///     </para>
     /// </summary>
     [Test]
@@ -359,7 +345,7 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     public async Task Work_Session_Create_Is_Refused_When_The_Agents_Model_Is_Not_Tool_Capable_Listed()
     {
         await PinChatModelOnSeededAgentAsync();
-        await MapChatModelToOllamaAsync();
+        await UnlistChatModelAsync();
 
         await Page.GotoAsync($"{NodeAppUrl}/work-sessions", new PageGotoOptions
         {

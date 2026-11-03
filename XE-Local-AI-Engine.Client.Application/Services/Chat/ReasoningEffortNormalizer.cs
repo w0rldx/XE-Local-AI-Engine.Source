@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 /// </summary>
 /// <remarks>
 ///     It recognizes the graded efforts, explicit <c>none</c>, the binary <c>on</c> sentinel — reason-by-default for
-///     a model lacking the Ollama <c>thinking</c> capability, where the factory omits <c>think</c> so the template's
+///     a model lacking the <c>thinking</c> capability, where the factory omits <c>think</c> so the template's
 ///     own reasoning runs — and <c>auto</c>, which the runner resolves per turn and never reaches a wire. Anything
 ///     else normalizes to <c>null</c>. Centralizing it keeps a sentinel from being dropped by one of several
 ///     independent ladders. Codex-only levels: <c>docs/wiki/05-chat.md</c>, "Reasoning effort + cloud clamp".

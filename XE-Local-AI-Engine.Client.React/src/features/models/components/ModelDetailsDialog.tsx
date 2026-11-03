@@ -61,7 +61,7 @@ function ModelDetailsBody({
 	const [tab, setTab] = useState<string | null>("overview");
 	const hasLicenseOrTemplate = Boolean(details?.template || details?.license);
 	// The launch-argument override is only read by the llama.cpp supervisor, so the Advanced tab is shown only for
-	// llamacpp models — an Ollama/Codex/Azure entry would report success but the override would be silently ineffective
+	// llamacpp models — a Codex/Azure entry would report success but the override would be silently ineffective
 	// (and could bleed onto a same-named GGUF). Gated behind developer mode too.
 	const showLaunchArgs = developerMode && model.provider === "llamacpp";
 	// The GGUF inspector reads the registered file, which only a llama.cpp-served model has.

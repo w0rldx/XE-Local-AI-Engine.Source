@@ -540,9 +540,6 @@ public static class ConfigureServices
         // Upgrade backfill for the sandbox security profile (ADR 0020), stamping "low" on a node past onboarding. Same discriminator as the
         // mode backfill above, so it is order-independent of both services before it.
         builder.Services.AddHostedService<SandboxSecurityProfileBackfillService>();
-        // Upgrade backfill: maps an Ollama model pulled on an EARLIER build, which wrote no provider-map row, to the ollama provider, so the flipped
-        // llamacpp default does not silently re-route it. Idempotent, offline-tolerant and not desktop-gated.
-        builder.Services.AddHostedService<OllamaProviderMapBackfillService>();
         // Desktop-only first-run model provisioning: installs and selects a small node-local GGUF through the bundled llama.cpp runtime, so a fresh
         // double-click install can chat out of the box. Offline-tolerant; headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();

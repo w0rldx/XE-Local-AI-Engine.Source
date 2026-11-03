@@ -54,7 +54,7 @@ internal static class InvocationFailureClassifier
     private const string ChatTemplateRejectedMessage =
         "The model's chat template could not render this conversation. Select a different model, or retry without the agent's skills or tools.";
 
-    // A provider HTTP 500 means the model was reached but failed to load OR run (an Ollama build too old for the architecture, an out-of-memory at load).
+    // A provider HTTP 500 means the model was reached but failed to load OR run (a runtime too old for the architecture, an out-of-memory at load).
     // Phrased to cover both, so it never falsely asserts a permanent model defect while staying far more actionable than the generic "Provider unreachable.".
     private const string ModelLoadFailedMessage = InvocationFailureMessages.ModelLoadFailed;
 
@@ -213,7 +213,7 @@ internal static class InvocationFailureClassifier
             // A chat-template render failure is also an HTTP 400, so it too matches ahead of the generic HttpRequestException arm.
             _ when ReportsChatTemplateFailure(exception) =>
                 new FailureClassification(FailureCategory.ModelCapabilityUnsupported, ChatTemplateRejectedMessage),
-            // Unmask the Ollama capability and load errors that would otherwise collapse to the generic ProviderUnreachable. The capability check matches
+            // Unmask the capability and load errors an OpenAI-compatible server reports, that would otherwise collapse to the generic ProviderUnreachable. The capability check matches
             // BEFORE the HTTP-500 load check, so a 400 "does not support ..." is always a capability problem rather than a load failure, whatever status it carries.
             _ when ResolveUnsupportedCapabilityMessage(exception) is { } capabilityMessage =>
                 new FailureClassification(FailureCategory.ModelCapabilityUnsupported, capabilityMessage),
@@ -239,14 +239,14 @@ internal static class InvocationFailureClassifier
     }
 
     /// <summary>
-    ///     The capability-specific fixed, path-free message when the exception chain reports an Ollama capability
-    ///     rejection, or <see langword="null" /> when none is present.
+    ///     The capability-specific fixed, path-free message when the exception chain reports a capability rejection,
+    ///     or <see langword="null" /> when none is present.
     /// </summary>
     /// <remarks>
     ///     The rejection is an HTTP 400 whose body contains "does not support thinking" or "does not support tools".
-    ///     OllamaSharp surfaces it as an exception whose <see cref="Exception.Message" /> IS the parsed error string, so a
-    ///     substring scan over the chain is robust to framework wrapping. The raw body is never forwarded; only the
-    ///     matched capability decides which constant is surfaced.
+    ///     An external OpenAI-compatible server can word it this way. A substring scan over the chain
+    ///     is robust to framework wrapping. The raw body is never forwarded; only the matched capability decides which
+    ///     constant is surfaced.
     /// </remarks>
     private static string? ResolveUnsupportedCapabilityMessage(Exception exception)
     {
@@ -310,11 +310,11 @@ internal static class InvocationFailureClassifier
         return templateText && badRequest;
     }
 
-    /// <summary>Whether the exception chain reports an Ollama model-load failure.</summary>
+    /// <summary>Whether the exception chain reports a model-load failure.</summary>
     /// <remarks>
-    ///     That is an HTTP 500 — OllamaSharp surfaces it via <see cref="HttpRequestException.StatusCode" />, not the
-    ///     body, so no path can leak — or a body mentioning "unable to load model" or "unknown model architecture"
-    ///     should one ever reach the message. The surfaced message is a fixed, path-free constant.
+    ///     That is an <see cref="HttpRequestException" /> with status 500, judged by
+    ///     <see cref="HttpRequestException.StatusCode" />, not the body, so no path can leak — or a message mentioning
+    ///     "unable to load model" or "unknown model architecture". The surfaced message is a fixed, path-free constant.
     /// </remarks>
     private static bool ReportsModelLoadFailure(Exception exception)
     {

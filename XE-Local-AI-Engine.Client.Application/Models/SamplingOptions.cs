@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
 ///     Developer-gated per-send sampling overrides for the local chat loopback path. Every field is optional; a null field means "no
-///     override" and the invocation factory leaves the corresponding Ollama option at its model default.
+///     override" and the invocation factory leaves the corresponding option at its model default.
 /// </summary>
 /// <remarks>
 ///     Carried on the <see cref="RuntimePackage" /> but deliberately excluded from the config hash (mirrors

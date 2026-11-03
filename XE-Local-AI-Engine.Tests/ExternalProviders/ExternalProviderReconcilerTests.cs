@@ -19,8 +19,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     The defining property under test is CONTAINMENT: the pass runs unconditionally on every boot, so every
-///     assertion here also asks what it left alone. A GGUF's map row, an Ollama backfill row and a hand-curated
-///     allow-list entry for a local model must all come through it untouched.
+///     assertion here also asks what it left alone. A GGUF's map row and a hand-curated allow-list entry for a
+///     local model must both come through it untouched.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class ExternalProviderReconcilerTests
@@ -67,11 +67,11 @@ public sealed class ExternalProviderReconcilerTests
     {
         var fixture = new Fixture();
         fixture.MapStore.Seed("qwen3-27b.gguf", LlamaServerProviderConstants.ProviderName);
-        fixture.MapStore.Seed("qwen3:8b", "ollama");
+        fixture.MapStore.Seed("qwen3:8b", "hand-curated");
 
         var report = await fixture.Reconciler.ReconcileAsync();
 
-        // The pass runs on every boot; a GGUF row or an Ollama backfill row it touched would be a data-loss bug.
+        // The pass runs on every boot; a GGUF row or a hand-curated row it touched would be a data-loss bug.
         AssertEx.False(report.Changed);
         AssertEx.Equal(2, fixture.MapStore.Mappings.Count);
     }

@@ -197,7 +197,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     {
         // EmbeddingProviderName routes the embedding model to its provider; the resolved provider's generator embeds
         // the batch (candidate(s) + query). This is the resolver-routed equivalent of the llama-server embedding
-        // (pooling) process — here a fake stands in so no Ollama/llama-server is needed.
+        // (pooling) process — here a fake stands in so no llama-server is needed.
         var candidates = SampleCandidates();
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
@@ -384,7 +384,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
             }
 
             // A bag-of-tokens vector: each token contributes to a fixed bucket, so texts sharing tokens point in a
-            // similar direction (higher cosine) and unrelated texts are near-orthogonal — deterministic and Ollama-free.
+            // similar direction (higher cosine) and unrelated texts are near-orthogonal — deterministic and runtime-free.
             // The bucket derives from a stable FNV-1a hash rather than string.GetHashCode/StringComparer.GetHashCode:
             // those are randomized per process, so token->bucket bucketing (and thus the cosine ranking) would change
             // each run and could collide an unrelated token into a query bucket, flaking SelectTopK_RanksByCosineSimilarity.

@@ -40,7 +40,7 @@ export function isInstalledLocalModel(dto: LocalModelWire): boolean {
 export function toLocalModelViewModel(dto: LocalModelWire): LocalModelViewModel {
 	return {
 		modelName: dto.modelName ?? "",
-		provider: dto.provider ?? "Ollama",
+		provider: dto.provider,
 		origin: localModelOrigin(dto.origin),
 		sizeLabel: formatModelSize(dto.sizeBytes),
 		modifiedDateLabel: formatModelModifiedDate(dto.modifiedAtUtc),

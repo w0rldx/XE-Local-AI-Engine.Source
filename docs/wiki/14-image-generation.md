@@ -99,7 +99,7 @@ Which pushes go out, and which are buffered, follows one rule. A **milestone** â
 
 On success the image is persisted encrypted-at-rest **before** the job is marked `Succeeded`.
 
-**Freeing VRAM for the job.** sd-server loads its weights inside the first job (`eager_load` is off, so readiness proves only the HTTP bind), which is where an idle chat model's VRAM turns into an out-of-memory. After the GPU gate admits the job and before the runtime is called, the coordinator reads `ILlamaServerProcessSupervisor.ListRunningProcesses` and ejects every idle llama-server process, any role, through the graceful operator `EjectAsync` the top-bar eject uses, logging each at Information. If any process is serving a request, nothing is ejected and the job fails with "A chat model is still generating; wait for it to finish, then retry the image." Ollama residents are not touched.
+**Freeing VRAM for the job.** sd-server loads its weights inside the first job (`eager_load` is off, so readiness proves only the HTTP bind), which is where an idle chat model's VRAM turns into an out-of-memory. After the GPU gate admits the job and before the runtime is called, the coordinator reads `ILlamaServerProcessSupervisor.ListRunningProcesses` and ejects every idle llama-server process, any role, through the graceful operator `EjectAsync` the top-bar eject uses, logging each at Information. If any process is serving a request, nothing is ejected and the job fails with "A chat model is still generating; wait for it to finish, then retry the image."
 
 ## Editing images (img2img, reference)
 

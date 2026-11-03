@@ -43,7 +43,7 @@ public sealed class ModelNameValidatorTests
     [Test]
     public void IsValid_WhenNameContainsDotAndColon_ReturnsTrue()
     {
-        AssertEx.True(_validator.IsValid("ollama3.2:latest"));
+        AssertEx.True(_validator.IsValid("llama3.2:latest"));
     }
 
     [Test]

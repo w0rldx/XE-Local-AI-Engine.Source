@@ -83,8 +83,8 @@ public static class CloudSettingsPolicy
     ///     A bare deployment name wins routing (Azure is matched first), so such a name would hijack every send to that model.
     /// </summary>
     /// <remarks>
-    ///     The installed-GGUF collision needs a store read and is checked by the save endpoint. Ceiling: an Ollama tag, or a
-    ///     GGUF installed after the save, can still collide; a reserved provider prefix is the upgrade path.
+    ///     The installed-GGUF collision needs a store read and is checked by the save endpoint. Ceiling: a GGUF installed after
+    ///     the save can still collide; a reserved provider prefix is the upgrade path.
     /// </remarks>
     public static IReadOnlyList<string> ValidateDeploymentNames(IEnumerable<string?> deploymentNames)
     {

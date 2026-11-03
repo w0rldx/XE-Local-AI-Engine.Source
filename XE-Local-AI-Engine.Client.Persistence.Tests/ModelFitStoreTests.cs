@@ -45,7 +45,7 @@ public sealed class ModelFitStoreTests : IDisposable
         AssertEx.Equal(ModelFitRunStatus.Succeeded, succeeded.Status);
         AssertEx.True(succeeded.IsLatestSuccessful, "A succeeded run becomes latest-successful for its key.");
 
-        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "llama.cpp", modelName: null));
         AssertEx.Equal(succeeded.Id, latest.Id);
     }
 
@@ -70,10 +70,10 @@ public sealed class ModelFitStoreTests : IDisposable
         var firstReread = await store.GetRawByIdAsync(first.Id);
         AssertEx.NotNull(firstReread);
 
-        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "llama.cpp", modelName: null));
         AssertEx.Equal(second.Id, latest.Id);
 
-        var rawLatestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "coding", "ollama", modelName: null);
+        var rawLatestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "coding", "llama.cpp", modelName: null);
         AssertEx.Equal(expected: 1, rawLatestCount);
     }
 
@@ -95,8 +95,8 @@ public sealed class ModelFitStoreTests : IDisposable
         var reasoning = await store.CreateRunningAsync(CreateRecommendInput("reasoning"));
         _ = await store.MarkTerminalAsync(reasoning.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
-        var latestCoding = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
-        var latestReasoning = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "reasoning", "ollama", modelName: null));
+        var latestCoding = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "llama.cpp", modelName: null));
+        var latestReasoning = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "reasoning", "llama.cpp", modelName: null));
 
         AssertEx.Equal(coding.Id, latestCoding.Id);
         AssertEx.Equal(reasoning.Id, latestReasoning.Id);
@@ -120,7 +120,7 @@ public sealed class ModelFitStoreTests : IDisposable
         _ = await store.MarkTerminalAsync(a.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 1_000);
         _ = await store.MarkTerminalAsync(b.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
-        var latestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "chat", "ollama", modelName: null);
+        var latestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "chat", "llama.cpp", modelName: null);
         AssertEx.Equal(expected: 1, latestCount);
     }
 
@@ -142,7 +142,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
         AssertEx.Equal(ModelFitRunStatus.Failed, failed.Status);
         AssertEx.False(failed.IsLatestSuccessful, "A failed run is never latest-successful.");
-        AssertEx.Null(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
+        AssertEx.Null(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "llama.cpp", modelName: null));
     }
 
     [Test]
@@ -180,7 +180,7 @@ public sealed class ModelFitStoreTests : IDisposable
         clock.Advance(1_000);
         var second = await store.CreateRunningAsync(CreateRecommendInput("coding"));
 
-        var recent = await store.ListRecentSummariesAsync(ModelFitOperation.Recommend, "ollama");
+        var recent = await store.ListRecentSummariesAsync(ModelFitOperation.Recommend, "llama.cpp");
 
         AssertEx.Equal(expected: 2, recent.Count);
         AssertEx.Equal(second.Id, recent[0].Id);
@@ -333,7 +333,7 @@ public sealed class ModelFitStoreTests : IDisposable
                 new ModelFitBenchmarkInput
                 {
                     ModelName = "qwen",
-                    ProviderName = "ollama",
+                    ProviderName = "llama.cpp",
                     TokensPerSecond = 42.0,
                     TtftMs = 12.0,
                     TotalLatencyMs = 200.0,
@@ -378,7 +378,7 @@ public sealed class ModelFitStoreTests : IDisposable
                 new ModelFitBenchmarkInput
                 {
                     ModelName = "qwen",
-                    ProviderName = "ollama",
+                    ProviderName = "llama.cpp",
                     TokensPerSecond = 1.0,
                     TtftMs = 1.0,
                     TotalLatencyMs = 1.0,
@@ -405,7 +405,7 @@ public sealed class ModelFitStoreTests : IDisposable
             ApprovedImageId = ImageId,
             Operation = ModelFitOperation.Recommend,
             UseCase = useCase,
-            ProviderName = "ollama",
+            ProviderName = "llama.cpp",
             ModelName = null,
             Status = ModelFitRunStatus.Queued,
             StartedAtUtc = null
@@ -419,7 +419,7 @@ public sealed class ModelFitStoreTests : IDisposable
             ApprovedImageId = ImageId,
             Operation = ModelFitOperation.Benchmark,
             UseCase = null,
-            ProviderName = "ollama",
+            ProviderName = "llama.cpp",
             ModelName = modelName,
             Status = ModelFitRunStatus.Queued,
             StartedAtUtc = null

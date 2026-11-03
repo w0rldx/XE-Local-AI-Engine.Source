@@ -3,7 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Default <see cref="IModelFitQueryService" />: a thin cache reader composing the sanitized snapshot-summary
@@ -11,8 +13,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 ///     never start an advisor run, and none on approved images.
 /// </summary>
 /// <remarks>
-///     On the read path it reconciles each row's install state against the node's actually-installed Ollama models
-///     (<see cref="IOllamaModelService.ListLocalModelsAsync" />). Listing the node's installed models is a node-local
+///     On the read path it reconciles each row's install state against the node's installed GGUF models. Listing them is a node-local
 ///     read, NOT an advisor run, so the no-runner invariant still holds. The enrichment is best-effort: if the install
 ///     list cannot be read, each row keeps its stored flag.
 /// </remarks>
@@ -22,21 +23,21 @@ public sealed class ModelFitQueryService : IModelFitQueryService
     internal const string SkippedCatalogEntriesMember = "skipped_catalog_entries";
 
     private readonly ILogger<ModelFitQueryService> _logger;
-    private readonly IOllamaModelService _ollamaModelService;
+    private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IModelFitRecommendationStore _recommendationStore;
     private readonly IModelFitSnapshotStore _snapshotStore;
 
     public ModelFitQueryService(IModelFitSnapshotStore snapshotStore,
         IModelFitRecommendationStore recommendationStore,
-        IOllamaModelService ollamaModelService,
+        ILocalModelProviderResolver providerResolver,
         ILogger<ModelFitQueryService> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
-        ArgumentNullException.ThrowIfNull(ollamaModelService);
+        ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(recommendationStore);
         ArgumentNullException.ThrowIfNull(snapshotStore);
         _logger = logger;
-        _ollamaModelService = ollamaModelService;
+        _providerResolver = providerResolver;
         _recommendationStore = recommendationStore;
         _snapshotStore = snapshotStore;
     }
@@ -112,14 +113,14 @@ public sealed class ModelFitQueryService : IModelFitQueryService
     }
 
     /// <summary>
-    ///     Returns <paramref name="recommendations" /> with each row's <c>IsInstalled</c> set from the node's
-    ///     actually-installed Ollama models rather than llmfit's offline flag.
+    ///     Returns <paramref name="recommendations" /> with each row's <c>IsInstalled</c> set from the GGUFs installed
+    ///     now rather than the flag stored when the snapshot ran.
     /// </summary>
     /// <remarks>
-    ///     A row is installed iff its <c>PullModelName</c> (the exact Ollama tag) matches an installed tag,
-    ///     case-insensitively and with <c>:latest</c> elided so a bare name matches its tagged form. A row with a null
-    ///     <c>PullModelName</c> has no tag to match and is reported not-installed. Best-effort: if the install list
-    ///     cannot be read (Ollama unreachable) the stored flags are returned as-is.
+    ///     A row is installed iff its <c>PullModelName</c> (the <c>{repo}:{quant}</c> name both the advisor and the GGUF
+    ///     store format with <see cref="GgufModelName" />) names an installed model, case-insensitively. A row with a null
+    ///     <c>PullModelName</c> is reported not-installed. Best-effort: if the install list cannot be read the stored
+    ///     flags are returned as-is.
     /// </remarks>
     private async Task<IReadOnlyList<ModelFitRecommendationRecord>> ApplyNodeInstallStateAsync(IReadOnlyList<ModelFitRecommendationRecord> recommendations,
         CancellationToken cancellationToken)
@@ -129,21 +130,15 @@ public sealed class ModelFitQueryService : IModelFitQueryService
             return recommendations;
         }
 
-        HashSet<string> installedTags;
+        HashSet<string> installedNames;
         try
         {
-            var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken);
-            installedTags = installed
-                            .Select(model => model.Name)
-                            .OfType<string>()
-                            .Where(name => !string.IsNullOrWhiteSpace(name))
-                            .Select(NormalizeTag)
-                            .ToHashSet(StringComparer.Ordinal);
+            var installed = await _providerResolver.ResolveProvider(LlamaServerProviderConstants.ProviderName).ListModelsAsync(cancellationToken);
+            installedNames = installed.Select(static model => model.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception exception)
         {
-            // Node-local enrichment only: a provider/transport failure (e.g. Ollama unreachable) must never fail the
-            // cached read — fall back to the snapshot's stored install flags.
+            // Node-local enrichment only: a store failure must never fail the cached read, so fall back to the snapshot's stored install flags.
             _logger.LogDebug(exception, "Could not list installed models for install-state enrichment; using stored flags.");
             return recommendations;
         }
@@ -151,25 +146,8 @@ public sealed class ModelFitQueryService : IModelFitQueryService
         return recommendations
                .Select(recommendation => recommendation with
                {
-                   IsInstalled = IsInstalledOnNode(recommendation.PullModelName, installedTags)
+                   IsInstalled = recommendation.PullModelName is { } pullModelName && installedNames.Contains(pullModelName.Trim())
                })
                .ToList();
-    }
-
-    private static bool IsInstalledOnNode(string? pullModelName, HashSet<string> installedTags)
-    {
-        return !string.IsNullOrWhiteSpace(pullModelName) && installedTags.Contains(NormalizeTag(pullModelName));
-    }
-
-    /// <summary>
-    ///     Canonical Ollama tag for matching: trimmed, lower-cased, with an explicit <c>:latest</c> tag elided so a bare
-    ///     name matches its <c>:latest</c> form (<c>qwen3-coder</c> ≡ <c>qwen3-coder:latest</c>) while distinct tags such
-    ///     as <c>llama3:8b</c> stay distinct.
-    /// </summary>
-    private static string NormalizeTag(string tag)
-    {
-        // Upper-invariant (CA1308: upper-casing round-trips safely) so matching is case-insensitive via an ordinal set.
-        var normalized = tag.Trim().ToUpperInvariant();
-        return normalized.EndsWith(":LATEST", StringComparison.Ordinal) ? normalized[..^":LATEST".Length] : normalized;
     }
 }

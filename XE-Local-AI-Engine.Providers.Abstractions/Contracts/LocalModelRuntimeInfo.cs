@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     loaded, as opposed to the model's ADVERTISED train context.
 /// </summary>
 /// <remarks>
-///     Provider-neutral; a provider that has no fixed launched window (Ollama, a not-yet-started model) reports
+///     Provider-neutral; a provider that has no fixed launched window, or a not-yet-started model, reports
 ///     <see langword="null" /> instead.
 /// </remarks>
 public sealed class LocalModelRuntimeInfo

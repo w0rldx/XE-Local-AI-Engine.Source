@@ -253,7 +253,7 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
     }
 
     // min(ceiling, window × chars-per-token × InputShare), floored at the smallest request that still fits; an
-    // unknown window (Ollama, a cold runtime) keeps the ceiling, so the budget only ever shrinks below the option.
+    // unknown window (a cold runtime) keeps the ceiling, so the budget only ever shrinks below the option.
     internal int ResolveRequestBudget(ConversationSummarizerInput input)
     {
         var ceiling = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);

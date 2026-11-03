@@ -2337,10 +2337,8 @@
 				"hint": "Wählen Sie ein auf dem lokalen Node installiertes Modell.",
 				"noChatModels": "Keine chat-fähigen Modelle",
 				"noResults": "Keine Modelle gefunden",
-				"search": "Modelle suchen...",
-				"unavailableModels": "Nicht verfügbare Modelle"
+				"search": "Modelle suchen..."
 			},
-			"modelUnavailable": "Nicht verfügbar",
 			"modelUnloadingIn": "Entladen in {{time}}",
 			"nativeReasoningLabel": "Natives Denken",
 			"newConversation": "Neuer Chat",
@@ -7146,14 +7144,6 @@
 				"nodeDbBackupRetainCount": {
 					"description": "Vor jedem Datenbank-Update wird eine Sicherung angelegt; ältere über diese Anzahl hinaus werden entfernt.",
 					"label": "Aufbewahrte Datenbanksicherungen"
-				},
-				"ollama": {
-					"title": "Ollama"
-				},
-				"ollamaEndpoint": {
-					"description": "Die Basis-URL der Ollama-API.",
-					"disabled": "Die Ollama-Laufzeit ist auf diesem Node deaktiviert.",
-					"label": "Ollama-Endpunkt"
 				},
 				"orchestrationIdleTimeoutSeconds": {
 					"label": "Orchestrierungs-Leerlauf-Timeout"

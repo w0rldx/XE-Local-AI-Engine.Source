@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 /// <summary>
 ///     Base for browser E2E tests that must run ONE AT A TIME as the canonical admin: they mutate
 ///     session-global state no other browser session may observe mid-flight (the shared
-///     <c>WorkerEventDispatcher.CurrentInvocation</c> slot, <c>FakeOllamaState</c> scripts/models,
+///     <c>WorkerEventDispatcher.CurrentInvocation</c> slot, <c>FakeOpenAiGatewayState</c> responder/models,
 ///     the admin's persisted tutorial row) or assert a node-wide empty state.
 ///     <para>
 ///         This is the <c>BrowserSerial</c> group. TUnit runs the two browser groups as DISJOINT phases —
@@ -65,8 +65,8 @@ public abstract class XESerialE2ETestBase : XEE2ETestBase
     }
 
     /// <summary>
-    ///     Opens the composer's model selector and picks <paramref name="modelName" />; a streamed reply needs a
-    ///     FakeOllama model, the default local model has no GGUF and fails at once.
+    ///     Opens the composer's model selector and picks <paramref name="modelName" />, so a test names the model it
+    ///     sends against instead of relying on what the local default resolves to.
     /// </summary>
     /// <param name="modelName">The option value behind <c>data-testid="chat-model-selector-option-{value}"</c>.</param>
     protected async Task SelectComposerModelAsync(string modelName)

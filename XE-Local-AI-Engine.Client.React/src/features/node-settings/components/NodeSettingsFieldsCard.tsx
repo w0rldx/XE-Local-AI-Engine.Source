@@ -14,7 +14,6 @@ import {
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import { NodeSettingsKnowledgeModelsCard } from "@/features/node-settings/components/NodeSettingsKnowledgeModelsCard";
-import { NodeSettingsOllamaCard } from "@/features/node-settings/components/NodeSettingsOllamaCard";
 import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
 import { NodeSettingsUiModeCard } from "@/features/node-settings/components/NodeSettingsUiModeCard";
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
@@ -66,7 +65,7 @@ export interface NodeSettingsFieldsCardProps {
 	// Installed llama.cpp chat models eligible for the supervised keep-warm loop.
 	readonly keepWarmModelOptions: readonly NodeSettingsModelOption[];
 	readonly autoEffortFastModelOptions: readonly NodeSettingsModelOption[];
-	// Installed node-local chat models (GGUF and Ollama) offered to the playbook analysis, eval and memory extraction runs.
+	// Installed node-local GGUF chat models offered to the playbook analysis, eval and memory extraction runs.
 	readonly backgroundModelOptions: readonly NodeSettingsModelOption[];
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
@@ -84,9 +83,6 @@ export interface NodeSettingsFieldsCardProps {
 	readonly onDownloadRecommendedEmbedding: () => void;
 	readonly isDownloadRecommendedEmbeddingPending: boolean;
 	readonly isRecommendedEmbeddingInFlight: boolean;
-	// True only when the node has definitely reported the optional Ollama runtime gated off; the page owns that probe
-	// and fails open.
-	readonly ollamaRuntimeDisabled: boolean;
 	// The update-channel picker, supplied by the route (it belongs to another feature). Rendered in External access.
 	readonly updateChannelSelector?: ReactNode;
 }
@@ -130,17 +126,7 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 				/>
 			);
 		case "runtimes":
-			return (
-				<>
-					<NodeSettingsOllamaCard
-						form={form}
-						errors={errors}
-						onChange={onChange}
-						ollamaRuntimeDisabled={props.ollamaRuntimeDisabled}
-					/>
-					<NodeSettingsContainerRuntimeCard {...tunable} />
-				</>
-			);
+			return <NodeSettingsContainerRuntimeCard {...tunable} />;
 		case "models":
 			return (
 				<>
@@ -404,7 +390,7 @@ const backgroundModelFields = [
 ] as const;
 
 // The node-local models behind the adaptive-memory background runs. Blank inherits the default model; the server refuses
-// anything that is not an installed GGUF or Ollama model on this machine.
+// anything that is not an installed GGUF model on this machine.
 function BackgroundModelsCard({ form, errors, onChange, backgroundModelOptions }: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
 	const inheritLabel = t("pages.nodeSettings.fields.backgroundModels.inherit", "Use the default model");

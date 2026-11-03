@@ -18,7 +18,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -27,7 +26,6 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -172,38 +170,11 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
 
     private static IModelCapabilityResolver CreateModelCapabilityResolver()
     {
-        var classification = Substitute.For<IModelClassificationService>();
-        classification.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
-                      .Returns(callInfo =>
-                      {
-                          var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
-                          foreach (var (modelName, _) in callInfo.Arg<IEnumerable<ModelIdentity>>())
-                          {
-                              if (!string.IsNullOrWhiteSpace(modelName))
-                              {
-                                  map[modelName] = new ModelClassificationResult
-                                  {
-                                      ModelName = modelName,
-                                      Kind = ModelKind.Chat,
-                                      DetectedKind = ModelKind.Chat,
-                                      Capabilities = ["completion", "tools"],
-                                      IsOverridden = false
-                                  };
-                              }
-                          }
-
-                          return Task.FromResult<IReadOnlyDictionary<string, ModelClassificationResult>>(map);
-                      });
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns(OllamaLocalModelProvider.OllamaProviderName);
         var gguf = Substitute.For<IGgufModelCapabilityResolver>();
-        gguf.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((GgufModelCapabilities?)null);
+        gguf.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false));
 
-        return new ModelCapabilityResolver(classification,
-            providerResolver,
-            gguf,
-            new FakeModelTrustResolver());
+        return new ModelCapabilityResolver(gguf, new FakeModelTrustResolver());
     }
 
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId, Guid assistantMessageId, Guid requestId)

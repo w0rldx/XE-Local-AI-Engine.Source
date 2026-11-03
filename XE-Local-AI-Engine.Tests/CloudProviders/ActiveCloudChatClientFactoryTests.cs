@@ -70,7 +70,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         using var codexClient = new StubChatClient();
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
-        // A local Ollama model name left in the node default must NOT reach Codex as the model — fall back to default.
+        // A local model name left in the node default must NOT reach Codex as the model — fall back to default.
         harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
                .Returns(new StoredNodeSettings
                {

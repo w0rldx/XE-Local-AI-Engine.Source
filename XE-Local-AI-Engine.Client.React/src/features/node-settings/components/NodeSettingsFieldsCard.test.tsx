@@ -65,7 +65,6 @@ function installJsdomEnvironmentMocks(): void {
 // The node's restart gate as the settings response serves it (`restartRequiredFields`, NodeSettingsRestartGate.Fields).
 const nodeRestartGate: ReadonlySet<string> = new Set([
 	"defaultModelName",
-	"ollamaEndpoint",
 	"huggingFaceDefaultQuant",
 	"huggingFaceDiskMarginBytes",
 	"huggingFaceDownloadConnections",
@@ -123,7 +122,6 @@ interface RenderOverrides {
 	onChange?: ReturnType<typeof vi.fn>;
 	errors?: Record<string, string>;
 	keepWarmModelOptions?: NodeSettingsFieldsCardProps["keepWarmModelOptions"];
-	ollamaRuntimeDisabled?: boolean;
 	autoEffortFastModelOptions?: NodeSettingsFieldsCardProps["autoEffortFastModelOptions"];
 	backgroundModelOptions?: NodeSettingsFieldsCardProps["backgroundModelOptions"];
 	intentRouterOptions?: NodeSettingsFieldsCardProps["intentRouterOptions"];
@@ -161,7 +159,6 @@ function renderCard(overrides: RenderOverrides = {}): {
 					onDownloadRecommendedEmbedding={onDownloadEmbedding}
 					isDownloadRecommendedEmbeddingPending={overrides.isDownloadRecommendedEmbeddingPending ?? false}
 					isRecommendedEmbeddingInFlight={overrides.isRecommendedEmbeddingInFlight ?? false}
-					ollamaRuntimeDisabled={overrides.ollamaRuntimeDisabled ?? false}
 				/>
 			</RestartRequiredFieldsContext.Provider>
 		</MantineProvider>,
@@ -552,9 +549,8 @@ describe("NodeSettingsFieldsCard — section split", () => {
 
 		expect(screen.getByTestId("node-settings-local-chat-card")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-auto-effort-fast-model")).toBeTruthy();
-		// Runtime tuning and the Ollama endpoint live in their own sections now.
+		// Runtime tuning lives in its own section.
 		expect(screen.queryByTestId("node-settings-runtime-card")).toBeNull();
-		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
 	});
 
 	it("tells the operator how to reach developer-only workspace limits", () => {
@@ -589,30 +585,6 @@ describe("NodeSettingsFieldsCard — section split", () => {
 
 		fireEvent.click(screen.getByTestId("node-settings-intent-max-utterance-age-use-default"));
 		expect(onChange).toHaveBeenCalledWith("intentMaxUtteranceAgeSeconds", "");
-	});
-});
-
-describe("NodeSettingsFieldsCard — Ollama gate pass-through", () => {
-	beforeEach(() => {
-		installJsdomEnvironmentMocks();
-		vi.clearAllMocks();
-	});
-
-	afterEach(() => cleanup());
-
-	it("hides the Ollama endpoint input when the page reports the runtime gated off", () => {
-		renderCard({ section: "runtimes", ollamaRuntimeDisabled: true });
-
-		// Proves the boolean survives the card group, not only the runtime card that renders the branch.
-		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
-		expect(screen.getByTestId("node-settings-ollama-disabled")).toBeTruthy();
-	});
-
-	it("renders the Ollama endpoint input when the runtime is not gated off", () => {
-		renderCard({ section: "runtimes", ollamaRuntimeDisabled: false });
-
-		expect(screen.getByTestId("node-settings-ollama-endpoint")).toBeTruthy();
-		expect(screen.queryByTestId("node-settings-ollama-disabled")).toBeNull();
 	});
 });
 

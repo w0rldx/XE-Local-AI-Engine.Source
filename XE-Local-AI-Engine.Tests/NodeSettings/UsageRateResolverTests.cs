@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Usage-cost rate precedence: local runtimes (llama.cpp / Ollama) are free; otherwise an operator override
+///     Usage-cost rate precedence: local runtimes are free; otherwise an operator override
 ///     wins, then the built-in table, then zero. Names match case-insensitively; blank keys and negative or
 ///     non-finite rates are dropped.
 /// </summary>
@@ -42,8 +42,9 @@ public sealed class UsageRateResolverTests
     }
 
     [Test]
-    public void Resolve_OllamaProvider_IsFree()
+    public void Resolve_AnOldRowLabelledWithTheRemovedLocalRuntime_IsFree()
     {
+        // A stored row keeps its label; one whose model name collides with a cloud rate must not be re-priced.
         var rate = WithOverrides(("gpt-5", 5, 5)).Resolve(AgentUsageProviders.Ollama, "gpt-5");
 
         AssertEx.Equal(expected: 0d, rate.InputPer1M);

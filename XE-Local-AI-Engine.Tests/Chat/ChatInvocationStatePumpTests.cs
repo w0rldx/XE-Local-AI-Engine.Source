@@ -202,7 +202,7 @@ public sealed class ChatInvocationStatePumpTests
     [Test]
     public async Task PumpAsync_WhenTheStateCarriesNoPhaseTimestamp_EmitsThePhaseEventWithANullTimestamp()
     {
-        // The cloud/Ollama and legacy shape: a phase with no stamp behind it. The field is optional end to end — the
+        // The cloud and legacy shape: a phase with no stamp behind it. The field is optional end to end — the
         // event still goes out, and the client falls back to first-observed time.
         var correlation = new NodeChatMessageCorrelation
         {

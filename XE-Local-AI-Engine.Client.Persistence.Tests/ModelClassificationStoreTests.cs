@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 [Category(TestCategories.Integration)]
 public sealed class ModelClassificationStoreTests : IDisposable
 {
+    private const long SeededAtUtc = 1_000;
+
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -20,7 +23,7 @@ public sealed class ModelClassificationStoreTests : IDisposable
     }
 
     [Test]
-    public async Task UpsertDetectedAsync_ThenReadBackInNewContext_RoundTripsDetectedFields()
+    public async Task GetByNameAsync_ReadsAnExistingRowBackInANewContext()
     {
         var databasePath = GetDatabasePath("roundtrip.sqlite");
 
@@ -28,56 +31,43 @@ public sealed class ModelClassificationStoreTests : IDisposable
         {
             await writeContext.Database.EnsureDeletedAsync();
             await writeContext.Database.EnsureCreatedAsync();
-
-            var store = new ModelClassificationStore(writeContext, TimeProvider.System);
-            var detected = await store.UpsertDetectedAsync("llama3.1",
-                "sha256:abc123",
-                ModelKind.Chat,
-                capabilitiesJson: """["completion","tools"]""");
-
-            AssertEx.Equal("llama3.1", detected.ModelName);
-            AssertEx.Equal("sha256:abc123", detected.Digest);
-            AssertEx.Equal(ModelKind.Chat, detected.DetectedKind);
-            AssertEx.Equal(expected: """["completion","tools"]""", detected.DetectedCapabilitiesJson);
-            AssertEx.Null(detected.OverrideKind, "A freshly detected row has no override.");
-            AssertEx.True(detected.DetectedAtUtc is > 0, "Detection should stamp a detected-at time.");
-            AssertEx.True(detected.UpdatedAtUtc > 0, "Detection should stamp an updated-at time.");
+            await SeedDetectedAsync(writeContext, "llama3.1", "sha256:abc123", ModelKind.Chat, """["completion","tools"]""");
         }
 
         await using var readContext = CreateContext(databasePath);
         var readStore = new ModelClassificationStore(readContext, TimeProvider.System);
 
         var byName = AssertEx.NotNull(await readStore.GetByNameAsync("llama3.1"), "Model should be found by name.");
+        AssertEx.Equal("llama3.1", byName.ModelName);
         AssertEx.Equal("sha256:abc123", byName.Digest);
         AssertEx.Equal(ModelKind.Chat, byName.DetectedKind);
         AssertEx.Equal(expected: """["completion","tools"]""", byName.DetectedCapabilitiesJson);
+        AssertEx.Null(byName.OverrideKind, "A row with no operator choice has no override.");
+        AssertEx.Equal(SeededAtUtc, byName.DetectedAtUtc);
+        AssertEx.Equal(SeededAtUtc, byName.UpdatedAtUtc);
 
         var unknown = await readStore.GetByNameAsync("does-not-exist");
         AssertEx.Null(unknown, "An unknown model name should return null.");
     }
 
     [Test]
-    public async Task UpsertDetectedAsync_WhenDigestChanges_ReDetectsAndPreservesOverride()
+    public async Task SetOverrideAsync_OnAnExistingRow_StoresTheOverrideAndKeepsDetectedFields()
     {
-        var databasePath = GetDatabasePath("redetect.sqlite");
+        var databasePath = GetDatabasePath("override-existing.sqlite");
 
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         var store = new ModelClassificationStore(context, TimeProvider.System);
+        await SeedDetectedAsync(context, "phi3", "sha256:old", ModelKind.Chat, """["completion"]""");
 
-        _ = await store.UpsertDetectedAsync("phi3", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion"]""");
+        var overridden = await store.SetOverrideAsync("phi3", ModelKind.Embedding);
 
-        // Operator overrides the model to Embedding (an intentional, name-keyed override).
-        _ = await store.SetOverrideAsync("phi3", ModelKind.Embedding);
-
-        // A re-pull changes the digest and re-detects the detected fields; the override must survive.
-        var reDetected = await store.UpsertDetectedAsync("phi3", "sha256:new", ModelKind.Chat, capabilitiesJson: """["completion","vision"]""");
-
-        AssertEx.Equal("sha256:new", reDetected.Digest);
-        AssertEx.Equal(ModelKind.Chat, reDetected.DetectedKind);
-        AssertEx.Equal(expected: """["completion","vision"]""", reDetected.DetectedCapabilitiesJson);
-        AssertEx.Equal(ModelKind.Embedding, reDetected.OverrideKind);
+        AssertEx.Equal(ModelKind.Embedding, overridden.OverrideKind);
+        AssertEx.Equal("sha256:old", overridden.Digest);
+        AssertEx.Equal(ModelKind.Chat, overridden.DetectedKind);
+        AssertEx.Equal(expected: """["completion"]""", overridden.DetectedCapabilitiesJson);
+        AssertEx.True(overridden.UpdatedAtUtc > SeededAtUtc, "Setting an override should stamp a newer updated-at time.");
     }
 
     [Test]
@@ -110,7 +100,7 @@ public sealed class ModelClassificationStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new ModelClassificationStore(context, TimeProvider.System);
 
-        _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, capabilitiesJson: """["completion"]""");
+        await SeedDetectedAsync(context, "mistral", "sha256:m", ModelKind.Chat, """["completion"]""");
         _ = await store.SetOverrideAsync("mistral", ModelKind.Embedding);
 
         var cleared = await store.SetOverrideAsync("mistral", overrideKind: null);
@@ -130,18 +120,18 @@ public sealed class ModelClassificationStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new ModelClassificationStore(context, TimeProvider.System);
 
-        _ = await store.UpsertDetectedAsync("Nomic-Embed-Text", "sha256:n", ModelKind.Embedding, capabilitiesJson: """["embedding"]""");
+        await SeedDetectedAsync(context, "Nomic-Embed-Text", "sha256:n", ModelKind.Embedding, """["embedding"]""");
 
-        // The model_name primary key uses NOCASE collation, so a differently-cased lookup resolves the same row, and a
-        // second upsert with a differently-cased name updates that same row rather than inserting a duplicate.
+        // The model_name primary key uses NOCASE collation, so a differently-cased lookup resolves the same row, and an
+        // override with a differently-cased name updates that same row rather than inserting a duplicate.
         var lookedUp = AssertEx.NotNull(await store.GetByNameAsync("nomic-embed-text"), "A case-only-different name should resolve the same row.");
         AssertEx.Equal(ModelKind.Embedding, lookedUp.DetectedKind);
 
-        _ = await store.UpsertDetectedAsync("NOMIC-EMBED-TEXT", "sha256:n2", ModelKind.Embedding, capabilitiesJson: """["embedding"]""");
+        _ = await store.SetOverrideAsync("NOMIC-EMBED-TEXT", ModelKind.Chat);
 
         var all = await store.ListAsync();
         AssertEx.Equal(expected: 1, all.Count);
-        AssertEx.Equal("sha256:n2", all[0].Digest);
+        AssertEx.Equal(ModelKind.Chat, all[0].OverrideKind);
     }
 
     [Test]
@@ -154,9 +144,9 @@ public sealed class ModelClassificationStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new ModelClassificationStore(context, TimeProvider.System);
 
-        _ = await store.UpsertDetectedAsync("zephyr", "sha256:z", ModelKind.Chat, capabilitiesJson: null);
-        _ = await store.UpsertDetectedAsync("alpaca", "sha256:a", ModelKind.Chat, capabilitiesJson: null);
-        _ = await store.UpsertDetectedAsync("mxbai-embed-large", "sha256:m", ModelKind.Embedding, capabilitiesJson: """["embedding"]""");
+        await SeedDetectedAsync(context, "zephyr", "sha256:z", ModelKind.Chat, capabilitiesJson: null);
+        await SeedDetectedAsync(context, "alpaca", "sha256:a", ModelKind.Chat, capabilitiesJson: null);
+        await SeedDetectedAsync(context, "mxbai-embed-large", "sha256:m", ModelKind.Embedding, """["embedding"]""");
 
         var all = await store.ListAsync();
 
@@ -164,6 +154,21 @@ public sealed class ModelClassificationStoreTests : IDisposable
         AssertEx.Equal("alpaca", all[0].ModelName);
         AssertEx.Equal("mxbai-embed-large", all[1].ModelName);
         AssertEx.Equal("zephyr", all[2].ModelName);
+    }
+
+    // Nothing in production writes the detected fields any more; rows that carry them only exist on upgraded databases.
+    private static async Task SeedDetectedAsync(NodeChatDbContext context, string modelName, string digest, ModelKind kind, string? capabilitiesJson)
+    {
+        _ = context.ModelClassifications.Add(new ModelClassification
+        {
+            ModelName = modelName,
+            Digest = digest,
+            DetectedKind = kind,
+            DetectedCapabilitiesJson = capabilitiesJson,
+            DetectedAtUtc = SeededAtUtc,
+            UpdatedAtUtc = SeededAtUtc
+        });
+        _ = await context.SaveChangesAsync();
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

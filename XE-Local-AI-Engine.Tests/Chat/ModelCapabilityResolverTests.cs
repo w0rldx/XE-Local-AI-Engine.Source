@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -28,7 +27,7 @@ public sealed class ModelCapabilityResolverTests
     {
         var factory = Substitute.For<IActiveCloudChatClientFactory>();
         factory.IsCloudProviderSelected(AzureDeployment).Returns(true);
-        var resolver = CreateResolver(factory, out _);
+        var resolver = CreateResolver(factory);
 
         var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None);
 
@@ -45,7 +44,7 @@ public sealed class ModelCapabilityResolverTests
         // and keep the conservative non-thinking/non-tools default for a model it could not actually classify.
         var factory = Substitute.For<IActiveCloudChatClientFactory>();
         factory.IsCloudProviderSelected(AzureDeployment).Returns(_ => throw new InvalidOperationException("credential store unavailable"));
-        var resolver = CreateResolver(factory, out _);
+        var resolver = CreateResolver(factory);
 
         var (supportsThinking, supportsTools, isCloud) = await resolver.ResolveAsync(AzureDeployment, CancellationToken.None);
 
@@ -62,8 +61,7 @@ public sealed class ModelCapabilityResolverTests
         const string localModel = "qwen3-8b.gguf";
         var factory = Substitute.For<IActiveCloudChatClientFactory>();
         factory.IsCloudProviderSelected(localModel).Returns(false);
-        var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
-        providerResolver.ResolveProviderNameForModelAsync(localModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
+        var resolver = CreateResolver(factory, out var ggufResolver);
         ggufResolver.ResolveOrNullAsync(localModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false));
 
@@ -82,8 +80,7 @@ public sealed class ModelCapabilityResolverTests
         const string visionModel = "smolvlm.gguf";
         var factory = Substitute.For<IActiveCloudChatClientFactory>();
         factory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
-        var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
-        providerResolver.ResolveProviderNameForModelAsync(visionModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
+        var resolver = CreateResolver(factory, out var ggufResolver);
         ggufResolver.ResolveOrNullAsync(visionModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: true));
 
@@ -109,8 +106,7 @@ public sealed class ModelCapabilityResolverTests
         const string unenforceableModel = "unclosed-think.gguf";
         var factory = Substitute.For<IActiveCloudChatClientFactory>();
         factory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
-        var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
-        providerResolver.ResolveProviderNameForModelAsync(unenforceableModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
+        var resolver = CreateResolver(factory, out var ggufResolver);
         ggufResolver.ResolveOrNullAsync(unenforceableModel, Arg.Any<CancellationToken>())
                     .Returns(new GgufModelCapabilities(SupportsThinking: true,
                         SupportsTools: false,
@@ -140,10 +136,7 @@ public sealed class ModelCapabilityResolverTests
         };
         var trust = new FakeModelTrustResolver().Register("cloud-box", "qwen3", ExternalProviderLocality.Cloud, cloudGrants: grants)
                                                 .Register("local-box", "qwen3", cloudGrants: grants);
-        var resolver = new ModelCapabilityResolver(Substitute.For<IModelClassificationService>(),
-            Substitute.For<ILocalModelProviderResolver>(),
-            Substitute.For<IGgufModelCapabilityResolver>(),
-            trust);
+        var resolver = new ModelCapabilityResolver(Substitute.For<IGgufModelCapabilityResolver>(), trust);
 
         var cloud = await resolver.ResolveAsync("ext:cloud-box/qwen3", CancellationToken.None);
 
@@ -155,23 +148,16 @@ public sealed class ModelCapabilityResolverTests
         AssertEx.Equal(ExternalProviderCloudGrants.None, default(ModelCapabilitySnapshot).CloudGrants);
     }
 
-    private static ModelCapabilityResolver CreateResolver(IActiveCloudChatClientFactory factory, out ILocalModelProviderResolver providerResolver)
+    private static ModelCapabilityResolver CreateResolver(IActiveCloudChatClientFactory factory)
     {
-        return CreateResolver(factory, out providerResolver, out _);
+        return CreateResolver(factory, out _);
     }
 
     private static ModelCapabilityResolver CreateResolver(IActiveCloudChatClientFactory factory,
-        out ILocalModelProviderResolver providerResolver,
         out IGgufModelCapabilityResolver ggufResolver)
     {
-        providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        // Default: not an Ollama-routed model, so the resolver never issues an /api/show probe in these tests.
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns(OllamaLocalModelProvider.OllamaProviderName + "-not");
         ggufResolver = Substitute.For<IGgufModelCapabilityResolver>();
-        return new ModelCapabilityResolver(Substitute.For<IModelClassificationService>(),
-            providerResolver,
-            ggufResolver,
+        return new ModelCapabilityResolver(ggufResolver,
             new ModelTrustResolver(new FakeExternalProviderRegistry(),
                 Substitute.For<IExternalProviderRegistryCache>(),
                 factory,

@@ -549,10 +549,8 @@ phase_model() {
     fi
   fi
   if [[ "$(record_value installed "${records}")" != "true" ]]; then
-    local provider_error
-    provider_error="$(record_value providerError "${records}")"
-    [[ -z "${provider_error}" ]] \
-      || log "the node lists no GGUF at all (${provider_error}); a models dir of symlinks is rejected, use hard links or copies."
+    [[ "$(record_value noGguf "${records}")" != "true" ]] \
+      || log "the node lists no GGUF at all; a models dir of symlinks is rejected, use hard links or copies."
     [[ "${DOWNLOAD}" == "true" ]] \
       || die 2 "model ${MODEL} is not installed and could not be linked (${link_note}); re-run with --download to install it."
     resolve_download_source

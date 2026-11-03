@@ -6,8 +6,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
@@ -38,7 +36,6 @@ public sealed class CapacityService : ICapacityService
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly LlamaServerSupervisorOptions _supervisorOptions;
     private readonly ILocalModelProviderResolver _localProviderResolver;
-    private readonly IOllamaModelService _ollamaModelService;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ILogger<CapacityService> _logger;
 
@@ -46,7 +43,6 @@ public sealed class CapacityService : ICapacityService
         ILocalModelProviderResolver localProviderResolver,
         IRuntimeDeviceAudit runtimeAudit,
         ILlamaServerProcessSupervisor supervisor,
-        IOllamaModelService ollamaModelService,
         IModelFootprintProvider footprintProvider,
         IPendingFootprintLedger ledger,
         IProcessLaunchAdmissionRegistry launchAdmissions,
@@ -58,7 +54,6 @@ public sealed class CapacityService : ICapacityService
         _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
         _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
-        _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
         _footprintProvider = footprintProvider ?? throw new ArgumentNullException(nameof(footprintProvider));
         _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
         _launchAdmissions = launchAdmissions ?? throw new ArgumentNullException(nameof(launchAdmissions));
@@ -101,17 +96,16 @@ public sealed class CapacityService : ICapacityService
         }
 
         var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct);
-        var isOllama = string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase);
-        var isLlamaServer = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
-        if (isLlamaServer && _externalEndpoints.Resolve(modelName, role) is not null)
-        {
-            return Unbudgeted(CapacityVerdict.Allow, ReasonAllowExternal);
-        }
 
         // An operator-registered external model runs on someone else's hardware: no process, no weights, no RAM or VRAM here, and the byte-budget path
         // below would reject it as "footprint could not be determined". Both conditions are deliberate and neither grants trust: see docs/wiki/04-agent-mode.md ("Capacity gate & sub-agent spawn").
         if (string.Equals(providerName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
             || ExternalModelId.HasExternalScheme(modelName))
+        {
+            return Unbudgeted(CapacityVerdict.Allow, ReasonAllowExternal);
+        }
+
+        if (_externalEndpoints.Resolve(modelName, role) is not null)
         {
             return Unbudgeted(CapacityVerdict.Allow, ReasonAllowExternal);
         }
@@ -124,7 +118,7 @@ public sealed class CapacityService : ICapacityService
         // pass on the same snapshot. Held only for this short sequence — no inference runs under it.
         using var gate = await _ledger.EnterDecisionAsync(ct);
 
-        var runningSnapshot = await SnapshotRunningKeysAsync(isOllama, ct);
+        var runningSnapshot = await SnapshotRunningKeysAsync(ct);
         var running = runningSnapshot.Keys;
 
         // Already running for this (model, role): serialize on that process; no fit math, no second load.
@@ -133,14 +127,7 @@ public sealed class CapacityService : ICapacityService
             return Unbudgeted(CapacityVerdict.QueueSameModel, ReasonQueueSameModel);
         }
 
-        var launchSnapshot = isLlamaServer
-            ? _launchAdmissions.Snapshot(modelName, role)
-            : new ProcessLaunchAdmissionSnapshot
-            {
-                AdmittedKeys = new HashSet<ProcessLaunchAdmissionKey>(),
-                HasRequestedKey = false,
-                HasGlobalBlocker = false
-            };
+        var launchSnapshot = _launchAdmissions.Snapshot(modelName, role);
 
         // Admitted and still loading for this (model, role): the launch joins that admission, so it books nothing and is never refused. Pooled roles too, and a
         // leaked lease whose process exited also lands here: the next ensure relaunches on that admission with no fresh budget check, under "Model is loading".
@@ -152,11 +139,10 @@ public sealed class CapacityService : ICapacityService
         // Pooled roles (embedder, reranker, decision) are spawned below every caller; the embedder is booked but never refused on budget.
         var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision;
         var neverReject = request.NeverRejectOnBudget;
-        var ollamaWarning = isOllama && running.Count > 0;
         var canPublish = !launchSnapshot.HasGlobalBlocker;
         if (!canPublish && !neverReject)
         {
-            return Reject(ReasonRejectLaunchBlocker, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectLaunchBlocker, modelName, role, runningSnapshot, launchSnapshot);
         }
 
         // INVARIANT: the forced refresh runs UNDER the gate, never before it. The free-VRAM baseline nets out every resident model, so two racing decisions
@@ -168,60 +154,59 @@ public sealed class CapacityService : ICapacityService
         {
             if (neverReject)
             {
-                return AllowOverBudget(modelName, role, reservation: null, ollamaWarning);
+                return AllowOverBudget(modelName, role, reservation: null);
             }
 
-            return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot);
         }
 
         // Process-count headroom mirrors the supervisor's chat-model cap: companions (embedder, reranker) hold their own slots, so only chat-class keys count.
         // A pooled role and the supervisor's own chat admission skip it: at the cap the supervisor evicts within the class or refuses the launch itself.
         if (!isPooledRole && !request.SupervisorEnforcesProcessCap && CountChatClassProcesses(running, launchSnapshot) + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
-            return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot);
         }
 
         var hasUnmeasuredGpuLoad = !runningSnapshot.IsKnown
                                    || running.Count > 0
-                                   || isLlamaServer
-                                   && role == ModelRole.Chat
+                                   || role == ModelRole.Chat
                                    && _supervisorOptions.Speculative.RequiresExternalDraftModel;
         var fits = TryFitByDownTier(request, profile, hasUnmeasuredGpuLoad, ref footprint, out var requiredWindowRefused);
         if (requiredWindowRefused)
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot);
         }
 
         if (!fits && !neverReject)
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning, isMemoryShortfall: true, footprint.Admission);
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, isMemoryShortfall: true, footprint.Admission);
         }
 
         var committed = _footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint);
         fits = fits && committed && FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad);
         if (!fits && !neverReject)
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning, isMemoryShortfall: committed,
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, isMemoryShortfall: committed,
                 committed ? footprint.Admission : null);
         }
 
         // Publish only after the exact footprint is reserved. Registry failure disposes the tentative reservation before
         // returning, preserving the ledger -> registry lock order and leaving neither half of the admission live.
         using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources), footprint.Admission);
-        if (!isLlamaServer || !request.PublishLaunchAdmission)
+        if (!request.PublishLaunchAdmission)
         {
-            return fits ? AllowWithinBudget(request, footprint, profile, reservation, ollamaWarning, published: false) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
+            return fits ? AllowWithinBudget(request, footprint, profile, reservation, published: false) : AllowOverBudget(modelName, role, reservation);
         }
 
         if (canPublish && committed && footprint.Admission is not null && reservation.TryAttach(_launchAdmissions, footprint.Admission))
         {
-            return fits ? AllowWithinBudget(request, footprint, profile, reservation, ollamaWarning, published: true) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
+            return fits ? AllowWithinBudget(request, footprint, profile, reservation, published: true) : AllowOverBudget(modelName, role, reservation);
         }
 
         // Only the embedder reaches here with a refused publication: it keeps the ledger bytes and launches unbound, as before it was gated.
         return neverReject
-            ? AllowOverBudget(modelName, role, reservation, ollamaWarning)
-            : Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            ? AllowOverBudget(modelName, role, reservation)
+            : Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot);
     }
 
     /// <summary>A decision that books no budget: a cloud or external model, or a launch that joins one already running or loading.</summary>
@@ -229,8 +214,7 @@ public sealed class CapacityService : ICapacityService
         new()
         {
             Verdict = verdict,
-            Reason = reason,
-            OllamaEvictionWarning = false
+            Reason = reason
         };
 
     /// <summary>
@@ -286,7 +270,6 @@ public sealed class CapacityService : ICapacityService
         ModelFootprint footprint,
         HardwareProfile profile,
         AdmissionReservation reservation,
-        bool ollamaWarning,
         bool published)
     {
         if (request.Role is ModelRole.Embedding or ModelRole.Reranker or ModelRole.Decision)
@@ -300,19 +283,18 @@ public sealed class CapacityService : ICapacityService
                 request.ModelName, profile.AvailableVramBytes / Mib, footprint.Resources.GpuBytes / Mib, footprint.Admission?.Allocation.ProcessContextTokens, published);
         }
 
-        return reservation.TransferToDecision(ollamaWarning);
+        return reservation.TransferToDecision();
     }
 
     /// <summary>An Allow for a <see cref="CapacityRequest.NeverRejectOnBudget" /> caller that would otherwise have been refused, logged so the overcommit is visible.</summary>
-    private CapacityDecision AllowOverBudget(string modelName, ModelRole role, AdmissionReservation? reservation, bool ollamaWarning)
+    private CapacityDecision AllowOverBudget(string modelName, ModelRole role, AdmissionReservation? reservation)
     {
         _logger.LogInformation("Capacity admitted {Model} ({Role}) without a full admission: its budget or launch admission could not be confirmed.",
             modelName, role);
-        return reservation?.TransferToDecision(ollamaWarning) ?? new CapacityDecision
+        return reservation?.TransferToDecision() ?? new CapacityDecision
         {
             Verdict = CapacityVerdict.Allow,
-            Reason = ReasonAllow,
-            OllamaEvictionWarning = ollamaWarning
+            Reason = ReasonAllow
         };
     }
 
@@ -322,7 +304,6 @@ public sealed class CapacityService : ICapacityService
         ModelRole role,
         RunningSnapshot runningSnapshot,
         ProcessLaunchAdmissionSnapshot launchSnapshot,
-        bool ollamaWarning,
         bool isMemoryShortfall = false,
         ProcessLaunchAdmission? shortfallAdmission = null)
     {
@@ -361,7 +342,6 @@ public sealed class CapacityService : ICapacityService
         {
             Verdict = CapacityVerdict.RejectInsufficient,
             Reason = reason,
-            OllamaEvictionWarning = ollamaWarning,
             IsMemoryShortfall = isMemoryShortfall,
             Admission = shortfallAdmission
         };
@@ -415,26 +395,15 @@ public sealed class CapacityService : ICapacityService
         return footprint.GpuBytes == 0;
     }
 
-    /// <summary>The running <c>(model, role)</c> keys for the relevant local provider, or an explicit unknown state when the probe fails.</summary>
+    /// <summary>The supervisor's running <c>(model, role)</c> keys, or an explicit unknown state when the probe fails.</summary>
     /// <remarks>
-    ///     llama.cpp reads the supervisor's per-process health rows; Ollama reads its running-models snapshot, where role is not modeled, so every
-    ///     running model counts as a Chat process — the only role a sub-agent chat spawn competes with. A probe failure preserves the uncertainty:
-    ///     CPU and free-VRAM decisions still have authoritative byte baselines, while the non-NVIDIA total-VRAM fallback must reject, because it
-    ///     cannot establish whether unledgered residents already consume that total.
+    ///     A probe failure preserves the uncertainty: CPU and free-VRAM decisions still have authoritative byte baselines, while the non-NVIDIA
+    ///     total-VRAM fallback must reject, because it cannot establish whether unledgered residents already consume that total.
     /// </remarks>
-    private async Task<RunningSnapshot> SnapshotRunningKeysAsync(bool isOllama, CancellationToken ct)
+    private async Task<RunningSnapshot> SnapshotRunningKeysAsync(CancellationToken ct)
     {
         try
         {
-            if (isOllama)
-            {
-                var snapshot = await _ollamaModelService.ListRunningModelsAsync(ct);
-                return new RunningSnapshot(snapshot
-                                           .Select(model => new RunningKey(model.ModelName ?? model.Name ?? string.Empty, ModelRole.Chat))
-                                           .ToHashSet(),
-                    IsKnown: true);
-            }
-
             var health = await _supervisor.CheckHealthAsync(ct);
 
             // EXITED entries are not running: the supervisor keeps a corpse until the idle reaper collects it (up to a quarter of the idle TTL), and counting one burns
@@ -497,13 +466,12 @@ public sealed class CapacityService : ICapacityService
             }
         }
 
-        public CapacityDecision TransferToDecision(bool ollamaWarning)
+        public CapacityDecision TransferToDecision()
         {
             var decision = new CapacityDecision
             {
                 Verdict = CapacityVerdict.Allow,
                 Reason = ReasonAllow,
-                OllamaEvictionWarning = ollamaWarning,
                 Reservation = _reservation,
                 Admission = _admission
             };

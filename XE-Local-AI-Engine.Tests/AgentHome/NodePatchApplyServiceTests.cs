@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Host patch apply coverage. Uses REAL host <c>git</c> (no Docker, no Ollama) to
+///     Host patch apply coverage. Uses REAL host <c>git</c> (no Docker, no model runtime) to
 ///     generate patch-export-shaped patches (rooted at a temp <c>selected/&lt;alias&gt;/</c> repo, with the exact diff
 ///     flags) and applies them through <see cref="NodePatchApplyService" /> to temp host folders mapped by a fake
 ///     <see cref="ISelectedFolderResolver" />. Proves the traversal/alias guards, binary-reject default, the gate on

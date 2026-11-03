@@ -288,8 +288,8 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     /// <remarks>
     ///     Mirrors the executor's admission: an LLM call or decision pin is asked through <see cref="NodeLocalModelGate" />; a cloud (or
     ///     unresolved) one is refused only while unattended cloud runs are off, so the warning names that switch. An Agent run takes any
-    ///     node-local model its provider serves, so its pin warns only when it routes to llama-server and no GGUF is installed (an Ollama
-    ///     model never warns), and it refuses a cloud one in its own words. A lookup that faults says nothing, so validation never throws.
+    ///     node-local model its provider serves, so its pin warns only when it routes to llama-server and no GGUF is installed,
+    ///     and it refuses a cloud one in its own words. A lookup that faults says nothing, so validation never throws.
     /// </remarks>
     private async Task<IReadOnlyList<GraphWorkflowValidationError>> UninstalledModelWarningsAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {

@@ -50,7 +50,7 @@ public sealed class KnowledgeModelPrewarmerTests
     [Test]
     public async Task StartWarm_EmbedderNotOnLlamaCpp_WarmsOnlyTheReranker()
     {
-        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "ollama");
+        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "another-runtime");
 
         await prewarmer.StartWarm();
 
@@ -74,7 +74,7 @@ public sealed class KnowledgeModelPrewarmerTests
     {
         var release = new TaskCompletionSource<LlamaServerEndpoint>(TaskCreationOptions.RunContinuationsAsynchronously);
         _supervisor.EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>()).Returns(release.Task);
-        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "ollama");
+        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "another-runtime");
 
         // The supervisor never answers until released, yet every request returns at once with the same warm.
         var first = prewarmer.StartWarm();
@@ -98,7 +98,7 @@ public sealed class KnowledgeModelPrewarmerTests
     [Test]
     public async Task StartWarm_AfterASuccessfulWarm_WarmsAgainWithoutCooldown()
     {
-        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "ollama");
+        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "another-runtime");
 
         await prewarmer.StartWarm();
         await prewarmer.StartWarm();
@@ -111,7 +111,7 @@ public sealed class KnowledgeModelPrewarmerTests
     {
         _supervisor.EnsureRunningAsync(Reranker, ModelRole.Reranker, Arg.Any<CancellationToken>())
                    .ThrowsAsync(new LlamaRuntimeException("Not enough memory to load the reranker."));
-        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "ollama");
+        var prewarmer = CreatePrewarmer(Reranker, embeddingProviderName: "another-runtime");
 
         await prewarmer.StartWarm();
         _time.Advance(KnowledgeModelPrewarmer.RetryCooldown - TimeSpan.FromSeconds(1));

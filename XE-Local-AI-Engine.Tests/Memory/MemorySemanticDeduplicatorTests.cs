@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     returns NotApplied so the caller keeps every candidate (no mass-dedup on outage); the configured threshold is the
 ///     deciding knob; scope confines the comparison; and existing-memory vectors are cached (RAM-only) while the
 ///     candidate is re-embedded each run. A deterministic map-based fake embedder makes cosine fully controllable
-///     (mirrors the KB/ranker test embedder pattern) — no Ollama/llama-server.
+///     (mirrors the KB/ranker test embedder pattern) — no llama-server.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class MemorySemanticDeduplicatorTests
@@ -221,7 +221,7 @@ public sealed class MemorySemanticDeduplicatorTests
         };
     }
 
-    // Deterministic text -> vector map so cosine (and thus threshold behavior) is fully controllable and Ollama-free.
+    // Deterministic text -> vector map so cosine (and thus threshold behavior) is fully controllable and runtime-free.
     private sealed class VectorMap
     {
         private readonly Dictionary<string, float[]> _byText = new(StringComparer.Ordinal);

@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Testing.FakeDocker.Endpoints;
 /// </summary>
 /// <remarks>
 ///     Loopback TCP is enough: the <c>unix</c>/<c>npipe</c> restriction is policy in <c>ContainerRuntimeResolver</c>,
-///     which a test building the client directly bypasses, so the fake mirrors <c>FakeOllamaServer</c>. One server per
+///     which a test building the client directly bypasses. One server per
 ///     test: a shared instance would leak a container into the next test's label filter, and a reset API costs more
 ///     than a Kestrel start on a dynamic loopback port.
 /// </remarks>

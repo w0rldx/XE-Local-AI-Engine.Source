@@ -6,12 +6,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Unit coverage for the usage-provider attribution: the pure <see cref="UsageProviderClassifier" />
-///     mapping over all five outcomes, and the <see cref="UsageProviderResolver" /> orchestration — cloud-first precedence,
+///     mapping over all four outcomes, and the <see cref="UsageProviderResolver" /> orchestration — cloud-first precedence,
 ///     local fallback, and the never-throw / null-model / failed-lookup degradations to <c>unknown</c>.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -36,17 +35,14 @@ public sealed class UsageProviderResolverTests
     }
 
     [Test]
-    public void Classify_LocalOllama_MapsToOllama()
-    {
-        AssertEx.Equal(AgentUsageProviders.Ollama, UsageProviderClassifier.Classify(cloudProviderName: null, OllamaLocalModelProvider.OllamaProviderName));
-    }
-
-    [Test]
     public void Classify_UnrecognizedNames_MapToUnknown()
     {
         AssertEx.Equal(AgentUsageProviders.Unknown, UsageProviderClassifier.Classify(cloudProviderName: null, localProviderName: null));
         AssertEx.Equal(AgentUsageProviders.Unknown, UsageProviderClassifier.Classify("some-future-cloud", localProviderName: null));
         AssertEx.Equal(AgentUsageProviders.Unknown, UsageProviderClassifier.Classify(cloudProviderName: null, "vllm"));
+
+        // The old label is only read back from stored rows: new usage is never attributed to it.
+        AssertEx.Equal(AgentUsageProviders.Unknown, UsageProviderClassifier.Classify(cloudProviderName: null, "ollama"));
     }
 
     [Test]
@@ -83,10 +79,10 @@ public sealed class UsageProviderResolverTests
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.ResolveActiveCloudProviderName(Arg.Any<string?>()).Returns((string?)null);
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(OllamaLocalModelProvider.OllamaProviderName);
+        providerResolver.ResolveProviderNameForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(LlamaServerProviderConstants.ProviderName);
         var resolver = Create(cloudFactory, providerResolver);
 
-        AssertEx.Equal(AgentUsageProviders.Ollama, await resolver.ResolveAsync("qwen3:8b"));
+        AssertEx.Equal(AgentUsageProviders.Local, await resolver.ResolveAsync("qwen3:8b"));
     }
 
     [Test]

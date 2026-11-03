@@ -11,11 +11,11 @@ import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard"
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function localDefaultOption(): ModelOption {
-	return { value: localDefaultModelValue, label: "Local default", displayName: "Local runtime default", isAvailable: true };
+	return { value: localDefaultModelValue, label: "Local default", displayName: "Local runtime default" };
 }
 
 function chatOption(value: string): ModelOption {
-	return { value, label: value, isAvailable: true };
+	return { value, label: value };
 }
 
 function externalOption(value: string, connectionId: string, connectionName: string, declaredLocality: string): ModelOption {
@@ -23,7 +23,6 @@ function externalOption(value: string, connectionId: string, connectionName: str
 		value,
 		label: value,
 		displayName: value,
-		isAvailable: true,
 		provider: "external",
 		externalConnectionId: connectionId,
 		externalConnectionName: connectionName,
@@ -32,7 +31,7 @@ function externalOption(value: string, connectionId: string, connectionName: str
 }
 
 function codexOption(value: string): ModelOption {
-	return { value, label: value, displayName: value, isAvailable: true, isCloud: true, provider: "CodexOAuth" };
+	return { value, label: value, displayName: value, isCloud: true, provider: "CodexOAuth" };
 }
 
 describe("ModelSelectorCard — external-provider sections", () => {

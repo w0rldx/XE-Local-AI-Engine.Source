@@ -19,7 +19,7 @@ const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second";
 const KNOWLEDGE_BASE_ENABLED_STORAGE_KEY = "xe-node-chat-knowledge-base-enabled";
 
-// Graded reasoning efforts, offered for models that advertise the Ollama `thinking` capability.
+// Graded reasoning efforts, offered for models that advertise the `thinking` capability.
 // "auto" is APPENDED, never prepended: clampReasoningEffort falls back to `available[0]`, so a leading "auto" would
 // silently become the fallback for every stale value that has no comparable rank.
 export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high", "auto"];
@@ -29,8 +29,8 @@ export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "med
 // clamped onto a binary model — restoring the model's natural reasoning, which the user can then switch off.
 export const binaryReasoningEfforts: readonly ReasoningEffort[] = ["on", "none"];
 // Full graded effort set for Codex/cloud models (OpenAI Responses API reasoning.effort vocabulary).
-// "minimal" and "xhigh" are Codex-only — NEVER offered for Ollama models. The Chat.tsx model-switch clamp
-// resets any carryover Codex effort (e.g. "xhigh") when the user switches back to an Ollama model.
+// "minimal" and "xhigh" are Codex-only — NEVER offered for local models. The Chat.tsx model-switch clamp
+// resets any carryover Codex effort (e.g. "xhigh") when the user switches back to a local model.
 export const codexReasoningEfforts: readonly ReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh", "auto"];
 // Every persistable reasoning-effort value — used to validate the hydrated localStorage value and persisted
 // wire values so a binary "on" survives reload/round-trip instead of being narrowed away.

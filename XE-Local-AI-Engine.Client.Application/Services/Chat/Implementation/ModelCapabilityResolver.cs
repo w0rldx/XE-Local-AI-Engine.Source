@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
 ///     Default <see cref="IModelCapabilityResolver" />, routing the capability lookup by the model's provider so an
@@ -13,9 +12,8 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 /// </summary>
 /// <remarks>
 ///     Codex and Azure Foundry ids use their declared matrices, an external OpenAI-compatible model uses the
-///     operator's own declarations, a llama.cpp GGUF reads its offline chat-template capabilities with no Ollama
-///     probe and no network, and only an Ollama-routed model hits <c>/api/show</c>, cache-first. This is the one
-///     provider-routing decision in the codebase: both the orchestration resolver, per participant, and
+///     operator's own declarations, and a llama.cpp GGUF reads its offline chat-template capabilities with no
+///     network. This is the one provider-routing decision in the codebase: both the orchestration resolver, per participant, and
 ///     <see cref="ChatTurnResolver" />, per turn, resolve through it.
 /// </remarks>
 public sealed class ModelCapabilityResolver : IModelCapabilityResolver
@@ -29,18 +27,12 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
 
     // The safe default: not thinking-capable, not tool-capable, and node-local.
     private static readonly ModelCapabilitySnapshot NotCapableLocal = new(SupportsThinking: false, SupportsTools: false, IsCloud: false);
-    private readonly IModelClassificationService _modelClassificationService;
-    private readonly ILocalModelProviderResolver _localModelProviderResolver;
     private readonly IGgufModelCapabilityResolver _ggufModelCapabilityResolver;
     private readonly IModelTrustResolver _modelTrustResolver;
 
-    public ModelCapabilityResolver(IModelClassificationService modelClassificationService,
-        ILocalModelProviderResolver localModelProviderResolver,
-        IGgufModelCapabilityResolver ggufModelCapabilityResolver,
+    public ModelCapabilityResolver(IGgufModelCapabilityResolver ggufModelCapabilityResolver,
         IModelTrustResolver modelTrustResolver)
     {
-        _modelClassificationService = modelClassificationService;
-        _localModelProviderResolver = localModelProviderResolver;
         _ggufModelCapabilityResolver = ggufModelCapabilityResolver;
         _modelTrustResolver = modelTrustResolver;
     }
@@ -52,8 +44,7 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
             return NotCapableLocal;
         }
 
-        // A Codex cloud model is NOT an Ollama model, so its declared matrix replaces an /api/show probe the runtime
-        // could only mis-detect. Thinking is on and tools track the V0 matrix; a cloud provider ignores `think`.
+        // A Codex cloud model uses its declared matrix. Thinking is on and tools track the V0 matrix; a cloud provider ignores `think`.
         if (CodexModelCatalog.IsCodexModel(model))
         {
             return new ModelCapabilitySnapshot(SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true)
@@ -98,43 +89,18 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
             return new ModelCapabilitySnapshot(SupportsThinking: false, AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
-        // /api/show only makes sense for an Ollama-routed model: a GGUF has no entry and desktop mode has no daemon, so
-        // the probe would stall every send. A GGUF reads its chat template offline; other providers take the default.
-        var providerName = await _localModelProviderResolver
-            .ResolveProviderNameForModelAsync(model, cancellationToken);
-        if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
-        {
-            var ggufCapabilities = await _ggufModelCapabilityResolver
-                .ResolveOrNullAsync(model, cancellationToken);
-            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL. Vision rides the GGUF descriptor's
-            // projector-gated flag — the only path that can advertise it (cloud/Ollama stay non-vision here).
-            return ggufCapabilities is { } caps
-                ? new ModelCapabilitySnapshot(caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
-                {
-                    SupportsVision = caps.SupportsVision,
-                    // The ONE path that can report a budget as unenforceable: llama.cpp is the only runtime that reads
-                    // the budget, and the GGUF descriptor is the only place its chat template was classified.
-                    ReasoningBudgetEnforceable = caps.ReasoningBudgetEnforceable
-                }
-                : NotCapableLocal;
-        }
-
-        var classifications = await _modelClassificationService
-            .ClassifyAsync([new ModelIdentity(model, Digest: null)], cancellationToken);
-        if (!classifications.TryGetValue(model, out var classification))
-        {
-            return NotCapableLocal;
-        }
-
-        // An Ollama-routed model runs on the node — local. Vision is not resolved on the Ollama path (llama.cpp is the
-        // default runtime and the mmproj-gated GGUF path owns vision); it stays the safe non-vision default here.
-        return new ModelCapabilitySnapshot(ModelKindDetector.SupportsThinking(classification.Capabilities),
-            ModelKindDetector.SupportsTools(classification.Capabilities),
-            IsCloud: false)
-        {
-            // Ollama ignores the in-process budget marker (its mapper reads a fixed option allowlist), so there is
-            // nothing to suppress on this wire — report enforceable and keep the Ollama path byte-identical.
-            ReasoningBudgetEnforceable = true
-        };
+        // A node-local model reads its chat template offline. Vision rides the GGUF descriptor's projector-gated flag — the only
+        // path that can advertise it — and an id with no installed GGUF takes the safe default.
+        var ggufCapabilities = await _ggufModelCapabilityResolver
+            .ResolveOrNullAsync(model, cancellationToken);
+        return ggufCapabilities is { } caps
+            ? new ModelCapabilitySnapshot(caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
+            {
+                SupportsVision = caps.SupportsVision,
+                // The ONE path that can report a budget as unenforceable: llama.cpp is the only runtime that reads
+                // the budget, and the GGUF descriptor is the only place its chat template was classified.
+                ReasoningBudgetEnforceable = caps.ReasoningBudgetEnforceable
+            }
+            : NotCapableLocal;
     }
 }

@@ -83,7 +83,6 @@ import {
 import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
 import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
 import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
-import { useOllamaRuntimeConfigured } from "@/features/node-settings/queries/useOllamaRuntimeConfigured";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
@@ -146,9 +145,6 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 
 	const recommendedDownloads = useRecommendedModelDownloads();
 
-	// Whether the optional Ollama runtime is gated off on this node (XE_OLLAMA_RUNTIME_ENABLED=false). FAIL OPEN: only
-	// a definite `false` disables the endpoint field, so a still-loading or failed probe leaves the field in place.
-	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
 	const effectiveToolCapableModels = useEffectiveToolCapableModels();
 	// The workloads the high profile would refuse on this host. Read only while the Sandbox section is open; it shares the
 	// development capability cache entry, which a saved profile change invalidates below.
@@ -418,7 +414,6 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			onDownloadRecommendedEmbedding={recommendedDownloads.embedding.start}
 			isDownloadRecommendedEmbeddingPending={recommendedDownloads.embedding.isPending}
 			isRecommendedEmbeddingInFlight={recommendedDownloads.embedding.isInFlight}
-			ollamaRuntimeDisabled={ollamaRuntimeDisabled}
 			updateChannelSelector={updateChannelSelector}
 		/>
 	);

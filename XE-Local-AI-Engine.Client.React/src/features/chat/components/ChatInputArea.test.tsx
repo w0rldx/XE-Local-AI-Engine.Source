@@ -370,13 +370,13 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(false);
 	});
 
-	it("does NOT render minimal or xhigh options when an Ollama graded set is passed", () => {
+	it("does NOT render minimal or xhigh options when a local graded set is passed", () => {
 		renderWithProviders(
 			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none", "low", "medium", "high"]} reasoningEffort="medium" />,
 		);
 
 		// Mantine Menu portal does not populate in jsdom; querying the default container confirms
-		// Codex-only items are not leaked into the non-portal render tree for Ollama models.
+		// Codex-only items are not leaked into the non-portal render tree for local models.
 		expect(screen.queryByTestId("chat-reasoning-effort-option-minimal")).toBeNull();
 		expect(screen.queryByTestId("chat-reasoning-effort-option-xhigh")).toBeNull();
 	});

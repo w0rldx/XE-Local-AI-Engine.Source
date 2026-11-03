@@ -58,7 +58,6 @@ function stubRoutes(respond: () => Response): void {
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
-				isAvailable: true,
 				items: [
 					["org/Tiny-GGUF:Q4_K_M", "llamacpp"],
 					["org/Tiny-GGUF:Q3_K_XL", "llamacpp"],
@@ -114,7 +113,7 @@ describe("ModelLabPage inspect tab", () => {
 
 	it.each([
 		["model-lab-models-failed", () => HttpResponse.json({ title: "gone" }, { status: 500 })],
-		["model-lab-no-models", () => HttpResponse.json({ isAvailable: true, items: [] })],
+		["model-lab-no-models", () => HttpResponse.json({ items: [] })],
 	])("shows %s on the tab when there is nothing to pick", async (testId, respond) => {
 		server.use(http.get(localApiPath("models"), respond));
 		renderWithProviders(<ModelLabPage />);

@@ -37,7 +37,7 @@ internal sealed class DefaultAssistantToolOfferService : IDefaultAssistantToolOf
 
     public async Task<DefaultAssistantToolOffer> GetAsync(string? modelName, CancellationToken cancellationToken = default)
     {
-        // The same head a send with no model picked takes: the installed-GGUF local default, never Ollama.
+        // The same head a send with no model picked takes: the installed-GGUF local default.
         var activeModel = string.IsNullOrWhiteSpace(modelName)
             ? await _localDefaultChatModelResolver.ResolveAsync((await _nodeSettingsStore.LoadAsync(cancellationToken)).DefaultModelName, cancellationToken)
             : modelName;

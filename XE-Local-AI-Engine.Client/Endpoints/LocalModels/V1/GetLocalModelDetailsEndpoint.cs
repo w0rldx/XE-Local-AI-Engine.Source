@@ -51,9 +51,6 @@ public sealed class GetLocalModelDetailsEndpoint : Endpoint<GetLocalModelDetails
             case LocalModelDetailsResolution.Gguf gguf:
                 await Send.OkAsync(gguf.Descriptor.ToDetailsResponse(modelName, gguf.EffectiveContextTokens, gguf.ExpertsOffloaded), ct);
                 return;
-            case LocalModelDetailsResolution.Ollama ollama:
-                await Send.OkAsync(ollama.Details.ToResponse(modelName), ct);
-                return;
             default:
                 await Send.NotFoundAsync(ct);
                 return;

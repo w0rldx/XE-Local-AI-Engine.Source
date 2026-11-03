@@ -34,7 +34,7 @@ public sealed record OrchestrationParticipant
     public string? ReasoningEffort { get; init; }
 
     /// <summary>
-    ///     Whether this participant's resolved <see cref="ModelId" /> advertises the Ollama <c>thinking</c> capability.
+    ///     Whether this participant's resolved <see cref="ModelId" /> advertises the <c>thinking</c> capability.
     ///     Defaults to <see langword="true" />.
     /// </summary>
     /// <remarks>
@@ -80,7 +80,7 @@ public sealed record OrchestrationParticipant
     ///     Carried onto the participant agent's construction-time <c>ChatOptions</c> as <c>num_ctx</c>, so
     ///     <c>ProviderCallBudgetChatClient</c> sizes THIS participant against its own launched window rather than the
     ///     shared default. Workflow participants never receive the outer runner's per-turn <c>RunOptions</c>, so like
-    ///     reasoning it must be baked in at construction. <see langword="null" /> — not yet resident, or cloud/Ollama —
+    ///     reasoning it must be baked in at construction. <see langword="null" /> — not yet resident, or cloud —
     ///     leaves the inner budgeter on its configured default window.
     /// </remarks>
     public int? EffectiveContextTokens { get; init; }

@@ -137,7 +137,7 @@ const triggerMessageId = graphWorkflowTestGuid(90);
 // Ambient routes the page reads before anything workflow-related: the chat model list, the composer's commands,
 // agents and knowledge base, and the conversation's attachment list.
 setupMswServer(
-	jsonRoute("get", "models", { isAvailable: true, items: [] }),
+	jsonRoute("get", "models", { items: [] }),
 	jsonRoute("get", "automation/commands", { items: [] }),
 	jsonRoute("get", "agents", { items: [] }),
 	jsonRoute("get", "knowledge-base/documents", { items: [], embeddingModel: "nomic-embed-text", embeddingModelAvailable: true }),

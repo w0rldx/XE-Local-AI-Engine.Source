@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 /// <summary>
 ///     Behavioral tests for <see cref="MemoryExtractionService" />: the temp-chat write-only gate, the no-model disabled
 ///     gate, lesson/no-lesson candidate creation, Failure-scope eligibility, and dedup against existing live memories.
-///     The model-touching agent is faked (mirrors the analysis-service test seam, so no Ollama in CI); the privacy
+///     The model-touching agent is faked (mirrors the analysis-service test seam, so no model runtime in CI); the privacy
 ///     invariant (node-local resolution, never a cloud client) is covered by
 ///     <see cref="DefaultMemoryExtractionAgentTests" />.
 /// </summary>

@@ -44,7 +44,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     /// <summary>The correction a context-size rejection without counts multiplies the model's current one by.</summary>
     internal const double UncountedOverflowCorrectionFactor = 1.25;
 
-    // The Ollama num_ctx option key the invocation factory writes onto ChatOptions.AdditionalProperties when a per-send
+    // The num_ctx option key the invocation factory writes onto ChatOptions.AdditionalProperties when a per-send
     // context window is set; read here so the per-round window matches the window the provider is actually launched with.
     private const string NumCtxKey = "num_ctx";
 

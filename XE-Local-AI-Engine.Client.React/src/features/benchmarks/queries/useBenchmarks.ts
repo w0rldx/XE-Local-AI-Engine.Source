@@ -52,7 +52,7 @@ import type {
 import { benchmarkReviewPageSize, isJudgeActive, toBenchmarkReviewQueue } from "@/features/benchmarks/models/BenchmarkModels";
 
 // Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY (the same imperative
-// pattern as useLoadedModels / the chat adapter) rather than
+// pattern as the chat adapter) rather than
 // the generated TanStack `*Options()` wrappers, because several hooks below derive their poll cadence from the
 // already-mapped domain data (`query.state.data`), which `select`-based options would not expose pre-mapping. The
 // paged runs feed is the exception: it uses the generated `listBenchmarkRunsInfiniteOptions` and maps in `select`.

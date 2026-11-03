@@ -17,7 +17,7 @@ using static InvocationRunnerTestSupport;
 public sealed class InvocationRunnerFailureTests
 {
     [Test]
-    [Arguments("registry.ollama.ai/library/gemma:12b does not support thinking", "This model does not support reasoning.")]
+    [Arguments("registry.example/library/gemma:12b does not support thinking","This model does not support reasoning.")]
     [Arguments("this model does not support tools", "This model does not support tool calling.")]
     public async Task RunAsync_WhenModelRejectsCapability_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage, string expectedError)
     {
@@ -277,7 +277,7 @@ public sealed class InvocationRunnerFailureTests
     {
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.models/blobs/sha256-deadbeef", inner: null,
                    HttpStatusCode.InternalServerError)));
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -294,7 +294,7 @@ public sealed class InvocationRunnerFailureTests
         var factory = Substitute.For<IInvocationAgentFactory>();
         // The blob path in the message must never reach the surfaced error; the status code alone drives the mapping.
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.models/blobs/sha256-deadbeef", inner: null,
                    HttpStatusCode.InternalServerError)));
 
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();

@@ -19,7 +19,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
@@ -30,7 +29,6 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -155,9 +153,7 @@ internal static partial class NodeChatStreamServiceTestSupport
         };
 
     // Runs a plain-chat send whose only attachment is an Image-status file, through a node-local (GGUF-routed) model
-    // whose vision capability is toggled by supportsVision, and returns the context the runner observed. A non-Ollama
-    // provider name forces the GGUF capability branch (where SupportsVision is resolved); the default Ollama resolver
-    // would bypass it and never surface vision.
+    // whose vision capability is toggled by supportsVision, and returns the context the runner observed.
     internal static async Task<IReadOnlyList<ConversationMessageDto>> RunImageAttachmentAsync(bool supportsVision,
         bool supportsTools = false,
         bool useLocalTools = false,
@@ -209,14 +205,10 @@ internal static partial class NodeChatStreamServiceTestSupport
 
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
 
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llama.cpp");
-
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision))),
+                CreateModelCapabilityResolver(gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -772,35 +764,17 @@ internal static partial class NodeChatStreamServiceTestSupport
         return store;
     }
 
-    // The default classification service: every model resolves to BOTH thinking- and tools-capable, so the existing
-    // think/tool-offer assertions stay byte-identical (these tests pre-date per-model capability gating). The dedicated
-    // capability-gate tests substitute an incapable classification.
-    // These tests exercise the Ollama /api/show classification path, so route every model to the Ollama provider; the
-    // chat service only skips classification for non-Ollama (e.g. llama.cpp/GGUF) providers.
-    internal static ILocalModelProviderResolver CreateLocalModelProviderResolver()
-    {
-        var resolver = Substitute.For<ILocalModelProviderResolver>();
-        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(OllamaLocalModelProvider.OllamaProviderName);
-        return resolver;
-    }
-
     // ChatTurnResolver resolves capabilities through the shared IModelCapabilityResolver, so these tests compose the
-    // real one over substituted collaborators — the routing decision under test lives in that one place.
-    internal static IModelCapabilityResolver CreateModelCapabilityResolver(IModelClassificationService? classification = null,
-        ILocalModelProviderResolver? providerResolver = null,
-        IGgufModelCapabilityResolver? gguf = null,
+    // real one over substituted collaborators — the routing decision under test lives in that one place. The default:
+    // every model is a BOTH thinking- and tools-capable GGUF; the capability-gate tests pass an incapable one.
+    internal static IModelCapabilityResolver CreateModelCapabilityResolver(IGgufModelCapabilityResolver? gguf = null,
         FakeModelTrustResolver? trustResolver = null)
     {
-        return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
-            providerResolver ?? CreateLocalModelProviderResolver(),
-            gguf ?? CreateGgufModelCapabilityResolver(),
+        return new ModelCapabilityResolver(gguf ?? CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false)),
             trustResolver ?? new FakeModelTrustResolver());
     }
 
-    // The default resolver reports every model as not-a-GGUF (null), so the existing Ollama-routed tests keep their
-    // /api/show classification behavior. A llama.cpp-capability test overrides ResolveOrNullAsync explicitly.
-    internal static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities? capabilities = null)
+    internal static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities capabilities)
     {
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
         resolver.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
@@ -835,35 +809,6 @@ internal static partial class NodeChatStreamServiceTestSupport
     internal static IMemoryExtractionDispatcher CreateMemoryExtractionDispatcher()
     {
         return Substitute.For<IMemoryExtractionDispatcher>();
-    }
-
-    internal static IModelClassificationService CreateModelClassificationService(params string[] capabilities)
-    {
-        var resolved = capabilities.Length > 0 ? capabilities : ["completion", "tools", "thinking"];
-        var service = Substitute.For<IModelClassificationService>();
-        service.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
-               .Returns(callInfo =>
-               {
-                   var models = callInfo.Arg<IEnumerable<ModelIdentity>>();
-                   var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
-                   foreach (var (modelName, _) in models)
-                   {
-                       if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
-                       {
-                           map[modelName] = new ModelClassificationResult
-                           {
-                               ModelName = modelName,
-                               Kind = ModelKind.Chat,
-                               DetectedKind = ModelKind.Chat,
-                               Capabilities = resolved,
-                               IsOverridden = false
-                           };
-                       }
-                   }
-
-                   return Task.FromResult<IReadOnlyDictionary<string, ModelClassificationResult>>(map);
-               });
-        return service;
     }
 
     // The default (unbound) resolver: ResolveAsync returns null, so the service keeps today's literals — these tests

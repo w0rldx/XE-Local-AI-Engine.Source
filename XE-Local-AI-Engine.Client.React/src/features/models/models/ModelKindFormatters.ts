@@ -1,4 +1,4 @@
-// Shared presentation helpers for a local model's ModelKind (Chat / Embedding / Unknown) and its raw Ollama
+// Shared presentation helpers for a local model's ModelKind (Chat / Embedding / Unknown) and its raw
 // capabilities. Kept in a non-component module so both the installed-models table and the details dialog can import
 // them without tripping the "components-only export" lint rule (mirrors ModelFitFormatters.ts).
 
@@ -44,7 +44,7 @@ export function kindLabel(t: Translate, kind: string): string {
 	}
 }
 
-// Localized label for a raw Ollama capability string, falling back to the raw value for capabilities without a label.
+// Localized label for a raw capability string, falling back to the raw value for capabilities without a label.
 //
 // The two reasoning capabilities are deliberately distinct and are never both present on one model:
 //   `thinking`         → a GRADED think:<level> control is available (Qwen3, DeepSeek-R1 class).

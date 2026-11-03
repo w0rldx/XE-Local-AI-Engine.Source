@@ -12,7 +12,7 @@ public interface IDefaultAssistantToolOfferService
     /// </summary>
     /// <remarks>
     ///     Read-only: it runs the send path's resolution (capabilities, trust boundary, node switches, approval policy)
-    ///     without loading a model. An Ollama-routed id may warm the classification cache, as the model list does.
+    ///     without loading a model.
     /// </remarks>
     Task<DefaultAssistantToolOffer> GetAsync(string? modelName, CancellationToken cancellationToken = default);
 }

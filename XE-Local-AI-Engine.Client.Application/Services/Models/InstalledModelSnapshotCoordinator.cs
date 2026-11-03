@@ -241,8 +241,8 @@ public sealed class InstalledModelSnapshotCoordinator : IInstalledModelSnapshotC
 
     /// <summary>The provider serving an installed GGUF.</summary>
     /// <remarks>
-    ///     The <c>model_provider_map</c> is an OVERRIDE map, not a census: only a model acquired THROUGH this node (or an Ollama name
-    ///     repaired by the startup backfill) ever gets a row, so a GGUF this node merely found on disk — after a reinstall, a node reset, a
+    ///     The <c>model_provider_map</c> is an OVERRIDE map, not a census: only a model acquired THROUGH this node
+    ///     ever gets a row, so a GGUF this node merely found on disk — after a reinstall, a node reset, a
     ///     moved data directory or a restored models folder — has none. Chat reads that as llama.cpp (the resolver's documented
     ///     "unmapped → default provider = llamacpp" rule), so returning null here would make every such model permanently
     ///     benchmark-ineligible while it stays perfectly chattable. A row naming another provider is still returned verbatim.

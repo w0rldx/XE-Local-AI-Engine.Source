@@ -24,12 +24,11 @@ function localDefaultOption(): ModelOption {
 		label: "Local default",
 		displayName: "Local runtime default",
 		isReasoningModel: false,
-		isAvailable: true,
 	};
 }
 
 function chatOption(value: string): ModelOption {
-	return { value, label: value, isReasoningModel: false, isAvailable: true };
+	return { value, label: value, isReasoningModel: false };
 }
 
 describe("ModelSelectorCard", () => {
@@ -123,7 +122,6 @@ describe("ModelSelectorCard", () => {
 			value: "codex-mini-latest",
 			label: "Codex Mini",
 			displayName: "Codex Mini",
-			isAvailable: true,
 			isCloud: true,
 		};
 
@@ -150,7 +148,6 @@ describe("ModelSelectorCard", () => {
 			value: "codex-mini-latest",
 			label: "Codex Mini",
 			displayName: "Codex Mini",
-			isAvailable: true,
 			isCloud: true,
 			provider: "CodexOAuth",
 		};
@@ -158,7 +155,6 @@ describe("ModelSelectorCard", () => {
 			value: "gpt-4o",
 			label: "gpt-4o",
 			displayName: "gpt-4o",
-			isAvailable: true,
 			isCloud: true,
 			provider: "AzureFoundry",
 		};
@@ -189,7 +185,6 @@ describe("ModelSelectorCard", () => {
 			value: "o4-mini",
 			label: "o4-mini",
 			displayName: "o4-mini",
-			isAvailable: true,
 			isCloud: true,
 		};
 

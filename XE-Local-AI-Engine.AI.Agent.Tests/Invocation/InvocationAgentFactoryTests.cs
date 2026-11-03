@@ -228,9 +228,8 @@ public sealed class InvocationAgentFactoryTests
         var chatOptions = runOptions.ChatOptions
                           ?? throw new AssertionException("Expected ChatOptions to be populated.");
 
-        // A non-thinking model gets think:FALSE (not an omitted key). think:false is accepted by Ollama (only
-        // think:true/<level> 400s) and suppresses the reasoning some GGUF templates emit by default; omitting the
-        // field would let that reasoning through and surface a reasoning block even with reasoning off.
+        // A non-thinking model gets think:FALSE (not an omitted key). It suppresses the reasoning some GGUF templates
+        // emit by default; omitting the field would let that reasoning through and surface a reasoning block even with reasoning off.
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
         AssertEx.Equal(expected: false, thinkValue);
@@ -437,8 +436,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ThinkingCapableReasoningNone_SetsLlamaDisableThinkingMarker()
     {
-        // Reasoning OFF on a thinking-capable model. think:false suppresses reasoning on the Ollama wire, but
-        // the llama.cpp OpenAI adapter drops think, so the factory also flags the turn for the llama.cpp chat client to
+        // Reasoning OFF on a thinking-capable model. The llama.cpp OpenAI adapter drops think, so the factory also flags the turn for the llama.cpp chat client to
         // inject chat_template_kwargs.enable_thinking=false — otherwise a Qwen3-class template keeps emitting reasoning.
         var definition = new InvocationAgentDefinition
         {
@@ -707,8 +705,8 @@ public sealed class InvocationAgentFactoryTests
     [Arguments("xhigh")]
     public async Task CreateAsync_WhenSupportsThinkingTrueAndCodexLevel_SendsThinkTrue_AndRawCodexSideChannel(string effort)
     {
-        // minimal/xhigh are Codex-only OpenAI Responses levels. Ollama 400s on them as a think level, so the factory
-        // collapses think to TRUE (safe on the Ollama path) while preserving the un-collapsed level on the Codex side
+        // minimal/xhigh are Codex-only OpenAI Responses levels and no think level, so the factory
+        // collapses think to TRUE while preserving the un-collapsed level on the Codex side
         // channel so the Codex boundary can map it with full fidelity.
         var definition = new InvocationAgentDefinition
         {
@@ -1049,7 +1047,7 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
-    public async Task CreateAsync_WhenSamplingProvided_AddsOllamaAdditionalProperties()
+    public async Task CreateAsync_WhenSamplingProvided_AddsSamplingAdditionalProperties()
     {
         var definition = new InvocationAgentDefinition
         {
@@ -1086,7 +1084,7 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WhenSamplingAbsent_LeavesChatOptionsByteIdentical()
     {
         // No-override guarantee: with no sampling, the factory sets only the reasoning keys (`think` and the default
-        // thinking budget), leaves every native sampling property null and adds no Ollama option keys.
+        // thinking budget), leaves every native sampling property null and adds no sampling option keys.
         var definition = new InvocationAgentDefinition
         {
             ModelId = "qwen3.5:0.8b",
@@ -1183,7 +1181,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSamplingValuesAtBoundaryEdges_AppliesThem()
     {
-        // The boundary edges are inclusive: temperature 2, penalties ±2, and seed -1 (Ollama's random-seed sentinel)
+        // The boundary edges are inclusive: temperature 2, penalties ±2, and seed -1 (the random-seed sentinel)
         // are all valid and must be applied, not dropped.
         var definition = new InvocationAgentDefinition
         {

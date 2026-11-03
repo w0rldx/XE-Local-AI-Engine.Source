@@ -1,5 +1,5 @@
 // Production-grade tests of the handoff orchestration factory + run session. Fully deterministic — a
-// scripted IChatClient stands in for the model (NO Ollama, NO network) — and drives the PRODUCTION surface
+// scripted IChatClient stands in for the model (NO network) — and drives the PRODUCTION surface
 // (IOrchestrationAgentFactory.CreateAsync + IOrchestrationRunSession.WatchAsync / RespondToApprovalAsync), not the
 // raw workflow. Evolves the framework-handoff probe shapes into regression guards.
 
@@ -364,8 +364,8 @@ public sealed class OrchestrationAgentFactoryTests
     [Test]
     public async Task CreateAsync_NonThinkingParticipantWithReasoning_OmitsTheThinkField()
     {
-        // Non-thinking model + a reasoning effort carried onto it: the think field must be OMITTED (Ollama 400s on
-        // think:true/level for a model without the thinking capability). Mirrors the single-agent contract's
+        // Non-thinking model + a reasoning effort carried onto it: the think field must be OMITTED (think:true/level
+        // is invalid for a model without the thinking capability). Mirrors the single-agent contract's
         // !SupportsThinking branch, proven here through the participant's actual outbound request.
         using var fake = new RecordingHandoffChatClient(SpecialistAnswer);
         var factory = CreateFactory(fake);

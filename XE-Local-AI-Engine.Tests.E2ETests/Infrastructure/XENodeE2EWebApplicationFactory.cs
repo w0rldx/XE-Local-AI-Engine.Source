@@ -19,7 +19,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
@@ -41,19 +40,21 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
-using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Boots the XE worker-node host for browser-driven E2E tests on a real, pre-chosen
 ///     loopback port, serving the freshly built React dist same-origin from a temp web root.
 ///     Config block mirrors <c>XE-Local-AI-Engine.Tests.TestServerWebAppFactory</c> (Testing env,
-///     temp-file SQLite + key, local model provider + FakeOllama, no hosted services, unpaired
+///     temp-file SQLite + key, local model provider + fake gateway, no hosted services, unpaired
 ///     token store). Unlike the unit factory this binds a real socket (so a browser can connect)
 ///     and uses the local <see cref="StubTokenStore" /> instead of the shared unit-test mock.
 ///     No CORS is added — the host serves the SPA same-origin and rejects cross-origin XHR by design.
@@ -117,7 +118,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     // byte-compatible with what the production service writes and reads (camelCase property names).
     private static readonly JsonSerializerOptions TutorialStateSerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly FakeOllamaServer _fakeOllamaServer;
+    private readonly FakeOpenAiGatewayServer _fakeGateway;
     private readonly string _fixtureDataRoot = Path.Combine(Path.GetTempPath(), "xe-local-ai-engine-e2e-" + Guid.NewGuid().ToString("N"));
 
     // Populated either from the explicit ctor (spike / direct use) or from the injected
@@ -131,18 +132,9 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     ///     <see cref="ReactClient" /> fixture, resolved in <see cref="InitializeAsync" />.
     /// </summary>
     public XENodeE2EWebApplicationFactory()
-        : this(null)
-    {
-    }
-
-    /// <param name="fakeOllamaOptions">Optional FakeOllama configuration; defaults to the standard test models.</param>
-    public XENodeE2EWebApplicationFactory(FakeOllamaOptions? fakeOllamaOptions)
     {
         Directory.CreateDirectory(_fixtureDataRoot);
-        _fakeOllamaServer = FakeOllamaServer.StartAsync(fakeOllamaOptions ?? new FakeOllamaOptions
-        {
-            Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
-        }).GetAwaiter().GetResult();
+        _fakeGateway = FakeOpenAiGatewayServer.StartAsync(FakeGatewayLocalModelProvider.DefaultOptions()).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -151,9 +143,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     /// </summary>
     /// <param name="port">Free loopback port chosen up front (before the React build).</param>
     /// <param name="webRoot">Temp directory whose root <c>index.html</c> is the freshly built dist (UseWebRoot).</param>
-    /// <param name="fakeOllamaOptions">Optional FakeOllama configuration; defaults to the standard test models.</param>
-    public XENodeE2EWebApplicationFactory(int port, string webRoot, FakeOllamaOptions? fakeOllamaOptions = null)
-        : this(fakeOllamaOptions)
+    public XENodeE2EWebApplicationFactory(int port, string webRoot)
+        : this()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(port);
         ArgumentException.ThrowIfNullOrWhiteSpace(webRoot);
@@ -173,16 +164,15 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     public string ServerAddress { get; private set; } = string.Empty;
 
     /// <summary>
-    ///     Mutable FakeOllama state; tests may set <c>ToolCallScript</c> (or <c>ChatScript</c>)
-    ///     before sending a message to control what the fake model returns.  Always reset to
-    ///     <c>null</c> in a <c>[After(Test)]</c> hook (or at the start of the test) so the shared
-    ///     <see cref="SharedType.PerTestSession" /> instance does not leak scripts across tests.
+    ///     Mutable fake gateway state; tests may set <c>ChatResponder</c> or <c>Models</c> before sending a message to
+    ///     control what the fake model returns.  Always reset in a <c>[After(Test)]</c> hook (or at the start of the
+    ///     test) so the shared <see cref="SharedType.PerTestSession" /> instance does not leak scripts across tests.
     /// </summary>
-    public FakeOllamaState FakeOllamaState => _fakeOllamaServer.State;
+    public FakeOpenAiGatewayState FakeGatewayState => _fakeGateway.State;
 
     public new async ValueTask DisposeAsync()
     {
-        await _fakeOllamaServer.DisposeAsync();
+        await _fakeGateway.DisposeAsync();
         await base.DisposeAsync();
         TryDeleteDirectory(_fixtureDataRoot);
         GC.SuppressFinalize(this);
@@ -421,16 +411,15 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         // A host setting, not the in-memory collection below: WebApplicationFactory applies that collection only at
         // Build(), after ConfigureServices has read this key and rooted dp-keys in the REAL Client directory.
         builder.UseSetting("NodeData:Directory", Path.Combine(_fixtureDataRoot, "node-data"));
+
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(_fixtureDataRoot, "node.sqlite")}",
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
-                ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
-                ["Ollama:ChatModel"] = "qwen3.5:0.8b",
-                ["KnowledgeBase:EmbeddingProviderName"] = "ollama",
-                ["KnowledgeBase:EmbeddingModelName"] = "qwen3-embedding:0.6b",
+                ["KnowledgeBase:EmbeddingProviderName"] = LlamaServerProviderConstants.ProviderName,
+                ["KnowledgeBase:EmbeddingModelName"] = FakeGatewayLocalModelProvider.EmbeddingModel,
                 ["Development:Enabled"] = "true",
                 // Stated rather than inherited: the shipped default is ON, and a fixture that
                 // relied on that default would go quietly dark the day an operator-facing default moved again.
@@ -472,8 +461,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<GraphWorkflowDispatcher>());
 
             // Admission, which this host cannot answer truthfully: the graph-workflow Agent lane runs the real capacity
-            // gate, and that gate sizes a model against an installed GGUF. There is none here — every model is served by
-            // FakeOllama — so the footprint reads as unknown and the gate refuses the turn with "the model's memory
+            // gate, and that gate sizes a model against an installed GGUF file. There is none here — every model is served
+            // by the fake gateway — so the footprint reads as unknown and the gate refuses the turn with "the model's memory
             // footprint could not be determined" before a single provider call is made. The same five seams are
             // replaced for the same reason in the unit-side GraphWorkflowAgentHostFixture; this is the one of them the
             // browser suite needs, because everything else on the path is real here. What capacity ACTUALLY decides is
@@ -586,32 +575,23 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             // is prevented by per-test isolation: XEE2ETestBase calls WorkerEventDispatcher.ResetForTests()
             // in a [Before(Test)] hook.
 
-            services.RemoveAll<IOllamaApiClient>();
+            var provider = new FakeGatewayLocalModelProvider(_fakeGateway);
             services.RemoveAll<IChatClient>();
             services.RemoveAll<ILocalModelProvider>();
-            // Repoint the shared Ollama transport factory (production registered one at the real endpoint) at the fake
-            // server, so the provider's per-model CreateChatClient/CreateEmbeddingGenerator — which now mint clients
-            // through this factory — reach FakeOllama.
-            services.RemoveAll<OllamaApiClientFactory>();
-#pragma warning disable CA2000 // The factory singleton owns and disposes this HttpClient for the test host lifetime.
-            services.AddSingleton(_ => new OllamaApiClientFactory(new HttpClient
-            {
-                BaseAddress = _fakeOllamaServer.BaseAddress
-            }, ownsHttpClient: true));
-#pragma warning restore CA2000
-            services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer.BaseAddress));
-            services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
-            services.AddSingleton<ILocalModelProvider>(_ =>
-            {
-                var llamacpp = Substitute.For<ILocalModelProvider>();
-                llamacpp.ProviderName.Returns("llamacpp");
-                return llamacpp;
-            });
-            // Register the base IChatClient pointing directly at FakeOllama, then re-apply the full
+            services.AddSingleton<ILocalModelProvider>(provider);
+
+            // The model catalog and the capability resolver read the installed-GGUF store, not a provider.
+            services.RemoveAll<IGgufModelStore>();
+            services.AddSingleton<IGgufModelStore>(new FakeGatewayGgufModelStore(_fakeGateway.State));
+
+            // Register the base IChatClient pointing directly at the fake gateway, then re-apply the full
             // agent pipeline decoration (ToolInvocationObservabilityChatClient + UseFunctionInvocation)
             // so tool-call lifecycle events reach the SignalR stream (chat-tool-call-group in the UI).
-            var fakeOllamaBase = _fakeOllamaServer.BaseAddress;
-            services.AddSingleton<IChatClient>(_ => new OllamaApiClient(fakeOllamaBase, "qwen3.5:0.8b"));
+            services.AddSingleton<IChatClient>(_ => provider.CreateChatClient(new LocalModelSelection
+            {
+                ModelName = FakeGatewayLocalModelProvider.ChatModel,
+                ProviderName = provider.ProviderName
+            }));
             services.DecorateChatClientPipeline();
 
             // The live transcription chain is under test end to end: the registry, the segmenter, the hub and the

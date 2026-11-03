@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IMemorySemanticDeduplicator" />: it embeds lexically-surviving candidates with the
@@ -80,7 +79,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             // Never swallow a genuine caller cancellation (the extraction run's own token fired).
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Any node-local embedding hiccup — an unpulled model, a down runtime, a transport error, an unregistered
             // provider — degrades to NOT-applied, so the run never mass-dedups. No candidate or memory text is logged.

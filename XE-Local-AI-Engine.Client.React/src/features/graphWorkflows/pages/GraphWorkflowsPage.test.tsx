@@ -535,7 +535,7 @@ describe("GraphWorkflowsPage", () => {
 			validateRoute({ valid: false, errors: [{ key: "deleted-node", message: "This node is gone." }] }),
 			// The only case here that opens a node: its inspector fills the agent, model and tool pickers.
 			jsonRoute("get", "agents", { items: [] }),
-			jsonRoute("get", "models", { isAvailable: true, items: [] }),
+			jsonRoute("get", "models", { items: [] }),
 			jsonRoute("get", "graph-workflows/tools", graphWorkflowTools()),
 		);
 

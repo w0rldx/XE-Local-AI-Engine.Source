@@ -43,7 +43,7 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
     private ChatOptions ApplyStoreDisabled(ChatOptions? options)
     {
         // Resolve the per-send effort from the INCOMING options so the store-disabling base options request reasoning
-        // summaries at it. Codex-only: the local/Ollama path does not pass through this wrapper.
+        // summaries at it. Codex-only: the local path does not pass through this wrapper.
         var reasoningEffort = CodexResponseStoreDisabling.ResolveReasoningEffort(options);
 
         var result = CodexResponseStoreDisabling.WithStoredOutputDisabled(options?.Clone(), reasoningEffort);
@@ -65,8 +65,8 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
     ///     The subscription Codex backend REJECTS system-role messages in the request input, and the Codex CLI and
     ///     opencode reference pass the system prompt through <c>instructions</c> instead, so every
     ///     <see cref="ChatRole.System" /> message's text is appended to <see cref="ChatOptions.Instructions" /> — which
-    ///     MEAI's Responses adapter maps to that field — and removed from the input. Codex-side only: the local and
-    ///     Ollama path does not go through this wrapper and keeps its system messages.
+    ///     MEAI's Responses adapter maps to that field — and removed from the input. Codex-side only: the local
+    ///     path does not go through this wrapper and keeps its system messages.
     /// </remarks>
     private CodexRequest PrepareCodexRequest(IEnumerable<ChatMessage> messages,
         ChatOptions? options)

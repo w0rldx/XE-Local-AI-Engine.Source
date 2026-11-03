@@ -64,7 +64,7 @@ internal sealed class GateableChatClient : IChatClient
     /// <summary>The system instructions the inner agent passed on the last run (read from <c>ChatOptions.Instructions</c>).</summary>
     public string? LastInstructions { get; private set; }
 
-    /// <summary>The additional properties the inner agent passed on the last run (read from <c>ChatOptions.AdditionalProperties</c>) — carries the Ollama <c>think</c> reasoning option + the Codex reasoning-effort side channel.</summary>
+    /// <summary>The additional properties the inner agent passed on the last run (read from <c>ChatOptions.AdditionalProperties</c>) — carries the <c>think</c> reasoning option + the Codex reasoning-effort side channel.</summary>
     public AdditionalPropertiesDictionary? LastAdditionalProperties { get; private set; }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,

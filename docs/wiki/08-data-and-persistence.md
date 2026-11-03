@@ -342,10 +342,10 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 supported source and is not tested as one. This floor keeps the startup upgrade code below alive until a later
 release raises it:
 
-- **Eight backfill hosted services:** `NodeChatContentEncryptionBackfillService`,
+- **Seven backfill hosted services:** `NodeChatContentEncryptionBackfillService`,
   `NodeChatTitleEncryptionBackfillService`, `KnowledgeVectorNormalizationBackfillService`,
-  `ExternalAccessProfileBackfillService`, `UiModeBackfillService`, `SandboxSecurityProfileBackfillService`,
-  `OllamaProviderMapBackfillService` and `ToolCapableModelBackfillService`. The settings backfills and their
+  `ExternalAccessProfileBackfillService`, `UiModeBackfillService`, `SandboxSecurityProfileBackfillService`
+  and `ToolCapableModelBackfillService`. The settings backfills and their
   discriminators are in [Hosting & Deployment](11-hosting-and-deployment.md#upgrade-backfills-and-their-discriminators).
 - **The Development profile backfill:** `DevelopmentProfileBackfillService`, run by `DevelopmentStartupReconciler`.
 - **The Open Canvas pre-migration read:** `ReadPendingCanvasWorkflowsAsync` in `Program.Startup` reads
@@ -389,7 +389,7 @@ They are deliberately **outside** the encryption interceptor's tracked set, and 
 
 `agent_turn_ms` is whole-turn time — each envelope's duration spans the provider rounds and the tool loop between them — so `run_ms - agent_turn_ms` is time outside the turns, never tool time.
 
-The two VRAM columns are the odd pair here: every other column counts what the attempt SPENT, while these two READ the host at one moment. They are the free-VRAM figure the capacity gate measured just before the most recent successful load of the serving model that carried a capacity admission, and the GPU bytes it reserved for that process — carried from the admission through the load observation to a process-lifetime record, never re-probed. An unadmitted reload clears the reading: a direct, profiling or variant-moved spawn measures nothing but replaces the process those figures described, so the record drops the entry instead of letting it go stale. Unlike every other cost column, which merges member-wise on each settle, the two are written together and only once per attempt — by the first settle that carries a reading, never rewritten by a later one — so they can never pair one load's free-VRAM figure with another load's admitted bytes; a settle with no reading leaves the pair open, and a re-attempt clears it. A **warm** run therefore reports an EARLIER load's figures, and `model_readiness_ms` is what tells the two apart: a SMALL readiness there means the warmer waited for nothing, so the load these bytes describe predates the run and the host may have looked different by the time it started, while a null readiness is unmeasured and settles nothing either way. A null on the VRAM columns themselves means nobody measured — a remote or Ollama model, a model the node never loaded itself, a host with no readable global-free figure (non-NVIDIA or CPU-only), or a row written before the columns existed. Because they are readings rather than quantities they are excluded from the retry snapshot's additive vector alongside the route, the served model and the tool names.
+The two VRAM columns are the odd pair here: every other column counts what the attempt SPENT, while these two READ the host at one moment. They are the free-VRAM figure the capacity gate measured just before the most recent successful load of the serving model that carried a capacity admission, and the GPU bytes it reserved for that process — carried from the admission through the load observation to a process-lifetime record, never re-probed. An unadmitted reload clears the reading: a direct, profiling or variant-moved spawn measures nothing but replaces the process those figures described, so the record drops the entry instead of letting it go stale. Unlike every other cost column, which merges member-wise on each settle, the two are written together and only once per attempt — by the first settle that carries a reading, never rewritten by a later one — so they can never pair one load's free-VRAM figure with another load's admitted bytes; a settle with no reading leaves the pair open, and a re-attempt clears it. A **warm** run therefore reports an EARLIER load's figures, and `model_readiness_ms` is what tells the two apart: a SMALL readiness there means the warmer waited for nothing, so the load these bytes describe predates the run and the host may have looked different by the time it started, while a null readiness is unmeasured and settles nothing either way. A null on the VRAM columns themselves means nobody measured — a remote model, a model the node never loaded itself, a host with no readable global-free figure (non-NVIDIA or CPU-only), or a row written before the columns existed. Because they are readings rather than quantities they are excluded from the retry snapshot's additive vector alongside the route, the served model and the tool names.
 
 Two reading traps a query must respect. The columns hold the **last attempt only** — a `Pending` re-attempt clears them, and the failing attempt's ten additive numbers are merged into that reset's `node.retry.scheduled` event detail instead — so a node's true total is `row + retry snapshots`. And a null is "nobody reported it", never zero: a structural node, a row from before the migration, and a collection that could not run all read the same way. The [cost telemetry runbook](../runbooks/agent-unit-cost-telemetry-runbook.md) carries the full recipe, including the reasons every number is a lower bound.
 
@@ -435,8 +435,8 @@ record because `IMachineKeyProvider` races every settings save on the same node.
 
 **Node-locality of the auto-effort fast model has two enforcement points.** Point 1 is this service, on BOTH save
 paths (the endpoint's merged save and the MCP patch): the runner's dispatcher may move an `auto` turn onto that
-model, and the turn's data was admitted upstream against a node-local one, so a cloud id, an `ext:` id or an Ollama
-name is refused before it can be stored. It fires only on a CHANGE to the value — both paths validate the merged
+model, and the turn's data was admitted upstream against a node-local one, so a cloud id, an `ext:` id or a name that is not
+an installed GGUF is refused before it can be stored. It fires only on a CHANGE to the value — both paths validate the merged
 result, so re-validating an unchanged stored value would reject every save of every other setting once the
 configured fast model is uninstalled, naming a field the operator never touched. Point 2 is the dispatcher's
 per-turn re-check, which shares the predicate (`NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync`) verbatim,
@@ -524,7 +524,7 @@ page displays. Feeding it keeps one inspectable, auditable list an operator can 
 invisible capability path that silently disagrees with the UI. The gate itself is unchanged.
 
 Registration is **additive only**: no path ever removes a name, so a model an operator added by hand — or one
-served by Ollama or a cloud provider, which have no GGUF descriptor at all — keeps its entry. Detection can grant
+served by a cloud provider, which has no GGUF descriptor at all — keeps its entry. Detection can grant
 capability here, never revoke it. `ToolCapableModelBackfillService` runs the backfill once at startup, off the
 critical path, because feeding capability in only at download time would leave every model already on the node
 silently tool-less. It is best-effort by design: the node must start even when the model registry or the settings

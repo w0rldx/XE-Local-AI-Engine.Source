@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <inheritdoc />
 internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
@@ -21,11 +20,9 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
     private readonly IGgufModelStore _ggufModelStore;
     private readonly ILogger<LocalModelDetailsResolver> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;
-    private readonly IOllamaModelService _modelService;
     private readonly ILocalModelProviderResolver _providerResolver;
 
-    public LocalModelDetailsResolver(IOllamaModelService modelService,
-        ILocalModelProviderResolver providerResolver,
+    public LocalModelDetailsResolver(ILocalModelProviderResolver providerResolver,
         IGgufModelStore ggufModelStore,
         ICloudModelResolver cloudModelResolver,
         IModelTrustResolver modelTrustResolver,
@@ -35,13 +32,11 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
         ArgumentNullException.ThrowIfNull(ggufModelStore);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(modelTrustResolver);
-        ArgumentNullException.ThrowIfNull(modelService);
         ArgumentNullException.ThrowIfNull(providerResolver);
         _cloudModelResolver = cloudModelResolver;
         _ggufModelStore = ggufModelStore;
         _logger = logger;
         _modelTrustResolver = modelTrustResolver;
-        _modelService = modelService;
         _providerResolver = providerResolver;
     }
 
@@ -67,29 +62,11 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
                 : new LocalModelDetailsResolution.Cloud(window.ContextTokens);
         }
 
-        // Route by the model's provider BEFORE probing: a GGUF (llama.cpp) model has no Ollama /api/show entry, so its details come from the
-        // GGUF store and a GGUF selection never touches Ollama, avoiding the desktop-mode connect stall and a 404. Provider resolution runs on the DECODED name, so resolved and probed names match.
-        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, cancellationToken);
-        if (string.Equals(providerName, LlamaCppProviderName, StringComparison.OrdinalIgnoreCase))
-        {
-            return await ResolveGgufAsync(modelName, cancellationToken);
-        }
-
-        try
-        {
-            return new LocalModelDetailsResolution.Ollama(await _modelService.ShowModelDetailsAsync(modelName, cancellationToken));
-        }
-        catch (HttpRequestException exception)
-        {
-            // Details come from the Ollama daemon's /api/show, and in desktop mode no endpoint is running, so the probe throws a connection
-            // error: an absence of local details, not a server fault — a clean 404, logged at Debug because the chat UI polls this per model.
-            _logger.LogDebug(exception, "Model details unavailable for '{ModelName}': the local Ollama runtime is unreachable.", modelName);
-            return new LocalModelDetailsResolution.NoLocalDetails();
-        }
+        return await ResolveGgufAsync(modelName, cancellationToken);
     }
 
-    // Details for a llama.cpp-served GGUF come from the installed-model registry — no Ollama probe. A model that resolves to llamacpp but is
-    // not in that registry (a stale map row, or one removed on disk) has no details, matching Ollama's "no entry".
+    // Details for a llama.cpp-served GGUF come from the installed-model registry. A model that is not in that registry
+    // (a stale map row, or one removed on disk) has no details.
     private async Task<LocalModelDetailsResolution> ResolveGgufAsync(string modelName, CancellationToken cancellationToken)
     {
         var installed = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken);

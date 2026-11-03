@@ -333,11 +333,10 @@ public sealed class ConversationStateDistillationServiceTests
                        .Select(static call => (NodeChatSetConversationStateRequest)call.GetArguments()[0]!)
                        .ToList();
 
-        // An Ollama-named provider: the warmer never reads a window from it, so the distiller keeps its ceiling.
+        // A provider reporting no window, so the distiller keeps its ceiling.
         private static LocalRuntimeWarmer CreateWarmer()
         {
             var provider = Substitute.For<ILocalModelProvider>();
-            provider.ProviderName.Returns("ollama");
             var providerResolver = Substitute.For<ILocalModelProviderResolver>();
             providerResolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
             return new LocalRuntimeWarmer(providerResolver, Substitute.For<IActiveCloudChatClientFactory>(), new FakeModelTrustResolver(), Substitute.For<ICloudModelResolver>(),

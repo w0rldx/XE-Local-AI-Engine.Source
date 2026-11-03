@@ -5,7 +5,6 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IKnowledgeChunkEmbedder" />: resolves the provider named by
@@ -22,7 +21,7 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 {
     // Fixed, content-free failure reasons: each is persisted on the document row and surfaced verbatim, so it names the
-    // in-app affordance that resolves it — never Ollama vocabulary ("pull") or an Ollama-style name the UI never shows.
+    // in-app affordance that resolves it — never a name the UI does not show.
     internal const string EmbeddingUnavailableReason =
         "No embedding model is installed, so documents cannot be indexed. Use \"Download recommended embedding model\" "
         + "in Node Settings, or install an embedding GGUF from Models → Browse Hugging Face, then retry.";
@@ -121,13 +120,13 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                     // wrong remediation. Carry the exception so KnowledgeIngestionService can log the server's own diagnostic.
                     throw new KnowledgeIngestionException(EmbeddingRejectedReason, exception);
                 }
-                catch (Exception exception) when (!retried && resolution.IsConfident && exception is HttpRequestException or IOException or OllamaUnavailableException)
+                catch (Exception exception) when (!retried && resolution.IsConfident && exception is HttpRequestException or IOException)
                 {
                     // An installed model's process went away mid-document. The generator drops its dead endpoint on this failure
                     // and its next call re-ensures (respawns and waits for) the process, so re-issue this batch ONCE before failing.
                     retried = true;
                 }
-                catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+                catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
                 {
                     // Mirror the ranker's caught set: model not pulled / provider process down / transport error / unregistered
                     // provider name. None of the exception's text is surfaced — only a fixed, content-free reason.
@@ -187,7 +186,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
             return descriptor?.MaxContextTokens is int window && window > 0 ? window : null;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Provider process down / transport error / unmapped provider. The window is simply unknown; chunking falls
             // back to the configured token budget. The subsequent embed step surfaces any genuine provider failure.
@@ -217,7 +216,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                     Dimension = KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth
                 };
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             return null;
         }

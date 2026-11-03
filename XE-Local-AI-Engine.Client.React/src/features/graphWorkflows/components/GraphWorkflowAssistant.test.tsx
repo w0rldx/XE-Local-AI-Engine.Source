@@ -86,7 +86,6 @@ function editorRoutes() {
 		jsonRoute("get", "graph-workflows/tools", graphWorkflowTools()),
 		jsonRoute("get", "agents", { items: [] }),
 		jsonRoute("get", "models", {
-			isAvailable: true,
 			items: [
 				{
 					modelName: "qwen-27b",

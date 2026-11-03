@@ -2,21 +2,22 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The chat model list exposes Codex cloud models (tagged <see cref="LocalModelProviders.CodexOAuth" />) as a
-///     distinct group alongside the node-local Ollama models, and the cloud entries advertise the Codex provider's
-///     declared capability matrix rather than an Ollama classification.
+///     distinct group alongside the node-local GGUF models, and the cloud entries advertise the Codex provider's
+///     declared capability matrix rather than a local classification.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelsCloudMappingTests
 {
+    private static readonly Dictionary<string, ModelClassificationRecord> NoClassifications = [];
+
     [Test]
     public void ToCodexCloudModelResponses_EmitsCatalogTaggedCodexOAuth()
     {
@@ -45,61 +46,37 @@ public sealed class LocalModelsCloudMappingTests
     [Test]
     public void ToListResponse_AppendsCloudModelsAfterLocalModels()
     {
-        var localModels = new[]
-        {
-            new OllamaModelSummary
-            {
-                Name = "qwen3:8b"
-            }
-        };
-        var classifications = new Dictionary<string, ModelClassificationResult>
-        {
-            ["qwen3:8b"] = new()
-            {
-                ModelName = "qwen3:8b",
-                Kind = ModelKind.Chat,
-                DetectedKind = ModelKind.Chat,
-                Capabilities = ["tools"],
-                IsOverridden = false
-            }
-        };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
-        var response = LocalModelsMapper.ToListResponse(localModels, "qwen3:8b", "qwen3:8b", classifications, cloud);
+        var response = LocalModelsMapper.ToListResponse("qwen3:8b", "qwen3:8b", NoClassifications, cloud, [Gguf("qwen3:8b")]);
 
-        // Local models first (provider=Ollama), cloud models appended after (provider=CodexOAuth).
+        // Local models first (provider=llamacpp), cloud models appended after (provider=CodexOAuth).
         AssertEx.Equal("qwen3:8b", response.Items[0].ModelName);
-        AssertEx.Equal(LocalModelProviders.Ollama, response.Items[0].Provider);
+        AssertEx.Equal(LocalModelProviders.LlamaCpp, response.Items[0].Provider);
         AssertEx.True(response.Items.Any(static m => m.Provider == LocalModelProviders.CodexOAuth),
             "the list must include the appended cloud models");
-        AssertEx.Equal(localModels.Length + cloud.Count, response.Items.Count);
+        AssertEx.Equal(1 + cloud.Count, response.Items.Count);
     }
 
     [Test]
     public void ToListResponse_WhenNoCloudModels_OmitsCloudGroup()
     {
-        var localModels = new[]
-        {
-            new OllamaModelSummary
-            {
-                Name = "qwen3:8b"
-            }
-        };
-        var classifications = new Dictionary<string, ModelClassificationResult>
-        {
-            ["qwen3:8b"] = new()
-            {
-                ModelName = "qwen3:8b",
-                Kind = ModelKind.Chat,
-                DetectedKind = ModelKind.Chat,
-                Capabilities = [],
-                IsOverridden = false
-            }
-        };
-
-        var response = LocalModelsMapper.ToListResponse(localModels, "qwen3:8b", "qwen3:8b", classifications);
+        var response = LocalModelsMapper.ToListResponse("qwen3:8b", "qwen3:8b", NoClassifications, ggufModels: [Gguf("qwen3:8b")]);
 
         AssertEx.Equal(expected: 1, response.Items.Count);
-        AssertEx.True(response.Items.All(static m => m.Provider == LocalModelProviders.Ollama));
+        AssertEx.True(response.Items.All(static m => m.Provider == LocalModelProviders.LlamaCpp));
+    }
+
+    private static LocalModelDescriptor Gguf(string modelName)
+    {
+        return new LocalModelDescriptor
+        {
+            ModelName = modelName,
+            ProviderName = LocalModelProviders.LlamaCpp,
+            IsAvailable = true,
+            SizeBytes = 1024,
+            ModifiedAt = null,
+            MaxContextTokens = null
+        };
     }
 }

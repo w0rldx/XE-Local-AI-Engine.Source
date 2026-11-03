@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -60,7 +59,6 @@ public sealed class PlacementConventionTests
         typeof(ICodexOAuthChatClientFactory).Assembly,
         typeof(HuggingFaceOptions).Assembly,
         typeof(IInstalledRuntimeStore).Assembly,
-        typeof(OllamaLocalModelProvider).Assembly,
         typeof(ExternalOpenAiModelProvider).Assembly,
         typeof(OpenAICompatibleClientFactory).Assembly,
         typeof(ManagedPythonPins).Assembly,
@@ -158,7 +156,7 @@ public sealed class PlacementConventionTests
         (assembly.GetName().Name ?? throw new InvalidOperationException("Assembly has no simple name.")).Replace('-', '_');
 
     // Every rule above ends in WithoutRequiringPositiveResults(): ArchUnitNET otherwise fails a rule whose predicate
-    // matched nothing. That default is a non-vacuity guard, but a per-assembly one — Providers.Ollama declares no
+    // matched nothing. That default is a non-vacuity guard, but a per-assembly one — Providers.Python declares no
     // *Options class and never will — and honoring it would mean an allow-list of "assemblies exempt from a rule they
     // trivially satisfy". Each test instead asserts an explicit floor on how many types the whole scan saw, which is
     // the guard that actually catches a broken marker or an empty load.

@@ -482,11 +482,6 @@ ask, lists the automatic copy taken before an update changes the database, and r
 start. Restoring replaces your current data with the copy and keeps the replaced database beside it, so read
 [Restoring a database snapshot](updating.md#restoring-a-database-snapshot) first.
 
-### Ollama
-
-If you already run [Ollama](glossary.md#ollama), the app can list and use its models. It won't install
-or manage Ollama for you, and if it isn't running, nothing breaks.
-
 ---
 
 ## Getting started with all this

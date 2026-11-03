@@ -66,7 +66,7 @@ internal static class FakeDockerEndpointMapper
     ///         Read out of <c>RouteValues</c> rather than bound as a lambda parameter on purpose: a route handler
     ///         whose delegate declares a route parameter and is cast to <c>Delegate</c> makes the ASP.NET
     ///         <c>RouteHandlerAnalyzer</c> throw, which fails the Release build with AD0001. Every handler here
-    ///         therefore takes the context alone, which is also the shape the fake Ollama server already uses.
+    ///         therefore takes the context alone.
     ///     </para>
     /// </summary>
     internal static string RouteValue(HttpContext context, string name)

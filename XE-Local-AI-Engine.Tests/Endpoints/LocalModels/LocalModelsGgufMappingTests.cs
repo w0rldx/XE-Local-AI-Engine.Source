@@ -3,20 +3,20 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The chat model list aggregates installed GGUF models (served by the bundled llama.cpp runtime, tagged
-///     <see cref="LocalModelProviders.LlamaCpp" />) alongside the node-local Ollama models, classifies them
-///     <c>Chat</c> WITHOUT an <c>/api/show</c> probe (so they satisfy the React <c>kind === "Chat"</c> picker filter),
-///     and surfaces them even when Ollama is unavailable.
+///     <see cref="LocalModelProviders.LlamaCpp" />) and classifies them <c>Chat</c> WITHOUT a runtime probe, so they
+///     satisfy the React <c>kind === "Chat"</c> picker filter.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelsGgufMappingTests
 {
+    private static readonly Dictionary<string, ModelClassificationRecord> NoClassifications = new(StringComparer.OrdinalIgnoreCase);
+
     private static LocalModelDescriptor Gguf(string modelName,
         long? sizeBytes = 1024,
         bool isToolCapable = false,
@@ -57,7 +57,7 @@ public sealed class LocalModelsGgufMappingTests
         var response = LocalModelsMapper.ToLlamaCppModelResponses([
                 Gguf("unsloth/qwen3.8-27b-GGUF:Q4_K_M", isReasoningCapable: true, reasoningBudgetEnforceable: enforceable)
             ],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.True(response[0].IsReasoningCapable, "enforceability never changes whether the model reasons");
         AssertEx.Equal(enforceable, response[0].ReasoningBudgetEnforceable);
@@ -70,7 +70,7 @@ public sealed class LocalModelsGgufMappingTests
     [Arguments("unsloth/Qwen3.5-9B-GGUF:Q4_K_M", "Chat", "completion")]
     public void ToLlamaCppModelResponses_ListsCompletionOnlyForAModelThatGeneratesText(string modelName, string kind, string expected)
     {
-        var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf(modelName, capabilities: ["completion"])], selectedModelName: null);
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf(modelName, capabilities: ["completion"])], selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(kind, response[0].Kind);
         AssertEx.Equal(expected, string.Join(",", response[0].Capabilities));
@@ -96,7 +96,7 @@ public sealed class LocalModelsGgufMappingTests
                     QuantizationLevel = "F16"
                 }
             ],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         var declared = response.Single(static model => model.ModelName.StartsWith("bartowski", StringComparison.Ordinal));
         AssertEx.Equal("qwen2", declared.Family);
@@ -117,7 +117,7 @@ public sealed class LocalModelsGgufMappingTests
     public void ToLlamaCppModelResponses_UndetectedTemplate_KeepsTheInertEnforceableDefault()
     {
         var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.False(response[0].IsReasoningCapable);
         AssertEx.True(response[0].ReasoningBudgetEnforceable);
@@ -142,7 +142,7 @@ public sealed class LocalModelsGgufMappingTests
         var response = LocalModelsMapper.ToLlamaCppModelResponses([
                 Gguf("local-import:Q4_K_M", origin: LocalModelOrigin.Imported, modelContentFingerprint: fingerprint)
             ],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(LocalModelOrigin.Imported, response[0].Origin);
         AssertEx.Equal(fingerprint, response[0].ModelContentFingerprint);
@@ -152,7 +152,7 @@ public sealed class LocalModelsGgufMappingTests
     public void ToLlamaCppModelResponses_TagsLlamaCpp_AndClassifiesChat()
     {
         var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(expected: 1, gguf.Count);
         AssertEx.Equal(LocalModelProviders.LlamaCpp, gguf[0].Provider);
@@ -172,7 +172,7 @@ public sealed class LocalModelsGgufMappingTests
         // A GGUF whose name identifies an embedding model (nomic-embed) is tagged Embedding so the React
         // `kind === "Chat"` picker filters it out — a fresh GGUF has no capability probe, only its name.
         var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M")],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(expected: 1, gguf.Count);
         AssertEx.Equal(ModelKind.Embedding.ToString(), gguf[0].Kind);
@@ -185,7 +185,7 @@ public sealed class LocalModelsGgufMappingTests
         // A reranker (cross-encoder) GGUF name is tagged Reranker so the React `kind === "Chat"` picker filters it out.
         // The name matches the BGE- embedding prefix too, but reranker wins — it must NOT be tagged Embedding.
         var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("BAAI/bge-reranker-v2-m3-GGUF:Q4_K_M")],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(expected: 1, gguf.Count);
         AssertEx.Equal(ModelKind.Reranker.ToString(), gguf[0].Kind);
@@ -197,7 +197,7 @@ public sealed class LocalModelsGgufMappingTests
     {
         // A non-embedding GGUF name stays Chat (the heuristic never guesses Chat from a name — it defaults to it).
         var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].Kind);
         AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].DetectedKind);
@@ -214,7 +214,7 @@ public sealed class LocalModelsGgufMappingTests
                     isReasoningCapable: true,
                     capabilities: ["completion", "tools", "thinking"])
             ],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.True(gguf[0].IsToolCapable, "detected tool capability must surface");
         AssertEx.True(gguf[0].IsReasoningCapable, "detected reasoning capability must surface");
@@ -226,111 +226,82 @@ public sealed class LocalModelsGgufMappingTests
     public void ToLlamaCppModelResponses_MarksTheSelectedModel()
     {
         var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("repo-a:Q4_K_M"), Gguf("repo-b:Q4_K_M")],
-            "repo-b:Q4_K_M");
+            "repo-b:Q4_K_M",
+            NoClassifications);
 
         AssertEx.ContainsSingle(gguf, static m => m.IsSelected);
         AssertEx.Contains(gguf, static m => m.ModelName == "repo-b:Q4_K_M" && m.IsSelected);
     }
 
     [Test]
-    public void ToListResponse_ConcatsGgufAfterOllama_BeforeCloud()
+    public void ToLlamaCppModelResponses_WhenOverridden_ReportsTheEffectiveAndDetectedKinds()
     {
-        var ollama = new[]
+        var classifications = new Dictionary<string, ModelClassificationRecord>(StringComparer.OrdinalIgnoreCase)
         {
-            new OllamaModelSummary
-            {
-                Name = "qwen3:8b"
-            }
+            ["repo-a:Q4_K_M"] = Override("repo-a:Q4_K_M", ModelKind.Embedding)
         };
-        var classifications = new Dictionary<string, ModelClassificationResult>
+
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("REPO-A:Q4_K_M")], selectedModelName: null, classifications);
+
+        AssertEx.Equal(ModelKind.Embedding.ToString(), response[0].Kind);
+        AssertEx.Equal(ModelKind.Chat.ToString(), response[0].DetectedKind);
+        AssertEx.True(response[0].IsOverridden);
+    }
+
+    [Test]
+    public void ToLlamaCppModelResponses_WhenARowHasNoOverride_ReportsTheOfflineKind()
+    {
+        var classifications = new Dictionary<string, ModelClassificationRecord>(StringComparer.OrdinalIgnoreCase)
         {
-            ["qwen3:8b"] = new()
-            {
-                ModelName = "qwen3:8b",
-                Kind = ModelKind.Chat,
-                DetectedKind = ModelKind.Chat,
-                Capabilities = ["tools"],
-                IsOverridden = false
-            }
+            ["repo-a:Q4_K_M"] = Override("repo-a:Q4_K_M", overrideKind: null)
         };
+
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("repo-a:Q4_K_M")], selectedModelName: null, classifications);
+
+        AssertEx.Equal(ModelKind.Chat.ToString(), response[0].Kind);
+        AssertEx.False(response[0].IsOverridden);
+    }
+
+    [Test]
+    public void ToListResponse_ConcatsGgufBeforeCloud()
+    {
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
-        var response = LocalModelsMapper.ToListResponse(ollama,
-            "qwen3:8b",
-            "qwen3:8b",
-            classifications,
+        var response = LocalModelsMapper.ToListResponse("repo-a:Q4_K_M",
+            "repo-a:Q4_K_M",
+            new Dictionary<string, ModelClassificationRecord>(),
             cloud,
             [Gguf("repo-a:Q4_K_M")]);
 
-        // Order: Ollama → GGUF (llamacpp) → cloud (Codex).
-        AssertEx.Equal(LocalModelProviders.Ollama, response.Items[0].Provider);
-        AssertEx.Equal(LocalModelProviders.LlamaCpp, response.Items[1].Provider);
-        AssertEx.Equal("repo-a:Q4_K_M", response.Items[1].ModelName);
-        AssertEx.True(response.Items.Any(static m => m.Provider == LocalModelProviders.CodexOAuth),
-            "the cloud group must remain appended last");
-        AssertEx.Equal(ollama.Length + 1 + cloud.Count, response.Items.Count);
-    }
-
-    [Test]
-    public void ToListResponse_DedupesGgufNameAlreadyListedByOllama()
-    {
-        var ollama = new[]
-        {
-            new OllamaModelSummary
-            {
-                Name = "shared-model"
-            }
-        };
-        var classifications = new Dictionary<string, ModelClassificationResult>
-        {
-            ["shared-model"] = new()
-            {
-                ModelName = "shared-model",
-                Kind = ModelKind.Chat,
-                DetectedKind = ModelKind.Chat,
-                Capabilities = [],
-                IsOverridden = false
-            }
-        };
-
-        // A name present under BOTH runtimes (case-insensitively) is listed once — the Ollama entry wins.
-        var response = LocalModelsMapper.ToListResponse(ollama,
-            selectedModelName: null,
-            configuredDefaultModelName: null,
-            classifications,
-            cloudModels: null,
-            [Gguf("SHARED-MODEL"), Gguf("unique-gguf:Q4_K_M")]);
-
-        AssertEx.Equal(expected: 2, response.Items.Count);
-        AssertEx.ContainsSingle(response.Items, static m => m.ModelName == "shared-model" && m.Provider == LocalModelProviders.Ollama);
-        AssertEx.Contains(response.Items, static m => m.ModelName == "unique-gguf:Q4_K_M" && m.Provider == LocalModelProviders.LlamaCpp);
-    }
-
-    [Test]
-    public void ToUnavailableListResponse_IncludesGguf_AndReportsAvailableWhenGgufPresent()
-    {
-        // Ollama unavailable, but an installed GGUF means a node-local runtime CAN serve a chat → IsAvailable true.
-        var response = LocalModelsMapper.ToUnavailableListResponse(selectedModelName: null,
-            configuredDefaultModelName: null,
-            "Local model provider is unavailable.",
-            cloudModels: null,
-            [Gguf("repo-a:Q4_K_M")]);
-
-        AssertEx.True(response.IsAvailable, "an installed GGUF makes the node-local runtime available even without Ollama");
-        AssertEx.Null(response.Error);
-        AssertEx.Equal(expected: 1, response.Items.Count);
+        // Order: GGUF (llamacpp) → cloud (Codex).
         AssertEx.Equal(LocalModelProviders.LlamaCpp, response.Items[0].Provider);
+        AssertEx.Equal("repo-a:Q4_K_M", response.Items[0].ModelName);
+        AssertEx.True(response.Items.Skip(1).All(static m => m.Provider == LocalModelProviders.CodexOAuth),
+            "the cloud group must remain appended last");
+        AssertEx.Equal(1 + cloud.Count, response.Items.Count);
     }
 
     [Test]
-    public void ToUnavailableListResponse_WithNoGguf_StaysUnavailable()
+    public void ToListResponse_WithNoGguf_IsEmpty()
     {
-        var response = LocalModelsMapper.ToUnavailableListResponse(selectedModelName: null,
+        var response = LocalModelsMapper.ToListResponse(selectedModelName: null,
             configuredDefaultModelName: null,
-            "Local model provider is unavailable.");
+            new Dictionary<string, ModelClassificationRecord>());
 
-        AssertEx.False(response.IsAvailable, "no GGUF and no Ollama → the local runtime is unavailable");
-        AssertEx.Equal("Local model provider is unavailable.", response.Error);
-        AssertEx.Equal(expected: 0, response.Items.Count);
+        AssertEx.Empty(response.Items);
+    }
+
+    private static ModelClassificationRecord Override(string modelName, ModelKind? overrideKind)
+    {
+        return new ModelClassificationRecord
+        {
+            ModelName = modelName,
+            Digest = null,
+            DetectedKind = ModelKind.Unknown,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = overrideKind,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 1
+        };
     }
 }

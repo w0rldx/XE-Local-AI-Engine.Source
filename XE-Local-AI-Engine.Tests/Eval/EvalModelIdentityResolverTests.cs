@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Eval;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -11,8 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="EvalModelIdentityResolver" />, the eval fingerprint's weight-identity term: the llama.cpp GGUF
-///     registry (content hash, else revision+size+download-time), then the Ollama digest, then the unverified
-///     sentinel. A same-name weight swap always changes the verified token.
+///     registry (content hash, else revision+size+download-time), then the unverified sentinel. A same-name weight swap always changes the verified token.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class EvalModelIdentityResolverTests
@@ -24,7 +21,7 @@ public sealed class EvalModelIdentityResolverTests
     {
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Entry(sha256: "abc123"));
-        var resolver = CreateResolver(registry, Substitute.For<IModelClassificationStore>());
+        var resolver = CreateResolver(registry);
 
         var identity = await resolver.ResolveAsync(ModelName);
 
@@ -37,7 +34,7 @@ public sealed class EvalModelIdentityResolverTests
     {
         // A same-name re-download that yields different weights (new LFS OID) must change the token.
         var registry = Substitute.For<IGgufModelRegistry>();
-        var resolver = CreateResolver(registry, Substitute.For<IModelClassificationStore>());
+        var resolver = CreateResolver(registry);
 
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Entry(sha256: "before"));
         var before = await resolver.ResolveAsync(ModelName);
@@ -55,7 +52,7 @@ public sealed class EvalModelIdentityResolverTests
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>())
                 .Returns(Entry(sha256: null, sizeBytes: 4096, revision: "rev-1", downloadedAt: DateTimeOffset.FromUnixTimeMilliseconds(1_700_000_000_000)));
-        var resolver = CreateResolver(registry, Substitute.For<IModelClassificationStore>());
+        var resolver = CreateResolver(registry);
 
         var identity = await resolver.ResolveAsync(ModelName);
 
@@ -64,28 +61,11 @@ public sealed class EvalModelIdentityResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_WhenNotInGgufRegistry_UsesOllamaClassificationDigest()
+    public async Task ResolveAsync_WhenNotInGgufRegistry_ReturnsTheUnverifiedSentinel()
     {
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns((GgufModelRegistryEntry?)null);
-        var classification = Substitute.For<IModelClassificationStore>();
-        classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Classification(digest: "sha256:deadbeef"));
-        var resolver = CreateResolver(registry, classification);
-
-        var identity = await resolver.ResolveAsync(ModelName);
-
-        AssertEx.True(identity.IsVerified, "an Ollama model with a cached content digest is a verified identity");
-        AssertEx.Equal("ollama-digest:sha256:deadbeef", identity.Token);
-    }
-
-    [Test]
-    public async Task ResolveAsync_WhenNoIdentitySourceResolves_ReturnsTheUnverifiedSentinel()
-    {
-        var registry = Substitute.For<IGgufModelRegistry>();
-        registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns((GgufModelRegistryEntry?)null);
-        var classification = Substitute.For<IModelClassificationStore>();
-        classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns((ModelClassificationRecord?)null);
-        var resolver = CreateResolver(registry, classification);
+        var resolver = CreateResolver(registry);
 
         var identity = await resolver.ResolveAsync(ModelName);
 
@@ -94,55 +74,35 @@ public sealed class EvalModelIdentityResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_WhenClassificationDigestIsBlank_ReturnsUnverified()
-    {
-        // A classification row with no digest (override-only / never probed) is NOT an identity — degrade to unverified.
-        var registry = Substitute.For<IGgufModelRegistry>();
-        registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns((GgufModelRegistryEntry?)null);
-        var classification = Substitute.For<IModelClassificationStore>();
-        classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Classification(digest: null));
-        var resolver = CreateResolver(registry, classification);
-
-        var identity = await resolver.ResolveAsync(ModelName);
-
-        AssertEx.False(identity.IsVerified);
-        AssertEx.Equal(EvalModelIdentity.UnverifiedToken, identity.Token);
-    }
-
-    [Test]
     public async Task ResolveAsync_WhenModelNameIsBlank_ReturnsUnverifiedWithoutLookup()
     {
         var registry = Substitute.For<IGgufModelRegistry>();
-        var classification = Substitute.For<IModelClassificationStore>();
-        var resolver = CreateResolver(registry, classification);
+        var resolver = CreateResolver(registry);
 
         var identity = await resolver.ResolveAsync("   ");
 
         AssertEx.False(identity.IsVerified);
         AssertEx.Equal(EvalModelIdentity.UnverifiedToken, identity.Token);
         await registry.DidNotReceive().FindAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await classification.DidNotReceive().GetByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task ResolveAsync_WhenGgufLookupThrows_FallsThroughToClassificationDigest()
+    public async Task ResolveAsync_WhenGgufLookupThrows_ReturnsTheUnverifiedSentinel()
     {
-        // A registry failure must never throw out of the resolver — it degrades to the next source.
+        // A registry failure must never throw out of the resolver — it degrades to unverified.
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.FindAsync(ModelName, Arg.Any<CancellationToken>()).Returns<GgufModelRegistryEntry?>(_ => throw new IOException("manifest unreadable"));
-        var classification = Substitute.For<IModelClassificationStore>();
-        classification.GetByNameAsync(ModelName, Arg.Any<CancellationToken>()).Returns(Classification(digest: "sha256:cafe"));
-        var resolver = CreateResolver(registry, classification);
+        var resolver = CreateResolver(registry);
 
         var identity = await resolver.ResolveAsync(ModelName);
 
-        AssertEx.True(identity.IsVerified);
-        AssertEx.Equal("ollama-digest:sha256:cafe", identity.Token);
+        AssertEx.False(identity.IsVerified);
+        AssertEx.Equal(EvalModelIdentity.UnverifiedToken, identity.Token);
     }
 
-    private static EvalModelIdentityResolver CreateResolver(IGgufModelRegistry registry, IModelClassificationStore classificationStore)
+    private static EvalModelIdentityResolver CreateResolver(IGgufModelRegistry registry)
     {
-        return new EvalModelIdentityResolver(registry, classificationStore, NullLogger<EvalModelIdentityResolver>.Instance);
+        return new EvalModelIdentityResolver(registry, NullLogger<EvalModelIdentityResolver>.Instance);
     }
 
     private static GgufModelRegistryEntry Entry(string? sha256,
@@ -161,20 +121,6 @@ public sealed class EvalModelIdentityResolverTests
             Sha256 = sha256,
             SourceRevision = revision,
             DownloadedAtUtc = downloadedAt ?? DateTimeOffset.FromUnixTimeMilliseconds(1_000)
-        };
-    }
-
-    private static ModelClassificationRecord Classification(string? digest)
-    {
-        return new ModelClassificationRecord
-        {
-            ModelName = ModelName,
-            Digest = digest,
-            DetectedKind = ModelKind.Chat,
-            DetectedCapabilitiesJson = null,
-            OverrideKind = null,
-            DetectedAtUtc = null,
-            UpdatedAtUtc = 0
         };
     }
 }

@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -56,7 +55,6 @@ public sealed class RequiredMemberSerializationTests
         typeof(ITrainingProcessHandle).Assembly,
         typeof(ManagedPythonPins).Assembly,
         typeof(StaleProcessReaper).Assembly,
-        typeof(RunningModelSnapshotMapper).Assembly,
         typeof(ICodexAuthService).Assembly,
         typeof(CapabilitiesServiceCollectionExtensions).Assembly,
         typeof(ExternalProviderConstants).Assembly,

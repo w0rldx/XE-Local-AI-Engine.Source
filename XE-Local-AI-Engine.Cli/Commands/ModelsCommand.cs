@@ -16,14 +16,16 @@ internal static class ModelsCommand
         return command;
     }
 
-    /// <summary>Installed models first, marked running when loaded; a loaded model the installed list lacks follows.</summary>
+    /// <summary>Installed models first, marked running when loaded; loaded models the installed list lacks follow, sorted by name.</summary>
     public static IReadOnlyList<ModelJson> Merge(LocalModelList installed, RunningModelList running)
     {
         ArgumentNullException.ThrowIfNull(installed);
         ArgumentNullException.ThrowIfNull(running);
 
-        var loaded = running.Items.GroupBy(static model => model.ModelName, StringComparer.Ordinal)
-                            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
+        // One row per model: a model loaded for several roles has several processes. An exited process waiting to be reaped is not loaded.
+        var loaded = running.Items.Where(static process => process.DetailCode != RunningModel.ExitedDetailCode)
+                            .Select(static process => process.ModelName)
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var rows = installed.Items.Select(model => new ModelJson
         {
             ModelName = model.ModelName,
@@ -36,16 +38,13 @@ internal static class ModelsCommand
             IsReasoningCapable = model.IsReasoningCapable,
             IsToolCapable = model.IsToolCapable,
             Installed = true,
-            Running = loaded.ContainsKey(model.ModelName),
-            SizeVramBytes = loaded.TryGetValue(model.ModelName, out var live) ? live.SizeVramBytes : null
+            Running = loaded.Contains(model.ModelName)
         }).ToList();
-        var named = rows.Select(static row => row.ModelName).ToHashSet(StringComparer.Ordinal);
-        rows.AddRange(loaded.Values.Where(model => !named.Contains(model.ModelName)).Select(static model => new ModelJson
+        var named = rows.Select(static row => row.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        rows.AddRange(loaded.Where(modelName => !named.Contains(modelName)).Order(StringComparer.OrdinalIgnoreCase).Select(static modelName => new ModelJson
         {
-            ModelName = model.ModelName,
-            SizeBytes = model.SizeBytes,
-            Running = true,
-            SizeVramBytes = model.SizeVramBytes
+            ModelName = modelName,
+            Running = true
         }));
         return rows;
     }
@@ -63,11 +62,6 @@ internal static class ModelsCommand
             return ExitCodes.Success;
         }
 
-        if (installed.Error is { Length: > 0 } error)
-        {
-            environment.ErrorTerminal.MarkupLine($"[yellow]{Markup.Escape(error)}[/]");
-        }
-
         var table = new Table().AddColumns("Model", "Kind", "Params", "Quant", "Size", "Default", "Loaded");
         foreach (var row in rows)
         {
@@ -77,7 +71,7 @@ internal static class ModelsCommand
                 Markup.Escape(row.QuantizationLevel ?? "-"),
                 FormatBytes(row.SizeBytes),
                 row.IsSelected ? "yes" : string.Empty,
-                row.Running ? $"yes {FormatBytes(row.SizeVramBytes)} VRAM" : string.Empty);
+                row.Running ? "yes" : string.Empty);
         }
 
         environment.Terminal.Write(table);

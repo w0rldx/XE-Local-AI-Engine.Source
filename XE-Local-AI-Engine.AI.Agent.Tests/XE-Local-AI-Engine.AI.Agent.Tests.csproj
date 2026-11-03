@@ -20,7 +20,6 @@
     <!-- Explicit: BuildServiceProvider lives here; in Debug it arrives transitively via the
          Debug-only Microsoft.Agents.AI.Hosting preview package, so Release needs it directly. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
-    <PackageReference Include="OllamaSharp"/>
   </ItemGroup>
 
   <ItemGroup>

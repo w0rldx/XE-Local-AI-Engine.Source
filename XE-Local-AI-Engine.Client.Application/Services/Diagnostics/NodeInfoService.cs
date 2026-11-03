@@ -181,14 +181,13 @@ public sealed class NodeInfoService : INodeInfoService
 
     /// <summary>The settings fields the report never carries; a test fails when a new field is in neither set.</summary>
     /// <remarks>
-    ///     <c>MachineKey</c> is the stable local machine identifier; <c>OllamaEndpoint</c> and <c>WebSearchSearxngUrl</c>
-    ///     are operator URLs that can carry a host name or <c>user:password@</c> userinfo. No other field is URL- or
+    ///     <c>MachineKey</c> is the stable local machine identifier; <c>WebSearchSearxngUrl</c>
+    ///     is an operator URL that can carry a host name or <c>user:password@</c> userinfo. No other field is URL- or
     ///     credential-shaped: credentials live in their own encrypted stores, not in this record.
     /// </remarks>
     public static readonly IReadOnlySet<string> ExcludedSettings = new HashSet<string>(StringComparer.Ordinal)
     {
         nameof(StoredNodeSettings.MachineKey),
-        nameof(StoredNodeSettings.OllamaEndpoint),
         nameof(StoredNodeSettings.WebSearchSearxngUrl)
     };
 

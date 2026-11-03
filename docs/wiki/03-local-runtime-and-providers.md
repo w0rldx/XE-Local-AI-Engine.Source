@@ -16,7 +16,7 @@
 - [6. Cloud connections — Azure Foundry, Entra ID, and cloud-vs-local routing](#6-cloud-connections--azure-foundry-entra-id-and-cloud-vs-local-routing)
 - [Related pages](#related-pages)
 
-This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (hardware-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
+This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (hardware-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
 
 The big picture: there is **no Docker** and **no container sandbox** in the inference path, and the old `HostAgent` connection layer has been deleted. Inference = a host `llama-server` child process, localhost-bound, owned by a singleton supervisor. See [01-architecture-overview.md](01-architecture-overview.md) for where this fits in the node.
 
@@ -30,7 +30,7 @@ The big picture: there is **no Docker** and **no container sandbox** in the infe
 
 ## 1. The provider seam: `Providers.Abstractions`
 
-All application code depends on **provider-neutral contracts**, never on a provider's SDK types. The provider-specific transport types (OllamaSharp, the OpenAI adapter, the HF HTTP clients) stay inside their own provider projects.
+All application code depends on **provider-neutral contracts**, never on a provider's SDK types. The provider-specific transport types (the OpenAI adapter, the HF HTTP clients) stay inside their own provider projects.
 
 ### `ILocalModelProvider`
 
@@ -51,7 +51,7 @@ All application code depends on **provider-neutral contracts**, never on a provi
 
 Two invariants are stated directly in the contract doc-comments:
 
-- **The selection's `ProviderName` must equal the provider's `ProviderName`** — every implementation validates this and throws otherwise (`LlamaServerLocalModelProvider.ValidateSelection`, the same check in `OllamaLocalModelProvider.CreateChatClient`).
+- **The selection's `ProviderName` must equal the provider's `ProviderName`** — every implementation validates this and throws otherwise (`LlamaServerLocalModelProvider.ValidateSelection`, the same check in `ExternalOpenAiModelProvider`).
 - **Embeddings are produced by the node-local runtime only, never a shared/cloud endpoint** — so playbook/prompt text never leaves the node (privacy invariant; see [12-security-and-privacy.md](12-security-and-privacy.md)).
 
 ### `IChatClient` / `IEmbeddingGenerator` usage
@@ -60,9 +60,9 @@ Both come from **Microsoft.Extensions.AI (MEAI)**. The provider returns them; th
 
 ### How a provider is chosen at runtime
 
-`Client.Application/Services/CloudProviders/Implementation/LocalModelProviderResolver.cs` collects all registered `ILocalModelProvider`s into a **case-insensitive map keyed by `ProviderName`** (last registration wins, so a host can override a provider). It resolves a `defaultProviderName` and carries `MaxLoadedProcesses`. With Ollama de-orchestrated in dev, the default resolves to `llamacpp`.
+`Client.Application/Services/CloudProviders/Implementation/LocalModelProviderResolver.cs` collects all registered `ILocalModelProvider`s into a **case-insensitive map keyed by `ProviderName`** (last registration wins, so a host can override a provider). It resolves a `defaultProviderName`, which is `llamacpp`, and carries `MaxLoadedProcesses`.
 
-Other abstraction-project contracts worth knowing: `IModelCapabilityClient` (runtime-reachability and installed-model probes), `INodeDataDirectory` (where node data lives), `IProcessVramBudgetProbe` (llama.cpp's process-local VRAM budget, §2.5), `IGgufMetadataReader` (header facts incl. MoE expert count), and the `Gguf/*` family (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`, `GgufModelName`, `GgufFilePath`) which is the shared GGUF vocabulary the llama-server and HuggingFace projects both speak. The same `Gguf/` folder now also holds the **quant-quality single source of truth** — `QuantLadder` (the curated best→worst quant ladder + `Q3_K_M` quality floor) and `GgufQuantQuality` (coarse `GgufQuantTier` classifier) — moved here so both the advisor's memory-fit step-down and the download picker's per-row badge read one table. The advisor side is detailed in [07-model-fit.md](07-model-fit.md).
+Other abstraction-project contracts worth knowing: `INodeDataDirectory` (where node data lives), `IProcessVramBudgetProbe` (llama.cpp's process-local VRAM budget, §2.5), `IGgufMetadataReader` (header facts incl. MoE expert count), and the `Gguf/*` family (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`, `GgufModelName`, `GgufFilePath`) which is the shared GGUF vocabulary the llama-server and HuggingFace projects both speak. The same `Gguf/` folder now also holds the **quant-quality single source of truth** — `QuantLadder` (the curated best→worst quant ladder + `Q3_K_M` quality floor) and `GgufQuantQuality` (coarse `GgufQuantTier` classifier) — moved here so both the advisor's memory-fit step-down and the download picker's per-row badge read one table. The advisor side is detailed in [07-model-fit.md](07-model-fit.md).
 
 ---
 
@@ -288,10 +288,6 @@ See [the reference page](reference/03-llama-server-launch-flags.md#28-process-co
 
 ## 3. Satellite providers
 
-### `Providers.Ollama` — present, de-orchestrated from Aspire dev
-
-`OllamaLocalModelProvider` (`ProviderName = "ollama"`) still fully implements `ILocalModelProvider` over `IOllamaApiClient` (OllamaSharp): list/pull/delete/warm/unload + `CreateChatClient`/`CreateEmbeddingGenerator`. It remains a real, registered provider — but llama.cpp is the dev runtime, so **Ollama is no longer orchestrated by Aspire in dev** (see [11-hosting-and-deployment.md](11-hosting-and-deployment.md)). Notable detail: `AddOllamaLocalModelProvider` sets a short **750 ms `SocketsHttpHandler.ConnectTimeout`** so a probe against an absent Ollama daemon (desktop mode) fails fast instead of stalling on the OS connect timeout; `OllamaConnectFailureHandler` translates a fired connect-timeout (`OperationCanceledException`) into `HttpRequestException` so "Ollama unreachable" handling is uniform. The 5-minute `HttpClient.Timeout` still covers genuine long pulls. `OllamaModelCapabilityClient` implements `IModelCapabilityClient` as thin pass-throughs over the API client.
-
 ### `Providers.WhisperCpp` — the supervised speech-to-text runtime
 
 `WhisperServerProcessSupervisor` owns one resident `whisper-server` child, whose readiness is a port accept followed by the health route.
@@ -332,11 +328,11 @@ See [the reference page](reference/03-satellite-and-cloud-providers.md#external-
 
 See [the reference page](reference/03-satellite-and-cloud-providers.md#the-connect-time-probe) for the rest of this section.
 
-### The model catalog's five sources
+### The model catalog's four sources
 
-`LocalModelCatalogService` gathers the chat picker's whole catalog from five sources that each degrade on their own — Ollama, the installed GGUF registry, a Codex session, a stored Azure Foundry connection, and the operator's external OpenAI-compatible connections (`IExternalProviderRegistry`). No source failure ever fails the catalog: an unreadable encrypted external store yields no external entries, exactly as an unreadable GGUF registry yields no GGUF entries.
+`LocalModelCatalogService` gathers the chat picker's whole catalog from four sources that each degrade on their own — the installed GGUF registry, a Codex session, a stored Azure Foundry connection, and the operator's external OpenAI-compatible connections (`IExternalProviderRegistry`). No source failure ever fails the catalog: an unreadable encrypted external store yields no external entries, exactly as an unreadable GGUF registry yields no GGUF entries.
 
-See [the reference page](reference/03-satellite-and-cloud-providers.md#the-model-catalogs-five-sources) for the rest of this section.
+See [the reference page](reference/03-satellite-and-cloud-providers.md#the-model-catalogs-four-sources) for the rest of this section.
 
 ---
 
@@ -349,7 +345,7 @@ Responsibilities and collaborators:
 - **Discovery** — `HuggingFaceGgufDiscovery` (`IHuggingFaceGgufDiscovery`) enumerates GGUF files/quants for a repo via `HfHubClient`.
 - **Download** — `HfDownloadClient` fetches the chosen GGUF to disk (atomic temp-file → rename for offline reuse), serializing concurrent `EnsureModelAsync` for the same name with a per-name gate, guarded by `IFreeSpaceProbe`.
 - **Registry** — `GgufModelRegistry` (`IGgufModelRegistry`) is the on-disk record (`GgufModelRegistryEntry`: model name, local path, size, sha, downloaded-at); `ResolveModelFilePathAsync` / `ListInstalledModelsAsync` read it.
-- **Header facts** — `GgufHeaderReader` reads the GGUF header once per model; `GgufCapabilityDetector.Detect` classifies tool/reasoning capability **deterministically from the embedded Jinja chat template** (`tokenizer.chat_template`) — tool markers (`tool_calls`, `function_call`, `tools`) and reasoning markers (`<think`, `enable_thinking`, `reasoning_content`). This is why XE needs no Ollama `/api/show` probe for a GGUF (a GGUF has no Ollama entry, and desktop mode runs no Ollama daemon). The same pass answers a THIRD question — `ReasoningBudgetEnforceable`: does the template render a literal reasoning END marker (`</think>`, `</thinking>`, gemma-4's `<channel|>`)? That is the shape llama.cpp turns into the non-empty think-end-tag set its `reasoning_budget_tokens` gate requires; without it the server accepts the budget and silently ignores it, so the node omits the field instead. It rides `LocalModelDescriptor` and the model-list DTO, and is also computed at import (`GgufImportInspector.Classify`, which raises an operator warning for a graded-but-unenforceable template). Its default is `true` everywhere — only a positively-detected closing-tag-less template turns a cap off. See [05-chat.md](05-chat.md#thinking-budget-llamacpp-and-where-it-is-enforceable) for the enforcement evidence. Results are cached by `(path, size, downloadedAt)`; a header-read failure for one model never sinks the list (yields `GgufHeaderFacts.Empty`).
+- **Header facts** — `GgufHeaderReader` reads the GGUF header once per model; `GgufCapabilityDetector.Detect` classifies tool/reasoning capability **deterministically from the embedded Jinja chat template** (`tokenizer.chat_template`) — tool markers (`tool_calls`, `function_call`, `tools`) and reasoning markers (`<think`, `enable_thinking`, `reasoning_content`). This is why XE needs no runtime probe for a GGUF. The same pass answers a THIRD question — `ReasoningBudgetEnforceable`: does the template render a literal reasoning END marker (`</think>`, `</thinking>`, gemma-4's `<channel|>`)? That is the shape llama.cpp turns into the non-empty think-end-tag set its `reasoning_budget_tokens` gate requires; without it the server accepts the budget and silently ignores it, so the node omits the field instead. It rides `LocalModelDescriptor` and the model-list DTO, and is also computed at import (`GgufImportInspector.Classify`, which raises an operator warning for a graded-but-unenforceable template). Its default is `true` everywhere — only a positively-detected closing-tag-less template turns a cap off. See [05-chat.md](05-chat.md#thinking-budget-llamacpp-and-where-it-is-enforceable) for the enforcement evidence. Results are cached by `(path, size, downloadedAt)`; a header-read failure for one model never sinks the list (yields `GgufHeaderFacts.Empty`).
 - **Tensor inspection** — `IGgufMetadataReader.ReadTensorsAsync` (implemented by `GgufTensorBlockReader`, a separate single-pass stream parser over a LOCAL file only) lists every tensor info after the KV block: name, dimensions, ggml type, offset and byte size (from `GgmlTypeTraits`, the ggml block/type sizes at the pinned llama.cpp tag; a removed or unknown type is still listed with a null size). The file is untrusted: dimensions, tensor and key counts and name lengths are capped, every length is checked against the bytes left, size arithmetic is overflow-checked, and a short or broken file returns `GgufTensorReadFailure.Truncated`/`Malformed` instead of throwing. `GgufInspectionService` resolves the path only through the registry and `GetModelGgufInspectionEndpoint` (`GET models/{modelName}/gguf-inspection`) serves header metadata plus tensors grouped per `blk.<n>`; the React models feature shows it in the model dialog's **Inspect** tab (llama.cpp models only), and derives a per-block kind strip and the bytes per tensor type from the same response (`GgufInspectInsights`); fused attention (`attn_qkv` with no `ssm_`) counts as full attention, and each block's accordion row names the kind and expert state for keyboard and touch. **Compare with** lists the other installed llama.cpp variants of the repo (`sameRepoVariants`, the name before the last colon, as no other field names the repo) and reads the picked file through the same endpoint; `compareInspections` matches tensors by name, and a failed read of either file shows the failure and no comparison. Metadata reads and the remote HTTP range path are unchanged.
 - **Footprint facts** — `ResolveModelFootprintFactsAsync` exposes weight/KV inputs (the public seam consumed by the capacity/advisor layer) again from a single cached header read.
 - **Token** — `IHfTokenStore` holds the optional HuggingFace token (a LOCAL secret) for gated repos. Downloads send it, and so do the advisor's remote header reads (`GgufHeaderReader`), so a gated repo with a token gets its header-based estimate.
@@ -423,9 +419,9 @@ The factory answers ROUTING: where this send goes now and through which provider
 
 ### The local routing client
 
-`ModelRoutingLocalChatClient` is the local branch behind `RuntimeChatClient`. Per request it resolves `ChatOptions.ModelId` to a provider through `ILocalModelProviderResolver` and asks that provider for a model-specific chat client. For llama-server the provider hands back a *deferred* client that ensure-runs the right per-model process on first use; for Ollama it hands back the single-daemon client with a `ModelId` hot-swap. The router builds the request's effective `ModelId` once and caches the client per `(provider, model)`, so repeated sends to one model reuse a single deferred client — which owns the single-flight cold-start.
+`ModelRoutingLocalChatClient` is the local branch behind `RuntimeChatClient`. Per request it resolves `ChatOptions.ModelId` to a provider through `ILocalModelProviderResolver` and asks that provider for a model-specific chat client. For llama-server the provider hands back a *deferred* client that ensure-runs the right per-model process on first use. The router builds the request's effective `ModelId` once and caches the client per `(provider, model)`, so repeated sends to one model reuse a single deferred client — which owns the single-flight cold-start.
 
-`ILocalModelProviderResolver` composes two lookups: `ModelName → ProviderName` over the persisted per-model→provider map (with a configured default for unmapped models), then `ProviderName → ILocalModelProvider` over the registered provider set. The first lookup is memoized in a short-TTL bounded cache because provider resolution runs several times per chat turn (capability gating, model resolution, one per orchestration participant) and the map is effectively write-once per model — a GGUF is always `llamacpp`, an Ollama model always `ollama`.
+`ILocalModelProviderResolver` composes two lookups: `ModelName → ProviderName` over the persisted per-model→provider map (with the `llamacpp` default for unmapped models), then `ProviderName → ILocalModelProvider` over the registered provider set. The first lookup is memoized in a short-TTL bounded cache because provider resolution runs several times per chat turn (capability gating, model resolution, one per orchestration participant) and the map is effectively write-once per model — a GGUF is always `llamacpp`.
 
 ---
 

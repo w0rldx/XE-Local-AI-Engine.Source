@@ -356,7 +356,7 @@ internal static class ProviderCallBudgeter
         return true;
     }
 
-    // Plain reasoning only: Chat Completions and Ollama adapters set neither; a Responses item carries a raw item (non-streaming)
+    // Plain reasoning only: Chat Completions adapters set neither; a Responses item carries a raw item (non-streaming)
     // or protected data (streaming, after coalescing drops the raw item), and Codex must receive it again.
     private static bool IsStrippableReasoning(AIContent content) =>
         content is TextReasoningContent { RawRepresentation: null } reasoning && string.IsNullOrEmpty(reasoning.ProtectedData);

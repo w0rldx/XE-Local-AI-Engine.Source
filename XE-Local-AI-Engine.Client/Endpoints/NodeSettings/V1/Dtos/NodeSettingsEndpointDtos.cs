@@ -134,9 +134,6 @@ public sealed record NodeSettingsResponse
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
-    /// <summary>Ollama endpoint for the optional Ollama runtime. Applies after a node restart.</summary>
-    public string? OllamaEndpoint { get; init; }
-
     /// <summary>Quantization a model download picks when the request names none. Applies after a node restart.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }
 
@@ -915,9 +912,6 @@ public sealed record SaveNodeSettingsRequest
     public bool? AutoProvisionFirstRunModel { get; init; }
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
-
-    /// <summary>Ollama endpoint for the optional Ollama runtime. Applies after a node restart.</summary>
-    public string? OllamaEndpoint { get; init; }
 
     /// <summary>Quantization a model download picks when the request names none. Applies after a node restart.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }

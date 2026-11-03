@@ -196,7 +196,7 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     none of it the agent. `model_readiness_ms` now separates that launch/load time out: it is the same warm phase
     summed over the same envelopes, so **`agent_turn_ms - model_readiness_ms` is the warm-equivalent turn time** and
     is what a cold arm and a warm arm compare on. **Null is unmeasured**, not a proven warm start: no turn went
-    through the local-runtime warmer at all (a remote provider, Ollama), or the row predates the column — so still
+    through the local-runtime warmer at all (a remote provider), or the row predates the column — so still
     record the runtime state (rule 9). **Non-null is the warmer's measured wall time**, summed over the run's turns.
     `LocalRuntimeWarmer` times every `WarmModelAsync` call including a cache reuse, and the sum is truncated to whole
     milliseconds, so an already-resident model measures **near zero** (live: 0) and a resident model can still read a
@@ -225,7 +225,7 @@ WHERE n.run_id IN (UPPER(:runIds)) AND n.failure_class IS NOT NULL GROUP BY fail
     started — so read `model_readiness_ms` beside them: a **small** readiness there means the warmer waited for
     nothing, which means the load these bytes describe predates the run and the device may have looked different by
     the time it started; null there is unmeasured and settles nothing either way. There is no exact-zero rule — a
-    resident model can read a few milliseconds (rule 11). Both are NULL, never zero, when nobody measured: a remote provider or Ollama model, a model the node
+    resident model can read a few milliseconds (rule 11). Both are NULL, never zero, when nobody measured: a remote provider's model, a model the node
     never loaded itself, a non-NVIDIA or CPU-only host with no readable global-free figure, a DevTask node run (they
     are agent-path only, like `tool_names_json`), and every row written before the columns existed. Zero in
     `vram_admitted_bytes` is different — it is a real answer, meaning a CPU-placed allocation reserved no VRAM.

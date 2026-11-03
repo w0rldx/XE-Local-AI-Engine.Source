@@ -23,7 +23,7 @@ internal sealed record class ModelFitSnapshot
     /// <summary>Requested use-case (recommend); null for benchmark. Part of the latest-successful key. Plaintext.</summary>
     public string? UseCase { get; set; }
 
-    /// <summary>Provider this run targeted (e.g. <c>ollama</c>). Part of the latest-successful key. Plaintext.</summary>
+    /// <summary>Provider this run targeted (e.g. <c>llama.cpp</c>). Part of the latest-successful key. Plaintext.</summary>
     public string ProviderName { get; set; } = string.Empty;
 
     /// <summary>Model name (benchmark), or null for a recommendation run. Part of the latest-successful key. Plaintext.</summary>

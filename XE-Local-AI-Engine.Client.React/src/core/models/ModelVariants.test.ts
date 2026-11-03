@@ -10,7 +10,7 @@ describe("sameRepoVariants", () => {
 			llamacpp("org/Tiny-GGUF:Q4_K_M"),
 			llamacpp("ORG/tiny-gguf:Q3_K_XL"),
 			llamacpp("org/Other-GGUF:Q4_K_M"),
-			{ modelName: "org/Tiny-GGUF:latest", provider: "Ollama" },
+			{ modelName: "org/Tiny-GGUF:latest", provider: "external" },
 		];
 
 		expect(sameRepoVariants("org/Tiny-GGUF:Q4_K_M", models)).toEqual(["ORG/tiny-gguf:Q3_K_XL"]);

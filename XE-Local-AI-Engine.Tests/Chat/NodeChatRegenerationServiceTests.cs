@@ -21,7 +21,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -29,7 +28,6 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -1734,14 +1732,11 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llamacpp");
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
+                CreateModelCapabilityResolver(gguf:CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -1824,8 +1819,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llamacpp");
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
@@ -1852,8 +1845,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
+                CreateModelCapabilityResolver(gguf:CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -3386,12 +3378,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
 
     [Test]
-    public async Task RegenerateAsync_WhenOriginalModelIsCodexCloudModel_OffersToolsAndSkipsOllamaClassification()
+    public async Task RegenerateAsync_WhenOriginalModelIsCodexCloudModel_OffersToolsAndSkipsGgufResolution()
     {
         // Parity with NodeChatStreamServiceTests.SendMessageAsync_WhenActiveModelIsCodexCloudModel_*: regenerating a
         // turn whose original model is a Codex cloud id must resolve capabilities from the Codex matrix (thinking on +
-        // tools per V0=true), NOT the Ollama /api/show classification — so the classifier is never consulted for the
-        // Codex id, and the requested local tool offer IS honored (regression guard for the regen-path Codex gate).
+        // tools per V0=true), NOT the GGUF capability resolver — which is never consulted for the Codex id, and the
+        // requested local tool offer IS honored (regression guard for the regen-path Codex gate).
         await using var provider = await BuildProviderAsync("regeneration-codex-capabilities.sqlite");
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
 
@@ -3437,11 +3429,11 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
         var offerProvider = CreateOfferProvider();
-        var classificationService = CreateModelClassificationService();
+        var gguf = CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false));
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(classification: classificationService),
+                CreateModelCapabilityResolver(gguf: gguf),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -3474,10 +3466,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
 
-        // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
-        await classificationService.DidNotReceive()
-                                   .ClassifyAsync(Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
-                                       Arg.Any<CancellationToken>());
+        // The GGUF resolver is never consulted for a Codex model id — capabilities come from the Codex matrix.
+        await gguf.DidNotReceive().ResolveOrNullAsync(CodexModel, Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for all Codex ids (V0=true), so the requested local tool offer is honored on
         // regenerate. It is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
@@ -3827,66 +3817,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         return store;
     }
 
-    // The default classification service: every model resolves to BOTH thinking- and tools-capable, so the existing
-    // think/tool-offer assertions stay byte-identical (these tests pre-date per-model capability gating).
-    private static IModelClassificationService CreateModelClassificationService()
-    {
-        var service = Substitute.For<IModelClassificationService>();
-        service.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
-               .Returns(callInfo =>
-               {
-                   var models = callInfo.Arg<IEnumerable<ModelIdentity>>();
-                   var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
-                   foreach (var (modelName, _) in models)
-                   {
-                       if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
-                       {
-                           map[modelName] = new ModelClassificationResult
-                           {
-                               ModelName = modelName,
-                               Kind = ModelKind.Chat,
-                               DetectedKind = ModelKind.Chat,
-                               Capabilities = ["completion", "tools", "thinking"],
-                               IsOverridden = false
-                           };
-                       }
-                   }
-
-                   return Task.FromResult<IReadOnlyDictionary<string, ModelClassificationResult>>(map);
-               });
-        return service;
-    }
-
     // ChatTurnResolver resolves capabilities through the shared IModelCapabilityResolver, so these tests compose the
-    // real one over the same substituted collaborators — the routing
-    // decision under test lives in one place.
-    private static IModelCapabilityResolver CreateModelCapabilityResolver(IModelClassificationService? classification = null,
-        ILocalModelProviderResolver? providerResolver = null,
-        IGgufModelCapabilityResolver? gguf = null,
+    // real one over substituted collaborators — the routing decision under test lives in one place. The default: every
+    // model is a BOTH thinking- and tools-capable GGUF; the capability-gate tests pass an incapable one.
+    private static IModelCapabilityResolver CreateModelCapabilityResolver(IGgufModelCapabilityResolver? gguf = null,
         FakeModelTrustResolver? trustResolver = null)
     {
-        return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
-            providerResolver ?? CreateLocalModelProviderResolver(),
-            gguf ?? CreateGgufModelCapabilityResolver(),
+        return new ModelCapabilityResolver(gguf ?? CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false)),
             trustResolver ?? new FakeModelTrustResolver());
     }
 
-    // The default resolver reports every model as not-a-GGUF (null), so these Ollama-routed regen tests keep their
-    // /api/show classification behavior. A llama.cpp-capability test overrides ResolveOrNullAsync explicitly.
-    private static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities? capabilities = null)
+    private static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities capabilities)
     {
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
         resolver.ResolveOrNullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
-        return resolver;
-    }
-
-    // Reports the active model as an Ollama-routed model so the shared ChatTurnResolver's capability gate classifies via
-    // the model-classification service (these regen tests' GGUF stub resolves null), matching the pre-extraction path.
-    private static ILocalModelProviderResolver CreateLocalModelProviderResolver()
-    {
-        var resolver = Substitute.For<ILocalModelProviderResolver>();
-        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(OllamaLocalModelProvider.OllamaProviderName);
         return resolver;
     }
 

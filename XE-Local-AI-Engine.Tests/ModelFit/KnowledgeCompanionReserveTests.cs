@@ -70,12 +70,12 @@ public sealed class KnowledgeCompanionReserveTests
     }
 
     [Test]
-    public async Task NoRerankerConfigured_AndAnOllamaEmbedder_ReserveNothing()
+    public async Task NoRerankerConfigured_AndAnEmbedderOnAnotherProvider_ReserveNothing()
     {
         var harness = new Harness
         {
             RerankerModelName = string.Empty,
-            EmbeddingProviderName = "ollama"
+            EmbeddingProviderName = "external"
         };
 
         var reserve = await harness.ResolveAsync();

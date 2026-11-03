@@ -24,13 +24,13 @@ public static class CodexResponseStoreDisabling
     /// </remarks>
     private const string CodexReasoningEffortKey = "codex_reasoning_effort";
 
-    /// <summary>The Ollama-shaped reasoning gate key, shared with the local path.</summary>
+    /// <summary>The <c>think</c> reasoning gate key, shared with the local path.</summary>
     /// <remarks>
     ///     On the Codex boundary it is the FALLBACK source for effort when the richer
     ///     <see cref="CodexReasoningEffortKey" /> side channel is absent: a string value is a graded level,
     ///     <c>false</c> means off, and <c>true</c> means reason at the default effort.
     /// </remarks>
-    private const string OllamaThinkKey = "think";
+    private const string ThinkKey = "think";
 
     /// <summary>
     ///     Returns <paramref name="options" />, or a new instance, sending <c>store=false</c>, an auto reasoning summary at
@@ -54,7 +54,7 @@ public static class CodexResponseStoreDisabling
     /// </summary>
     /// <remarks>
     ///     Prefers the Codex side channel, which carries full fidelity including minimal and xhigh, and falls back to
-    ///     the Ollama <c>think</c> value; <see langword="null" /> when the effort is unspecified, "on" or think:true,
+    ///     the <c>think</c> value; <see langword="null" /> when the effort is unspecified, "on" or think:true,
     ///     where the model's default effort applies and summaries are still requested. The pinned OpenAI .NET SDK
     ///     2.10.0 has no <c>XHigh</c> member, so <c>xhigh</c> maps to the nearest supported
     ///     <see cref="ResponseReasoningEffortLevel.High" />.
@@ -74,7 +74,7 @@ public static class CodexResponseStoreDisabling
             return mapped;
         }
 
-        if (properties.TryGetValue(OllamaThinkKey, out var think))
+        if (properties.TryGetValue(ThinkKey, out var think))
         {
             // think:true is the model's default effort (null), think:false is off (None), a string is a graded level.
             // The None arm is cast so the other arms cannot coerce null through the implicit string operator.

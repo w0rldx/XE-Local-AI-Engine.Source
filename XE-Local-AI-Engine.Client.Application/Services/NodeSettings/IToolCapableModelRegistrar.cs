@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// <remarks>
 ///     Tool calling is gated on exact membership of that list (<c>LocalToolOfferProvider.IsToolCapable</c>); the capability itself is already
 ///     persisted per model as <c>LocalModelDescriptor.IsToolCapable</c> by <c>GgufCapabilityDetector</c>. ADDITIVE ONLY — neither method ever
-///     removes a name, so a hand-added model, or one served by Ollama or a cloud provider (no GGUF descriptor), keeps it: detection can grant
+///     removes a name, so a hand-added model, or one served by a cloud provider (no GGUF descriptor), keeps it: detection can grant
 ///     capability here, never revoke it. Why the list is fed rather than replaced, and what the detector reads:
 ///     docs/wiki/08-data-and-persistence.md ("The tool-capable model allow-list is fed, never replaced").
 /// </remarks>

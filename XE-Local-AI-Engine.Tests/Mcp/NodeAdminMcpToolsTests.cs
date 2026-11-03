@@ -119,7 +119,6 @@ public sealed class NodeAdminMcpToolsTests
 
         AssertEx.Equal(string.Join('|', ExpectedSettingsParameters), string.Join('|', names));
         AssertEx.False(names.Any(static name => name.Contains("custom", StringComparison.OrdinalIgnoreCase)
-                                                || name.Contains("ollama", StringComparison.OrdinalIgnoreCase)
                                                 || name.Contains("approval_policy", StringComparison.OrdinalIgnoreCase)));
     }
 
@@ -140,7 +139,6 @@ public sealed class NodeAdminMcpToolsTests
             var protocolTool = McpServerTool.Create(method, harness.Tools, new McpServerToolCreateOptions()).ProtocolTool;
             var schema = JsonSerializer.Serialize(protocolTool.InputSchema);
             AssertEx.False(schema.Contains("CustomToolsEnabled", StringComparison.OrdinalIgnoreCase));
-            AssertEx.False(schema.Contains("OllamaEndpoint", StringComparison.OrdinalIgnoreCase));
         }
     }
 

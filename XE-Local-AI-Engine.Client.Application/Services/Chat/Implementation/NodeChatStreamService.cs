@@ -1144,13 +1144,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
         else if (!string.IsNullOrWhiteSpace(request.Model))
         {
-            // An explicitly picked model (incl. an Ollama model) is honored unchanged — only the local-default path
+            // An explicitly picked model is honored unchanged — only the local-default path
             // (request.Model null/blank) reroutes through the installed-GGUF resolver below.
             activeModel = request.Model;
         }
         else
         {
-            // "Local runtime default" resolves to an installed GGUF chat model, never Ollama, and honors the node
+            // "Local runtime default" resolves to an installed GGUF chat model and honors the node
             // default only when it is one. A null resolve flags the turn so RunInvocationAsync says ModelNotInstalled.
             var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken);
             activeModel = await _localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken);

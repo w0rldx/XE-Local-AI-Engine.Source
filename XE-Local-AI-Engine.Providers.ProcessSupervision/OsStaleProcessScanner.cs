@@ -34,7 +34,7 @@ public sealed class OsStaleProcessScanner : IStaleProcessScanner
     {
         var results = new List<StaleProcess>();
 
-        // Matches every process of that name, ours and unrelated ones (Ollama's llama-server); the reaper's path filter
+        // Matches every process of that name, ours and unrelated ones (another application's llama-server); the reaper's path filter
         // excludes the latter. A process-table read failure surfaces nothing rather than throwing (best-effort).
         Process[] processes;
         try

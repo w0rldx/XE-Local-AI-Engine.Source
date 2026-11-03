@@ -676,9 +676,6 @@ import type {
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
-	GetRunningLocalModelsData,
-	GetRunningLocalModelsErrors,
-	GetRunningLocalModelsResponses,
 	GetRuntimeAcquisitionStatusData,
 	GetRuntimeAcquisitionStatusErrors,
 	GetRuntimeAcquisitionStatusResponses,
@@ -1672,7 +1669,6 @@ import {
 	zGetNodeChatMessageFeedbackResponse,
 	zGetNodeInfoResponse,
 	zGetNodeSettingsResponse,
-	zGetRunningLocalModelsResponse,
 	zGetRuntimeAcquisitionStatusResponse,
 	zGetRuntimeResidentsResponse,
 	zGetRuntimeResourcesResponse,
@@ -9811,28 +9807,6 @@ export const listLocalModels = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/models",
-		...options,
-	});
-
-export const getRunningLocalModels = <ThrowOnError extends boolean = true>(
-	options?: Options<GetRunningLocalModelsData, ThrowOnError>,
-): RequestResult<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError> =>
-	(options?.client ?? client).get<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetRunningLocalModelsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/models/running",
 		...options,
 	});
 

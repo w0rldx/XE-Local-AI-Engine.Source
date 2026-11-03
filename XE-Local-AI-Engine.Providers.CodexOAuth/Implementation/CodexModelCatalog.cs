@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 ///     is a Codex cloud model.
 /// </summary>
 /// <remarks>
-///     The subscription Responses backend accepts only a fixed family of ids, and any other — a local Ollama name, or
+///     The subscription Responses backend accepts only a fixed family of ids, and any other — a local model name, or
 ///     the bare <c>gpt-5-codex</c> — is rejected with HTTP 400. This mirrors the opencode reference client's
 ///     <c>ALLOWED_MODELS</c> set, which is the catalog source because no "list my account's models" Codex endpoint is
 ///     documented; a stale id is a one-line change here. It is the single source of truth for both surfaces that must

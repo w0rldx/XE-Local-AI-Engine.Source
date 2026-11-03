@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -38,8 +38,7 @@ public sealed class LocalModelExternalEndpointTests
                       {
                           SelectedModelName = null,
                           ConfiguredDefaultModelName = null,
-                          OllamaModels = [],
-                          Classifications = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase),
+                          Classifications = new Dictionary<string, ModelClassificationRecord>(StringComparer.OrdinalIgnoreCase),
                           InstalledGgufModels = [],
                           HasUsableCodexSession = false,
                           AzureFoundryConnection = null,

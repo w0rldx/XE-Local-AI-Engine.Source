@@ -4,7 +4,7 @@ import type { ModelOption } from "@/core/models/ModelOption";
 import { deriveModelDisplay, deriveModelIdDisplay, middleEllipsis } from "@/features/chat/models/ModelDisplay";
 
 function option(overrides: Partial<ModelOption>): ModelOption {
-	return { value: "llama3:8b", label: "llama3:8b", isAvailable: true, ...overrides };
+	return { value: "llama3:8b", label: "llama3:8b", ...overrides };
 }
 
 describe("deriveModelIdDisplay", () => {
@@ -25,7 +25,7 @@ describe("deriveModelIdDisplay", () => {
 		expect(deriveModelIdDisplay("phi-4-IQ3_XXS").secondary).toBe("IQ3_XXS");
 	});
 
-	it("keeps an Ollama parameter tag in the name — it is not a quantization marker", () => {
+	it("keeps a parameter tag in the name — it is not a quantization marker", () => {
 		const display = deriveModelIdDisplay("llama3:8b");
 
 		expect(display.primary).toBe("llama3:8b");

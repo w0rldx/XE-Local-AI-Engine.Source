@@ -348,7 +348,7 @@ public static class NodeMetrics
     ///     "silent pre-spawn gap" (a first-ever send stalled ~7.8 s here with no log).
     /// </summary>
     /// <remarks>
-    ///     Only recorded for a local llama.cpp turn (the one that pays a cold load); cloud/Ollama turns never reach the warm phase. Tagged
+    ///     Only recorded for a local llama.cpp turn (the one that pays a cold load); cloud and external turns never reach the warm phase. Tagged
     ///     by <c>provider</c> (local). Content-free (a duration only).
     /// </remarks>
     public static readonly Histogram<double> TurnToModelLoadStartMs =
@@ -361,7 +361,7 @@ public static class NodeMetrics
     ///     no cold-load) to the FIRST streamed output chunk — time-to-first-token.
     /// </summary>
     /// <remarks>
-    ///     Tagged by <c>provider</c> (local | remote); <c>remote</c> covers cloud and non-warming local runtimes (Ollama), whose
+    ///     Tagged by <c>provider</c> (local | remote); <c>remote</c> covers cloud and external models, whose
     ///     first-token latency is the provider's own rather than a local cold load. Content-free (a duration only).
     /// </remarks>
     public static readonly Histogram<double> ModelReadyToFirstOutputMs =
@@ -386,7 +386,7 @@ public static class NodeMetrics
     /// <remarks>
     ///     Cumulative model token consumption — the real cost surface for cloud providers — is therefore observable live without waiting on
     ///     the persisted <c>agent_execution_logs</c> ledger. Fires once per turn per direction (never per tool-loop round, so it cannot double-count). Labels: provider (local | remote — the
-    ///     coarse routing dimension; remote covers cloud and Ollama), model (the resolved model id), direction (input | output).
+    ///     coarse routing dimension; remote covers cloud and external models), model (the resolved model id), direction (input | output).
     ///     Content-free — a token count only; never any prompt, completion, or transcript text. Bounded cardinality (installed/cloud model
     ///     ids are a small, stable set).
     /// </remarks>

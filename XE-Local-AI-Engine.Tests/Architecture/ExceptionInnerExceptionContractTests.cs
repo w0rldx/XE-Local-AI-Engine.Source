@@ -30,7 +30,6 @@ public sealed class ExceptionInnerExceptionContractTests
     [
         "XE-Local-AI-Engine.Tests",
         "XE-Local-AI-Engine.Client.Testing",
-        "XE-Local-AI-Engine.Testing.FakeOllama",
         "XE-Local-AI-Engine.Testing.FakeDocker",
         "XE-Local-AI-Engine.Testing.FakeOpenAiGateway"
     ];

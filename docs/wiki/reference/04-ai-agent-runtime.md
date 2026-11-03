@@ -382,7 +382,7 @@ list MAF hands the raw `IChatClient` after appending inner tool results. Its pol
    trimming continues with older units.
 4. Then **strip superseded plain reasoning**, oldest first, from assistant messages outside the in-flight round
    (the last message's tool-call unit). Only reasoning with neither a provider raw representation nor protected
-   data is strippable: that is what the Chat Completions (llama-server, OpenAI-compatible, Azure) and Ollama
+   data is strippable: that is what the Chat Completions (llama-server, OpenAI-compatible, Azure)
    adapters produce. Reasoning a Responses provider returned (Codex: a raw reasoning item, or encrypted protected
    data once streaming updates are coalesced) is never stripped from any round, because the stateless tool loop
    replays it before every retained function call. A message is dropped only when everything it held was
@@ -681,7 +681,7 @@ undercount skips the append, the hop then refuses to filter for lack of a `ListT
 a missed optimisation on one agent shape, never a hidden tool the model cannot recover. Never relax the hop's
 gate.
 
-### Per-send sampling reaches two runtimes
+### Per-send sampling
 
 `ApplySamplingOptions` applies the developer-gated per-send overrides. Native knobs (temperature, top_p,
 top_k, num_predict, presence_penalty, frequency_penalty, seed, stop) ride the strongly-typed `ChatOptions`
@@ -689,10 +689,8 @@ properties; the four without a native property travel as `AdditionalProperties` 
 `SamplingOptionKeys`, the same channel `think` already proves. Each field is applied only when set and only
 when it passes a defensive range guard — NaN, negative or out-of-range is skipped and the model default
 kept — with temperature accepted in `[0, 2]` and the penalties in `[-2, 2]` (the UI caps), and a seed floor of
-`-1`, which is Ollama's "random seed" sentinel.
+`-1`, the conventional "random seed" sentinel.
 
-Those shared keys reach **both** runtimes. OllamaSharp's `AbstractionMapper` maps all four onto the Ollama
-wire (verified against the installed OllamaSharp assembly; the pin is in `Directory.Packages.props`), and
 `DeferredLlamaServerChatClient.ApplySamplingPassthrough` patches `min_p`, `repeat_penalty` and
 `repeat_last_n` — plus the strongly-typed `TopK`, which the MEAI OpenAI adapter drops — onto the outbound
 llama-server body. `num_ctx` is deliberately **not** sent to llama-server, whose window is fixed at process
@@ -705,9 +703,8 @@ default budget is clamped down to `InvocationAgentDefinition.EffectiveContextTok
 
 A third llama.cpp marker rides the same dictionary. `xe.llama.disable_thinking` tells the llama.cpp chat
 client to inject `chat_template_kwargs.enable_thinking=false`, and is set **only** when reasoning is
-explicitly off on a thinking-capable model: the `think: false` written alongside it suppresses reasoning on
-the Ollama wire, but the llama.cpp OpenAI adapter ignores `think`, so a Qwen3-class chat template would keep
-emitting a reasoning block. Like the budget marker its literal is duplicated in
+explicitly off on a thinking-capable model: the llama.cpp OpenAI adapter ignores the `think: false` written
+alongside it, so a Qwen3-class chat template would keep emitting a reasoning block. Like the budget marker its literal is duplicated in
 `DeferredLlamaServerChatClient`, because the AI.Agent assembly does not reference the LlamaServer provider —
 keep the two in sync. An explicit sampling `ReasoningBudgetTokens` wins over the effort-derived ladder, so
 benchmark replay stays exact.
@@ -716,16 +713,16 @@ benchmark replay stays exact.
 
 `ReasoningOptionsResolver` (`Invocation/ReasoningOptionsResolver.cs`) is the single source of truth for the
 effort → provider mapping, shared by the single-agent path (`InvocationAgentFactory.CreateAsync`) and the
-orchestration participant path (`ParticipantReasoningOptions.Build`), so a new effort level or an Ollama
+orchestration participant path (`ParticipantReasoningOptions.Build`), so a new effort level or a
 behaviour change is made once.
 
-It writes up to four things onto `ChatOptions.AdditionalProperties`, and three of them are **in-process
-markers that never reach any wire** — the OllamaSharp `AbstractionMapper` reads a fixed option allowlist and
-ignores unknown keys, and Codex reads only its own:
+It writes up to four things onto `ChatOptions.AdditionalProperties`, and all of them are **in-process values
+that never reach any wire under these names** — the MEAI OpenAI adapter drops unmapped keys, and each reader below
+translates its own:
 
 | Key | Read by | Carries |
 |---|---|---|
-| `think` | Ollama | `false` / `"low"` / `"medium"` / `"high"` / `true` |
+| `think` | the Codex Responses boundary, as the fallback when `codex_reasoning_effort` is absent | `false` / `"low"` / `"medium"` / `"high"` / `true` |
 | `codex_reasoning_effort` | the Codex Responses boundary | the raw normalized effort, `minimal`…`xhigh` |
 | `xe.llama.reasoning_budget_tokens` | `DeferredLlamaServerChatClient` | the per-request thinking budget |
 | `xe.external.reasoning_effort` | the external OpenAI-compatible provider | the canonical lowercase effort |
@@ -736,7 +733,7 @@ in `ExternalProviderConstants.ReasoningEffortMarkerKey`. A test pins the externa
 together; keep all of them in sync.
 
 The `think` value is graded only for a thinking-capable model. `minimal` and `xhigh` are OpenAI Responses
-levels Ollama does not understand — it returns 400 on an unknown think level — so they collapse to `true`
+levels the `think` key does not carry, so they collapse to `true`
 there, and the Codex boundary reads the un-collapsed level from its own key instead. A **non**-thinking model
 that carries a graded level (an agent definition pinned it, or the composer kept a stale selection across a
 model switch) cannot honour it, but the user still asked to reason: the caller omits the `think` field
@@ -748,7 +745,7 @@ entirely so the model's chat-template-baked reasoning runs, and only `none` or u
 `minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576 tokens. A blank (unspecified) effort gets the rung
 of the **default effort** setting, shipped `low` (model-matrix 2026-10-04, operator decision 3: the earlier flat
 `medium` let a 0.8B spend minutes reasoning over a five-word greeting). Only the budget follows that setting: the
-turn still sends no effort, so `think` stays `true` for Ollama and an external model keeps its registered default.
+turn still sends no effort, so `think` stays `true` and an external model keeps its registered default.
 Uncapped, a hard prompt reasoned until `finish_reason: length` with no answer (tester round 6). Anything else —
 `none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an unrecognized
 value — sends no budget at all. The marker is inert off the llama.cpp path. `minimal` and `xhigh` are mapped

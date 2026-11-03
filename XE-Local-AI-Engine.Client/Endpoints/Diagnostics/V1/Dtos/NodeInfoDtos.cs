@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Diagnostics.V1;
 /// <remarks>
 ///     Sections are best-effort: an unavailable one is <see langword="null" /> and named in <see cref="Warnings" />.
 ///     <see cref="Settings" /> values are invariant text (booleans and numbers as JSON literals, lists and objects as
-///     compact JSON); <c>MachineKey</c>, <c>OllamaEndpoint</c> and <c>WebSearchSearxngUrl</c> are never included.
+///     compact JSON); <c>MachineKey</c> and <c>WebSearchSearxngUrl</c> are never included.
 /// </remarks>
 public sealed record NodeInfoResponse
 {

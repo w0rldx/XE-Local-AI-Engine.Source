@@ -90,13 +90,13 @@ public sealed class BenchmarkCatalogServiceTests
         models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
             Descriptor("chat-with-projector", 8192),
             Descriptor("embedding", 8192),
-            Descriptor("ollama-chat", 8192)
+            Descriptor("other-provider-chat", 8192)
         ]);
         var leases = new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
         {
             ["chat-with-projector"] = CreateSnapshot("chat-with-projector", LocalModelOrigin.Imported, withProjector: true),
             ["embedding"] = CreateSnapshot("embedding", LocalModelOrigin.Imported, role: GgufRole.Embedding),
-            ["ollama-chat"] = CreateSnapshot("ollama-chat", LocalModelOrigin.Imported, providerName: "ollama")
+            ["other-provider-chat"] = CreateSnapshot("other-provider-chat", LocalModelOrigin.Imported, providerName: "another-runtime")
         });
         var service = CreateService(models, leases);
 

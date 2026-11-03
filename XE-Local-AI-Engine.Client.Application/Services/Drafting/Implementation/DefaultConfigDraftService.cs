@@ -12,16 +12,14 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IConfigDraftService" />, cloning the memory-extraction agent's fail-soft shape and adding
 ///     the two guards a foreground, operator-triggered generation needs.
 /// </summary>
 /// <remarks>
-///     Eligibility is fail-closed and runs BEFORE any provider work: an installed chat model (GGUF per
-///     <see cref="LocalGgufModelKindClassifier.IsChatModel" />, Ollama per a PERSISTED Chat row) on a node-local
-///     runtime, read from <see cref="IModelClassificationStore" />, never the <c>/api/show</c> probe. The
+///     Eligibility is fail-closed and runs BEFORE any provider work: an installed chat GGUF per
+///     <see cref="LocalGgufModelKindClassifier.IsChatModel" />, on a node-local runtime. The
 ///     <see cref="DraftAdmissionGate" /> keeps a draft off a live run; nothing here writes the database or logs model text.
 /// </remarks>
 internal sealed class DefaultConfigDraftService : IConfigDraftService
@@ -48,7 +46,6 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     private readonly ILogger<DefaultConfigDraftService> _logger;
     private readonly IModelClassificationStore _modelClassificationStore;
     private readonly INodeSettingsStore _nodeSettingsStore;
-    private readonly IOllamaModelService _ollamaModelService;
     private readonly DraftingOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly TimeProvider _timeProvider;
@@ -60,8 +57,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         IOptions<DraftingOptions> options,
         INodeSettingsStore nodeSettingsStore,
         TimeProvider timeProvider,
-        ILogger<DefaultConfigDraftService> logger,
-        IOllamaModelService ollamaModelService)
+        ILogger<DefaultConfigDraftService> logger)
     {
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
@@ -71,10 +67,6 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        // Always registered: the capability gate decides which implementation answers, and the gate-off substitute
-        // reports no installed model — which simply makes every Ollama model ineligible on a llama.cpp-only node.
-        _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
     }
 
     public Task<DraftResult> DraftAgentDefinitionAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
@@ -120,7 +112,6 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         var eligibleProviderName = await DraftModelEligibility.ResolveEligibleProviderAsync(request.ModelName,
             _modelClassificationStore,
             _ggufModelStore,
-            _ollamaModelService,
             cancellationToken);
         if (eligibleProviderName is null)
         {

@@ -25,7 +25,6 @@ const {
 	modelsRef: {
 		current: { data: undefined, isSuccess: false } as {
 			data?: {
-				isAvailable: boolean;
 				items?: { modelName: string; kind?: string; provider?: string }[];
 				selectedModelName?: string | null;
 			};
@@ -227,34 +226,13 @@ describe("explicit opt-in", () => {
 
 describe("frozen Quick Start readiness", () => {
 	it.each([
-		[
-			"ready",
-			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true },
-			"navChat",
-		],
-		[
-			"installed-unselected",
-			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true },
-			"setDefaultModel",
-		],
-		["missing", { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true }, "navModels"],
+		["ready", { data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true }, "navChat"],
+		["installed-unselected", { data: { items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true }, "setDefaultModel"],
+		["missing", { data: { items: [], selectedModelName: null }, isSuccess: true }, "navModels"],
 		[
 			"cloud-only",
 			{
 				data: {
-					isAvailable: true,
-					items: [{ modelName: "gpt-5.3-codex", kind: "Chat", provider: "CodexOAuth" }],
-					selectedModelName: "gpt-5.3-codex",
-				},
-				isSuccess: true,
-			},
-			"navModels",
-		],
-		[
-			"unavailable with cloud entries",
-			{
-				data: {
-					isAvailable: false,
 					items: [{ modelName: "gpt-5.3-codex", kind: "Chat", provider: "CodexOAuth" }],
 					selectedModelName: "gpt-5.3-codex",
 				},
@@ -263,6 +241,11 @@ describe("frozen Quick Start readiness", () => {
 			"navModels",
 		],
 		["unresolved", { data: undefined, isSuccess: false }, "navModels"],
+		[
+			"a failed refresh keeping an older ready list",
+			{ data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: false },
+			"navModels",
+		],
 	])("selects the canonical first step for %s", (_name, query, firstStepId) => {
 		modelsRef.current = query;
 		const view = renderProvider();
@@ -270,7 +253,7 @@ describe("frozen Quick Start readiness", () => {
 		expect(joyrideProps.current?.steps[0]?.title).toContain(`.${firstStepId}.title`);
 		const frozenLength = joyrideProps.current?.steps.length;
 		applyModelsQuery(view, {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		});
 		expect(joyrideProps.current?.steps.length).toBe(frozenLength);
@@ -278,7 +261,7 @@ describe("frozen Quick Start readiness", () => {
 
 	it("finishes the frozen flow as completed and clears progress", () => {
 		modelsRef.current = {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		renderProvider();
@@ -293,30 +276,30 @@ describe("frozen Quick Start readiness", () => {
 	});
 
 	it("advances within the frozen plan when model installation and default selection complete", () => {
-		modelsRef.current = { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true };
+		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING }));
 		expect(joyrideProps.current?.stepIndex).toBe(1);
 
-		applyModelsQuery(view, { data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true });
+		applyModelsQuery(view, { data: { items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true });
 		expect(joyrideProps.current?.stepIndex).toBe(2);
 
 		applyModelsQuery(view, {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		});
 		expect(joyrideProps.current?.stepIndex).toBe(3);
 	});
 
 	it("skips the already-satisfied default step when install and selection resolve together", () => {
-		modelsRef.current = { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true };
+		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING }));
 
 		applyModelsQuery(view, {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		});
 
@@ -326,12 +309,12 @@ describe("frozen Quick Start readiness", () => {
 	it.each([
 		[
 			"the install and default steps",
-			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true },
+			{ data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true },
 			3,
 		],
-		["only the install step", { data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true }, 2],
+		["only the install step", { data: { items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true }, 2],
 	])("skips %s when readiness changes before entering the setup step", (_name, query, expectedIndex) => {
-		modelsRef.current = { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true };
+		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 
@@ -344,7 +327,7 @@ describe("frozen Quick Start readiness", () => {
 
 	it("completes when a slow assistant reply arrives after entering the final step", () => {
 		modelsRef.current = {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		conversationsRef.current = [[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }]];
@@ -371,7 +354,7 @@ describe("frozen Quick Start readiness", () => {
 
 	it("completes when a fast assistant reply arrives before entering the final step", () => {
 		modelsRef.current = {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		conversationsRef.current = [[["conversations", "existing"], { messages: [{ role: "assistant", content: "Earlier" }] }]];
@@ -400,7 +383,7 @@ describe("frozen Quick Start readiness", () => {
 
 	it("does not downgrade a same-session completion when its replay is closed", () => {
 		modelsRef.current = {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		renderProvider();
@@ -430,7 +413,7 @@ describe("frozen Quick Start readiness", () => {
 			callbacks.push({ status, onSuccess: resultCallbacks?.onSuccess });
 		});
 		modelsRef.current = {
-			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			data: { items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
 		};
 		renderProvider();
@@ -471,7 +454,7 @@ describe("frozen Quick Start readiness", () => {
 	});
 
 	it("does not replace an already active tutorial", () => {
-		modelsRef.current = { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true };
+		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 		expect(contextRef.current?.activeTutorialId).toBe("quick-start");
@@ -497,7 +480,7 @@ describe("frozen Quick Start readiness", () => {
 
 describe("controlled tutorial recovery", () => {
 	beforeEach(() => {
-		modelsRef.current = { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true };
+		modelsRef.current = { data: { items: [], selectedModelName: null }, isSuccess: true };
 	});
 
 	it("keeps Back available on an action step", () => {

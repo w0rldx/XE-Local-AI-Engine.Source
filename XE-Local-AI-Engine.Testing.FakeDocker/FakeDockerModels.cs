@@ -1,4 +1,4 @@
-// Grouped rather than one type per file, which is how the sibling Testing.FakeOllama is laid out. These are the
+// Grouped rather than one type per file. These are the
 // small value types the scenario API is written in — a stream tag, a frame, a mount point, an exec outcome, a
 // pull line, a recorded request, a seeded image — and they are only meaningful as a set: a reader arriving at
 // FakeDockerState needs all seven at once, and seven files of a dozen lines each would scatter them. The

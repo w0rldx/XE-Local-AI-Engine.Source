@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
-using System.Runtime.CompilerServices;
 using Microsoft.Playwright;
-using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Browser-driven E2E for the local-tools send path and tool-call flow.
@@ -12,17 +12,16 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <item>Enable the local-tools toggle in the chat input area.</item>
 ///         <item>Send a prompt that the fake model answers with a <c>Calculate</c> tool call.</item>
 ///         <item>
-///             <see cref="FakeOllamaState.ToolCallScript" /> returns the tool-call on the first
-///             request; the <c>FunctionInvokingChatClient</c> executes the tool, appends the result,
-///             and re-invokes the model.  On the second request the script returns <c>null</c> and
-///             <see cref="FakeOllamaState.ChatScript" /> answers instead — parked in a gate the test
-///             releases, so the stream is still open when the mid-stream assertion runs.
+///             <see cref="FakeOpenAiGatewayState.ChatResponder" /> returns the tool call on the first request
+///             offering <c>Calculate</c>; the <c>FunctionInvokingChatClient</c> executes the tool, appends the
+///             result, and re-invokes the model.  The second such request parks in a gate the test releases,
+///             so the stream is still open when the mid-stream assertion runs.
 ///         </item>
 ///         <item>A tool-call group appears in the chat timeline.</item>
 ///         <item>The assistant text reply completes (send button reverts to "Send").</item>
 ///     </list>
 ///     <para>
-///         The test mutates <see cref="Infrastructure.XENodeE2EWebApplicationFactory.FakeOllamaState" /> before
+///         The test mutates <see cref="Infrastructure.XENodeE2EWebApplicationFactory.FakeGatewayState" /> before
 ///         sending and resets it in a <c>[After(Test)]</c> hook so the shared
 ///         <see cref="SharedType.PerTestSession" /> factory is left clean for other tests.
 ///     </para>
@@ -34,11 +33,11 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
     private const string SendButtonTestId = "chat-send-button";
     private const string LocalToolsToggleTestId = "chat-local-tools-toggle";
 
-    // The local-tools toggle gates on the ACTIVE model advertising the Ollama `tools` capability. A fresh session
+    // The local-tools toggle gates on the ACTIVE model advertising the `tools` capability. A fresh session
     // starts on the "Local default" sentinel, whose capabilities are unknown (treated as not tool-capable), so the
-    // toggle is intentionally hidden until a concrete tool-capable model is picked. This is the FakeOllama chat model
-    // (it advertises `completion` + `tools` via ShowEndpoint), mirroring a real user selecting e.g. qwen.
-    private const string ToolCapableModelName = "qwen3.5:0.8b";
+    // toggle is intentionally hidden until a concrete tool-capable model is picked. This is the fake gateway's chat
+    // model (its descriptor advertises `completion` + `tools`), mirroring a real user selecting e.g. qwen.
+    private const string ToolCapableModelName = FakeGatewayLocalModelProvider.ChatModel;
 
     // Holds the fake's post-tool answer open until the test releases it, so "the stream is in flight" is a state the
     // test creates rather than one it hopes to catch. Same shape as OnboardingTourE2ETests' tutorial-reply gate.
@@ -47,13 +46,12 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
     [After(Test)]
     public void ResetToolCallScript()
     {
-        // Release first: a test that failed before its own release would otherwise leave the parked FakeOllama
+        // Release first: a test that failed before its own release would otherwise leave the parked fake
         // request holding a connection on the shared session.
         _answerGate.TrySetResult(true);
 
-        // Always clear the scripts so no state leaks into subsequent tests on the shared session.
-        Factory.FakeOllamaState.ToolCallScript = null;
-        Factory.FakeOllamaState.ChatScript = null;
+        // Always clear the responder so no state leaks into subsequent tests on the shared session.
+        Factory.FakeGatewayState.ChatResponder = null;
     }
 
     private async Task<ILocator> NavigateAndWaitForChatAsync()
@@ -124,36 +122,36 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
     [Category("Page")]
     public async Task Calculate_Tool_Call_Appears_In_Timeline_And_Answer_Completes()
     {
-        // Wire the ToolCallScript: first request → Calculate tool call; subsequent requests
-        // (after FunctionInvokingChatClient appends the tool-result and re-invokes) → null →
-        // falls through to the echo text path.
-        // Use an atomic flag to avoid any shared-state concern: once the tool call has been
-        // emitted once, every subsequent request gets null.
+        // First request offering Calculate → the tool call; the one FunctionInvokingChatClient makes after the tool
+        // result parks in this gate. Without it the whole exchange could finish before Playwright's first poll of the
+        // send button, and the mid-stream assertion below failed that way once under the 4-wide parallel suite. Only a
+        // request offering the tool counts: the node's own background requests offer none and fall through to the echo.
         var toolCallEmitted = 0;
-        Factory.FakeOllamaState.ToolCallScript = _ =>
+        Factory.FakeGatewayState.ChatResponder = async (turn, ct) =>
         {
+            if (!turn.OfferedToolNames.Contains("Calculate", StringComparer.Ordinal))
+            {
+                return null;
+            }
+
             if (Interlocked.CompareExchange(ref toolCallEmitted, value: 1, comparand: 0) == 0)
             {
-                // First call: emit the Calculate tool call.
-                return new FakeOllamaToolCall
+                return new FakeOpenAiGatewayScript
                 {
-                    Name = "Calculate",
-                    Arguments = new
+                    ToolCall = new FakeOpenAiGatewayToolCall
                     {
-                        expression = "12*9"
+                        Name = "Calculate",
+                        Arguments = """{"expression":"12*9"}"""
                     }
                 };
             }
 
-            // Subsequent calls: fall through to the gated text reply below.
-            return null;
+            await _answerGate.Task.WaitAsync(ct);
+            return new FakeOpenAiGatewayScript
+            {
+                CompletionText = "12*9 is 108"
+            };
         };
-
-        // The second request — the one FunctionInvokingChatClient makes after the tool result — parks in this gate.
-        // Without it the whole exchange could finish before Playwright's first poll of the send button, and the
-        // mid-stream assertion below failed that way once under the 4-wide parallel suite. The None here is the
-        // [EnumeratorCancellation] idiom: the fake substitutes its own RequestAborted when it enumerates.
-        Factory.FakeOllamaState.ChatScript = _ => GatedAnswerAsync(_answerGate.Task, CancellationToken.None);
 
         await NavigateAndWaitForChatAsync();
         await EnableLocalToolsToggleAsync();
@@ -180,30 +178,6 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
                 Timeout = 5000
             });
 
-        // Diagnose: confirm the host address and what VITE_API_URL the SPA bundle was compiled with.
-        await Console.Out.WriteLineAsync($"[DIAG] ServerAddress={Factory.ServerAddress} Page.Url={Page.Url}");
-        var viteBundledUrl = await Page.EvaluateAsync<string>("window?.xeConfig?.apiUrl ?? 'not-found'");
-        await Console.Out.WriteLineAsync($"[DIAG] window.xeConfig.apiUrl={viteBundledUrl}");
-
-        // Capture browser console errors for diagnostics.
-        var consoleErrors = new List<string>();
-        Page.Console += (_, msg) =>
-        {
-            if (msg.Type == "error")
-            {
-                consoleErrors.Add(msg.Text);
-            }
-        };
-
-        // Log ALL requests recorded so far (before clearing) for diagnostics.
-        var allBefore = Factory.FakeOllamaState.RecordedRequests;
-        await Console.Out.WriteLineAsync(
-            $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}");
-        foreach (var req in allBefore)
-        {
-            await Console.Out.WriteLineAsync($"  {req.Path} | model={req.ModelName} | msgs={req.MessageCount}");
-        }
-
         var sendButton = Page.GetByTestId(SendButtonTestId);
         var chatInput = Page.GetByPlaceholder(ChatInputPlaceholder);
 
@@ -215,9 +189,6 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
             {
                 Timeout = 10000
             });
-
-        // Clear recorded requests so we count only those from this test's send.
-        Factory.FakeOllamaState.ClearRequests();
 
         // Fill first — send is disabled when the input is empty.
         await chatInput.FillAsync("what's 12*9?");
@@ -244,27 +215,6 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
                 Timeout = 20000
             });
 
-        // Diagnostic: log ALL Ollama requests after stream completes (total, not just post-clear).
-        var allAfter = Factory.FakeOllamaState.RecordedRequests;
-        var chatRequests = allAfter
-                           .Where(static r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))
-                           .ToList();
-        await Console.Out.WriteLineAsync($"[DIAG] Total requests after send: {allAfter.Count}, /api/chat: {chatRequests.Count}, toolCallEmitted: {toolCallEmitted}");
-        foreach (var req in allAfter)
-        {
-            await Console.Out.WriteLineAsync($"  POST {req.Path} | model={req.ModelName} | msgs={req.MessageCount} @ {req.CapturedAtUtc:HH:mm:ss}");
-        }
-
-        // Log any browser console errors.
-        if (consoleErrors.Count > 0)
-        {
-            await Console.Out.WriteLineAsync($"[DIAG] Browser console errors ({consoleErrors.Count}):");
-            foreach (var err in consoleErrors)
-            {
-                await Console.Out.WriteLineAsync($"  {err}");
-            }
-        }
-
         // After the stream completes, the ordered-parts renderer persists each tool call as a
         // ToolCallCard entry (testid `chat-tool-call-card-<name>`), which replaced the former
         // ChatActivityTimeline / `chat-activity-entry-<name>` structure. The card container (its
@@ -275,14 +225,6 @@ public sealed class ChatLocalToolsE2ETests : XESerialE2ETestBase
             {
                 Timeout = 5000
             });
-    }
-
-    // The token is the fake's RequestAborted: without it a parked request could only be released by the after-hook,
-    // so a cancelled or torn-down run would sit on the gate.
-    private static async IAsyncEnumerable<string> GatedAnswerAsync(Task gate, [EnumeratorCancellation] CancellationToken ct)
-    {
-        await gate.WaitAsync(ct);
-        yield return "12*9 is 108";
     }
 
     [Test]

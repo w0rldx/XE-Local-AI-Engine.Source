@@ -198,7 +198,7 @@ describe("ChatSamplingOptionsDialog", () => {
 
 		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} cloudModelSelected={true} />);
 
-		// topK / minP / repeatPenalty / repeatLastN only reach llama.cpp and Ollama; the OpenAI-shaped cloud paths
+		// topK / minP / repeatPenalty / repeatLastN only reach llama.cpp; the OpenAI-shaped cloud paths
 		// have no wire field for them, so the dialog must say so rather than accept a value that is thrown away.
 		for (const key of ["topK", "minP", "repeatPenalty", "repeatLastN"]) {
 			expect(screen.getByTestId(`chat-sampling-field-${key}`).hasAttribute("disabled")).toBe(true);

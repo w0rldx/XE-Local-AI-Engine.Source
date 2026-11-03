@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -304,7 +303,6 @@ public sealed class SupervisorPooledAdmissionTests
             resolver,
             audit,
             supervisor,
-            Substitute.For<IOllamaModelService>(),
             Substitute.For<IModelFootprintProvider>(),
             ledger,
             registry,

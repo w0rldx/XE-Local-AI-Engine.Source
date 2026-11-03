@@ -43,8 +43,7 @@ public sealed class PooledRoleLaunchAdmissionTests
         await using var host = Host.Create(new CapacityDecision
         {
             Verdict = CapacityVerdict.QueueSameModel,
-            Reason = "Model already running; the spawn will share that process.",
-            OllamaEvictionWarning = false
+            Reason = "Model already running; the spawn will share that process."
         });
 
         var returned = await host.Admission.AdmitAsync(Model, ModelRole.Reranker, CancellationToken.None);
@@ -72,8 +71,7 @@ public sealed class PooledRoleLaunchAdmissionTests
         await using var host = Host.Create(new CapacityDecision
         {
             Verdict = CapacityVerdict.QueueSameModel,
-            Reason = "Model already running; the spawn will share that process.",
-            OllamaEvictionWarning = false
+            Reason = "Model already running; the spawn will share that process."
         });
 
         await host.Admission.AdmitAsync(Model, role, CancellationToken.None);
@@ -281,8 +279,7 @@ public sealed class PooledRoleLaunchAdmissionTests
         await using var host = Host.Create(new CapacityDecision
         {
             Verdict = CapacityVerdict.RejectInsufficient,
-            Reason = Reason,
-            OllamaEvictionWarning = false
+            Reason = Reason
         });
         var evictions = new EvictionRecorder("'idle/chat-GGUF:Q4_K_M' (Chat)");
 
@@ -329,7 +326,6 @@ public sealed class PooledRoleLaunchAdmissionTests
         {
             Verdict = CapacityVerdict.Allow,
             Reason = "Capacity available.",
-            OllamaEvictionWarning = false,
             Reservation = reservation
         };
 
@@ -338,7 +334,6 @@ public sealed class PooledRoleLaunchAdmissionTests
         {
             Verdict = CapacityVerdict.RejectInsufficient,
             Reason = Reason,
-            OllamaEvictionWarning = false,
             IsMemoryShortfall = true
         };
 

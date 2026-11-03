@@ -137,6 +137,4 @@ internal sealed class ModelJson
     public bool Installed { get; init; }
 
     public bool Running { get; init; }
-
-    public long? SizeVramBytes { get; init; }
 }

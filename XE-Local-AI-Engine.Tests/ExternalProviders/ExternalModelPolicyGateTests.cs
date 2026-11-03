@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -279,14 +278,7 @@ public sealed class ExternalModelPolicyGateTests
 
     private static ModelCapabilityResolver CreateCapabilityResolver()
     {
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        _ = providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                            .Returns(OllamaLocalModelProvider.OllamaProviderName + "-not");
-
-        return new ModelCapabilityResolver(Substitute.For<IModelClassificationService>(),
-            providerResolver,
-            Substitute.For<IGgufModelCapabilityResolver>(),
-            Trust());
+        return new ModelCapabilityResolver(Substitute.For<IGgufModelCapabilityResolver>(), Trust());
     }
 
     private static ILocalToolOfferProvider CreateOfferProvider(FakeModelTrustResolver? trust = null)

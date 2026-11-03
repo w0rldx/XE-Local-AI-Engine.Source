@@ -66,10 +66,6 @@ where Debug was green.
 
 **Rule:** a section's bulk `dotnet_analyzer_diagnostic.severity = none` suppresses a rule's reporting there, but the analyzer still executes over those files; a per-ID `dotnet_diagnostic.<ID>.severity = none` in the same section (or removing the files from `<Compile>`) stops execution, because Roslyn's per-tree skip reads the per-ID key. Sonar rules opt out of Roslyn's generated-code filter, so `[**/Migrations/*.cs]` does not take migrations off the bill. Measure with `-p:ReportAnalyzer=true -v:d --no-dependencies` on the one suspect project, before and after. **Prevents:** disabling a security rule solution-wide to buy back time that scoping it to the generated section buys for free. **Authority:** `.editorconfig` `[**/Migrations/*.cs]` section. [evidence](../agent-knowledge-evidence.md#a-bulk-editorconfig-severity-silences-an-analyzer-without-stopping-it-running)
 
-### Code behind `#if P0_SPIKE` escapes the analyzer wall, and the constant REPLACES the defaults
-
-**Rule:** `scripts/lint-release-scripts.sh` build-checks `P0_SPIKE` code; keep that gate. `-p:DefineConstants=P0_SPIKE` replaces defaults such as `TRACE`: read the existing value, append `P0_SPIKE` with semicolons encoded as `%3B` (a command-line `$(DefineConstants)` is not expanded), verify with `-getProperty:DefineConstants`, and rebuild ungated afterwards. Never redirect `BaseIntermediateOutputPath` globally (it propagates through references and duplicates assembly attributes). Under `set -o pipefail`, `strings | grep -q` can exit 141. **Prevents:** rotting spike code, and gated assemblies left in `bin/` for a later `--no-build` run. **Authority:** `scripts/lint-release-scripts.sh` (`--no-spike`, `--spike-only`).
-
 ## Build and NuGet state
 
 ### TUnit, `Microsoft.Testing.Platform` and its extensions move as one cohort

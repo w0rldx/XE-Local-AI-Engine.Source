@@ -7,8 +7,6 @@ import type { ModelOption } from "@/core/models/ModelOption";
 // remote one (an external connection's declared window, a Codex id's catalogued window, an Azure deployment's
 // operator-declared window). We only fetch when the selection can actually yield them:
 //   - a non-empty concrete model name is resolved, AND
-//   - when the selection maps to a known list option, that option is available — an unavailable model can't return
-//     details, so polling it just retries a guaranteed failure, AND
 //   - the selection is remote (external or cloud), or the resolved concrete name is present in the installed list.
 //
 // The installed-list gate is the terminal domain state that fixes the configured-but-not-installed starter model: the
@@ -26,11 +24,6 @@ export function shouldFetchLocalModelDetails(
 	concreteModelInstalled: boolean,
 ): boolean {
 	if (concreteModelName.length === 0) {
-		return false;
-	}
-
-	// A matched option that is explicitly unavailable can't serve details — don't poll it.
-	if (selectedOption !== undefined && selectedOption.isAvailable === false) {
 		return false;
 	}
 

@@ -154,7 +154,7 @@ public sealed class DefaultMemoryExtractionAgentTests
     public async Task MemoryExtraction_CapsOutputAndTurnsThinkingOffOnAThinkingModel(bool supportsThinking)
     {
         // Uncapped with thinking on, one job decoded 64k tokens on the only slot while chat stalled. The marker is gated
-        // like the summarizer's: never on a model that cannot think, where Ollama refuses a think field.
+        // like the summarizer's: never on a model that cannot think.
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         var provider = Substitute.For<ILocalModelProvider>();
 #pragma warning disable CA2000 // Ownership transfers to the agent, which disposes it via `using`.

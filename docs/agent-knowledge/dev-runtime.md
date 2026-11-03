@@ -148,7 +148,7 @@ read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_match
 **Rule:** do not reintroduce: Docker in inference, model hosting/acquisition, embedding or image generation (ADR 0004;
 Development Mode build/test/lint only), HostAgent or sandbox gRPC; the original `Docker.DotNet` package (keep
 `Docker.DotNet.Enhanced`); repository-supplied container config (`devcontainer.json`, aliases); a global
-`ISandboxRuntimeProvider` (select per feature); Ollama as default (opt-in `XE_OLLAMA_RUNTIME_ENABLED`).
+`ISandboxRuntimeProvider` (select per feature).
 A read-only-rootfs .NET container needs a 64 MB `/tmp` tmpfs `noexec,nosuid,nodev` (check flags as tokens). Rootless uid
 mapping is proven by writing and statting host-side, never by `inspect`. **Prevents:** re-opened security decisions.
 **Authority:** ADR 0004, `docs/wiki/12-security-and-privacy.md` §7. [evidence](../agent-knowledge-evidence.md#tmp-tmpfs)
@@ -253,8 +253,8 @@ and assert the chain. **Prevents:** replayed POSTs, `invalid_grant`, escaping `T
 
 ### Other silent-failure traps
 
-**Rule:** native probes need a per-call timeout plus an outer deadline that degrades safely; desktop mode treats absent
-Ollama as expected. **Prevents:** hangs and unexpected desktop behavior.
+**Rule:** native probes need a per-call timeout plus an outer deadline that degrades safely. **Prevents:** hangs and
+unexpected desktop behavior.
 **Authority:** `docs/wiki/11-hosting-and-deployment.md` §5.
 
 ### Measure free disk through `IFreeSpaceProbe`, never on `Path.GetPathRoot` of a path
@@ -308,7 +308,7 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | Development Mode must be unrestricted because restore needs network. | A short warm sandbox restores, then the agent-facing sandbox requests deny-egress where supported |
-| Ollama was removed. | Only Aspire auto-orchestration was removed; Ollama remains opt-in |
+| Ollama remains an opt-in secondary runtime. | It was removed: llama-server and the `ext:` OpenAI-compatible provider remain, and `XE_OLLAMA_*` and `Ollama:*` configuration is ignored |
 | Inbound MCP key is recoverable. | Only a SHA-256 digest is stored; plaintext is returned once on generation |
 | Development Docker is unbuilt / now required. | It is shipped opt-in and not the default; the container status record is canonical |
 | Development Mode always fails closed without isolation. | It degrades per served capability/platform; report actual posture |
@@ -316,4 +316,3 @@ Superseded claims; the entries above are the active rules.
 | Process sandbox always shares host network. | Empty netns is used where measured available; other hosts degrade |
 | Hardened containers always use uid 1000 and inspect proves mapping. | Rootless requires uid 0 to map to engine user; verify outcome host-side |
 | Node DB is SQLCipher and wrong key fails DB open. | SQLite is plain with per-column AEAD; DataProtection resolver enforces fail-closed key reads. |
-| A node cannot start with `XE_OLLAMA_RUNTIME_ENABLED=false`. | It can; the gate-off branch registers a no-op `IModelCapabilityClient` and `IOllamaModelService` |

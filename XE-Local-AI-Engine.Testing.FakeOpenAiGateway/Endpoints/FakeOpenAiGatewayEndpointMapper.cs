@@ -19,6 +19,7 @@ internal static class FakeOpenAiGatewayEndpointMapper
         api.MapGet("models", (Delegate)((HttpContext context) => ModelsEndpoint.HandleAsync(context, state)));
         api.MapPost("chat/completions", (Delegate)((HttpContext context) => ChatCompletionsEndpoint.HandleAsync(context, state)));
         api.MapPost("responses", (Delegate)((HttpContext context) => ResponsesEndpoint.HandleAsync(context, state)));
+        api.MapPost("embeddings", (Delegate)((HttpContext context) => EmbeddingsEndpoint.HandleAsync(context, state)));
 
         app.MapPost("/test/failures", (Delegate)((HttpContext context) => TestControlEndpoints.EnqueueFailureAsync(context, state)));
         app.MapDelete("/test/failures", (HttpContext context) => TestControlEndpoints.ClearFailures(context, state));

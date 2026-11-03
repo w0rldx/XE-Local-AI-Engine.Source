@@ -31,7 +31,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         job either already exists for the whole of this test or does not appear at all during it.
 ///     </para>
 ///     <para>
-///         FakeOllama is NOT needed: the recommend path is cache/registry-driven and the refresh merely triggers
+///         The fake gateway is NOT needed: the recommend path is cache/registry-driven and the refresh merely triggers
 ///         the existing scheduler job (TriggerNowAsync). The benchmark — the only path that runs a live model — is
 ///         disabled everywhere and is asserted-absent, never invoked.
 ///     </para>

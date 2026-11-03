@@ -15,13 +15,12 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The guard rails around AI-assisted drafting: fail-closed model eligibility evaluated BEFORE any provider work, a
 ///     non-queueing admission gate, an aggregate prompt budget, and post-parse normalization that trusts nothing the
-///     model asserted. No live model, Ollama daemon or llama-server is involved — the chat client is a fake.
+///     model asserted. No live model or llama-server is involved — the chat client is a fake.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class DefaultConfigDraftServiceTests
@@ -296,24 +295,14 @@ public sealed class DefaultConfigDraftServiceTests
     }
 
     [Test]
-    [Arguments("unclassified")]
-    [Arguments("embedding")]
+    [Arguments("overridden-non-chat")]
     [Arguments("not-installed")]
-    [Arguments("ollama-reports-not-installed")]
-    public async Task Eligibility_UnknownUnclassifiedCloudOrIneligibleOllama_RejectsBeforeResolver(string scenario)
+    public async Task Eligibility_OverriddenNonChatOrNotInstalled_RejectsBeforeResolver(string scenario)
     {
         var harness = new Harness();
         switch (scenario)
         {
-            case "unclassified":
-                // An Ollama model with no classification row: drafting must not be the thing that discovers its kind.
-                harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
-                       .Returns(Task.FromResult<ModelClassificationRecord?>(null));
-                harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                       .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
-                harness.UseOllama(installedOnLoopback: true);
-                break;
-            case "embedding":
+            case "overridden-non-chat":
                 harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
                        .Returns(Task.FromResult<ModelClassificationRecord?>(Classification(ModelKind.Embedding)));
                 break;
@@ -321,13 +310,6 @@ public sealed class DefaultConfigDraftServiceTests
                 // Classified Chat, but present in no local inventory (a cloud or otherwise remote model name).
                 harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                        .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
-                break;
-            case "ollama-reports-not-installed":
-                // The loopback decision itself now lives in OllamaModelService (covered by its own tests): from here a
-                // remote endpoint is indistinguishable from an uninstalled model — both answer "not eligible".
-                harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                       .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
-                harness.UseOllama(installedOnLoopback: false);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(scenario));
@@ -339,9 +321,7 @@ public sealed class DefaultConfigDraftServiceTests
         await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         harness.Provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
 
-        // Read-only: the eligibility path must never write to the classification cache.
-        await harness.Classifications.DidNotReceive()
-                     .UpsertDetectedAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<ModelKind>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        // Read-only: the eligibility path must never write to the classification store.
         await harness.Classifications.DidNotReceive()
                      .SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind?>(), Arg.Any<CancellationToken>());
     }
@@ -377,7 +357,7 @@ public sealed class DefaultConfigDraftServiceTests
     [Test]
     public async Task Eligibility_InstalledGgufWithoutClassificationRow_Passes()
     {
-        // A GGUF-only node never writes a row (only the Ollama probe or an override does); the name rule decides.
+        // Only an override writes a row, so a GGUF normally has none; the name rule decides.
         var harness = new Harness();
         harness.Classifications.GetByNameAsync(LlamaModel, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelClassificationRecord?>(null));
@@ -420,19 +400,21 @@ public sealed class DefaultConfigDraftServiceTests
     }
 
     [Test]
-    public async Task Eligibility_LoopbackOllama_Passes()
+    [Arguments("gpt-5.6-sol")]
+    [Arguments("ext:cloud-box/qwen3")]
+    public async Task Eligibility_CloudModel_RejectsBeforeResolver(string modelName)
     {
-        var harness = new Harness
+        var harness = new Harness();
+
+        var result = await harness.Service.DraftAgentDefinitionAsync(new ConfigDraftRequest
         {
-            ProviderName = "ollama"
-        };
-        harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
-        harness.UseOllama(installedOnLoopback: true);
+            Mode = DraftMode.Create,
+            ModelName = modelName,
+            Brief = "Draft an agent."
+        });
 
-        var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
-
-        AssertEx.True(result.Succeeded, "A model installed in a LOOPBACK Ollama is eligible.");
+        AssertEx.Equal<DraftFailureKind?>(DraftFailureKind.ModelNotEligible, result.Failure);
+        await harness.Resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -442,7 +424,7 @@ public sealed class DefaultConfigDraftServiceTests
         // is not a guard, so the mismatch must refuse instead of generating on an unvetted route.
         var harness = new Harness
         {
-            ProviderName = "ollama"
+            ProviderName = "another-runtime"
         };
 
         var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent."));
@@ -537,15 +519,15 @@ public sealed class DefaultConfigDraftServiceTests
         };
     }
 
-    private static ModelClassificationRecord Classification(ModelKind kind)
+    private static ModelClassificationRecord Classification(ModelKind? overrideKind = null)
     {
         return new ModelClassificationRecord
         {
             ModelName = LlamaModel,
             Digest = null,
-            DetectedKind = kind,
+            DetectedKind = ModelKind.Chat,
             DetectedCapabilitiesJson = null,
-            OverrideKind = null,
+            OverrideKind = overrideKind,
             DetectedAtUtc = null,
             UpdatedAtUtc = 0
         };
@@ -563,7 +545,7 @@ public sealed class DefaultConfigDraftServiceTests
         public Harness()
         {
             Classifications.GetByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                           .Returns(Task.FromResult<ModelClassificationRecord?>(Classification(ModelKind.Chat)));
+                           .Returns(Task.FromResult<ModelClassificationRecord?>(Classification()));
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                           .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
                               new LocalModelDescriptor
@@ -613,18 +595,6 @@ public sealed class DefaultConfigDraftServiceTests
 
         public DefaultConfigDraftService Service => _service ??= Build();
 
-        private IOllamaModelService OllamaModelService { get; } = Substitute.For<IOllamaModelService>();
-
-        /// <summary>
-        ///     Stubs the one question drafting asks the Ollama runtime. Left unstubbed it answers false, which is the
-        ///     "no Ollama runtime on this node" default every other scenario here relies on.
-        /// </summary>
-        public void UseOllama(bool installedOnLoopback)
-        {
-            OllamaModelService.IsLoopbackModelInstalledAsync(LlamaModel, Arg.Any<CancellationToken>())
-                              .Returns(Task.FromResult(installedOnLoopback));
-        }
-
         private DefaultConfigDraftService Build()
         {
             Provider.ProviderName.Returns(ProviderName);
@@ -660,8 +630,7 @@ public sealed class DefaultConfigDraftServiceTests
                 Microsoft.Extensions.Options.Options.Create(Options),
                 nodeSettings,
                 new ManualTimeProvider(DraftedAt),
-                NullLogger<DefaultConfigDraftService>.Instance,
-                OllamaModelService);
+                NullLogger<DefaultConfigDraftService>.Instance);
         }
     }
 

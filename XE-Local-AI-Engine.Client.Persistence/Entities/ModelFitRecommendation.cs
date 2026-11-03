@@ -21,7 +21,7 @@ internal sealed record class ModelFitRecommendation
     /// <summary>Canonical model name. Plaintext.</summary>
     public string ModelName { get; set; } = string.Empty;
 
-    /// <summary>Provider-specific model name (e.g. ollama name), or null. Plaintext.</summary>
+    /// <summary>Provider-specific model name (e.g. a GGUF name), or null. Plaintext.</summary>
     public string? ProviderModelName { get; set; }
 
     /// <summary>Fit score (0–100). Plaintext.</summary>

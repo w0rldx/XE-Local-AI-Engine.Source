@@ -24,8 +24,6 @@ public sealed record StoredNodeSettings
     // serve as the hardcoded fallback when neither a stored value nor an appsettings seed is available.
     public const bool DefaultEnableTools = true;
 
-    public const string DefaultOllamaEndpoint = "http://127.0.0.1:11434";
-
     public const string DefaultHuggingFaceQuant = "Q4_K_M";
 
     public const long DefaultHuggingFaceDiskMarginBytes = 1L * 1024 * 1024 * 1024;
@@ -755,9 +753,6 @@ public sealed record StoredNodeSettings
     /// <summary>The AgentHome tool-capable model allowlist. Seed: <c>AgentHome:ToolCapableModels</c>.</summary>
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
-    /// <summary>The Ollama runtime endpoint. Seed: <c>Ollama:Endpoint</c>. Applies after restart (read at host build).</summary>
-    public string? OllamaEndpoint { get; init; }
-
     /// <summary>The Hugging Face default quant. Seed: <c>HuggingFace:DefaultQuant</c>.</summary>
     public string? HuggingFaceDefaultQuant { get; init; }
 
@@ -878,8 +873,8 @@ public sealed record StoredNodeSettings
     /// </summary>
     /// <remarks>
     ///     <see langword="null" />/blank (default) leaves the swap OFF — an <c>auto</c> turn then keeps its model and
-    ///     only lowers the effort. It is validated at save to be an installed llama.cpp model (never a cloud id, an
-    ///     external id, or an Ollama name) and to leave a second loaded-process slot, and re-validated per turn.
+    ///     only lowers the effort. It is validated at save to be an installed llama.cpp model (never a cloud id or an
+    ///     external id) and to leave a second loaded-process slot, and re-validated per turn.
     ///     NOT restart-gated: it is read per send, so a save applies to the next turn.
     /// </remarks>
     public string? AutoEffortFastModelName { get; init; }
@@ -913,7 +908,7 @@ public sealed record StoredNodeSettings
     /// <summary>
     ///     Operator-configured SearXNG base URL that replaces the DuckDuckGo backend of <c>web_search</c>;
     ///     <see langword="null" /> uses DuckDuckGo. <c>NodeSettingsStore.Normalize</c> keeps only an absolute http(s) URL,
-    ///     and a blank save clears it, like <see cref="OllamaEndpoint" />.
+    ///     and a blank save clears it.
     /// </summary>
     public string? WebSearchSearxngUrl { get; init; }
 
@@ -1107,8 +1102,8 @@ public sealed record StoredNodeSettings
     ///     Default: <c>low</c>. Read per turn.
     /// </summary>
     /// <remarks>
-    ///     Only the budget follows it: the turn still sends no effort, so an external model keeps its registered default
-    ///     and Ollama its own. Unknown falls back to <see langword="null" /> in <c>NodeSettingsStore.Normalize</c>.
+    ///     Only the budget follows it: the turn still sends no effort, so an external model keeps its registered default.
+    ///     Unknown falls back to <see langword="null" /> in <c>NodeSettingsStore.Normalize</c>.
     /// </remarks>
     public string? DefaultReasoningEffort { get; init; }
 

@@ -338,7 +338,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
     }
 
     // Node-local provider fake: installs the configured embedding model and returns a fixed non-zero vector so the query
-    // embedding succeeds without Ollama or a network round-trip.
+    // embedding succeeds without a network round-trip.
     private sealed class FixedEmbeddingProvider : ILocalModelProvider
     {
         public string ProviderName => "llamacpp";

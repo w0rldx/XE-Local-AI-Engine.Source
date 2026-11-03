@@ -128,13 +128,9 @@ internal sealed class QuestionAnswer
 /// <summary><c>GET models</c>.</summary>
 internal sealed class LocalModelList
 {
-    public bool IsAvailable { get; init; }
-
     public string? SelectedModelName { get; init; }
 
     public string? ConfiguredDefaultModelName { get; init; }
-
-    public string? Error { get; init; }
 
     public IReadOnlyList<LocalModel> Items { get; init; } = [];
 }
@@ -164,25 +160,20 @@ internal sealed class LocalModel
     public bool IsToolCapable { get; init; }
 }
 
-/// <summary><c>GET models/running</c>.</summary>
+/// <summary><c>GET model-fit/running</c>: one row per running <c>(model, role)</c> process.</summary>
 internal sealed class RunningModelList
 {
-    public bool IsAvailable { get; init; }
-
-    public string? Error { get; init; }
-
     public IReadOnlyList<RunningModel> Items { get; init; } = [];
 }
 
 internal sealed class RunningModel
 {
+    /// <summary>The <see cref="DetailCode" /> of a process that has exited and waits to be reaped.</summary>
+    public const string ExitedDetailCode = "exited";
+
     public string ModelName { get; init; } = string.Empty;
 
-    public long? SizeBytes { get; init; }
-
-    public long? SizeVramBytes { get; init; }
-
-    public long? ExpiresAtUtc { get; init; }
+    public string DetailCode { get; init; } = string.Empty;
 }
 
 /// <summary><c>GET agents</c>.</summary>

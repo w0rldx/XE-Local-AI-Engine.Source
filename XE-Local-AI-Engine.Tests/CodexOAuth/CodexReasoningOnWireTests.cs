@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <remarks>
 ///     HTTP is mocked, so this body shape is the correctness proof; the MEAI summary→TextReasoningContent mapping is
 ///     verified against a live model. The effort arrives via <see cref="ChatOptions.AdditionalProperties" />: the
-///     Codex-only <c>codex_reasoning_effort</c> raw string (full fidelity, incl. minimal/xhigh) and the Ollama-shaped
+///     Codex-only <c>codex_reasoning_effort</c> raw string (full fidelity, incl. minimal/xhigh) and the shared
 ///     <c>think</c> value (false / "low"/"medium"/"high" / true). Both channels run through the real SDK serialization
 ///     over a capturing transport.
 /// </remarks>
@@ -57,7 +57,7 @@ public sealed class CodexReasoningOnWireTests
     public async Task CodexResponsesRequest_MapsSideChannelEffort_ToReasoningEffortOnWire(string effort, string expectedWire)
     {
         // The Codex side channel carries the raw normalized effort; it is preferred over `think` and supports the full
-        // OpenAI Responses set (minimal/xhigh) that the Ollama `think` value cannot carry.
+        // OpenAI Responses set (minimal/xhigh) that the `think` value cannot carry.
         var properties = new AdditionalPropertiesDictionary
         {
             // `think` rides alongside (factory sets both); the side channel must win.
@@ -88,7 +88,7 @@ public sealed class CodexReasoningOnWireTests
     [Arguments("high")]
     public async Task CodexResponsesRequest_FallsBackToThinkLevel_WhenSideChannelAbsent(string level)
     {
-        // Without the side channel, the graded Ollama `think` level still maps to reasoning.effort (back-compat with the
+        // Without the side channel, the graded `think` level still maps to reasoning.effort (back-compat with the
         // think-only carry; covers low/medium/high which `think` CAN carry).
         var body = await CaptureRequestBodyAsync(new ChatOptions
         {

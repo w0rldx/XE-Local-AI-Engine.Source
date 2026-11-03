@@ -13,9 +13,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The chunk embedder resolves the configured (Ollama-style) embedding name against the models installed on the
-///     resolved provider before creating the generator, so the same nomic weights work whether they are installed under
-///     the Ollama name or a llama.cpp <c>&lt;repo&gt;:&lt;quant&gt;</c> GGUF name. The name actually handed to
+///     The chunk embedder resolves the configured embedding name against the models installed on the resolved
+///     provider before creating the generator, so the same nomic weights work whether they are installed under the
+///     configured name or a llama.cpp <c>&lt;repo&gt;:&lt;quant&gt;</c> GGUF name. The name actually handed to
 ///     <see cref="ILocalModelProvider.CreateEmbeddingGenerator" /> is asserted, and the graceful content-free failure is
 ///     preserved when the generator itself fails.
 /// </summary>
@@ -258,7 +258,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     }
 
     // A node-local provider fake that records the model name its embedding generator was created with and returns
-    // fixed-dimension zero vectors (or throws a transport error), so the resolution wiring can be asserted without Ollama.
+    // fixed-dimension zero vectors (or throws a transport error), so the resolution wiring can be asserted without a model runtime.
     private sealed class CapturingProvider : ILocalModelProvider
     {
         private readonly LocalModelDescriptor[] _models;

@@ -1,6 +1,6 @@
 # For people who already run local models
 
-If you already use llama.cpp, Ollama or LM Studio, the rest of these docs are written for someone who
+If you already use llama.cpp or LM Studio, the rest of these docs are written for someone who
 doesn't — this page isn't. It's the specifics, including the parts that aren't implemented.
 
 Everything here was verified against the shipped build. Where I don't know, it says so rather than

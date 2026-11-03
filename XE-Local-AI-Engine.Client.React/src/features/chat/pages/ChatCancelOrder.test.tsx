@@ -120,10 +120,8 @@ describe("Chat cancel ordering", () => {
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 		adapter.getConversation.mockResolvedValue(conversation());
 		adapter.listConversations.mockResolvedValue({ conversations: [conversation()] });

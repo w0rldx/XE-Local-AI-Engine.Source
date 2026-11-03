@@ -4588,20 +4588,6 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsRes
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = z.object({
-	modelName: z.string(),
-	sizeBytes: z.int().nullish(),
-	sizeVramBytes: z.int().nullish(),
-	expiresAtUtc: z.int().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = z.object({
-	isAvailable: z.boolean(),
-	ollamaConfigured: z.boolean(),
-	error: z.string().nullish(),
-	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse),
-});
-
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = z.object({
 	modelName: z.string().min(0).max(100),
 });
@@ -7905,7 +7891,6 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
 	autoProvisionFirstRunModel: z.boolean().nullish(),
 	toolCapableModels: z.array(z.string()).nullish(),
-	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
 	llamaMaxLoadedProcesses: z
 		.int()
@@ -8961,7 +8946,6 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
 	autoProvisionFirstRunModel: z.boolean().nullish(),
 	toolCapableModels: z.array(z.string()).nullish(),
-	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
 	llamaMaxLoadedProcesses: z
 		.int()
@@ -9833,7 +9817,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
 	modelName: z.string(),
-	provider: z.string().optional(),
+	provider: z.string(),
 	displayLabel: z.string().nullish(),
 	externalConnectionId: z.string().nullish(),
 	externalConnectionName: z.string().nullish(),
@@ -9859,10 +9843,8 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = z.object({
-	isAvailable: z.boolean(),
 	selectedModelName: z.string().nullish(),
 	configuredDefaultModelName: z.string().nullish(),
-	error: z.string().nullish(),
 	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse),
 });
 
@@ -12890,11 +12872,6 @@ export const zGetRuntimeResidentsResponse = zXeLocalAiEngineClientEndpointsModel
  * Success
  */
 export const zListLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
-
-/**
- * Success
- */
-export const zGetRunningLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
 
 export const zSelectLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;
 

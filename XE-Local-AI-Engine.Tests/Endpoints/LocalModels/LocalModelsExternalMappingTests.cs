@@ -3,11 +3,10 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -99,36 +98,29 @@ public sealed class LocalModelsExternalMappingTests
     {
         var localModels = new[]
         {
-            new OllamaModelSummary
-            {
-                Name = "qwen3:8b"
-            }
-        };
-        var classifications = new Dictionary<string, ModelClassificationResult>
-        {
-            ["qwen3:8b"] = new()
+            new LocalModelDescriptor
             {
                 ModelName = "qwen3:8b",
-                Kind = ModelKind.Chat,
-                DetectedKind = ModelKind.Chat,
-                Capabilities = ["tools"],
-                IsOverridden = false
+                ProviderName = LocalModelProviders.LlamaCpp,
+                IsAvailable = true,
+                SizeBytes = 1024,
+                ModifiedAt = null,
+                MaxContextTokens = null
             }
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
         var external = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Local)], selectedModelName: null);
 
-        var response = LocalModelsMapper.ToListResponse(localModels,
-            selectedModelName: null,
+        var response = LocalModelsMapper.ToListResponse(selectedModelName: null,
             configuredDefaultModelName: null,
-            classifications,
+            new Dictionary<string, ModelClassificationRecord>(),
             cloud,
-            ggufModels: null,
+            localModels,
             external);
 
         AssertEx.Equal("qwen3:8b", response.Items[0].ModelName);
 
-        // Undeclared, not false: a local model's graded control follows its Ollama `thinking` capability, and this
+        // Undeclared, not false: a local model's graded control follows its template's `thinking` capability, and this
         // field must never be read as an answer for a provider that never declared one.
         AssertEx.Null(response.Items[0].IsReasoningEffortCapable);
         AssertEx.Equal(LocalModelProviders.External, response.Items[^1].Provider);
@@ -136,14 +128,14 @@ public sealed class LocalModelsExternalMappingTests
     }
 
     [Test]
-    public void ToUnavailableListResponse_StillCarriesExternalModels()
+    public void ToListResponse_WithNoGguf_StillCarriesExternalModels()
     {
-        // An external model is served by someone else's endpoint, so an unreachable Ollama has nothing to do with it.
+        // An external model is served by someone else's endpoint, so a node with no GGUF must keep offering it enabled.
         var external = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Local)], selectedModelName: null);
 
-        var response = LocalModelsMapper.ToUnavailableListResponse(selectedModelName: null,
+        var response = LocalModelsMapper.ToListResponse(selectedModelName: null,
             configuredDefaultModelName: null,
-            "Local model provider is unavailable.",
+            new Dictionary<string, ModelClassificationRecord>(),
             cloudModels: null,
             ggufModels: null,
             external);
@@ -171,32 +163,6 @@ public sealed class LocalModelsExternalMappingTests
         var responses = LocalModelsMapper.ToAzureFoundryCloudModelResponses(connection, selectedModelName: null);
 
         AssertEx.Equal("GPT-5 (prod)", responses.Single().DisplayLabel);
-    }
-
-    [Test]
-    public void ToRunningResponse_NeverListsAnExternalModel()
-    {
-        // "Running" means resident in this node's RAM/VRAM. Listing an ext: id would offer an eject/unload action
-        // against a process this node does not own.
-        var running = new[]
-        {
-            new RunningModelSnapshot
-            {
-                Name = "qwen3:8b",
-                ModelName = "qwen3:8b",
-                ExpiresAt = null
-            },
-            new RunningModelSnapshot
-            {
-                Name = "ext:unsloth-box/qwen3-27b",
-                ModelName = "ext:unsloth-box/qwen3-27b",
-                ExpiresAt = null
-            }
-        };
-
-        var response = LocalModelsMapper.ToRunningResponse(running, ollamaConfigured: true);
-
-        AssertEx.Equal("qwen3:8b", response.Items.Single().ModelName);
     }
 
     private static ExternalProviderModelRegistration Registration(ExternalProviderLocality locality,

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <item>Delete (confirm dialog) → the row is gone.</item>
 ///     </list>
 ///     <para>
-///         No FakeOllama scripting is needed: an MCP registration is persisted node config, not a model
+///         No model scripting is needed: an MCP registration is persisted node config, not a model
 ///         call. The seeders that would pre-populate rows (<c>McpServerStartupConnector</c> and friends)
 ///         are <c>IHostedService</c>s removed by the E2E factory's <c>RemoveAll&lt;IHostedService&gt;()</c>,
 ///         so the list starts empty — but the test still asserts BY NAME (not row count) to stay robust if

@@ -41,25 +41,81 @@ internal static class ChatCompletionsEndpoint
                 return Results.Empty;
             }
 
-            if (!state.Options.Models.Any(known => string.Equals(known.Id, model, StringComparison.Ordinal)))
+            if (!state.Serves(model))
             {
                 await FakeOpenAiGatewayEndpointMapper.WriteUnknownModelAsync(context, model);
                 return Results.Empty;
             }
 
-            var script = state.TakeScript();
-            var usage = Usage(PromptTokens(root), script?.ToolCall is not null ? 1 : SplitTokens(Text(state, script)).Count);
+            var script = await NextScriptAsync(context, state, model, root);
+            var text = Text(state, script, root);
+            var usage = Usage(PromptTokens(root), script?.ToolCall is not null ? 1 : SplitTokens(text).Count);
             if (stream)
             {
-                await StreamAsync(context, model, state, script, usage);
+                await StreamAsync(context, model, text, script, usage);
             }
             else
             {
-                await FakeOpenAiGatewayEndpointMapper.WriteJsonAsync(context, Completion(model, state, script, usage));
+                await FakeOpenAiGatewayEndpointMapper.WriteJsonAsync(context, Completion(model, text, script, usage));
             }
 
             return Results.Empty;
         }
+    }
+
+    private static async Task<FakeOpenAiGatewayScript?> NextScriptAsync(HttpContext context, FakeOpenAiGatewayState state, string? model, JsonElement root)
+    {
+        if (state.ChatResponder is { } responder
+            && await responder(ReadTurn(model, root), context.RequestAborted) is { } answer)
+        {
+            return answer;
+        }
+
+        return state.TakeScript();
+    }
+
+    private static FakeOpenAiGatewayChatTurn ReadTurn(string? model, JsonElement root)
+    {
+        return new FakeOpenAiGatewayChatTurn
+        {
+            Model = model,
+            Messages = ReadMessages(root),
+            OfferedToolNames = root.TryGetProperty("tools", out var tools) && tools.ValueKind == JsonValueKind.Array
+                ? tools.EnumerateArray()
+                       .Select(static tool => tool.TryGetProperty("function", out var function) ? FakeOpenAiGatewayEndpointMapper.GetString(function, "name") : null)
+                       .OfType<string>()
+                       .ToArray()
+                : []
+        };
+    }
+
+    private static FakeOpenAiGatewayChatMessage[] ReadMessages(JsonElement root)
+    {
+        return root.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array
+            ? messages.EnumerateArray()
+                      .Select(static message => new FakeOpenAiGatewayChatMessage
+                      {
+                          Role = FakeOpenAiGatewayEndpointMapper.GetString(message, "role") ?? string.Empty,
+                          Text = ContentText(message)
+                      })
+                      .ToArray()
+            : [];
+    }
+
+    /// <summary>A message's text: <c>content</c> as a plain string, or its text parts joined.</summary>
+    private static string ContentText(JsonElement message)
+    {
+        if (!message.TryGetProperty("content", out var content))
+        {
+            return string.Empty;
+        }
+
+        return content.ValueKind switch
+        {
+            JsonValueKind.String => content.GetString() ?? string.Empty,
+            JsonValueKind.Array => string.Concat(content.EnumerateArray().Select(static part => FakeOpenAiGatewayEndpointMapper.GetString(part, "text"))),
+            _ => string.Empty
+        };
     }
 
     internal static JsonObject Chunk(string? model, JsonObject delta, string? finishReason)
@@ -79,7 +135,7 @@ internal static class ChatCompletionsEndpoint
         };
     }
 
-    private static JsonObject Completion(string? model, FakeOpenAiGatewayState state, FakeOpenAiGatewayScript? script, JsonObject usage)
+    private static JsonObject Completion(string? model, string text, FakeOpenAiGatewayScript? script, JsonObject usage)
     {
         var message = new JsonObject
         {
@@ -103,7 +159,7 @@ internal static class ChatCompletionsEndpoint
         }
         else
         {
-            message["content"] = Text(state, script);
+            message["content"] = text;
             finishReason = "stop";
         }
 
@@ -123,7 +179,7 @@ internal static class ChatCompletionsEndpoint
         };
     }
 
-    private static async Task StreamAsync(HttpContext context, string? model, FakeOpenAiGatewayState state, FakeOpenAiGatewayScript? script, JsonObject usage)
+    private static async Task StreamAsync(HttpContext context, string? model, string text, FakeOpenAiGatewayScript? script, JsonObject usage)
     {
         FakeOpenAiGatewayEndpointMapper.StartEventStream(context);
         await WriteChunkAsync(context, Chunk(model, new JsonObject
@@ -154,7 +210,7 @@ internal static class ChatCompletionsEndpoint
         }
         else
         {
-            foreach (var token in SplitTokens(Text(state, script)))
+            foreach (var token in SplitTokens(text))
             {
                 await WriteChunkAsync(context, Chunk(model, new JsonObject
                 {
@@ -220,9 +276,16 @@ internal static class ChatCompletionsEndpoint
         return messages.EnumerateArray().Sum(message => FakeOpenAiGatewayEndpointMapper.GetString(message, "content")?.Length ?? 0);
     }
 
-    private static string Text(FakeOpenAiGatewayState state, FakeOpenAiGatewayScript? script)
+    private static string Text(FakeOpenAiGatewayState state, FakeOpenAiGatewayScript? script, JsonElement root)
     {
-        return script?.CompletionText ?? state.Options.DefaultCompletionText;
+        if (script?.CompletionText is { } scripted)
+        {
+            return scripted;
+        }
+
+        return state.Options.EchoPrefix is { } prefix
+            ? $"{prefix} {ReadMessages(root).LastOrDefault(static message => string.Equals(message.Role, "user", StringComparison.Ordinal))?.Text}"
+            : state.Options.DefaultCompletionText;
     }
 
     private static List<string> SplitTokens(string text)

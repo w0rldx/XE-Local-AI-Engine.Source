@@ -171,7 +171,7 @@ public sealed class GetAgentUsageSummaryEndpointTests
         AssertEx.Equal("USD", cloud.Currency);
 
         AssertEx.Equal(expected: 0d, payload.ByProvider[1].EstimatedCostUsd, "A local runtime is free regardless of token volume.");
-        AssertEx.Equal(expected: 0d, payload.ByProvider[2].EstimatedCostUsd, "Ollama is a local runtime and also free.");
+        AssertEx.Equal(expected: 0d, payload.ByProvider[2].EstimatedCostUsd, "An old row with the removed local runtime's label is also free.");
 
         AssertEx.Equal(expected: 3, payload.Totals.RunCount);
         AssertEx.Equal(expected: 1_001_010L, payload.Totals.PromptTokens);

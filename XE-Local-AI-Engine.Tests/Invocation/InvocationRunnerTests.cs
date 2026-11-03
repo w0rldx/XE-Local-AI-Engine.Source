@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -26,7 +25,6 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static InvocationRunnerTestSupport;
@@ -1015,14 +1013,12 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenNoLocalRuntimeWarms_ReportsNoModelReadinessDuration()
     {
-        // Null, not zero: a remote or Ollama turn warmed nothing, and zero would claim it proved a warm start.
+        // Null, not zero: a turn on another provider warmed nothing, and zero would claim it proved a warm start.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var provider = Substitute.For<ILocalModelProvider>();
-        provider.ProviderName.Returns(OllamaLocalModelProvider.OllamaProviderName);
+        provider.ProviderName.Returns("another-runtime");
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();
-        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
@@ -1036,16 +1032,13 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_OllamaModel_DoesNotWarmViaReadinessPhase()
+    public async Task RunAsync_ModelOnAnotherProvider_DoesNotWarmViaReadinessPhase()
     {
-        // The readiness (warm) phase is llama.cpp-only. An Ollama model must NOT be warmed here (it warms
-        // cheaply on first send), so the phase is a no-op for it.
+        // The readiness (warm) phase is llama.cpp-only: for a model on any other provider it is a no-op.
         var provider = Substitute.For<ILocalModelProvider>();
-        provider.ProviderName.Returns(OllamaLocalModelProvider.OllamaProviderName);
+        provider.ProviderName.Returns("another-runtime");
 
         var resolver = Substitute.For<ILocalModelProviderResolver>();
-        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(provider));
 
@@ -1578,24 +1571,24 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenRequestedModelCannotBeVerified_SurfacesAModelSubstitutedNotice()
+    [Arguments(null, "node-default-model")]
+    [Arguments("   ", "node-default-model")]
+    [Arguments("  some-unverifiable-model ", "some-unverifiable-model")]
+    public async Task RunAsync_ResolvesABlankRequestedModelToTheDefault_AndPassesARequestedModelThroughUnverified(string? requested, string expected)
     {
+        InvocationAgentDefinition? captured = null;
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Do<InvocationAgentDefinition>(definition => captured = definition), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("stop after the definition")));
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var capabilityReporter = Substitute.For<ICapabilityReporter>();
-        // Force the fallback branch: the requested model never verifies against Ollama, so ResolveModelAsync falls
-        // back to the node's default model (Ollama:ChatModel = "qwen3.5:0.8b", wired in CreateRunner) and reports the
-        // substitution.
-        capabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(false));
-        var runner = CreateRunner(eventDispatcher: dispatcher, capabilityReporter: capabilityReporter, agentUpdates: CreateUpdates("ok"));
-        var package = RuntimePackageBuilder.Valid().WithModel("some-unverifiable-model").Build();
+        var runner = CreateRunner(factory,
+            eventDispatcher: dispatcher,
+            configureRuntimeSettings: settings => settings.GetDefaultModelName().Returns("node-default-model"));
 
-        await RunAsync(runner, package);
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithModel(requested).Build());
 
-        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
-            payload.InvocationId == package.InvocationId
-            && payload.Kind == TurnNoticeKind.ModelSubstituted
-            && payload.Message.Contains("some-unverifiable-model", StringComparison.Ordinal)
-            && payload.Message.Contains("qwen3.5:0.8b", StringComparison.Ordinal)));
+        AssertEx.Equal(expected, AssertEx.NotNull(captured).ModelId);
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Any<TurnNoticePayload>());
     }
 
     [Test]

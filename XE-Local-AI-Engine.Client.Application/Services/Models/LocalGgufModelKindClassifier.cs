@@ -36,27 +36,26 @@ public static class LocalGgufModelKindClassifier
     }
 
     /// <summary>
-    ///     Whether an installed GGUF may serve chat: a draft quant or a decision model never does; otherwise an operator
-    ///     override wins, then a persisted non-Unknown detection, else the offline name classification (a fresh GGUF carries no row).
+    ///     The effective kind: a draft quant or a decision model is structural and ignores any override; otherwise an
+    ///     operator override wins over the offline classification.
     /// </summary>
+    public static ResolvedModelKind ResolveKind(string modelName, ModelClassificationRecord? classification, string? decisionType = null)
+    {
+        var detected = Classify(modelName, decisionType);
+        var overrideKind = detected is ModelKind.Draft or ModelKind.Decision ? null : classification?.OverrideKind;
+
+        return new ResolvedModelKind
+        {
+            Kind = overrideKind ?? detected,
+            DetectedKind = detected,
+            IsOverridden = overrideKind is not null
+        };
+    }
+
+    /// <summary>Whether an installed GGUF may serve chat, by its effective kind.</summary>
     public static bool IsChatModel(string modelName, ModelClassificationRecord? classification, string? decisionType = null)
     {
-        if (Classify(modelName, decisionType) is ModelKind.Draft or ModelKind.Decision)
-        {
-            return false;
-        }
-
-        if (classification?.OverrideKind is { } overrideKind)
-        {
-            return overrideKind == ModelKind.Chat;
-        }
-
-        return classification?.DetectedKind switch
-        {
-            ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft or ModelKind.Decision => false,
-            ModelKind.Chat => true,
-            _ => Classify(modelName) == ModelKind.Chat
-        };
+        return ResolveKind(modelName, classification, decisionType).Kind == ModelKind.Chat;
     }
 
     /// <summary>The installed GGUF's <c>decision.type</c> family, or null when the model is not installed or is no decision model.</summary>

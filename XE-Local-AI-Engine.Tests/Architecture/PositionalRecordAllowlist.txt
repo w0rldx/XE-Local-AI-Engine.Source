@@ -98,9 +98,6 @@ XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerNativeClient.
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerNativeClient.cs|RerankResponse
 XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaServerRerankerClient.cs|RerankResponse
 XE-Local-AI-Engine.Providers.Training/Contracts/ITrainingRuntimeService.cs|InstalledTrainingRuntimeState
-XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaFailureRequest.cs|FakeOllamaFailureRequest
-XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaRequest.cs|FakeOllamaRequest
-XE-Local-AI-Engine.Testing.FakeOllama/FakeOllamaScriptRequest.cs|FakeOllamaScriptRequest
 XE-Local-AI-Engine.Tests/ApiFoundation/ConflictExceptionHandlerTests.cs|ConflictProblemBody
 XE-Local-AI-Engine.Tests/Auth/Integration/NodeLoginLockoutIntegrationTests.cs|LockedOutBody
 XE-Local-AI-Engine.Tests/Auth/NodeAuthEndpointTests.cs|AuthStatusResponse
@@ -221,7 +218,6 @@ XE-Local-AI-Engine.Client.Application/Services/AgentHome/Implementation/NodePatc
 XE-Local-AI-Engine.Client.Application/Services/Auth/AccessTokenResult.cs|AccessTokenResult
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/KvCacheResolution.cs|KvCacheResolution
 XE-Local-AI-Engine.Client.Application/Services/Capacity/Implementation/RuntimeDeviceAuditService.cs|DeviceAuditComputation
-XE-Local-AI-Engine.Client.Application/Services/Chat/ModelIdentity.cs|ModelIdentity
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/EntraDeviceCodeSignInCoordinator.cs|DeviceCodeFlowHandle
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Auth/PkcePair.cs|PkcePair
 XE-Local-AI-Engine.Client.Application/Services/CloudProviders/ResolvedCustomHeader.cs|ResolvedCustomHeader
@@ -235,7 +231,6 @@ XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/Knowledg
 XE-Local-AI-Engine.Client.Application/Services/Mcp/Implementation/McpServerConnectionManager.cs|ConnectResult
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/GgufFileSelector.cs|SelectedGgufFile
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeRemovalOutcome.cs|LlamaCppRuntimeRemovalOutcome
-XE-Local-AI-Engine.Client.Application/Services/Models/Implementation/LocalModelCatalogService.cs|OllamaModelListing
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/Implementation/DockerDotNetRuntimeClient.cs|ExecOutput
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Fake/FakeSandboxRuntimeProvider.cs|VirtualFile
 XE-Local-AI-Engine.Client.Application/Services/Sandbox/Implementation/Launch/HostSandboxContainmentProbe.cs|NetworkIsolationProbe
@@ -285,7 +280,6 @@ XE-Local-AI-Engine.Client.Application/Services/Models/ICoordinatedModelProviderM
 XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Cloud
 XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|External
 XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Gguf
-XE-Local-AI-Engine.Client.Application/Services/Models/ILocalModelDetailsResolver.cs|Ollama
 
 # --- stored-row-read-back (18) ----------------------------------------------------
 # Deserialized from JSON stored in a SQLite row, or projected by EF SqlQuery/SqlQueryRaw. required would reject

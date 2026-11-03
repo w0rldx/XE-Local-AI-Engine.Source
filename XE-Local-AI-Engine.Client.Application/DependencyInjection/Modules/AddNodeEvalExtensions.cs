@@ -20,8 +20,8 @@ internal static class AddNodeEvalExtensions
         // Eval options. The model name is the PlaybookEvalModelName node setting, read per run; blank inherits the default model.
         builder.Services.AddOptions<PlaybookEvalOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookEvalOptions.Section));
-        // Eval-model weight-identity resolver: folds a model digest into the eval fingerprint, so a same-name weight swap (Ollama
-        // re-pull, GGUF re-download) invalidates a recorded pass. Scoped like its digest cache; PlaybookEvalService and PlaybookActionService share this one seam.
+        // Eval-model weight-identity resolver: folds a model digest into the eval fingerprint, so a same-name weight swap (a GGUF
+        // re-download) invalidates a recorded pass. Scoped like its digest cache; PlaybookEvalService and PlaybookActionService share this one seam.
         builder.Services.AddScoped<IEvalModelIdentityResolver, EvalModelIdentityResolver>();
         // Eval judge: deterministic assertion path plus node-local judge path. Singleton because it holds no scoped
         // state and receives the per-run node-local client as a parameter.

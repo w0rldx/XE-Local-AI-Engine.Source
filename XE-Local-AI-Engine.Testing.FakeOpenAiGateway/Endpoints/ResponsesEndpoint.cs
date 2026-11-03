@@ -49,7 +49,7 @@ internal static class ResponsesEndpoint
                 return Results.Empty;
             }
 
-            if (!state.Options.Models.Any(known => string.Equals(known.Id, model, StringComparison.Ordinal)))
+            if (!state.Serves(model))
             {
                 await FakeOpenAiGatewayEndpointMapper.WriteUnknownModelAsync(context, model);
                 return Results.Empty;

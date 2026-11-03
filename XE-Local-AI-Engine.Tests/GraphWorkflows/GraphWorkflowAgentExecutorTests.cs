@@ -188,9 +188,9 @@ public sealed class GraphWorkflowAgentExecutorTests
                {
                    ModelName = model,
                    Digest = null,
-                   DetectedKind = ModelKind.Embedding,
+                   DetectedKind = ModelKind.Chat,
                    DetectedCapabilitiesJson = null,
-                   OverrideKind = null,
+                   OverrideKind = ModelKind.Embedding,
                    DetectedAtUtc = null,
                    UpdatedAtUtc = 0
                });
@@ -586,14 +586,14 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     [Test]
-    public async Task ALlmCall_OnAnOllamaServedLocalModel_IsStillRefusedWhenCloudRunsAreAllowed()
+    public async Task ALlmCall_OnALocalModelServedByAnotherProvider_IsStillRefusedWhenCloudRunsAreAllowed()
     {
-        const string prompt = "llm-ollama-allowed";
+        const string prompt = "llm-other-provider-allowed";
         const string model = "qwen3:8b";
         await using var harness = CloudAllowedHost();
         harness.Services.GetRequiredService<ILocalModelProviderResolver>()
                .ResolveProviderNameForModelAsync(model, Arg.Any<CancellationToken>())
-               .Returns("ollama");
+               .Returns("another-runtime");
         var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
 
         var analyze = await AdvanceUntilTerminalAsync(harness, runId);

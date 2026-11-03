@@ -5,19 +5,19 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
-///     Shared reasoning-effort mapping to the Ollama <c>think</c> value and the provider side channels, used by both
+///     Shared reasoning-effort mapping to the <c>think</c> value and the provider side channels, used by both
 ///     the single-agent path and the orchestration participant path.
 /// </summary>
 /// <remarks>
 ///     <c>InvocationAgentFactory.CreateAsync</c> and <c>ParticipantReasoningOptions.Build</c> need the identical
-///     capability/effort matrix, so this class is the single source of truth and a new effort level or an Ollama
+///     capability/effort matrix, so this class is the single source of truth and a new effort level or a
 ///     behavior change is made once. See docs/wiki/04-agent-mode.md ("The reasoning-effort matrix and the thinking
 ///     budget").
 /// </remarks>
 internal static class ReasoningOptionsResolver
 {
     /// <summary>
-    ///     The binary reasoning-"on" sentinel for a model that lacks the Ollama <c>thinking</c> capability but reasons
+    ///     The binary reasoning-"on" sentinel for a model that lacks the <c>thinking</c> capability but reasons
     ///     by default.
     /// </summary>
     /// <remarks>
@@ -33,10 +33,8 @@ internal static class ReasoningOptionsResolver
     ///     the Codex Responses boundary maps it to <c>ResponseReasoningEffortLevel</c> with full fidelity.
     /// </summary>
     /// <remarks>
-    ///     The Ollama <c>think</c> key cannot carry <c>minimal</c> or <c>xhigh</c> — Ollama 400s on an unknown think
-    ///     level — so those collapse to <c>think:true</c> there, and this key preserves the distinction without
-    ///     touching the Ollama wire: the OllamaSharp AbstractionMapper reads a fixed option allowlist and ignores
-    ///     unknown keys. Added ONLY when a graded or explicit effort is present, so the no-effort path stays
+    ///     The <c>think</c> key does not carry <c>minimal</c> or <c>xhigh</c>, so those collapse to <c>think:true</c>
+    ///     there, and this key preserves the distinction. Added ONLY when a graded or explicit effort is present, so the no-effort path stays
     ///     byte-identical.
     /// </remarks>
     internal const string CodexReasoningEffortKey = "codex_reasoning_effort";
@@ -69,11 +67,11 @@ internal static class ReasoningOptionsResolver
     internal const string ExternalReasoningEffortMarkerKey = "xe.external.reasoning_effort";
 
     /// <summary>
-    ///     Maps a normalized reasoning effort to the Ollama <c>think</c> option value for a thinking-capable model:
+    ///     Maps a normalized reasoning effort to the <c>think</c> option value for a thinking-capable model:
     ///     false, "low", "medium", "high", or true as the default and fallback.
     /// </summary>
     /// <remarks>
-    ///     minimal and xhigh — OpenAI Responses levels Ollama does not understand, and 400s on — collapse to true here;
+    ///     minimal and xhigh, the OpenAI Responses-only levels, collapse to true here;
     ///     the Codex boundary reads the un-collapsed level from <see cref="CodexReasoningEffortKey" /> instead. The
     ///     "on" sentinel is covered defensively: the non-thinking-model branch normally handles it via
     ///     <see cref="IsReasoningRequested" />, and it reaches this graded path only when a definition or a stale
@@ -142,7 +140,7 @@ internal static class ReasoningOptionsResolver
     /// <remarks>
     ///     Recognizes the OpenAI Responses graded levels and explicit <c>none</c>; blank, the binary <c>on</c> sentinel
     ///     and any unrecognized value return <see langword="null" />, so the Codex boundary falls back to interpreting
-    ///     the Ollama <c>think</c> value, where true means its default effort. The input is expected already normalized
+    ///     the <c>think</c> value, where true means its default effort. The input is expected already normalized
     ///     upstream by the Application layer's reasoning-effort normalizer.
     /// </remarks>
     internal static string? ResolveCodexReasoningEffort(string? reasoningEffort)
@@ -200,9 +198,9 @@ internal static class ReasoningOptionsResolver
     ///     graded level. Only <c>none</c>, unspecified or blank returns false, which the caller sends as think:false.
     /// </summary>
     /// <remarks>
-    ///     Used ONLY on the non-thinking-model branch. A graded level can be carried onto a model that lacks the Ollama
+    ///     Used ONLY on the non-thinking-model branch. A graded level can be carried onto a model that lacks the
     ///     <c>thinking</c> capability — a definition pins it, or the composer keeps a stale selection across a model
-    ///     switch — and the model cannot honor it (Ollama 400s on <c>think:&lt;level&gt;</c>), but the user still asked
+    ///     switch — and the model cannot honor it, but the user still asked
     ///     to reason, so the caller OMITS the think field and lets the model's built-in reasoning run.
     /// </remarks>
     internal static bool IsReasoningRequested(string? reasoningEffort)

@@ -37,12 +37,30 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Equal("legacy-model", loaded.DefaultModelName);
         AssertEx.Null(loaded.EnableTools);
         AssertEx.Null(loaded.ToolCapableModels);
-        AssertEx.Null(loaded.OllamaEndpoint);
         AssertEx.Null(loaded.LlamaMaxLoadedProcesses);
         AssertEx.Null(loaded.KeepModelWarmEnabled);
         AssertEx.Null(loaded.KeepModelWarmModelName);
         AssertEx.Null(loaded.KeepModelWarmIntervalSeconds);
         AssertEx.Null(loaded.RecommendedLlamaCppTag);
+    }
+
+    [Test]
+    public async Task OldFileCarryingTheRemovedEndpointField_LoadsAndTheNextSaveDropsIt()
+    {
+        // An existing node's file still holds the field. An unknown member must not read as corrupt, because a strict
+        // load's null is what stops the backfills and the lenient load's fallback would wipe the whole file's values.
+        await WriteSettingsJsonAsync("""{ "ollamaEndpoint": "http://127.0.0.1:11434", "defaultModelName": "kept-model" }""");
+        using var store = NewStore();
+
+        var loaded = await store.LoadAsync();
+        var strict = await store.LoadStrictAsync();
+        await store.SaveAsync(loaded);
+
+        AssertEx.Equal("kept-model", loaded.DefaultModelName);
+        AssertEx.Equal("kept-model", AssertEx.NotNull(strict).DefaultModelName);
+        var rewritten = await File.ReadAllTextAsync(Path.Combine(_root, "node-settings.json"));
+        AssertEx.Contains(rewritten, "kept-model", StringComparison.Ordinal);
+        AssertEx.False(rewritten.Contains("ollamaEndpoint", StringComparison.OrdinalIgnoreCase), rewritten);
     }
 
     [Test]
@@ -92,7 +110,6 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             DefaultModelName = "  spaced-model  ",
             EnableTools = false,
             ToolCapableModels = ["  qwen3:8b  ", "", "gemma3:12b"],
-            OllamaEndpoint = "http://127.0.0.1:12345",
             HuggingFaceDefaultQuant = "Q5_K_M",
             HuggingFaceDiskMarginBytes = 2_000_000_000,
             LlamaMaxLoadedProcesses = 8,
@@ -112,7 +129,6 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.NotNull(loaded.ToolCapableModels);
         AssertEx.Equal(expected: 2, loaded.ToolCapableModels!.Count);
         AssertEx.Equal("qwen3:8b", loaded.ToolCapableModels[0]);
-        AssertEx.Equal("http://127.0.0.1:12345", loaded.OllamaEndpoint);
         AssertEx.Equal("Q5_K_M", loaded.HuggingFaceDefaultQuant);
         AssertEx.Equal(expected: 2_000_000_000L, loaded.HuggingFaceDiskMarginBytes);
         AssertEx.Equal(expected: 8, loaded.LlamaMaxLoadedProcesses);
@@ -515,20 +531,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
-    public async Task OllamaEndpoint_NonUrl_FallsBackToNull()
-    {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
-        {
-            OllamaEndpoint = "not a url"
-        });
-        AssertEx.Null(loaded.OllamaEndpoint);
-    }
-
-    [Test]
     [Arguments("not a url", null)]
     [Arguments("   ", null)]
     [Arguments(" https://searx.example.org/ ", "https://searx.example.org/")]
-    public async Task WebSearchSearxngUrl_IsNormalizedLikeOllamaEndpoint(string stored, string? expected)
+    public async Task WebSearchSearxngUrl_IsNormalizedToAValidUrlOrNull(string stored, string? expected)
     {
         var loaded = await SaveAndReloadAsync(new StoredNodeSettings
         {
@@ -1074,8 +1080,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     public async Task Save_KeepsTheOwnerOnlyFileModeAcrossTheAtomicMove()
     {
         // The rename replaces the target with the TEMP file's inode, so the temp must be created 0600 as well. A temp
-        // created without UnixCreateMode would silently downgrade the permissions of a file holding the Ollama endpoint
-        // and the machine key.
+        // created without UnixCreateMode would silently downgrade the permissions of a file holding the machine key.
         using var store = NewStore();
         await store.SaveAsync(new StoredNodeSettings
         {

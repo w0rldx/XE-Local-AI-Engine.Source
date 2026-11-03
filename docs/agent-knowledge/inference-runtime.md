@@ -57,32 +57,12 @@ re-measure). Residual: `FailureCategory.ModelCapabilityUnsupported`. Grammar via
 **Prevents:** a 400 on each tool turn. **Authority:** wiki 03 ("The grammar repetition bound").
 [evidence](../agent-knowledge-evidence.md#passing-all-five-gates-is-still-not-enough--llamacpp-must-be-able-to-compile-the-tool-schemas)
 
-### OllamaSharp wraps HTTP **400 only** into `OllamaException` — every other status is a bare `HttpRequestException`
+### Unloading a model ejects every llama-server role, because residency is not the provider map
 
-**Rule:** on the pinned OllamaSharp 5.5.0 (verified identical to 5.4.30), `EnsureSuccessStatusCodeAsync` builds an `OllamaException` only for 400; every
-other failure is an `HttpRequestException` with `StatusCode` set. Catch on the status, never a message substring.
-**Prevents:** a `catch (OllamaException)` filtered on "not found" that never runs for a 404. **Authority:** OllamaSharp
-`OllamaApiClient.EnsureSuccessStatusCodeAsync` (decompiled at the pin).
-
-### Unloading a model asks BOTH local runtimes, because residency is not the provider map
-
-**Rule:** unload asks the llama-server supervisor first (graceful, per `ModelRole`, letting a turn drain; stopping the child
-also applies edited launch args), then Ollama when its gate is on. An unknown model (`StatusCode` NotFound, in
-`OllamaModelUnloader.UnloadAsync`) or no daemon (`StatusCode is null`, in `UnloadFromOllamaAsync`) counts as success; any
-other status propagates; `Unloaded` is false only when a role reported `TimedOutStillBusy`. Never route on the provider
-map: it says where a model would be served, not where it is resident. **Prevents:** an Ollama-resident model staying loaded.
-**Authority:** `ModelUnloadCoordinator` (`EjectEveryRoleAsync`, `UnloadFromOllamaAsync`), `OllamaModelUnloader.UnloadAsync`,
-`RunningLocalModelEndpointTests` (`UnloadModel_*`).
-
-### The Ollama gate-off branch registers no-op `IModelCapabilityClient` and `IOllamaModelService`, so the node still boots
-
-**Rule:** `AddNodeModelRuntimeExtensions.AddOllamaRuntime` owns both gate branches; gate-off registers
-`UnavailableModelCapabilityClient` and `UnavailableOllamaModelService`, which answer as an absent daemon (empty lists, null
-`StatusCode` `HttpRequestException`), and the real service lives only on the gate-on branch. Prove composition with
-`ServiceProviderValidationTests` (real root, `ValidateOnBuild`); `TestServerWebAppFactory` registers a fake
-`IOllamaApiClient` and proves nothing here. **Prevents:** an opted-out secondary runtime making the host unbuildable.
-**Authority:** `ServiceProviderValidationTests`, `OllamaRuntimeGateStartupTests`.
-[evidence](../agent-knowledge-evidence.md#the-ollama-gate-off-branch-registers-no-op-imodelcapabilityclient-and-iollamamodelservice-so-the-node-still-boots)
+**Rule:** unload asks the llama-server supervisor to eject every `ModelRole` (graceful, letting a turn drain; stopping the
+child also applies edited launch args). A role that is not running counts as success; `Unloaded` is false only when a role
+reported `TimedOutStillBusy`. Never route on the provider map: it says where a model would be served, not where it is
+resident. **Prevents:** a resident model staying loaded. **Authority:** `ModelUnloadCoordinator.UnloadAsync`.
 
 ### Post-turn background model work shares the chat's single llama-server slot, so it yields to every turn
 

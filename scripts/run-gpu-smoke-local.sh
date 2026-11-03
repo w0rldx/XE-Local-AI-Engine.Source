@@ -389,10 +389,10 @@ pick_chat_model() {
     [[ -n "${line}" ]] || continue
     IFS='|' read -r name kind capable provider size <<<"${line}"
     [[ "${kind}" == "Chat" ]] || continue
-    # The provider filter is what keeps this smoke honest. `/models` merges Ollama and the cloud
-    # providers into the same list — Ollama sorts FIRST — so without it a node with Ollama
-    # reachable would run the chat turn on Ollama while steps 1-2 audited llama.cpp, and steps 3
-    # and 4 could both pass without the runtime under test ever being exercised.
+    # The provider filter is what keeps this smoke honest. `/models` merges the cloud providers into
+    # the same list, so without it a node with a cloud connection could run the chat turn on a cloud
+    # model while steps 1-2 audited llama.cpp, and steps 3 and 4 could both pass without the runtime
+    # under test ever being exercised.
     [[ "${provider}" == "${LOCAL_MODEL_PROVIDER}" ]] || continue
     size="$(as_int "${size:-0}")"
     # A missing/zero size must not win the comparison and silently become "smallest".

@@ -14,7 +14,6 @@ using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
@@ -50,8 +49,6 @@ public sealed class LayerDependencyTests
     private const string PersistenceNamespace = "XE_Local_AI_Engine.Client.Persistence";
     private const string ApplicationNamespace = "XE_Local_AI_Engine.Client.Application";
 
-    private const string OllamaNamespace = "XE_Local_AI_Engine.Providers.Ollama";
-
     // CAUTION for anyone adding a namespace-prefix rule here: "XE_Local_AI_Engine.Providers.OpenAICompat" is a string
     // PREFIX of "XE_Local_AI_Engine.Providers.OpenAICompatible.Core", and NetArchTest matches namespaces by prefix. So
     // forbidding OpenAICompatNamespace also forbids the shared transport core — correct for Abstractions (which must
@@ -74,7 +71,6 @@ public sealed class LayerDependencyTests
 
     // Marker types anchor each assembly so we test the real compiled IL, not a
     // namespace string. Every marker is a verified public type in its assembly.
-    private static readonly Assembly OllamaAssembly = typeof(OllamaLocalModelProvider).Assembly;
     private static readonly Assembly OpenAICompatAssembly = typeof(ExternalOpenAiModelProvider).Assembly;
     private static readonly Assembly OpenAICompatibleCoreAssembly = typeof(OpenAICompatibleClientFactory).Assembly;
     private static readonly Assembly LlamaServerAssembly = typeof(IInstalledRuntimeStore).Assembly;
@@ -112,7 +108,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Client.Application",
                 "XE-Local-AI-Engine.Client.Persistence",
                 "XE-Local-AI-Engine.Providers.Abstractions",
-                "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             ["XE-Local-AI-Engine.Client.Application"] =
@@ -125,7 +120,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.CodexOAuth",
                 "XE-Local-AI-Engine.Providers.HuggingFace",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
-                "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 // The composition layer joins the shared wire layer so the rules it stores and the rules the transport
                 // enforces are ONE code: the encrypted external-provider store normalizes a saved base URL with the same
@@ -176,7 +170,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
                 "XE-Local-AI-Engine.Providers.ProcessSupervision"
             ],
-            ["XE-Local-AI-Engine.Providers.Ollama"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.OpenAICompat"] =
             [
                 "XE-Local-AI-Engine.Providers.Abstractions",
@@ -212,11 +205,6 @@ public sealed class LayerDependencyTests
             ]
         };
 
-    // The direct-re-add guard that the compile-asset wall cannot provide. PrivateAssets="compile" on
-    // Providers.Ollama's OllamaSharp reference stops that package's compile assets flowing to consumers, but a
-    // developer adding <PackageReference Include="OllamaSharp"/> straight to Client.Application.csproj brings its OWN
-    // compile assets and bypasses the wall entirely — a direct add compiles fine, and only this list catches it.
-    //
     // Keyed by the SAME production-project set as ApprovedProjectReferences (the test below asserts the two key sets
     // are equal, so a project added to one and forgotten in the other is a red, not a silent hole). Values are what
     // the csproj DECLARES, not what NuGet restores: a conditioned PackageReference belongs here too, because the
@@ -335,13 +323,6 @@ public sealed class LayerDependencyTests
                 "Microsoft.Extensions.Http.Resilience",
                 "Microsoft.Extensions.Logging.Abstractions"
             ],
-            ["XE-Local-AI-Engine.Providers.Ollama"] =
-            [
-                "Microsoft.Extensions.AI",
-                "Microsoft.Extensions.AI.Abstractions",
-                "Microsoft.Extensions.DependencyInjection.Abstractions",
-                "OllamaSharp"
-            ],
             ["XE-Local-AI-Engine.Providers.OpenAICompat"] =
             [
                 "Microsoft.Extensions.AI.Abstractions",
@@ -429,11 +410,9 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Client.Persistence",
                 "XE-Local-AI-Engine.Client.Testing",
                 "XE-Local-AI-Engine.Providers.Abstractions",
-                "XE-Local-AI-Engine.Providers.Ollama",
-                "XE-Local-AI-Engine.Testing.FakeOllama"
+                "XE-Local-AI-Engine.Testing.FakeOpenAiGateway"
             ],
             // Every fake is deliberately reference-free: a fake that reaches into the code under test stops being a fake.
-            ["XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"] = [],
             ["XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"] = [],
             ["XE-Local-AI-Engine.Testing.FakeOpenAiGateway/XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"] = [],
             ["XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"] =
@@ -446,7 +425,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.CodexOAuth",
                 "XE-Local-AI-Engine.Providers.HuggingFace",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
-                "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
                 "XE-Local-AI-Engine.Providers.Python",
@@ -455,7 +433,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.WhisperCpp",
                 "XE-Local-AI-Engine.ServiceDefaults",
                 "XE-Local-AI-Engine.Testing.FakeDocker",
-                "XE-Local-AI-Engine.Testing.FakeOllama",
                 "XE-Local-AI-Engine.Testing.FakeOpenAiGateway",
                 "XE-Local-AI-Engine.WindowsLauncher"
             ]
@@ -488,7 +465,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
                 "XE-Local-AI-Engine.Providers.ProcessSupervision"
             ],
-            [OllamaAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [OpenAICompatAssembly] =
             [
                 "XE-Local-AI-Engine.Providers.Abstractions",
@@ -526,7 +502,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.CodexOAuth",
                 "XE-Local-AI-Engine.Providers.HuggingFace",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
-                "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 // See the project-reference list above for why the composition layer reaches the shared wire layer.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
@@ -549,7 +524,6 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.Abstractions",
                 "XE-Local-AI-Engine.Providers.CodexOAuth",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
-                "XE-Local-AI-Engine.Providers.Ollama",
                 // The training runtime endpoints catch the shared layer's user-safe exception beside Training's own, and
                 // the reference is transitive through Client.Application, as WhisperCpp is below.
                 "XE-Local-AI-Engine.Providers.Python",
@@ -619,28 +593,6 @@ public sealed class LayerDependencyTests
 
             AssertExactReferences(projectName, approvedReferences, actualReferences);
         }
-    }
-
-    [Test]
-    public void OllamaSharpReference_IsCompileWalledInsideTheOllamaProvider()
-    {
-        // ProductionProjects_HaveOnlyTheApprovedPackageReferences reads only Include, so deleting PrivateAssets from
-        // this one reference leaves every other test green while the package's compile assets flow again to everything
-        // that references Providers.Ollama — and `using OllamaSharp;` compiles in the application layer once more.
-        // PrivateAssets="compile" is what keeps the SDK confined; nothing else in the repository asserts it.
-        const string projectName = "XE-Local-AI-Engine.Providers.Ollama";
-        var project = XDocument.Load(RepositoryPaths.Combine(projectName, $"{projectName}.csproj"));
-        var ollamaSharp = AssertEx.NotNull(project.Descendants("PackageReference")
-                                                  .SingleOrDefault(reference =>
-                                                      string.Equals((string?)reference.Attribute("Include"), "OllamaSharp", StringComparison.Ordinal)),
-            $"{projectName}.csproj declares no OllamaSharp PackageReference, so this guard scanned nothing. The wall it "
-            + "protects only exists while that reference does.");
-        var privateAssets = ((string?)ollamaSharp.Attribute("PrivateAssets"))?.Trim();
-
-        AssertEx.Equal("compile", privateAssets,
-            $"{projectName}'s OllamaSharp PackageReference must keep PrivateAssets=\"compile\". Without it the package's "
-            + "compile assets flow through the ProjectReference to every consumer, and the provider boundary — no OllamaSharp "
-            + "type outside this provider — silently reopens with no other test noticing.");
     }
 
     [Test]
@@ -746,21 +698,6 @@ public sealed class LayerDependencyTests
     }
 
     [Test]
-    public void OllamaProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
-    {
-        AssertTypesScanned(OllamaAssembly, OllamaNamespace, 8);
-
-        AssertNoDependency(OllamaAssembly,
-            OllamaNamespace,
-            ClientNamespace,
-            PersistenceNamespace,
-            LlamaServerNamespace,
-            HuggingFaceNamespace,
-            CodexOAuthNamespace,
-            CapabilitiesNamespace);
-    }
-
-    [Test]
     public void LlamaServerProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
         AssertTypesScanned(LlamaServerAssembly, LlamaServerNamespace, 220);
@@ -769,7 +706,6 @@ public sealed class LayerDependencyTests
             LlamaServerNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
             CapabilitiesNamespace,
@@ -785,7 +721,6 @@ public sealed class LayerDependencyTests
             HuggingFaceNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             CodexOAuthNamespace,
             CapabilitiesNamespace,
@@ -801,7 +736,6 @@ public sealed class LayerDependencyTests
             CodexOAuthNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CapabilitiesNamespace);
@@ -818,7 +752,6 @@ public sealed class LayerDependencyTests
             StableDiffusionCppNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
@@ -837,7 +770,6 @@ public sealed class LayerDependencyTests
             WhisperCppNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
@@ -856,7 +788,6 @@ public sealed class LayerDependencyTests
             PythonNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             OpenAICompatNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
@@ -878,7 +809,6 @@ public sealed class LayerDependencyTests
             ProcessSupervisionNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             OpenAICompatNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
@@ -899,7 +829,6 @@ public sealed class LayerDependencyTests
             CapabilitiesNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace);
@@ -929,7 +858,6 @@ public sealed class LayerDependencyTests
             OpenAICompatNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
@@ -949,7 +877,6 @@ public sealed class LayerDependencyTests
             ClientNamespace,
             PersistenceNamespace,
             ApplicationNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
@@ -968,7 +895,6 @@ public sealed class LayerDependencyTests
             AiAgentNamespace,
             ClientNamespace,
             PersistenceNamespace,
-            OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,

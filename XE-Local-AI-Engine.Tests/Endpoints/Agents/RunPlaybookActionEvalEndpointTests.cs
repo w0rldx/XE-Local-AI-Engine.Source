@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Playbook eval endpoint (<c>POST agents/{id}/playbook/{actionId}/eval</c>). The happy path is exercised against
 ///     a Suggested action with NO golden cases — the eval service short-circuits to a failing result without calling the
-///     model, so the full endpoint → service → persist path runs with no Ollama. The model-dependent scoring path is
+///     model, so the full endpoint → service → persist path runs with no runtime. The model-dependent scoring path is
 ///     covered by the Wave-2 service unit tests.
 /// </summary>
 [Category(TestCategories.Integration)]
@@ -157,7 +157,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var actionId = await SeedSuggestionAsync(factory, agentId);
 
         // No golden cases seeded: the eval service records a failing result (no-regression unprovable with zero cases)
-        // WITHOUT calling the model, so the full endpoint path runs with no Ollama dependency.
+        // WITHOUT calling the model, so the full endpoint path runs with no runtime dependency.
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, actionId))
         {
             Content = JsonContent.Create(new

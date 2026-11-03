@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 {
-    // The keys with no strongly-typed ChatOptions property live in the shared SamplingOptionKeys because they reach TWO
-    // runtimes: OllamaSharp 5.4.25's AbstractionMapper and DeferredLlamaServerChatClient.ApplySamplingPassthrough.
+    // The keys with no strongly-typed ChatOptions property live in the shared SamplingOptionKeys because this assembly writes
+    // them and DeferredLlamaServerChatClient.ApplySamplingPassthrough reads them.
 
     /// <summary>
     ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> that tells the llama.cpp chat client to
@@ -82,18 +82,18 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         var seedMessages = BuildSeedMessages(definition);
 
-        // Ollama rejects think=true/levels on non-thinking models. Omitting the field preserves reasoning baked into
-        // some GGUF templates; think=false suppresses it. Verified with gemma-4-12b-it on Ollama 0.30.5.
+        // A non-thinking model gets no graded think value. Omitting the field preserves reasoning baked into
+        // some GGUF templates; think=false suppresses it.
         var additionalProperties = new AdditionalPropertiesDictionary();
         if (definition.SupportsThinking)
         {
             // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high"). minimal/xhigh
-            // collapse to think:true here because Ollama 400s on an unknown think level (see ResolveThinkOption).
+            // collapse to think:true here; the Codex boundary reads the raw level from its own key (see ResolveThinkOption).
             var think = ReasoningOptionsResolver.ResolveThinkOption(definition.ReasoningEffort);
             additionalProperties["think"] = think;
 
             // llama.cpp's OpenAI adapter drops think=false, so explicitly disable thinking through its template marker.
-            // The marker is inert on Ollama/Codex and unnecessary for non-thinking models.
+            // The marker is inert on Codex and unnecessary for non-thinking models.
             if (think is false)
             {
                 additionalProperties[LlamaDisableThinkingMarkerKey] = true;
@@ -114,7 +114,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                 }
             }
 
-            // Codex needs the raw effort to distinguish minimal/xhigh; Ollama ignores this unknown side-channel key.
+            // Codex needs the raw effort to distinguish minimal/xhigh; other providers ignore this side-channel key.
             var codexEffort = ReasoningOptionsResolver.ResolveCodexReasoningEffort(definition.ReasoningEffort);
             if (codexEffort is not null)
             {
@@ -130,7 +130,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         }
         else if (ReasoningOptionsResolver.IsReasoningRequested(definition.ReasoningEffort))
         {
-            // Omit think: Ollama rejects true/levels, while omission permits chat-template reasoning.
+            // Omit think: omission permits chat-template reasoning.
         }
         else
         {

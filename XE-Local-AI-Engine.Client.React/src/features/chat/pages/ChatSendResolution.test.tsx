@@ -131,10 +131,8 @@ describe("Chat send-conversation resolution", () => {
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 	});
 

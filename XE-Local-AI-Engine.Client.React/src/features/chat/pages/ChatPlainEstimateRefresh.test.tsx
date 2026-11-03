@@ -92,10 +92,8 @@ describe("Chat plain toggle and the pre-send estimate", () => {
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 		adapter.listConversations.mockResolvedValue({ conversations: [conversation] });
 		adapter.getConversation.mockResolvedValue(conversation);

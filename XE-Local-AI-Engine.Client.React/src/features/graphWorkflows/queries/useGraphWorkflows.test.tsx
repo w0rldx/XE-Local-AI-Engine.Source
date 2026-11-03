@@ -220,10 +220,8 @@ describe("graph workflow read hooks", () => {
 		server.use(
 			http.get(localApiPath("models"), () =>
 				HttpResponse.json({
-					isAvailable: true,
 					items: [
 						localModel({ modelName: "qwen3", displayLabel: "Qwen 3", kind: "Chat", provider: "llamacpp" }),
-						localModel({ modelName: "ollama-chat", kind: "Chat", provider: "ollama", isToolCapable: false }),
 						localModel({
 							modelName: "ext:lan/llama",
 							kind: "Chat",
@@ -243,7 +241,13 @@ describe("graph workflow read hooks", () => {
 						localModel({ modelName: "my-deploy", displayLabel: "My deploy", kind: "Chat", provider: "AzureFoundry" }),
 						localModel({ modelName: "nomic-embed", kind: "Embedding", detectedKind: "Embedding", provider: "llamacpp" }),
 						localModel({ modelName: "julia-1", displayLabel: "Julia-1", kind: "Decision", provider: "llamacpp" }),
-						localModel({ modelName: "ollama-decision", kind: "Decision", provider: "ollama" }),
+						localModel({
+							modelName: "ext:lan/decision",
+							kind: "Decision",
+							provider: "external",
+							externalConnectionName: "LAN box",
+							declaredLocality: "local",
+						}),
 					],
 				}),
 			),
@@ -262,10 +266,9 @@ describe("graph workflow read hooks", () => {
 			]),
 		);
 
-		await waitFor(() => expect(agent.result.current.data).toHaveLength(6));
+		await waitFor(() => expect(agent.result.current.data).toHaveLength(5));
 		expect(agent.result.current.data?.map((option) => option.value)).toEqual([
 			"qwen3",
-			"ollama-chat",
 			"ext:lan/llama",
 			"ext:hosted/big",
 			"gpt-5.5",

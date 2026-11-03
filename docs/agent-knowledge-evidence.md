@@ -672,28 +672,10 @@ asserts on the factory's `ChatOptions`, upstream of the adapter, so it cannot ca
 hits for `grammar`, `json_schema`, `response_format` or `gbnf`; only llama-server's `--verbose` shows the compiled GBNF,
 with no host restart needed.
 
-### OllamaSharp wraps HTTP **400 only** into `OllamaException` — every other status is a bare `HttpRequestException`
+### Unloading a model ejects every llama-server role, because residency is not the provider map
 
-Found by a second-pass review of the S7 unload change, via `ilspycmd` of `OllamaApiClient.EnsureSuccessStatusCodeAsync` in
-the 5.4.30 package.
-
-### Unloading a model asks BOTH local runtimes, because residency is not the provider map
-
-Routing on the provider map sent an Ollama-resident, unmapped model to three no-op llama-server ejects and left it loaded.
-`LoadedModelsPageE2ETests` caught it through the page's Ollama eject button; that UI path was removed on 2026-09-23 by
-operator decision. `Unloaded` is false only when a llama-server role reported `TimedOutStillBusy`.
-
-### The Ollama gate-off branch registers no-op `IModelCapabilityClient` and `IOllamaModelService`, so the node still boots
-
-Before the fix `OllamaModelService` was registered unconditionally in `AddNodeWorkerInfrastructureExtensions` although it
-needs an `IOllamaApiClient` that only exists on the gate-on side, so a gate-off Development host failed `ValidateOnBuild`
-and other hosts threw at the first resolve of `LocalModelCatalogService`, `CapacityService`, `ModelClassificationService`,
-`ModelFitQueryService`, `OllamaProviderMapBackfillCoordinator`, `GetRunningLocalModelsEndpoint`,
-`GetLocalModelDetailsEndpoint` or `UnloadLocalModelEndpoint`. Nuance: `InstalledModelInventoryResult.OllamaQuerySucceeded`
-is `true` under the no-op (an empty list is a successful query); nothing reads it for reachability. Latent and not fixed:
-`OllamaProviderMapBackfillCoordinator.ListInstalledNamesAsync` is called once outside any `try` and once inside one whose
-only non-cancellation catch is `InvalidOperationException or IOException`, so a real dead daemon's `HttpRequestException`
-escapes the backfill; the gate-off path does not reach it.
+Routing on the provider map once sent a resident, unmapped model to no-op ejects and left it loaded; a browser test caught
+it. `Unloaded` is false only when a llama-server role reported `TimedOutStillBusy`.
 
 ### Post-turn background model work shares the chat's single llama-server slot, so it yields to every turn
 
@@ -797,8 +779,8 @@ ever reached the supervisor since the section was introduced, because the provid
 
 ### a reverse provider→application `ProjectReference` fails at RESTORE, not in an architecture test
 
-Found during the OllamaSharp boundary migration (static-quality S5): the reverse-cycle break-proof
-(`Providers.Ollama` → `Client.Application`, which already references `Providers.Ollama`) failed `dotnet restore` with
+Found during a provider SDK boundary migration (static-quality S5): the reverse-cycle break-proof
+(a provider project → `Client.Application`, which already references that provider) failed `dotnet restore` with
 `error MSB4006: There is a circular dependency in the target dependency graph involving target
 "_GenerateRestoreProjectPathWalk"`, before any test ran. The guard demonstrated is the project graph itself, not
 `LayerDependencyTests`.
@@ -1054,12 +1036,6 @@ across nine files (2026-09-20).
 One test read a tab's content synchronously and only passed because a modal's open transition gave an in-flight
 request time to land; with transitions off the click is immediate and the read had to become a `findBy*`. The
 three-effect behaviour was read from the installed `@mantine/core` ESM (`OptionalPortal`, `Transition`, `TabsPanel`).
-
-### A gated-off Ollama runtime is a UI state, not an empty list
-
-The loaded-models page stopped showing Ollama at all on 2026-09-23. The probe hook is its own query over the
-running-models endpoint at infinite `staleTime`; the dependency-cruiser fingerprint baseline is no-growth, which is
-why the hook lives in `core/`.
 
 ### an AudioWorklet is ONE self-contained `.js` file imported with `?url`
 

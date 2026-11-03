@@ -44,9 +44,9 @@ function rateRow(overrides: Partial<UsageRateRow>): UsageRateRow {
 }
 
 describe("NodeSettingsFieldsModel validators", () => {
-	it("accepts http/https Ollama endpoints and rejects non-URLs", () => {
-		expect(validateOptionalHttpUrl("http://127.0.0.1:11434")).toEqual({ value: "http://127.0.0.1:11434" });
-		expect(validateOptionalHttpUrl("https://ollama.local")).toEqual({ value: "https://ollama.local" });
+	it("accepts http/https URLs and rejects non-URLs", () => {
+		expect(validateOptionalHttpUrl("http://127.0.0.1:8888")).toEqual({ value: "http://127.0.0.1:8888" });
+		expect(validateOptionalHttpUrl("https://searxng.local")).toEqual({ value: "https://searxng.local" });
 		expect(validateOptionalHttpUrl("")).toEqual({});
 		expect(validateOptionalHttpUrl("not-a-url")).toEqual({ error: "url" });
 		expect(validateOptionalHttpUrl("ftp://host")).toEqual({ error: "url" });
@@ -125,7 +125,6 @@ describe("NodeSettingsFieldsModel mapping", () => {
 		defaultModelName: "qwen3:8b",
 		enableTools: false,
 		toolCapableModels: ["qwen3:8b"],
-		ollamaEndpoint: "http://127.0.0.1:11434",
 		huggingFaceDefaultQuant: "Q4_K_M",
 		llamaMaxLoadedProcesses: 5,
 		minLlamaMaxLoadedProcesses: 1,
@@ -218,11 +217,16 @@ describe("buildNodeSettingsRequest", () => {
 		expect(body).toEqual({ toolRelevanceEnabled: true });
 	});
 
-	it("sends a cleared Ollama endpoint as null, the clear back to the default", () => {
-		const configured = { ...baseline, ollamaEndpoint: "http://127.0.0.1:11500" };
-		const { body, errors } = buildNodeSettingsRequest({ ...configured, ollamaEndpoint: "  " }, configured, bounds, false);
+	it("never sends a removed setting, even when an older response or form still carries it", () => {
+		// The save request answers 400 on an unknown member, so one stale key would fail every save on the page.
+		const olderResponse = { defaultModelName: "qwen3:8b", ollamaEndpoint: "http://127.0.0.1:11434" };
+		const stale = toNodeSettingsFieldsForm(olderResponse);
+		expect(stale).not.toHaveProperty("ollamaEndpoint");
+
+		const edited = { ...stale, huggingFaceDefaultQuant: "Q8_0", ollamaEndpoint: "http://127.0.0.1:11500" };
+		const { body, errors } = buildNodeSettingsRequest(edited, stale, bounds, false);
 		expect(errors).toEqual({});
-		expect(body).toEqual({ ollamaEndpoint: null });
+		expect(body).toEqual({ huggingFaceDefaultQuant: "Q8_0" });
 	});
 
 	it("sends the web-access switch only when toggled, and never restart-gates it", () => {

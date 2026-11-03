@@ -57,7 +57,7 @@ public sealed class SelectLocalModelEndpoint : Endpoint<SelectLocalModelRequest,
     ///     — and storing it would make it the node default, from which every chat turn would fail to route with no
     ///     explanation. The reconciliation pass clears such a default at startup; this stops one being written at all.
     ///     Only external ids are checked here: an unknown id under any OTHER provider is a legitimate selection (a
-    ///     model still downloading, an Ollama tag pulled later), and this endpoint does not verify installation.
+    ///     model still downloading), and this endpoint does not verify installation.
     /// </remarks>
     private async Task<bool> ValidateExternalRegistrationAsync(string? modelName, CancellationToken ct)
     {

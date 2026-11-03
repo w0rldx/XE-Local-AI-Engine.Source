@@ -181,8 +181,8 @@ function toValidBoundedInt(value: number | string, bounds: NumericBounds): numbe
 	return numeric;
 }
 
-// http/https URL validator for the Ollama endpoint and the SearXNG URL (mirrors the server's BeAbsoluteHttpUrl). Empty
-// resolves to undefined; each caller decides what a blank means on save.
+// http/https URL validator for the SearXNG URL (mirrors the server's BeAbsoluteHttpUrl). Empty resolves to undefined;
+// the caller decides what a blank means on save.
 const httpUrlSchema = z
 	.string()
 	.trim()
@@ -246,7 +246,6 @@ export interface NodeSettingsFieldsForm {
 	// Web access (web_search + web_fetch). Off by default; an empty SearXNG URL means DuckDuckGo.
 	webAccessEnabled: boolean;
 	webSearchSearxngUrl: string;
-	ollamaEndpoint: string;
 	huggingFaceDefaultQuant: string;
 	llamaMaxLoadedProcesses: number | string;
 	// Shown and edited in MINUTES (see nodeSettingsDisplayScale); the key keeps the wire name so request keys stay 1:1.
@@ -574,7 +573,6 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	toolCapableModels: [],
 	webAccessEnabled: false,
 	webSearchSearxngUrl: "",
-	ollamaEndpoint: "",
 	huggingFaceDefaultQuant: "",
 	llamaMaxLoadedProcesses: 3,
 	llamaIdleTimeToLiveSeconds: 15,
@@ -743,7 +741,6 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		toolCapableModels: response.toolCapableModels ? [...response.toolCapableModels] : [],
 		webAccessEnabled: response.webAccessEnabled ?? nodeSettingsFieldDefaults.webAccessEnabled,
 		webSearchSearxngUrl: response.webSearchSearxngUrl ?? "",
-		ollamaEndpoint: response.ollamaEndpoint ?? "",
 		huggingFaceDefaultQuant: response.huggingFaceDefaultQuant ?? "",
 		llamaMaxLoadedProcesses: numberOr(response.llamaMaxLoadedProcesses, nodeSettingsFieldDefaults.llamaMaxLoadedProcesses),
 		llamaIdleTimeToLiveSeconds: scaledOr(response.llamaIdleTimeToLiveSeconds, "llamaIdleTimeToLiveSeconds"),
@@ -1156,17 +1153,6 @@ export function buildNodeSettingsRequest(
 		} else {
 			// A blank field is sent as null — the clear back to DuckDuckGo.
 			body.webSearchSearxngUrl = searxngUrl.value ?? null;
-		}
-	}
-
-	if (form.ollamaEndpoint !== baseline.ollamaEndpoint) {
-		const endpoint = validateOptionalHttpUrl(form.ollamaEndpoint);
-		if (endpoint.error) {
-			errors["ollamaEndpoint"] = endpoint.error;
-		} else {
-			// As for the SearXNG URL: a blank field is sent as null, which the node stores as unset and resolves to its
-			// default endpoint.
-			body.ollamaEndpoint = endpoint.value ?? null;
 		}
 	}
 

@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Eval gate orchestration over a SEEDED golden set via fake runner + fake judge (no Ollama). The fake runner keys
+///     Eval gate orchestration over a SEEDED golden set via fake runner + fake judge (no model runtime). The fake runner keys
 ///     its output on whether the system prompt contains the candidate behavior, so a test can stage a regression by
 ///     scripting the judge to fail the candidate output but pass the baseline output.
 /// </summary>
@@ -56,7 +56,7 @@ public sealed class PlaybookEvalServiceTests
         var trust = Substitute.For<IModelTrustResolver>();
         trust.ResolveAsync("test-model", Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Cloud);
         var provider = Substitute.For<ILocalModelProvider>();
-        provider.ProviderName.Returns("ollama");
+        provider.ProviderName.Returns("another-runtime");
         var runner = new FakePlaybookEvalAgentRunner();
         var service = CreateServiceCore(agentId, actionId, suggestedPriority: 100, [], [JudgeCase(agentId)], runner,
             new FakePlaybookEvalJudge((_, _) => true), maxGoldenCases: 25, out var actionService, trust, provider);
@@ -458,7 +458,7 @@ public sealed class PlaybookEvalServiceTests
         ILocalModelProvider? localModelProviderOverride = null)
     {
         var localModelProvider = Substitute.For<ILocalModelProvider>();
-        localModelProvider.ProviderName.Returns("ollama");
+        localModelProvider.ProviderName.Returns("another-runtime");
         localModelProvider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(Substitute.For<IChatClient>());
         var providerResolver = SingleProviderResolverFactory.Create(localModelProviderOverride ?? localModelProvider);
 
@@ -580,7 +580,7 @@ public sealed class PlaybookEvalServiceTests
 
     /// <summary>
     ///     Scripted runner: returns "candidate output" when the system prompt contains the candidate behavior,
-    ///     else "baseline output". No Ollama.
+    ///     else "baseline output". No model runtime.
     /// </summary>
     private sealed class FakePlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
     {
@@ -599,7 +599,7 @@ public sealed class PlaybookEvalServiceTests
 
     /// <summary>
     ///     Captures the candidate system prompt (the one containing the candidate behavior) so a test can assert
-    ///     composition order. No Ollama.
+    ///     composition order. No model runtime.
     /// </summary>
     private sealed class CapturingEvalAgentRunner : IPlaybookEvalAgentRunner
     {

@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic CI guard for framework approval behavior (no Ollama, no network). Locks in the live finding from
+///     Deterministic CI guard for framework approval behavior (no network). Locks in the live finding from
 ///     the approval-gate probe: the framework-native approval gate
 ///     (<see cref="ApprovalRequiredAIFunction" /> + <c>UseFunctionInvocation</c>) PAUSES — run#1 surfaces a
 ///     <see cref="ToolApprovalRequestContent" /> and does NOT execute the tool — and a THREADLESS resume

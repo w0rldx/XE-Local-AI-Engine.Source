@@ -885,12 +885,12 @@ public sealed class ConversationCompactionServiceTests
         return distillation;
     }
 
-    // The real warmer over a substituted provider: a resident llama.cpp server reporting the given window, or (null) an
-    // Ollama-served model, which the warmer never reads a window from.
+    // The real warmer over a substituted provider: a resident llama.cpp server reporting the given window, or (null) one
+    // reporting none, which keeps the summarizer's default.
     private static LocalRuntimeWarmer CreateWarmer(int? residentWindowTokens)
     {
         var provider = Substitute.For<ILocalModelProvider>();
-        provider.ProviderName.Returns(residentWindowTokens is null ? "ollama" : LlamaServerProviderConstants.ProviderName);
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
         provider.GetRuntimeInfoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(new LocalModelRuntimeInfo
                 {

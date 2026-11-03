@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Reasoning-off must reach llama.cpp. The MEAI OpenAI adapter drops the Ollama <c>think:false</c>, so
+///     Reasoning-off must reach llama.cpp. The MEAI OpenAI adapter drops the <c>think:false</c> option, so
 ///     <see cref="DeferredLlamaServerChatClient.ApplyThinkingSwitch" /> injects <c>enable_thinking=false</c> into
 ///     <c>chat_template_kwargs</c> via <c>ChatCompletionOptions.Patch</c> on the raw representation.
 /// </summary>

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     The single admission gate before any local sub-agent model loads: provider class (cloud, llama.cpp or Ollama), the running-models
+///     The single admission gate before any local sub-agent model loads: provider class (cloud or llama.cpp), the running-models
 ///     snapshot, the footprint estimate, the byte budget and the process cap fold into one <see cref="CapacityDecision" /> per model+role.
 /// </summary>
 /// <remarks>

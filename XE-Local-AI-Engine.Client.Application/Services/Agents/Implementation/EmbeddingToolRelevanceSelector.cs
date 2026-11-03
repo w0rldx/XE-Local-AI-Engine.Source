@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Embedding-backed <see cref="IToolRelevanceSelector" />, in the shape of
@@ -94,7 +93,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             // the guard stays honest if a future revision flows a token in.
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Every node-local embedding hiccup lands here: an unpulled model, a downed runtime, a spent profiling
             // retry, a transport error, an unregistered provider. None may break a send or hide a tool.

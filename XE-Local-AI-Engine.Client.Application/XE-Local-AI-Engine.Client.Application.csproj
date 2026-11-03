@@ -87,7 +87,6 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompat\XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
     <!-- Direct, not transitive-through-OpenAICompat: the external-provider store calls OpenAICompatibleBaseAddress as
          the authority for what a stored base URL means and CustomHeaderRules for what a header may be named, and the

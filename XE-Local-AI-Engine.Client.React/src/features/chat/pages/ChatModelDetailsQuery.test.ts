@@ -4,7 +4,7 @@ import type { ModelOption } from "@/core/models/ModelOption";
 import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 
 function option(overrides: Partial<ModelOption>): ModelOption {
-	return { value: "model", label: "model", isAvailable: true, ...overrides };
+	return { value: "model", label: "model", ...overrides };
 }
 
 describe("shouldFetchLocalModelDetails", () => {
@@ -22,26 +22,8 @@ describe("shouldFetchLocalModelDetails", () => {
 		);
 	});
 
-	it("still refuses a cloud selection the picker marked unavailable", () => {
-		expect(shouldFetchLocalModelDetails("gpt-5.6-sol", option({ isCloud: true, isAvailable: false }), false)).toBe(false);
-	});
-
-	it("does not fetch when the matched option is explicitly unavailable", () => {
-		expect(shouldFetchLocalModelDetails("llama3:8b", option({ isAvailable: false }), true)).toBe(false);
-	});
-
-	it("fetches for an available, installed GGUF (llamacpp) selection — the node serves its details as a 200", () => {
-		expect(
-			shouldFetchLocalModelDetails(
-				"Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
-				option({ provider: "llamacpp", isAvailable: true }),
-				true,
-			),
-		).toBe(true);
-	});
-
-	it("fetches for an available, installed Ollama selection", () => {
-		expect(shouldFetchLocalModelDetails("llama3:8b", option({ provider: "Ollama", isAvailable: true }), true)).toBe(true);
+	it("fetches for an installed GGUF (llamacpp) selection — the node serves its details as a 200", () => {
+		expect(shouldFetchLocalModelDetails("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", option({ provider: "llamacpp" }), true)).toBe(true);
 	});
 
 	it("fetches when no option is matched but the resolved default name is installed (default sentinel)", () => {
@@ -51,15 +33,7 @@ describe("shouldFetchLocalModelDetails", () => {
 	it("fetches for an external selection, which is never in the installed list but does have declared details", () => {
 		// The declared context window is the one detail the endpoint answers for an `ext:` id, and the context-usage
 		// meter is its only consumer — gating it on the installed list metered every external turn against "—".
-		expect(
-			shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external", isAvailable: true }), false),
-		).toBe(true);
-	});
-
-	it("still refuses an external selection the picker marked unavailable", () => {
-		expect(
-			shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external", isAvailable: false }), false),
-		).toBe(false);
+		expect(shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external" }), false)).toBe(true);
 	});
 
 	it("does not fetch a configured-but-not-installed starter model (resolved name absent from the installed list)", () => {

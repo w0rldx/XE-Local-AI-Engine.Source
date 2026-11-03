@@ -162,10 +162,8 @@ describe("Chat cold-load resume", () => {
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 		adapter.listConversations.mockResolvedValue({ conversations: [parkedConversation()] });
 		adapter.getConversation.mockImplementation(async (conversationId: string) => parkedConversation(conversationId));

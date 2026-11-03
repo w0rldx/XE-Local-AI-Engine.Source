@@ -138,10 +138,8 @@ describe("Chat web content review mode on the wire", () => {
 		localStorage.setItem("xe-node-chat-web-auto:conversation-auto", "true");
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 		adapter.listConversations.mockResolvedValue({ conversations: [autoConversation, reviewConversation] });
 		adapter.getConversation.mockImplementation(async (id) =>

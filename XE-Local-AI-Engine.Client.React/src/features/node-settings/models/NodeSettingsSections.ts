@@ -79,7 +79,6 @@ const nodeSettingsFieldSections: Readonly<
 	speculativeDraftModelName: "runtime",
 	speculativeDraftMaxTokens: "runtime",
 	chatCacheReuse: "runtime",
-	ollamaEndpoint: "runtimes",
 	huggingFaceDefaultQuant: "models",
 	rerankerModelName: "knowledge",
 	knowledgeEmbeddingModelName: "knowledge",

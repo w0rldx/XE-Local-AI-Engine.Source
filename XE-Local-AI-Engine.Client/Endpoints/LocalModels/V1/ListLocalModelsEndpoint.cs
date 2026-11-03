@@ -28,22 +28,12 @@ public sealed class ListLocalModelsEndpoint : EndpointWithoutRequest<ListLocalMo
         var cloudModels = ToCloudModelResponses(catalog);
         var externalModels = LocalModelsMapper.ToExternalProviderModelResponses(catalog.ExternalModels, catalog.SelectedModelName);
 
-        // A null model list is the catalog's only unavailability signal: Ollama could not be reached, so the response
-        // degrades to the installed-GGUF + cloud + external entries the other sources still supplied.
-        var response = catalog.OllamaModels is null
-            ? LocalModelsMapper.ToUnavailableListResponse(catalog.SelectedModelName,
-                catalog.ConfiguredDefaultModelName,
-                "Local model provider is unavailable.",
-                cloudModels,
-                catalog.InstalledGgufModels,
-                externalModels)
-            : LocalModelsMapper.ToListResponse(catalog.OllamaModels,
-                catalog.SelectedModelName,
-                catalog.ConfiguredDefaultModelName,
-                catalog.Classifications,
-                cloudModels,
-                catalog.InstalledGgufModels,
-                externalModels);
+        var response = LocalModelsMapper.ToListResponse(catalog.SelectedModelName,
+            catalog.ConfiguredDefaultModelName,
+            catalog.Classifications,
+            cloudModels,
+            catalog.InstalledGgufModels,
+            externalModels);
 
         await Send.OkAsync(response, ct);
     }

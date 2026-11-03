@@ -834,7 +834,6 @@ public sealed class StubNodeRuntimeSettings
         settings.GetDefaultModelName().Returns(_defaultModelName);
         settings.GetToolCapableModels().Returns(_toolCapableModels);
         settings.GetToolCapableModelsSeed().Returns(_ => _toolCapableModelsSeed);
-        settings.GetOllamaEndpoint().Returns(StoredNodeSettings.DefaultOllamaEndpoint);
         settings.GetHuggingFaceDefaultQuant().Returns(_huggingFaceDefaultQuant);
         settings.GetHuggingFaceDiskMarginBytes().Returns(_huggingFaceDiskMarginBytes);
         settings.GetLlamaMaxLoadedProcesses().Returns(_llamaMaxLoadedProcesses);

@@ -277,7 +277,7 @@ describe("DevWorkflowsPage", () => {
 			projectsRoute(),
 			// The only case here that reaches the editor: its form fills the agent and model pickers.
 			jsonRoute("get", "agents", { items: [] }),
-			jsonRoute("get", "models", { isAvailable: true, items: [] }),
+			jsonRoute("get", "models", { items: [] }),
 		);
 		renderWithProviders(
 			<ConfirmProvider>

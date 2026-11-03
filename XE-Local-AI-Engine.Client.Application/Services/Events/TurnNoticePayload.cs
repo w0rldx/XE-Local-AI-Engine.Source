@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 ///     server-side is instead surfaced to the chat client as a sanitized, structured notice.
 /// </summary>
 /// <remarks>
-///     A model substitution, a tool disabled after repeated invalid calls, a history truncation. Mirrors
+///     A tool disabled after repeated invalid calls, a history truncation. Mirrors
 ///     <see cref="ToolCallLifecyclePayload" />'s shape and fan-out so the local send/regenerate/resume paths cannot
 ///     drift. <see cref="Message" /> is always a fixed, path-free, user-facing string; nothing here ever carries a raw
 ///     exception, stack trace, or file path.
@@ -19,7 +19,7 @@ public sealed record TurnNoticePayload
     /// <summary>Sanitized, user-facing description of what happened.</summary>
     public required string Message { get; init; }
 
-    /// <summary>Optional sanitized detail (e.g. the substituted model name, or the disabled tool's name).</summary>
+    /// <summary>Optional sanitized detail (e.g. the disabled tool's name).</summary>
     public string? Detail { get; init; }
 }
 
@@ -28,7 +28,8 @@ public sealed record TurnNoticePayload
 /// </summary>
 public enum TurnNoticeKind
 {
-    /// <summary>The requested model could not be verified; the turn ran on the node's fallback default instead.</summary>
+    /// <summary>Obsolete: no longer emitted. Requests now pass through with no verification that could substitute the model.</summary>
+    /// <remarks>Kept so persisted replies that carry it still render, like <see cref="QueuedBehindParkedTurn" />.</remarks>
     ModelSubstituted = 0,
 
     /// <summary>A tool was disabled for the rest of this turn after repeated invalid-argument calls.</summary>

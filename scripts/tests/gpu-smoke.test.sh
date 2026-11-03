@@ -388,11 +388,11 @@ check "picks the smallest by size, not the first listed" "small-05b" "$(pick_cha
 zero_size="$(records 'model\tunknown-size|Chat|true|llamacpp|0\nmodel\tknown-small|Chat|true|llamacpp|400\n')"
 check "a zero size does not masquerade as smallest" "known-small" "$(pick_chat_model "${zero_size}" "")"
 
-# /models merges providers into ONE list with Ollama FIRST. Picking an Ollama or cloud model
-# would run the chat turn on a runtime steps 1-2 never audited, and steps 3-4 could still pass —
-# certifying "the GPU did the work" without touching the llama.cpp runtime under test.
-ollama_first="$(records 'model\tllama3:8b|Chat|true|Ollama|100\nmodel\tqwen-chat|Chat|true|llamacpp|400\n')"
-check "skips an Ollama model that sorts first" "qwen-chat" "$(pick_chat_model "${ollama_first}" "")"
+# /models merges providers into ONE list. Picking a cloud model would run the chat turn on a runtime
+# steps 1-2 never audited, and steps 3-4 could still pass — certifying "the GPU did the work" without
+# touching the llama.cpp runtime under test.
+cloud_first="$(records 'model\tgpt-5-codex|Chat|true|CodexOAuth|100\nmodel\tqwen-chat|Chat|true|llamacpp|400\n')"
+check "skips a smaller cloud model listed first" "qwen-chat" "$(pick_chat_model "${cloud_first}" "")"
 
 cloud_only="$(records 'model\tgpt-5-codex|Chat|true|CodexOAuth|100\nmodel\tfoundry-model|Chat|true|AzureFoundry|100\n')"
 pick_chat_model "${cloud_only}" "" >/dev/null 2>&1

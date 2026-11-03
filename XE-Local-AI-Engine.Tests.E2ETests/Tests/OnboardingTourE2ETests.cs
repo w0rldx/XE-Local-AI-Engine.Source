@@ -4,8 +4,10 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Browser coverage for optional progressive tutorials. The normal fixture seeds all tutorial keys completed;
@@ -13,9 +15,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 /// </summary>
 public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
 {
-    private const string DefaultChatModel = "qwen3.5:0.8b";
-    private const string DefaultEmbeddingModel = "qwen3-embedding:0.6b";
+    private const string DefaultChatModel = FakeGatewayLocalModelProvider.ChatModel;
     private const string QuickStartProgressKey = XENodeE2EWebApplicationFactory.TourProgressStorageKey;
+    private const string TutorialReply = "Tutorial reply from the fake model";
     private const string AgentsProgressKey = "xe-onboarding-agents-v1-step";
     private const string KnowledgeBaseProgressKey = "xe-onboarding-knowledge-base-v1-step";
 
@@ -28,7 +30,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
     [Before(Test)]
     public async Task ClearSeededTutorialStateAsync()
     {
-        Factory.FakeOllamaState.Models = [DefaultChatModel, DefaultEmbeddingModel];
+        Factory.FakeGatewayState.Models = FakeGatewayLocalModelProvider.DefaultModels;
         await Factory.SetAdminTutorialStateAsync(null);
         await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
         {
@@ -44,8 +46,8 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
     [After(Test)]
     public async Task RestoreSeededTutorialStateAsync()
     {
-        Factory.FakeOllamaState.ChatScript = null;
-        Factory.FakeOllamaState.Models = [DefaultChatModel, DefaultEmbeddingModel];
+        Factory.FakeGatewayState.ChatResponder = null;
+        Factory.FakeGatewayState.Models = FakeGatewayLocalModelProvider.DefaultModels;
         await SetDefaultModelAsync(null);
         await Factory.SetAdminTutorialStateAsync(XENodeE2EWebApplicationFactory.CompletedMainAppTourState);
     }
@@ -93,11 +95,18 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
 
     [Test]
     [Category("Onboarding")]
-    public async Task QuickStart_ReadyModel_ShowsEveryCompactStep_AndCompletesAfterFakeOllamaReply()
+    public async Task QuickStart_ReadyModel_ShowsEveryCompactStep_AndCompletesAfterFakeModelReply()
     {
         await PrepareReadyQuickStartAsync();
         var replyGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        Factory.FakeOllamaState.ChatScript = _ => GatedTutorialReplyAsync(replyGate.Task);
+        Factory.FakeGatewayState.ChatResponder = async (_, ct) =>
+        {
+            await replyGate.Task.WaitAsync(ct);
+            return new FakeOpenAiGatewayScript
+            {
+                CompletionText = TutorialReply
+            };
+        };
         await Page.SetViewportSizeAsync(390, 844);
         await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
         {
@@ -143,7 +152,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
                 {
                     Timeout = 10000
                 });
-            await Expect(Page.GetByText("Tutorial reply from FakeOllama")).ToBeVisibleAsync();
+            await Expect(Page.GetByText(TutorialReply)).ToBeVisibleAsync();
 
             await Expect(ActiveTooltip).ToHaveCountAsync(0);
             await AssertTutorialStatusAsync("main-app-v1", "completed");
@@ -158,7 +167,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
     [Category("Onboarding")]
     public async Task QuickStart_MissingModel_ShowsModelAndRecommendationTargets_WithoutDownloading()
     {
-        Factory.FakeOllamaState.Models = [];
+        Factory.FakeGatewayState.Models = [];
         await SetDefaultModelAsync(null);
         await Page.SetViewportSizeAsync(390, 844);
         await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
@@ -220,7 +229,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
         await AssertTourStepAsync("chatInput", "[data-testid='chat-input']", QuickStartProgressKey);
 
         var chatInput = Page.GetByPlaceholder("Type your message");
-        await chatInput.FillAsync("Complete after this fast FakeOllama reply");
+        await chatInput.FillAsync("Complete after this fast fake reply");
         await PrimaryTourAction.ClickAsync();
         await AssertTourStepAsync("chatSend", "[data-testid='chat-send-button']", QuickStartProgressKey);
 
@@ -236,7 +245,7 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
             {
                 Timeout = 10000
             });
-        await Expect(Page.GetByText("[fake-ollama] Complete after this fast FakeOllama reply")).ToBeVisibleAsync();
+        await Expect(Page.GetByText($"{FakeGatewayLocalModelProvider.EchoPrefix} Complete after this fast fake reply")).ToBeVisibleAsync();
 
         await Page.RunAndWaitForResponseAsync(async () => await PrimaryTourAction.ClickAsync(),
             response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
@@ -420,11 +429,5 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
             string.Equals(entry.GetProperty("key").GetString(), key, StringComparison.Ordinal)
             && string.Equals(entry.GetProperty("status").GetString(), status, StringComparison.Ordinal));
         await Assert.That(matchingEntry).IsTrue();
-    }
-
-    private static async IAsyncEnumerable<string> GatedTutorialReplyAsync(Task replyGate)
-    {
-        await replyGate;
-        yield return "Tutorial reply from FakeOllama";
     }
 }

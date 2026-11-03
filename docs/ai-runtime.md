@@ -38,7 +38,6 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 | Microsoft Agent Framework 1.22.0 | `AIAgent` / `ChatClientAgent` integration, handoff workflows, tool invocation, approval, and workflow-event streaming. Framework types remain behind this repository's orchestration-session boundary. | <https://learn.microsoft.com/en-us/agent-framework/> and the official [1.22.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.agents.ai/1.22.0/microsoft.agents.ai.nuspec) |
 | llama.cpp `llama-server` b12014 | Primary local runtime, supervised as a host child process. The provider uses its `/v1/chat/completions` and `/v1/embeddings` OpenAI-compatible endpoints; compatibility is endpoint/feature-specific, not a guarantee for arbitrary OpenAI clients. | The pinned [b12014 server README](https://github.com/ggml-org/llama.cpp/blob/aa588a3463357ee990b314f41dda242869130704/tools/server/README.md) and [release](https://github.com/ggml-org/llama.cpp/releases/tag/b12014) |
 | HuggingFace | GGUF model discovery + download (`XE-Local-AI-Engine.Providers.HuggingFace`). | <https://huggingface.co/docs/hub/gguf> |
-| Ollama | Optional/legacy local provider (present but de-orchestrated from Aspire dev): inventory, pull/delete/warm/unload, chat, embeddings via OllamaSharp. | <https://docs.ollama.com/api> and <https://docs.ollama.com/capabilities/embeddings> |
 | Codex OAuth (cloud; integration-sensitive) | Optional cloud chat adapter using the ChatGPT-login Codex Responses endpoint used by Codex CLI. It is distinct from the public API-key Responses endpoint; revalidate this transport whenever the provider changes. | OpenAI's [Codex agent-loop engineering article](https://openai.com/index/unrolling-the-codex-agent-loop/) distinguishes the ChatGPT-login and public API-key endpoints. |
 
 ## Maintenance rules
@@ -47,7 +46,7 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 2. Resolve offered tools by name through the built-in, ClientLocal, MCP, and custom-tool registries before an agent run starts. Unknown offered names must be dropped, not executed. Custom tools additionally remain behind the node-wide off-by-default switch, their per-tool enabled/acknowledged state, node-local model gating, and approval wrapping.
 3. Keep executable tool schemas derived from the executable or registered descriptor; do not hand-copy model-visible JSON schemas into unrelated DTOs.
 4. Keep Agent Framework workflow types behind the `IOrchestrationRunSession` / factory boundary so `.Client.Application` stays framework-type-agnostic.
-5. Treat Ollama model names, context-length metadata, and embedding dimensions as provider observations, not hard-coded invariants.
+5. Treat model names, context-length metadata, and embedding dimensions as provider observations, not hard-coded invariants.
 6. Treat cloud-provider credentials (Codex OAuth tokens) and the HuggingFace token as local secrets. They may configure a chat client or download path but must not be logged, returned to the browser, or included in transcripts.
 7. Preserve cancellation-token flow through chat, embedding, tool, MCP, and sandbox operations.
 8. Treat current online snippets as version-sensitive. At the repository's MAF 1.22.0 / MEAI 10.10.0 pins, verify approval and workflow types against the resolved package artifacts before copying framework examples.
@@ -59,6 +58,6 @@ Run the normal backend/frontend validation for production code changes. For AI-s
 - model/provider selection and fallback;
 - tool schema/approval resolution;
 - orchestration event normalization;
-- llama.cpp process supervision, GGUF model resolution, and Ollama model inventory/context parsing;
+- llama.cpp process supervision and GGUF model resolution;
 - cloud-provider (Codex OAuth) credential validation and redaction;
 - embedding service behavior for empty input and cancellation.

@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 internal static class AddNodeDraftingExtensions
 {
@@ -43,8 +42,7 @@ internal static class AddNodeDraftingExtensions
         // Singleton: the draft slot is process-wide, and it reads the two singleton busy signals.
         builder.Services.AddSingleton<DraftAdmissionGate>();
 
-        // Scoped, not singleton: eligibility reads the scoped, DbContext-backed IModelClassificationStore. The Ollama model service is
-        // always registered — the capability gate substitutes one reporting no installed model, so a llama.cpp-only node just makes them ineligible.
+        // Scoped, not singleton: eligibility reads the scoped, DbContext-backed IModelClassificationStore.
         builder.Services.AddScoped<IConfigDraftService>(serviceProvider => new DefaultConfigDraftService(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
             serviceProvider.GetRequiredService<IGgufModelStore>(),
             serviceProvider.GetRequiredService<IModelClassificationStore>(),
@@ -52,8 +50,7 @@ internal static class AddNodeDraftingExtensions
             serviceProvider.GetRequiredService<IOptions<DraftingOptions>>(),
             serviceProvider.GetRequiredService<INodeSettingsStore>(),
             serviceProvider.GetRequiredService<TimeProvider>(),
-            serviceProvider.GetRequiredService<ILogger<DefaultConfigDraftService>>(),
-            serviceProvider.GetRequiredService<IOllamaModelService>()));
+            serviceProvider.GetRequiredService<ILogger<DefaultConfigDraftService>>()));
 
         return builder;
     }

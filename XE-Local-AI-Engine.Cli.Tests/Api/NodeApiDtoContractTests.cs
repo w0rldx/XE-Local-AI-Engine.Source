@@ -13,6 +13,7 @@ public sealed class NodeApiDtoContractTests
 {
     private const string Chat = "XE_Local_AI_EngineClientEndpointsLocalChatV1";
     private const string Models = "XE_Local_AI_EngineClientEndpointsLocalModelsV1";
+    private const string ModelFit = "XE_Local_AI_EngineClientEndpointsModelFitV1";
     private const string AuthSchemas = "XE_Local_AI_EngineClientEndpointsAuthV1";
 
     [Test]
@@ -28,8 +29,8 @@ public sealed class NodeApiDtoContractTests
     [Arguments(typeof(QuestionAnswer), Chat + "ResolveUserQuestionAnswerDto")]
     [Arguments(typeof(LocalModelList), Models + "ListLocalModelsResponse")]
     [Arguments(typeof(LocalModel), Models + "LocalModelResponse")]
-    [Arguments(typeof(RunningModelList), Models + "RunningLocalModelsResponse")]
-    [Arguments(typeof(RunningModel), Models + "RunningLocalModelResponse")]
+    [Arguments(typeof(RunningModelList), ModelFit + "ListRunningModelsResponse")]
+    [Arguments(typeof(RunningModel), ModelFit + "RunningModelResponse")]
     [Arguments(typeof(AgentDefinitionList), "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentDefinitionsResponse")]
     [Arguments(typeof(AgentDefinition), "XE_Local_AI_EngineClientEndpointsAgentsV1AgentDefinitionResponse")]
     [Arguments(typeof(NodeInfo), "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoResponse")]
@@ -71,7 +72,7 @@ public sealed class NodeApiDtoContractTests
                      "chat/approvals/resolve",
                      "chat/questions/resolve",
                      "models",
-                     "models/running",
+                     "model-fit/running",
                      "agents",
                      "diagnostics/node-info"
                  })

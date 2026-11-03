@@ -2625,14 +2625,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Primitives@10.0.13",
-			"name": "Microsoft.Extensions.Primitives",
-			"version": "10.0.13",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.Extensions.Primitives@10.0.14",
 			"name": "Microsoft.Extensions.Primitives",
 			"version": "10.0.14",
@@ -3007,14 +2999,6 @@
 			"license": "MIT",
 			"homepageUrl": "https://github.com/sindresorhus/object-assign#readme",
 			"source": "frontend"
-		},
-		{
-			"id": "backend:OllamaSharp@5.5.0",
-			"name": "OllamaSharp",
-			"version": "5.5.0",
-			"license": "MIT",
-			"homepageUrl": "https://github.com/awaescher/OllamaSharp",
-			"source": "backend"
 		},
 		{
 			"id": "backend:OpenAI@2.14.0",

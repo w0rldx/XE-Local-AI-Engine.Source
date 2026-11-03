@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
 ///     Pure mapping from the runtime's own provider names to the canonical usage-ledger provider labels
@@ -11,8 +10,8 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 /// </summary>
 /// <remarks>
 ///     A resolved cloud selection wins: a turn that reached a cloud provider is attributed there even if a local model of the
-///     same name exists. An external OpenAI-compatible model is attributed to its own connection; otherwise the local runtime
-///     serving the model decides <c>local</c> (llama.cpp) vs <c>ollama</c>. Anything unrecognized, including a cloud name this
+///     same name exists. An external OpenAI-compatible model is attributed to its own connection; otherwise a model
+///     served by llama.cpp is <c>local</c>. Anything unrecognized, including a cloud name this
 ///     build does not know and the "no provider resolved" case, degrades to <see cref="AgentUsageProviders.Unknown" />. No I/O
 ///     and no throwing; the async resolution around it lives in <see cref="UsageProviderResolver" />.
 /// </remarks>
@@ -54,13 +53,8 @@ internal static class UsageProviderClassifier
                 : AgentUsageProviders.Unknown;
         }
 
-        if (string.Equals(localProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
-        {
-            return AgentUsageProviders.Local;
-        }
-
-        return string.Equals(localProviderName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase)
-            ? AgentUsageProviders.Ollama
+        return string.Equals(localProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
+            ? AgentUsageProviders.Local
             : AgentUsageProviders.Unknown;
     }
 }

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 ///     (<c>ModelCapabilityResolver.ResolveAsync</c>) and the <c>/models</c> <c>IsToolCapable</c> tag in <c>LocalModelsMapper</c>.
 ///     Tool calling is enabled for all Azure OpenAI chat deployments (the MEAI Azure OpenAI pipeline supports function
 ///     invocation). Reasoning / extended thinking is NOT advertised, so the gate keeps thinking off: a generic Azure OpenAI
-///     chat deployment (GPT-4 class) is no reasoning model, and the Ollama-shaped <c>think</c> is meaningless on the Azure wire.
+///     chat deployment (GPT-4 class) is no reasoning model, and the <c>think</c> field is meaningless on the Azure wire.
 /// </remarks>
 public static class AzureFoundryProviderCapabilities
 {

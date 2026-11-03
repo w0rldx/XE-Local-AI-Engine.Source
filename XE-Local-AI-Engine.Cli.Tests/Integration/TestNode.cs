@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 /// <remarks>
 ///     The CLI tests cannot reference <c>XE-Local-AI-Engine.Tests</c>, whose <c>TestServerWebAppFactory</c> also starts a
-///     FakeOllama server; these tests replace the chat stream service instead, so they keep only the host deviations
+///     fake gateway server; these tests replace the chat stream service instead, so they keep only the host deviations
 ///     that matter here. Host bootstrap mutates process-global state, so starts are serialized.
 /// </remarks>
 internal sealed class TestNode : IAsyncDisposable

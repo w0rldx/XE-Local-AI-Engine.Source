@@ -67,7 +67,7 @@ the synthetic transcript entry for tool-free turns; graph-workflow LLM call node
 caller. It is not a security boundary — FICC never executed a tool that was not offered.
 
 The decoration is exposed as a **public** method specifically so test harnesses that swap the base
-client for a fake (e.g. FakeOllama) can re-apply the full pipeline after their
+client for a fake (e.g. FakeOpenAiGateway) can re-apply the full pipeline after their
 `RemoveAll`/`AddSingleton`. The decoration factory resolves its options and the relevance selector
 **defensively** (`GetService` plus a pinned default): re-decoration is re-entrant and the factory runs
 lazily at `IChatClient` resolution, so a missing registration has to fall back rather than throw
@@ -164,8 +164,8 @@ an `InvocationAgentContext` from an `InvocationAgentDefinition`. It:
 
 > **Reasoning gotcha (`InvocationAgentFactory.BuildAgent`):** for a **thinking-capable** model the
 > requested effort is honored (`think: false|low|medium|high`); for a **non-thinking** model that has
-> reasoning *requested* the `think` field is **omitted entirely** (Ollama returns HTTP 400 for an
-> unknown think level, but omission lets chat-template-baked reasoning through); only "none"/unspecified
+> reasoning *requested* the `think` field is **omitted entirely** (omission lets chat-template-baked
+> reasoning through); only "none"/unspecified
 > sends `think: false`. A Codex side-channel key carries the raw effort for the Responses boundary.
 > Per-send sampling overrides (`ApplySamplingOptions`) are null/no-op by default to keep the mode-off
 > path byte-identical.
@@ -174,9 +174,9 @@ an `InvocationAgentContext` from an `InvocationAgentDefinition`. It:
 
 This covers why `InvocationAgentFactory.BuildAgent` sends instructions exactly once as the seed message and attaches skills through a context provider. See [the reference page](reference/04-ai-agent-runtime.md#building-the-agent-instructions-once-skills-through-a-context-provider).
 
-#### Per-send sampling reaches two runtimes
+#### Per-send sampling
 
-This covers how `ApplySamplingOptions` carries per-send sampling overrides to both runtimes. See [the reference page](reference/04-ai-agent-runtime.md#per-send-sampling-reaches-two-runtimes).
+This covers how `ApplySamplingOptions` carries per-send sampling overrides to the provider. See [the reference page](reference/04-ai-agent-runtime.md#per-send-sampling).
 
 #### The reasoning-effort matrix and the thinking budget
 

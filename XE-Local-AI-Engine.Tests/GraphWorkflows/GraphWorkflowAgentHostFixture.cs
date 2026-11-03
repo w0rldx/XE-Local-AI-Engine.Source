@@ -263,8 +263,7 @@ internal sealed class FakeGraphWorkflowCapacity : ICapacityService
             return Task.FromResult(new CapacityDecision
             {
                 Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = RejectionReason,
-                OllamaEvictionWarning = false
+                Reason = RejectionReason
             });
         }
 
@@ -279,7 +278,6 @@ internal sealed class FakeGraphWorkflowCapacity : ICapacityService
         {
             Verdict = CapacityVerdict.Allow,
             Reason = "Capacity available.",
-            OllamaEvictionWarning = false,
             Reservation = reservation
         });
     }

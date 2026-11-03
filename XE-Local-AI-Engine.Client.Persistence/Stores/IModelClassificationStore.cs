@@ -1,8 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     Node-scoped persistence for local model classifications: the digest-keyed detection cache and the operator
-///     override, keyed by model name (case-insensitive).
+///     Node-scoped persistence for local model classifications: the operator override, keyed by model name (case-insensitive).
 /// </summary>
 /// <remarks>
 ///     Not encrypted — model names, digests, capabilities and kinds are not secrets. This store performs no
@@ -15,16 +14,6 @@ public interface IModelClassificationStore
 
     /// <summary>Returns every stored classification, ordered by model name.</summary>
     Task<IReadOnlyList<ModelClassificationRecord>> ListAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    ///     Inserts or updates the detected fields (digest, kind, capabilities, detected-at) for <paramref name="modelName" />,
-    ///     preserving any existing operator override, and returns the stored record.
-    /// </summary>
-    Task<ModelClassificationRecord> UpsertDetectedAsync(string modelName,
-        string? digest,
-        ModelKind detectedKind,
-        string? capabilitiesJson,
-        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Sets (or, when <paramref name="overrideKind" /> is <c>null</c>, clears) the operator override for

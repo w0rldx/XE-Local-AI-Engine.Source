@@ -138,10 +138,8 @@ describe("Chat scope seam", () => {
 				{ modelName: "qwen3:8b", kind: "Chat", isToolCapable: true },
 				{ modelName: "qwen3:32b", kind: "Chat", isToolCapable: true },
 			],
-			isAvailable: true,
 			selectedModelName: "qwen3:8b",
 			configuredDefaultModelName: "qwen3:8b",
-			error: null,
 		});
 		listAgentDefinitionsQueryFn.mockResolvedValue({
 			items: [

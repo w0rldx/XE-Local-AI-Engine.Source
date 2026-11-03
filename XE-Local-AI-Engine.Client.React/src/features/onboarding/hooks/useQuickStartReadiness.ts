@@ -12,7 +12,7 @@ import {
 } from "@/core/onboarding/data/TutorialRegistry";
 
 export interface QuickStartReadinessState {
-	/** The installed models, or undefined while the runtime has not reported an available catalog yet. */
+	/** The installed models, or undefined while the catalog is loading or its read failed. */
 	modelItems: readonly LocalModelResponse[] | undefined;
 	selectedModelName: string | null | undefined;
 	/** The steps the quick-start tour should freeze at activation, given what is installed right now. */
@@ -28,7 +28,8 @@ export function useQuickStartReadiness(isAuthenticated: boolean): QuickStartRead
 
 	const classifyQuickStartReadiness = useCallback((): QuickStartReadiness => {
 		const modelItems = modelsQuery.data?.items;
-		if (!modelsQuery.isSuccess || modelsQuery.data?.isAvailable !== true || modelItems === undefined) {
+		// A failed read is "unresolved", never "missing": it says nothing about what is installed.
+		if (!modelsQuery.isSuccess || modelItems === undefined) {
 			return "unresolved";
 		}
 		if (hasChatCapableDefault(modelItems, modelsQuery.data?.selectedModelName)) {
@@ -46,7 +47,7 @@ export function useQuickStartReadiness(isAuthenticated: boolean): QuickStartRead
 	);
 
 	return {
-		modelItems: modelsQuery.data?.isAvailable === true ? modelsQuery.data.items : undefined,
+		modelItems: modelsQuery.data?.items,
 		selectedModelName: modelsQuery.data?.selectedModelName,
 		eligibleStepIds,
 	};

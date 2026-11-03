@@ -37,7 +37,7 @@ public sealed class EvalModelIdentity
     ///     The opaque identity token folded into the fingerprint.
     /// </summary>
     /// <remarks>
-    ///     A verified token carries a source prefix such as <c>gguf-sha256:</c> or <c>ollama-digest:</c>, while the
+    ///     A verified token carries a source prefix such as <c>gguf-sha256:</c>, while the
     ///     sentinel <see cref="UnverifiedToken" /> shares no prefix with any of them, so an unverified run can never
     ///     collide with a verified one of the same name.
     /// </remarks>

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 /// <remarks>
 ///     The seams are <see cref="IActiveCloudChatClientFactory.ResolveActiveCloudProviderName" /> (codex/azure) and
-///     <see cref="ILocalModelProviderResolver.ResolveProviderNameForModelAsync(string, CancellationToken)" /> (llamacpp/ollama). Correctness of
+///     <see cref="ILocalModelProviderResolver.ResolveProviderNameForModelAsync(string, CancellationToken)" /> (llamacpp). Correctness of
 ///     terminalization outranks attribution accuracy, so every failure path swallows to
 ///     <see cref="AgentUsageProviders.Unknown" /> and the local lookup is bounded by a short timeout: a dead runtime
 ///     probe can never stall the write.
@@ -68,7 +68,7 @@ internal sealed class UsageProviderResolver : IUsageProviderResolver
             return UsageProviderClassifier.Classify(cloudProviderName, localProviderName: null);
         }
 
-        // Local: which runtime serves the model (llama.cpp vs Ollama). Bounded so a stalled scoped read can never hang
+        // Local: which runtime serves the model. Bounded so a stalled scoped read can never hang
         // terminalization; any failure/timeout degrades to unknown.
         string? localProviderName;
         try

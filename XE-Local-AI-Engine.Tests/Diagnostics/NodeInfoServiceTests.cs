@@ -115,8 +115,7 @@ public sealed class NodeInfoServiceTests
         {
             EnableTools = true,
             MachineKey = "0123456789abcdef0123456789abcdef",
-            OllamaEndpoint = "http://user:pass@ollama.lan:11434",
-            WebSearchSearxngUrl = "http://searx.lan",
+            WebSearchSearxngUrl = "http://user:pass@searx.lan",
             UpdateChannel = "preview"
         });
     }
@@ -206,7 +205,6 @@ public sealed class NodeInfoServiceTests
         AssertEx.Equal("true", settings["enableTools"]);
         AssertEx.Equal("preview", settings["updateChannel"]);
         AssertEx.False(settings.ContainsKey("machineKey"), "The machine key is never reported.");
-        AssertEx.False(settings.ContainsKey("ollamaEndpoint"), "Operator URLs are never reported.");
         AssertEx.False(settings.ContainsKey("webSearchSearxngUrl"), "Operator URLs are never reported.");
         AssertEx.Equal(NodeInfoService.IncludedSettings.Count, settings.Count);
         var all = string.Join('|', settings.Values);

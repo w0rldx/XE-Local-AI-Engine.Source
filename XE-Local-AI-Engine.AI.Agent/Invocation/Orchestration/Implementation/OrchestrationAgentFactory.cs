@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
 {
-    // The Ollama num_ctx option key, byte-identical to SamplingOptionKeys.NumCtx and the key
+    // The num_ctx option key, byte-identical to SamplingOptionKeys.NumCtx and the key
     // ProviderCallBudgetChatClient reads — the per-participant effective context window rides it.
     private const string NumCtxKey = "num_ctx";
 

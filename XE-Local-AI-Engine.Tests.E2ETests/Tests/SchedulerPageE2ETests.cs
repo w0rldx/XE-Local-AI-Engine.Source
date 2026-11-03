@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <item>Save → the new job appears in <c>ScheduledJobList</c> BY NAME.</item>
 ///     </list>
 ///     <para>
-///         No FakeOllama scripting needed for create: a scheduled-job definition is persisted config; the
+///         No model scripting needed for create: a scheduled-job definition is persisted config; the
 ///         model run only happens when the job fires. The seeded Manual job
 ///         (<c>ModelRecommendationScheduleSeeder</c>) is an <c>IHostedService</c> removed by the E2E factory,
 ///         so the list starts empty in this host — the test still asserts BY NAME (not by row count).

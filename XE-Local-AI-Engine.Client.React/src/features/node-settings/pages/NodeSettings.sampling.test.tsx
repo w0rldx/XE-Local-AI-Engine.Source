@@ -64,7 +64,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	// Installed-models query feeding the speculative draft-model picker; empty list is enough for these tests.
 	listLocalModelsOptions: () => ({
 		queryKey: ["local-models"],
-		queryFn: () => Promise.resolve({ items: [], isAvailable: false }),
+		queryFn: () => Promise.resolve({ items: [] }),
 	}),
 	// Saved graph workflows feeding the intent-router picker.
 	listGraphWorkflowDefinitionsOptions: () => ({

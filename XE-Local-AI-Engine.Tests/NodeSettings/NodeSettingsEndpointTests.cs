@@ -302,7 +302,6 @@ public sealed class NodeSettingsEndpointTests
             CustomToolsEnabled = true,
             ToolRelevanceEnabled = true,
             ToolCapableModels = ["qwen3:8b", "gemma3:12b"],
-            OllamaEndpoint = "http://127.0.0.1:11500",
             HuggingFaceDefaultQuant = "Q5_K_M",
             LlamaMaxLoadedProcesses = 5,
             LlamaIdleTimeToLiveSeconds = 1200,
@@ -324,7 +323,6 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: false, settings.EnableTools);
         AssertEx.Equal(expected: true, settings.CustomToolsEnabled);
         AssertEx.Equal(expected: true, settings.ToolRelevanceEnabled);
-        AssertEx.Equal("http://127.0.0.1:11500", settings.OllamaEndpoint);
         AssertEx.Equal("Q5_K_M", settings.HuggingFaceDefaultQuant);
         AssertEx.Equal(expected: 5, settings.LlamaMaxLoadedProcesses);
         AssertEx.Equal(expected: 1200, settings.LlamaIdleTimeToLiveSeconds);
@@ -1118,7 +1116,7 @@ public sealed class NodeSettingsEndpointTests
         {
             MaxMessageRequestTimeoutSeconds = 300,
             RecommendedLlamaCppTag = "b9692",
-            OllamaEndpoint = "http://127.0.0.1:11434",
+            WebSearchSearxngUrl = "http://127.0.0.1:8888",
             KeepModelWarmEnabled = true,
             KeepModelWarmModelName = "keep-me-warm",
             KeepModelWarmIntervalSeconds = 180,
@@ -1139,7 +1137,7 @@ public sealed class NodeSettingsEndpointTests
         await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
                 Persisted(mutate, stored).MaxMessageRequestTimeoutSeconds == 300
                 && Persisted(mutate, stored).RecommendedLlamaCppTag == "b9692"
-                && Persisted(mutate, stored).OllamaEndpoint == "http://127.0.0.1:11434"
+                && Persisted(mutate, stored).WebSearchSearxngUrl == "http://127.0.0.1:8888"
                 && Persisted(mutate, stored).KeepModelWarmEnabled == true
                 && Persisted(mutate, stored).KeepModelWarmModelName == "keep-me-warm"
                 && Persisted(mutate, stored).KeepModelWarmIntervalSeconds == 180
@@ -1170,21 +1168,23 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
-    public async Task SaveNodeSettings_WhenOllamaEndpointNotAUrl_ReturnsValidationProblem()
+    [Arguments("\"not a url\"")]
+    [Arguments("null")]
+    public async Task SaveNodeSettings_WhenTheBodyStillCarriesTheRemovedEndpointField_RefusesItAsUnknownAndSavesNothing(string jsonValue)
     {
+        // The save route is strict about unknown members: a client built against the old contract is told which field
+        // to drop, whether it sent a value or a null, and no part of its request lands.
         var nodeSettingsStore = NewSettingsStore();
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = NodeSettingsRequestContent.Create(new SaveNodeSettingsRequest
-        {
-            MaxMessageRequestTimeoutSeconds = 300,
-            OllamaEndpoint = "not a url"
-        });
+        request.Content = new StringContent($$"""{"ollamaEndpoint":{{jsonValue}},"enableTools":false}""", Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("ollamaEndpoint", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
@@ -2131,7 +2131,7 @@ public sealed class NodeSettingsEndpointTests
         // save keeps the current override (null-preserving merge) and does NOT wipe unrelated settings.
         var request = new SaveNodeSettingsRequest
         {
-            OllamaEndpoint = "http://127.0.0.1:11434",
+            WebSearchSearxngUrl = "http://127.0.0.1:8888",
             UsageRates = new Dictionary<string, ModelRate>
             {
                 ["gpt-5"] = new()
@@ -2155,11 +2155,11 @@ public sealed class NodeSettingsEndpointTests
         // Omitting UsageRates on a later save keeps the current override AND leaves the other stored fields intact.
         var merged = new SaveNodeSettingsRequest
         {
-            OllamaEndpoint = "http://127.0.0.1:11500"
+            WebSearchSearxngUrl = "http://127.0.0.1:8889"
         }.ToStoredSettings(stored);
         AssertEx.NotNull(merged.UsageRates);
         AssertEx.Equal(expected: 1.25d, merged.UsageRates!.Models!["gpt-5"].InputPer1M);
-        AssertEx.Equal("http://127.0.0.1:11500", merged.OllamaEndpoint);
+        AssertEx.Equal("http://127.0.0.1:8889", merged.WebSearchSearxngUrl);
     }
 
     [Test]
@@ -2862,7 +2862,7 @@ public sealed class NodeSettingsEndpointTests
         var stored = new StoredNodeSettings
         {
             LlamaMaxLoadedProcesses = 3,
-            OllamaEndpoint = "http://ollama.example:11434",
+            WebSearchSearxngUrl = "http://searx.example:8888",
             EnableTools = true,
             UsageRates = new NodeUsageRateSettings
             {
@@ -2884,14 +2884,14 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = new StringContent("""{"llamaMaxLoadedProcesses":null,"ollamaEndpoint":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
+        request.Content = new StringContent("""{"llamaMaxLoadedProcesses":null,"webSearchSearxngUrl":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
             Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
         await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
                 Persisted(mutate, stored).LlamaMaxLoadedProcesses == null
-                && Persisted(mutate, stored).OllamaEndpoint == null
+                && Persisted(mutate, stored).WebSearchSearxngUrl == null
                 && Persisted(mutate, stored).EnableTools == null
                 && Persisted(mutate, stored).UsageRates == null
                 && Persisted(mutate, stored).SpeculativeDraftGpuLayers == null
@@ -2906,7 +2906,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments("llamaChatCacheRamMiB", "-1", "or null for the default")]
     [Arguments("agentHomeMaxPatchBytes", "-1", "or null for the default")]
     [Arguments("reasoningBudgetLowTokens", "-1", "or null for the default")]
-    [Arguments("ollamaEndpoint", "\"\"", "'ollamaEndpoint' cannot be blank; send null to clear it.")]
+    [Arguments("webSearchSearxngUrl", "\"\"", "'webSearchSearxngUrl' cannot be blank; send null to clear it.")]
     [Arguments("defaultModelName", "\"\"", "'defaultModelName' cannot be blank; send null to clear it.")]
     [Arguments("intentRouterDefinitionId", "\"\"", "'intentRouterDefinitionId' cannot be blank; send null to clear it.")]
     [Arguments("defaultReasoningEffort", "\"\"", "'defaultReasoningEffort' cannot be blank; send null to clear it.")]
@@ -2991,12 +2991,12 @@ public sealed class NodeSettingsEndpointTests
     [Test]
     public void ExplicitNullTracking_RecordsOnlyAnExplicitNull_KeepsLaterModifiers_AndRegistersOnce()
     {
-        AssertEx.True(ParseRequest("""{"ollamaEndpoint":null}""").Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
-        AssertEx.False(ParseRequest("{}").Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
-        AssertEx.False(ParseRequest("""{"ollamaEndpoint":"http://ollama.example:11434"}""").Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        AssertEx.True(ParseRequest("""{"webSearchSearxngUrl":null}""").Clears(nameof(SaveNodeSettingsRequest.WebSearchSearxngUrl)));
+        AssertEx.False(ParseRequest("{}").Clears(nameof(SaveNodeSettingsRequest.WebSearchSearxngUrl)));
+        AssertEx.False(ParseRequest("""{"webSearchSearxngUrl":"http://searx.example:8888"}""").Clears(nameof(SaveNodeSettingsRequest.WebSearchSearxngUrl)));
         // A duplicate key: the last value wins, so a later value takes the clear back.
-        AssertEx.False(ParseRequest("""{"ollamaEndpoint":null,"ollamaEndpoint":"http://ollama.example:11434"}""")
-            .Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        AssertEx.False(ParseRequest("""{"webSearchSearxngUrl":null,"webSearchSearxngUrl":"http://searx.example:8888"}""")
+            .Clears(nameof(SaveNodeSettingsRequest.WebSearchSearxngUrl)));
 
         var chainModifierRan = false;
         var wrapped = new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -3005,8 +3005,8 @@ public sealed class NodeSettingsEndpointTests
                 chainModifierRan |= typeInfo.Type == typeof(SaveNodeSettingsRequest))
         };
         ConfigureServices.ConfigureJsonSerializerOptions(wrapped);
-        var parsed = AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"ollamaEndpoint":null}""", wrapped));
-        AssertEx.True(parsed.Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        var parsed = AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"webSearchSearxngUrl":null}""", wrapped));
+        AssertEx.True(parsed.Clears(nameof(SaveNodeSettingsRequest.WebSearchSearxngUrl)));
         AssertEx.True(chainModifierRan);
 
         // The FastEndpoints shape: a later modifier wrapper around the chain that already holds the tracking resolver.
@@ -3014,8 +3014,8 @@ public sealed class NodeSettingsEndpointTests
         ConfigureServices.ConfigureJsonSerializerOptions(rewrapped);
         rewrapped.TypeInfoResolver = rewrapped.TypeInfoResolver!.WithAddedModifier(static _ => { });
         ConfigureServices.ConfigureJsonSerializerOptions(rewrapped);
-        AssertEx.True(AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"ollamaEndpoint":null}""", rewrapped))
-                              .Clears(nameof(SaveNodeSettingsRequest.OllamaEndpoint)));
+        AssertEx.True(AssertEx.NotNull(JsonSerializer.Deserialize<SaveNodeSettingsRequest>("""{"webSearchSearxngUrl":null}""", rewrapped))
+                              .Clears(nameof(SaveNodeSettingsRequest.WebSearchSearxngUrl)));
 
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         ConfigureServices.ConfigureJsonSerializerOptions(options);

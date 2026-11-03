@@ -9,7 +9,7 @@ import { localDefaultModelValue } from "@/core/models/NodeChatModelSelection";
 // is optional on the generated type, so each read below coalesces to the prior default.
 type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
-export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOption {
+export function toModelOption(model: LocalModelDto): ModelOption {
 	const statusLabel = [
 		model.isSelected ? t("pages.chat.nodeDefaultModel", "Node default") : undefined,
 		model.parameterSize ?? undefined,
@@ -22,7 +22,7 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 	return {
 		value: modelName,
 		label: modelName,
-		// Per-model capabilities (Ollama `/api/show`): thinking → graded reasoning menu; tools → local-tool controls.
+		// Per-model capabilities: thinking → graded reasoning menu; tools → local-tool controls.
 		// `isNativeReasoningCapable` is the SECOND, distinct reasoning capability (harmony/gpt-oss): it renders its own
 		// picker badge but keeps the binary On/Off effort vocabulary, so it is deliberately NOT folded into
 		// `isReasoningModel` — doing so would route the model into the graded think:<level> path it cannot honor.
@@ -36,7 +36,6 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		isToolCapable: model.isToolCapable ?? false,
 		// Vision projector (mmproj) capability — drives whether the composer offers image attachments for this model.
 		isMultimodal: model.isMultimodalCapable ?? false,
-		isAvailable: nodeAvailable,
 		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
 		// Carry the serving runtime so the page can gate the model-details poll per provider.
 		provider: model.provider ?? undefined,
@@ -72,8 +71,8 @@ export function isLocalChatModel(model: LocalModelDto | undefined): model is Loc
 // Cloud provider entries (CodexOAuth / AzureFoundry) are excluded here — they appear in the separate cloud
 // sections via useCloudModelOptions. Lives in its own module (not Chat.tsx) so it is unit-testable and so
 // exporting it does not break the component-only-export Fast Refresh rule on the page.
-export function toChatModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
-	return models.filter(isLocalChatModel).map((model) => toModelOption(model, nodeAvailable));
+export function toChatModelOptions(models: LocalModelDto[]): ModelOption[] {
+	return models.filter(isLocalChatModel).map((model) => toModelOption(model));
 }
 
 // Models eligible as the node's speculative-decoding DRAFT model. Two kinds qualify and neither belongs in the chat
@@ -81,7 +80,7 @@ export function toChatModelOptions(models: LocalModelDto[], nodeAvailable: boole
 // marker) and any installed chat model small enough to draft for a bigger one (the `draft-simple` mode's usual setup).
 // Cloud and external entries are excluded — a drafter must be a local file the supervisor can pass to `--spec-model`,
 // and an external model is an HTTP endpoint, not a file on this node.
-export function toDraftModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
+export function toDraftModelOptions(models: LocalModelDto[]): ModelOption[] {
 	return models
 		.filter(
 			(model) =>
@@ -89,7 +88,7 @@ export function toDraftModelOptions(models: LocalModelDto[], nodeAvailable: bool
 				!CLOUD_PROVIDERS.has(model.provider ?? "") &&
 				!isExternalModel(model),
 		)
-		.map((model) => toModelOption(model, nodeAvailable));
+		.map((model) => toModelOption(model));
 }
 
 // Chat options for the operator-registered external endpoints, one per registered model. They carry their connection
@@ -98,11 +97,11 @@ export function toDraftModelOptions(models: LocalModelDto[], nodeAvailable: bool
 // `isCloud` is deliberately NOT set, even for a declared-cloud connection: that flag selects the Codex Responses effort
 // vocabulary (minimal/xhigh), which this feature explicitly does not offer. The declared locality travels on its own
 // field instead, and the reasoning controls follow the model's declared capabilities like any other model's.
-export function toExternalModelOptions(models: LocalModelDto[], nodeAvailable: boolean): ModelOption[] {
+export function toExternalModelOptions(models: LocalModelDto[]): ModelOption[] {
 	return models
 		.filter((model) => isExternalModel(model) && model.kind === "Chat")
 		.map((model) => ({
-			...toModelOption(model, nodeAvailable),
+			...toModelOption(model),
 			externalConnectionId: model.externalConnectionId ?? undefined,
 			externalConnectionName: model.externalConnectionName ?? undefined,
 			declaredLocality: model.declaredLocality ?? undefined,

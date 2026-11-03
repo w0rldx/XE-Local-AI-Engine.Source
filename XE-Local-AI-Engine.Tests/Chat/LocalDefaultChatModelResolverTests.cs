@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -16,9 +17,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 /// <remarks>
 ///     A model resident in a llama.cpp Chat-role process outranks both, if it is an installed chat model.
-///     Eligibility reads the PERSISTED effective kind (OverrideKind ?? DetectedKind), with no Ollama probe: a GGUF
-///     with no persisted row is eligible, DetectedKind=Embedding without override or OverrideKind=Embedding is
-///     excluded, and OverrideKind=Chat makes an Embedding detected kind eligible.
+///     Eligibility is the picker's rule (the override, else the name rules), with no runtime probe: a GGUF with no
+///     persisted row is eligible unless its name says otherwise, and OverrideKind=Chat makes an Embedding name eligible.
 /// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class LocalDefaultChatModelResolverTests
@@ -49,7 +49,7 @@ public sealed class LocalDefaultChatModelResolverTests
     [Test]
     public async Task ResolveAsync_WhenPersistedDefaultNotInstalled_FallsBackToMostRecentlyModified()
     {
-        // A stale persisted default (not an installed GGUF — e.g. a dead Ollama id) is ignored; the fallback is the
+        // A stale persisted default (not an installed GGUF — e.g. a removed model) is ignored; the fallback is the
         // most-recently-modified installed GGUF chat model.
         var resolver = CreateResolver(Gguf("older:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1)),
             Gguf("newer:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)));
@@ -74,7 +74,7 @@ public sealed class LocalDefaultChatModelResolverTests
     [Test]
     public async Task ResolveAsync_WhenGgufHasNoPersistedRow_IsEligible()
     {
-        // A GGUF with no row in model_classifications (absent/Unknown) must stay eligible — no Ollama probe is triggered.
+        // A GGUF with no row in model_classifications (absent/Unknown) must stay eligible.
         // This is the normal state for a freshly-installed GGUF model.
         ModelClassificationRecord[] noRows = [];
         LocalModelDescriptor[] oneGguf = [Gguf("phi-4:Q4_K_M", DateTimeOffset.UnixEpoch)];
@@ -85,25 +85,29 @@ public sealed class LocalDefaultChatModelResolverTests
         AssertEx.Equal("phi-4:Q4_K_M", resolved);
     }
 
+    /// <summary>
+    ///     The default is always a model the picker lists, in the two cases where a row's stale or odd kind could split
+    ///     them: an Unknown override hides a model from both, and a leftover DetectedKind counts for neither.
+    /// </summary>
     [Test]
-    public async Task ResolveAsync_ExcludesGgufWithPersistedDetectedEmbeddingKind()
+    [Arguments(ModelKind.Chat, ModelKind.Unknown, false)]
+    [Arguments(ModelKind.Embedding, null, true)]
+    public async Task ResolveAsync_AgreesWithThePicker(ModelKind detectedKind, ModelKind? overrideKind, bool isChat)
     {
-        // An Embedding-classified GGUF (detected, no override) is not a chat model and must be excluded.
-        ModelClassificationRecord[] classifications =
-        [
-            Classification("embed-model:Q4_K_M", ModelKind.Embedding, overrideKind: null),
-            Classification("chat-model:Q4_K_M", ModelKind.Chat, overrideKind: null)
-        ];
-        LocalModelDescriptor[] installed =
-        [
-            Gguf("embed-model:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
-            Gguf("chat-model:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1))
-        ];
-        var resolver = CreateResolver(classifications, installed);
+        const string modelName = "neutral-name:Q4_K_M";
+        var record = Classification(modelName, detectedKind, overrideKind);
+        LocalModelDescriptor[] installed = [Gguf(modelName, DateTimeOffset.UnixEpoch)];
+        var resolver = CreateResolver([record], installed);
 
         var resolved = await resolver.ResolveAsync(persistedDefault: null);
+        var listed = LocalModelsMapper.ToLlamaCppModelResponses(installed, selectedModelName: null,
+            new Dictionary<string, ModelClassificationRecord>(StringComparer.OrdinalIgnoreCase)
+            {
+                [modelName] = record
+            }).Single();
 
-        AssertEx.Equal("chat-model:Q4_K_M", resolved);
+        AssertEx.Equal(isChat, string.Equals(listed.Kind, nameof(ModelKind.Chat), StringComparison.Ordinal));
+        AssertEx.Equal(isChat, string.Equals(resolved, modelName, StringComparison.Ordinal));
     }
 
     [Test]
@@ -139,25 +143,9 @@ public sealed class LocalDefaultChatModelResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_WhenOnlyInstalledGgufHasPersistedEmbeddingKind_ReturnsNull()
-    {
-        ModelClassificationRecord[] classifications =
-        [
-            Classification("embed-only:Q4_K_M", ModelKind.Embedding, overrideKind: null)
-        ];
-        LocalModelDescriptor[] installed = [Gguf("embed-only:Q4_K_M", DateTimeOffset.UnixEpoch)];
-        var resolver = CreateResolver(classifications, installed);
-
-        var resolved = await resolver.ResolveAsync(persistedDefault: null);
-
-        AssertEx.Null(resolved);
-    }
-
-    [Test]
     public async Task ResolveAsync_ExcludesEmbeddingNamedGgufWithNoPersistedRow()
     {
-        // Belt-and-suspenders: a freshly-installed embedding GGUF has NO classification row, so the persisted-kind check
-        // alone would leave it eligible. Its NAME (nomic-embed) must exclude it, leaving the chat GGUF as the default.
+        // A freshly-installed embedding GGUF has NO classification row: its NAME (nomic-embed) excludes it, leaving the chat GGUF as the default.
         LocalModelDescriptor[] installed =
         [
             Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
@@ -182,31 +170,10 @@ public sealed class LocalDefaultChatModelResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_ExcludesGgufWithPersistedDetectedRerankerKind()
-    {
-        // A Reranker-classified GGUF (cross-encoder, no completion head) is not a chat model and must be excluded.
-        ModelClassificationRecord[] classifications =
-        [
-            Classification("rerank-model:Q4_K_M", ModelKind.Reranker, overrideKind: null),
-            Classification("chat-model:Q4_K_M", ModelKind.Chat, overrideKind: null)
-        ];
-        LocalModelDescriptor[] installed =
-        [
-            Gguf("rerank-model:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
-            Gguf("chat-model:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1))
-        ];
-        var resolver = CreateResolver(classifications, installed);
-
-        var resolved = await resolver.ResolveAsync(persistedDefault: null);
-
-        AssertEx.Equal("chat-model:Q4_K_M", resolved);
-    }
-
-    [Test]
     public async Task ResolveAsync_ExcludesRerankerNamedGgufWithNoPersistedRow()
     {
-        // Belt-and-suspenders: a freshly-installed reranker GGUF has NO classification row. Its NAME (bge-reranker) must
-        // exclude it even though it also matches the BGE- embedding prefix, leaving the chat GGUF as the default.
+        // A freshly-installed reranker GGUF has NO classification row. Its NAME (bge-reranker) must exclude it even
+        // though it also matches the BGE- embedding prefix, leaving the chat GGUF as the default.
         LocalModelDescriptor[] installed =
         [
             Gguf("bge-reranker-v2-m3:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
@@ -293,14 +260,14 @@ public sealed class LocalDefaultChatModelResolverTests
     [Test]
     public async Task ResolveAsync_WhenTheResidentModelIsEmbeddingClassified_IgnoresIt()
     {
-        // Same chat-capability notion as the non-resident pick: an Embedding-classified GGUF never becomes the chat default.
-        ModelClassificationRecord[] classifications = [Classification("embed:Q4_K_M", ModelKind.Embedding, overrideKind: null)];
+        // Same chat-capability notion as the non-resident pick: an Embedding-overridden GGUF never becomes the chat default.
+        ModelClassificationRecord[] classifications = [Classification("overridden:Q4_K_M", ModelKind.Chat, ModelKind.Embedding)];
         LocalModelDescriptor[] installed =
         [
             Gguf("default:Q4_K_M", DateTimeOffset.UnixEpoch),
-            Gguf("embed:Q4_K_M", DateTimeOffset.UnixEpoch)
+            Gguf("overridden:Q4_K_M", DateTimeOffset.UnixEpoch)
         ];
-        var resolver = CreateResolver(classifications, installed, Resident("embed:Q4_K_M", ModelRole.Chat, minutesAgo: 1));
+        var resolver = CreateResolver(classifications, installed, Resident("overridden:Q4_K_M", ModelRole.Chat, minutesAgo: 1));
 
         var resolved = await resolver.ResolveAsync(persistedDefault: "default:Q4_K_M");
 

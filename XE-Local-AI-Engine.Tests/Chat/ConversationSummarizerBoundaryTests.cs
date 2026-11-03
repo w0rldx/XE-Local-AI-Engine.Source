@@ -298,7 +298,7 @@ public sealed class ConversationSummarizerBoundaryTests
         AssertEx.True(client.Options.All(static options => options?.AdditionalProperties is { } properties
                                                            && properties.ContainsKey("think")
                                                            && properties["think"] is false),
-            "Every fold on a thinking-capable model must send the Ollama think:false field.");
+            "Every fold on a thinking-capable model must send the think:false field.");
         AssertEx.True(client.Options.All(static options => options?.AdditionalProperties is { } properties
                                                            && properties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey)
                                                            && properties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey] is true),
@@ -309,7 +309,7 @@ public sealed class ConversationSummarizerBoundaryTests
     public async Task FoldAsync_WhenTheModelDoesNotSupportThinking_SendsNoThinkingFields()
     {
         // Mirrors InvocationAgentFactoryTests.CreateAsync_WhenNativeReasoningModel_OmitsThinkAndNeverDisablesTemplateThinking:
-        // Ollama rejects think on a non-thinking model, and a native-reasoning template has no enable_thinking kwarg.
+        // A non-thinking model takes no think field, and a native-reasoning template has no enable_thinking kwarg.
         using var client = new CapturingChatClient();
         var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
 

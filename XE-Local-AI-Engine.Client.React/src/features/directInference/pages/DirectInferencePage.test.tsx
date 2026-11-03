@@ -74,12 +74,11 @@ function stubModels(): void {
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
-				isAvailable: true,
 				items: [
 					["qwen3", "llamacpp"],
 					["gpt-6", "CodexOAuth"],
 					["ext:lan/qwen3", "external"],
-					["ollama-model", "ollama"],
+					["my-deployment", "AzureFoundry"],
 				].map(([modelName, provider]) => ({
 					modelName,
 					displayLabel: null,
@@ -116,7 +115,7 @@ describe("DirectInferencePage", () => {
 		hub.handle.whenStarted = Promise.resolve();
 	});
 
-	it.each(["gpt-6", "ext:lan/qwen3", "ollama-model"])(
+	it.each(["gpt-6", "ext:lan/qwen3", "my-deployment"])(
 		"states the default output cap for a llama.cpp model, not for %s",
 		async (other) => {
 			stubModels();

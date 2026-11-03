@@ -213,10 +213,10 @@ def command_model_ensure(args: argparse.Namespace) -> int:
     installed = any(isinstance(i, dict) and i.get("modelName") == args.model for i in items)
     emit("installed", installed)
     if not installed:
-        # An empty listing with isAvailable false means the node sees NO GGUF at all (e.g. a models dir of symlinks,
-        # which the sidecar validation rejects), which is a different problem from one missing model.
-        if listing.get("isAvailable") is False:
-            emit("providerError", str(listing.get("error") or "no GGUF installed"))
+        # No llama.cpp row at all means the node sees NO GGUF (e.g. a models dir of symlinks, which the sidecar
+        # validation rejects), which is a different problem from one missing model. Cloud rows do not count.
+        if not any(isinstance(i, dict) and i.get("provider") == "llamacpp" for i in items):
+            emit("noGguf", True)
         return 0
     previous = str(client.get("/node-settings").get("defaultModelName") or "")
     emit("previouslySelected", previous)

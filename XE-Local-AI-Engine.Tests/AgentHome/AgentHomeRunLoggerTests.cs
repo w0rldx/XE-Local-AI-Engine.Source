@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Run-logger coverage. Proves that JSONL log files are created under the host-side
 ///     <c>logs/</c> directory, that every record carries the run-id/NodeId/OwnerUserId/providerName
 ///     correlation envelope, and that argument summaries never leak raw host paths or secrets.
-///     Tests run against <see cref="AgentHomeRunLogger" /> directly — no sandbox, no Docker, no Ollama.
+///     Tests run against <see cref="AgentHomeRunLogger" /> directly — no sandbox, no Docker, no model runtime.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AgentHomeRunLoggerTests : IDisposable

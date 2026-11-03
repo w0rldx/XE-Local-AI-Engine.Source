@@ -21,7 +21,5 @@ export function useExternalModelOptions(): ModelOption[] {
 		staleTime: 30_000,
 	});
 
-	// An external endpoint is reachable independently of the local runtime, so these options do not inherit the
-	// node's own availability flag the way the local list does.
-	return toExternalModelOptions(modelsQuery.data?.items ?? [], true);
+	return toExternalModelOptions(modelsQuery.data?.items ?? []);
 }

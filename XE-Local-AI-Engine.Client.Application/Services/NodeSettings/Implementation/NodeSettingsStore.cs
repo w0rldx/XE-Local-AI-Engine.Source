@@ -291,7 +291,6 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             MaxMessageRequestTimeoutSeconds = timeout,
             DefaultModelName = TrimToNull(settings.DefaultModelName),
             ToolCapableModels = NormalizeStringList(settings.ToolCapableModels),
-            OllamaEndpoint = NormalizeAbsoluteUrl(settings.OllamaEndpoint),
             WebSearchSearxngUrl = NormalizeAbsoluteUrl(settings.WebSearchSearxngUrl),
             HuggingFaceDefaultQuant = TrimToNull(settings.HuggingFaceDefaultQuant),
             HuggingFaceDiskMarginBytes = ClampToRange(settings.HuggingFaceDiskMarginBytes,

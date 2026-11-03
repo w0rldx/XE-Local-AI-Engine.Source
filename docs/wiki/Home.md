@@ -57,7 +57,7 @@ Framework pins, while the wiki covers architecture.
 | --- | --- | --- |
 | 01 | [Architecture Overview](01-architecture-overview.md) | System boundary, layering, dataflow, Development Mode source/worktree flow, the architecture invariants |
 | 02 | [Project Layout](02-project-layout.md) | Every `.csproj`, dependency graph, central package mgmt, analyzer wall |
-| 03 | [Local Runtime & Providers](03-local-runtime-and-providers.md) | llama.cpp supervisor, GPU variant select, binary acquisition (prebuilt / BYO override / in-app source build), provider seams across every `Providers.*` project registered in `XE-Local-AI-Engine.slnx` (Abstractions, LlamaServer, HuggingFace, Ollama, CodexOAuth, Capabilities, StableDiffusionCpp, Training) |
+| 03 | [Local Runtime & Providers](03-local-runtime-and-providers.md) | llama.cpp supervisor, GPU variant select, binary acquisition (prebuilt / BYO override / in-app source build), provider seams across every `Providers.*` project registered in `XE-Local-AI-Engine.slnx` (Abstractions, LlamaServer, HuggingFace, CodexOAuth, Capabilities, StableDiffusionCpp, Training) |
 | 04 | [Agent Mode](04-agent-mode.md) | MAF wiring, tool registries, AgentHome, Playbook P1–P5, Memory, Capacity, Coder, sub-agent spawn |
 | 05 | [Chat](05-chat.md) | `RuntimeChatClient` per-send routing, ordered parts, sampling, attribution, at-rest encryption |
 | 06 | [Scheduler](06-scheduler.md) | Quartz.NET jobs, run history, cancellation, live hub, encoded gotchas |

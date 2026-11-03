@@ -16,7 +16,8 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static NodeChatStreamServiceTestSupport;
@@ -252,11 +253,15 @@ public sealed class NodeChatStreamServicePlainTests
         {
             var details = Substitute.For<ILocalModelDetailsResolver>();
             details.ResolveAsync(model, Arg.Any<CancellationToken>())
-                   .Returns(new LocalModelDetailsResolution.Ollama(new OllamaModelDetails
+                   .Returns(new LocalModelDetailsResolution.Gguf(new LocalModelDescriptor
                    {
-                       MaxContextTokens = 32768,
-                       Capabilities = ["completion", "tools"]
-                   }));
+                       ModelName = model,
+                       ProviderName = LlamaServerProviderConstants.ProviderName,
+                       IsAvailable = true,
+                       SizeBytes = null,
+                       ModifiedAt = null,
+                       MaxContextTokens = null
+                   }, EffectiveContextTokens: 32768));
             return new ChatContextEstimateService(_turnResolver,
                 DefaultAgentProvider,
                 CreateNodeSettingsStore(),

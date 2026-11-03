@@ -9,8 +9,6 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Inference;
@@ -95,9 +93,6 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
         builder.Services.AddSingleton<IDirectInferenceService, DirectInferenceService>();
-        builder.Services.AddSingleton<ModelCapabilityProber>();
-        builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
-        builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
         builder.Services.AddSingleton<INodeSqliteKeyHolder, NodeSqliteKeyHolder>();
         builder.Services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();

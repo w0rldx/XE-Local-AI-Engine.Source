@@ -36,7 +36,7 @@ function shellProps(overrides: Partial<ChatDisplayShellProps> = {}): ChatDisplay
 	return {
 		conversations: [conversation],
 		selectedConversationId: "conversation-1",
-		modelOptions: [{ value: "local-default", label: "Local default", isAvailable: true }],
+		modelOptions: [{ value: "local-default", label: "Local default" }],
 		selectedModel: "local-default",
 		reasoningEffort: "medium",
 		availableReasoningEfforts: ["none", "low", "medium", "high"],

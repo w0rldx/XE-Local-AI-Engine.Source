@@ -13,7 +13,6 @@ import {
 	type AssistSurface,
 	isSameModelName,
 } from "@/core/assist/models/AssistModels";
-import { useLoadedModels } from "@/core/loaded-models/queries/useLoadedModels";
 import { useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
 import { isLocalChatModel } from "@/core/models/ChatModelOptions";
 import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
@@ -37,25 +36,20 @@ export function AssistActions({ surface, existing, onApply, onDiscard }: AssistA
 	const [mode, setMode] = useState<AssistMode | null>(null);
 
 	const { data: modelsData } = useQuery(listLocalModelsOptions());
-	const loadedModelsQuery = useLoadedModels();
 	const runningModelsQuery = useRunningModels();
 
 	// Same predicate the chat picker uses: installed, classified Chat, non-cloud provider.
 	const models = useMemo(() => (modelsData?.items ?? []).filter(isLocalChatModel), [modelsData]);
-	// Each picker entry is checked against its own runtime: Ollama entries against Ollama's in-memory list, llama.cpp
-	// entries against the supervisor's live chat processes (an exited or embedding process cannot serve the draft).
+	// Each picker entry is checked against the supervisor's live chat processes (an exited or embedding process cannot
+	// serve the draft).
 	const loadedModelNames = useMemo(() => {
-		const ollamaNames = (loadedModelsQuery.data?.models ?? []).map((model) => model.modelName);
-		const llamaCppNames = (runningModelsQuery.data ?? [])
+		const runningNames = (runningModelsQuery.data ?? [])
 			.filter((model) => model.role === "chat" && model.detailCode !== "exited")
 			.map((model) => model.modelName);
 		return models
-			.filter((model) => {
-				const names = model.provider === "ollama" ? ollamaNames : model.provider === "llamacpp" ? llamaCppNames : [];
-				return names.some((name) => isSameModelName(name, model.modelName));
-			})
+			.filter((model) => runningNames.some((name) => isSameModelName(name, model.modelName)))
 			.map((model) => model.modelName ?? "");
-	}, [models, loadedModelsQuery.data, runningModelsQuery.data]);
+	}, [models, runningModelsQuery.data]);
 
 	const hasEligibleModel = models.length > 0;
 	const canImprove = existing.content.trim().length > 0;

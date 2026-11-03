@@ -8,6 +8,7 @@ type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelRespon
 function model(modelName: string, kind: string): LocalModelDto {
 	return {
 		modelName,
+		provider: "llamacpp",
 		sizeBytes: null,
 		modifiedAtUtc: null,
 		family: null,
@@ -33,16 +34,17 @@ describe("chat model picker filter", () => {
 			model("mistral", "Chat"),
 		];
 
-		const options = toChatModelOptions(models, true);
+		const options = toChatModelOptions(models);
 
 		expect(options.map((option) => option.value)).toEqual(["llama3:8b", "mistral"]);
 	});
 
 	it("returns no options when every model is non-chat", () => {
-		const options = toChatModelOptions(
-			[model("nomic-embed-text", "Embedding"), model("bge-reranker-v2-m3", "Reranker"), model("mystery", "Unknown")],
-			true,
-		);
+		const options = toChatModelOptions([
+			model("nomic-embed-text", "Embedding"),
+			model("bge-reranker-v2-m3", "Reranker"),
+			model("mystery", "Unknown"),
+		]);
 
 		expect(options).toHaveLength(0);
 	});
@@ -52,13 +54,7 @@ describe("chat model picker filter", () => {
 		// model it drafts for. It has no standalone chat use at all.
 		const models = [model("unsloth/gemma-4-12b-it-GGUF:MTP-Q8_0", "Draft"), model("unsloth/gemma-4-12b-it-GGUF:Q8_0", "Chat")];
 
-		expect(toChatModelOptions(models, true).map((option) => option.value)).toEqual(["unsloth/gemma-4-12b-it-GGUF:Q8_0"]);
-	});
-
-	it("propagates node availability onto each chat option", () => {
-		const options = toChatModelOptions([model("llama3:8b", "Chat")], false);
-
-		expect(options[0]?.isAvailable).toBe(false);
+		expect(toChatModelOptions(models).map((option) => option.value)).toEqual(["unsloth/gemma-4-12b-it-GGUF:Q8_0"]);
 	});
 });
 
@@ -74,7 +70,7 @@ describe("speculative draft model picker filter", () => {
 			model("mystery", "Unknown"),
 		];
 
-		expect(toDraftModelOptions(models, true).map((option) => option.value)).toEqual([
+		expect(toDraftModelOptions(models).map((option) => option.value)).toEqual([
 			"unsloth/gemma-4-12b-it-GGUF:MTP-Q8_0",
 			"llama3:1b",
 		]);

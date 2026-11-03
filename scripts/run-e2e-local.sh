@@ -36,7 +36,7 @@
 #   - pwsh                  — Playwright's browser installer ships as playwright.ps1 only.
 #   - Playwright browsers   — chromium + headless shell under ~/.cache/ms-playwright.
 #
-# No model runtime is required: the suite uses XE-Local-AI-Engine.Testing.FakeOllama and an
+# No model runtime is required: the suite uses XE-Local-AI-Engine.Testing.FakeOpenAiGateway and an
 # in-process WebApplicationFactory host, not llama-server. It therefore does NOT need
 # scripts/dev-stop.sh afterwards — no port or VRAM is held.
 #

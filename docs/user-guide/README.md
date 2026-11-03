@@ -20,7 +20,7 @@ under Apache-2.0. This page is the user guide: how to download, install and use 
 
 | I want to… | Go to |
 |---|---|
-| **I already run llama.cpp / Ollama / LM Studio** | [**Technical summary**](docs/for-experienced-users.md) — skip the hand-holding |
+| **I already run llama.cpp / LM Studio** | [**Technical summary**](docs/for-experienced-users.md) — skip the hand-holding |
 | **See what it can do** | [Feature tour](docs/features.md) |
 | **Download the app (new to GitHub?)** | [Downloading from GitHub](docs/download-from-github.md) |
 | **Install it on Windows** | [Windows installation guide](docs/install-windows.md) |
@@ -235,8 +235,6 @@ Everything below runs **on your own machine** unless you deliberately connect an
   Availability, quality, and whether a system voice uses the network depend on that platform's speech
   implementation, which the app does not control.
 - **Optional cloud providers** — Azure AI Foundry and Codex, if you want them. Entirely optional.
-- **Ollama** — if you already run Ollama, the app can use its models. It will not install or manage
-  Ollama for you.
 
 </details>
 

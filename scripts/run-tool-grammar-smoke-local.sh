@@ -8,7 +8,7 @@
 #   catch that coming back:
 #
 #     * ChatLocalToolsE2ETests looks like it covers the local-tools path, but its chat backend is
-#       FakeOllama. No chat template, no GBNF, no sampler ever runs there.
+#       FakeOpenAiGateway. No chat template, no GBNF, no sampler ever runs there.
 #     * LlamaGrammarToolSchemaCompatibilityTests pins our schemas under a bound we measured BY HAND.
 #       It cannot notice llama.cpp changing that limit.
 #

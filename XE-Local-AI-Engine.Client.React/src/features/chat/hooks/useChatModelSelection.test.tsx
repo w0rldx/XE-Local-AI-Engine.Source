@@ -15,7 +15,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: ["listLocalModels"],
 		queryFn: () =>
 			Promise.resolve({
-				isAvailable: true,
 				items: [
 					{ modelName: "gpt-5.6-sol", provider: "CodexOAuth", isReasoningCapable: true, isToolCapable: true },
 					{ modelName: "my-azure-deployment", provider: "AzureFoundry", isReasoningCapable: false, isToolCapable: true },

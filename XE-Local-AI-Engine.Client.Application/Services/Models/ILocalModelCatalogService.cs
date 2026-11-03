@@ -1,14 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
-///     The model picker's whole catalog, gathered from five independent sources that each degrade on their own.
+///     The model picker's whole catalog, gathered from independent sources that each degrade on their own.
 ///     Everything here is raw material for the list mapper — no source failure ever fails the catalog.
 /// </summary>
 public sealed class LocalModelCatalog
@@ -17,17 +15,8 @@ public sealed class LocalModelCatalog
 
     public required string? ConfiguredDefaultModelName { get; init; }
 
-    /// <summary>
-    ///     The Ollama runtime's models, or <see langword="null" /> when that runtime could not be reached. Null is the
-    ///     ONLY unavailability signal: an empty list means a reachable runtime with nothing installed.
-    /// </summary>
-    public required IReadOnlyList<OllamaModelSummary>? OllamaModels { get; init; }
-
-    /// <summary>
-    ///     Effective kind per Ollama model name. Empty when <see cref="OllamaModels" /> is null — there is nothing
-    ///     to classify, and classification probes the same unreachable runtime.
-    /// </summary>
-    public required IReadOnlyDictionary<string, ModelClassificationResult> Classifications { get; init; }
+    /// <summary>The stored classification rows by model name (case-insensitive), carrying the operator's kind overrides.</summary>
+    public required IReadOnlyDictionary<string, ModelClassificationRecord> Classifications { get; init; }
 
     public required IReadOnlyList<LocalModelDescriptor> InstalledGgufModels { get; init; }
 
@@ -52,7 +41,7 @@ public sealed class LocalModelCatalog
 }
 
 /// <summary>
-///     Aggregates the model picker's five independent sources (Ollama, installed GGUF, Codex, Azure Foundry, external
+///     Aggregates the model picker's independent sources (installed GGUF, Codex, Azure Foundry, external
 ///     OpenAI-compatible connections) and owns the per-source degradation policy.
 /// </summary>
 /// <remarks>The list endpoint therefore stays a single call plus a mapping.</remarks>
@@ -62,11 +51,4 @@ public interface ILocalModelCatalogService
     ///     Reads every source. Never throws for a source-level failure — only cancellation propagates.
     /// </summary>
     Task<LocalModelCatalog> GetCatalogAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>Lists the models the Ollama runtime currently holds in memory.</summary>
-    /// <remarks>
-    ///     Delegates straight to the runtime service this catalog already depends on, so the loaded-models endpoint reaches it through an
-    ///     Application-owned seam rather than injecting a concrete provider's contract.
-    /// </remarks>
-    Task<IReadOnlyList<RunningModelSnapshot>> ListRunningOllamaModelsAsync(CancellationToken cancellationToken = default);
 }

@@ -450,12 +450,12 @@ public sealed class ReasoningEffortDispatcherTests
     [Test]
     public async Task Fast_WhenFastModelIsNotServedByLlamaCpp_NeverSwaps()
     {
-        // Node-local is not enough: an Ollama-served model is local but the swap targets a llama.cpp process, which is
-        // the only provider the capacity gate and the liveness probe can reason about.
+        // Node-local is not enough: a model served by another provider is local but the swap targets a llama.cpp
+        // process, which is the only provider the capacity gate and the liveness probe can reason about.
         var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
             fastModelName: "qwen3:1.7b",
             fastModelLocality: ModelTrustLocality.Local,
-            fastModelProviderName: "ollama");
+            fastModelProviderName: "another-runtime");
 
         AssertEx.Equal(ResolvedModel, decision.Model);
         AssertEx.Equal(ReasoningDispatchReasons.FastModelNotLocal, decision.ReasonCode);
@@ -501,8 +501,7 @@ public sealed class ReasoningEffortDispatcherTests
             capacityDecision: new CapacityDecision
             {
                 Verdict = CapacityVerdict.RejectInsufficient,
-                Reason = "no room",
-                OllamaEvictionWarning = false
+                Reason = "no room"
             });
 
         AssertEx.Equal(ReasoningTier.Fast, decision.Tier);
@@ -544,7 +543,6 @@ public sealed class ReasoningEffortDispatcherTests
             {
                 Verdict = CapacityVerdict.Allow,
                 Reason = "ok",
-                OllamaEvictionWarning = false,
                 Reservation = reservation
             },
             fastModelCapabilities: new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: false, IsCloud: false)
@@ -629,8 +627,7 @@ public sealed class ReasoningEffortDispatcherTests
             capacityDecision: new CapacityDecision
             {
                 Verdict = CapacityVerdict.QueueSameModel,
-                Reason = "Model is loading; the request will share that load.",
-                OllamaEvictionWarning = false
+                Reason = "Model is loading; the request will share that load."
             },
             leaseAcquisition: LlamaServerLeaseAcquisition.NotRunning);
 
@@ -711,7 +708,6 @@ public sealed class ReasoningEffortDispatcherTests
             {
                 Verdict = CapacityVerdict.Allow,
                 Reason = "ok",
-                OllamaEvictionWarning = false,
                 Reservation = reservation
             },
             capabilityResolver: capabilityResolver);
@@ -741,7 +737,6 @@ public sealed class ReasoningEffortDispatcherTests
             {
                 Verdict = CapacityVerdict.Allow,
                 Reason = "ok",
-                OllamaEvictionWarning = false,
                 Reservation = reservation
             },
             capabilityResolver: capabilityResolver));
@@ -843,8 +838,7 @@ public sealed class ReasoningEffortDispatcherTests
                        .Returns(Task.FromResult(capacityDecision ?? new CapacityDecision
                        {
                            Verdict = CapacityVerdict.Allow,
-                           Reason = "ok",
-                           OllamaEvictionWarning = false
+                           Reason = "ok"
                        }));
 
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
@@ -876,8 +870,7 @@ public sealed class ReasoningEffortDispatcherTests
         new()
         {
             Verdict = CapacityVerdict.QueueSameModel,
-            Reason = "already running",
-            OllamaEvictionWarning = false
+            Reason = "already running"
         };
 
     private sealed class StubDisposable : IDisposable

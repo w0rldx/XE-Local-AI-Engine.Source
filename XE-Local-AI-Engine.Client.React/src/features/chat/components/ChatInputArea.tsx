@@ -67,7 +67,7 @@ interface ChatInputAreaProps {
 	sendDisabled?: boolean;
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
-	// Whether the active model advertises the Ollama `tools` capability. Combined with the node-wide
+	// Whether the active model advertises the `tools` capability. Combined with the node-wide
 	// capability to gate the local-tool controls so a non-tool model never offers them.
 	activeModelToolCapable?: boolean;
 	// The conversation the composer sends into ("" for a draft without one yet); keys the per-conversation web review mode.
@@ -174,7 +174,7 @@ export function ChatInputArea({
 	const trimmed = content.trim();
 	const reasoningEnabled = reasoningEffort !== "none";
 	const reasoningMenuDisabled = disabled || isSending || availableReasoningEfforts.length <= 1;
-	// Local-tool controls require BOTH the node-wide capability AND the active model advertising the Ollama
+	// Local-tool controls require BOTH the node-wide capability AND the active model advertising the
 	// `tools` capability — a model that can't call tools must never be offered them.
 	const showLocalToolControls = capabilities.showLocalToolControls && activeModelToolCapable;
 	// The knowledge-base grounding toggle shows for plain chat only: agent mode reaches the knowledge base through the

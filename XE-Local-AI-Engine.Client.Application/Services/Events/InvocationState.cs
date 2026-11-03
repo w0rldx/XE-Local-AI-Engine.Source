@@ -180,7 +180,7 @@ public sealed class InvocationState
     /// </summary>
     /// <remarks>
     ///     The whole-turn clock starts before the warm, so a cold first turn measured 206 s against the same work's 28 s warm; subtracting
-    ///     this leaves the warm-equivalent turn time. Null whenever no local warm happened (Ollama, a remote provider, an already-warm
+    ///     this leaves the warm-equivalent turn time. Null whenever no local warm happened (a remote provider, an already-warm
     ///     runtime that reported nothing) and on every platform/legacy turn.
     /// </remarks>
     public long? ModelReadinessMs { get; set; }

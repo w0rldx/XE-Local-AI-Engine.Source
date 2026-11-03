@@ -70,7 +70,7 @@ public sealed class CodexStoreFalseOnWireTests
 
         try
         {
-            // Simulate the agent send path leaking a LOCAL Ollama model name via ChatOptions.ModelId.
+            // Simulate the agent send path leaking a LOCAL model name via ChatOptions.ModelId.
             await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")],
                 new ChatOptions
                 {

@@ -31,7 +31,6 @@ public sealed class ConfigureAwaitPolicyTests
         "XE-Local-AI-Engine.Providers.CodexOAuth",
         "XE-Local-AI-Engine.Providers.HuggingFace",
         "XE-Local-AI-Engine.Providers.LlamaServer",
-        "XE-Local-AI-Engine.Providers.Ollama",
         "XE-Local-AI-Engine.Providers.OpenAICompat",
         "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
         "XE-Local-AI-Engine.Providers.ProcessSupervision",

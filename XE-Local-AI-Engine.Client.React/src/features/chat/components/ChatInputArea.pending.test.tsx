@@ -11,7 +11,7 @@ function baseProps() {
 	return {
 		availableReasoningEfforts: ["none" as const],
 		isSending: false,
-		modelOptions: [{ value: "model-a", label: "Model A", isAvailable: true }],
+		modelOptions: [{ value: "model-a", label: "Model A" }],
 		selectedModel: "model-a",
 		reasoningEffort: "none" as const,
 		onCancel: vi.fn(),

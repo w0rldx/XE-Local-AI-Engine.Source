@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <inheritdoc />
 public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
@@ -41,7 +40,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         {
             installed = await provider.ListModelsAsync(cancellationToken);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Provider process down, transport error or unmapped provider: keep the configured name so the caller's
             // graceful "not available" path fires. NOT confident, never a vector identity; no model or chunk text involved.
@@ -62,7 +61,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             };
         }
 
-        // (1) Exact pinned or configured name is installed → keep it (an Ollama node with nomic-embed-text is unaffected).
+        // (1) Exact pinned or configured name is installed → keep it.
         var exactMatch = installed.FirstOrDefault(descriptor =>
             string.Equals(descriptor.ModelName, effectiveName, StringComparison.OrdinalIgnoreCase));
         if (exactMatch is not null)

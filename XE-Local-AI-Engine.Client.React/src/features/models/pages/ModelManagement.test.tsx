@@ -196,10 +196,8 @@ describe("ModelManagement", () => {
 		// which would otherwise surface as an unhandled rejection from a deferred timer.
 		Element.prototype.scrollIntoView = vi.fn();
 		queryFns.listLocalModels.mockResolvedValue({
-			isAvailable: true,
 			selectedModelName: "llama3:8b",
 			configuredDefaultModelName: "llama3:8b",
-			error: null,
 			items: [
 				{
 					modelName: "llama3:8b",
@@ -286,10 +284,8 @@ describe("ModelManagement", () => {
 	// so it must never reach the installed table — where every row carries exactly those actions.
 	it("keeps external-provider models out of the installed table and its actions", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
-			isAvailable: true,
 			selectedModelName: "llama3:8b",
 			configuredDefaultModelName: "llama3:8b",
-			error: null,
 			items: [
 				{
 					modelName: "llama3:8b",
@@ -351,7 +347,7 @@ describe("ModelManagement", () => {
 
 		const kindBadge = await screen.findByTestId("model-kind-badge-llama3:8b");
 		expect(kindBadge.textContent).toContain("Chat");
-		// Raw Ollama capabilities surface as read-only badges in the table.
+		// Raw capabilities surface as read-only badges in the table.
 		expect(screen.getByText("Tools")).toBeTruthy();
 		// A non-overridden model shows no "reset to detected" affordance, and the table no longer carries the override
 		// Select (it moved into the details dialog).
@@ -377,17 +373,13 @@ describe("ModelManagement", () => {
 		};
 		queryFns.listLocalModels
 			.mockResolvedValueOnce({
-				isAvailable: true,
 				selectedModelName: "llama3:8b",
 				configuredDefaultModelName: "llama3:8b",
-				error: null,
 				items: [{ ...overriddenRow, kind: "Chat", isOverridden: false }],
 			})
 			.mockResolvedValue({
-				isAvailable: true,
 				selectedModelName: "llama3:8b",
 				configuredDefaultModelName: "llama3:8b",
-				error: null,
 				items: [overriddenRow],
 			});
 
@@ -420,10 +412,8 @@ describe("ModelManagement", () => {
 
 	it("shows a reset-to-detected action only for overridden models and resets through the generated mutation", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
-			isAvailable: true,
 			selectedModelName: "llama3:8b",
 			configuredDefaultModelName: "llama3:8b",
-			error: null,
 			items: [
 				{
 					modelName: "llama3:8b",
@@ -451,23 +441,26 @@ describe("ModelManagement", () => {
 		await waitFor(() => expect(mutationFns.deleteModelKind.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" } }));
 	});
 
-	it("renders the empty installed list without surfacing a provider-unavailable error", async () => {
-		// isAvailable=false no longer means the page is broken: installed GGUF + cloud models still render from the same
-		// response even when the legacy Ollama probe reports unavailable, so the page shows the empty-list state rather
-		// than a false error banner.
+	it("renders the empty installed list for a successful, empty answer", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
-			isAvailable: false,
 			selectedModelName: null,
 			configuredDefaultModelName: "llama3:8b",
-			error: "Local model provider is unavailable.",
 			items: [],
 		});
 
 		renderWithProviders(<ModelManagement />);
 
-		// The empty installed-models state renders, and the provider-unavailable error is NOT shown.
 		expect(await screen.findByText("No local models found.")).toBeTruthy();
-		expect(screen.queryByText("Local model provider is unavailable.")).toBeNull();
+		expect(screen.queryByRole("alert")).toBeNull();
+	});
+
+	it("shows a failed list read as an error, never as the empty list", async () => {
+		queryFns.listLocalModels.mockRejectedValue(new Error("list failed"));
+
+		renderWithProviders(<ModelManagement />);
+
+		expect(await screen.findByRole("alert")).toBeTruthy();
+		expect(screen.queryByText("No local models found.")).toBeNull();
 	});
 
 	it("shows license and template in the dialog License tab", async () => {
@@ -708,7 +701,6 @@ describe("ModelManagement", () => {
 
 	it("marks a tested model installed when any quant of its repo is installed and offers its Download as another quant", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
-			isAvailable: true,
 			items: [
 				{
 					modelName: "unsloth/Granite-4.1-3b-GGUF:Q8_0",
@@ -1052,7 +1044,6 @@ describe("ModelManagement", () => {
 
 	it("hides import when capability is unavailable and labels imported provenance from the typed origin", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
-			isAvailable: true,
 			items: [
 				{
 					modelName: "private-model:Q4_K_M",

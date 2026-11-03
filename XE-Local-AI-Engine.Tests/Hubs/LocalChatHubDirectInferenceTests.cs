@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <c>StreamDirectInference</c> end to end through the real hub, the real service and the test host's fake Ollama chat
+///     <c>StreamDirectInference</c> end to end through the real hub, the real service and the test host's fake gateway chat
 ///     client: the browser's wire, the operator gate and the eager refusal.
 /// </summary>
 [Category(TestCategories.Integration)]
@@ -32,8 +32,8 @@ public sealed class LocalChatHubDirectInferenceTests
         AssertEx.True(events.Count >= 3, $"expected deltas, usage and done; got {string.Join(",", events.Select(static e => e.Type))}");
         AssertEx.True(events.Any(static e => e.Type == DirectInferenceEventTypes.Delta && !string.IsNullOrEmpty(e.TextDelta)));
         var usage = AssertEx.NotNull(events.Single(static e => e.Type == DirectInferenceEventTypes.Usage).Usage);
-        AssertEx.Equal(5L, usage.InputTokens, "the fake counts the user message's characters");
-        AssertEx.Empty(events.Where(static e => e.Type == DirectInferenceEventTypes.Timings), "an Ollama answer carries no llama-server timings");
+        AssertEx.Equal((long)("Be terse.".Length + "hello".Length), usage.InputTokens, "the fake counts the characters of every message, system prompt included");
+        AssertEx.Empty(events.Where(static e => e.Type == DirectInferenceEventTypes.Timings), "the fake gateway's answer carries no llama-server timings");
         var done = events[^1];
         AssertEx.Equal(DirectInferenceEventTypes.Done, done.Type);
         AssertEx.Equal("stop", done.FinishReason);

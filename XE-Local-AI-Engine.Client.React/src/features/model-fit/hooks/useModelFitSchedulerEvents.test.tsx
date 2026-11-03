@@ -216,7 +216,7 @@ describe("useModelFitSchedulerEvents", () => {
 			{
 				_id: "getLatestRecommendations",
 				baseURL: "",
-				query: { useCase: "coding", providerName: "ollama" },
+				query: { useCase: "coding", providerName: "llamacpp" },
 			},
 		];
 		const queryClient = renderHubWithSeededQuery(fullLatestKey);

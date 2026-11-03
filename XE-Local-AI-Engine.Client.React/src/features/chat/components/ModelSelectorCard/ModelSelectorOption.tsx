@@ -13,7 +13,7 @@ interface ModelSelectorOptionProps {
 	selected: boolean;
 	reasoningLabel: string;
 	nativeReasoningLabel: string;
-	statusFallback: (option: ModelOption) => string;
+	statusFallback: string;
 	onSelect: (value: string) => void;
 }
 
@@ -30,21 +30,11 @@ export function ModelSelectorOption({
 	return (
 		<UnstyledButton
 			data-testid={`chat-model-selector-option-${option.value}`}
-			disabled={!option.isAvailable}
 			onClick={() => onSelect(option.value)}
-			className={cx(
-				classes["option-button"],
-				selected && classes["option-button-selected"],
-				!option.isAvailable && classes["option-button-disabled"],
-			)}
+			className={cx(classes["option-button"], selected && classes["option-button-selected"])}
 		>
 			<Group gap="sm" wrap="nowrap" align="flex-start">
-				<Box
-					className={cx(
-						classes["status-accent"],
-						option.isAvailable ? classes["status-accent-available"] : classes["status-accent-unavailable"],
-					)}
-				/>
+				<Box className={cx(classes["status-accent"], classes["status-accent-available"])} />
 				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 					<Group gap={6} wrap="nowrap">
 						<ModelNameTooltip display={display}>
@@ -84,7 +74,7 @@ export function ModelSelectorOption({
 					    reported no status at all. The raw id used to sit here too; it now travels in the tooltip, which
 					    is the only place it can be shown untruncated. */}
 					<Text size="xs" c="dimmed" lineClamp={1}>
-						{display.secondary ?? statusFallback(option)}
+						{display.secondary ?? statusFallback}
 					</Text>
 				</Stack>
 				<IconChevronRight

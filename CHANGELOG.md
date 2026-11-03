@@ -22,6 +22,21 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
 
+> **Breaking (pre-release): the Ollama runtime and its model list are removed.** llama.cpp is the node's local chat and
+> embedding runtime. Models held by that runtime can no longer be used through this engine, and their files are left
+> untouched: download or import a GGUF to replace them.
+> - `XE_OLLAMA_*` environment variables and `Ollama:*` configuration are ignored. Stored model-to-runtime rows naming it
+>   are deleted by a migration, so those names route to llama.cpp and fail like any model that is not installed: a chat
+>   turn is refused with "the model's memory footprint could not be determined".
+> - `ollamaEndpoint` is gone from node settings. A stored settings file carrying it still loads, but a save request
+>   carrying it is rejected with a 400, so update any client that sends it.
+> - `GET models/running` is removed in favour of `GET model-fit/running`. `xe models` no longer shows VRAM, and its
+>   `--json` output loses `sizeVramBytes`.
+> - `ListLocalModelsResponse` loses `isAvailable` and `error`.
+> - Background models accept only an installed GGUF. A model-fit request naming that runtime as its provider is rejected.
+> - A requested model is no longer substituted when it is missing: the turn fails in its provider instead of falling
+>   back to the default model with a notice.
+
 > **Breaking (pre-release): re-create existing Development projects after this upgrade.** The Development command-profile
 > catalog moved from `v2` to `v3` (the new `python-pytest` profile). A project created before the upgrade keeps its
 > stored `v2` profile, and every attempt, validation, review, apply and Dev Workflows Tool node on it is refused with

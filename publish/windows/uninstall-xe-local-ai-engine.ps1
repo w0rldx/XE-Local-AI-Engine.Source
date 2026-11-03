@@ -7,7 +7,7 @@
       1. Stops the desktop shell and launcher first, then any running XE Local AI Engine
          process, then the llama-server / sd-server / whisper-server child runtimes and
          the trainer's Python interpreter THIS app spawned (matched strictly by executable path under the
-         app's own per-user data directory - an unrelated llama-server/Ollama is never
+         app's own per-user data directory - an unrelated llama-server is never
          touched, mirroring the app's own StaleProcessReaper).
       2. If a Velopack-managed install is detected, notes that Velopack/the OS uninstall
          owns the app binaries and points at it (this script does not delete a managed

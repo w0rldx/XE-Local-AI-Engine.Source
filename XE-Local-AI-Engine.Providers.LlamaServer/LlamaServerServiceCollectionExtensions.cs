@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     DI wiring for the llama-server local-model provider stack (binary manager + GPU probe/selector + the
-///     supervisor + provider seams). Mirrors the <c>AddOllamaLocalModelProvider</c> registration shape.
+///     supervisor + provider seams).
 /// </summary>
 public static class LlamaServerServiceCollectionExtensions
 {
@@ -288,7 +288,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILogger<LlamaServerSystemOneClient>>()));
 
         // SEAM: the llamacpp ILocalModelProvider, over the supervisor and the caller-supplied IGgufModelStore (the Hugging Face GGUF store), added to the
-        // ILocalModelProvider set alongside Ollama so the per-model resolver dispatches across both. Singleton — it holds no per-request state, and the deferred clients own the cold-start.
+        // ILocalModelProvider set the per-model resolver dispatches across. Singleton — it holds no per-request state, and the deferred clients own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>(),

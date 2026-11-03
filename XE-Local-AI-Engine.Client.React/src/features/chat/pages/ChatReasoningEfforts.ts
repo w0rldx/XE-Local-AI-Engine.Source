@@ -7,8 +7,8 @@ import { binaryReasoningEfforts, codexReasoningEfforts, reasoningEfforts } from 
 //
 // - Cloud (Codex) models get the full OpenAI Responses vocabulary: none/minimal/low/medium/high/xhigh. "minimal" and
 //   "xhigh" are Codex-only and must NEVER be offered for a local model.
-// - A model advertising the Ollama `thinking` capability gets the graded set: none/low/medium/high.
-// - Everything else (native-reasoning, non-thinking Ollama, the local default) gets binary On/Off: on/none. "On"
+// - A model advertising the `thinking` capability gets the graded set: none/low/medium/high.
+// - Everything else (native-reasoning, non-thinking, the local default) gets binary On/Off: on/none. "On"
 //   omits `think` so a model that reasons by default runs its built-in reasoning; "Off" sends think:false.
 //
 // NATIVE-reasoning models (harmony/gpt-oss, `isNativeReasoningModel`) belong in the BINARY bucket on purpose and are

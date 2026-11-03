@@ -4,8 +4,8 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 ///     Resolves the model a "Local runtime default" send, one that names no model, should run on.
 /// </summary>
 /// <remarks>
-///     It resolves ONLY to an installed GGUF chat-capable model and NEVER to Ollama, which stays opt-in: an explicit
-///     Ollama pick is unaffected, but the default must not route a stale id to a possibly absent daemon.
+///     It resolves ONLY to an installed GGUF chat-capable model: an explicit pick is unaffected, but the default must
+///     not route a stale id to a model that is not installed.
 /// </remarks>
 public interface ILocalDefaultChatModelResolver
 {

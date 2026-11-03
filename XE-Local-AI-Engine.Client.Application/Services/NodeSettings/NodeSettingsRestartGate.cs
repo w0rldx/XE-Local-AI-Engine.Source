@@ -19,8 +19,7 @@ public static class NodeSettingsRestartGate
     internal static readonly FrozenDictionary<string, Func<StoredNodeSettings, NodeSettingsEffectiveValues, object?>> StoredValues =
         new Dictionary<string, Func<StoredNodeSettings, NodeSettingsEffectiveValues, object?>>(StringComparer.Ordinal)
         {
-            ["defaultModelName"] = static (s, _) => s.DefaultModelName, // ResolveChatConnectionSettings; InvocationRunner constructor
-            ["ollamaEndpoint"] = static (s, _) => s.OllamaEndpoint, // ResolveChatConnectionSettings
+            ["defaultModelName"] = static (s, _) => s.DefaultModelName, // ResolveFallbackChatModel; InvocationRunner constructor
             ["huggingFaceDefaultQuant"] = static (s, _) => s.HuggingFaceDefaultQuant, // BuildSeededHuggingFaceOptions
             ["huggingFaceDiskMarginBytes"] = static (s, _) => s.HuggingFaceDiskMarginBytes, // BuildSeededHuggingFaceOptions
             ["huggingFaceDownloadConnections"] = static (s, _) => s.HuggingFaceDownloadConnections, // BuildSeededHuggingFaceOptions

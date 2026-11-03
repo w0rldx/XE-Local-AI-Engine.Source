@@ -103,16 +103,13 @@ describe("LoadedModelsPage", () => {
 		expertsOffloaded: false,
 	};
 
-	it("renders the llama.cpp running-models table and no Ollama section", () => {
+	it("renders the llama.cpp running-models table", () => {
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
 
 		renderPage();
 
 		expect(screen.getByTestId("loaded-models-llamacpp-table")).toBeTruthy();
 		expect(screen.getByTestId("loaded-models-llamacpp-row-running-a")).toBeTruthy();
-		// The Ollama in-memory section was removed from this page; nothing Ollama-specific may render.
-		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
-		expect(screen.queryByText(/ollama/i)).toBeNull();
 	});
 
 	it("shows the empty state for the llama.cpp section when no processes are running", () => {

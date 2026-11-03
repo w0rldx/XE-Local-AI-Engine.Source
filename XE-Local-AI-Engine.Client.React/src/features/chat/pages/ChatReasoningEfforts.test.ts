@@ -4,7 +4,7 @@ import type { ModelOption } from "@/core/models/ModelOption";
 import { resolveAvailableReasoningEfforts } from "@/features/chat/pages/ChatReasoningEfforts";
 
 function option(overrides: Partial<ModelOption>): ModelOption {
-	return { value: "model", label: "model", isAvailable: true, ...overrides };
+	return { value: "model", label: "model", ...overrides };
 }
 
 describe("resolveAvailableReasoningEfforts", () => {
@@ -62,7 +62,7 @@ describe("resolveAvailableReasoningEfforts", () => {
 	it("treats an undeclared capability as no answer, leaving every other provider on its usual path", () => {
 		// Only an external connection declares the field; a local or cloud entry reports null, which must not be read
 		// as "no graded effort" and demote a thinking model to the binary control.
-		expect(resolveAvailableReasoningEfforts(option({ provider: "Ollama", isReasoningModel: true }))).toEqual([
+		expect(resolveAvailableReasoningEfforts(option({ provider: "llamacpp", isReasoningModel: true }))).toEqual([
 			"none",
 			"low",
 			"medium",

@@ -47,7 +47,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly int _maxProviderCallsPerInvocationSeed;
     private readonly int _orchestrationIdleTimeoutSeed;
     private readonly int _transcriptionIdleTimeoutMinutesSeed;
-    private readonly string _ollamaEndpointSeed;
     private readonly Lazy<IModelTrustResolver> _modelTrustResolver;
     private readonly INodeSettingsStore _store;
     private readonly IReadOnlyList<string> _toolCapableModelsSeed;
@@ -191,11 +190,10 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             StoredNodeSettings.DefaultKnowledgeScheduledReindexIntervalMinutes);
         _knowledgeAgentToolsEnabledSeed = BoolSeed(configuration, "KnowledgeBase:AgentToolsEnabled", StoredNodeSettings.DefaultKnowledgeAgentToolsEnabled);
         _allowCloudModelAccessSeed = BoolSeed(configuration, "KnowledgeBase:AllowCloudModelAccess", StoredNodeSettings.DefaultAllowCloudModelAccess);
-        // The background-model seeds keep the Ollama:ChatModel override the invocation runner also honors; blank falls to the default model.
-        var ollamaChatModel = NonBlank(configuration.GetValue<string>("Ollama:ChatModel"));
-        _playbookAnalysisModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookAnalysis:ModelName")) ?? ollamaChatModel;
-        _playbookEvalModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookEval:ModelName")) ?? ollamaChatModel;
-        _memoryExtractionModelNameSeed = NonBlank(configuration.GetValue<string>("MemoryExtraction:ExtractionModelName")) ?? ollamaChatModel;
+        // A blank background-model seed falls to the default model.
+        _playbookAnalysisModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookAnalysis:ModelName"));
+        _playbookEvalModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookEval:ModelName"));
+        _memoryExtractionModelNameSeed = NonBlank(configuration.GetValue<string>("MemoryExtraction:ExtractionModelName"));
         _chatRetentionEnabledSeed = BoolSeed(configuration, "ChatRetention:Enabled", StoredNodeSettings.DefaultChatRetentionEnabled);
         _chatRetentionDaysSeed = IntSeed(configuration, "ChatRetention:RetentionDays", 1, StoredNodeSettings.DefaultChatRetentionDays);
         _agentExecutionLogRetentionEnabledSeed = BoolSeed(configuration, "AgentExecutionLogRetention:Enabled",
@@ -284,12 +282,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         // 0 is a valid seed here: it turns the age limit off, and an absent stored value must keep that.
         var configuredRetentionDays = configuration.GetValue<int?>("AgentHome:RunRetention:RetentionDays");
         _agentHomeRunRetentionDaysSeed = configuredRetentionDays is >= 0 ? configuredRetentionDays.Value : StoredNodeSettings.DefaultAgentHomeRunRetentionDays;
-
-        // Ollama:Endpoint is not bound to an Options class today; it is read directly from configuration at host build.
-        var configuredOllama = configuration.GetValue<string>("Ollama:Endpoint");
-        _ollamaEndpointSeed = string.IsNullOrWhiteSpace(configuredOllama)
-            ? StoredNodeSettings.DefaultOllamaEndpoint
-            : configuredOllama;
     }
 
     public async Task<string> GetDefaultModelNameAsync(CancellationToken cancellationToken = default) =>
@@ -360,9 +352,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default) =>
         ResolveToolCapableModels(await LoadAsync(cancellationToken));
-
-    public async Task<string> GetOllamaEndpointAsync(CancellationToken cancellationToken = default) =>
-        ResolveOllamaEndpoint(await LoadAsync(cancellationToken));
 
     public async Task<string> GetHuggingFaceDefaultQuantAsync(CancellationToken cancellationToken = default) =>
         ResolveHuggingFaceDefaultQuant(await LoadAsync(cancellationToken));
@@ -719,9 +708,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public IReadOnlyList<string> GetToolCapableModelsSeed() =>
         _toolCapableModelsSeed;
 
-    public string GetOllamaEndpoint() =>
-        ResolveOllamaEndpoint(LoadStored());
-
     public string GetHuggingFaceDefaultQuant() =>
         ResolveHuggingFaceDefaultQuant(LoadStored());
 
@@ -920,9 +906,6 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private IReadOnlyList<string> ResolveToolCapableModels(StoredNodeSettings stored) =>
         stored.ToolCapableModels is { Count: > 0 } models ? models : _toolCapableModelsSeed;
-
-    private string ResolveOllamaEndpoint(StoredNodeSettings stored) =>
-        string.IsNullOrWhiteSpace(stored.OllamaEndpoint) ? _ollamaEndpointSeed : stored.OllamaEndpoint;
 
     private string ResolveHuggingFaceDefaultQuant(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.HuggingFaceDefaultQuant) ? _hfQuantSeed : stored.HuggingFaceDefaultQuant;

@@ -190,7 +190,7 @@ public sealed class TurnPolicyTests
     [Test]
     public void WithEffectiveContext_WhenTheLaunchedWindowIsUnknown_LeavesThePolicyUnchanged()
     {
-        // Cloud, Ollama, or a failed read: nothing better than the configured default is known.
+        // Cloud or a failed read: nothing better than the configured default is known.
         var policy = ResolveWithDefaults(new ConversationContextBudgetOptions());
 
         AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: null).ContextCapacityTokens);

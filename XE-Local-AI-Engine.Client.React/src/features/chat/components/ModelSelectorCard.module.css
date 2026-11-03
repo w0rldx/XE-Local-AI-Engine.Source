@@ -113,15 +113,6 @@
 	background: var(--mantine-primary-color-light-hover);
 }
 
-.option-button-disabled {
-	cursor: not-allowed;
-	opacity: 0.62;
-}
-
-.option-button-disabled:hover {
-	background: transparent;
-}
-
 .status-accent {
 	width: 3px;
 	border-radius: 2px;
@@ -132,10 +123,6 @@
 
 .status-accent-available {
 	background: var(--mantine-color-primary-filled);
-}
-
-.status-accent-unavailable {
-	background: var(--mantine-color-gray-4);
 }
 
 .reasoning-badge {

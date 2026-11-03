@@ -74,7 +74,7 @@ public sealed class ToolCapableModelRegistrarTests
     [Test]
     public async Task RegisterIfToolCapable_WhenModelIsNotInstalled_DoesNothing()
     {
-        // A cloud/Ollama model has no GGUF descriptor at all; it must not be admitted by this path.
+        // A cloud model has no GGUF descriptor at all; it must not be admitted by this path.
         var store = NewSettingsStore(existing: []);
         var registrar = NewRegistrar(store, Descriptor(PlainGguf, isToolCapable: true));
 

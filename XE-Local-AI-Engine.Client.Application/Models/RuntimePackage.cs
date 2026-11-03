@@ -37,17 +37,17 @@ public sealed record RuntimePackage
     /// </summary>
     /// <remarks>
     ///     Deliberately excluded from the config hash (mirrors <see cref="SupportsThinking" />): sampling is a loopback-only per-send knob,
-    ///     so the cross-repo encrypted/server digest stays stable. Threaded to the invocation factory, which sets the matching Ollama chat
+    ///     so the cross-repo encrypted/server digest stays stable. Threaded to the invocation factory, which sets the matching chat
     ///     options only for the non-null fields.
     /// </remarks>
     public SamplingOptions? SamplingOptions { get; init; }
 
     /// <summary>
-    ///     Whether the active model advertises the Ollama <c>thinking</c> capability. Threaded to the invocation factory so the <c>think</c>
-    ///     chat option is attached only for a capable model (an incapable model returns HTTP 400 for any <c>think</c> value).
+    ///     Whether the active model advertises the <c>thinking</c> capability. Threaded to the invocation factory so the <c>think</c>
+    ///     chat option is attached only for a capable model.
     /// </summary>
     /// <remarks>
-    ///     Defaults to <c>true</c> so the cloud/non-Ollama path and pre-existing callers stay byte-identical; deliberately excluded from
+    ///     Defaults to <c>true</c> so the cloud path and pre-existing callers stay byte-identical; deliberately excluded from
     ///     the config hash so capable models keep a stable hash.
     /// </remarks>
     public bool SupportsThinking { get; init; } = true;
@@ -59,7 +59,7 @@ public sealed record RuntimePackage
     /// <remarks>
     ///     That marker is what llama.cpp turns into the non-empty think-end-tag set its budget gate requires. When <c>false</c> the invocation
     ///     factory omits the budget marker entirely rather than sending a cap the server accepts and then ignores. Defaults to <c>true</c> so
-    ///     the cloud/Ollama paths and pre-existing callers stay byte-identical; deliberately excluded from the config hash (mirrors
+    ///     the cloud path and pre-existing callers stay byte-identical; deliberately excluded from the config hash (mirrors
     ///     <see cref="SupportsThinking" />) because it is derived from the model, not the agent configuration.
     /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; } = true;

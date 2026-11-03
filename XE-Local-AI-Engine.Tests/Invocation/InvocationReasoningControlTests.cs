@@ -36,7 +36,7 @@ public sealed class InvocationReasoningControlTests
         var messageId = Guid.NewGuid();
         using var turn = control.Track(messageId);
 
-        // Reasoning text from a stream that never advertised a completion: a cloud or Ollama turn, or thinking off.
+        // Reasoning text from a stream that never advertised a completion: a cloud turn, or thinking off.
         turn.Observe(new ChatResponseUpdate(ChatRole.Assistant, "x"), sawReasoning: true, sawAnswer: false);
 
         AssertEx.Equal(ReasoningEndOutcome.NotReasoning, await control.EndReasoningAsync(messageId, CancellationToken.None));

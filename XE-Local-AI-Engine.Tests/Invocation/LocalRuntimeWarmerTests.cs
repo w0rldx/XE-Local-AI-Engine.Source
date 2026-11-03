@@ -17,8 +17,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The warm decision, without the whole runner: only llama.cpp is warmable (a cloud or Ollama model never triggers
-///     a local cold-load), and a non-cancellation failure degrades to "no warm" / "window unknown"; a cancellation
+///     The warm decision, without the whole runner: only llama.cpp is warmable (a model on any other provider never
+///     triggers a local cold-load), and a non-cancellation failure degrades to "no warm" / "window unknown"; a cancellation
 ///     propagates.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -41,10 +41,10 @@ public sealed class LocalRuntimeWarmerTests
     [Test]
     public async Task ResolveWarmableProviderAsync_WhenTheProviderIsNotLlamaCpp_IsNotWarmable()
     {
-        var ollama = Substitute.For<ILocalModelProvider>();
-        ollama.ProviderName.Returns("ollama");
+        var otherProvider = Substitute.For<ILocalModelProvider>();
+        otherProvider.ProviderName.Returns("another-runtime");
         var resolver = Substitute.For<ILocalModelProviderResolver>();
-        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ollama));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(otherProvider));
 
         var warmer = CreateWarmer(resolver);
 
@@ -131,12 +131,12 @@ public sealed class LocalRuntimeWarmerTests
     [Test]
     public async Task PrepareLocalRuntimeAsync_ForANonWarmableLocalModel_NeverAsksForACloudWindow()
     {
-        // An Ollama model is skipped like a cloud one, but has no declared window: the default must stay, and the cloud
-        // config must not even be read for it.
-        var ollama = Substitute.For<ILocalModelProvider>();
-        ollama.ProviderName.Returns("ollama");
+        // A model on another local provider is skipped like a cloud one, but has no declared window: the default must
+        // stay, and the cloud config must not even be read for it.
+        var otherProvider = Substitute.For<ILocalModelProvider>();
+        otherProvider.ProviderName.Returns("another-runtime");
         var resolver = Substitute.For<ILocalModelProviderResolver>();
-        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ollama));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(otherProvider));
         var cloudModels = Substitute.For<ICloudModelResolver>();
         cloudModels.ResolveContextWindowAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
         {

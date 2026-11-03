@@ -30,7 +30,7 @@ public sealed class NodeUiSmokeE2ETests : XEPooledE2ETestBase
 
     [Test]
     [Category("Smoke")]
-    public async Task Models_Page_Renders_FakeOllama_Model()
+    public async Task Models_Page_Renders_The_Fake_Gateway_Model()
     {
         await Page.GotoAsync($"{NodeAppUrl}/models", new PageGotoOptions
         {

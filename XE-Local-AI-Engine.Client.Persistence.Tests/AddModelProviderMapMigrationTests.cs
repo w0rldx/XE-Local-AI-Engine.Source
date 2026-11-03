@@ -12,6 +12,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
 {
     private const string PreModelProviderMapMigrationId = "20260610165152_EncryptConversationTitle";
     private const string PreRevisionMigrationId = "20260813121930_AddKnowledgeCollectionsAndProvenance";
+    private const string PreRemoveOllamaProviderMapRowsMigrationId = "20261101053539_AddPlainConversations";
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -82,7 +83,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.ExecuteSqlRawAsync("INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);");
+            await context.Database.ExecuteSqlRawAsync("INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'llamacpp', 7);");
             await context.Database.MigrateAsync();
         }
 
@@ -103,7 +104,42 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
         AssertEx.False(columns.Contains("revision"), "Rollback should remove only the revision column.");
         await using var providerCommand = rolledBack.CreateCommand();
         providerCommand.CommandText = "SELECT provider_name FROM model_provider_map WHERE model_name = 'legacy-model';";
-        AssertEx.Equal("ollama", await providerCommand.ExecuteScalarAsync() as string);
+        AssertEx.Equal("llamacpp", await providerCommand.ExecuteScalarAsync() as string);
+    }
+
+    [Test]
+    public async Task RemoveOllamaProviderMapRows_RemovesThatProviderInAnyCaseAndKeepsOtherRows()
+    {
+        var databasePath = GetDatabasePath("model-provider-map-remove-runtime.sqlite");
+
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRemoveOllamaProviderMapRowsMigrationId);
+
+        await using (var context = CreateContext(databasePath))
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc, revision) VALUES
+                    ('old-lower', 'ollama', 1, 'r1'),
+                    ('old-upper', 'OLLAMA', 2, 'r2'),
+                    ('old-mixed', 'Ollama', 3, 'r3'),
+                    ('kept-gguf', 'llamacpp', 4, 'r4'),
+                    ('kept-external', 'external', 5, 'r5'),
+                    ('kept-lookalike', 'ollama2', 6, 'r6');
+                """);
+            await context.Database.MigrateAsync();
+        }
+
+        await using (var context = CreateContext(databasePath))
+        {
+            var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+            // No row left means the caller's routing default applies, which sends the name to the GGUF provider.
+            AssertEx.Null(await store.GetProviderForModelAsync("old-lower"));
+
+            var rows = await store.ListAsync();
+            AssertEx.Equal("kept-external=external,kept-gguf=llamacpp,kept-lookalike=ollama2",
+                string.Join(',', rows.Select(static row => $"{row.ModelName}={row.ProviderName}")));
+        }
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

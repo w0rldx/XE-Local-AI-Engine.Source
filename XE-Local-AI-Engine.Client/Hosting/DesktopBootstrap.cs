@@ -147,8 +147,8 @@ internal static class DesktopBootstrap
             overrides[HuggingFaceImageModelsDirectoryKey] = imageModelsDirectory;
         }
 
-        // Point the default chat model at the GGUF starter model desktop provisions: Agent:LocalChat:DefaultModel ships an Ollama-era id desktop never installs,
-        // so a send before provisioning ends fails as "not installed". From FirstRunModel:{RepoId,Quant}; added last, so it wins over appsettings while headless/Aspire keep Ollama.
+        // Point the default chat model at the GGUF starter model desktop provisions: Agent:LocalChat:DefaultModel may name one desktop never installs, which
+        // a send would then fail on as "not installed". From FirstRunModel:{RepoId,Quant}; added last, so it wins over appsettings; headless/Aspire keep appsettings.
         var firstRunModel = ResolveFirstRunModelIdentity(configuration);
         if (!string.IsNullOrWhiteSpace(firstRunModel))
         {

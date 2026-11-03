@@ -62,8 +62,7 @@ public sealed class PlaybookRetrievalRankerRegistrationTests : IDisposable
             ["ConnectionStrings:node-sqlite"] = $"Data Source={databasePath}",
             // ValidateOnBuild eagerly constructs NodeOperatorSecretProvider, which requires a base64 32-byte operator
             // secret. Supply one via configuration so the build never depends on an ambient/leaked process env var.
-            [NodeOperatorSecretProvider.EnvVarName] = Convert.ToBase64String(new byte[NodeOperatorSecretProvider.ExpectedSecretLength]),
-            ["Ollama:Endpoint"] = "http://127.0.0.1:11434"
+            [NodeOperatorSecretProvider.EnvVarName] = Convert.ToBase64String(new byte[NodeOperatorSecretProvider.ExpectedSecretLength])
         });
 
         return builder;

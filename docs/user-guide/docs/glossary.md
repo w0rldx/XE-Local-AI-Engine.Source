@@ -304,10 +304,6 @@ Compressing the conversation memory so longer chats fit in less VRAM.
 ### Eject
 Unloading a model from memory to free VRAM, without closing the app.
 
-### Ollama
-A separate, popular local-AI program. If you already use it, this app can borrow its models. It will
-not install or manage Ollama for you, and you do not need it.
-
 ### Development Mode
 An experimental feature where an agent works on a real code repository of yours in an isolated copy,
 with a review step before anything is written back. **Read

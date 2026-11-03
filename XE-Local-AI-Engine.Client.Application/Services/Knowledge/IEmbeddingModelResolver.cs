@@ -8,10 +8,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     <see cref="KnowledgeBaseOptions.EmbeddingModelName" /> and the models installed on the resolved provider.
 /// </summary>
 /// <remarks>
-///     The configured default is an Ollama-style name such as <c>nomic-embed-text</c>; on a llama.cpp node the same
-///     weights are installed under a <c>&lt;repo&gt;:&lt;quant&gt;</c> GGUF name that never equals it, so a literal
-///     pass-through fails even with a matching embedding GGUF present. Bridging that gap makes knowledge-base embedding
-///     work on either runtime, while an installed exact configured name is kept as-is. The chunk-vector and
+///     The configured default is a short name such as <c>nomic-embed-text</c>; the same weights are installed under a
+///     <c>&lt;repo&gt;:&lt;quant&gt;</c> GGUF name that never equals it, so a literal pass-through fails even with a
+///     matching embedding GGUF present. Bridging that gap makes knowledge-base embedding work, while an installed
+///     exact configured name is kept as-is. The chunk-vector and
 ///     query-vector lanes MUST share one resolved name so the two vector sets stay comparable.
 /// </remarks>
 public interface IEmbeddingModelResolver

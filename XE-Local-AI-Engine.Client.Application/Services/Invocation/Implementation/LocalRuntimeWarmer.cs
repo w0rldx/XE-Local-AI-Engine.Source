@@ -65,7 +65,7 @@ public sealed class LocalRuntimeWarmer
     ///     the supervisor's own size-aware window instead of dying to the shorter no-first-chunk watchdog.
     /// </summary>
     /// <remarks>
-    ///     Cloud and Ollama models route elsewhere or warm on first send, so they are a no-op. It surfaces the phase
+    ///     Cloud and external models route elsewhere, so they are a no-op. It surfaces the phase
     ///     into the invocation state and records readiness on <see cref="NodeMetrics" />. INVARIANT: this wait is
     ///     decoupled from the load's lifetime — a cancellation abandons the WAIT and rethrows while the load keeps
     ///     going, leaving the model warm for the next send. A warm FAILURE is swallowed so the streaming send surfaces
@@ -94,7 +94,7 @@ public sealed class LocalRuntimeWarmer
         var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken);
         if (provider is null)
         {
-            // No local cold-load (cloud, Ollama or an unresolved provider): the TTFT baseline is turn start and the
+            // No local cold-load (cloud or an unresolved provider): the TTFT baseline is turn start and the
             // latency is the provider's own; the load-start histogram is local-only. A cloud model's declared window replaces the default.
             stream.ProviderTag = "remote";
             stream.ModelReadyTimestamp = turnStartedTimestamp;
@@ -270,7 +270,7 @@ public sealed class LocalRuntimeWarmer
     ///     llama.cpp runtime — the one that pays a real cold-load before a watched stream.
     /// </summary>
     /// <remarks>
-    ///     Any other provider (Ollama, cloud, external) or a resolution failure answers <see langword="null" /> so the
+    ///     Any other provider (cloud, external) or a resolution failure answers <see langword="null" /> so the
     ///     warm phase is skipped; a genuine cancellation propagates.
     /// </remarks>
     public bool IsRemoteModel(string resolvedModel)

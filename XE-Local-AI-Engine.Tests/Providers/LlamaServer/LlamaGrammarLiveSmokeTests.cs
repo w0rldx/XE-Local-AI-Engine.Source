@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         OPT-IN live smoke: starts a REAL <c>llama-server</c> and proves the shipped tool offer compiles into a GBNF
 ///         grammar on it. <see cref="LlamaGrammarToolSchemaCompatibilityTests" /> pins our side of the contract against
 ///         a bound we measured by hand; it cannot notice llama.cpp changing that limit, and no other suite can either —
-///         <c>ChatLocalToolsE2ETests</c> looks like it covers the local-tools path but its chat backend is FakeOllama,
+///         <c>ChatLocalToolsE2ETests</c> looks like it covers the local-tools path but its chat backend is the fake gateway,
 ///         so no chat template, no GBNF and no sampler ever run there.
 ///     </para>
 ///     <para>

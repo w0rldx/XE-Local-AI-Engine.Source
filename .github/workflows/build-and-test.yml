@@ -64,8 +64,8 @@ jobs:
 
   release-contracts:
     runs-on: ubuntu-latest
-    # Two dotnet builds of the AI.Agent.Tests project (the P0_SPIKE gate) dominate this job.
-    timeout-minutes: 30
+    # Expected about 5 min.
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -100,9 +100,9 @@ jobs:
           tar -xJf "$archive" -C "${RUNNER_TEMP}"
           echo "${RUNNER_TEMP}/shellcheck-${SHELLCHECK_VERSION}" >> "$GITHUB_PATH"
 
-      # Static analysis of the release-critical shell/PowerShell scripts, the Pester suites, and the
-      # P0_SPIKE compile gate. shellcheck comes from the pinned step above; ubuntu-latest already
-      # ships pwsh, PSScriptAnalyzer and Pester; --bootstrap only installs PSScriptAnalyzer if a
+      # Static analysis of the release-critical shell/PowerShell scripts and the Pester suites.
+      # shellcheck comes from the pinned step above; ubuntu-latest already
+      # ships pwsh,PSScriptAnalyzer and Pester; --bootstrap only installs PSScriptAnalyzer if a
       # future image drops it (a missing linter is exit 2 here, never a silent pass). --no-behavior
       # skips the contract-test pass the step above already ran.
       - name: Lint release-critical scripts

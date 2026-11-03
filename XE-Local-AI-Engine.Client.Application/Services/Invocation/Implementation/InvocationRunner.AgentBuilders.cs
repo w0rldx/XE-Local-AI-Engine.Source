@@ -18,7 +18,6 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed partial class InvocationRunner
 {
@@ -28,7 +27,6 @@ public sealed partial class InvocationRunner
         OrchestrationSpec spec,
         string resolvedModel,
         int? turnEffectiveContextTokens,
-        StreamTransport transport,
         ChatOutputCap outputCap,
         ReasoningBudgets reasoningBudgets,
         CancellationToken invocationToken)
@@ -36,17 +34,11 @@ public sealed partial class InvocationRunner
         var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
         foreach (var participant in spec.Participants)
         {
-            var participantResolution = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken);
-            if (participantResolution.Substituted)
-            {
-                await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
-                    BuildModelSubstitutedNoticeMessage(participantResolution.RequestedModel, participantResolution.Model),
-                    participant.Key);
-            }
+            var participantModel = ResolveModel(participant.ModelId ?? resolvedModel);
 
             // Resolve THIS participant's launched effective context window so its inner provider-round budgeter
             // sizes against it, not the shared configured default.
-            var participantWindow = await ResolveParticipantContextTokensAsync(participantResolution.Model,
+            var participantWindow = await ResolveParticipantContextTokensAsync(participantModel,
                 resolvedModel,
                 turnEffectiveContextTokens,
                 package.InvocationId,
@@ -58,7 +50,7 @@ public sealed partial class InvocationRunner
                 Name = participant.Name,
                 Description = participant.Description,
                 Instructions = participant.Instructions,
-                ModelId = participantResolution.Model,
+                ModelId = participantModel,
                 ReasoningEffort = participant.ReasoningEffort,
                 // This participant's OWN capability, resolved per participant rather than copied from the turn model:
                 // a graded effort must never reach a non-thinking pin, nor a thinking pin lose its reasoning.
@@ -160,52 +152,12 @@ public sealed partial class InvocationRunner
         return string.IsNullOrWhiteSpace(update.ToolName) ? "tool" : update.ToolName;
     }
 
-    /// <summary>
-    ///     The outcome of <see cref="ResolveModelAsync" />: the model that will actually serve the turn, and (when it
-    ///     differs from what was requested) the original request so the caller can surface a model-substitution
-    ///     notice once the transport exists.
-    /// </summary>
-    private readonly record struct ModelResolution(string Model, bool Substituted, string? RequestedModel);
-
-    private async Task<ModelResolution> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
+    /// <summary>The requested model, or the node's default when none was requested. Each provider validates its own models when it serves them.</summary>
+    private string ResolveModel(string? requestedModel)
     {
         var trimmedModel = requestedModel?.Trim();
 
-        // The preflight and its fallback-to-default are Ollama-specific: a GGUF never appears in Ollama's installed
-        // list, so it would always "fail" into an Ollama default. Route by provider; the supervisor validates its own.
-        if (!string.IsNullOrWhiteSpace(trimmedModel))
-        {
-            var providerName = await _providerResolver.ResolveProviderNameForModelAsync(trimmedModel, cancellationToken);
-            if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
-            {
-                return new ModelResolution(trimmedModel, Substituted: false, RequestedModel: trimmedModel);
-            }
-        }
-
-        if (await _capabilityReporter.VerifyOllamaAndModelAsync(trimmedModel, cancellationToken))
-        {
-            var verifiedModel = string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
-            return new ModelResolution(verifiedModel, Substituted: false, RequestedModel: trimmedModel);
-        }
-
-        if (string.IsNullOrWhiteSpace(trimmedModel))
-        {
-            throw new InvalidOperationException("Ollama is unavailable or the default model is not installed.");
-        }
-
-        _logger.LogWarning("Requested model '{RequestedModel}' could not be verified. Falling back to '{FallbackModel}'.",
-            trimmedModel,
-            _defaultModel);
-
-        return new ModelResolution(_defaultModel, Substituted: true, RequestedModel: trimmedModel);
-    }
-
-    /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.ModelSubstituted" /> notice.</summary>
-    private static string BuildModelSubstitutedNoticeMessage(string? requestedModel, string fallbackModel)
-    {
-        return string.IsNullOrWhiteSpace(requestedModel)
-            ? $"The requested model could not be verified; this turn ran on the node's default model '{fallbackModel}' instead."
-            : $"Model '{requestedModel}' could not be verified; this turn ran on the node's default model '{fallbackModel}' instead.";
+        return string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
     }
 
     /// <summary>

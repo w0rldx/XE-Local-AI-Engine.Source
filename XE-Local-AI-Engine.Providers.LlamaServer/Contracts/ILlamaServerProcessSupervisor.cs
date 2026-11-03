@@ -196,8 +196,7 @@ public interface ILlamaServerProcessSupervisor
     /// </summary>
     /// <remarks>
     ///     A synchronous in-memory read of the process table with NO health or HTTP probe, so it is safe on hot paths
-    ///     such as the runtime-status GET and the pre-update safety gate. Ollama is an external provider the supervisor
-    ///     does not own, so it is never counted.
+    ///     such as the runtime-status GET and the pre-update safety gate.
     /// </remarks>
     int CountRunningProcesses();
 

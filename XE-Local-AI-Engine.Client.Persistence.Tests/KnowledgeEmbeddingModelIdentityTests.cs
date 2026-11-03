@@ -778,7 +778,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     // A provider resolver whose provider installs the GGUF embedding model (so the resolver picks the GGUF name, which
-    // differs from the configured "nomic-embed-text") and generates fixed-dimension non-zero vectors — no Ollama/network.
+    // differs from the configured "nomic-embed-text") and generates fixed-dimension non-zero vectors — no network.
     private static ILocalModelProviderResolver CreateResolvingProviderResolver()
     {
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName), Descriptor("qwen2.5:Q4_K_M"));
@@ -985,7 +985,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     // Node-local provider fake: installs a configurable model set and returns fixed non-zero embedding vectors so the
-    // resolver, chunk embedder, and search query embedding all work without Ollama or a network round-trip.
+    // resolver, chunk embedder, and search query embedding all work without a network round-trip.
     private sealed class FixedEmbeddingProvider : ILocalModelProvider
     {
         private readonly LocalModelDescriptor[] _models;

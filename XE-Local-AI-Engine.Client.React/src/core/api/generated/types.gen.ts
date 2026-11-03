@@ -4286,10 +4286,8 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1GetModelLaunchArgumentsRe
 };
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = {
-	isAvailable: boolean;
 	selectedModelName?: string | null;
 	configuredDefaultModelName?: string | null;
-	error?: string | null;
 	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse>;
 };
 
@@ -4312,7 +4310,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	modelName: string;
-	provider?: string;
+	provider: string;
 	displayLabel?: string | null;
 	externalConnectionId?: string | null;
 	externalConnectionName?: string | null;
@@ -4391,20 +4389,6 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1ModelLaunchArgumentsRespo
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = {
 	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = {
-	modelName: string;
-	sizeBytes?: number | null;
-	sizeVramBytes?: number | null;
-	expiresAtUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = {
-	isAvailable: boolean;
-	ollamaConfigured: boolean;
-	error?: string | null;
-	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = {
@@ -5165,7 +5149,6 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	autoCheckRuntimeUpdates?: boolean | null;
 	autoProvisionFirstRunModel?: boolean | null;
 	toolCapableModels?: Array<string> | null;
-	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
 	llamaMaxLoadedProcesses?: number | null;
 	minLlamaMaxLoadedProcesses?: number;
@@ -5439,7 +5422,6 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	autoCheckRuntimeUpdates?: boolean | null;
 	autoProvisionFirstRunModel?: boolean | null;
 	toolCapableModels?: Array<string> | null;
-	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
 	llamaMaxLoadedProcesses?: number | null;
 	llamaIdleTimeToLiveSeconds?: number | null;
@@ -18375,33 +18357,6 @@ export type ListLocalModelsResponses = {
 };
 
 export type ListLocalModelsResponse = ListLocalModelsResponses[keyof ListLocalModelsResponses];
-
-export type GetRunningLocalModelsData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/models/running";
-};
-
-export type GetRunningLocalModelsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetRunningLocalModelsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
-};
-
-export type GetRunningLocalModelsResponse = GetRunningLocalModelsResponses[keyof GetRunningLocalModelsResponses];
 
 export type SelectLocalModelData = {
 	body: XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;

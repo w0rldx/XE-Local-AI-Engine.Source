@@ -9,8 +9,8 @@ using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Tests the startup <see cref="StaleProcessReaper" /> shared by llama-server, sd-server and whisper-server: it
-///     reaps a previous-run orphan under the provider's own cache root, spares an unrelated same-name server (e.g.
-///     Ollama's) and never throws from <c>StartAsync</c>.
+///     reaps a previous-run orphan under the provider's own cache root, spares an unrelated same-name server and never
+///     throws from <c>StartAsync</c>.
 /// </summary>
 /// <remarks>Matching runs through an in-memory scanner fake: no real processes, no file I/O.</remarks>
 [Category(TestCategories.Unit)]
@@ -21,8 +21,8 @@ public sealed class StaleProcessReaperTests
     private static readonly string BinariesRoot = Path.Combine(Path.GetTempPath(), "xe-reaper-test", "llama.cpp");
 
     private static readonly string ForeignServer = OperatingSystem.IsWindows()
-        ? @"C:\Program Files\Ollama\llama-server.exe"
-        : "/usr/lib/ollama/llama-server";
+        ? @"C:\Program Files\OtherRuntime\llama-server.exe"
+        : "/usr/lib/other-runtime/llama-server";
 
     [Test]
     public async Task StartAsync_WhenOrphanUnderBinariesRoot_TreeKillsIt()
@@ -40,7 +40,7 @@ public sealed class StaleProcessReaperTests
     [Test]
     public async Task StartAsync_WhenServerOutsideRoot_DoesNotTreeKillIt()
     {
-        // An unrelated llama-server (Ollama bundles one) must never be reaped.
+        // An unrelated llama-server (other runtimes bundle one) must never be reaped.
         var scanner = new FakeStaleProcessScanner([new StaleProcess(4321, ForeignServer)]);
         var reaper = CreateReaper(scanner, BinariesRoot);
 

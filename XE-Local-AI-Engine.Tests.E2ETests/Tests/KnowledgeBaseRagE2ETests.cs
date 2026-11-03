@@ -4,14 +4,15 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
-using OllamaSharp.Models.Chat;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Focused offline RAG journey over the real authenticated browser surface and the FakeOllama embedding/chat server.
+///     Focused offline RAG journey over the real authenticated browser surface and the fake gateway's embedding/chat server.
 ///     The repository is a fresh local Git root containing only regular files; no network, external model, or symlink is
 ///     involved. One scenario deliberately keeps the lifecycle ordering visible: import two collection snapshots, prove
 ///     isolation and provenance, reconcile an update plus deletion, then ground a plain-chat turn with persisted sources.
@@ -28,8 +29,6 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
     private const string GammaToken = "gamma-harbor-9537";
     private const string ObsoleteToken = "obsolete-forest-1648";
     private const string GroundedReplyMarker = "GROUNDING-CONTEXT-VERIFIED";
-    private const string FakeOllamaChatModel = "qwen3.5:0.8b";
-
     private string? _repositorySourceId;
     private Guid? _selectedFolderId;
 
@@ -85,7 +84,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         }
         finally
         {
-            Factory.FakeOllamaState.ChatScript = null;
+            Factory.FakeGatewayState.ChatResponder = null;
             await PurgeScenarioDocumentsAsync();
             await RevokeScenarioRepositoryAsync();
             TryDeleteDirectory(repositoryRoot);
@@ -273,7 +272,10 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
 
     private async Task AssertPlainChatGroundingAsync(string query)
     {
-        Factory.FakeOllamaState.ChatScript = request => GroundedReplyAsync(request, query);
+        Factory.FakeGatewayState.ChatResponder = (turn, _) => Task.FromResult<FakeOpenAiGatewayScript?>(new FakeOpenAiGatewayScript
+        {
+            CompletionText = GroundedReply(turn, query)
+        });
         await Page.GotoAsync($"{NodeAppUrl}/chat", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
@@ -286,7 +288,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         });
         await Expect(newConversation).ToBeVisibleAsync();
         await newConversation.ClickAsync();
-        await SelectComposerModelAsync(FakeOllamaChatModel);
+        await SelectComposerModelAsync(FakeGatewayLocalModelProvider.ChatModel);
 
         var knowledgeToggle = Page.GetByTestId("chat-knowledge-base-toggle");
         await Expect(knowledgeToggle).ToBeEnabledAsync(new LocatorAssertionsToBeEnabledOptions
@@ -366,12 +368,11 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
                        .RevokeAsync(selectedFolderId, CancellationToken.None);
     }
 
-    private static async IAsyncEnumerable<string> GroundedReplyAsync(ChatRequest request, string expectedToken)
+    private static string GroundedReply(FakeOpenAiGatewayChatTurn turn, string expectedToken)
     {
-        await Task.Yield();
-        var prompt = string.Join('\n', (request.Messages ?? []).Select(static message => message.Content ?? string.Empty));
-        yield return prompt.Contains(expectedToken, StringComparison.Ordinal)
-                     && prompt.Contains(SharedDocument, StringComparison.Ordinal)
+        var prompt = string.Join('\n', turn.Messages.Select(static message => message.Text));
+        return prompt.Contains(expectedToken, StringComparison.Ordinal)
+               && prompt.Contains(SharedDocument, StringComparison.Ordinal)
             ? GroundedReplyMarker
             : "GROUNDING-CONTEXT-MISSING";
     }

@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
@@ -520,7 +519,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
                 });
             return new QueryEmbedding(transformed.Values, embeddingModelName, transformed.Identity);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException or KnowledgeIngestionException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException or KnowledgeIngestionException)
         {
             // Model not pulled / provider down / transport error / unregistered provider name. Degrade to lexical-only.
             // Log the exception type only — never its message, never the query.

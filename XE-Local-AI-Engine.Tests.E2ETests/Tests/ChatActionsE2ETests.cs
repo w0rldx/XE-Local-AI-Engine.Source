@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Browser-driven E2E for the chat feature surface that <see cref="ChatPageE2ETests" />
@@ -10,9 +11,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     delete-with-confirm-skip). These capabilities otherwise have only unit/component coverage.
 ///     <para>
 ///         Same host as <see cref="ChatPageE2ETests" /> — <see cref="Infrastructure.XENodeE2EWebApplicationFactory" />
-///         wires FakeOllama as the local provider, so a reply echoing the sent text streams deterministically
-///         in bounded time once the FakeOllama model is picked explicitly in the composer (see
-///         <see cref="FakeOllamaChatModel" />).  Locators prefer <c>data-testid</c>; per-message and
+///         wires the fake gateway as the local provider, so a reply echoing the sent text streams deterministically
+///         in bounded time once its chat model is picked explicitly in the composer.  Locators prefer <c>data-testid</c>; per-message and
 ///         per-conversation ids are runtime values so prefix/CSS selectors are used.
 ///     </para>
 /// </summary>
@@ -23,15 +23,6 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
     private const string SendButtonTestId = "chat-send-button";
     private const string NewConversationButtonName = "New chat";
 
-    /// <summary>
-    ///     The FakeOllama chat model this suite sends against. It must be picked EXPLICITLY in the composer:
-    ///     the "Local runtime default" sentinel resolves only to an installed GGUF (llama.cpp) chat model and
-    ///     never to an Ollama one by design (NodeChatStreamService.ResolveTurn), and the E2E host stubs the
-    ///     llama.cpp provider out — so every local-default send terminates as ModelNotInstalled before the
-    ///     model runs, and the assistant turn is persisted with EMPTY content.
-    /// </summary>
-    private const string FakeOllamaChatModel = "qwen3.5:0.8b";
-
     private async Task<ILocator> NavigateAndWaitForChatAsync()
     {
         await Page.GotoAsync($"{NodeAppUrl}/chat", new PageGotoOptions
@@ -41,7 +32,7 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
 
         var chatInput = Page.GetByPlaceholder(ChatInputPlaceholder);
         await Expect(chatInput).ToBeVisibleAsync();
-        await SelectComposerModelAsync(FakeOllamaChatModel);
+        await SelectComposerModelAsync(FakeGatewayLocalModelProvider.ChatModel);
         return chatInput;
     }
 
@@ -65,8 +56,8 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
         // Match the echoed reply text, not the "Node reply" bubble label. That label is the assistant
         // role caption (pages.chat.nodeReply in ChatMessage.tsx) and renders on every assistant bubble
         // including a failed, empty one — asserting it let a turn that produced no content at all read as
-        // a completed reply. FakeOllama echoes "[fake-ollama] {last user message}".
-        await Expect(Page.GetByText($"[fake-ollama] {text}").First)
+        // a completed reply. The fake echoes its prefix and the last user message.
+        await Expect(Page.GetByText($"{FakeGatewayLocalModelProvider.EchoPrefix} {text}").First)
             .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 5000

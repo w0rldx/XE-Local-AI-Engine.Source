@@ -323,7 +323,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     /// </summary>
     /// <remarks>
     ///     Backfill and download miss a GGUF copied or linked into the store while the host runs. The gate stays the
-    ///     operator-visible list: Ollama, cloud and hand-named models still need listing, and the list was already
+    ///     operator-visible list: cloud and hand-named models still need listing, and the list was already
     ///     additive (backfill re-adds a removed entry on the next start). A listed model never pays the store listing; a
     ///     failed write is logged and keeps the reduced offer. See docs/wiki/08-data-and-persistence.md.
     /// </remarks>

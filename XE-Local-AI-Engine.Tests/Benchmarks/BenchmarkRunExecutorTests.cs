@@ -1927,7 +1927,6 @@ public sealed class BenchmarkRunExecutorTests
             {
                 Verdict = verdict,
                 Reason = "capacity",
-                OllamaEvictionWarning = false,
                 Reservation = verdict == CapacityVerdict.Allow ? Reservation : null
             });
         }
@@ -1953,8 +1952,7 @@ public sealed class BenchmarkRunExecutorTests
             return Task.FromResult(new CapacityDecision
             {
                 Verdict = CapacityVerdict.Allow,
-                Reason = "allowed",
-                OllamaEvictionWarning = false
+                Reason = "allowed"
             });
         }
 
@@ -1968,7 +1966,6 @@ public sealed class BenchmarkRunExecutorTests
             {
                 Verdict = CapacityVerdict.Allow,
                 Reason = "allowed",
-                OllamaEvictionWarning = false,
                 Reservation = Reservation
             });
         }

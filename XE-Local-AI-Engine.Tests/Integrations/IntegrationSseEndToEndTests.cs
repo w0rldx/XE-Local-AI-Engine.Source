@@ -71,7 +71,6 @@ public sealed class IntegrationCoordinatorHostFixture : IAsyncInitializer, IAsyn
                     {
                         Verdict = CapacityVerdict.Allow,
                         Reason = "Capacity available.",
-                        OllamaEvictionWarning = false,
                         Reservation = null
                     });
 

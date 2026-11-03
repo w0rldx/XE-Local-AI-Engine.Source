@@ -159,13 +159,13 @@ public sealed class RunSavedAgentHandlerTests
         await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.ModelUnavailable);
     }
 
-    // Ollama owns its own model store, so a pin it serves is never refused for a missing GGUF.
+    // Only llama.cpp serves GGUFs from the store, so a pin another provider serves is never refused for a missing GGUF.
     [Test]
-    public async Task ExecuteAsync_WhenThePinnedModelRoutesToOllama_RunsWithoutAGguf()
+    public async Task ExecuteAsync_WhenThePinnedModelRoutesToAnotherProvider_RunsWithoutAGguf()
     {
         using var harness = new Harness();
         harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "qwen3:8b"));
-        harness.Providers.ResolveProviderNameForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns("ollama");
+        harness.Providers.ResolveProviderNameForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns("another-runtime");
         harness.Gguf.ExistsAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(false);
 
         await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
@@ -315,8 +315,7 @@ public sealed class RunSavedAgentHandlerTests
                .Returns(new CapacityDecision
                {
                    Verdict = CapacityVerdict.RejectInsufficient,
-                   Reason = "Insufficient capacity: not enough free memory for another model.",
-                   OllamaEvictionWarning = false
+                   Reason = "Insufficient capacity: not enough free memory for another model."
                });
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
@@ -642,7 +641,6 @@ public sealed class RunSavedAgentHandlerTests
                 {
                     Verdict = CapacityVerdict.Allow,
                     Reason = "Capacity available.",
-                    OllamaEvictionWarning = false,
                     Reservation = _reservation
                 });
             Resolver
@@ -757,8 +755,7 @@ public sealed class RunSavedAgentHandlerTests
                 return new CapacityDecision
                 {
                     Verdict = CapacityVerdict.QueueSameModel,
-                    Reason = "Resident.",
-                    OllamaEvictionWarning = false
+                    Reason = "Resident."
                 };
             }
 
@@ -767,8 +764,7 @@ public sealed class RunSavedAgentHandlerTests
                 return new CapacityDecision
                 {
                     Verdict = CapacityVerdict.RejectInsufficient,
-                    Reason = "Insufficient capacity: not enough free memory for another model.",
-                    OllamaEvictionWarning = false
+                    Reason = "Insufficient capacity: not enough free memory for another model."
                 };
             }
 
@@ -777,7 +773,6 @@ public sealed class RunSavedAgentHandlerTests
             {
                 Verdict = CapacityVerdict.Allow,
                 Reason = "Capacity available.",
-                OllamaEvictionWarning = false,
                 Reservation = new ReleaseOnDispose(() =>
                 {
                     HeldReservations--;

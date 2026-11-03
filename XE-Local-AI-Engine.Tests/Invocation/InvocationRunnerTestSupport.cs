@@ -11,7 +11,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -31,7 +30,6 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -53,7 +51,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -869,7 +866,6 @@ internal static class InvocationRunnerTestSupport
 
     internal static InvocationRunner CreateRunner(IInvocationAgentFactory? invocationAgentFactory = null,
         IRuntimePackageValidator? validator = null,
-        ICapabilityReporter? capabilityReporter = null,
         WorkerNodeOptions? workerOptions = null,
         IWorkerEventDispatcher? eventDispatcher = null,
         IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null,
@@ -910,20 +906,8 @@ internal static class InvocationRunnerTestSupport
             resolvedValidator.Validate(Arg.Any<RuntimePackage>(), Arg.Any<bool>()).Returns(RuntimePackageValidationResult.Success);
         }
 
-        var resolvedCapabilityReporter = capabilityReporter ?? Substitute.For<ICapabilityReporter>();
-        if (capabilityReporter is null)
-        {
-            resolvedCapabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
-        }
-
-        // Default to the Ollama provider so the existing tests keep exercising the VerifyOllamaAndModelAsync preflight
-        // path (a non-Ollama provider intentionally bypasses it). Tests can pass their own resolver to cover routing.
+        // Default: resolves to a provider that is not llama.cpp, so nothing warms. Tests can pass their own to cover routing.
         var resolvedProviderResolver = providerResolver ?? Substitute.For<ILocalModelProviderResolver>();
-        if (providerResolver is null)
-        {
-            resolvedProviderResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                                    .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
-        }
 
         // Default: no cloud provider selected (IsCloudProviderSelected returns false), so the warm path resolves the
         // local provider exactly as before. A cloud-routing test injects one that returns true to prove the warm is skipped.
@@ -939,13 +923,6 @@ internal static class InvocationRunnerTestSupport
                                                    StubNodeRuntimeSettings.Create().Build(),
                                                    TimeProvider.System,
                                                    NullLogger<ProviderStreamResilience>.Instance);
-
-        var configuration = new ConfigurationBuilder()
-                            .AddInMemoryCollection(new Dictionary<string, string?>
-                            {
-                                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
-                            })
-                            .Build();
 
         var resolvedWorkerOptions = workerOptions ?? new WorkerNodeOptions
         {
@@ -979,8 +956,6 @@ internal static class InvocationRunnerTestSupport
             resolvedFactory,
             resolvedOrchestrationFactory,
             resolvedValidator,
-            resolvedCapabilityReporter,
-            resolvedProviderResolver,
             new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, modelTrustResolver ?? new FakeModelTrustResolver(),
                 cloudModelResolver ?? Substitute.For<ICloudModelResolver>(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System, new GpuWorkGate()),
             resolvedProviderStreamResilience,
@@ -990,7 +965,6 @@ internal static class InvocationRunnerTestSupport
             Options.Create(new AgentToolPipelineOptions()),
             Options.Create(new ProviderCallBudgetOptions()),
             toolRelevanceCoreSet ?? new FakeToolRelevanceCoreSet(),
-            configuration,
             runtimeSettings,
             new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
                 resolvedPendingToolCallRegistry,

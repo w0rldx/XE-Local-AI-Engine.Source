@@ -94,7 +94,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         var store = new AgentExecutionLogStore(context, TimeProvider.System);
 
         // Same model + same UTC day, TWO providers → two distinct buckets (the provider is part of the group key). The two
-        // "local" rows must fold into ONE bucket; the "ollama" row for the same model/day is a separate bucket.
+        // "local" rows must fold into ONE bucket; an old "ollama" row for the same model/day keeps its own bucket.
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 10, prompt: 100, completion: 200, reasoning: 50, total: 350, provider: AgentUsageProviders.Local);
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 20, prompt: 10, completion: 20, reasoning: 5, total: 35, provider: AgentUsageProviders.Local);
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 30, prompt: 1, completion: 2, reasoning: 3, total: 6, provider: AgentUsageProviders.Ollama);
@@ -121,12 +121,12 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         AssertEx.Equal(expected: 55L, local.ReasoningTokens);
         AssertEx.Equal(expected: 385L, local.TotalTokens);
 
-        var ollama = summary[2];
-        AssertEx.Equal(AgentUsageProviders.Ollama, ollama.Provider);
-        AssertEx.Equal("llama-x", ollama.ModelName);
-        // The ollama row is NOT folded into the local bucket despite the same model + day.
-        AssertEx.Equal(expected: 1, ollama.RunCount);
-        AssertEx.Equal(expected: 1L, ollama.PromptTokens);
+        var oldRow = summary[2];
+        AssertEx.Equal(AgentUsageProviders.Ollama, oldRow.Provider);
+        AssertEx.Equal("llama-x", oldRow.ModelName);
+        // The old row is NOT folded into the local bucket despite the same model + day.
+        AssertEx.Equal(expected: 1, oldRow.RunCount);
+        AssertEx.Equal(expected: 1L, oldRow.PromptTokens);
 
         AssertEx.Equal(AgentUsageProviders.Unknown, summary[3].Provider);
         AssertEx.Equal("legacy", summary[3].ModelName);

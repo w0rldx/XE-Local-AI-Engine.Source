@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Resolves a node-local GGUF model's advertised <c>thinking</c> and <c>tools</c> capabilities from its
-///     installed-model descriptor, detected offline from the chat template rather than an Ollama probe.
+///     installed-model descriptor, detected offline from the chat template.
 /// </summary>
 /// <remarks>
 ///     The send and regenerate paths consult it so a GGUF is offered tools and a graded reasoning effort exactly when
-///     its template supports them, without ever probing the Ollama daemon that desktop mode does not have.
+///     its template supports them.
 /// </remarks>
 public interface IGgufModelCapabilityResolver
 {

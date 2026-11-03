@@ -144,7 +144,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 "Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
         }
 
-        // 3a. INSTALLED GATE: a llama-server model with no GGUF installed would reach capacity and read as a capacity problem; Ollama and external pins
+        // 3a. INSTALLED GATE: a llama-server model with no GGUF installed would reach capacity and read as a capacity problem; external pins
         //     pass. The refusal is thrown under the slot (step 5) so the monitor records it, and it wins over the tool gate below.
         var missingModelRefusal = !effectiveModelIsCloud && await IsMissingLlamaServerModelAsync(effectiveModel, localModelProviderResolver, ggufModelStore, cancellationToken)
             ? $"The agent '{definition.Name}' is pinned to model '{effectiveModel}', which is not installed on this node. Install the model or re-pin the agent."

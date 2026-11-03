@@ -430,8 +430,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                         .Returns(new CapacityDecision
                         {
                             Verdict = CapacityVerdict.Allow,
-                            Reason = "allowed",
-                            OllamaEvictionWarning = false
+                            Reason = "allowed"
                         });
             return capacity;
         }

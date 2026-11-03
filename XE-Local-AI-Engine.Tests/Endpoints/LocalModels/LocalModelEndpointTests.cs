@@ -6,7 +6,6 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
-using OllamaSharp;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -19,71 +18,102 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
-using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
 public sealed class LocalModelEndpointTests
 {
-    // The resolver provider keys the details endpoint routes by (lowercase, matching the registered providers).
-    private const string LlamaCppProviderName = LocalModelProviders.LlamaCpp;
-    private const string OllamaProviderName = "ollama";
+    private const string ChatModel = "llama3:8b";
+    private const string EncodedHfName = "hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL";
+    private const string HfName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
-    public async Task ListLocalModels_WhenAvailable_ReturnsModelsAndSelection()
+    public async Task ListLocalModels_ReturnsTheInstalledGgufAndTheSelection()
     {
-        await using var context = await CreateContextAsync("llama3:8b");
-        await context.SettingsStore.SaveAsync(new StoredNodeSettings
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
         {
-            DefaultModelName = "llama3:8b"
+            DefaultModelName = ChatModel
         });
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(settingsStore, Installed(Gguf(ChatModel) with
+        {
+            Family = "fake",
+            QuantizationLevel = "Q0_0"
+        }));
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models");
         using var response = await client.SendAsync(request);
         var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.True(models.IsAvailable);
-        AssertEx.Equal("llama3:8b", models.SelectedModelName);
-        AssertEx.ContainsSingle(models.Items, item => item.ModelName == "llama3:8b");
-        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
+        AssertEx.Equal(ChatModel, models.SelectedModelName);
+        AssertEx.ContainsSingle(models.Items, item => item.ModelName == ChatModel);
+        var model = models.Items.Single(item => item.ModelName == ChatModel);
+        AssertEx.Equal(LocalModelProviders.LlamaCpp, model.Provider);
         AssertEx.True(model.IsSelected);
         AssertEx.Equal("fake", model.Family);
         AssertEx.Equal("Q0_0", model.QuantizationLevel);
     }
 
     [Test]
-    public async Task ListLocalModels_WhenAvailable_EnrichesItemsWithClassification()
+    public async Task ListLocalModels_EnrichesItemsWithTheOfflineKindAndTheDescriptorCapabilities()
     {
-        await using var context = await CreateContextAsync("llama3:8b");
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(ggufModelStore: Installed(Gguf(ChatModel)));
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var response = await client.SendAsync(request);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
+        var model = await ListSingleAsync(factory, client, ChatModel);
 
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
-
-        // FakeOllama /api/show reports ["completion","embedding","tools"], so the detector classifies the model as Chat.
         AssertEx.Equal("Chat", model.Kind);
         AssertEx.Equal("Chat", model.DetectedKind);
         AssertEx.False(model.IsOverridden);
         AssertEx.Contains(model.Capabilities, "completion");
-        AssertEx.Contains(model.Capabilities, "embedding");
+        AssertEx.Contains(model.Capabilities, "tools");
+    }
+
+    [Test]
+    public async Task ListLocalModels_WhenNoGgufIsInstalled_AnswersOkAndEmpty()
+    {
+        // The picker keeps cloud and external entries enabled, and the quick-start tour reaches its download offer, only
+        // if a node with nothing installed still answers the list successfully.
+        await using var factory = CreateFactory(ggufModelStore: Installed());
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models");
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Empty(models.Items);
+    }
+
+    [Test]
+    public async Task ListLocalModels_WhenTheGgufStoreFails_DegradesToAnEmptyList()
+    {
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                      .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new IOException("registry unreadable"));
+        await using var factory = CreateFactory(ggufModelStore: ggufModelStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models");
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        var models = Deserialize<ListLocalModelsResponse>(body);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Empty(models.Items);
+        AssertEx.False(body.Contains("registry unreadable", StringComparison.Ordinal), "A store failure's text never reaches the client.");
     }
 
     [Test]
     public async Task SetModelKind_WhenValid_PersistsOverrideAndReportsEffectiveKind()
     {
-        await using var context = await CreateContextAsync("llama3:8b");
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(ggufModelStore: Installed(Gguf(ChatModel)));
+        using var client = factory.CreateClient();
 
-        using var putRequest = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, $"/api/local/v1/models/{ChatModel}/kind");
         putRequest.Content = JsonContent.Create(new SetModelKindRequest
         {
             Kind = "Embedding"
@@ -92,18 +122,14 @@ public sealed class LocalModelEndpointTests
         var put = await ReadJsonAsync<ModelKindResponse>(putResponse);
 
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
-        AssertEx.Equal("llama3:8b", put.ModelName);
+        AssertEx.Equal(ChatModel, put.ModelName);
         AssertEx.Equal("Embedding", put.Kind);
-        // Setting an override does not probe /api/show, so detection has not yet run.
-        AssertEx.Equal("Unknown", put.DetectedKind);
+        AssertEx.Equal("Chat", put.DetectedKind);
         AssertEx.True(put.IsOverridden);
 
-        // The override survives and surfaces through the list endpoint as the effective kind; the list call lazily detects,
-        // so the detected kind now resolves to Chat while the override keeps the effective kind on Embedding.
-        using var listRequest = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var listResponse = await client.SendAsync(listRequest);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse);
-        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
+        // The override survives and surfaces through the list: the row agrees with the response it followed.
+        var model = await ListSingleAsync(factory, client, ChatModel);
+        AssertEx.Equal(LocalModelProviders.LlamaCpp, model.Provider);
         AssertEx.Equal("Embedding", model.Kind);
         AssertEx.Equal("Chat", model.DetectedKind);
         AssertEx.True(model.IsOverridden);
@@ -112,10 +138,10 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task ResetModelKind_WhenOverridden_ClearsOverrideAndRevertsToDetected()
     {
-        await using var context = await CreateContextAsync("llama3:8b");
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(ggufModelStore: Installed(Gguf(ChatModel)));
+        using var client = factory.CreateClient();
 
-        using var putRequest = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, $"/api/local/v1/models/{ChatModel}/kind");
         putRequest.Content = JsonContent.Create(new SetModelKindRequest
         {
             Kind = "Embedding"
@@ -123,24 +149,17 @@ public sealed class LocalModelEndpointTests
         using var putResponse = await client.SendAsync(putRequest);
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
 
-        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b/kind");
+        using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/models/{ChatModel}/kind");
         using var deleteResponse = await client.SendAsync(deleteRequest);
         var deleted = await ReadJsonAsync<ModelKindResponse>(deleteResponse);
 
-        // Reset clears the override but does NOT eagerly probe /api/show (the override-only row carries a null digest, so
-        // probing now would cache a stale digest and force a redundant re-probe on the next list). Detection is deferred to
-        // the next list, so the DELETE response reports Unknown with the override cleared.
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
-        AssertEx.Equal("llama3:8b", deleted.ModelName);
-        AssertEx.Equal("Unknown", deleted.Kind);
-        AssertEx.Equal("Unknown", deleted.DetectedKind);
+        AssertEx.Equal(ChatModel, deleted.ModelName);
+        AssertEx.Equal("Chat", deleted.Kind);
+        AssertEx.Equal("Chat", deleted.DetectedKind);
         AssertEx.False(deleted.IsOverridden);
 
-        // The next list lazily detects with the real digest, so the effective kind reverts to the detected Chat.
-        using var listRequest = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var listResponse = await client.SendAsync(listRequest);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse);
-        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
+        var model = await ListSingleAsync(factory, client, ChatModel);
         AssertEx.Equal("Chat", model.Kind);
         AssertEx.Equal("Chat", model.DetectedKind);
         AssertEx.False(model.IsOverridden);
@@ -149,10 +168,10 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task SetModelKind_WhenKindIsInvalid_ReturnsValidationProblem()
     {
-        await using var context = await CreateContextAsync("llama3:8b");
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
+        using var request = CreateRequest(factory, HttpMethod.Put, $"/api/local/v1/models/{ChatModel}/kind");
         request.Content = JsonContent.Create(new SetModelKindRequest
         {
             Kind = "Banana"
@@ -165,12 +184,12 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task SetModelKind_WhenModelNameIsUnsafe_ReturnsValidationProblem()
     {
-        var modelService = Substitute.For<IOllamaModelService>();
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
-        using var client = context.Factory.CreateClient();
+        var classificationService = Substitute.For<IModelClassificationService>();
+        await using var factory = CreateFactory(classificationService: classificationService);
+        using var client = factory.CreateClient();
 
         // %2E%2E decodes to ".." in the bound route value, which ModelNameValidator rejects as path traversal.
-        using var request = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/%2E%2Esecret/kind");
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/models/%2E%2Esecret/kind");
         request.Content = JsonContent.Create(new SetModelKindRequest
         {
             Kind = "Chat"
@@ -178,91 +197,50 @@ public sealed class LocalModelEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await classificationService.DidNotReceiveWithAnyArgs().SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task ListLocalModels_WhenProviderUnavailable_ReturnsSafeUnavailableResponse()
+    public async Task GetLocalModelDetails_WhenCodexCloudModel_ReportsItsCatalogWindow_AndNeverReachesTheGgufBranch()
     {
-        var modelService = Substitute.For<IOllamaModelService>();
-        modelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns<Task<IEnumerable<OllamaModelSummary>>>(_ => throw new InvalidOperationException("provider offline"));
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
-        using var client = context.Factory.CreateClient();
-
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
-        using var response = await client.SendAsync(request);
-        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
-
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.False(models.IsAvailable);
-        AssertEx.Empty(models.Items);
-        AssertEx.Equal("Local model provider is unavailable.", models.Error);
-    }
-
-    [Test]
-    public async Task GetLocalModelDetails_WhenOllamaModel_ProbesOllamaForSecretSafeDetails()
-    {
-        // The test host stubs the provider resolver to route every model to "ollama" (StubNoCodexSession), so this
-        // exercises the Ollama /api/show branch. The real resolver's default is now "llamacpp"; the GGUF test below
-        // overrides the resolver to assert the no-Ollama GGUF branch.
-        await using var context = await CreateContextAsync("llama3:8b");
-        context.Server!.State.ModelInfo["llama3:8b"] = new Dictionary<string, object?>
+        // A Codex cloud id has no LOCAL details; its one detail is the catalog window. A same-named GGUF proves the
+        // endpoint short-circuits: falling through would report that file's window instead.
+        await using var factory = CreateFactory(ggufModelStore: Installed(Gguf("gpt-5.6-terra") with
         {
-            ["llama.context_length"] = 8192
-        };
-        using var client = context.Factory.CreateClient();
+            MaxContextTokens = 1
+        }));
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/llama3:8b/details");
-        using var response = await client.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
-        var details = Deserialize<LocalModelDetailsResponse>(body);
-
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("llama3:8b", details.ModelName);
-        AssertEx.Equal(expected: 8192, details.MaxContextTokens);
-        AssertEx.Equal("{{ .Prompt }}", details.Template);
-        AssertEx.False(body.Contains("apiKey", StringComparison.OrdinalIgnoreCase));
-        AssertEx.Contains(context.Server.RecordedRequests, recorded => recorded.Path == "/api/show" && recorded.ModelName == "llama3:8b");
-    }
-
-    [Test]
-    public async Task GetLocalModelDetails_WhenCodexCloudModel_ReportsItsCatalogWindow_AndNeverProbesLocalRuntime()
-    {
-        // A Codex cloud id has no LOCAL details; its one detail is the catalog window. The endpoint must short-circuit instead
-        // of probing Ollama /api/show (which 500s because the local runtime has no such model). Regression for the details-500 noise.
-        await using var context = await CreateContextAsync("llama3:8b");
-        using var client = context.Factory.CreateClient();
-
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-5.6-terra/details");
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models/gpt-5.6-terra/details");
         using var response = await client.SendAsync(request);
         var details = Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync());
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(272_000, details.MaxContextTokens);
         AssertEx.Null(details.Template);
-        var probedLocalRuntime = context.Server!.RecordedRequests
-                                        .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.6-terra");
-        AssertEx.False(probedLocalRuntime, "a Codex cloud id must not probe the local Ollama /api/show endpoint");
     }
 
     [Test]
     [Arguments(128_000)]
     [Arguments(null)]
-    public async Task GetLocalModelDetails_WhenAzureFoundryDeployment_ReportsTheDeclaredWindow_AndNeverProbesLocalRuntime(int? declaredWindow)
+    public async Task GetLocalModelDetails_WhenAzureFoundryDeployment_ReportsTheDeclaredWindow_AndNeverReachesTheGgufBranch(int? declaredWindow)
     {
-        // An Azure Foundry deployment id has no LOCAL details either. The branch must short-circuit BEFORE provider routing reaches the
-        // Ollama /api/show probe, which 500s for an id the daemon has never heard of. An undeclared window is still 200 with null.
-        var modelService = Substitute.For<IOllamaModelService>();
+        // An Azure Foundry deployment id has no LOCAL details either. An undeclared window is still 200 with null; a
+        // same-named GGUF proves the branch short-circuits before the installed-model lookup.
         var cloudModelResolver = Substitute.For<ICloudModelResolver>();
         cloudModelResolver.IsCloudModelAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(true);
         cloudModelResolver.ResolveContextWindowAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(new CloudModelContextWindow
         {
             ContextTokens = declaredWindow
         });
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
-        using var client = context.Factory.CreateClient();
+        var ggufModelStore = Installed(Gguf("gpt-4o-prod") with
+        {
+            MaxContextTokens = 1
+        });
+        await using var factory = CreateFactory(ggufModelStore: ggufModelStore, cloudModelResolver: cloudModelResolver);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
         using var response = await client.SendAsync(request);
         var details = Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync());
 
@@ -270,96 +248,64 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal("gpt-4o-prod", details.ModelName);
         AssertEx.Equal(declaredWindow, details.MaxContextTokens);
         AssertEx.Equal(declaredWindow, details.EffectiveContextTokens);
-        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task GetLocalModelDetails_WhenACloudIdIsNoLongerRecognised_Returns404()
     {
         // The trust resolver still answers "cloud" for an id whose Azure deployment was removed, but there is no window to report.
-        var modelService = Substitute.For<IOllamaModelService>();
         var cloudModelResolver = Substitute.For<ICloudModelResolver>();
         cloudModelResolver.IsCloudModelAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns(true);
         cloudModelResolver.ResolveContextWindowAsync("gpt-4o-prod", Arg.Any<CancellationToken>()).Returns((CloudModelContextWindow?)null);
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
-        using var client = context.Factory.CreateClient();
+        var ggufModelStore = Installed(Gguf("gpt-4o-prod"));
+        await using var factory = CreateFactory(ggufModelStore: ggufModelStore, cloudModelResolver: cloudModelResolver);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task GetLocalModelDetails_WhenOllamaIsUnreachable_Returns404RatherThan500()
+    public async Task SelectLocalModel_WhenValid_PersistsDefaultModelAndKeepsOtherSettings()
     {
-        // Desktop mode runs no Ollama daemon, so /api/show throws a transport error. That is an ABSENCE of local
-        // details, not a server fault: the polled details route degrades to a clean 404 instead of bubbling a 500.
-        var modelService = Substitute.For<IOllamaModelService>();
-        modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns<Task<OllamaModelDetails>>(_ => throw new HttpRequestException("Connection refused"));
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
-        using var client = context.Factory.CreateClient();
-
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/llama3:8b/details");
-        using var response = await client.SendAsync(request);
-
-        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        await modelService.Received(1).ShowModelDetailsAsync("llama3:8b", Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task SelectLocalModel_WhenValid_PersistsDefaultModelWithoutProviderSwitching()
-    {
-        var modelService = Substitute.For<IOllamaModelService>();
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
         {
             MaxMessageRequestTimeoutSeconds = 120
         });
-        await using var context = CreateContext(modelService, settingsStore);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(settingsStore);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/select");
+        using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/models/select");
         request.Content = JsonContent.Create(new SelectLocalModelRequest
         {
-            ModelName = "llama3:8b"
+            ModelName = ChatModel
         });
         using var response = await client.SendAsync(request);
         var selection = await ReadJsonAsync<SelectLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("llama3:8b", selection.SelectedModelName);
-        AssertEx.Equal("llama3:8b", settingsStore.Current.DefaultModelName);
+        AssertEx.Equal(ChatModel, selection.SelectedModelName);
+        AssertEx.Equal(ChatModel, settingsStore.Current.DefaultModelName);
         AssertEx.Equal(expected: 120, settingsStore.Current.MaxMessageRequestTimeoutSeconds);
-        await modelService.DidNotReceiveWithAnyArgs().ListLocalModelsAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task SelectLocalModel_WhenDecisionModel_Returns400AndKeepsTheDefault()
     {
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
-        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns([
-                          new LocalModelDescriptor
-                          {
-                              ModelName = "org/Laya-GGUF:Q8_0",
-                              ProviderName = LlamaCppProviderName,
-                              IsAvailable = true,
-                              SizeBytes = null,
-                              ModifiedAt = null,
-                              MaxContextTokens = null,
-                              DecisionType = "classify"
-                          }
-                      ]);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings
         {
             DefaultModelName = "chat-model"
         });
-        await using var context = CreateContext(Substitute.For<IOllamaModelService>(), settingsStore, LlamaCppProviderName, ggufModelStore);
-        using var client = context.Factory.CreateClient();
+        var ggufModelStore = Installed(Gguf("org/Laya-GGUF:Q8_0") with
+        {
+            DecisionType = "classify"
+        });
+        await using var factory = CreateFactory(settingsStore, ggufModelStore);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/select");
+        using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/models/select");
         request.Content = JsonContent.Create(new SelectLocalModelRequest
         {
             ModelName = "org/Laya-GGUF:Q8_0"
@@ -373,19 +319,14 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task DeleteLocalModel_WhenValid_UsesJournaledGgufCoordinator()
     {
-        // Local models are GGUF files served by the bundled llama.cpp runtime (Ollama is no longer a runtime), so the
-        // delete endpoint routes to IGgufModelStore.DeleteModelAsync — assert the GGUF store is the deletion path.
-        var modelService = Substitute.For<IOllamaModelService>();
+        // Local models are GGUF files served by the bundled llama.cpp runtime; the journaled coordinator is the deletion
+        // path, and the store's own delete is what it must not fall back to.
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("orca-mini:latest");
-        await using var context = CreateContext(modelService,
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            LlamaCppProviderName,
-            ggufModelStore,
-            deletionCoordinator);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(ggufModelStore: ggufModelStore, deletionCoordinator: deletionCoordinator);
+        using var client = factory.CreateClient();
 
-        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/orca-mini:latest");
+        using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/models/orca-mini:latest");
         using var deleteResponse = await client.SendAsync(deleteRequest);
         var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse);
 
@@ -395,7 +336,6 @@ public sealed class LocalModelEndpointTests
         await deletionCoordinator.Received(1).CommitDeleteAsync("orca-mini:latest", Arg.Any<CancellationToken>());
         await deletionCoordinator.Received(1).PurgeAfterSuccessAsync(Arg.Any<CommittedModelDeletion>(), CancellationToken.None);
         await ggufModelStore.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await modelService.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -404,19 +344,13 @@ public sealed class LocalModelEndpointTests
         // Regression: CommitDeleteAsync throws KeyNotFoundException when the mutation lease has no snapshot (the model
         // was already deleted/never existed). Delete must stay idempotent (200) rather than 500ing, and report
         // Deleted=false so the caller can tell the no-op apart from a real removal.
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = Substitute.For<ILocalModelDeletionCoordinator>();
         deletionCoordinator.CommitDeleteAsync("ghost:model", Arg.Any<CancellationToken>())
                            .Returns<Task<CommittedModelDeletion>>(_ => throw new KeyNotFoundException("The installed model was not found."));
-        await using var context = CreateContext(modelService,
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            LlamaCppProviderName,
-            ggufModelStore,
-            deletionCoordinator);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(deletionCoordinator: deletionCoordinator);
+        using var client = factory.CreateClient();
 
-        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/ghost:model");
+        using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/models/ghost:model");
         using var deleteResponse = await client.SendAsync(deleteRequest);
         var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(deleteResponse);
 
@@ -436,14 +370,10 @@ public sealed class LocalModelEndpointTests
         var deletionCoordinator = Substitute.For<ILocalModelDeletionCoordinator>();
         deletionCoordinator.CommitDeleteAsync("base:model", Arg.Any<CancellationToken>())
                            .Returns<Task<CommittedModelDeletion>>(_ => throw new InstalledModelDependentAdaptersException());
-        await using var context = CreateContext(Substitute.For<IOllamaModelService>(),
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            LlamaCppProviderName,
-            Substitute.For<IGgufModelStore>(),
-            deletionCoordinator);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(deletionCoordinator: deletionCoordinator);
+        using var client = factory.CreateClient();
 
-        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/base:model");
+        using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/models/base:model");
         using var deleteResponse = await client.SendAsync(deleteRequest);
 
         AssertEx.Equal(HttpStatusCode.Conflict, deleteResponse.StatusCode);
@@ -462,49 +392,34 @@ public sealed class LocalModelEndpointTests
     {
         // The hey-api client escapes the route segment with encodeURIComponent, and Kestrel leaves %2F encoded by design,
         // so the bound name arrives as "hf.co%2F...". The endpoint must decode it and delete the canonical HF reference.
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
-        var deletionCoordinator = DeletionCoordinator("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL");
-        await using var context = CreateContext(modelService,
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            LlamaCppProviderName,
-            ggufModelStore,
-            deletionCoordinator);
-        using var client = context.Factory.CreateClient();
+        var deletionCoordinator = DeletionCoordinator(HfName);
+        await using var factory = CreateFactory(deletionCoordinator: deletionCoordinator);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory,
-            HttpMethod.Delete,
-            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL");
+        using var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/models/{EncodedHfName}");
         using var response = await client.SendAsync(request);
         var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", deleted.ModelName);
+        AssertEx.Equal(HfName, deleted.ModelName);
         AssertEx.True(deleted.Deleted);
-        await deletionCoordinator.Received(1)
-                                 .CommitDeleteAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+        await deletionCoordinator.Received(1).CommitDeleteAsync(HfName, Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task DeleteLocalModel_WhenNameIsPlainTag_DeletesUnchanged()
     {
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
-        var deletionCoordinator = DeletionCoordinator("llama3:8b");
-        await using var context = CreateContext(modelService,
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            LlamaCppProviderName,
-            ggufModelStore,
-            deletionCoordinator);
-        using var client = context.Factory.CreateClient();
+        var deletionCoordinator = DeletionCoordinator(ChatModel);
+        await using var factory = CreateFactory(deletionCoordinator: deletionCoordinator);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b");
+        using var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/models/{ChatModel}");
         using var response = await client.SendAsync(request);
         var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("llama3:8b", deleted.ModelName);
-        await deletionCoordinator.Received(1).CommitDeleteAsync("llama3:8b", Arg.Any<CancellationToken>());
+        AssertEx.Equal(ChatModel, deleted.ModelName);
+        await deletionCoordinator.Received(1).CommitDeleteAsync(ChatModel, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -512,17 +427,12 @@ public sealed class LocalModelEndpointTests
     {
         // ..%2F..%2Fetc decodes to "../../etc", which the validator's ".." guard rejects AFTER decoding — so decoding
         // cannot smuggle path traversal past the guard.
-        var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("unused");
-        await using var context = CreateContext(modelService,
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            LlamaCppProviderName,
-            ggufModelStore,
-            deletionCoordinator);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(ggufModelStore: ggufModelStore, deletionCoordinator: deletionCoordinator);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc");
+        using var request = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -533,20 +443,17 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task DeleteLocalModel_WhenNonGgufProvider_PreservesProviderDeletionPath()
     {
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
         var deletionCoordinator = DeletionCoordinator("other:model");
         var provider = Substitute.For<ILocalModelProvider>();
-        provider.ProviderName.Returns(OllamaProviderName);
-        await using var context = CreateContext(modelService,
-            new FakeNodeSettingsStore(new StoredNodeSettings()),
-            OllamaProviderName,
-            ggufModelStore,
-            deletionCoordinator,
-            provider);
-        using var client = context.Factory.CreateClient();
+        provider.ProviderName.Returns(ExternalProviderConstants.ProviderName);
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(_ => Task.FromResult(ExternalProviderConstants.ProviderName));
+        providerResolver.ResolveProvider(ExternalProviderConstants.ProviderName).Returns(provider);
+        await using var factory = CreateFactory(deletionCoordinator: deletionCoordinator, providerResolver: providerResolver);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/other:model");
+        using var request = CreateRequest(factory, HttpMethod.Delete, "/api/local/v1/models/other:model");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -555,60 +462,24 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
-    public async Task GetLocalModelDetails_WhenNameHasEncodedSlashes_DecodesBeforeProbing()
+    public async Task GetLocalModelDetails_WhenGgufModel_ReturnsSecretSafeGgufMetadata()
     {
-        // Ollama branch (default-stubbed resolver): the decoded canonical name is the one probed via /api/show.
-        var modelService = Substitute.For<IOllamaModelService>();
-        modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns(new OllamaModelDetails
-                    {
-                        MaxContextTokens = 4096,
-                        Capabilities = []
-                    });
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()));
-        using var client = context.Factory.CreateClient();
+        // A llama.cpp model's details come from the installed-GGUF registry: the descriptor's context length surfaces as
+        // MaxContextTokens on the shared details response.
+        await using var factory = CreateFactory(ggufModelStore: Installed(Gguf("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M") with
+        {
+            SizeBytes = 491_000_000,
+            ModifiedAt = DateTimeOffset.UnixEpoch,
+            MaxContextTokens = 32768,
+            Origin = LocalModelOrigin.Imported,
+            ModelContentFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }));
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory,
-            HttpMethod.Get,
-            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M/details");
         using var response = await client.SendAsync(request);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
-
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
-        await modelService.Received(1)
-                          .ShowModelDetailsAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task GetLocalModelDetails_WhenGgufModel_ReturnsGgufMetadata_WithoutProbingOllama()
-    {
-        // A llamacpp-routed model's details come from the installed-GGUF registry, NOT Ollama /api/show. Assert the
-        // Ollama model service is never touched (desktop mode has no Ollama daemon) and the descriptor's context
-        // length surfaces as MaxContextTokens on the shared details response.
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
-        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns(_ =>
-                      [
-                          new LocalModelDescriptor
-                          {
-                              ModelName = "Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
-                              ProviderName = LlamaCppProviderName,
-                              IsAvailable = true,
-                              SizeBytes = 491_000_000,
-                              ModifiedAt = DateTimeOffset.UnixEpoch,
-                              MaxContextTokens = 32768,
-                              Origin = LocalModelOrigin.Imported,
-                              ModelContentFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-                          }
-                      ]);
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
-        using var client = context.Factory.CreateClient();
-
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M/details");
-        using var response = await client.SendAsync(request);
-        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
+        var body = await response.Content.ReadAsStringAsync();
+        var details = Deserialize<LocalModelDetailsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", details.ModelName);
@@ -616,26 +487,20 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(LocalModelOrigin.Imported, details.Origin);
         AssertEx.Equal("v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             details.ModelContentFingerprint);
-        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        AssertEx.False(body.Contains("apiKey", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
-    public async Task GetLocalModelDetails_WhenGgufModelNotInstalled_Returns404_WithoutProbingOllama()
+    public async Task GetLocalModelDetails_WhenGgufModelNotInstalled_Returns404()
     {
-        // A name that routes to llamacpp but has no installed descriptor (stale map row / removed file) has no details:
-        // a clean 404 that still never touches Ollama.
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
-        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns(_ => []);
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
-        using var client = context.Factory.CreateClient();
+        // A name that routes to llamacpp but has no installed descriptor (stale map row / removed file) has no details.
+        await using var factory = CreateFactory(ggufModelStore: Installed());
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/ghost-gguf:Q4_K_M/details");
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models/ghost-gguf:Q4_K_M/details");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -643,34 +508,19 @@ public sealed class LocalModelEndpointTests
     {
         // Decode must precede provider resolution AND the GGUF lookup: the resolver and the registry are both keyed by
         // the decoded canonical name, so an encoded HF reference resolves and matches the installed descriptor.
-        var modelService = Substitute.For<IOllamaModelService>();
-        var ggufModelStore = Substitute.For<IGgufModelStore>();
-        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns(_ =>
-                      [
-                          new LocalModelDescriptor
-                          {
-                              ModelName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
-                              ProviderName = LlamaCppProviderName,
-                              IsAvailable = true,
-                              SizeBytes = 1,
-                              ModifiedAt = DateTimeOffset.UnixEpoch,
-                              MaxContextTokens = 8192
-                          }
-                      ]);
-        await using var context = CreateContext(modelService, new FakeNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(ggufModelStore: Installed(Gguf(HfName) with
+        {
+            MaxContextTokens = 8192
+        }));
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory,
-            HttpMethod.Get,
-            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
+        using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/models/{EncodedHfName}/details");
         using var response = await client.SendAsync(request);
         var details = await ReadJsonAsync<LocalModelDetailsResponse>(response);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
+        AssertEx.Equal(HfName, details.ModelName);
         AssertEx.Equal(expected: 8192, details.MaxContextTokens);
-        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -680,18 +530,16 @@ public sealed class LocalModelEndpointTests
         classificationService.SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind>(), Arg.Any<CancellationToken>())
                              .Returns(new ModelClassificationResult
                              {
-                                 ModelName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                                 ModelName = HfName,
                                  Kind = ModelKind.Chat,
                                  DetectedKind = ModelKind.Unknown,
                                  Capabilities = [],
                                  IsOverridden = true
                              });
-        await using var context = CreateContextWithClassification(classificationService);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(classificationService: classificationService);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory,
-            HttpMethod.Put,
-            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
+        using var request = CreateRequest(factory, HttpMethod.Put, $"/api/local/v1/models/{EncodedHfName}/kind");
         request.Content = JsonContent.Create(new SetModelKindRequest
         {
             Kind = "Chat"
@@ -699,8 +547,7 @@ public sealed class LocalModelEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await classificationService.Received(1)
-                                   .SetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", ModelKind.Chat, Arg.Any<CancellationToken>());
+        await classificationService.Received(1).SetOverrideAsync(HfName, ModelKind.Chat, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -710,59 +557,50 @@ public sealed class LocalModelEndpointTests
         classificationService.ResetOverrideAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                              .Returns(new ModelClassificationResult
                              {
-                                 ModelName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                                 ModelName = HfName,
                                  Kind = ModelKind.Unknown,
                                  DetectedKind = ModelKind.Unknown,
                                  Capabilities = [],
                                  IsOverridden = false
                              });
-        await using var context = CreateContextWithClassification(classificationService);
-        using var client = context.Factory.CreateClient();
+        await using var factory = CreateFactory(classificationService: classificationService);
+        using var client = factory.CreateClient();
 
-        using var request = CreateRequest(context.Factory,
-            HttpMethod.Delete,
-            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
+        using var request = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/models/{EncodedHfName}/kind");
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await classificationService.Received(1)
-                                   .ResetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+        await classificationService.Received(1).ResetOverrideAsync(HfName, Arg.Any<CancellationToken>());
     }
 
-    private static async Task<LocalModelEndpointTestContext> CreateContextAsync(params string[] models)
+    private static async Task<LocalModelResponse> ListSingleAsync(TestServerWebAppFactory factory, HttpClient client, string modelName)
     {
-        var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
-        {
-            Models = models.Length > 0 ? models : ["chat"]
-        }, CancellationToken.None);
-        try
-        {
-            return new LocalModelEndpointTestContext(server);
-        }
-        catch
-        {
-            await server.DisposeAsync();
-            throw;
-        }
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/models");
+        using var response = await client.SendAsync(request);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        return models.Items.Single(item => item.ModelName == modelName);
     }
 
-    private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
-        FakeNodeSettingsStore settingsStore,
-        ICloudModelResolver? cloudModelResolver = null)
+    private static LocalModelDescriptor Gguf(string modelName)
     {
-        return new LocalModelEndpointTestContext(modelService, settingsStore, cloudModelResolver);
+        return new LocalModelDescriptor
+        {
+            ModelName = modelName,
+            ProviderName = LocalModelProviders.LlamaCpp,
+            IsAvailable = true,
+            SizeBytes = 1,
+            ModifiedAt = DateTimeOffset.UnixEpoch,
+            MaxContextTokens = null,
+            Capabilities = ["completion", "tools"]
+        };
     }
 
-    // Overload for the GGUF (llamacpp) details branch: routes every model to the given provider and supplies the
-    // installed-GGUF store the branch reads. Used to assert the no-Ollama GGUF path.
-    private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
-        FakeNodeSettingsStore settingsStore,
-        string providerName,
-        IGgufModelStore ggufModelStore,
-        ILocalModelDeletionCoordinator? deletionCoordinator = null,
-        ILocalModelProvider? localProvider = null)
+    private static IGgufModelStore Installed(params LocalModelDescriptor[] descriptors)
     {
-        return new LocalModelEndpointTestContext(modelService, settingsStore, providerName, ggufModelStore, deletionCoordinator, localProvider);
+        var store = Substitute.For<IGgufModelStore>();
+        store.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(descriptors);
+        return store;
     }
 
     private static ILocalModelDeletionCoordinator DeletionCoordinator(string modelName)
@@ -784,11 +622,6 @@ public sealed class LocalModelEndpointTests
                        StageReceipt = receipt
                    });
         return coordinator;
-    }
-
-    private static LocalModelEndpointTestContext CreateContextWithClassification(IModelClassificationService classificationService)
-    {
-        return new LocalModelEndpointTestContext(classificationService);
     }
 
     private static HttpRequestMessage CreateRequest(TestServerWebAppFactory factory, HttpMethod method, string uri)
@@ -815,173 +648,44 @@ public sealed class LocalModelEndpointTests
         return AssertEx.NotNull(await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions));
     }
 
-    private sealed class LocalModelEndpointTestContext : IAsyncDisposable
+    // These tests cover the LOCAL model surface, so the Codex token store is stubbed to "no session": an ambient Codex
+    // session on the dev machine would otherwise add cloud models to the list and make the local assertions (e.g.
+    // available-and-empty) non-deterministic. The dedicated cloud-model mapping tests cover the cloud path.
+    private static TestServerWebAppFactory CreateFactory(FakeNodeSettingsStore? settingsStore = null,
+        IGgufModelStore? ggufModelStore = null,
+        ICloudModelResolver? cloudModelResolver = null,
+        ILocalModelDeletionCoordinator? deletionCoordinator = null,
+        IModelClassificationService? classificationService = null,
+        ILocalModelProviderResolver? providerResolver = null)
     {
-        private readonly OllamaApiClient? _ollamaClient;
-        private readonly OllamaModelService? _ownedModelService;
-
-        public LocalModelEndpointTestContext(FakeOllamaServer server)
+        return new TestServerWebAppFactory
         {
-            Server = server ?? throw new ArgumentNullException(nameof(server));
-            _ollamaClient = new OllamaApiClient(Server.BaseAddress);
-            _ownedModelService = new OllamaModelService(_ollamaClient);
-            SettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-            Factory = CreateFactory(_ownedModelService, SettingsStore);
-        }
-
-        public LocalModelEndpointTestContext(IOllamaModelService modelService,
-            FakeNodeSettingsStore settingsStore,
-            ICloudModelResolver? cloudModelResolver = null)
-        {
-            SettingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)), SettingsStore, cloudModelResolver);
-        }
-
-        public LocalModelEndpointTestContext(IOllamaModelService modelService,
-            FakeNodeSettingsStore settingsStore,
-            string providerName,
-            IGgufModelStore ggufModelStore,
-            ILocalModelDeletionCoordinator? deletionCoordinator,
-            ILocalModelProvider? localProvider)
-        {
-            SettingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-            ArgumentNullException.ThrowIfNull(ggufModelStore);
-            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)),
-                SettingsStore,
-                providerName,
-                ggufModelStore,
-                deletionCoordinator,
-                localProvider);
-        }
-
-        public LocalModelEndpointTestContext(IModelClassificationService classificationService)
-        {
-            ArgumentNullException.ThrowIfNull(classificationService);
-            SettingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-            Factory = CreateFactory(classificationService, SettingsStore);
-        }
-
-        public TestServerWebAppFactory Factory { get; }
-
-        public FakeNodeSettingsStore SettingsStore { get; }
-
-        public FakeOllamaServer? Server { get; }
-
-        public async ValueTask DisposeAsync()
-        {
-            await Factory.DisposeAsync();
-
-            _ownedModelService?.Dispose();
-            _ollamaClient?.Dispose();
-
-            if (Server is not null)
+            ConfigureAdditionalTestServices = services =>
             {
-                await Server.DisposeAsync();
+                services.RemoveAll<INodeSettingsStore>();
+                services.AddSingleton<INodeSettingsStore>(settingsStore ?? new FakeNodeSettingsStore(new StoredNodeSettings()));
+
+                var codexTokenStore = Substitute.For<ICodexTokenStore>();
+                codexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+                services.RemoveAll<ICodexTokenStore>();
+                services.AddSingleton(codexTokenStore);
+
+                Replace(services, ggufModelStore);
+                Replace(services, cloudModelResolver);
+                Replace(services, deletionCoordinator);
+                Replace(services, classificationService);
+                Replace(services, providerResolver);
             }
-        }
+        };
+    }
 
-        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
-            FakeNodeSettingsStore settingsStore,
-            ICloudModelResolver? cloudModelResolver = null)
+    private static void Replace<TService>(IServiceCollection services, TService? instance)
+        where TService : class
+    {
+        if (instance is not null)
         {
-            return new TestServerWebAppFactory
-            {
-                ConfigureAdditionalTestServices = services =>
-                {
-                    services.RemoveAll<IOllamaModelService>();
-                    services.AddSingleton(modelService);
-                    services.RemoveAll<INodeSettingsStore>();
-                    services.AddSingleton<INodeSettingsStore>(settingsStore);
-                    if (cloudModelResolver is not null)
-                    {
-                        services.RemoveAll<ICloudModelResolver>();
-                        services.AddSingleton(cloudModelResolver);
-                    }
-
-                    StubNoCodexSession(services);
-                }
-            };
-        }
-
-        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
-            FakeNodeSettingsStore settingsStore,
-            string providerName,
-            IGgufModelStore ggufModelStore,
-            ILocalModelDeletionCoordinator? deletionCoordinator,
-            ILocalModelProvider? localProvider)
-        {
-            return new TestServerWebAppFactory
-            {
-                ConfigureAdditionalTestServices = services =>
-                {
-                    services.RemoveAll<IOllamaModelService>();
-                    services.AddSingleton(modelService);
-                    services.RemoveAll<INodeSettingsStore>();
-                    services.AddSingleton<INodeSettingsStore>(settingsStore);
-                    services.RemoveAll<IGgufModelStore>();
-                    services.AddSingleton(ggufModelStore);
-                    if (deletionCoordinator is not null)
-                    {
-                        services.RemoveAll<ILocalModelDeletionCoordinator>();
-                        services.AddSingleton(deletionCoordinator);
-                    }
-
-                    StubNoCodexSession(services);
-                    // Override the default (ollama) resolver from StubNoCodexSession so this context routes the details
-                    // endpoint to the requested provider (llamacpp for the GGUF branch).
-                    StubProviderResolver(services, providerName, localProvider);
-                }
-            };
-        }
-
-        private static TestServerWebAppFactory CreateFactory(IModelClassificationService classificationService, FakeNodeSettingsStore settingsStore)
-        {
-            return new TestServerWebAppFactory
-            {
-                ConfigureAdditionalTestServices = services =>
-                {
-                    services.RemoveAll<IModelClassificationService>();
-                    services.AddSingleton(classificationService);
-                    services.RemoveAll<INodeSettingsStore>();
-                    services.AddSingleton<INodeSettingsStore>(settingsStore);
-                    StubNoCodexSession(services);
-                }
-            };
-        }
-
-        // These tests cover the LOCAL model surface, so the Codex token store is stubbed to "no session" — otherwise an
-        // ambient Codex session on the dev machine would add cloud models to the list and make the local assertions
-        // (e.g. empty-when-unavailable) non-deterministic. The dedicated cloud-model mapping tests cover the cloud path.
-        private static void StubNoCodexSession(IServiceCollection services)
-        {
-            var codexTokenStore = Substitute.For<ICodexTokenStore>();
-            codexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
-            services.RemoveAll<ICodexTokenStore>();
-            services.AddSingleton(codexTokenStore);
-
-            // Default the details endpoint's provider routing to "ollama" so the Ollama-branch detail tests probe
-            // /api/show. The real resolver's default for an unmapped model is now "llamacpp" (which would route the
-            // GGUF branch and skip Ollama) — the GGUF test overrides this resolver to assert that branch explicitly.
-            StubProviderResolver(services, OllamaProviderName);
-        }
-
-        // Replaces the real ILocalModelProviderResolver with a substitute that routes EVERY model to a single provider
-        // name. The details endpoint only calls ResolveProviderNameForModelAsync, so the other members stay
-        // unimplemented (an NSubstitute default), keeping these endpoint tests deterministic and provider-stack-free.
-        private static void StubProviderResolver(IServiceCollection services,
-            string providerName,
-            ILocalModelProvider? localProvider = null)
-        {
-            var resolver = Substitute.For<ILocalModelProviderResolver>();
-            resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns(_ => Task.FromResult(providerName));
-            if (localProvider is not null)
-            {
-                resolver.ResolveProvider(providerName).Returns(localProvider);
-            }
-
-            services.RemoveAll<ILocalModelProviderResolver>();
-            services.AddSingleton(resolver);
+            services.RemoveAll<TService>();
+            services.AddSingleton(instance);
         }
     }
 }

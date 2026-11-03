@@ -21,7 +21,7 @@ internal sealed record class ModelFitBenchmark
     /// <summary>Benchmarked model name. Plaintext.</summary>
     public string ModelName { get; set; } = string.Empty;
 
-    /// <summary>Provider name (e.g. <c>ollama</c>). Plaintext.</summary>
+    /// <summary>Provider name (e.g. <c>llama.cpp</c>). Plaintext.</summary>
     public string ProviderName { get; set; } = string.Empty;
 
     /// <summary>Measured tokens per second, or null. Plaintext.</summary>

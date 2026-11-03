@@ -57,7 +57,6 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 | Local inference runtime | `XE-Local-AI-Engine.Providers.LlamaServer` | `LlamaServerLocalModelProvider.cs`, `LlamaServerProcessSupervisor.cs` |
 | Local image runtime (`sd-server`) | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | `StableDiffusionCppRuntime.cs`, `ImageServerProcessSupervisor.cs` |
 | HF GGUF discovery/download | `XE-Local-AI-Engine.Providers.HuggingFace` | provider project |
-| Optional secondary provider | `XE-Local-AI-Engine.Providers.Ollama` | `OllamaLocalModelProvider.cs` |
 | Cloud chat provider (ChatGPT OAuth) | `XE-Local-AI-Engine.Providers.CodexOAuth` | `CodexOAuthChatClientFactory.cs` |
 | Hardware probing | `XE-Local-AI-Engine.Providers.Capabilities` | `HardwareProfiler.cs` |
 | SQLite persistence with selected per-column AEAD encryption | `XE-Local-AI-Engine.Client.Persistence` | `Client/Program.cs` migration runners; `NodeEncryptionSaveChangesInterceptor.cs` |
@@ -267,8 +266,8 @@ development, the container sandbox, model runtime, images, the training runtime,
                          │  └────────────────┘ Client  │ IChatClient/IEmbed   │  │
                          │                              │  ├ LlamaServer (RT)  │  │
                          │  ┌────────────────┐          │  ├ HuggingFace (GGUF)│  │
-                         │  │ Client.        │◀─────────┤  ├ Ollama (optional) │  │
-                         │  │ Persistence    │  EF/state│  ├ CodexOAuth (cloud)│  │
+                         │  │ Client.        │◀─────────┤  ├ CodexOAuth (cloud)│  │
+                         │  │ Persistence    │  EF/state│  ├ OpenAICompat (ext)│  │
                          │  │ (SQLite;       │          │  ├ Capabilities (HW) │  │
                          │  │ selected AEAD) │          │  ├ StableDiffusionCpp│  │
                          │  └────────────────┘          │  └ Training (SFT)    │  │
@@ -297,14 +296,11 @@ Application and agent code depend only on `ILocalModelProvider` / `IChatClient` 
 `IEmbeddingGenerator` (`Providers.Abstractions/ILocalModelProvider.cs` — members like
 `CreateChatClient(LocalModelSelection)`, `CreateEmbeddingGenerator(...)`,
 `Pull/Delete/Warm/UnloadModelAsync`). **Provider-specific SDK types never leak across this seam** —
-they stay inside the provider projects (`LlamaServerLocalModelProvider`, `OllamaLocalModelProvider`).
-For OllamaSharp this is enforced, not just intended: `Providers.Ollama`'s `OllamaSharp` reference is
-`PrivateAssets="compile"` so its compile assets do not flow to consumers, and
-`LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` catches a direct re-add of the
-package. Docker and Azure remain source-scan-only, with no compile-asset boundary yet.
-Exactly **two** classes implement `ILocalModelProvider` — `LlamaServerLocalModelProvider` (`llamacpp`, the
-default) and `OllamaLocalModelProvider` (`ollama`, the gated secondary). The remaining `Providers.*`
-projects sit alongside that seam rather than on it: `Abstractions` (contracts), `HuggingFace` (the
+they stay inside the provider projects (`LlamaServerLocalModelProvider`, `ExternalOpenAiModelProvider`).
+Docker and Azure are source-scan-only, with no compile-asset boundary yet.
+Exactly **two** production classes implement `ILocalModelProvider` — `LlamaServerLocalModelProvider` (`llamacpp`,
+the default) and `ExternalOpenAiModelProvider` (`external`, the operator's OpenAI-compatible connections). The
+remaining `Providers.*` projects sit alongside that seam rather than on it: `Abstractions` (contracts), `HuggingFace` (the
 `IGgufModelStore` the llama-server provider delegates model acquisition to), `CodexOAuth` (a cloud
 `IChatClient` factory, not an `ILocalModelProvider`), `Capabilities` (hardware probing),
 `StableDiffusionCpp` (`IImageRuntime`, the image daemon — see [Image Generation](14-image-generation.md)),
@@ -335,18 +331,16 @@ device-inventory probe (`Implementation/LlamaDeviceInventoryProbe.cs`, `ILlamaDe
 runtime device audit. See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 
 ### Per-send model routing
-Because llama.cpp is **spawn-per-model** (one process/port per model, unlike Ollama's hot-swap behind one
-endpoint), the runtime client selects/routes per send rather than caching one baked-in client —
+Because llama.cpp is **spawn-per-model** (one process/port per model),
+the runtime client selects/routes per send rather than caching one baked-in client —
 `RuntimeChatClient` (`Client.Application/Services/CloudProviders/Implementation/RuntimeChatClient.cs`)
 re-selects local vs cloud and the target llama-server process by `ChatOptions.ModelId` on each request.
 
 `LocalModelProviderResolver` maps `ModelName` → `ProviderName` over the persisted `model_provider_map` and then
-`ProviderName` → `ILocalModelProvider` over the registered set. **An unmapped name defaults to `llamacpp`**: Ollama
-is the optional secondary runtime and the shipped default model is a GGUF, so a name with no map row — a
-pre-existing GGUF install, or a registry/map divergence — still routes to llama.cpp. Genuine Ollama models are
-mapped to `ollama` at pull time by the symmetric upsert on the Ollama pull endpoints, and a model pulled before
-that upsert existed is repaired once at startup by `OllamaProviderMapBackfillService` (`OllamaProviderMapBackfillCoordinator`), so the default only ever governs
-truly unmapped names. The resolver constructor validates that its default provider is registered, and `llamacpp`
+`ProviderName` → `ILocalModelProvider` over the registered set. **An unmapped name defaults to `llamacpp`**: the
+shipped default model is a GGUF, so a name with no map row — a pre-existing GGUF install, or a registry/map
+divergence — still routes to llama.cpp. A chat turn on a model that is not installed is refused by the capacity gate,
+whose message says the model's memory footprint could not be determined. The resolver constructor validates that its default provider is registered, and `llamacpp`
 always is. The supervisor's loaded-cap is surfaced through the same resolver for the preview reject-at-start check.
 See [Chat](05-chat.md) and [Agent Mode](04-agent-mode.md).
 
@@ -362,7 +356,7 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 | 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as a bounded stopgap that leaves the MXC provider seam open. The epic's grep-clean acceptance criterion was amended in the same change. |
 | 5/6 | Hybrid spawn-per-model lifecycle; app-controlled HF download + local store | `LlamaServerProcessSupervisor`, `LlamaServerLocalModelProvider`, `Providers.HuggingFace`. |
 | 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). **Amended since the lock:** prebuilt download is still the default and the only *automatic* path, but two opt-in operator paths now sit ahead of it in `EnsureBinaryAsync` — an environment-variable bring-your-own binary override, and an in-app **source build** (`ILlamaCppSourceBuildService`, `LlamaCppSourceBuildService.cs`) that closes the missing-Linux-CUDA-prebuilt gap. Neither ever runs implicitly. See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux). |
-| 14 | **Ollama kept as optional native secondary** (no Docker) | `Providers.Ollama` still exists; **de-orchestrated** from Aspire dev — `AppHost.cs` orchestrates only `app` + Vite + SQLite, llama.cpp is the dev runtime. |
+| 14 | **A secondary native runtime** — **withdrawn**: the Ollama runtime was removed | llama.cpp is the only node-managed chat runtime; `AppHost.cs` orchestrates only `app` + Vite + SQLite. |
 | 16 | Embeddings via llama.cpp day one | embedding GGUF on a pooling-enabled llama-server process, lexical ranker as fallback. |
 | 17 | **HostAgent deleted entirely** | The old `XE-Local-AI-Engine.HostAgent.*` projects no longer exist in the solution. The supervisor runs in-app as an unprivileged same-user child (localhost port, Job Object tree-kill on Windows). |
 
@@ -391,10 +385,9 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 4. **One-way dependency flow.** Host → `Client.Application` → `AI.Agent`/`Providers` → `Persistence`.
    The host wires only web concerns; logic registers via `AddNodeApplication`.
 5. **Provider SDK types do not cross `Providers.Abstractions`.** Depend on `ILocalModelProvider` /
-   `IChatClient` / `IEmbeddingGenerator`; keep OllamaSharp / llama-server HTTP types inside provider
-   projects. OllamaSharp is enforced by a compile-asset boundary (`PrivateAssets="compile"` on
-   `Providers.Ollama`'s reference) plus `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences`
-   against a direct re-add; Docker and Azure remain source-scan-only.
+   `IChatClient` / `IEmbeddingGenerator`; keep llama-server HTTP types inside provider
+   projects. `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` pins each project's
+   packages; Docker and Azure remain source-scan-only.
 6. **No inference path requires Docker or WSL, and nothing requires a CUDA toolkit to *run*.** The only
    external dependency for inference is a GPU driver — and CPU fallback always works (re-architecture
    invariant §3). Two opt-in features sit outside this and need more: the **in-app source build**, an
@@ -406,7 +399,7 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
    the WSL2 filesystem). Neither ever runs implicitly, and a node that uses neither needs none of it — chat,
    embedding and image generation are unaffected either way.
 7. **Inference = host llama.cpp process(es).** spawn-per-model, supervised in-app; routing is per-send by
-   `ChatOptions.ModelId` (`RuntimeChatClient`). Ollama is an optional secondary, not the dev default.
+   `ChatOptions.ModelId` (`RuntimeChatClient`).
    Launch args follow an **explore → freeze → replay** lifecycle: the supervisor no longer forces
    `--n-gpu-layers 999` — placement comes from `IInferenceProfileResolver` (explore-mode auto-fit, or a frozen
    per-machine profile replayed verbatim), and every spawn pins `--parallel 1` + `--no-warmup`
@@ -453,7 +446,7 @@ Persistence specifics (selected per-column encryption, the migrations under
 
 ## Where to go next
 
-- The runtime/provider internals (supervisor, binary manager, GPU variant, HF GGUF, Ollama):
+- The runtime/provider internals (supervisor, binary manager, GPU variant, HF GGUF):
   [Local Runtime & Providers](03-local-runtime-and-providers.md)
 - The agent execution loop, MAF/MEAI wiring, tools, governance: [Agent Mode](04-agent-mode.md)
 - Chat send path, streaming, per-send routing: [Chat](05-chat.md)

@@ -22,9 +22,6 @@ public interface INodeRuntimeSettings
     /// <summary>The AgentHome tool-capable model allowlist (stored &gt; <c>AgentHome:ToolCapableModels</c>).</summary>
     Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The Ollama runtime endpoint (stored &gt; <c>Ollama:Endpoint</c> &gt; loopback default).</summary>
-    Task<string> GetOllamaEndpointAsync(CancellationToken cancellationToken = default);
-
     /// <summary>The Hugging Face default quant (stored &gt; <c>HuggingFace:DefaultQuant</c> &gt; "Q4_K_M").</summary>
     Task<string> GetHuggingFaceDefaultQuantAsync(CancellationToken cancellationToken = default);
 
@@ -269,19 +266,19 @@ public interface INodeRuntimeSettings
     Task<bool> GetAllowCloudModelSubAgentsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The playbook analysis model (stored &gt; <c>PlaybookAnalysis:ModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read
+    ///     The playbook analysis model (stored &gt; <c>PlaybookAnalysis:ModelName</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read
     ///     once per run.
     /// </summary>
     Task<string> GetPlaybookAnalysisModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The playbook eval model (stored &gt; <c>PlaybookEval:ModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read once
+    ///     The playbook eval model (stored &gt; <c>PlaybookEval:ModelName</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read once
     ///     per run, so a run's fingerprint and its calls agree.
     /// </summary>
     Task<string> GetPlaybookEvalModelNameAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The memory extraction model (stored &gt; <c>MemoryExtraction:ExtractionModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default
+    ///     The memory extraction model (stored &gt; <c>MemoryExtraction:ExtractionModelName</c> &gt; the default
     ///     model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read once per run.
     /// </summary>
     Task<string> GetMemoryExtractionModelNameAsync(CancellationToken cancellationToken = default);
@@ -378,9 +375,6 @@ public interface INodeRuntimeSettings
 
     /// <summary>The configured <c>AgentHome:ToolCapableModels</c> seed the allowlist falls back to when none is stored. Fixed for the process.</summary>
     IReadOnlyList<string> GetToolCapableModelsSeed();
-
-    /// <inheritdoc cref="GetOllamaEndpointAsync" />
-    string GetOllamaEndpoint();
 
     /// <inheritdoc cref="GetHuggingFaceDefaultQuantAsync" />
     string GetHuggingFaceDefaultQuant();

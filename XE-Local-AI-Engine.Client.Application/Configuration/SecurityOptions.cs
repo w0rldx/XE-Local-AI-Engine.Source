@@ -25,7 +25,7 @@ public sealed class SecurityOptions
     [Range(minimum: 1, maximum: 512)]
     public int MaxUploadFileSizeMb { get; set; } = 25;
 
-    /// <summary>Accepts either a plain Ollama tag OR an <c>org/repo</c> GGUF reference.</summary>
+    /// <summary>Accepts either a plain <c>name[:tag]</c> model name OR an <c>org/repo</c> GGUF reference.</summary>
     /// <remarks>
     ///     The repo branch is exactly <c>org/repo</c> with an optional <c>:quant</c> (no spaces, no extra path segments) and an OPTIONAL
     ///     <c>hf.co</c> / <c>huggingface.co</c> domain prefix, so both the bare "bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M" form (what

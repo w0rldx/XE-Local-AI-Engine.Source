@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///             <item>Drop an Agent and a Pause on the canvas, wire <c>start → agent-1 → pause-1 → end</c>, configure all three.</item>
 ///             <item>Save. The editor validates before it sends, so a graph that saves is a graph the server accepted.</item>
 ///             <item>Start a run with a JSON input. The endpoint answers out of band and the page switches to the run view.</item>
-///             <item>The Agent node runs against FakeOllama and the Pause node parks the run on a decision.</item>
+///             <item>The Agent node runs against the fake gateway and the Pause node parks the run on a decision.</item>
 ///             <item>Approve. The run reaches <c>Completed</c> and the End node carries the run's result document.</item>
 ///         </list>
 ///     </para>
@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <c>XENodeE2EWebApplicationFactory</c>: <c>GraphWorkflows:Enabled</c> is stated rather than inherited, the
 ///         dispatcher and its startup reconciler go back after the blanket <c>RemoveAll&lt;IHostedService&gt;</c> (a run
 ///         is advanced by that loop and by nothing else), and the capacity gate is replaced because this host has no
-///         installed GGUF to size a model against. See the comments beside each one.
+///         GGUF file to size a model against. See the comments beside each one.
 ///     </para>
 ///     <para>
 ///         The first-run welcome modal is NOT dismissed here: the fixture seeds the admin with a terminal tour outcome,
@@ -38,7 +38,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 [Category("GraphWorkflows")]
 public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
 {
-    /// <summary>The FakeOllama chat model the Agent node pins. Pinned on the NODE, so no agent definition is involved.</summary>
+    /// <summary>The fake gateway chat model the Agent node pins. Pinned on the NODE, so no agent definition is involved.</summary>
     private const string FakeChatModel = "qwen3.5:0.8b";
 
     /// <summary>Palette keys are minted per kind over one namespace, so the first Agent and Pause are always these.</summary>
@@ -114,7 +114,7 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
         await Page.GetByTestId("gw-node-config-instructions")
                   .FillAsync("You are an E2E probe. Answer the question in one short sentence.");
         // The node pins its own model, which is what makes this an unattended local run with no agent definition
-        // behind it. The list is the node's installed chat models, which here is what FakeOllama serves.
+        // behind it. The list is the node's installed chat models, which here is what the fake gateway lists.
         await Page.GetByTestId("gw-node-config-model").ClickAsync();
         await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions
         {
@@ -169,7 +169,7 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
         var runId = Regex.Match(Page.Url, "runId=([^&]+)").Groups[1].Value;
         await Assert.That(runId).IsNotEmpty();
 
-        // 8. The Agent node runs off the dispatcher's loop against FakeOllama, and the Pause node parks the run on a
+        // 8. The Agent node runs off the dispatcher's loop against the fake gateway, and the Pause node parks the run on a
         //    person. Read the statuses off the node-run table rather than the canvas: the table is the same rows and
         //    needs no viewport geometry to be legible.
         await Expect(NodeStatus(AgentKey)).ToHaveTextAsync("Succeeded", new LocatorAssertionsToHaveTextOptions

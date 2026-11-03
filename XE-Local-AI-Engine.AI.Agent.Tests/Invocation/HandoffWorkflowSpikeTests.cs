@@ -1,6 +1,6 @@
 // Handoff + workflow-approval probe for Microsoft.Agents.AI.Workflows at the pinned version
 // (Directory.Packages.props). It runs in the normal suite and is fully deterministic: a scripted IChatClient stands
-// in for the model (no Ollama, no network). It pins the API shapes the production handoff orchestration and
+// in for the model (no network). It pins the API shapes the production handoff orchestration and
 // IOrchestrationRunSession.RespondToApprovalAsync depend on:
 //   (A) 2-agent handoff routing via AgentWorkflowBuilder.CreateHandoffBuilderWith + InProcessExecution.
 //   (B) tool-approval pause/resume INSIDE a workflow run (surfacing event + resume mechanism).

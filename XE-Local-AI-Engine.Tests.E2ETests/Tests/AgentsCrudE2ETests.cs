@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         row and reading the value back is the only layer that exercises encrypt → persist → decrypt.
 ///     </para>
 ///     <para>
-///         FakeOllama is NOT needed: an agent definition is persisted config; no model call happens on save.
+///         The fake gateway is NOT needed: an agent definition is persisted config; no model call happens on save.
 ///         The seeded "Default Assistant" + agency-agents starter pack come from <c>DefaultAgentSeeder</c>,
 ///         an <c>IHostedService</c> removed by the E2E factory — so the list starts empty in this host. The
 ///         test asserts BY NAME against the agent it creates, never by row count.

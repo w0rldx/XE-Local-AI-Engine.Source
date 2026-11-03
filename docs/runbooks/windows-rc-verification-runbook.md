@@ -195,7 +195,7 @@ Reaped 1 stale llama-server orphan process(es) left by a previous run.
 ```
 
 That is a check-1 fail regardless of what step 6 showed. Note the reaper matches **only** binaries under
-`%LOCALAPPDATA%\XE-Local-AI-Engine\llama.cpp\` — an Ollama `llama-server` is never touched, so a match is
+`%LOCALAPPDATA%\XE-Local-AI-Engine\llama.cpp\` — another application's `llama-server` is never touched, so a match is
 unambiguously ours.
 
 ---

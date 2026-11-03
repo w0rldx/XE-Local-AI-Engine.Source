@@ -72,7 +72,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new ModelProviderMapStore(context, TimeProvider.System);
 
-        _ = await store.UpsertAsync("mistral", "ollama");
+        _ = await store.UpsertAsync("mistral", "external");
         var repointed = await store.UpsertAsync("mistral", "llamacpp");
 
         AssertEx.Equal("llamacpp", repointed.ProviderName);
@@ -99,11 +99,11 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         var lookedUp = await store.GetProviderForModelAsync("phi-3-mini");
         AssertEx.Equal("llamacpp", lookedUp);
 
-        _ = await store.UpsertAsync("PHI-3-MINI", "ollama");
+        _ = await store.UpsertAsync("PHI-3-MINI", "external");
 
         var all = await store.ListAsync();
         AssertEx.Equal(expected: 1, all.Count);
-        AssertEx.Equal("ollama", all[0].ProviderName);
+        AssertEx.Equal("external", all[0].ProviderName);
     }
 
     [Test]
@@ -116,7 +116,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new ModelProviderMapStore(context, TimeProvider.System);
 
-        _ = await store.UpsertAsync("zephyr", "ollama");
+        _ = await store.UpsertAsync("zephyr", "external");
         _ = await store.UpsertAsync("alpaca", "llamacpp");
         _ = await store.UpsertAsync("mistral", "llamacpp");
 
@@ -145,7 +145,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         var created = claim as ProviderMapClaimResult.Created;
         AssertEx.NotNull(created);
 
-        var replacement = await rawStore.UpsertAsync("mistral", "ollama");
+        var replacement = await rawStore.UpsertAsync("mistral", "external");
         AssertEx.True(replacement.Revision.Length > 0);
         var restore = await coordinated.TryRestoreAsync(lease, created!.Receipt);
         AssertEx.Equal(ProviderMapRestoreResult.Superseded, restore);
@@ -153,7 +153,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         var removal = await coordinated.TryRemoveIfMatchAsync(lease, "mistral", "llamacpp", created.Receipt.Mutation!.Revision);
         AssertEx.True(removal is ProviderMapRemovalResult.Superseded,
             "A conditional removal must preserve a newer provider/revision.");
-        AssertEx.Equal("ollama", await rawStore.GetProviderForModelAsync("mistral"));
+        AssertEx.Equal("external", await rawStore.GetProviderForModelAsync("mistral"));
     }
 
     [Test]

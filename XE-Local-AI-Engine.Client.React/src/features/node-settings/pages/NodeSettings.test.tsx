@@ -40,17 +40,6 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-// The page asks the node whether the optional Ollama runtime is configured at all and threads the answer down to the
-// runtime card. That probe reaches the generated SDK, and its axios interceptors pull in the app router - neither of
-// which this file mounts (the SDK's react-query module is mocked wholesale below, so MSW never sees the call). This is
-// the one seam left for the hook, and it doubles as the switch for the gate-off test: `undefined` is the fail-open
-// answer every other test runs with, so the Ollama endpoint field renders exactly as it did before the probe existed.
-const { ollamaProbe } = vi.hoisted(() => ({ ollamaProbe: { data: undefined as boolean | undefined } }));
-
-vi.mock("@/features/node-settings/queries/useOllamaRuntimeConfigured", () => ({
-	useOllamaRuntimeConfigured: () => ollamaProbe,
-}));
-
 const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getNodeSettingsOptions: vi.fn(),
@@ -336,7 +325,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		// The draft-model picker's installed-models query resolves to an empty list by default (no draft models offered).
 		generatedMock.listLocalModelsOptions.mockReturnValue({
 			queryKey: fakeQueryKey("listLocalModels"),
-			queryFn: async () => ({ items: [], isAvailable: false }),
+			queryFn: async () => ({ items: [] }),
 		});
 		generatedMock.getLlamaCppSourceBuildStatusOptions.mockReturnValue({
 			queryKey: fakeQueryKey("getLlamaCppSourceBuildStatus"),
@@ -392,26 +381,6 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		useDeveloperModeStore.setState({ developerMode: false });
 		// The GGUF in-flight set is a shared session store; reset it so a reranker-download test starts with none.
 		useGgufBrowseStore.setState({ inFlightDownloads: [] });
-		// The probe holder is module state shared by the whole file; reset it to the fail-open answer.
-		ollamaProbe.data = undefined;
-	});
-
-	it("hides the Ollama endpoint field when the node reports the runtime gated off", () => {
-		ollamaProbe.data = false;
-
-		renderPage("runtimes");
-
-		// Through the real page -> NodeSettingsFieldsCard -> NodeSettingsOllamaCard path, so the prop is proven wired.
-		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
-		expect(screen.getByTestId("node-settings-ollama-disabled")).toBeTruthy();
-	});
-
-	it("keeps the Ollama endpoint field while the runtime probe has not answered", () => {
-		renderPage("runtimes");
-
-		// FAIL OPEN: `undefined` is a loading or failed probe, and must never take the setting away.
-		expect(screen.getByTestId("node-settings-ollama-endpoint")).toBeTruthy();
-		expect(screen.queryByTestId("node-settings-ollama-disabled")).toBeNull();
 	});
 
 	it("mounts workspace access directly below the inbound MCP key panel", () => {
@@ -1009,7 +978,6 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		generatedMock.listLocalModelsOptions.mockReturnValue({
 			queryKey: fakeQueryKey("listLocalModels"),
 			queryFn: async () => ({
-				isAvailable: true,
 				items: [
 					{
 						modelName: "llama-chat",
@@ -1023,8 +991,8 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 						isOverridden: false,
 					},
 					{
-						modelName: "ollama-chat",
-						provider: "ollama",
+						modelName: "codex-chat",
+						provider: "CodexOAuth",
 						isSelected: false,
 						kind: "Chat",
 						detectedKind: "Chat",
@@ -1056,7 +1024,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		// Mantine keeps Select options mounted in a hidden portal until the dropdown opens; hidden-role queries let this
 		// assert the actual option data without coupling the filter test to Popover positioning behavior in jsdom.
 		expect(within(listbox).getByRole("option", { name: "llama-chat", hidden: true })).toBeTruthy();
-		expect(within(listbox).queryByRole("option", { name: "ollama-chat", hidden: true })).toBeNull();
+		expect(within(listbox).queryByRole("option", { name: "codex-chat", hidden: true })).toBeNull();
 		expect(within(listbox).queryByRole("option", { name: "llama-embedding", hidden: true })).toBeNull();
 	});
 
@@ -1074,7 +1042,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 		generatedMock.listLocalModelsOptions.mockReturnValue({
 			queryKey: fakeQueryKey("listLocalModels"),
-			queryFn: async () => ({ items: [], isAvailable: true }),
+			queryFn: async () => ({ items: [] }),
 		});
 
 		renderPage("runtime");
@@ -1106,7 +1074,6 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		generatedMock.listLocalModelsOptions.mockReturnValue({
 			queryKey: fakeQueryKey("listLocalModels"),
 			queryFn: async () => ({
-				isAvailable: true,
 				items: [
 					{
 						modelName: "model-a",

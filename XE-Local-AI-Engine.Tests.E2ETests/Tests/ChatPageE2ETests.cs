@@ -1,8 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
-using System.Runtime.CompilerServices;
 using Microsoft.Playwright;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Browser-driven E2E tests for the node Chat page (<c>/chat</c>), mirroring the manual
@@ -13,8 +14,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 ///     <para>
 ///         The test host uses <see cref="Infrastructure.XENodeE2EWebApplicationFactory" /> which wires
-///         FakeOllama (<c>qwen3.5:0.8b</c>) as the local model provider.  No real Ollama process
-///         is required.  The FakeOllama chat endpoint streams deterministic token chunks, so
+///         the fake gateway (<c>qwen3.5:0.8b</c>) as the local model provider.  No model runtime
+///         is required.  The fake chat endpoint streams deterministic token chunks, so
 ///         assertions can rely on the stream completing in a bounded time.
 ///     </para>
 ///     <para>
@@ -36,17 +37,15 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     private const string ChatInputPlaceholder = "Type your message";
     private const string SendButtonTestId = "chat-send-button";
     private const string GatedAnswerText = "this answer must never arrive";
-    private const string FakeOllamaChatModel = "qwen3.5:0.8b";
-
     // Holds the fake's answer open until the after-hook releases it; only the cancel test installs it.
     private readonly TaskCompletionSource<bool> _answerGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     [After(Test)]
     public void ResetChatScript()
     {
-        // Release first so a parked FakeOllama request never holds a connection on the shared session.
+        // Release first so a parked fake request never holds a connection on the shared session.
         _answerGate.TrySetResult(true);
-        Factory.FakeOllamaState.ChatScript = null;
+        Factory.FakeGatewayState.ChatResponder = null;
     }
 
     /// <summary>
@@ -159,12 +158,12 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     {
         var (chatInput, sendButton) = await NavigateAndWaitForChatAsync();
 
-        const string userText = "Say hello from FakeOllama";
+        const string userText = "Say hello from the fake gateway";
 
         await chatInput.FillAsync(userText);
         await Expect(sendButton).ToBeEnabledAsync();
 
-        // Submit — sends to the in-process FakeOllama via the local SignalR chat hub.
+        // Submit — sends to the in-process fake gateway via the local SignalR chat hub.
         await sendButton.ClickAsync();
 
         // The input clears on submit — check the textarea value, not its text content.
@@ -174,12 +173,12 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
         });
 
         // During streaming the button label switches to "Stop".
-        // We tolerate the case where FakeOllama is fast and the stream already finished
+        // We tolerate the case where the fake is fast and the stream already finished
         // before Playwright samples the button; in that case we fall through to the completion
         // assertion below without asserting the transient streaming state.
 
         // Stream completion: button must revert to "Send" (no longer isSending).
-        // FakeOllama streams a small deterministic chunk — allow up to 10 s.
+        // The fake streams a small deterministic chunk — allow up to 10 s.
         await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
         {
             Timeout = 10000
@@ -203,10 +202,16 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     {
         // The fake's answer parks on a gate this test never opens, so the stream is in flight for as long as the test
         // needs: Stop is always observable, and only the cancel can end the turn.
-        Factory.FakeOllamaState.ChatScript = _ => GatedAnswerAsync(_answerGate.Task, CancellationToken.None);
+        Factory.FakeGatewayState.ChatResponder = async (_, ct) =>
+        {
+            await _answerGate.Task.WaitAsync(ct);
+            return new FakeOpenAiGatewayScript
+            {
+                CompletionText = GatedAnswerText
+            };
+        };
         var (chatInput, sendButton) = await NavigateAndWaitForChatAsync();
-        // The default local model has no GGUF on the fixture node, so its turn fails before Stop is observable.
-        await SelectComposerModelAsync(FakeOllamaChatModel);
+        await SelectComposerModelAsync(FakeGatewayLocalModelProvider.ChatModel);
 
         await chatInput.FillAsync("Stream then cancel");
         await Expect(sendButton).ToBeEnabledAsync();
@@ -225,13 +230,6 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
             Timeout = 10000
         });
         await Expect(Page.GetByText(GatedAnswerText)).ToHaveCountAsync(0);
-    }
-
-    // ChatScript hands over no token, so the [After(Test)] hook releasing the gate is what frees a parked request.
-    private static async IAsyncEnumerable<string> GatedAnswerAsync(Task gate, [EnumeratorCancellation] CancellationToken ct)
-    {
-        await gate.WaitAsync(ct);
-        yield return GatedAnswerText;
     }
 
     [Test]

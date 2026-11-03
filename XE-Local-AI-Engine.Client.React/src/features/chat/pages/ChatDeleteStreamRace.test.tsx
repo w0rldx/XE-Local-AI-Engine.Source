@@ -138,10 +138,8 @@ describe("Chat delete-vs-stream race", () => {
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 		adapter.getConversation.mockResolvedValue(conversation());
 		// The list starts with the one conversation; the delete drops it so a post-delete list refetch (and the

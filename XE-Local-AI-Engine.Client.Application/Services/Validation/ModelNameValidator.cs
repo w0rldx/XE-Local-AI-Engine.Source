@@ -39,7 +39,7 @@ public sealed class ModelNameValidator
             return ExternalModelId.TryParse(modelName, out _, out _) ? null : InvalidModelIdentifier;
         }
 
-        // 150 comfortably fits Hugging Face GGUF references (hf.co/org/repo:quant), which are longer than plain Ollama tags.
+        // 150 comfortably fits Hugging Face GGUF references (hf.co/org/repo:quant), which are longer than plain name:tag ids.
         if (modelName.Length > 150)
         {
             return InvalidModelIdentifier;

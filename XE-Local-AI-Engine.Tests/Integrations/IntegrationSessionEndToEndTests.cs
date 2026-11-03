@@ -99,7 +99,6 @@ public sealed class IntegrationSessionHostFixture : IAsyncInitializer, IAsyncDis
                     {
                         Verdict = CapacityVerdict.Allow,
                         Reason = "Capacity available.",
-                        OllamaEvictionWarning = false,
                         Reservation = null
                     });
 

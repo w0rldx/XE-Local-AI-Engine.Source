@@ -118,10 +118,8 @@ describe("Chat knowledge-base toggle and the send payload", () => {
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 		adapter.listConversations.mockResolvedValue({ conversations: [conversation] });
 		adapter.getConversation.mockResolvedValue(conversation);

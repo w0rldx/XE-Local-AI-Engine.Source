@@ -30,7 +30,7 @@ internal sealed partial class SubAgentSpawnService
         }
 
         // The child model's OWN capabilities: tools gate the offer below (withheld, not refused, as chat does); thinking gates the reasoning field,
-        // as the direct and orchestration-participant paths do (a non-thinking Ollama model 400s on think). Cache-first.
+        // as the direct and orchestration-participant paths do. Cache-first.
         var childCapabilities = await _modelCapabilityResolver
             .ResolveAsync(definition.ModelProfile, ct);
         var (supportsThinking, supportsTools, _) = childCapabilities;

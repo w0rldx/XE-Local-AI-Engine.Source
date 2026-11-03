@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </summary>
 /// <remarks>
 ///     Those descriptor flags were detected from the chat template and cached per file. A name that matches no
-///     installed GGUF returns <see langword="null" />, so the caller falls back to the Ollama or Codex path.
+///     installed GGUF returns <see langword="null" />, so the caller takes its safe not-capable default.
 /// </remarks>
 internal sealed class GgufModelCapabilityResolver : IGgufModelCapabilityResolver
 {

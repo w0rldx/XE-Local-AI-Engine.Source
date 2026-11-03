@@ -22,7 +22,7 @@ public sealed class ModelRoutingLocalChatClientTests
     private const string DefaultModel = "default-chat";
 
     private const string LlamaProvider = "llamacpp";
-    private const string OllamaProvider = "ollama";
+    private const string ExternalProvider = "external";
 
     private static ChatMessage[] Message => [new(ChatRole.User, "hi")];
 
@@ -30,13 +30,13 @@ public sealed class ModelRoutingLocalChatClientTests
     public async Task GetResponse_RoutesByModelId_ToMappedProviderAndDistinctPerModelClient()
     {
         var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
-        var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        // "gguf-model" is mapped to llamacpp; "ollama-model" has no row → routes to the default provider (ollama).
-        var resolver = BuildResolver([llamacpp, ollama],
-            OllamaProvider,
+        var external = new RecordingLocalModelProvider(ExternalProvider);
+        // "remote-model" is mapped to the external provider; "gguf-model" has no row → routes to the default provider (llamacpp).
+        var resolver = BuildResolver([llamacpp, external],
+            LlamaProvider,
             new Dictionary<string, string>
             {
-                ["gguf-model"] = LlamaProvider
+                ["remote-model"] = ExternalProvider
             });
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
@@ -46,26 +46,26 @@ public sealed class ModelRoutingLocalChatClientTests
         });
         await router.GetResponseAsync(Message, new ChatOptions
         {
-            ModelId = "ollama-model"
+            ModelId = "remote-model"
         });
 
         // Each model id reached the provider the map (or default) names, with the model carried through the selection.
         AssertEx.Equal(expected: 1, llamacpp.CreatedClients.Count);
         AssertEx.Equal("gguf-model", llamacpp.CreatedClients[0].ModelName);
-        AssertEx.Equal(expected: 1, ollama.CreatedClients.Count);
-        AssertEx.Equal("ollama-model", ollama.CreatedClients[0].ModelName);
+        AssertEx.Equal(expected: 1, external.CreatedClients.Count);
+        AssertEx.Equal("remote-model", external.CreatedClients[0].ModelName);
 
         // The two sends reached two DISTINCT per-model clients (distinct processes) — a model switch mid-session does
         // not reuse the previous model's client.
-        AssertEx.False(ReferenceEquals(llamacpp.CreatedClients[0], ollama.CreatedClients[0]),
+        AssertEx.False(ReferenceEquals(llamacpp.CreatedClients[0], external.CreatedClients[0]),
             "Two different models must resolve to two distinct per-model clients.");
     }
 
     [Test]
     public async Task GetResponse_WhenSameModelSentTwice_ReusesOneCachedClientPerProviderAndModel()
     {
-        var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
+        var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
+        var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
         await router.GetResponseAsync(Message, new ChatOptions
@@ -78,22 +78,22 @@ public sealed class ModelRoutingLocalChatClientTests
         });
 
         // One CreateChatClient for two sends of the same model — the (provider, model) cache held.
-        AssertEx.Equal(expected: 1, ollama.CreatedClients.Count);
-        AssertEx.Equal(expected: 2, ollama.CreatedClients[0].CallCount);
-        AssertEx.False(ollama.CreatedClients[0].IsDisposed, "A cached client must not be disposed between sends.");
+        AssertEx.Equal(expected: 1, llamacpp.CreatedClients.Count);
+        AssertEx.Equal(expected: 2, llamacpp.CreatedClients[0].CallCount);
+        AssertEx.False(llamacpp.CreatedClients[0].IsDisposed, "A cached client must not be disposed between sends.");
     }
 
     [Test]
     public async Task GetResponse_WhenModelIdOmitted_FallsBackToDefaultModel()
     {
-        var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
+        var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
+        var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
         await router.GetResponseAsync(Message);
 
-        AssertEx.Equal(expected: 1, ollama.CreatedClients.Count);
-        AssertEx.Equal(DefaultModel, ollama.CreatedClients[0].ModelName);
+        AssertEx.Equal(expected: 1, llamacpp.CreatedClients.Count);
+        AssertEx.Equal(DefaultModel, llamacpp.CreatedClients[0].ModelName);
     }
 
     [Test]
@@ -151,15 +151,15 @@ public sealed class ModelRoutingLocalChatClientTests
     [Test]
     public async Task Dispose_DisposesCachedClients_ButNeverDuringASend()
     {
-        var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
+        var llamacpp = new RecordingLocalModelProvider(LlamaProvider);
+        var resolver = BuildResolver([llamacpp], LlamaProvider, new Dictionary<string, string>());
         var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
         await router.GetResponseAsync(Message, new ChatOptions
         {
             ModelId = "chat-a"
         });
-        var resolvedDuringSend = ollama.CreatedClients[0];
+        var resolvedDuringSend = llamacpp.CreatedClients[0];
         AssertEx.False(resolvedDuringSend.IsDisposed, "The resolved adapter must survive the send (router never disposes per-call).");
 
         router.Dispose();
@@ -187,7 +187,7 @@ public sealed class ModelRoutingLocalChatClientTests
 
     /// <summary>
     ///     A provider that records every (model) it was asked to build a chat client for and hands back a fresh
-    ///     <see cref="StubChatClient" /> per call — standing in for a llama-server deferred client or the Ollama client.
+    ///     <see cref="StubChatClient" /> per call — standing in for a llama-server deferred client.
     /// </summary>
     private sealed class RecordingLocalModelProvider : ILocalModelProvider
     {

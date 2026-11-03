@@ -2,15 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Models;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>Answers "which provider owns this model, and what does <em>details</em> mean for it" for the model-details route.</summary>
 /// <remarks>
-///     The five-way routing — Codex cloud id, external OpenAI-compatible id, Azure Foundry deployment, GGUF served by llama.cpp,
-///     Ollama-served model — is a decision, so it lives here rather than in the endpoint, which is left to map one
-///     <see cref="LocalModelDetailsResolution" /> onto the wire response. <para> The branch order is a PRIORITY, not an arbitrary sequence:
-///     the cloud/external ids are recognized by shape before anything probes a local runtime, because probing the Ollama daemon's <c>/api/show</c>
-///     for an id it has never heard of answers 500, and a cloud model's only detail is its declared context window. </para>
+///     The routing — Codex cloud id, external OpenAI-compatible id, Azure Foundry deployment, GGUF served by llama.cpp — is a
+///     decision, so it lives here rather than in the endpoint, which is left to map one <see cref="LocalModelDetailsResolution" />
+///     onto the wire response. Cloud and external ids are recognized first: a cloud model's only detail is its declared window.
 /// </remarks>
 public interface ILocalModelDetailsResolver
 {
@@ -27,7 +24,7 @@ public abstract record LocalModelDetailsResolution
 {
     /// <summary>
     ///     No details to report: a gone external registration, a cloud id with no known window (a removed deployment, an
-    ///     unsourced Codex id), a GGUF with no installed descriptor, or an unreachable Ollama daemon.
+    ///     unsourced Codex id), or a GGUF with no installed descriptor.
     /// </summary>
     /// <remarks>
     ///     Every one of those is a clean 404 rather than a fault.
@@ -48,7 +45,4 @@ public abstract record LocalModelDetailsResolution
     ///     the running process when one is warm, and are <see langword="null" /> otherwise (including when the probe failed).
     /// </summary>
     public sealed record Gguf(LocalModelDescriptor Descriptor, int? EffectiveContextTokens, bool? ExpertsOffloaded = null) : LocalModelDetailsResolution;
-
-    /// <summary>An Ollama-served model, as reported by the daemon's <c>/api/show</c>.</summary>
-    public sealed record Ollama(OllamaModelDetails Details) : LocalModelDetailsResolution;
 }

@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministrationService
 {
@@ -19,7 +18,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         "The fast model for automatic reasoning effort must be an installed node-local model.";
 
     private const string BackgroundModelNotLocalMessage =
-        "The model must be an installed node-local model (a GGUF model or an Ollama model on this machine), or blank to use the default model.";
+        "The model must be an installed node-local GGUF model, or blank to use the default model.";
 
     private const string EmbeddingModelNotInstalledMessage =
         "The knowledge-base embedding model must name an installed embedding model; null clears the pin only while no document is indexed.";
@@ -40,7 +39,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     private readonly ILocalModelProviderResolver _localModelProviderResolver;
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILogger<NodeSettingsAdministrationService> _logger;
-    private readonly IOllamaModelService _ollamaModelService;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
@@ -53,7 +51,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         IGgufModelStore ggufModelStore,
         IModelTrustResolver modelTrustResolver,
         ILocalModelProviderResolver localModelProviderResolver,
-        IOllamaModelService ollamaModelService,
         IOptions<KnowledgeBaseOptions> knowledgeOptions,
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
         IServiceScopeFactory scopeFactory,
@@ -63,8 +60,6 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(knowledgeOptions);
         _knowledgeOptions = knowledgeOptions.Value;
-        ArgumentNullException.ThrowIfNull(ollamaModelService);
-        _ollamaModelService = ollamaModelService;
         ArgumentNullException.ThrowIfNull(knowledgeModelPrewarmer);
         _knowledgeModelPrewarmer = knowledgeModelPrewarmer;
         ArgumentNullException.ThrowIfNull(defaultModelSelectionPolicy);
@@ -197,7 +192,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         {
             var settings = apply(validatedAgainst);
 
-            // Enforcement point 1 of the node-locality gate, on BOTH save paths: a cloud id, an `ext:` id or an Ollama name here would carry
+            // Enforcement point 1 of the node-locality gate, on BOTH save paths: a cloud id or an `ext:` id here would carry
             // turn data somewhere no egress gate authorized. Only on a CHANGE — point 2 (the dispatcher) re-checks per turn. Wiki 08.
             if (!string.Equals(settings.AutoEffortFastModelName, validatedAgainst.AutoEffortFastModelName, StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(settings.AutoEffortFastModelName)
@@ -349,8 +344,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     /// <summary>The first background-model field whose CHANGED, non-blank value is not node-local, or null.</summary>
     /// <remarks>
     ///     These models read conversations, feedback and golden text, so a cloud id or an <c>ext:</c> id would carry that data off the
-    ///     node. Unlike the fast-model gate an Ollama model on this machine is accepted. Only a change is judged, so a later uninstall
-    ///     never blocks an unrelated save; the run then fails at call time.
+    ///     node. Only a change is judged, so a later uninstall never blocks an unrelated save; the run then fails at call time.
     /// </remarks>
     private async Task<NodeSettingsField?> FindNonLocalBackgroundModelAsync(StoredNodeSettings settings,
         StoredNodeSettings previous,
@@ -386,8 +380,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         }
 
         // Membership is the load-bearing check: both resolvers call an unknown id local, so only an installed model passes.
-        return await _ggufModelStore.ExistsAsync(modelName, cancellationToken)
-               || await _ollamaModelService.IsLoopbackModelInstalledAsync(modelName, cancellationToken);
+        return await _ggufModelStore.ExistsAsync(modelName, cancellationToken);
     }
 
     // The same match the embedding resolver makes (exact, case-insensitive, on the knowledge embedding provider), plus the
@@ -405,7 +398,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             var installed = await provider.ListModelsAsync(cancellationToken);
             return installed.Any(descriptor => string.Equals(descriptor.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             return false;
         }

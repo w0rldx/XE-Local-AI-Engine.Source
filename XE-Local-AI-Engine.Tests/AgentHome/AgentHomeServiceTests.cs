@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 /// <summary>
 ///     Service-level coverage: the real <see cref="AgentHomeService" /> drives the real
 ///     <see cref="AgentHomeManifestService" /> (temp host root) and the <see cref="FakeSandboxRuntimeProvider" />
-///     end-to-end, with a fake resolver/identity injected through a real scope factory. No Docker, no Ollama.
+///     end-to-end, with a fake resolver/identity injected through a real scope factory. No Docker, no model runtime.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class AgentHomeServiceTests : IDisposable

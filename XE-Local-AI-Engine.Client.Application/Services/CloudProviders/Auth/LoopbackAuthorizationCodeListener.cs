@@ -69,7 +69,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
     }
 
     // HttpListener requires a root-path prefix ending in "/" — the listener's URI shape requirement, not a filesystem
-    // path, so S1075's hardcoded-path-delimiter flag is a false positive (mirrors FakeOllamaServer's loopback-bind suppression).
+    // path, so S1075's hardcoded-path-delimiter flag is a false positive.
     [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded",
         Justification = "The trailing '/' is HttpListener's required prefix shape, not a filesystem or network path.")]
     private static string BuildListenerPrefix(Uri redirectUri)

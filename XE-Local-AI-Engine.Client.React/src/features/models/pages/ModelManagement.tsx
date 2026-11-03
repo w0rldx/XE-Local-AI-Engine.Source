@@ -48,8 +48,7 @@ export function ModelManagement() {
 
 	// Reads run through the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
 	// AbortSignal automatically); a zod response-shape failure throws a ZodError the shared error sinks handle.
-	// The list query keeps the generated response envelope (isAvailable / selectedModelName / error) and
-	// maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
+	// The list query keeps the generated response envelope and maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
 	// factories so every cached variant of an endpoint refetches.
 	const {
 		data: modelsResponse,
@@ -69,7 +68,7 @@ export function ModelManagement() {
 		[modelViewModels],
 	);
 
-	const detailsDialog = useModelDetailsDialog(modelsResponse?.isAvailable ?? false);
+	const detailsDialog = useModelDetailsDialog(modelsResponse !== undefined);
 	const acquisition = useGgufAcquisitionFlow();
 	// The tested catalog picks the browse panel offers before any search. A loading or failed read shows no block.
 	const testedModelsQuery = useTestedCatalogModels(nodeCapabilities.modelFit);
@@ -108,9 +107,7 @@ export function ModelManagement() {
 
 	const setKindMutation = useMutation({
 		...putModelKindMutation(),
-		// Setting an override does NOT probe Ollama, so the response's detectedKind may still be Unknown. Invalidate
-		// the list so the next refetch runs lazy detection and the row reflects the freshly detected kind, not the
-		// override response.
+		// Invalidate the list so the row reflects the effective kind, not the override response.
 		onSuccess: async () => {
 			await invalidateList();
 		},
@@ -185,16 +182,19 @@ export function ModelManagement() {
 
 			{modelsError ? <InlineErrorAlert message={errorMessage(modelsError, t)} /> : null}
 
-			<SectionCard title={t("pages.models.local.installedTitle", "Installed models")} icon={<IconRobot size={22} />}>
-				<InstalledModelsTable
-					models={modelViewModels}
-					isActionPending={isActionPending}
-					onOpenDetails={detailsDialog.open}
-					onSetDefault={(modelName) => selectMutation.mutate({ body: { modelName } })}
-					onDelete={confirmDelete}
-					onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
-				/>
-			</SectionCard>
+			{/* A failed first read says nothing about what is installed, so it must not render as the empty list. */}
+			{modelsError && !modelsResponse ? null : (
+				<SectionCard title={t("pages.models.local.installedTitle", "Installed models")} icon={<IconRobot size={22} />}>
+					<InstalledModelsTable
+						models={modelViewModels}
+						isActionPending={isActionPending}
+						onOpenDetails={detailsDialog.open}
+						onSetDefault={(modelName) => selectMutation.mutate({ body: { modelName } })}
+						onDelete={confirmDelete}
+						onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
+					/>
+				</SectionCard>
+			)}
 
 			<DownloadProgressPanel
 				inFlight={acquisition.inFlightDownloads}

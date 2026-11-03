@@ -43,6 +43,7 @@ describe("local model mappers", () => {
 		expect(
 			toLocalModelViewModel({
 				modelName: "",
+				provider: "llamacpp",
 				isSelected: false,
 				kind: "Unknown",
 				detectedKind: "Unknown",
@@ -53,7 +54,7 @@ describe("local model mappers", () => {
 			}),
 		).toEqual({
 			modelName: "",
-			provider: "Ollama",
+			provider: "llamacpp",
 			origin: null,
 			sizeLabel: "—",
 			modifiedDateLabel: "—",

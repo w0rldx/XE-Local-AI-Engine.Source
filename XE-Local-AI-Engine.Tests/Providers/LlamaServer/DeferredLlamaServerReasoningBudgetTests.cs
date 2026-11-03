@@ -77,7 +77,7 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
 
         // The marker is in-process only: it is a plain AdditionalProperties entry, which the MEAI OpenAI adapter drops.
         // Any provider that does not run ApplyReasoningBudget (cloud OpenAI-compatible endpoints, and — via their own
-        // fixed option allowlists — Ollama and Codex) therefore sends a body with no budget field at all.
+        // fixed option allowlists, such as Codex) therefore sends a body with no budget field at all.
         var options = new ChatOptions
         {
             AdditionalProperties = new AdditionalPropertiesDictionary

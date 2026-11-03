@@ -223,7 +223,6 @@ public sealed class IntegrationExecutionCoordinatorTests
                {
                    Verdict = CapacityVerdict.RejectInsufficient,
                    Reason = "No capacity.",
-                   OllamaEvictionWarning = false,
                    Reservation = null
                });
         var executionId = harness.SeedAccepted();

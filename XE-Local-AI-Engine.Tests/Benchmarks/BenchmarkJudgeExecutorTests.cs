@@ -1657,8 +1657,7 @@ public sealed class BenchmarkJudgeExecutorTests
             Task.FromResult(new CapacityDecision
             {
                 Verdict = Next(),
-                Reason = "capacity",
-                OllamaEvictionWarning = false
+                Reason = "capacity"
             });
 
         public Task<CapacityDecision> DecideAsync(CapacityRequest request, CancellationToken ct)
@@ -1669,7 +1668,6 @@ public sealed class BenchmarkJudgeExecutorTests
             {
                 Verdict = verdict,
                 Reason = Reason,
-                OllamaEvictionWarning = false,
                 Reservation = verdict == CapacityVerdict.Allow ? Reservation : null
             });
         }

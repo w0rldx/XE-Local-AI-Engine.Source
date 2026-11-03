@@ -146,7 +146,7 @@ export function deriveChatMessageDisplay({
 				? t("pages.chat.defaultAgentName", "Default Assistant")
 				: message.agentName
 			: undefined;
-	// Model that produced the turn (ground truth from the persisted message — Ollama id or Codex/cloud id).
+	// Model that produced the turn (ground truth from the persisted message — local or cloud id).
 	// Shown on every assistant turn that carries a model so multiple-provider threads stay auditable. Absent for
 	// legacy turns with no persisted model and for user turns → omitted.
 	const modelLabel =

@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// <summary>Provider tags for <see cref="LocalModelResponse.Provider" /> (chat picker grouping + egress hint).</summary>
 public static class LocalModelProviders
 {
-    /// <summary>A node-local Ollama model (default; stays entirely on the node).</summary>
-    public const string Ollama = "Ollama";
-
     /// <summary>A node-local GGUF model served by the bundled llama.cpp runtime (stays entirely on the node).</summary>
     public const string LlamaCpp = "llamacpp";
 
@@ -44,13 +41,9 @@ public static class LocalModelDeclaredLocalities
 
 public sealed class ListLocalModelsResponse
 {
-    public required bool IsAvailable { get; init; }
-
     public string? SelectedModelName { get; init; }
 
     public string? ConfiguredDefaultModelName { get; init; }
-
-    public string? Error { get; init; }
 
     public required IReadOnlyList<LocalModelResponse> Items { get; init; }
 }
@@ -75,14 +68,10 @@ public sealed class LocalModelResponse
     public required string ModelName { get; init; }
 
     /// <summary>
-    ///     The provider this model is served by: <c>"Ollama"</c> for a node-local model (the default), or
-    ///     <c>"CodexOAuth"</c> for a ChatGPT-subscription Codex cloud model.
+    ///     The provider this model is served by, one of <see cref="LocalModelProviders" />.
     /// </summary>
-    /// <remarks>
-    ///     The chat picker groups by this and shows an egress hint for cloud models. Defaults to <c>"Ollama"</c>, so an
-    ///     entry written without the field reads as node-local.
-    /// </remarks>
-    public string Provider { get; init; } = LocalModelProviders.Ollama;
+    /// <remarks>The chat picker groups by this and shows an egress hint for cloud models.</remarks>
+    public required string Provider { get; init; }
 
     /// <summary>
     ///     A friendly label the operator gave this model, or <see langword="null" /> when they gave none (the client
@@ -121,7 +110,7 @@ public sealed class LocalModelResponse
 
     public string? QuantizationLevel { get; init; }
 
-    /// <summary>Typed acquisition provenance for installed GGUF models; null for legacy, Ollama, and cloud entries.</summary>
+    /// <summary>Typed acquisition provenance for installed GGUF models; null for legacy and cloud entries.</summary>
     public LocalModelOrigin? Origin { get; init; }
 
     /// <summary>Verified aggregate identity of installed GGUF weight/projector content.</summary>
@@ -136,13 +125,13 @@ public sealed class LocalModelResponse
     public required string DetectedKind { get; init; }
 
     /// <summary>
-    ///     Raw Ollama capability strings for read-only badges (e.g. <c>tools</c>, <c>vision</c>, <c>thinking</c>,
+    ///     Raw capability strings for read-only badges (e.g. <c>tools</c>, <c>vision</c>, <c>thinking</c>,
     ///     <c>native_reasoning</c>).
     /// </summary>
     public required IReadOnlyList<string> Capabilities { get; init; }
 
     /// <summary>
-    ///     True when the model advertises the Ollama <c>thinking</c> capability — GRADED reasoning, a switchable
+    ///     True when the model advertises the <c>thinking</c> capability — GRADED reasoning, a switchable
     ///     <c>think:&lt;level&gt;</c> control.
     /// </summary>
     /// <remarks>
@@ -170,7 +159,7 @@ public sealed class LocalModelResponse
     ///     model: an endpoint honoring <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets
     ///     the binary control, since offering levels it ignores is a menu whose entries do nothing.
     ///     <see langword="null" /> means "not declared", which is every non-external entry: a local model's graded
-    ///     control follows its Ollama <c>thinking</c> capability and a cloud provider's its own, neither of which this field may change.
+    ///     control follows its <c>thinking</c> capability and a cloud provider's its own, neither of which this field may change.
     /// </remarks>
     public bool? IsReasoningEffortCapable { get; init; }
 
@@ -187,7 +176,7 @@ public sealed class LocalModelResponse
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 
     /// <summary>
-    ///     True when the model advertises the Ollama <c>tools</c> capability. The composer uses this to gate the local-tool
+    ///     True when the model advertises the <c>tools</c> capability. The composer uses this to gate the local-tool
     ///     controls so a non-tool model is never offered tools.
     /// </summary>
     public required bool IsToolCapable { get; init; }
@@ -335,46 +324,6 @@ public sealed class DeleteLocalModelResponse
     public required string ModelName { get; init; }
 
     public required bool Deleted { get; init; }
-}
-
-/// <summary>
-///     Response for <c>GET models/running</c>: the models the runtime currently holds in memory. Mirrors the
-///     availability/error shape of <see cref="ListLocalModelsResponse" /> so the page degrades gracefully when the
-///     provider is unreachable (empty list, <see cref="IsAvailable" /> false).
-/// </summary>
-public sealed class RunningLocalModelsResponse
-{
-    public required bool IsAvailable { get; init; }
-
-    /// <summary>
-    ///     Whether the optional Ollama runtime is configured/enabled on this node (the <c>XE_OLLAMA_RUNTIME_ENABLED</c>
-    ///     gate).
-    /// </summary>
-    /// <remarks>
-    ///     When false the client can stop polling this endpoint entirely — no Ollama daemon will ever answer — so it
-    ///     never backs off forever against a runtime that is switched off. Distinct from <see cref="IsAvailable" />,
-    ///     which reflects whether a configured daemon is currently reachable.
-    /// </remarks>
-    public required bool OllamaConfigured { get; init; }
-
-    public string? Error { get; init; }
-
-    public required IReadOnlyList<RunningLocalModelResponse> Items { get; init; }
-}
-
-/// <summary>A single loaded model, with its memory footprint and eviction time when the runtime reports them.</summary>
-public sealed class RunningLocalModelResponse
-{
-    public required string ModelName { get; init; }
-
-    /// <summary>Total resident size in bytes (RAM + VRAM); null when the runtime did not report it.</summary>
-    public long? SizeBytes { get; init; }
-
-    /// <summary>Portion resident in GPU VRAM in bytes; null when the runtime did not report it.</summary>
-    public long? SizeVramBytes { get; init; }
-
-    /// <summary>Scheduled eviction time as Unix epoch milliseconds (UTC); null when the runtime did not report it.</summary>
-    public long? ExpiresAtUtc { get; init; }
 }
 
 /// <summary>Request DTO for <c>POST models/{modelName}/unload</c>. <see cref="ModelName" /> is bound from the route.</summary>

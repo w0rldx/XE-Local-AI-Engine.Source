@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     coverage at all.
 ///     <para>
 ///         Scope is deliberately the NO-RUNTIME state, because that is the only honest headless state: there is no
-///         fake <c>sd-server</c> in the test tree (FakeOllama backs chat/embeddings only), and the image model
+///         fake <c>sd-server</c> in the test tree (the fake gateway backs chat/embeddings only), and the image model
 ///         registry reads an on-disk manifest under the fixture's temp <c>NodeData</c> directory, which is empty. So a
 ///         real generation cannot be driven here and is not attempted — the backend transaction suites own it. What
 ///         E2E owns is that the page degrades correctly with nothing installed instead of erroring or offering a

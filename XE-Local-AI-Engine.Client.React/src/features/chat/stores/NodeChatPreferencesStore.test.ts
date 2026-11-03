@@ -77,7 +77,7 @@ describe("NodeChatPreferencesStore", () => {
 
 	it("keeps the graded + binary + codex effort lists in sync with the persistable validation set", async () => {
 		// persistableReasoningEfforts is the validation source of truth for both store hydrate and the wire mapper, so
-		// it must equal the union of all three menu lists (Ollama graded, binary, Codex) — otherwise a value offered in
+		// it must equal the union of all three menu lists (graded, binary, Codex) — otherwise a value offered in
 		// the UI could be silently dropped on reload/round-trip. Pins the four hand-maintained lists against desync.
 		const { reasoningEfforts, binaryReasoningEfforts, codexReasoningEfforts, persistableReasoningEfforts } = await import(
 			"@/features/chat/stores/NodeChatPreferencesStore"
@@ -100,8 +100,8 @@ describe("NodeChatPreferencesStore", () => {
 		expect(useStore.getState().reasoningEffort).toBe("xhigh");
 	});
 
-	it("codexReasoningEfforts contains minimal and xhigh but Ollama lists do not", async () => {
-		// Guard that Codex-only levels never leak into the Ollama pickers.
+	it("codexReasoningEfforts contains minimal and xhigh but the local lists do not", async () => {
+		// Guard that Codex-only levels never leak into the local pickers.
 		const { reasoningEfforts, binaryReasoningEfforts, codexReasoningEfforts } = await import(
 			"@/features/chat/stores/NodeChatPreferencesStore"
 		);
@@ -249,7 +249,7 @@ describe("NodeChatPreferencesStore", () => {
 });
 
 describe("clampReasoningEffort", () => {
-	// reasoningEfforts = ["none", "low", "medium", "high", "auto"] (graded Ollama set).
+	// reasoningEfforts = ["none", "low", "medium", "high", "auto"] (graded set).
 	// binaryReasoningEfforts = ["on", "none"].
 
 	it("returns the current effort unchanged when it is already in the available set", () => {

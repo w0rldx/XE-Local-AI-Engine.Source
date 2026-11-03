@@ -470,7 +470,7 @@ Continues [Agent Mode](../04-agent-mode.md#24-usage-and-estimated-cost), which k
 estimate, the model-readiness duration and the turn's **summed** usage onto the invocation state immediately before
 it reports the turn completed, cancelled or failed, so the terminalize write persists them with the envelope row.
 Failure and cancellation carry them too, because the numbers are most interesting on a turn that ran out of context;
-the readiness duration is `null` on any turn with no local warm (Ollama, a remote provider), which is what that
+the readiness duration is `null` on any turn with no local warm (a remote provider), which is what that
 column means; and the summed usage is the turn's **cost**, as opposed to the last round's counts that
 `ReportInvocationCompletedAsync` puts on the message row. The report runs *before* each terminal report and swallows
 its own faults, so a throw can neither turn a finished turn into a failed one nor replace a real failure

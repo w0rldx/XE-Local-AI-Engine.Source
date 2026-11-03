@@ -7,7 +7,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -250,11 +251,15 @@ public sealed class NodeChatContextEstimateEndpointTests
     {
         public Task<LocalModelDetailsResolution> ResolveAsync(string modelName, CancellationToken cancellationToken = default) =>
             Task.FromResult<LocalModelDetailsResolution>(string.Equals(modelName, KnownModel, StringComparison.Ordinal)
-                ? new LocalModelDetailsResolution.Ollama(new OllamaModelDetails
+                ? new LocalModelDetailsResolution.Gguf(new LocalModelDescriptor
                 {
-                    MaxContextTokens = KnownWindow,
-                    Capabilities = ["completion", "tools"]
-                })
+                    ModelName = KnownModel,
+                    ProviderName = LlamaServerProviderConstants.ProviderName,
+                    IsAvailable = true,
+                    SizeBytes = null,
+                    ModifiedAt = null,
+                    MaxContextTokens = null
+                }, KnownWindow)
                 : new LocalModelDetailsResolution.NoLocalDetails());
     }
 }

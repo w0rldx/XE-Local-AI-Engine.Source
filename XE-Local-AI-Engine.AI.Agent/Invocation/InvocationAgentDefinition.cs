@@ -27,12 +27,12 @@ public sealed class InvocationAgentDefinition
     public string? ReasoningEffort { get; init; }
 
     /// <summary>
-    ///     When <c>true</c> the factory attaches the Ollama-specific <c>think</c> chat option for this turn; when
+    ///     When <c>true</c> the factory attaches the <c>think</c> chat option for this turn; when
     ///     <c>false</c> the option is omitted entirely. Defaults to <c>true</c>.
     /// </summary>
     /// <remarks>
     ///     The loopback path sets this from the active model's advertised <c>thinking</c> capability, so an incapable
-    ///     model never receives the field (Ollama returns HTTP 400 otherwise). The default keeps reasoning on for cloud
+    ///     model never receives the field. The default keeps reasoning on for cloud
     ///     providers, which ignore the unknown <c>think</c> property.
     /// </remarks>
     public bool SupportsThinking { get; init; } = true;
@@ -40,7 +40,7 @@ public sealed class InvocationAgentDefinition
     /// <summary>Optional developer-gated per-send sampling overrides.</summary>
     /// <remarks>
     ///     Null (the default) keeps the no-override path byte-identical: the factory sets no extra chat options. When
-    ///     present, only the non-null fields are applied, as native chat options or Ollama additional properties.
+    ///     present, only the non-null fields are applied, as native chat options or additional properties.
     /// </remarks>
     public InvocationSamplingOptions? Sampling { get; init; }
 

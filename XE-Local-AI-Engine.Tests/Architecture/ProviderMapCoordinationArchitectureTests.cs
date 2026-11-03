@@ -23,8 +23,7 @@ public sealed class ProviderMapCoordinationArchitectureTests
                      "AddScoped<IInstalledModelSnapshotCoordinator>",
                      "GetRequiredService<IInstalledGgufSnapshotStore>()",
                      "AddScoped<ICoordinatedModelProviderMapStore>",
-                     "AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>()",
-                     "AddScoped<IOllamaProviderMapBackfillCoordinator, OllamaProviderMapBackfillCoordinator>()"
+                     "AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>()"
                  })
         {
             AssertEx.Contains(source, registration);

@@ -18,7 +18,6 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -574,11 +573,7 @@ public sealed class ChatContextEstimateServiceTests
             details.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.NoLocalDetails());
             details.ResolveAsync(Arg.Is<string>(static name => string.Equals(name, LocalModel, StringComparison.Ordinal) || string.Equals(name, NoToolsModel, StringComparison.Ordinal)),
                        Arg.Any<CancellationToken>())
-                   .Returns(new LocalModelDetailsResolution.Ollama(new OllamaModelDetails
-                   {
-                       MaxContextTokens = LocalWindow,
-                       Capabilities = ["completion", "tools"]
-                   }));
+                   .Returns(new LocalModelDetailsResolution.Gguf(CreateGgufDescriptor(LocalModel), LocalWindow));
 
             details.ResolveAsync(DeclaredCloudModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.Cloud(DeclaredCloudWindow));
             details.ResolveAsync(DeclaredExternalModel, Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.External(new ExternalProviderModelRegistration

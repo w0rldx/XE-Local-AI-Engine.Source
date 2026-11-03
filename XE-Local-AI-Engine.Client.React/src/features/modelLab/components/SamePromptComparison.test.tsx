@@ -71,7 +71,6 @@ function stubModels(): void {
 	server.use(
 		http.get(localApiPath("models"), () =>
 			HttpResponse.json({
-				isAvailable: true,
 				items: [
 					["model-a", "llamacpp"],
 					["model-b", "llamacpp"],
@@ -268,7 +267,7 @@ describe("SamePromptComparison", () => {
 	});
 
 	it("says when no eligible model is installed", async () => {
-		server.use(http.get(localApiPath("models"), () => HttpResponse.json({ isAvailable: true, items: [] })));
+		server.use(http.get(localApiPath("models"), () => HttpResponse.json({ items: [] })));
 		renderWithProviders(<SamePromptComparison />);
 
 		expect((await screen.findByTestId("model-lab-no-models")).textContent).toContain("No installed llama.cpp model");

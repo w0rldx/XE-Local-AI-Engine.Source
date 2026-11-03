@@ -5,14 +5,11 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -20,10 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="CapacityService" /> tests: the single admission gate. Cloud short-circuits without a probe; a local
 ///     model already running queues; a fitting local model with process headroom is admitted (and reserves its
 ///     footprint); the process cap and byte budget each reject independently; an unknown footprint rejects; CPU mode
-///     does not double-count resident models; concurrent different-model spawns cannot both pass (TOCTOU); and a
-///     non-fitting Ollama model rejects with the eviction warning flagged; GPU mode fits against measured FREE VRAM
-///     (not total) and falls back to total when free is unmeasurable; the decision reads a fresh (forceRefresh) profile.
-///     Every probe is mocked — no Ollama/network.
+///     does not double-count resident models; concurrent different-model spawns cannot both pass (TOCTOU); GPU mode
+///     fits against measured FREE VRAM (not total) and falls back to total when free is unmeasurable; the decision reads
+///     a fresh (forceRefresh) profile. Every probe is mocked — no model runtime or network.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class CapacityServiceTests
@@ -46,7 +42,6 @@ public sealed class CapacityServiceTests
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
-        AssertEx.False(decision.OllamaEvictionWarning);
         AssertEx.Null(decision.Reservation);
         // No hardware/audit/supervisor/footprint probe may run on the cloud path.
         await harness.RuntimeAudit.DidNotReceive().GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
@@ -100,7 +95,6 @@ public sealed class CapacityServiceTests
         var decision = await service.DecideAsync("ext:unsloth-box/unsloth/Qwen3.8-27B-GGUF", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
-        AssertEx.False(decision.OllamaEvictionWarning);
         AssertEx.Null(decision.Reservation);
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
         await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
@@ -467,24 +461,6 @@ public sealed class CapacityServiceTests
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
-    }
-
-    [Test]
-    public async Task Capacity_OllamaFitDoesNotPublishLlamaLaunchAdmission()
-    {
-        var harness = new Harness
-        {
-            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
-            Profile = GpuProfile(64 * Gb),
-            Footprint = GpuFootprint(1 * Gb)
-        };
-        var service = harness.Build();
-
-        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
-
-        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
-        AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
-        decision.Reservation!.Dispose();
     }
 
     [Test]
@@ -1119,27 +1095,6 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
-    public async Task Capacity_NonNvidiaGpu_WhenOllamaResidencyProbeFails_Rejects()
-    {
-        var harness = new Harness
-        {
-            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
-            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null) with
-            {
-                GpuVendor = GpuVendor.Intel
-            },
-            Footprint = GpuFootprint(8 * Gb),
-            OllamaProbeThrows = true
-        };
-        var service = harness.Build();
-
-        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
-
-        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
-        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
-    }
-
-    [Test]
     public async Task Capacity_LocalDecision_ReadsFreshProfile_NotBootCache()
     {
         // A capacity decision must re-probe live VRAM/RAM (forceRefresh:true) — a boot-time cached free-VRAM figure
@@ -1179,34 +1134,6 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(1, allowed);
         AssertEx.Equal(1, rejected);
         AssertEx.Equal(6 * Gb, harness.Ledger.Reserved.GpuBytes);
-    }
-
-    [Test]
-    public async Task Capacity_WhenOllamaDifferentModelNoFit_RejectsAndFlagsWarning()
-    {
-        var harness = new Harness
-        {
-            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
-            Profile = GpuProfile(4 * Gb),
-            Footprint = GpuFootprint(40 * Gb),
-            RunningOllama =
-            [
-                new RunningModelSnapshot
-                {
-                    Name = "other-model",
-                    ModelName = "other-model",
-                    ExpiresAt = null,
-                    SizeBytes = 3 * Gb,
-                    SizeVramBytes = 3 * Gb
-                }
-            ]
-        };
-        var service = harness.Build();
-
-        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
-
-        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
-        AssertEx.True(decision.OllamaEvictionWarning, "a different running Ollama model that won't fit must flag the eviction warning.");
     }
 
     [Test]
@@ -1413,26 +1340,6 @@ public sealed class CapacityServiceTests
         AssertEx.False(harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding).HasRequestedKey);
     }
 
-    [Test]
-    public async Task Capacity_OllamaResolvingEmbedder_BooksBytesButStaysUnbound()
-    {
-        var harness = new Harness
-        {
-            ProviderName = OllamaLocalModelProvider.OllamaProviderName,
-            Profile = GpuProfile(64 * Gb),
-            Footprint = GpuFootprint(1 * Gb)
-        };
-        var service = harness.Build();
-
-        var decision = await service.DecideAsync(EmbedderRequest(), CancellationToken.None);
-
-        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
-        AssertEx.Equal(1 * Gb, harness.Ledger.Reserved.GpuBytes);
-        AssertEx.False(harness.LaunchAdmissions.Snapshot(Embedder, ModelRole.Embedding).HasRequestedKey,
-            "An Ollama-resolved name must never publish a llama.cpp launch admission.");
-        decision.Reservation!.Dispose();
-    }
-
     private static CapacityRequest EmbedderRequest() =>
         new()
         {
@@ -1538,9 +1445,7 @@ public sealed class CapacityServiceTests
         public HardwareProfile Profile { get; init; } = null!;
         public ModelFootprint Footprint { get; init; } = ModelFootprint.Unknown;
         public IReadOnlyList<LlamaServerProcessHealth> RunningLlama { get; init; } = [];
-        public IReadOnlyList<RunningModelSnapshot> RunningOllama { get; init; } = [];
         public bool SupervisorProbeThrows { get; init; }
-        public bool OllamaProbeThrows { get; init; }
         public LlamaServerExternalEndpointOptions ExternalEndpoints { get; init; } = new();
         public LlamaServerSupervisorOptions SupervisorOptions { get; init; } = new();
 
@@ -1603,17 +1508,10 @@ public sealed class CapacityServiceTests
                                  return true;
                              });
 
-            var ollama = Substitute.For<IOllamaModelService>();
-            ollama.ListRunningModelsAsync(Arg.Any<CancellationToken>())
-                  .Returns(OllamaProbeThrows
-                      ? Task.FromException<IReadOnlyList<RunningModelSnapshot>>(new InvalidOperationException("Synthetic Ollama probe failure."))
-                      : Task.FromResult(RunningOllama));
-
             return new CapacityService(cloud,
                 resolver,
                 RuntimeAudit,
                 Supervisor,
-                ollama,
                 FootprintProvider,
                 Ledger,
                 LaunchAdmissions,

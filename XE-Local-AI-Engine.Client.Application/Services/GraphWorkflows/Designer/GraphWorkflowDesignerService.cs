@@ -22,7 +22,6 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IGraphWorkflowDesignerService" />, on drafting's pattern: one structured-output call per attempt,
@@ -93,7 +92,6 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
     private readonly ILogger<GraphWorkflowDesignerService> _logger;
     private readonly IModelClassificationStore _modelClassificationStore;
     private readonly INodeSettingsStore _nodeSettingsStore;
-    private readonly IOllamaModelService _ollamaModelService;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
@@ -104,7 +102,6 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
         ILocalModelProviderResolver providerResolver,
         IGgufModelStore ggufModelStore,
         IModelClassificationStore modelClassificationStore,
-        IOllamaModelService ollamaModelService,
         IModelCapabilityResolver capabilities,
         IModelTrustResolver trust,
         INodeRuntimeSettings runtimeSettings,
@@ -121,7 +118,6 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
         _modelClassificationStore = modelClassificationStore ?? throw new ArgumentNullException(nameof(modelClassificationStore));
-        _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
         _capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _trust = trust ?? throw new ArgumentNullException(nameof(trust));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
@@ -155,7 +151,6 @@ internal sealed class GraphWorkflowDesignerService : IGraphWorkflowDesignerServi
         var localProviderName = await DraftModelEligibility.ResolveEligibleProviderAsync(request.ModelName,
             _modelClassificationStore,
             _ggufModelStore,
-            _ollamaModelService,
             cancellationToken);
         if (localProviderName is null && await RefuseRemoteModelAsync(request.ModelName, cancellationToken) is { } refusal)
         {

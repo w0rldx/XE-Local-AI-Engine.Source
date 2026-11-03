@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     or assert a node-wide empty state, and neither survives a concurrent sibling.
 /// </summary>
 /// <remarks>
-///     That state: the <c>WorkerEventDispatcher.CurrentInvocation</c> slot, <c>FakeOllamaState</c>, the
+///     That state: the <c>WorkerEventDispatcher.CurrentInvocation</c> slot, <c>FakeOpenAiGatewayState</c>, the
 ///     canonical admin's tutorial row. It is not about auth: each sign-in is its own refresh session and the
 ///     remaining auth couplings (a logout revoking every session of its user, Identity lockout) are per-user,
 ///     so a user per test unlocks concurrency, as <see cref="PooledBrowserParallelLimit" /> and

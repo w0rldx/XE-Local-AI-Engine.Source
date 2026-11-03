@@ -24,7 +24,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     /// <remarks>
     ///     Provider resolution runs several times per chat turn (capability gating, model resolution, per-orchestration
     ///     participant), and each lookup otherwise opens a fresh DI scope and a coordinated map read. The map is
-    ///     effectively write-once per model — a GGUF is always <c>llamacpp</c>, an Ollama model always <c>ollama</c> —
+    ///     effectively write-once per model — a GGUF is always <c>llamacpp</c> —
     ///     so a few seconds of caching collapses that to one read per turn.
     /// </remarks>
     private static readonly TimeSpan DefaultMapCacheTtl = TimeSpan.FromSeconds(5);
@@ -41,8 +41,8 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     private readonly IServiceScopeFactory _scopeFactory;
 
     /// <summary>
-    ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server plus the optional
-    ///     Ollama provider), the scope factory that reads the per-model map, the default provider and the
+    ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server plus the external
+    ///     OpenAI-compatible provider), the scope factory that reads the per-model map, the default provider and the
     ///     loaded-process cap.
     /// </summary>
     /// <remarks>

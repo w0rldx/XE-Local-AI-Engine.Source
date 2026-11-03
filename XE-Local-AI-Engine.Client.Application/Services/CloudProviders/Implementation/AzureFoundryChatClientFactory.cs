@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 /// <remarks>
 ///     The rest of the node runtime consumes the returned <see cref="IChatClient" /> abstraction, which lets local
-///     Ollama and cloud-backed deployments share the same agent pipeline. The returned client is wrapped in
+///     and cloud-backed deployments share the same agent pipeline. The returned client is wrapped in
 ///     <see cref="AzureFoundryErrorTranslatingChatClient" /> so an Azure <c>RequestFailedException</c> (content filter,
 ///     auth) surfaces as a typed <see cref="AzureFoundryProviderException" /> with a sanitized message.
 /// </remarks>

@@ -1,26 +1,29 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="ModelFitQueryService" /> tests: the cache reader returns the assembled view when a latest successful
-///     snapshot exists and null on a cache-miss. Its two-store constructor is the structural proof that it cannot
-///     reach the refresh service or advisor.
+///     snapshot exists and null on a cache-miss. Its constructor takes neither the refresh service nor the advisor,
+///     the structural proof that a read cannot reach them.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ModelFitQueryServiceTests
 {
     private const string ApprovedImageId = "llmfit-recommender-0-9-30";
-    private const string ProviderName = "ollama";
+    private const string ProviderName = "llama.cpp";
+    private const string CoderModel = "org/Qwen2.5-Coder-7B-GGUF:Q5_K_M";
+    private const string OtherModel = "org/DeepSeek-Coder-1.3B-GGUF:Q4_K_M";
 
     [Test]
     public async Task GetLatestRecommendationsAsync_WhenNoSuccessfulSnapshot_ReturnsNull()
@@ -41,8 +44,8 @@ public sealed class ModelFitQueryServiceTests
             new ModelFitRecommendationInput
             {
                 Rank = 1,
-                ModelName = "qwen2.5-coder:7b",
-                ProviderModelName = "qwen2.5-coder:7b",
+                ModelName = CoderModel,
+                ProviderModelName = CoderModel,
                 Score = 82.5,
                 FitLevel = "Good",
                 RunMode = "GPU",
@@ -52,14 +55,14 @@ public sealed class ModelFitQueryServiceTests
                 RequiredVramMb = null,
                 ContextTokens = 16384,
                 IsInstalled = true,
-                PullModelName = "qwen2.5-coder:7b",
+                PullModelName = CoderModel,
                 DiagnosticsJson = null
             },
             new ModelFitRecommendationInput
             {
                 Rank = 2,
-                ModelName = "deepseek-coder:1.3b",
-                ProviderModelName = "deepseek-coder:1.3b",
+                ModelName = OtherModel,
+                ProviderModelName = OtherModel,
                 Score = 61.0,
                 FitLevel = "Marginal",
                 RunMode = "CPU",
@@ -69,7 +72,7 @@ public sealed class ModelFitQueryServiceTests
                 RequiredVramMb = null,
                 ContextTokens = 16384,
                 IsInstalled = false,
-                PullModelName = "deepseek-coder:1.3b",
+                PullModelName = OtherModel,
                 DiagnosticsJson = null
             });
 
@@ -83,7 +86,7 @@ public sealed class ModelFitQueryServiceTests
         AssertEx.Equal(ProviderName, view.ProviderName);
         AssertEx.Equal(expected: 2, view.Recommendations.Count);
         AssertEx.Equal(expected: 1, view.Recommendations[0].Record.Rank);
-        AssertEx.Equal("qwen2.5-coder:7b", view.Recommendations[0].Record.ModelName);
+        AssertEx.Equal(CoderModel, view.Recommendations[0].Record.ModelName);
         AssertEx.Equal(expected: 2, view.Recommendations[1].Record.Rank);
     }
 
@@ -96,7 +99,7 @@ public sealed class ModelFitQueryServiceTests
             new ModelFitRecommendationInput
             {
                 Rank = 1,
-                ModelName = "qwen2.5-coder:7b",
+                ModelName = CoderModel,
                 ProviderModelName = null,
                 Score = 82.5,
                 FitLevel = null,
@@ -120,16 +123,16 @@ public sealed class ModelFitQueryServiceTests
     [Test]
     public async Task GetLatestRecommendationsAsync_WhenPullModelOnNode_MarksInstalledFromNodeNotLlmfit()
     {
-        // The node has the tag though the snapshot stored installed:false (offline recommend); a different row stored
+        // The node has the GGUF though the snapshot stored installed:false (offline recommend); a different row stored
         // installed:true is NOT on the node. Install state must follow the node, not llmfit's offline flag.
-        var harness = Harness.Create(["qwen2.5-coder:7b"]);
+        var harness = Harness.Create([CoderModel]);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput
             {
                 Rank = 1,
-                ModelName = "qwen2.5-coder:7b",
-                ProviderModelName = "qwen2.5-coder:7b",
+                ModelName = CoderModel,
+                ProviderModelName = CoderModel,
                 Score = 82.5,
                 FitLevel = null,
                 RunMode = null,
@@ -139,13 +142,13 @@ public sealed class ModelFitQueryServiceTests
                 RequiredVramMb = null,
                 ContextTokens = 16384,
                 IsInstalled = false,
-                PullModelName = "qwen2.5-coder:7b",
+                PullModelName = CoderModel,
                 DiagnosticsJson = null
             },
             new ModelFitRecommendationInput
             {
                 Rank = 2,
-                ModelName = "deepseek-coder:1.3b",
+                ModelName = OtherModel,
                 ProviderModelName = null,
                 Score = 61.0,
                 FitLevel = null,
@@ -156,22 +159,22 @@ public sealed class ModelFitQueryServiceTests
                 RequiredVramMb = null,
                 ContextTokens = 16384,
                 IsInstalled = true,
-                PullModelName = "deepseek-coder:1.3b",
+                PullModelName = OtherModel,
                 DiagnosticsJson = null
             });
 
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
         AssertEx.NotNull(view);
-        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "a row whose tag is installed on the node is Installed despite llmfit's stored false.");
-        AssertEx.False(view.Recommendations[1].Record.IsInstalled, "a row whose tag is absent on the node is not Installed despite llmfit's stored true.");
+        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "a row whose GGUF is installed on the node is Installed despite llmfit's stored false.");
+        AssertEx.False(view.Recommendations[1].Record.IsInstalled, "a row whose GGUF is absent on the node is not Installed despite llmfit's stored true.");
     }
 
     [Test]
     public async Task GetLatestRecommendationsAsync_WhenPullModelNameNull_IsNotInstalled()
     {
-        // An HF-only model with no Ollama tag cannot be matched to the install list → not installed (unknown).
-        var harness = Harness.Create(["qwen2.5-coder:7b"]);
+        // A row with no pull name cannot be matched to the install list → not installed (unknown).
+        var harness = Harness.Create([CoderModel]);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput
@@ -199,17 +202,17 @@ public sealed class ModelFitQueryServiceTests
     }
 
     [Test]
-    public async Task GetLatestRecommendationsAsync_WhenTagOmitsLatest_MatchesInstalledLatest()
+    public async Task GetLatestRecommendationsAsync_WhenNameDiffersOnlyByCase_MatchesTheInstalledGguf()
     {
-        // The recommendation carries the bare name; the node lists the `:latest` form — they must match.
-        var harness = Harness.Create(["Mistral:latest"]);
+        // The advisor and the GGUF store format the same {repo}:{quant} name, but a repo's casing is not guaranteed.
+        var harness = Harness.Create(["ORG/Mistral-GGUF:q4_k_m"]);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("general");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput
             {
                 Rank = 1,
-                ModelName = "mistral",
-                ProviderModelName = "mistral",
+                ModelName = "org/Mistral-GGUF:Q4_K_M",
+                ProviderModelName = "org/Mistral-GGUF:Q4_K_M",
                 Score = 70.0,
                 FitLevel = null,
                 RunMode = null,
@@ -219,28 +222,28 @@ public sealed class ModelFitQueryServiceTests
                 RequiredVramMb = null,
                 ContextTokens = null,
                 IsInstalled = false,
-                PullModelName = "mistral",
+                PullModelName = "org/Mistral-GGUF:Q4_K_M",
                 DiagnosticsJson = null
             });
 
         var view = await harness.Service.GetLatestRecommendationsAsync("general", ProviderName, CancellationToken.None);
 
         AssertEx.NotNull(view);
-        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "a bare name matches the node's :latest tag, case-insensitively.");
+        AssertEx.True(view!.Recommendations[0].Record.IsInstalled, "the install-state match is case-insensitive.");
     }
 
     [Test]
     public async Task GetLatestRecommendationsAsync_WhenInstallListThrows_FallsBackToStoredFlag()
     {
-        // Ollama unreachable: the install-state enrichment must not fail the cached read — keep the stored flag.
+        // Listing failed: the install-state enrichment must not fail the cached read — keep the stored flag.
         var harness = Harness.Create(throwOnList: true);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput
             {
                 Rank = 1,
-                ModelName = "qwen2.5-coder:7b",
-                ProviderModelName = "qwen2.5-coder:7b",
+                ModelName = CoderModel,
+                ProviderModelName = CoderModel,
                 Score = 82.5,
                 FitLevel = null,
                 RunMode = null,
@@ -250,7 +253,7 @@ public sealed class ModelFitQueryServiceTests
                 RequiredVramMb = null,
                 ContextTokens = 16384,
                 IsInstalled = true,
-                PullModelName = "qwen2.5-coder:7b",
+                PullModelName = CoderModel,
                 DiagnosticsJson = null
             });
 
@@ -334,11 +337,22 @@ public sealed class ModelFitQueryServiceTests
         {
             var snapshotStore = new InMemoryModelFitSnapshotStore();
             var recommendationStore = new SeedableRecommendationStore();
-            var ollamaModelService = new FakeOllamaModelService(installedModelNames, throwOnList);
+            var provider = Substitute.For<ILocalModelProvider>();
+            provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+            if (throwOnList)
+            {
+                provider.ListModelsAsync(Arg.Any<CancellationToken>())
+                        .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new InvalidOperationException("GGUF store unreadable (test)."));
+            }
+            else
+            {
+                provider.ListModelsAsync(Arg.Any<CancellationToken>())
+                        .Returns([.. (installedModelNames ?? []).Select(InstalledGguf)]);
+            }
 
             var service = new ModelFitQueryService(snapshotStore,
                 recommendationStore,
-                ollamaModelService,
+                SingleProviderResolverFactory.Create(provider),
                 NullLogger<ModelFitQueryService>.Instance);
 
             return new Harness
@@ -346,6 +360,19 @@ public sealed class ModelFitQueryServiceTests
                 Service = service,
                 SnapshotStore = snapshotStore,
                 RecommendationStore = recommendationStore
+            };
+        }
+
+        private static LocalModelDescriptor InstalledGguf(string modelName)
+        {
+            return new LocalModelDescriptor
+            {
+                ModelName = modelName,
+                ProviderName = LlamaServerProviderConstants.ProviderName,
+                IsAvailable = true,
+                SizeBytes = 1024,
+                ModifiedAt = null,
+                MaxContextTokens = null
             };
         }
 
@@ -391,71 +418,6 @@ public sealed class ModelFitQueryServiceTests
         public void Seed(Guid snapshotId, params ModelFitRecommendationInput[] rows)
         {
             _inner.ReplaceForSnapshotAsync(snapshotId, rows).GetAwaiter().GetResult();
-        }
-    }
-
-    /// <summary>
-    ///     Minimal <see cref="IOllamaModelService" /> fake for the install-state join: returns a configured set of
-    ///     installed model tags (or throws, to exercise the best-effort fallback). Only <c>ListLocalModelsAsync</c> is
-    ///     used by the query service; the rest are unsupported.
-    /// </summary>
-    private sealed class FakeOllamaModelService : IOllamaModelService
-    {
-        private readonly IReadOnlyList<string> _installed;
-        private readonly bool _throwOnList;
-
-        public FakeOllamaModelService(IEnumerable<string>? installedModelNames, bool throwOnList)
-        {
-            _throwOnList = throwOnList;
-            _installed = installedModelNames?.ToList() ?? [];
-        }
-
-        public Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
-        {
-            if (_throwOnList)
-            {
-                throw new InvalidOperationException("Ollama unreachable (test).");
-            }
-
-            return Task.FromResult(_installed.Select(static name => new OllamaModelSummary
-            {
-                Name = name
-            }));
-        }
-
-        public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public IAsyncEnumerable<PullProgress> PullModelAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task DeleteModelAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task UnloadModelAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<bool> IsAvailableAsync(CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<bool> IsLoopbackModelInstalledAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
         }
     }
 }

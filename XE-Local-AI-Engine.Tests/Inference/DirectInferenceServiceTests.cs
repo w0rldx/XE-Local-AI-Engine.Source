@@ -24,7 +24,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -316,10 +315,10 @@ public sealed class DirectInferenceServiceTests
     }
 
     [Test]
-    public async Task StreamAsync_AnInstalledModelMappedToOllamaWithNoOutputLimit_SendsNoCap()
+    public async Task StreamAsync_AnInstalledModelMappedToAnotherProviderWithNoOutputLimit_SendsNoCap()
     {
         var harness = new Harness(Updates(Text("x"), Finish()));
-        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns(OllamaLocalModelProvider.OllamaProviderName);
+        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns("another-runtime");
 
         _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
 
@@ -461,10 +460,10 @@ public sealed class DirectInferenceServiceTests
     }
 
     [Test]
-    public async Task StreamAsync_TopLogprobsForAnInstalledModelMappedToOllama_IsRefused()
+    public async Task StreamAsync_TopLogprobsForAnInstalledModelMappedToAnotherProvider_IsRefused()
     {
         var harness = new Harness(Updates(Text("never")));
-        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns(OllamaLocalModelProvider.OllamaProviderName);
+        harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns("another-runtime");
 
         var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
 

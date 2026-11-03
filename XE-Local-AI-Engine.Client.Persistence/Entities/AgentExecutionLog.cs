@@ -47,7 +47,7 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>
     ///     Fine-grained runtime provider that served the run (a non-sensitive category label): <c>local</c>
-    ///     (llama.cpp), <c>ollama</c>, <c>codex</c>, <c>azure</c>, or <c>unknown</c>. Plaintext (structural).
+    ///     (llama.cpp), <c>codex</c>, <c>azure</c>, or <c>unknown</c>; older rows may carry <c>ollama</c>. Plaintext (structural).
     /// </summary>
     /// <remarks>
     ///     Never encrypted — a category label like <see cref="ModelName" />, not content. <c>unknown</c> is the
@@ -147,7 +147,7 @@ internal sealed record class AgentExecutionLog
     ///     <c>llama-server</c> and loading the model — rather than generating. Plaintext (structural) — a duration.
     /// </summary>
     /// <remarks>
-    ///     <c>null</c> when no local warm happened (a remote provider, Ollama, an already-resident model) and on every
+    ///     <c>null</c> when no local warm happened (a remote provider, an already-resident model) and on every
     ///     pre-migration row. The whole-turn latency starts before the warm, so <c>latency_ms - model_readiness_ms</c>
     ///     is the warm-equivalent turn time and the only way a cold arm compares with a warm one.
     /// </remarks>

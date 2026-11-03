@@ -20,14 +20,13 @@ function setViewportWidth(width: number): void {
 }
 
 function localDefaultOption(): ModelOption {
-	return { value: localDefaultModelValue, label: "Local default", displayName: "Local runtime default", isAvailable: true };
+	return { value: localDefaultModelValue, label: "Local default", displayName: "Local runtime default" };
 }
 
 function ggufOption(): ModelOption {
 	return {
 		value: "unsloth/Qwen3-8B-Instruct-GGUF:Q4_K_M",
 		label: "unsloth/Qwen3-8B-Instruct-GGUF:Q4_K_M",
-		isAvailable: true,
 		provider: "llamacpp",
 		statusLabel: "8B · Q4_K_M",
 	};
@@ -83,7 +82,6 @@ describe("ModelSelectorCard trigger", () => {
 		const external: ModelOption = {
 			value: "ext:workstation/qwen3-coder-30b",
 			label: "ext:workstation/qwen3-coder-30b",
-			isAvailable: true,
 			provider: "external",
 			externalConnectionId: "workstation",
 			externalConnectionName: "Workstation",

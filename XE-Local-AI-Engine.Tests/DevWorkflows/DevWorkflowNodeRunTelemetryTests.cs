@@ -473,7 +473,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     /// <summary>
-    ///     A model this node never loaded itself — a remote provider, Ollama, or one already resident before the node
+    ///     A model this node never loaded itself — a remote provider, or one already resident before the node
     ///     started — has no reading, and a null says so rather than a zero claiming an empty device.
     /// </summary>
     [Test]

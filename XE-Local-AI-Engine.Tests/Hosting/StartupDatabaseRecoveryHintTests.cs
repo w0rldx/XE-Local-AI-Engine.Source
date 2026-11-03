@@ -74,7 +74,6 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
                 {
                     ["ConnectionStrings:node-sqlite"] = $"Data Source={databasePath}",
                     ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
-                    ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                     ["NodeData:Directory"] = dataDirectory,
                     ["EntityFramework:ServiceProviderCaching"] = "false"
                 },

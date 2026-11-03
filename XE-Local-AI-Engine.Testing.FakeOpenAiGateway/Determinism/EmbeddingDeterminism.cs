@@ -1,0 +1,26 @@
+namespace XE_Local_AI_Engine.Testing.FakeOpenAiGateway.Determinism;
+
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
+
+/// <summary>SHA-256-seeded vectors, so the same text always embeds to the same vector across runs and hosts.</summary>
+public static class EmbeddingDeterminism
+{
+    public static IReadOnlyList<double> EmbedDeterministic(string input, int dimensions)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dimensions);
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        var messageHash = BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan()[..8]);
+        var baseValue = messageHash % 1_000_003UL * 0.001;
+        var vector = new double[dimensions];
+
+        for (var i = 0; i < vector.Length; i++)
+        {
+            vector[i] = Math.Sin(baseValue + (i * 0.01));
+        }
+
+        return vector;
+    }
+}

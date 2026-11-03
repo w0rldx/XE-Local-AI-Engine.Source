@@ -122,7 +122,7 @@ public sealed class LlamaCppRuntimeStatusResponse
     ///     The number of running <c>llama-server</c> processes (chat + embedding) reported by the supervisor.
     /// </summary>
     /// <remarks>
-    ///     It counts llama.cpp binaries only — Ollama is an opt-in external provider and is never counted. A non-zero
+    ///     It counts llama.cpp binaries only. A non-zero
     ///     value gates the runtime update: the binary must not be replaced while a process holds it.
     /// </remarks>
     public required int RunningProcessCount { get; init; }

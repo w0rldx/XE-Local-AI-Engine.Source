@@ -6,10 +6,10 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Models;
 
 /// <summary>
-///     Gracefully evicts a model from the local runtimes' memory, wherever it is resident.
+///     Gracefully evicts a model from the local runtime's memory, wherever it is resident.
 /// </summary>
 /// <remarks>
-///     The two-runtime fan-out — every llama-server role, then the gated Ollama eviction — belongs to
+///     The fan-out across every llama-server role belongs to
 ///     <see cref="IModelUnloadCoordinator" />; this endpoint binds, delegates and maps. Idempotent: unloading a model
 ///     that is not loaded still reports success. <c>Unloaded</c> is false only when a llama-server process was still
 ///     busy when the bounded drain window elapsed and was therefore left running. The model name is carried in the

@@ -35,7 +35,6 @@ setupMswServer(
 			},
 		],
 	}),
-	jsonRoute("get", "models/running", { isAvailable: true, ollamaConfigured: false, items: [] }),
 	jsonRoute("get", "model-fit/running", { items: [] }),
 );
 

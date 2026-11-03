@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Resolves a model's advertised <c>thinking</c> and <c>tools</c> capabilities, routed by its provider: a declared
-///     cloud matrix, a GGUF's offline chat-template detection, or an Ollama <c>/api/show</c> classification.
+///     cloud matrix or a GGUF's offline chat-template detection.
 /// </summary>
 /// <remarks>
 ///     The per-turn chat path and the per-participant orchestration path resolve through ONE implementation rather
 ///     than duplicating the provider-routing decision. A null or blank model, or any detection miss, resolves to
-///     NOT-capable for both: the safe default that omits the think field, avoiding the Ollama 400, and withholds the
+///     NOT-capable for both: the safe default that omits the think field and withholds the
 ///     tool offer.
 /// </remarks>
 public interface IModelCapabilityResolver

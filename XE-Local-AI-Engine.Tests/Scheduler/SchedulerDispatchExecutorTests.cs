@@ -140,7 +140,7 @@ public sealed class SchedulerDispatchExecutorTests
     {
         // A baked model-fit parameter set; the manual refresh should swap ONLY its use-case.
         const string storedJson =
-            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
 
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
@@ -170,14 +170,14 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal("llmfit-recommender-0-9-30", root.GetProperty("approvedImageId").GetString(), "approvedImageId must be untouched.");
         AssertEx.Equal("Recommend", root.GetProperty("operation").GetString(), "operation must be untouched.");
         AssertEx.Equal(expected: 5, root.GetProperty("limit").GetInt32(), "limit must be untouched.");
-        AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
+        AssertEx.Equal("llama.cpp", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
     }
 
     [Test]
     public async Task Dispatch_WhenLimitOverridePresent_MergesLimitAsNumber()
     {
         const string storedJson =
-            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
 
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
@@ -201,14 +201,14 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal(JsonValueKind.Number, root.GetProperty("limit").ValueKind, "limit must be written back as a JSON number, not a string.");
         AssertEx.Equal(expected: 20, root.GetProperty("limit").GetInt32(), "Only the limit must be overridden.");
         AssertEx.Equal("coding", root.GetProperty("useCase").GetString(), "useCase must be untouched when only limit is overridden.");
-        AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
+        AssertEx.Equal("llama.cpp", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
     }
 
     [Test]
     public async Task Dispatch_WhenUseCaseAndLimitOverride_MergesBothWhitelistedKeysOnly()
     {
         const string storedJson =
-            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
 
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
@@ -233,14 +233,14 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal("general", root.GetProperty("useCase").GetString(), "useCase must be overridden.");
         AssertEx.Equal(expected: 15, root.GetProperty("limit").GetInt32(), "limit must be overridden.");
         AssertEx.Equal("llmfit-recommender-0-9-30", root.GetProperty("approvedImageId").GetString(), "approvedImageId must be untouched.");
-        AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
+        AssertEx.Equal("llama.cpp", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
     }
 
     [Test]
     public async Task Dispatch_WhenOverrideCarriesNonWhitelistedKey_IgnoresItAndPassesStoredThrough()
     {
         const string storedJson =
-            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
 
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
@@ -268,7 +268,7 @@ public sealed class SchedulerDispatchExecutorTests
     {
         // The cron / no-override path must hand the handler the stored parameters verbatim (baked use-case unchanged).
         const string storedJson =
-            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"llama.cpp"}""";
 
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();

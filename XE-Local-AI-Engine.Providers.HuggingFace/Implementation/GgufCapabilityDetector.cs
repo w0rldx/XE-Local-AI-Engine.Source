@@ -7,14 +7,14 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 /// </summary>
 /// <remarks>
 ///     The template is the most reliable offline signal — a tool-wired model renders the tool list, a thinking-channel model renders the
-///     think markers — so no Ollama <c>/api/show</c> probe is needed: a GGUF has no Ollama entry and desktop mode runs no daemon. The
+///     think markers — so no runtime probe is needed. The
 ///     heuristics are conservative: a false negative merely hides a capability (the model still chats), a false positive would offer
 ///     tools the model cannot honor. Token sets are matched case-insensitively against the template text and cover the mainstream
 ///     tool/reasoning families (Qwen2.5/Qwen3, Llama 3.1+, Mistral/Hermes, DeepSeek-R1, OpenAI harmony).
 /// </remarks>
 internal static class GgufCapabilityDetector
 {
-    // Ollama-style capability tokens reused across the system so a GGUF entry classifies identically to an Ollama one.
+    // Capability tokens reused across the system, so every GGUF entry classifies the same way.
     private const string CompletionCapability = "completion";
     private const string ToolsCapability = "tools";
     private const string ThinkingCapability = "thinking";
@@ -25,7 +25,7 @@ internal static class GgufCapabilityDetector
     /// </summary>
     /// <remarks>
     ///     Detecting it as its own capability is what stops a reasoning model being advertised as unable to reason, WITHOUT handing it a
-    ///     graded control whose levels would do nothing. Deliberately NOT the Ollama <c>thinking</c> token:
+    ///     graded control whose levels would do nothing. Deliberately NOT the <c>thinking</c> token:
     ///     <c>ModelKindDetector.SupportsThinking</c> matches that token by EXACT equality, so this one can never flip a native-reasoning
     ///     model into the graded branch (which would write <c>think</c> and, on effort <c>none</c>, an <c>enable_thinking=false</c> the
     ///     harmony template has no kwarg for). See <see cref="NativeReasoningTemplateMarkers" />.
@@ -89,7 +89,7 @@ internal static class GgufCapabilityDetector
     /// <summary>
     ///     Classifies the supplied chat template into
     ///     <c>(IsToolCapable, IsReasoningCapable, IsNativeReasoningCapable, ReasoningBudgetEnforceable)</c> plus the
-    ///     matching Ollama capability tokens; a null/blank template yields the safe chat-only default.
+    ///     matching capability tokens; a null/blank template yields the safe chat-only default.
     /// </summary>
     /// <remarks>
     ///     A null or blank template — a raw base model, or a header read that did not reach the template — means no tools and no

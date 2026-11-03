@@ -31,7 +31,6 @@ const localDefaultModelOptionBase: ModelOption = {
 	isNativeReasoningModel: false,
 	isToolCapable: false,
 	isMultimodal: false,
-	isAvailable: true,
 	statusLabel: "Runtime-selected model",
 };
 
@@ -102,7 +101,7 @@ export function useChatModelSelection({
 			...localDefaultOption,
 			...resolveLocalDefaultModelCapabilities(items),
 		};
-		return [localDefaultModelOption, ...toChatModelOptions(items, response.isAvailable ?? false)];
+		return [localDefaultModelOption, ...toChatModelOptions(items)];
 	}, [localModelsData, localDefaultOption]);
 	// Cloud (Codex + Azure) model options — empty array when signed out; non-empty only when Codex session active.
 	const codexModelOptions = useCodexModelOptions();

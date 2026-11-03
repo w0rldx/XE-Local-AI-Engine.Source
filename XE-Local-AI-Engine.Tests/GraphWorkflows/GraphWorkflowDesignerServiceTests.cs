@@ -29,7 +29,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -861,7 +860,6 @@ public sealed class GraphWorkflowDesignerServiceTests
                 resolver,
                 ggufModels,
                 classifications,
-                Substitute.For<IOllamaModelService>(),
                 capabilities,
                 trust,
                 runtimeSettings,

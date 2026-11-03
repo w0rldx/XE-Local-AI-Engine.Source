@@ -1,22 +1,22 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
+using System.Text.Json;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Browser-driven E2E for the Models page (<c>/models</c>) kind-change + delete round-trip.
-///     The existing smoke test only proves a FakeOllama model renders; this suite
-///     drives the management lifecycle against FakeOllama's show/delete endpoints:
+///     The existing smoke test only proves a listed model renders; this suite drives the management lifecycle:
 ///     <list type="bullet">
 ///         <item>
-///             Register a NEW, uniquely-named model directly in <c>FakeOllamaState.Models</c> → the
-///             installed-models table shows the new row after the list query runs. The product ships no
-///             Ollama model-pull surface to drive, so seeding the provider's model set reproduces the
-///             post-pull state the kind-change + delete paths under test need.
+///             Register a NEW, uniquely-named model directly in <c>FakeOpenAiGatewayState.Models</c>, which the
+///             fixture's installed-GGUF store reads → the installed-models table shows the new row after the list
+///             query runs. Seeding the list reproduces the post-download state the paths under test need.
 ///         </item>
 ///         <item>
-///             Open its details → change the ModelKind override (PUT <c>models/{name}/kind</c>) → the
-///             effective-kind badge reflects the override.
+///             Open its details → change the ModelKind override (PUT <c>models/{name}/kind</c>) → the endpoint
+///             answers the override as the effective kind and the row's kind badge shows it.
 ///         </item>
 ///         <item>
 ///             Delete it (DELETE <c>models/{name}</c>) → 200 with NO "Invalid model identifier" error.
@@ -27,10 +27,9 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         </item>
 ///     </list>
 ///     <para>
-///         FakeOllama serves the list and <c>ShowEndpoint</c> (<c>/api/show</c> capabilities for detection);
-///         no live Ollama. The node's DELETE goes to the GGUF store rather than to Ollama, so the seeded name
-///         is dropped from <c>FakeOllamaState.Models</c> in <c>[After(Test)]</c> — see the delete leg for why
-///         the row's removal is not observable here.
+///         The node's DELETE runs on the on-disk GGUF registry, so the seeded name is dropped from
+///         <c>FakeOpenAiGatewayState.Models</c> in <c>[After(Test)]</c> — see the delete leg for why the row's
+///         removal is not observable here.
 ///     </para>
 /// </summary>
 [Category("Page")]
@@ -43,11 +42,11 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
     [After(Test)]
     public Task RemoveSeededModelsAsync()
     {
-        // FakeOllamaState is shared PerTestSession: a model left behind by a failed run would show up as a
-        // phantom installed row in every later test. Idempotent — the happy path already deleted it.
-        Factory.FakeOllamaState.Models =
+        // The gateway state is shared PerTestSession: a model left behind would show up as a
+        // phantom installed row in every later test.
+        Factory.FakeGatewayState.Models =
         [
-            .. Factory.FakeOllamaState.Models.Where(model => !model.StartsWith(SeededModelPrefix, StringComparison.OrdinalIgnoreCase))
+            .. Factory.FakeGatewayState.Models.Where(model => !model.Id.StartsWith(SeededModelPrefix, StringComparison.OrdinalIgnoreCase))
         ];
 
         return Task.CompletedTask;
@@ -66,7 +65,7 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
             }))
             .ToBeVisibleAsync();
 
-        // The installed-models table renders once the list query settles (FakeOllama is "online").
+        // The installed-models table renders once the list query settles.
         await Expect(Page.GetByTestId("installed-models-table"))
             .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
@@ -87,7 +86,7 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
 
         // Seed BEFORE the first navigation so the page's initial list query already returns the row; that
         // keeps the assertion on a plain page load rather than on a refresh-button race.
-        Factory.FakeOllamaState.Models = [.. Factory.FakeOllamaState.Models, modelName];
+        Factory.FakeGatewayState.Models = [.. Factory.FakeGatewayState.Models, FakeGatewayLocalModelProvider.Model(modelName)];
 
         await NavigateAndWaitForModelsPageAsync();
 
@@ -120,7 +119,7 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
         });
 
         // Selecting the override PUTs models/{name}/kind; wait for that response so the assertion runs after persist.
-        await Page.RunAndWaitForResponseAsync(async () =>
+        var kindResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await overrideSelect.ClickAsync();
                 await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions
@@ -135,16 +134,23 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
                 Timeout = 10_000
             });
 
-        // The Type-tab effective-kind badge reflects the override.
-        await Expect(Page.GetByTestId($"model-kind-badge-{modelName}").First)
-            .ToContainTextAsync("Embedding", new LocatorAssertionsToContainTextOptions
-            {
-                Timeout = 5000
-            });
+        // The override is persisted and answered as the effective kind.
+        await Assert.That(kindResponse.Status).IsEqualTo(200);
+        using (var kind = JsonDocument.Parse(await kindResponse.TextAsync()))
+        {
+            await Assert.That(kind.RootElement.GetProperty("kind").GetString()).IsEqualTo("Embedding");
+        }
 
         // Close the details dialog (Escape) before deleting from the row.
         await Page.Keyboard.PressAsync("Escape");
         await Expect(Page.GetByTestId("installed-models-table")).ToBeVisibleAsync();
+
+        // The operator sees it: the row's badge comes from the model list, so this proves the list reports the override.
+        await Expect(Page.GetByTestId("installed-models-table").GetByTestId($"model-kind-badge-{modelName}"))
+            .ToContainTextAsync("Embedding", new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 5000
+            });
 
         var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
@@ -170,12 +176,10 @@ public sealed class ModelsManagementE2ETests : XESerialE2ETestBase
         // endpoint with a decoded, valid name IS the regression this leg guards.
         await Assert.That(deleteResponse.Status).IsEqualTo(200);
 
-        // Deliberately NOT asserting that the row disappears. DeleteLocalModelEndpoint deletes through
-        // IGgufModelStore only ("Ollama is no longer a runtime"), and its DeleteModelAsync is idempotent, so
-        // deleting an Ollama-SERVED model returns 200 while the provider keeps listing it. Observing the row
-        // vanish would need an installed GGUF model, which this fixture has none of (the llama.cpp provider is
-        // an NSubstitute stub). Covering the removal end-to-end needs a GGUF-store fake in the fixture — a
-        // deliberate gap, not a silently relaxed assertion.
+        // Deliberately NOT asserting that the row disappears. The deletion coordinator works on the on-disk GGUF
+        // registry, which does not hold a name only the fixture's store lists, and it answers that absence with a 200.
+        // Observing the row vanish would need a real GGUF on disk in this fixture — a deliberate gap, not a silently
+        // relaxed assertion.
 
         // No "Invalid model identifier" text leaked anywhere (the decode-regression guard), and no page error.
         var bodyText = await Page.Locator("body").InnerTextAsync();

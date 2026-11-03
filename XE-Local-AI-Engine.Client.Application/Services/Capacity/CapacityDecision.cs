@@ -23,9 +23,7 @@ public enum CapacityVerdict
 /// </summary>
 /// <remarks>
 ///     <see cref="Reason" /> is a sanitized constant — never a path, secret or token — handed to the calling agent on a
-///     reject; <see cref="OllamaEvictionWarning" /> flags that admitting or serializing this spawn on the best-effort
-///     Ollama provider may evict a different running model. A LOCAL Allow carries a <see cref="Reservation" /> owning
-///     both the exact llama.cpp launch admission and this model's pending-footprint ledger booking, which the caller
+///     reject. A LOCAL Allow carries a <see cref="Reservation" /> owning both the exact llama.cpp launch admission and this model's pending-footprint ledger booking, which the caller
 ///     MUST dispose on child exit; it is null for cloud Allow, QueueSameModel and every reject.
 /// </remarks>
 public sealed class CapacityDecision
@@ -35,9 +33,6 @@ public sealed class CapacityDecision
 
     /// <summary>Sanitized, user-safe reason string (constant; never a path/secret).</summary>
     public required string Reason { get; init; }
-
-    /// <summary>Whether loading this model on Ollama may evict a different running model.</summary>
-    public required bool OllamaEvictionWarning { get; init; }
 
     /// <summary>
     ///     The composite launch-admission/ledger reservation to release on child exit (local Allow only);

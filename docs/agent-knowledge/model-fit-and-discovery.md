@@ -41,15 +41,15 @@ this file holds only the traps those pages lack. Benchmarks, knowledge base, tra
 
 ### Model kind classification
 
-**Rule:** `ModelKind` includes Reranker and Decision; a GGUF whose header declares `<arch>.decision.type` is Decision before any name rule (Kev-4B is a `qwen35` with a tool-calling chat template), and test reranker names before embedding names. The capability-classification cache is digest-keyed, so an Ollama capability change without a digest change stays cached. **Prevents:** rerankers classified as embedding models; expecting a re-probe that never happens. **Authority:** `ModelKind` (`Client.Persistence`).
+**Rule:** `ModelKind` includes Reranker and Decision; a GGUF whose header declares `<arch>.decision.type` is Decision before any name rule (Kev-4B is a `qwen35` with a tool-calling chat template), and test reranker names before embedding names. **Prevents:** rerankers classified as embedding models. **Authority:** `ModelKind` (`Client.Persistence`).
 
-### Local-default chat resolution must stay Ollama-blind
+### Local-default chat resolution reads persisted state only
 
-**Rule:** resolve only installed llama.cpp GGUF Chat models from persisted classification; never live-probe Ollama on the send hot path. No chat model is `ModelNotInstalled`, not provider-unreachable. **Prevents:** send latency and a misleading error. **Authority:** `LocalDefaultChatModelResolver`, `NoChatModelInstalledException`.
+**Rule:** resolve only installed llama.cpp GGUF Chat models from persisted classification; never live-probe a runtime on the send hot path. No chat model is `ModelNotInstalled`, not provider-unreachable. **Prevents:** send latency and a misleading error. **Authority:** `LocalDefaultChatModelResolver`, `NoChatModelInstalledException`.
 
-### Reasoning ("think") has counter-intuitive Ollama semantics
+### Reasoning ("think") has counter-intuitive semantics
 
-**Rule:** for a model without Ollama's `thinking` capability, `think:true`/levels answer 400, `think:false` suppresses template-default reasoning, and omission preserves it: requested reasoning → omit; off/unspecified → false. Thinking-capable models receive false/levels. Keep `InvocationAgentFactory` and `ParticipantReasoningOptions` aligned; a new effort value also updates both factories, `ReasoningEffortNormalizer`, `RuntimePackageValidator` and `RuntimePackageConfigHash`. **Prevents:** 400s on non-thinking models and reasoning silently on or off. **Authority:** the symbols named.
+**Rule:** for a model without the `thinking` capability, requested reasoning → omit `think`, off/unspecified → false. Thinking-capable models receive false/levels. Keep `InvocationAgentFactory` and `ParticipantReasoningOptions` aligned; a new effort value also updates both factories, `ReasoningEffortNormalizer`, `RuntimePackageValidator` and `RuntimePackageConfigHash`. **Prevents:** reasoning silently on or off. **Authority:** the symbols named.
 
 ## Capacity, spawn and process lifecycle
 

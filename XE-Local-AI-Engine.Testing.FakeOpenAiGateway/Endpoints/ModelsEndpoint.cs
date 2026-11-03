@@ -13,7 +13,7 @@ internal static class ModelsEndpoint
         }
 
         var data = new JsonArray();
-        foreach (var model in state.Options.Models)
+        foreach (var model in state.Models)
         {
             var entry = new JsonObject
             {

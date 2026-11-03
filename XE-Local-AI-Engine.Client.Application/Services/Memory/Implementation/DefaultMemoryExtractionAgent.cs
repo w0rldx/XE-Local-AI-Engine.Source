@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// <remarks>
 ///     The model is resolved per-model through <see cref="ILocalModelProviderResolver" />, never the shared
 ///     <see cref="IChatClient" /> singleton that can be a cloud client, so the run's turns and answer never cross the
-///     node boundary. Tests substitute a fake agent, mirroring the analysis seam, so CI needs no Ollama.
+///     node boundary. Tests substitute a fake agent, mirroring the analysis seam, so CI needs no model runtime.
 /// </remarks>
 internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 {

@@ -415,7 +415,7 @@ export interface ChatDisplayShellProps {
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
 	availableReasoningEfforts: ReasoningEffort[];
-	// Whether the active model advertises the Ollama `tools` capability. Gated together with the node-wide
+	// Whether the active model advertises the `tools` capability. Gated together with the node-wide
 	// capability to decide whether the composer offers the local-tool controls. Defaults to false (safe).
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;

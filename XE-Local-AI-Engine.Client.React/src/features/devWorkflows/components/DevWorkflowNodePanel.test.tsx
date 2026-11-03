@@ -938,7 +938,7 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-cost-model-readiness")).toBeNull();
 	});
 
-	// Nothing measured the box: a remote or Ollama model, or a model this node never loaded itself. Rows that are
+	// Nothing measured the box: a remote model, or a model this node never loaded itself. Rows that are
 	// absent say that; a "0.0 GB" row would claim the gate saw an empty device.
 	it("draws no VRAM rows when nothing measured the box at load", () => {
 		renderPanel(

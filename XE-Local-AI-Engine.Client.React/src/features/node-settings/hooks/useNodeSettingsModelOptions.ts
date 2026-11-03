@@ -17,7 +17,7 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 	const { data: graphDefinitions } = useQuery(listGraphWorkflowDefinitionsOptions());
 	const draftModelOptions = useMemo(
 		() =>
-			toDraftModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+			toDraftModelOptions(localModels?.items ?? []).map((option) => ({
 				value: option.value,
 				label: option.label,
 			})),
@@ -25,10 +25,9 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 	);
 	const installedKeepWarmModelOptions = useMemo(
 		() =>
-			toChatModelOptions(
-				(localModels?.items ?? []).filter((model) => (model.provider ?? "").toLowerCase() === "llamacpp"),
-				localModels?.isAvailable ?? false,
-			).map((option) => ({ value: option.value, label: option.label })),
+			toChatModelOptions((localModels?.items ?? []).filter((model) => (model.provider ?? "").toLowerCase() === "llamacpp")).map(
+				(option) => ({ value: option.value, label: option.label }),
+			),
 		[localModels],
 	);
 	const selectedKeepWarmModel = form.keepModelWarmModelName.trim();
@@ -52,10 +51,10 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 				: installedKeepWarmModelOptions,
 		[installedKeepWarmModelOptions, keepWarmModelUnavailable, selectedKeepWarmModel, t],
 	);
-	// Every installed node-local chat model, llama.cpp and Ollama alike; cloud and external entries are excluded.
+	// Every installed node-local chat model; cloud and external entries are excluded.
 	const backgroundModelOptions = useMemo(
 		() =>
-			toChatModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+			toChatModelOptions(localModels?.items ?? []).map((option) => ({
 				value: option.value,
 				label: option.label,
 			})),
@@ -95,7 +94,7 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 		intentRouterOptions,
 		keepWarmModelOptions,
 		// The fast model for automatic reasoning effort takes exactly the keep-warm filter: an installed llama.cpp chat
-		// model, never a cloud id, an external id or an Ollama name. The backend refuses anything else at save.
+		// model, never a cloud or external id. The backend refuses anything else at save.
 		autoEffortFastModelOptions: installedKeepWarmModelOptions,
 		rerankerModelOptions,
 		embeddingModelOptions,

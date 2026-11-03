@@ -19,7 +19,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -35,7 +34,6 @@ public sealed class NodeSettingsAdministrationServiceTests
         {
             DefaultModelName = "old",
             CustomToolsEnabled = true,
-            OllamaEndpoint = "http://127.0.0.1:11434",
             MaxResponseSizeMb = 42,
             VoiceFeatureEnabled = true,
             ToolApprovalPolicy = new NodeToolApprovalPolicySettings()
@@ -58,7 +56,6 @@ public sealed class NodeSettingsAdministrationServiceTests
         // The excluded fields come from the write-time record, because that is where a partial patch takes every field
         // it does not name from.
         AssertEx.Equal(true, store.Current.CustomToolsEnabled);
-        AssertEx.Equal("http://127.0.0.1:11434", store.Current.OllamaEndpoint);
         AssertEx.Equal(42, store.Current.MaxResponseSizeMb);
         AssertEx.Equal(true, store.Current.VoiceFeatureEnabled);
         AssertEx.True(ReferenceEquals(store.Current.ToolApprovalPolicy, approvalPolicy));
@@ -318,7 +315,6 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.CustomToolsEnabled)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.ToolRelevanceEnabled)));
         AssertEx.False(names.Contains(nameof(StoredNodeSettings.ToolApprovalPolicy)));
-        AssertEx.False(names.Contains(nameof(StoredNodeSettings.OllamaEndpoint)));
     }
 
     [Test]
@@ -480,14 +476,14 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
-    public async Task Save_WhenAutoEffortFastModelIsServedByOllama_IsRejected()
+    public async Task Save_WhenAutoEffortFastModelIsNodeLocalButNotServedByLlamaCpp_IsRejected()
     {
         // Node-local is not enough. The swap targets a llama.cpp process — the only provider the capacity gate and the
-        // liveness probe can reason about — so an Ollama-served local model is refused at the same point.
+        // liveness probe can reason about — so a trusted-local model on any other provider is refused at the same point.
         var store = NewSubstituteStore(new StoredNodeSettings());
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns(Task.FromResult("ollama"));
+                        .Returns(Task.FromResult("external"));
         var service = CreateService(store, localModelProviderResolver: providerResolver);
 
         var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
@@ -935,7 +931,6 @@ public sealed class NodeSettingsAdministrationServiceTests
         IModelTrustResolver? modelTrustResolver = null,
         ILocalModelProviderResolver? localModelProviderResolver = null,
         bool fastModelInstalled = true,
-        IOllamaModelService? ollamaModelService = null,
         IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
         params string[] indexedEmbeddingModels)
     {
@@ -980,8 +975,6 @@ public sealed class NodeSettingsAdministrationServiceTests
             ggufModelStore,
             modelTrustResolver,
             localModelProviderResolver,
-            // Default: nothing is installed on Ollama, so only the GGUF registry admits a background model.
-            ollamaModelService ?? Substitute.For<IOllamaModelService>(),
             Options.Create(new KnowledgeBaseOptions()),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
             CatalogScopeFactory(indexedEmbeddingModels),
@@ -1023,38 +1016,24 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
-    public async Task Save_WhenABackgroundModelIsAnInstalledOllamaModel_IsAccepted()
+    [Arguments("gpt-4o-mini")]
+    [Arguments("qwen3:8b")]
+    public async Task Save_WhenABackgroundModelIsNotAnInstalledGguf_IsRejectedOnItsFieldNamingTheRequirement(string modelName)
     {
-        // Unlike the fast model, a background model may be served by Ollama: what matters is that it stays on the node.
-        var store = NewSubstituteStore(new StoredNodeSettings());
-        var ollama = Substitute.For<IOllamaModelService>();
-        ollama.IsLoopbackModelInstalledAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
-        var service = CreateService(store, fastModelInstalled: false, ollamaModelService: ollama);
-
-        var result = await service.SaveTrustedMergedAsync(static record => record with
-        {
-            MemoryExtractionModelName = "qwen3:8b"
-        });
-
-        AssertEx.True(result.Updated);
-        AssertEx.Equal("qwen3:8b", result.Settings.MemoryExtractionModelName);
-    }
-
-    [Test]
-    public async Task Save_WhenABackgroundModelIsInstalledNowhere_IsRejectedOnItsField()
-    {
-        // Both resolvers call an unknown id local, so membership is what refuses a typo or a cloud id saved by name.
+        // Both resolvers call an unknown id local, so GGUF registry membership is what refuses a typo, a cloud id saved by
+        // name, or a tag-style name an older node could serve from another runtime.
         var store = NewSubstituteStore(new StoredNodeSettings());
         var service = CreateService(store, fastModelInstalled: false);
 
-        var result = await service.SaveTrustedMergedAsync(static record => record with
+        var result = await service.SaveTrustedMergedAsync(record => record with
         {
-            PlaybookEvalModelName = "gpt-4o-mini"
+            PlaybookEvalModelName = modelName
         });
 
         AssertEx.False(result.Updated);
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.PlaybookEvalModelName, result.ValidationErrors[0].Field);
+        AssertEx.Equal("The model must be an installed node-local GGUF model, or blank to use the default model.", result.ValidationErrors[0].Message);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 

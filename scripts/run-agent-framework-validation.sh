@@ -27,7 +27,7 @@ This lane is intentionally Linux-safe. It runs:
   * the permanent deterministic Agent Framework compatibility suite
   * the Release llama-server adapter-policy and architecture dependency tests
   * Debug restore + build
-  * release-script static analysis (shellcheck + PSScriptAnalyzer + P0_SPIKE compile gate)
+  * release-script static analysis (shellcheck + PSScriptAnalyzer)
   * optionally the real linux-x64 portable packager
 
 The canonical Windows Velopack tester packager is not executed here. Its remaining

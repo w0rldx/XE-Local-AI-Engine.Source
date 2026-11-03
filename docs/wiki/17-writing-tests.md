@@ -94,7 +94,7 @@ A test ends in an explicit assertion and is binary green/red with no human step 
 Substitute only at a real collaboration boundary, and take the first of these that works:
 
 1. **The real thing**, when it is fast and deterministic — an in-memory store, a pure function, a real SQLite file.
-2. **The repo's fake seam** for that boundary: `FakeOllama` for anything model-dependent,
+2. **The repo's fake seam** for that boundary: `FakeOpenAiGateway` for anything model-dependent,
    MSW handlers for frontend network calls.
 3. **`Substitute.For<T>()`** — NSubstitute, never Moq or FakeItEasy, both banned — or `vi.fn()`/`vi.mock()` on the
    frontend, or stdlib `unittest.mock` in Python (not `pytest-mock`).
@@ -114,7 +114,7 @@ Every test class carries **exactly one** class-level `[Category(...)]`, from thr
 | Category | What it means |
 |---|---|
 | `Unit` | Pure logic against in-memory collaborators: no host, no real database, no socket, no child process. A hand-written fake or an NSubstitute double is still `Unit`. |
-| `Integration` | Deterministic, but boots something real in-process: a `TestServerWebAppFactory` host, a real SQLite file (including a `MigratedDatabaseTemplate` copy), a `FakeOllama`/`FakeDocker` server on a loopback socket, or a real child process. |
+| `Integration` | Deterministic, but boots something real in-process: a `TestServerWebAppFactory` host, a real SQLite file (including a `MigratedDatabaseTemplate` copy), a `FakeOpenAiGateway`/`FakeDocker` server on a loopback socket, or a real child process. |
 | `ExternalInfra` | Needs infrastructure the host may not have: a container daemon, a model runtime or live server, a GPU, a privileged sandbox binary. Opt-in through an environment variable, and **every** test in the class skips visibly when that gate is unset. Never part of the default gate. |
 
 The line between `Unit` and `Integration` is **mechanism, not speed**: what the test starts decides its category,
@@ -277,14 +277,25 @@ Mark it with a `// real-timer:` comment naming why, so a later reader does not "
 
 ## 5. Recipes
 
-### Model-dependent behaviour → FakeOllama
+### Model-dependent behaviour → FakeOpenAiGateway
 
-Unless `RUN_LOCAL_INTEGRATION=true`, the fixture starts a `FakeOllamaServer` seeded with
-`["qwen3.5:0.8b", "qwen3-embedding:0.6b"]` and points the provider at it. Script it through the test-control
-endpoints (`POST /test/script`, `POST /test/failures`, `GET /test/requests`) or by passing `FakeOllamaOptions`
-to the factory constructor. Embeddings are SHA256-seeded and therefore stable
-(`Determinism/EmbeddingDeterminism.cs`). Flip `RUN_LOCAL_INTEGRATION=true` only for a deliberate fidelity run
-against a real local runtime — never as a CI default.
+Unless `RUN_LOCAL_INTEGRATION=true`, the fixture starts a `FakeOpenAiGatewayServer` with
+`FakeGatewayLocalModelProvider.DefaultOptions()`: the models `qwen3.5:0.8b` and `qwen3-embedding:0.6b`, any other
+model id served too (`AllowUnlistedModels`), and an unscripted reply that echoes the last user message after
+`EchoPrefix`. `FakeGatewayLocalModelProvider` registers as the host's `llamacpp` provider and builds real
+OpenAI-compatible clients over real HTTP; warming and unloading are no-ops, because there is no process.
+
+The two factories differ in what they expose. `XENodeE2EWebApplicationFactory.FakeGatewayState` gives a browser
+test the live `FakeOpenAiGatewayState`: set `ChatResponder` to script or park a reply, or replace `Models` to add or
+remove a model. The E2E host also swaps in `FakeGatewayGgufModelStore`, because the model catalog, the capability
+resolver and the default-model policy read `IGgufModelStore` rather than a provider. `TestServerWebAppFactory` keeps
+its gateway private and leaves the product's GGUF store in place: a test there replaces a seam through
+`ConfigureAdditionalTestServices`. A test that scripts the wire itself starts its own `FakeOpenAiGatewayServer`, whose
+`/test/*` endpoints (`POST /test/script`, `POST /test/failures`, `GET /test/requests`) and `FakeOpenAiGatewayOptions`
+mirror the state members.
+
+Embeddings are SHA256-seeded and therefore stable (`Determinism/EmbeddingDeterminism.cs`). Flip
+`RUN_LOCAL_INTEGRATION=true` only for a deliberate fidelity run against a real local runtime — never as a CI default.
 
 ### A local SignalR hub
 
@@ -410,7 +421,7 @@ Pick a base class, and pick it deliberately:
   pool users for its duration, so several browsers run at once. Requires that the test only reads node-global
   state or writes `Guid`-named rows.
 - **`Common/XESerialE2ETestBase.cs`** (group `BrowserSerial`) — for tests that mutate session-global state (the
-  `WorkerEventDispatcher.CurrentInvocation` slot, FakeOllama scripts/models, the admin's tutorial row) or assert a
+  `WorkerEventDispatcher.CurrentInvocation` slot, fake gateway scripts/models, the admin's tutorial row) or assert a
   node-wide empty state. Runs one at a time as the canonical admin.
 
 The two groups run as disjoint phases, but **which phase runs first is not guaranteed** — never write a test that

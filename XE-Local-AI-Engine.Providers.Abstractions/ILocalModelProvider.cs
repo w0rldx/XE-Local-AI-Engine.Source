@@ -7,8 +7,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     Provider-neutral contract for local model runtimes exposed to the node host.
 /// </summary>
 /// <remarks>
-///     Implementations translate runtime-specific APIs (for example Ollama's model-management and chat endpoints)
-///     into the stable host-agent DTOs plus a <see cref="IChatClient" />. Keep this boundary free of provider
+///     Implementations translate runtime-specific APIs into the stable host-agent DTOs plus a <see cref="IChatClient" />. Keep this boundary free of provider
 ///     transport types so the React UI and platform capability payloads can remain provider-agnostic.
 /// </remarks>
 public interface ILocalModelProvider
@@ -39,7 +38,7 @@ public interface ILocalModelProvider
     /// <summary>
     ///     Returns live runtime facts for the running chat process backing <paramref name="modelName" /> — currently the
     ///     effective context window it actually loaded — or <see langword="null" /> when unknown (the model is not yet
-    ///     started, or the provider has no fixed launched window, e.g. Ollama/cloud).
+    ///     started, or the provider has no fixed launched window, e.g. cloud).
     /// </summary>
     /// <remarks>
     ///     The default implementation reports <see langword="null" />; a runtime that pins a launched context window

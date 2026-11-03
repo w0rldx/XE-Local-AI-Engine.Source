@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -9,14 +9,11 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="ILocalDefaultChatModelResolver" />, resolving the local-default chat model from the
-///     installed GGUF (llama.cpp) models ONLY — never Ollama.
+///     installed GGUF (llama.cpp) models ONLY.
 /// </summary>
 /// <remarks>
-///     An installed GGUF is chat-capable by construction. A model is excluded when its persisted effective kind
-///     (<c>OverrideKind ?? DetectedKind</c>) is <see cref="ModelKind.Embedding" /> or
-///     <see cref="ModelKind.Reranker" />, or — belt and braces, since a fresh GGUF has no row — when its NAME matches
-///     one, which an explicit operator override outranks. It reads only <see cref="IModelClassificationStore" />,
-///     never the Ollama probe <c>ClassifyAsync</c> would re-run against a dead daemon on every local-default send.
+///     Eligibility is <see cref="LocalGgufModelKindClassifier.IsChatModel" />, the rule the model picker reads, so the
+///     default is always a model the picker lists. It reads only <see cref="IModelClassificationStore" />.
 /// </remarks>
 public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolver
 {
@@ -48,15 +45,14 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
             return null;
         }
 
-        // The persisted classifications for every installed GGUF in one DB round-trip. A missing row means unprobed
-        // and therefore eligible; only an explicitly non-chat effective kind excludes a model.
+        // The operator overrides for every installed GGUF in one DB round-trip; the picker's own kind rule decides, so the two cannot disagree.
         var records = await _modelClassificationStore.ListAsync(cancellationToken);
         var classificationIndex = records.ToDictionary(static r => r.ModelName, static r => r, StringComparer.OrdinalIgnoreCase);
 
-        // A native decision model (header decision.type) is structurally excluded, like a drafter, ahead of every override.
         var chatModels = named
-                         .Where(descriptor => string.IsNullOrWhiteSpace(descriptor.DecisionType)
-                                              && !IsExcludedFromChat(classificationIndex, descriptor.ModelName))
+                         .Where(descriptor => LocalGgufModelKindClassifier.IsChatModel(descriptor.ModelName,
+                             classificationIndex.GetValueOrDefault(descriptor.ModelName),
+                             descriptor.DecisionType))
                          .ToArray();
         if (chatModels.Length == 0)
         {
@@ -104,69 +100,5 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
         return string.IsNullOrWhiteSpace(modelName)
             ? null
             : models.FirstOrDefault(descriptor => string.Equals(descriptor.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>
-    ///     Whether the model must be excluded from the local-default chat pick.
-    /// </summary>
-    /// <remarks>
-    ///     It is excluded when its persisted effective kind is <see cref="ModelKind.Embedding" /> or
-    ///     <see cref="ModelKind.Reranker" />, or when its name identifies one and the operator did not override the
-    ///     kind to a chat-eligible one — so a corrected model stays eligible.
-    /// </remarks>
-    private static bool IsExcludedFromChat(IReadOnlyDictionary<string, ModelClassificationRecord> index,
-        string modelName)
-    {
-        // A speculative-decoding drafter is structurally excluded, ahead of every override: it is a partial model that
-        // only runs inside another process's --spec-model slot, so no operator override can make it chat-eligible.
-        if (ModelKindDetector.IsDraftName(modelName))
-        {
-            return true;
-        }
-
-        if (IsPersistedNonChat(index, modelName))
-        {
-            return true;
-        }
-
-        // An explicit operator override to a chat-eligible kind (for example correcting a misdetected embedding GGUF to
-        // Chat) is authoritative — do not second-guess it with the name heuristic.
-        if (HasExplicitChatEligibleOverride(index, modelName))
-        {
-            return false;
-        }
-
-        return ModelKindDetector.IsEmbeddingName(modelName) || ModelKindDetector.IsRerankerName(modelName);
-    }
-
-    /// <summary>
-    ///     Returns <c>true</c> when the PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is a non-chat kind
-    ///     (<see cref="ModelKind.Embedding" /> or <see cref="ModelKind.Reranker" />). An absent row returns <c>false</c>
-    ///     (eligible).
-    /// </summary>
-    private static bool IsPersistedNonChat(IReadOnlyDictionary<string, ModelClassificationRecord> index,
-        string modelName)
-    {
-        if (!index.TryGetValue(modelName, out var record))
-        {
-            return false; // no row → Unknown → eligible
-        }
-
-        var effectiveKind = record.OverrideKind ?? record.DetectedKind;
-        return effectiveKind is ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft or ModelKind.Decision;
-    }
-
-    /// <summary>
-    ///     Returns <c>true</c> when the operator explicitly overrode the kind to a chat-eligible value
-    ///     (<c>OverrideKind</c> is set and is neither <see cref="ModelKind.Embedding" /> nor
-    ///     <see cref="ModelKind.Reranker" />). Only an explicit override — not an auto-detected kind — suppresses the name
-    ///     heuristic.
-    /// </summary>
-    private static bool HasExplicitChatEligibleOverride(IReadOnlyDictionary<string, ModelClassificationRecord> index,
-        string modelName)
-    {
-        return index.TryGetValue(modelName, out var record)
-               && record.OverrideKind is { } overrideKind
-               && overrideKind is not (ModelKind.Embedding or ModelKind.Reranker or ModelKind.Draft or ModelKind.Decision);
     }
 }

@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <summary>
 ///     Wraps one <see cref="ILocalModelProvider" /> in the real <see cref="LocalModelProviderResolver" /> for consumer
 ///     unit tests: it is the only registered provider AND the default with an empty per-model map, so every model
-///     routes to it and any other provider name fails to resolve. No Ollama, no network.
+///     routes to it and any other provider name fails to resolve. No network.
 /// </summary>
 internal static class SingleProviderResolverFactory
 {

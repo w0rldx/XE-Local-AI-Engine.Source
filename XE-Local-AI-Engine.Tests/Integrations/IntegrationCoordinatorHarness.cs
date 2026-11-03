@@ -116,7 +116,6 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
                     {
                         Verdict = CapacityVerdict.Allow,
                         Reason = "Capacity available.",
-                        OllamaEvictionWarning = false,
                         Reservation = _reservation
                     };
                 });

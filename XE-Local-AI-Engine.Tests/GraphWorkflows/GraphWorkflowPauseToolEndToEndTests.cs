@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The slice's gate: one whole run of <c>Start → Pause → Tool → End</c> over the WIRED host, driven through the
 ///     REST routes an operator's browser actually calls.
 ///     <para>
-///         Nothing is faked. No model and no <c>FakeOllama</c>, because the graph has no <c>Agent</c> node; no scripted
+///         Nothing is faked. No model and no fake gateway, because the graph has no <c>Agent</c> node; no scripted
 ///         invocation service, because <c>GetCurrentTime</c> is a real built-in that needs no flag, no workspace and no
 ///         model — which is exactly why it is the tool this graph names. What the other suites prove one seam at a time,
 ///         this proves once end to end: the definition a person saved, the run they started, the pause they answered,

@@ -16,7 +16,7 @@ export interface AssistDraftVariables {
 }
 
 /**
- * The draft mutation for one surface. Calls the generated SDK fn imperatively (the `useLoadedModels` pattern) rather
+ * The draft mutation for one surface. Calls the generated SDK fn imperatively rather
  * than through the generated `*Mutation()` factory because the endpoints answer with differently-named fields —
  * `instructions`, `body`, `prompt` — and normalizing them here keeps the surface split out of the dialog.
  *

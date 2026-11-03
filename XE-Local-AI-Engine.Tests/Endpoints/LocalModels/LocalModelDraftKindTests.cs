@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -13,13 +14,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class LocalModelDraftKindTests
 {
+    private static readonly Dictionary<string, ModelClassificationRecord> NoClassifications = new(StringComparer.OrdinalIgnoreCase);
+
     [Test]
     public void ToLlamaCppModelResponses_ClassifiesTheDrafterAsDraft_AndTheRealModelAsChat()
     {
         var responses = LocalModelsMapper.ToLlamaCppModelResponses([
             Descriptor("unsloth/gemma-4-12b-it-GGUF:MTP-Q8_0", sizeBytes: 400_000_000),
             Descriptor("unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", sizeBytes: 7_800_000_000)
-        ], selectedModelName: null);
+        ], selectedModelName: null, NoClassifications);
 
         var draft = responses.Single(response => response.ModelName == "unsloth/gemma-4-12b-it-GGUF:MTP-Q8_0");
         AssertEx.Equal(ModelKind.Draft.ToString(), draft.Kind);
@@ -34,7 +37,7 @@ public sealed class LocalModelDraftKindTests
     {
         // unsloth/Qwen3.6-27B-MTP-GGUF is a real 21 GB chat model — only the QUANT marker means "draft".
         var responses = LocalModelsMapper.ToLlamaCppModelResponses([Descriptor("unsloth/Qwen3.6-27B-MTP-GGUF:Q6_K", sizeBytes: 21_300_000_000)],
-            selectedModelName: null);
+            selectedModelName: null, NoClassifications);
 
         AssertEx.Equal(ModelKind.Chat.ToString(), responses.Single().Kind);
     }

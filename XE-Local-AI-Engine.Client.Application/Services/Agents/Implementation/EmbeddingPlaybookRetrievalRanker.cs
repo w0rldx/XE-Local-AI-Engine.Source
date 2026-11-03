@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Embedding-backed <see cref="IPlaybookRetrievalRanker" />: it ranks candidates by cosine similarity between the
@@ -62,7 +61,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         ArgumentNullException.ThrowIfNull(candidates);
 
         // Disabled gate: no embedding model configured => the lexical ranker is the effective ranker. No embedding
-        // client is constructed and Ollama is never touched (the "lexical stays default" / CI behavior).
+        // client is constructed and no runtime is touched (the "lexical stays default" / CI behavior).
         var model = _options.EmbeddingModelName;
         if (string.IsNullOrWhiteSpace(model))
         {
@@ -83,7 +82,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             // Never swallow cancellation — let the send's own cancellation propagate.
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException)
         {
             // Any node-local embedding hiccup degrades to the deterministic lexical ranker: a model not pulled, a
             // server down, a transport error, or an unregistered provider name. None is a reason to break the send.

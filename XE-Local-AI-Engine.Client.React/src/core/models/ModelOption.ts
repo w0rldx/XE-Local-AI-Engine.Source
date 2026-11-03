@@ -2,7 +2,7 @@ export interface ModelOption {
 	value: string;
 	label: string;
 	displayName?: string;
-	// GRADED reasoning: the model advertises the Ollama `thinking` capability, i.e. a switchable think:<level>
+	// GRADED reasoning: the model advertises the `thinking` capability, i.e. a switchable think:<level>
 	// control. Drives the graded reasoning-effort menu (none/low/medium/high).
 	isReasoningModel?: boolean;
 	// NATIVE reasoning: the model reasons on a channel baked into its chat template with no graded switch (OpenAI
@@ -17,9 +17,9 @@ export interface ModelOption {
 	// decided by `isCloud` and `isReasoningModel` exactly as before.
 	isReasoningEffortCapable?: boolean;
 	// Whether "Answer now" can end this model's reasoning early: a graded-reasoning llama.cpp model whose template
-	// has a reasoning end tag. Undefined (cloud, Ollama, external) is "no".
+	// has a reasoning end tag. Undefined (cloud, external) is "no".
 	isReasoningControllable?: boolean;
-	// Whether the model advertises the Ollama `tools` capability. Drives whether the composer offers the
+	// Whether the model advertises the `tools` capability. Drives whether the composer offers the
 	// local-tool controls (gated together with the node-wide capability). Undefined on the local-default
 	// option (the runtime picks a concrete model later), so callers treat undefined as "not tool-capable".
 	isToolCapable?: boolean;
@@ -28,12 +28,11 @@ export interface ModelOption {
 	// the local-default option (the runtime picks a concrete model later), so callers treat undefined as "not
 	// multimodal".
 	isMultimodal?: boolean;
-	isAvailable: boolean;
 	statusLabel?: string;
 	// True for cloud-provider models (e.g. Codex/OpenAI). Drives the "Cloud (Codex)" section in the picker
 	// and the egress cue badge. Local models never set this; absence is equivalent to false.
 	isCloud?: boolean;
-	// The runtime that serves this local model ("Ollama" / "llamacpp"), straight from the list entry's Provider.
+	// The runtime that serves this model (for example "llamacpp"), straight from the list entry's Provider.
 	// Used to gate which selections poll the model-details endpoint. Undefined on the local-default sentinel option
 	// (the runtime resolves a concrete model later) and on cloud options (gated by isCloud instead).
 	provider?: string;

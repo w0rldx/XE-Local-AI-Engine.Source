@@ -34,7 +34,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 ///     serializes (no second load) with a bounded wait that rejects on timeout; an over-cap fan-out or cloud-spawn is
 ///     rejected; a reject verdict returns its sanitized reason as the result (no exception, no path/secret); and the
 ///     outer cancellation token flows into the inner run. The capacity verdict is mocked so each dispatch branch is
-///     exercised in isolation; no Ollama/Docker/network.
+///     exercised in isolation; no model runtime, Docker or network.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class SubAgentSpawnServiceTests
@@ -385,7 +385,7 @@ public sealed class SubAgentSpawnServiceTests
     {
         // The resolved reasoning effort must be baked into the child's construction-time ChatOptions (an agent-as-tool
         // never receives per-run RunOptions), gated on the child model's thinking capability — mirroring the
-        // orchestration-participant path. A thinking-capable model honors the graded level on the Ollama think key.
+        // orchestration-participant path. A thinking-capable model honors the graded level on the think key.
         using var harness = new Harness();
         harness.AllowLocal();
         harness.WithThinkingCapability(true);
@@ -415,7 +415,7 @@ public sealed class SubAgentSpawnServiceTests
     public async Task Spawn_WhenProfileBound_NonThinkingModel_OmitsThinkField()
     {
         // Same resolved effort, but the child model does NOT advertise the thinking capability: the think field must be
-        // OMITTED (Ollama 400s on think:true/level for such a model) so its built-in template reasoning runs — the exact
+        // OMITTED so its built-in template reasoning runs — the exact
         // capability gate ParticipantReasoningOptions applies on the direct/orchestration paths.
         using var harness = new Harness();
         harness.AllowLocal();
@@ -1136,8 +1136,7 @@ public sealed class SubAgentSpawnServiceTests
         decision.SetResult(new CapacityDecision
         {
             Verdict = CapacityVerdict.RejectInsufficient,
-            Reason = "Insufficient capacity.",
-            OllamaEvictionWarning = false
+            Reason = "Insufficient capacity."
         });
         _ = await pending;
     }
@@ -1677,7 +1676,7 @@ public sealed class SubAgentSpawnServiceTests
             _chatClient = new GateableChatClient(delayBeforeResponse: delayBeforeResponse);
             _toolRegistry = new FakeAgentToolRegistry(includeSearchText);
             // Default: the child model advertises the thinking capability, so a resolved reasoning effort is honored on
-            // the Ollama think key. A test can flip this to prove a non-thinking model omits the field.
+            // the think key. A test can flip this to prove a non-thinking model omits the field.
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                                     .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
             WithMaxMessageRequestTimeoutSeconds(StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds);
@@ -1694,7 +1693,7 @@ public sealed class SubAgentSpawnServiceTests
         }
 
         // Overrides the child model's advertised thinking capability (default true), gating whether a resolved reasoning
-        // effort reaches the Ollama think key or is omitted (a non-thinking model 400s on think:true/level).
+        // effort reaches the think key or is omitted.
         public void WithThinkingCapability(bool supportsThinking)
         {
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
@@ -1952,7 +1951,6 @@ public sealed class SubAgentSpawnServiceTests
                      {
                          Verdict = CapacityVerdict.Allow,
                          Reason = "Capacity available.",
-                         OllamaEvictionWarning = false,
                          Reservation = reservation
                      });
         }
@@ -1964,8 +1962,7 @@ public sealed class SubAgentSpawnServiceTests
                      .Returns(_ => new CapacityDecision
                      {
                          Verdict = CapacityVerdict.Allow,
-                         Reason = "Cloud provider selected; no local capacity required.",
-                         OllamaEvictionWarning = false
+                         Reason = "Cloud provider selected; no local capacity required."
                      });
         }
 
@@ -1975,8 +1972,7 @@ public sealed class SubAgentSpawnServiceTests
                      .Returns(_ => new CapacityDecision
                      {
                          Verdict = CapacityVerdict.QueueSameModel,
-                         Reason = "Model already running; the spawn will share that process.",
-                         OllamaEvictionWarning = false
+                         Reason = "Model already running; the spawn will share that process."
                      });
         }
 
@@ -1986,8 +1982,7 @@ public sealed class SubAgentSpawnServiceTests
                      .Returns(_ => new CapacityDecision
                      {
                          Verdict = CapacityVerdict.RejectInsufficient,
-                         Reason = "Insufficient capacity: not enough free memory for another model.",
-                         OllamaEvictionWarning = false
+                         Reason = "Insufficient capacity: not enough free memory for another model."
                      });
         }
 

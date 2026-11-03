@@ -863,7 +863,7 @@ public sealed class InvocationResumeRegistryTests
     [Test]
     public async Task ResumeAsync_WhenTheInvocationHasNoPhase_ReplaysNoPhaseEvent()
     {
-        // Cloud and Ollama turns report no phase at all. The replay is additive: their resume stream keeps exactly
+        // Cloud turns report no phase at all. The replay is additive: their resume stream keeps exactly
         // the shape it has today.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var registry = CreateRegistry(dispatcher);

@@ -26,13 +26,13 @@ export function useDirectInferenceModels(): {
 		// Availability is not filtered here: the server refuses a model it cannot run with a classified error event.
 		const toItems = (options: { value: string; label: string; displayName?: string }[]) =>
 			options.map((option) => ({ value: option.value, label: option.displayName ?? option.label }));
-		const localOptions = toChatModelOptions(items, data?.isAvailable ?? false);
+		const localOptions = toChatModelOptions(items);
 		const groups: ModelGroup[] = [
 			{
 				group: t("pages.directInference.modelGroups.local", "Local"),
 				items: toItems(localOptions),
 			},
-			{ group: t("pages.directInference.modelGroups.external", "External"), items: toItems(toExternalModelOptions(items, true)) },
+			{ group: t("pages.directInference.modelGroups.external", "External"), items: toItems(toExternalModelOptions(items)) },
 			{
 				group: t("pages.directInference.modelGroups.cloud", "Cloud"),
 				items: items

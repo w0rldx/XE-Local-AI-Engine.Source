@@ -97,7 +97,7 @@ public static class AgentUsageProviders
     /// <summary>The default local runtime (llama.cpp / llama-server).</summary>
     public const string Local = "local";
 
-    /// <summary>The gated secondary local runtime (Ollama).</summary>
+    /// <summary>The label on ledger rows from a local runtime the node no longer ships: never written now, still rated free and shown by the usage view.</summary>
     public const string Ollama = "ollama";
 
     /// <summary>The Codex (ChatGPT OAuth) cloud provider.</summary>

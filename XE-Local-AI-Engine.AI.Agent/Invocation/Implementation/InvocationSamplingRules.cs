@@ -56,7 +56,7 @@ internal static class InvocationSamplingRules
             chatOptions.FrequencyPenalty = sampling.FrequencyPenalty;
         }
 
-        // Seed floor mirrors the UI: -1 is Ollama's "random seed" sentinel, anything below is invalid → skip.
+        // Seed floor mirrors the UI: -1 is the "random seed" sentinel, anything below is invalid → skip.
         if (IsValidSeed(sampling.Seed))
         {
             chatOptions.Seed = sampling.Seed;

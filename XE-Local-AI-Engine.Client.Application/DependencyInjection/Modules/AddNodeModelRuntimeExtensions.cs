@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
@@ -11,10 +10,8 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
-using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
@@ -36,21 +33,10 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
-using XE_Local_AI_Engine.Providers.Ollama;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 internal static class AddNodeModelRuntimeExtensions
 {
-    private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
-
-    // Capability gate for the optional Ollama runtime. Enabled when unset, so the default registration is unchanged. The
-    // key lives on OllamaRuntimeGate so the running-models endpoint reads the SAME gate (no drift).
-    private const string OllamaRuntimeEnabledConfigurationKey = OllamaRuntimeGate.RuntimeEnabledConfigurationKey;
-
-    // Opt-in escape hatch for a non-loopback Ollama endpoint. Off by default — the local Ollama API is unauthenticated.
-    private const string OllamaAllowRemoteEndpointConfigurationKey = "XE_OLLAMA_ALLOW_REMOTE_ENDPOINT";
-
     public static IHostApplicationBuilder AddNodeModelRuntime(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -125,12 +111,8 @@ internal static class AddNodeModelRuntimeExtensions
         // Embeddings are provider-routed: EmbeddingPlaybookRetrievalRanker resolves the provider by PlaybookRetrievalOptions
         // .EmbeddingProviderName through ILocalModelProviderResolver and owns its generator per send. No IEmbeddingGenerator is DI-registered, by design.
 
-        // Ollama is an OPTIONAL secondary local runtime: ALL Ollama-specific wiring lives in AddOllamaRuntime, so this module is the
-        // single seam referencing Providers.Ollama — runtime selection keeps one capability gate, never a second provider-direct path.
-        AddOllamaRuntime(builder, configuration);
-
-        // The llama-server provider stack registers ALONGSIDE Ollama so the resolver can dispatch to either runtime: binary manager,
-        // GPU variant probe, supervisor and the "llamacpp" provider. It takes two things from the host, an HttpClient and IGgufModelStore.
+        // The llama-server provider stack: binary manager, GPU variant probe, supervisor and the "llamacpp" provider. It takes two
+        // things from the host, an HttpClient and IGgufModelStore.
         builder.Services.AddHttpClient();
         // AddHuggingFaceGgufStore below provides the real IGgufModelStore (discovery, download, disk guard, registry); the optional
         // Hugging Face token rides the encrypted HfTokenStore, the third IDataProtector .enc store.
@@ -192,7 +174,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         // The local-branch router is its own singleton so its (provider, model) chat-client cache can be invalidated out-of-band: the
         // runtime-update endpoint clears it after a variant switch, or a cached deferred client keeps dialling the now-gone endpoint.
-        builder.Services.AddSingleton(sp => CreateLocalChatClient(sp, configuration));
+        builder.Services.AddSingleton(CreateLocalChatClient);
         // The SAME instance backs the IChatClient local branch below, so invalidation and sends share one cache. Disposal is idempotent,
         // so the container disposing this singleton and RuntimeChatClient disposing its local branch is safe.
         builder.Services.AddSingleton<ILocalChatClientCacheInvalidator>(sp => sp.GetRequiredService<ModelRoutingLocalChatClient>());
@@ -274,124 +256,15 @@ internal static class AddNodeModelRuntimeExtensions
         }
     }
 
-    /// <summary>
-    ///     Registers the OPTIONAL Ollama local-model runtime as one cohesive, capability-gated block.
-    /// </summary>
-    /// <remarks>
-    ///     This is the only place that references <c>Providers.Ollama</c>, so the resolver dispatches a model to this
-    ///     provider or to llama.cpp through a single seam. The runtime is enabled unless <c>XE_OLLAMA_RUNTIME_ENABLED</c>
-    ///     is false, and the resolved endpoint is loopback-guarded (<see cref="GuardOllamaEndpointIsLoopback" />). With
-    ///     the gate OFF the provider stack is skipped, so this method supplies the two services whose Ollama-side
-    ///     dependencies live inside it: <see cref="UnavailableModelCapabilityClient" /> and <see cref="UnavailableOllamaModelService" />.
-    /// </remarks>
-    private static void AddOllamaRuntime(IHostApplicationBuilder builder, IConfiguration configuration)
+    private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        // Capability gate: enabled unless explicitly disabled, so an un-flagged machine keeps today's behavior exactly.
-        if (!configuration.GetValue(OllamaRuntimeEnabledConfigurationKey, defaultValue: true))
-        {
-            // Opting out of a SECONDARY runtime must not make the host unbuildable: ModelCapabilityProber and the model service are
-            // mandatory singletons whose Ollama-side dependencies exist only in the skipped stack. Both no-ops report "nothing there".
-            builder.Services.AddSingleton<IModelCapabilityClient, UnavailableModelCapabilityClient>();
-            builder.Services.AddSingleton<IOllamaModelService, UnavailableOllamaModelService>();
-            return;
-        }
-
-        builder.Services.AddOllamaLocalModelProvider(sp =>
-        {
-            var chatConnectionSettings = ResolveChatConnectionSettings(sp, configuration);
-            GuardOllamaEndpointIsLoopback(chatConnectionSettings.Endpoint, configuration);
-            return new OllamaLocalModelProviderRegistration
-            {
-                Endpoint = chatConnectionSettings.Endpoint,
-                Model = chatConnectionSettings.Model
-            };
-        });
-
-        // IOllamaModelService's real registration rides inside AddOllamaLocalModelProvider, next to the IOllamaApiClient it wraps —
-        // exactly once on this branch, mirroring the gate-off branch's UnavailableOllamaModelService above.
-    }
-
-    /// <summary>
-    ///     Rejects a non-loopback Ollama endpoint (SSRF): the local Ollama HTTP API is unauthenticated, so a stray
-    ///     non-loopback value would route prompts to an arbitrary host.
-    /// </summary>
-    /// <remarks>
-    ///     An operator can opt in to a remote endpoint with <c>XE_OLLAMA_ALLOW_REMOTE_ENDPOINT</c> set to true.
-    /// </remarks>
-    private static void GuardOllamaEndpointIsLoopback(Uri endpoint, IConfiguration configuration)
-    {
-        ArgumentNullException.ThrowIfNull(endpoint);
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        if (endpoint.IsLoopback || configuration.GetValue(OllamaAllowRemoteEndpointConfigurationKey, defaultValue: false))
-        {
-            return;
-        }
-
-        throw new InvalidOperationException($"The configured Ollama endpoint '{endpoint}' is not a loopback address. The local Ollama API is "
-                                            + $"unauthenticated; refusing to route prompts to a remote host. Set {OllamaAllowRemoteEndpointConfigurationKey}=true to override.");
-    }
-
-    private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider, IConfiguration configuration)
-    {
-        var chatConnectionSettings = ResolveChatConnectionSettings(serviceProvider, configuration);
-
-        // XE_USE_LOCAL_MODEL_PROVIDER is honored: unset, the router's default provider and the configured default model serve an
-        // un-mapped model as a single daemon would; set, the same router additionally honors llamacpp model_provider_map rows.
-        _ = UseLocalModelProvider(configuration);
         // The local branch routes per-send by ChatOptions.ModelId through the provider resolver, superseding the fixed-model
-        // ILocalModelProvider.CreateChatClient path; the configured chat model is the fallback ModelId when a request omits one.
-        return new ModelRoutingLocalChatClient(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
-            chatConnectionSettings.Model);
-    }
-
-    private static ChatConnectionSettings ResolveChatConnectionSettings(IServiceProvider serviceProvider, IConfiguration configuration)
-    {
-        ArgumentNullException.ThrowIfNull(serviceProvider);
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        // The explicit "chat" connection string (the Aspire/dev orchestration override) still wins when present —
-        // it is an out-of-band wiring channel, not a migrated user setting.
-        var connectionString = configuration.GetConnectionString("chat");
-        if (!string.IsNullOrWhiteSpace(connectionString))
-        {
-            var connectionStringBuilder = new DbConnectionStringBuilder
-            {
-                ConnectionString = connectionString
-            };
-
-            if (connectionStringBuilder.TryGetValue("Endpoint", out var endpointValue)
-                && endpointValue is string endpoint
-                && Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri)
-                && connectionStringBuilder.TryGetValue("Model", out var modelValue)
-                && modelValue is string model
-                && !string.IsNullOrWhiteSpace(model))
-            {
-                return new ChatConnectionSettings
-                {
-                    Endpoint = endpointUri,
-                    Model = model
-                };
-            }
-        }
-
-        // Migrated knobs: the Ollama endpoint and the local-chat default model come from INodeRuntimeSettings (stored > appsettings
-        // seed > hardcoded default), read once at host build. Ollama:ChatModel, an out-of-band override, still wins over that default.
+        // ILocalModelProvider.CreateChatClient path; the node default (the same read as InvocationRunner) is the fallback ModelId when a request omits one.
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
 #pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
-        var fallbackEndpoint = runtimeSettings.GetOllamaEndpoint();
-        var fallbackModel = configuration.GetValue<string>("Ollama:ChatModel")
-                            ?? runtimeSettings.GetDefaultModelName();
+        return new ModelRoutingLocalChatClient(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
+            runtimeSettings.GetDefaultModelName());
 #pragma warning restore MA0045
-
-        return new ChatConnectionSettings
-        {
-            Endpoint = new Uri(fallbackEndpoint, UriKind.Absolute),
-            Model = fallbackModel
-        };
     }
 
     /// <summary>
@@ -484,21 +357,4 @@ internal static class AddNodeModelRuntimeExtensions
             RamReserveFraction = runtimeSettings.GetLlamaRamReserveFraction()
         };
     }
-
-    private static bool UseLocalModelProvider(IConfiguration configuration)
-    {
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        return configuration.GetValue<bool>(UseLocalModelProviderConfigurationKey);
-    }
-
-    private sealed record ChatConnectionSettings
-    {
-        public required Uri Endpoint { get; init; }
-
-        public required string Model { get; init; }
-    }
-
-    // The boxed state the fault continuation is handed. A named type instead of a cast to an anonymous tuple shape:
-    // the continuation runs on a plain object?, and the cast has to match the boxed type exactly.
 }

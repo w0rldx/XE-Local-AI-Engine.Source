@@ -36,7 +36,7 @@ public sealed class GgufAdapterBaseModelMissingException : Exception
 ///     models for <see cref="ILocalModelProvider.ListModelsAsync" />); its pull/delete operations and the model-fit advisor consume the
 ///     acquire/delete pair. Downloads are atomic-on-complete: a file is reported present only after the full byte stream is received and
 ///     its hash verifies (when an LFS OID is available); partial downloads live under a <c>.part</c> name and are never returned as
-///     complete. Progress is reported as the same <see cref="PullProgress" /> DTO the Ollama provider uses, so the layer maps it 1:1.
+///     complete. Progress is reported as the <see cref="PullProgress" /> DTO, so the layer maps it 1:1.
 /// </remarks>
 public interface IGgufModelStore
 {

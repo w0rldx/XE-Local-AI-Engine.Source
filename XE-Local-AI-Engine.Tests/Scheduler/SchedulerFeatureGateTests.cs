@@ -68,7 +68,6 @@ public sealed class SchedulerFeatureGateTests
             {
                 ["Agent:LocalChat:DefaultModel"] = "llama3.2",
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(root, "node.sqlite")}",
-                ["Ollama:Endpoint"] = "http://127.0.0.1:11434",
                 ["Scheduler:Enabled"] = schedulerEnabled.ToString()
             });
 

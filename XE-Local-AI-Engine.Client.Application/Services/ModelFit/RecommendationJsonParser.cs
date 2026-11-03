@@ -75,11 +75,6 @@ public static class RecommendationJsonParser
 
     private static ModelFitRecommendationInput MapModel(JsonElement model, int rank)
     {
-        // ollama_name is the legacy llmfit provider tag; repo_id/file_name are the advisor's GGUF identity. Prefer the
-        // GGUF repo id as the pull/provider name when present, else the legacy ollama tag (tolerant to both shapes).
-        var ollamaName = GetString(model, "ollama_name");
-        var repoId = GetString(model, "repo_id");
-        var providerModelName = repoId ?? ollamaName;
         var memoryRequiredGb = GetDouble(model, "memory_required_gb");
         var vramRequiredGb = GetDouble(model, "vram_required_gb");
 
@@ -87,7 +82,7 @@ public static class RecommendationJsonParser
         {
             Rank = rank,
             ModelName = GetString(model, "name") ?? string.Empty,
-            ProviderModelName = providerModelName,
+            ProviderModelName = GetString(model, "repo_id"),
             Score = GetDouble(model, "score") ?? 0d,
             FitLevel = GetString(model, "fit_level"),
             RunMode = GetString(model, "run_mode"),
@@ -98,11 +93,11 @@ public static class RecommendationJsonParser
             // The advisor fills vram_required_gb from the memory-fit estimate (null for a CPU-mode fit / legacy payload).
             RequiredVramMb = vramRequiredGb is { } vramGb ? vramGb * 1024d : null,
             // The context column is the model's advertised maximum window (context_length); effective_context_length is
-            // llmfit's memory-estimation cap (8192 unless --max-context / OLLAMA_CONTEXT_LENGTH is set), so it is a fallback.
+            // llmfit's memory-estimation cap (8192 unless --max-context is set), so it is a fallback.
             ContextTokens = GetInt(model, "context_length") ?? GetInt(model, "effective_context_length"),
             IsInstalled = GetBool(model, "installed") ?? false,
-            // The advisor's model name IS the GGUF registry pull key ({repo}:{quant}); fall back to the legacy ollama tag.
-            PullModelName = GetString(model, "name") ?? ollamaName,
+            // The advisor's model name IS the GGUF registry pull key ({repo}:{quant}).
+            PullModelName = GetString(model, "name"),
             DiagnosticsJson = BuildDiagnostics(model)
         };
     }

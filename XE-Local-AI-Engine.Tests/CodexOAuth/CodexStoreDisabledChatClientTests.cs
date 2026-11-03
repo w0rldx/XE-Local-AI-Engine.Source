@@ -61,7 +61,7 @@ public sealed class CodexStoreDisabledChatClientTests
         using var inner = new StubChatClient();
         using var client = new CodexStoreDisabledChatClient(inner, "gpt-5.4");
 
-        // The agent send path leaks a LOCAL Ollama model name via ChatOptions.ModelId; the wrapper must pin Codex.
+        // The agent send path leaks a LOCAL model name via ChatOptions.ModelId; the wrapper must pin Codex.
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")],
             new ChatOptions
             {

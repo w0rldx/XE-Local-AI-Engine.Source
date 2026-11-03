@@ -26,7 +26,7 @@ public sealed record LocalModelDescriptor
     public required DateTimeOffset? ModifiedAt { get; init; }
 
     /// <summary>
-    ///     Immutable installed-weight revision when the provider exposes one: a content digest for Ollama/GGUF, or a
+    ///     Immutable installed-weight revision when the provider exposes one: a content digest for a GGUF, or a
     ///     source revision when content hashing was unavailable. Consumers may use this to invalidate same-name caches.
     /// </summary>
     public string? RevisionFingerprint { get; init; }
@@ -36,7 +36,7 @@ public sealed record LocalModelDescriptor
 
     /// <summary>
     ///     Whether the model's chat template advertises tool / function calling. Detected offline from the GGUF chat
-    ///     template (no Ollama probe). Defaults to <see langword="false" /> — the safe default that offers no tools to a
+    ///     template. Defaults to <see langword="false" /> — the safe default that offers no tools to a
     ///     model whose capability could not be determined.
     /// </summary>
     public bool IsToolCapable { get; init; }
@@ -84,12 +84,12 @@ public sealed record LocalModelDescriptor
     public bool IsMultimodalCapable { get; init; }
 
     /// <summary>
-    ///     The Ollama-style capability tokens (for example <c>completion</c>, <c>tools</c>, <c>thinking</c>,
+    ///     The capability tokens (for example <c>completion</c>, <c>tools</c>, <c>thinking</c>,
     ///     <c>native_reasoning</c>, <c>vision</c>) detected for the model. Empty when no capabilities could be determined.
     /// </summary>
     public IReadOnlyList<string> Capabilities { get; init; } = [];
 
-    /// <summary>The model family (the GGUF architecture id, as Ollama reports it), or null when unknown.</summary>
+    /// <summary>The model family (the GGUF architecture id), or null when unknown.</summary>
     public string? Family { get; init; }
 
     /// <summary>The parameter size label (<c>7B</c>, <c>568M</c>), or null when the model does not declare one.</summary>

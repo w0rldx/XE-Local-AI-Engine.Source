@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 /// <remarks>
 ///     Two lookups compose the route: <c>ModelName → ProviderName</c> over the persisted per-model→provider map (with
-///     a configured default for unmapped models), then <c>ProviderName → <see cref="ILocalModelProvider" /></c> over
-///     the registered provider set (llama-server plus the optional Ollama provider). Singleton-safe: the provider set
+///     a default for unmapped models), then <c>ProviderName → <see cref="ILocalModelProvider" /></c> over
+///     the registered provider set (llama-server plus the external OpenAI-compatible provider). Singleton-safe: the provider set
 ///     is captured once and the per-model map is read through a fresh scope on each call, so the singleton
 ///     model-routing client / preview resolver hits no scope-lifetime mismatch. Provider keys match case-insensitively.
 /// </remarks>
@@ -22,7 +22,7 @@ public interface ILocalModelProviderResolver
     int MaxLoadedProcesses { get; }
 
     /// <summary>
-    ///     The provider that unmapped models route to (the configured default — <c>ollama</c> by configuration).
+    ///     The provider that unmapped models route to: <c>llamacpp</c>.
     /// </summary>
     /// <remarks>
     ///     Consumers that operate provider-wide rather than per-model (a node health/inventory snapshot) resolve
@@ -33,7 +33,7 @@ public interface ILocalModelProviderResolver
 
     /// <summary>
     ///     Resolves the provider key that serves <paramref name="modelName" />: the persisted map entry when present,
-    ///     otherwise the configured default provider. Never returns <c>null</c>.
+    ///     otherwise the default provider. Never returns <c>null</c>.
     /// </summary>
     Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default);
 
@@ -64,7 +64,7 @@ public interface ILocalModelProviderResolver
     /// </summary>
     /// <remarks>
     ///     Callers that mutate the persisted per-model→provider map (a GGUF download mapping to <c>llamacpp</c>, the
-    ///     Ollama backfill mapping to <c>ollama</c>) invoke this after a successful write, so a subsequent lookup
+    ///     external reconciliation pass) invoke this after a successful write, so a subsequent lookup
     ///     observes the new row immediately rather than after the TTL. Cheap and idempotent; a no-op when nothing is
     ///     cached.
     /// </remarks>

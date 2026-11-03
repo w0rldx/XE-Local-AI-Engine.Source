@@ -158,7 +158,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
             if (current is not null)
             {
                 // A non-external provider already owns this exact name. Refuse rather than steal it: the name grammar makes this
-                // practically impossible (no GGUF or Ollama model is called "ext:…"), so reaching here means something is genuinely wrong.
+                // practically impossible (no GGUF model is called "ext:…"), so reaching here means something is genuinely wrong.
                 _logger.LogWarning("The provider-map row for external model '{ModelId}' is owned by provider '{ProviderName}'; leaving it untouched.",
                     modelId,
                     current.ProviderName);

@@ -100,7 +100,7 @@ public sealed class DecisionModelKindTests
                 Capabilities = ["completion", "tools", "thinking"],
                 DecisionType = "kev"
             }
-        ], selectedModelName: null);
+        ], selectedModelName: null, new Dictionary<string, ModelClassificationRecord>(StringComparer.OrdinalIgnoreCase));
 
         var kev = responses.Single();
         AssertEx.Equal(ModelKind.Decision.ToString(), kev.Kind, "the picker offers Chat only, so Decision keeps it out.");

@@ -12,6 +12,7 @@ import {
 
 const chatModel: LocalModelResponse = {
 	modelName: "qwen3:8b",
+	provider: "llamacpp",
 	kind: "Chat",
 	detectedKind: "Chat",
 	isSelected: false,
@@ -22,6 +23,7 @@ const chatModel: LocalModelResponse = {
 };
 const embeddingModel: LocalModelResponse = {
 	modelName: "nomic-embed",
+	provider: "llamacpp",
 	kind: "Embedding",
 	detectedKind: "Embedding",
 	isSelected: false,
@@ -32,6 +34,7 @@ const embeddingModel: LocalModelResponse = {
 };
 const rerankerModel: LocalModelResponse = {
 	modelName: "bge-reranker-v2-m3",
+	provider: "llamacpp",
 	kind: "Reranker",
 	detectedKind: "Reranker",
 	isSelected: false,

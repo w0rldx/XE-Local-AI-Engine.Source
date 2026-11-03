@@ -7,7 +7,6 @@ import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 const controllable: ModelOption = {
 	value: "qwen3",
 	label: "qwen3",
-	isAvailable: true,
 	isReasoningModel: true,
 	isReasoningControllable: true,
 };

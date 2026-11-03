@@ -16,13 +16,13 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///                 agent picker start empty; the picker only renders once at least one agent exists).
 ///             </item>
 ///             <item>Go to <c>/chat</c>, open <c>AgentSelectorCard</c>, pick that agent (enabling agent mode).</item>
-///             <item>Send a message — FakeOllama streams the deterministic reply.</item>
+///             <item>Send a message — the fake gateway streams the deterministic reply.</item>
 ///             <item>The assistant turn's attribution row (<c>chat-message-agent-*</c>) names the picked agent.</item>
 ///         </list>
 ///     </para>
 ///     <para>
-///         FakeOllama supplies the streamed reply via its default chat script (no <c>ChatScript</c> override is
-///         required; the script is still reset in <c>[After(Test)]</c> defensively so no state leaks on the shared
+///         The fake gateway supplies the streamed reply by echoing (no <c>ChatResponder</c> is required; it is still
+///         reset in <c>[After(Test)]</c> defensively so no state leaks on the shared
 ///         <c>PerTestSession</c> host). The attribution text is <c>agentName · Reasoning: x · time</c>, so the test
 ///         asserts the chosen agent's name is a substring of the attribution element's text.
 ///     </para>
@@ -38,8 +38,7 @@ public sealed class ChatAgentModeE2ETests : XESerialE2ETestBase
     [After(Test)]
     public void ResetScripts()
     {
-        Factory.FakeOllamaState.ChatScript = null;
-        Factory.FakeOllamaState.ToolCallScript = null;
+        Factory.FakeGatewayState.ChatResponder = null;
     }
 
     /// <summary>
@@ -122,7 +121,7 @@ public sealed class ChatAgentModeE2ETests : XESerialE2ETestBase
                 Timeout = 3000
             });
 
-        // Send a message — FakeOllama streams a deterministic reply.
+        // Send a message — the fake gateway streams a deterministic reply.
         await chatInput.FillAsync("Introduce yourself in one sentence.");
         await Expect(sendButton).ToBeEnabledAsync();
         await sendButton.ClickAsync();

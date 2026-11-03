@@ -8,6 +8,20 @@ Once the operator approves it, move the entry to its topic file and delete it he
 
 **Rule:** coder and validation sandboxes run in the bubblewrap chain where advertised, the trusted workspace as the jail and engine mounts as binds after `/work`. Bind the package folder at its HOST path: the warm restore runs outside the chain (it needs egress) and writes that path into `obj/`. Set `UseSharedCompilation=false` behind the chain: a compiler server in a fresh namespace holds stdout and the command hangs to its timeout. A `NuGet.Config` naming a host-only local source fails restore there (`NU1301`). **Prevents:** a `--no-restore` build missing the warmed packages, validation timing out after a green build. **Authority:** `DevelopmentWorkspaceProvider.BuildMounts`, `DevelopmentWorkspaceTools.BuildEnvironment`, `DevelopmentMountBrokerTests`.
 
+### A delegated agent's working directory does not persist between its shell calls
+
+**Rule:** a delegated agent passes absolute paths and `git -C <worktree>`, or runs `( cd <worktree> && … )` inside one
+call, because its working directory is reset before every shell call. **Prevents:** a build, grep or write that silently
+lands in the main checkout instead of the worktree (runtime removal round, 2026-11-03). **Authority:** `AGENTS.md`
+parallel-work rule; print `pwd` across two calls to see it.
+
+### A delegated agent never ends its turn on a background command
+
+**Rule:** a delegated agent runs a long command in the foreground, or polls it to completion, before ending its turn.
+**Prevents:** a worker that goes idle on a background gate, never receives the completion notice, and leaves its result
+unread (runtime removal round, 2026-11-03). **Authority:** observed in worker runs; a completion notice reaches only
+an agent that is still running.
+
 ### A new project's publish profile is ignored until `.gitignore` un-ignores its folder
 
 **Rule:** after adding `Properties/PublishProfiles/*.pubxml` to a new project, add

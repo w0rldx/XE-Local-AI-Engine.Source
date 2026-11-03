@@ -11,7 +11,7 @@ interface ModelSelectorSectionProps {
 	reasoningLabel: string;
 	nativeReasoningLabel: string;
 	selectedModel: string;
-	statusFallback: (option: ModelOption) => string;
+	statusFallback: string;
 	onSelect: (value: string) => void;
 }
 

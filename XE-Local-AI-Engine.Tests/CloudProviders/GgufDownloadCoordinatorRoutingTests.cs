@@ -118,7 +118,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     {
         var canonical = GgufModelName.Format(Repo, Quant);
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        mapStore.Seed(canonical, "ollama");
+        mapStore.Seed(canonical, "external");
         var transaction = new ProvisioningDownloadTransaction();
         var coordinator = BuildCoordinator(transaction, mapStore);
 
@@ -132,7 +132,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
         var status = coordinator.GetStatus(ticket.OperationId);
         AssertEx.Equal("ModelConflict", status!.ErrorCode);
-        AssertEx.Equal("ollama", mapStore.Mappings[canonical].ProviderName);
+        AssertEx.Equal("external", mapStore.Mappings[canonical].ProviderName);
         AssertEx.True(transaction.WasRolledBack);
     }
 
@@ -238,7 +238,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     {
         var canonical = GgufModelName.Format(Repo, Quant);
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        mapStore.Seed(canonical, "ollama");
+        mapStore.Seed(canonical, "external");
         var publisher = new RecordingPublisher();
         var coordinator = BuildCoordinator(new ProvisioningDownloadTransaction(),
             mapStore,
@@ -266,7 +266,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     {
         var canonical = GgufModelName.Format(Repo, Quant);
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        mapStore.Seed(canonical, "ollama");
+        mapStore.Seed(canonical, "external");
         var logger = new RecordingLogger<GgufDownloadCoordinator>();
         var coordinator = BuildCoordinator(new ProvisioningDownloadTransaction(),
             mapStore,
@@ -349,7 +349,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     {
         var canonical = GgufModelName.Format(Repo, Quant);
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();
-        mapStore.Seed(canonical, "ollama");
+        mapStore.Seed(canonical, "external");
         var transaction = new ProvisioningDownloadTransaction
         {
             ThrowRollback = true

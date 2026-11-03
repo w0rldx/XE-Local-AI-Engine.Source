@@ -21,12 +21,6 @@ describe("toCloudModelOption — Codex model shape", () => {
 		expect(option.isCloud).toBe(true);
 	});
 
-	it("always reports available (cloud availability is determined by sign-in, not Ollama status)", () => {
-		const option = toCloudModelOption("gpt-5.3-codex-spark");
-
-		expect(option.isAvailable).toBe(true);
-	});
-
 	it("uses the model name as value, label, and displayName", () => {
 		const option = toCloudModelOption("gpt-5.3-codex-spark");
 
@@ -47,7 +41,6 @@ describe("toAzureFoundryModelOption — Azure deployment shape", () => {
 		expect(option.provider).toBe("AzureFoundry");
 		expect(option.isCloud).toBe(true);
 		expect(option.isToolCapable).toBe(true);
-		expect(option.isAvailable).toBe(true);
 	});
 
 	it("uses the deployment name as value, label, and displayName", () => {

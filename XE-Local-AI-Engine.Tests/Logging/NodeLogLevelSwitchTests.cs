@@ -94,7 +94,6 @@ public sealed class NodeLogLevelSwitchTests : IDisposable
         {
             ["Agent:LocalChat:DefaultModel"] = "llama3.2",
             ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(_rootPath, "switch.sqlite")}",
-            ["Ollama:Endpoint"] = "http://127.0.0.1:11434",
             ["Serilog:MinimumLevel:Default"] = "Information",
             ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore"] = "Warning"
         });

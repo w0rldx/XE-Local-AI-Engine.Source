@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 /// <summary>
 ///     The capability classification of a single GGUF model derived from its chat template: the tool / graded-reasoning
-///     / native-reasoning flags plus the matching Ollama-style capability tokens (always including <c>completion</c>).
+///     / native-reasoning flags plus the matching capability tokens (always including <c>completion</c>).
 /// </summary>
 /// <param name="IsReasoningCapable">GRADED reasoning: the template exposes a switchable thinking channel, so a <c>think:&lt;level&gt;</c> control is available.</param>
 /// <param name="IsNativeReasoningCapable">NATIVE reasoning: the model reasons on a channel baked into its template with no graded switch (harmony/gpt-oss).</param>

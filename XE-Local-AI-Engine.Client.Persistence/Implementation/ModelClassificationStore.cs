@@ -45,49 +45,6 @@ public sealed class ModelClassificationStore : IModelClassificationStore
         return entities.Select(ToRecord).ToArray();
     }
 
-    public async Task<ModelClassificationRecord> UpsertDetectedAsync(string modelName,
-        string? digest,
-        ModelKind detectedKind,
-        string? capabilitiesJson,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-
-        var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-
-        // Load tracked so an existing operator override is preserved across the detection refresh.
-        var entity = await _dbContext.ModelClassifications
-                                     .FirstOrDefaultAsync(classification => classification.ModelName == modelName, cancellationToken);
-
-        if (entity is null)
-        {
-            entity = new ModelClassification
-            {
-                ModelName = modelName,
-                Digest = digest,
-                DetectedKind = detectedKind,
-                DetectedCapabilitiesJson = capabilitiesJson,
-                OverrideKind = null,
-                DetectedAtUtc = now,
-                UpdatedAtUtc = now
-            };
-
-            _ = _dbContext.ModelClassifications.Add(entity);
-        }
-        else
-        {
-            entity.Digest = digest;
-            entity.DetectedKind = detectedKind;
-            entity.DetectedCapabilitiesJson = capabilitiesJson;
-            entity.DetectedAtUtc = now;
-            entity.UpdatedAtUtc = now;
-        }
-
-        _ = await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return ToRecord(entity);
-    }
-
     public async Task<ModelClassificationRecord> SetOverrideAsync(string modelName,
         ModelKind? overrideKind,
         CancellationToken cancellationToken = default)
@@ -101,8 +58,7 @@ public sealed class ModelClassificationStore : IModelClassificationStore
 
         if (entity is null)
         {
-            // No row yet: persist the override against an unprobed (Unknown) detected baseline. Detection will fill the
-            // detected fields later without disturbing the override.
+            // No row yet: persist the override with empty detected fields, which nothing fills any more.
             entity = new ModelClassification
             {
                 ModelName = modelName,

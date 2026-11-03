@@ -58,8 +58,8 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
     {
         ArgumentNullException.ThrowIfNull(aggregate);
 
-        // Route the configured analysis model to the runtime that serves it (persisted map, else the configured default provider, ollama, so an
-        // un-repointed model behaves exactly as before). Node-local only — never the cloud singleton.
+        // Route the configured analysis model to the runtime that serves it (persisted map, else the default provider).
+        // Node-local only — never the cloud singleton.
         var modelName = await _runtimeSettings.GetPlaybookAnalysisModelNameAsync(cancellationToken);
         if (!await BackgroundModelLocalityGuard.AllowAsync(modelName, "PlaybookAnalysisModelName", _modelTrustResolver, _logger, cancellationToken))
         {

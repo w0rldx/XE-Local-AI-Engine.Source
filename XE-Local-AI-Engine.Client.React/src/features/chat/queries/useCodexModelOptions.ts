@@ -43,7 +43,6 @@ export function toCloudModelOption(modelName: string, capabilities?: CloudModelC
 		// Codex (gpt-5.x / OpenAI Responses) supports function tools; the backend capability gate
 		// (CodexProviderCapabilities.SupportsToolCalling) is the authoritative runtime guard.
 		isToolCapable: capabilities?.isToolCapable ?? true,
-		isAvailable: true,
 		isCloud: true,
 		provider: CODEX_PROVIDER,
 	};
@@ -59,7 +58,6 @@ export function toAzureFoundryModelOption(deploymentName: string, capabilities?:
 		// cannot advertise a reasoning control the pipeline never reads.
 		isReasoningModel: capabilities?.isReasoningCapable ?? false,
 		isToolCapable: capabilities?.isToolCapable ?? true,
-		isAvailable: true,
 		isCloud: true,
 		provider: AZURE_FOUNDRY_PROVIDER,
 	};

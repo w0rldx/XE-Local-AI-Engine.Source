@@ -392,6 +392,10 @@ check_contains "missing model names --download" "--download" "${ERR}"
 check_contains "missing model names the failed link attempt" "could not be linked" "${ERR}"
 check "the link was attempted against the (empty) user store" "1" "$(calls model-link)"
 check "no download attempted" "0" "$(calls download)"
+ctl model-ensure.out "installed\tfalse\nnoGguf\ttrue\n"
+run_lab --
+check_contains "a node with no GGUF at all gets the symlink hint" "a models dir of symlinks is rejected" "${ERR}"
+ctl model-ensure.out "installed\tfalse\n"
 ctl download.out "model\t${MODEL}\ntoken\ttok-renewed-opaque\ntokenRenewals\t1\ndownloaded\ttrue\nphase\tCompleted\n"
 ctl model-ensure.2.out "installed\ttrue\npreviouslySelected\t${MODEL}\nselected\t${MODEL}\nresident\tfalse\n"
 run_lab -- --download
@@ -915,6 +919,20 @@ check_absent "a password inside a JSON-string arguments field is scrubbed" "sink
 check_absent "an apiKey inside a JSON-string result array is scrubbed" "sink-secret-7" "${SINK}"
 check_contains "the JSON-string arguments keep their other fields" "kept-path" "${SINK}"
 check_contains "a string that only looks like JSON passes through unchanged" "sink-kept-8" "${SINK}"
+# model-ensure: cloud rows do not count as a GGUF, another llama.cpp row does.
+model_ensure_listing() {
+  python3 -c '
+import importlib.util, sys, types
+spec = importlib.util.spec_from_file_location("lab_driver", sys.argv[1])
+driver = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(driver)
+listing = {"items": [{"modelName": "other", "provider": sys.argv[2]}]}
+driver.client_for = lambda args: types.SimpleNamespace(get=lambda path: listing)
+driver.command_model_ensure(types.SimpleNamespace(model="wanted", eject_others=False))
+' "${REAL}/lab-driver.py" "$1" 2>&1
+}
+check "model-ensure with only cloud rows reports no GGUF" $'installed\tfalse\nnoGguf\ttrue' "$(model_ensure_listing CodexOAuth)"
+check "model-ensure with another GGUF reports only the missing model" $'installed\tfalse' "$(model_ensure_listing llamacpp)"
 
 echo
 if [[ "${FAILED}" -ne 0 ]]; then

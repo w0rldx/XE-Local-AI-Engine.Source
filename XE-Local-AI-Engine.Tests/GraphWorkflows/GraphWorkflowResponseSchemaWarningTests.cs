@@ -50,7 +50,7 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     [Test]
     public async Task ValidateAsync_WhenTheNodesModelIsServedByAnotherProvider_KeepsTheResponseSchemaWarning()
     {
-        var service = BuildService(CloudRoutedModel, "ollama");
+        var service = BuildService(CloudRoutedModel, "another-runtime");
 
         var result = await service.ValidateAsync(AgentGraph(CloudRoutedModel));
 
@@ -344,11 +344,11 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.Empty(result.Warnings);
     }
 
-    /// <summary>An Ollama model is no GGUF in this node's registry, yet the agent run serves it, so it must not be called missing.</summary>
+    /// <summary>A model on another provider is no GGUF in this node's registry, yet the agent run serves it, so it must not be called missing.</summary>
     [Test]
-    public async Task ValidateAsync_WhenAnAgentPinsAnOllamaModel_DoesNotWarn()
+    public async Task ValidateAsync_WhenAnAgentPinsAModelOnAnotherProvider_DoesNotWarn()
     {
-        var service = BuildService(LocalModel, "ollama");
+        var service = BuildService(LocalModel, "another-runtime");
 
         var result = await service.ValidateAsync(PlainAgentGraph(LocalModel));
 

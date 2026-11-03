@@ -8,14 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Models.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
+using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Proves the routing default: an UNMAPPED model routes to <c>llamacpp</c> (the shipped default model is a GGUF),
-///     while a model explicitly mapped to <c>ollama</c> still routes to Ollama. Ollama is optional, and the default
-///     governs only truly-unmapped names.
+///     while a mapped model routes to the provider its row names. The default governs only truly-unmapped names.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LocalModelProviderResolverDefaultTests
@@ -43,16 +43,33 @@ public sealed class LocalModelProviderResolverDefaultTests
     }
 
     [Test]
-    public async Task ModelMappedToOllama_StillRoutesToOllama()
+    public async Task ModelWhoseOldRuntimeRowIsGone_RoutesToLlamaCpp_AndFailsAsNotInstalled()
+    {
+        // The migration deletes old map rows, so a saved agent still naming such a model is simply unmapped: it reaches
+        // the real llama.cpp provider, whose store has no such file, and gets the ordinary not-installed failure.
+        var store = new FakeModelStore(fixedPath: null);
+        await using var supervisor = SupervisorFactory.Create(modelStore: store);
+        var resolver = SingleProviderResolverFactory.Create(new LlamaServerLocalModelProvider(supervisor, store, TimeProvider.System));
+
+        var providerName = await resolver.ResolveProviderNameForModelAsync("llama3.2:3b");
+        var provider = await resolver.ResolveProviderForModelAsync("llama3.2:3b");
+        var failure = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => provider.WarmModelAsync("llama3.2:3b", CancellationToken.None));
+
+        AssertEx.Equal(LlamaServerProviderConstants.ProviderName, providerName);
+        AssertEx.Contains(failure.Message, "not installed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task MappedModel_RoutesToItsMappedProvider_NotTheDefault()
     {
         var resolver = BuildResolver(new Dictionary<string, string>
         {
-            ["llama3.2:3b"] = OllamaLocalModelProvider.OllamaProviderName
+            ["registered-model"] = ExternalProviderConstants.ProviderName
         });
 
-        var provider = await resolver.ResolveProviderNameForModelAsync("llama3.2:3b");
+        var provider = await resolver.ResolveProviderNameForModelAsync("registered-model");
 
-        AssertEx.Equal(OllamaLocalModelProvider.OllamaProviderName, provider);
+        AssertEx.Equal(ExternalProviderConstants.ProviderName, provider);
     }
 
     private static LocalModelProviderResolver BuildResolver(IReadOnlyDictionary<string, string> mappings)
@@ -68,11 +85,10 @@ public sealed class LocalModelProviderResolverDefaultTests
         services.AddScoped<ICoordinatedModelProviderMapStore>(_ => mapStore);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        // Both runtimes registered; the flipped default = llamacpp (mirrors AddNodeModelRuntimeExtensions post-flip).
+        // The default = llamacpp, as AddNodeModelRuntimeExtensions registers it.
         ILocalModelProvider[] providers =
         [
             new StubProvider(LlamaServerProviderConstants.ProviderName),
-            new StubProvider(OllamaLocalModelProvider.OllamaProviderName),
             new StubProvider(ExternalProviderConstants.ProviderName)
         ];
 

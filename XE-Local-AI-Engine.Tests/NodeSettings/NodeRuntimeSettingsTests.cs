@@ -45,7 +45,6 @@ public sealed class NodeRuntimeSettingsTests
                 DefaultModelName = "stored-model",
                 EnableTools = false,
                 ToolCapableModels = ["stored-tool-model"],
-                OllamaEndpoint = "http://stored:1234",
                 LlamaMaxLoadedProcesses = 9,
                 LlamaIdleTimeToLiveSeconds = 1200,
                 KeepModelWarmEnabled = true,
@@ -57,13 +56,12 @@ public sealed class NodeRuntimeSettingsTests
             },
             seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
             {
-                ["Ollama:Endpoint"] = "http://seed:9999"
+                ["HuggingFace:DefaultQuant"] = "Q6_K"
             });
 
         AssertEx.Equal("stored-model", await sut.GetDefaultModelNameAsync());
         AssertEx.Equal(expected: false, await sut.GetEnableToolsAsync());
         AssertEx.Equal("stored-tool-model", (await sut.GetToolCapableModelsAsync())[0]);
-        AssertEx.Equal("http://stored:1234", await sut.GetOllamaEndpointAsync());
         AssertEx.Equal(expected: 9, await sut.GetLlamaMaxLoadedProcessesAsync());
         AssertEx.Equal(TimeSpan.FromSeconds(1200), await sut.GetLlamaIdleTimeToLiveAsync());
         AssertEx.Equal(expected: true, await sut.GetKeepModelWarmEnabledAsync());
@@ -80,7 +78,6 @@ public sealed class NodeRuntimeSettingsTests
         var sut = CreateSut(new StoredNodeSettings(),
             seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
             {
-                ["Ollama:Endpoint"] = "http://seed:9999",
                 ["HuggingFace:DefaultQuant"] = "Q6_K",
                 ["HuggingFace:DiskMarginBytes"] = "2000000000",
                 ["Agent:Orchestration:IdleTimeoutSeconds"] = "444"
@@ -106,7 +103,6 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal("seed-model", await sut.GetDefaultModelNameAsync());
         AssertEx.Equal(expected: false, await sut.GetEnableToolsAsync());
         AssertEx.Equal("seed-tool-model", (await sut.GetToolCapableModelsAsync())[0]);
-        AssertEx.Equal("http://seed:9999", await sut.GetOllamaEndpointAsync());
         AssertEx.Equal("Q6_K", await sut.GetHuggingFaceDefaultQuantAsync());
         AssertEx.Equal(expected: 2_000_000_000L, await sut.GetHuggingFaceDiskMarginBytesAsync());
         AssertEx.Equal(expected: 77, await sut.GetMaxResponseSizeMbAsync());
@@ -170,10 +166,9 @@ public sealed class NodeRuntimeSettingsTests
     [Test]
     public async Task StoredAndSeedAbsent_UsesHardcodedDefault()
     {
-        // No stored value, no Ollama/HF seed in configuration, default Options instances.
+        // No stored value, no HF seed in configuration, default Options instances.
         var sut = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
 
-        AssertEx.Equal(StoredNodeSettings.DefaultOllamaEndpoint, await sut.GetOllamaEndpointAsync());
         AssertEx.Equal(StoredNodeSettings.DefaultHuggingFaceQuant, await sut.GetHuggingFaceDefaultQuantAsync());
         AssertEx.Equal(StoredNodeSettings.DefaultHuggingFaceDiskMarginBytes, await sut.GetHuggingFaceDiskMarginBytesAsync());
         AssertEx.Equal(expected: StoredNodeSettings.DefaultLlamaMaxLoadedProcesses, await sut.GetLlamaMaxLoadedProcessesAsync());
@@ -979,11 +974,12 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
-    public async Task BackgroundModels_FollowStoredOverSectionSeedOverOllamaChatModel()
+    public async Task BackgroundModels_FollowStoredOverSectionSeedOverTheDefaultModel()
     {
         var seeds = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["Ollama:ChatModel"] = "ollama-override:1b",
+            // The removed runtime's override key: configuration that still sets it is ignored.
+            ["Ollama:ChatModel"] = "ignored-override:1b",
             ["PlaybookEval:ModelName"] = "eval-seed:3b"
         };
         var sut = CreateSut(new StoredNodeSettings
@@ -993,8 +989,8 @@ public sealed class NodeRuntimeSettingsTests
             },
             seeds);
 
-        // Analysis names nothing of its own, so the out-of-band Ollama override the runner also honors wins over the default.
-        AssertEx.Equal("ollama-override:1b", await sut.GetPlaybookAnalysisModelNameAsync());
+        // Analysis names nothing of its own, so it follows the node's default model.
+        AssertEx.Equal("stored-default:7b", await sut.GetPlaybookAnalysisModelNameAsync());
         AssertEx.Equal("eval-seed:3b", await sut.GetPlaybookEvalModelNameAsync());
         AssertEx.Equal("stored-extraction:8b", await sut.GetMemoryExtractionModelNameAsync());
     }

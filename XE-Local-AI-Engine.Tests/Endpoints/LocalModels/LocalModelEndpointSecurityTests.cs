@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -16,8 +16,8 @@ public sealed class LocalModelEndpointSecurityTests
     [Test]
     public async Task LocalModelEndpoints_WhenTokenMissing_AreRejected()
     {
-        var modelService = Substitute.For<IOllamaModelService>();
-        await using var factory = CreateFactory(modelService);
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        await using var factory = CreateFactory(ggufModelStore);
         using var client = factory.CreateClient();
 
         using var listResponse = await client.GetAsync("/api/local/v1/models");
@@ -32,7 +32,7 @@ public sealed class LocalModelEndpointSecurityTests
             Kind = "Chat"
         });
         using var resetKindResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b/kind");
-        using var runningResponse = await client.GetAsync("/api/local/v1/models/running");
+        using var runningResponse = await client.GetAsync("/api/local/v1/model-fit/running");
         // Body-less, like the real client: the route-only unload POST sends no body and no Content-Type, so this also
         // proves auth runs ahead of content negotiation (401, never a 415 that would mask the missing token).
         using var unloadResponse = await client.PostAsync("/api/local/v1/models/llama3:8b/unload", content: null);
@@ -45,19 +45,17 @@ public sealed class LocalModelEndpointSecurityTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, resetKindResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, runningResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, unloadResponse.StatusCode);
-        await modelService.DidNotReceiveWithAnyArgs().ListLocalModelsAsync(Arg.Any<CancellationToken>());
-        await modelService.DidNotReceiveWithAnyArgs().ListRunningModelsAsync(Arg.Any<CancellationToken>());
-        await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await ggufModelStore.DidNotReceiveWithAnyArgs().ListInstalledModelsAsync(Arg.Any<CancellationToken>());
     }
 
-    private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService)
+    private static TestServerWebAppFactory CreateFactory(IGgufModelStore ggufModelStore)
     {
         return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
-                services.RemoveAll<IOllamaModelService>();
-                services.AddSingleton(modelService);
+                services.RemoveAll<IGgufModelStore>();
+                services.AddSingleton(ggufModelStore);
                 services.RemoveAll<INodeSettingsStore>();
                 services.AddSingleton<INodeSettingsStore>(new FakeNodeSettingsStore(new StoredNodeSettings()));
             }

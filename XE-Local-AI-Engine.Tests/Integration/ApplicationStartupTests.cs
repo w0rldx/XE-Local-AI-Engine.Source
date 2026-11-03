@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Integration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -47,13 +46,6 @@ public sealed class ApplicationStartupTests
     {
         var factory = Factory;
         AssertEx.NotNull(factory.Services.GetRequiredService<IInvocationRunner>());
-    }
-
-    [Test]
-    public async Task ICapabilityReporter_IsRegistered()
-    {
-        var factory = Factory;
-        AssertEx.NotNull(factory.Services.GetRequiredService<ICapabilityReporter>());
     }
 
     [Test]

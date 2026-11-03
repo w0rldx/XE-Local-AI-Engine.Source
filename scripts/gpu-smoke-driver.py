@@ -256,9 +256,8 @@ def command_models(args: argparse.Namespace) -> int:
             continue
         kind = item.get("kind") or item.get("detectedKind") or ""
         # `provider` is REQUIRED downstream, not decoration: this endpoint merges the node-local
-        # GGUF models with Ollama and the cloud providers into ONE items array (Ollama first,
-        # cloud appended), so without it the shell cannot tell which rows belong to the llama.cpp
-        # runtime that steps 1-2 just audited.
+        # GGUF models with the cloud providers into ONE items array, so without it the shell cannot
+        # tell which rows belong to the llama.cpp runtime that steps 1-2 just audited.
         provider = item.get("provider") or ""
         # sizeBytes lets the shell pick the SMALLEST eligible model. On a box with both a 27B and a
         # 0.5B installed that is the difference between a smoke someone runs before every RC and

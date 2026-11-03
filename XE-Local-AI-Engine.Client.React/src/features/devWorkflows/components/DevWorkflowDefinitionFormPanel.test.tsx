@@ -107,7 +107,6 @@ function optionRoutes() {
 	return [
 		jsonRoute("get", "agents", { items: [] }),
 		jsonRoute("get", "models", {
-			isAvailable: true,
 			items: [localModel("qwen3-30b", "Qwen3 30B", "Chat"), localModel("nomic-embed", "Nomic Embed", "Embedding")],
 		}),
 	];

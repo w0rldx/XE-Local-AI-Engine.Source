@@ -470,11 +470,11 @@ collaborator (its own interface + result + class) that has accreted at the tail 
 service belongs in its own file (same folder/namespace).
 
 The reverse direction is fenced too: a third-party runtime SDK belongs to the provider that owns it, and
-`ThirdPartySdkBoundaryTests` keeps `OllamaSharp`, `Docker.DotNet`, `Azure.*` and `Microsoft.Identity.Client` out
-of the host, application, persistence, agent and contracts layers. For Docker and Azure nothing in the project
+`ThirdPartySdkBoundaryTests` keeps `Docker.DotNet`, `Azure.*` and `Microsoft.Identity.Client` out
+of the host, application, persistence, agent and contracts layers. Nothing in the project
 graph says so on its own, because those packages are referenced by `Client.Application` itself, so every such
 reference compiles. That is why the rule is a source scan with its own shrink-only allowlist per SDK. The Docker
-entries are the two `ADR 0004` sanctions; the `OllamaSharp` allowlist is empty and stays empty.
+entries are the two `ADR 0004` sanctions.
 
 A provider whose third-party SDK must not leak marks that `PackageReference` `PrivateAssets="compile"`, and
 `LayerDependencyTests` fences a direct re-add in a consumer project the same way it fences `ProjectReference`s —
@@ -587,7 +587,7 @@ rules; test projects carry the ratchet only.
 
 Backend tests are **TUnit** (`[Test]`) on Microsoft.Testing.Platform, with a project **`AssertEx`** helper
 (`AssertEx.Equal/NotNull`) and **NSubstitute** for mocks — **no** xUnit/Shouldly/FluentAssertions/Moq.
-Reach for a substitute only after the real thing and the repo's fake seam (`FakeOllama`,
+Reach for a substitute only after the real thing and the repo's fake seam (`FakeOpenAiGateway`,
 `RecordingHubMessageSender`, MSW) have been ruled out, and never for the gate, cipher or migration the test exists
 to verify — [17-writing-tests.md §1a](17-writing-tests.md#1a-test-principles). Every test class carries exactly
 one `[Category(TestCategories.…)]`, enforced by `TestCategoryConventionTests` —

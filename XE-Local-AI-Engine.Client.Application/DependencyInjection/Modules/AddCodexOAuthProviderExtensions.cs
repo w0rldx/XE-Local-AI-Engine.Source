@@ -99,7 +99,7 @@ internal static class AddCodexOAuthProviderExtensions
         // Session lifecycle behind the cloud/codex/* Operator endpoints. Singleton, matching every dependency it wraps.
         builder.Services.AddSingleton<CodexSessionService>();
 
-        // Attributes a terminalized turn's tokens to the fine-grained provider (local/ollama/codex/azure/unknown) for the
+        // Attributes a terminalized turn's tokens to the fine-grained provider (local/codex/azure/unknown) for the
         // usage ledger; composed from the cloud selector above + the local model→provider resolver.
         builder.Services.AddSingleton<IUsageProviderResolver, UsageProviderResolver>();
         // Lazy for the chat persistence service, which startup resolves before the cloud graph behind the resolver is needed.

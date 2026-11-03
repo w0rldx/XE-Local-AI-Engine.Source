@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
-using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -25,8 +24,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
-using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
+using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
@@ -50,7 +49,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         "<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>XE Local AI Engine</title></head>\n" +
         "<body><div id=\"root\"></div><script type=\"module\" src=\"/assets/index.js\"></script></body>\n</html>\n";
 
-    private readonly FakeOllamaServer? _fakeOllamaServer;
+    private readonly FakeOpenAiGatewayServer? _fakeGateway;
     private readonly string _fixtureWebRoot;
     private readonly string _nodeSqlitePath;
     private readonly string _nodeDataDirectory;
@@ -76,14 +75,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private WebApplication? _app;
     private bool _disposed;
 
-    // TUnit's ClassDataSource<T> resolves the fixture through a new() constraint, which an all-optional-parameter
-    // constructor does not satisfy (TUnit0061), so the parameterless form is declared explicitly.
     public TestServerWebAppFactory()
-        : this(fakeOllamaOptions: null)
-    {
-    }
-
-    public TestServerWebAppFactory(FakeOllamaOptions? fakeOllamaOptions)
     {
         _fixtureWebRoot = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-wwwroot-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_fixtureWebRoot);
@@ -93,10 +85,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
         if (!RunLocalIntegration)
         {
-            _fakeOllamaServer = FakeOllamaServer.StartAsync(fakeOllamaOptions ?? new FakeOllamaOptions
-            {
-                Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
-            }).GetAwaiter().GetResult();
+            _fakeGateway = FakeOpenAiGatewayServer.StartAsync(FakeGatewayLocalModelProvider.DefaultOptions()).GetAwaiter().GetResult();
         }
     }
 
@@ -249,9 +238,9 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         {
             try
             {
-                if (_fakeOllamaServer is not null)
+                if (_fakeGateway is not null)
                 {
-                    await _fakeOllamaServer.DisposeAsync();
+                    await _fakeGateway.DisposeAsync();
                 }
             }
             finally
@@ -287,8 +276,6 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             {
                 [NodeSqliteConnectionStringKey] = ownConnectionString,
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
-                ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
-                ["Ollama:ChatModel"] = "qwen3.5:0.8b",
                 ["NodeData:Directory"] = _nodeDataDirectory,
                 // Keep this host out of EF's static ServiceProviderCache: an immortal entry would root this host's
                 // whole ServiceProvider (the measured ~20 MB/host leak). The host owns one EF internal provider
@@ -452,7 +439,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     // The test host's deviations from the product composition: no background services, a temp-scoped Data Protection
     // ring, runtime-acquisition seams pointed at a transport that always fails (so no host build can reach GitHub), an
-    // unpaired token store, and — off RUN_LOCAL_INTEGRATION — the fake Ollama backend in place of a live model.
+    // unpaired token store, and — off RUN_LOCAL_INTEGRATION — the fake gateway in place of a live model.
     private void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IHostedService>();
@@ -487,31 +474,15 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
         if (!RunLocalIntegration)
         {
-            services.RemoveAll<IOllamaApiClient>();
+            var provider = new FakeGatewayLocalModelProvider(_fakeGateway!);
             services.RemoveAll<IChatClient>();
             services.RemoveAll<ILocalModelProvider>();
-            services.RemoveAll<OllamaApiClientFactory>();
-#pragma warning disable CA2000 // The factory singleton owns and disposes this HttpClient for the test host lifetime.
-            services.AddSingleton(_ => new OllamaApiClientFactory(new HttpClient
+            services.AddSingleton<ILocalModelProvider>(provider);
+            services.AddSingleton<IChatClient>(_ => provider.CreateChatClient(new LocalModelSelection
             {
-                BaseAddress = _fakeOllamaServer!.BaseAddress
-            }, ownsHttpClient: true));
-#pragma warning restore CA2000
-            services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer!.BaseAddress));
-            services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
-            services.AddSingleton<ILocalModelProvider>(_ =>
-            {
-                var llamacpp = Substitute.For<ILocalModelProvider>();
-                llamacpp.ProviderName.Returns("llamacpp");
-                return llamacpp;
-            });
-            services.AddSingleton<IChatClient>(sp => sp.GetServices<ILocalModelProvider>()
-                                                       .First(provider => provider.ProviderName == OllamaLocalModelProvider.OllamaProviderName)
-                                                       .CreateChatClient(new LocalModelSelection
-                                                       {
-                                                           ModelName = "qwen3.5:0.8b",
-                                                           ProviderName = OllamaLocalModelProvider.OllamaProviderName
-                                                       }));
+                ModelName = FakeGatewayLocalModelProvider.ChatModel,
+                ProviderName = provider.ProviderName
+            }));
 
             services.RemoveAll<IHttpClientFactory>();
             services.AddSingleton<IHttpClientFactory>(_ =>

@@ -7,14 +7,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The fence that keeps a third-party SDK out of the layers that must not name it.
 ///     <para>
-///         <c>OllamaSharp</c>, <c>Docker.DotNet</c>, <c>Azure.*</c> and <c>Microsoft.Identity.Client</c> are provider
+///         <c>Docker.DotNet</c>, <c>Azure.*</c> and <c>Microsoft.Identity.Client</c> are provider
 ///         concerns. A host, application, persistence, agent or contracts type that names one has moved a runtime
-///         decision out of the provider that owns it. For Docker, Azure and MSAL the project graph still says nothing:
+///         decision out of the provider that owns it. The project graph says nothing here:
 ///         those packages are referenced by <c>Client.Application</c> itself, so every one of those references
-///         compiles and this scan is the only fence. OllamaSharp is the exception — its allowlist is
-///         empty and the graph itself now refuses the reference (<c>PrivateAssets="compile"</c> on
-///         <c>Providers.Ollama</c>'s reference, plus the <c>PackageReference</c> allow-list in
-///         <c>LayerDependencyTests</c>), so there the scan is the reviewer-facing symptom rather than the wall.
+///         compiles and this scan is the only fence.
 ///     </para>
 ///     <para>
 ///         A raw-text scan rather than reflection over the compiled assemblies, matching
@@ -34,8 +31,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <para>
 ///         Ratchet (P1): the allowlists freeze the files that reference an SDK today so no NEW one can land.
 ///         <see cref="EveryAllowlistedFile_StillReferencesItsSdkToday" /> is the other half — an entry that stopped
-///         violating is deleted, so the lists only shrink. OllamaSharp's has already shrunk to nothing, which is the
-///         end state the ratchet exists to reach.
+///         violating is deleted, so the lists only shrink.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -54,17 +50,6 @@ public sealed class ThirdPartySdkBoundaryTests
         ("XE-Local-AI-Engine.AI.Agent", 60),
         ("XE-Local-AI-Engine.AI.Contracts", 5)
     ];
-
-    /// <summary>
-    ///     Empty, and it stays empty: every OllamaSharp usage lives in <c>Providers.Ollama</c> behind
-    ///     <c>Providers.Abstractions</c>, so this fence now asserts ZERO matches across the five scanned projects with
-    ///     no exemption at all. The SDK is confined by two stronger mechanisms than this scan —
-    ///     <c>Providers.Ollama</c>'s <c>OllamaSharp</c> reference is <c>PrivateAssets="compile"</c> so no consumer can
-    ///     compile against it, and <c>LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences</c>
-    ///     catches a direct re-add of the package — but this one names the offending FILE, which is what a reviewer
-    ///     needs. Do not re-add an entry here; fix the file instead.
-    /// </summary>
-    private static readonly string[] OllamaSharpAllowlist = [];
 
     /// <summary>
     ///     The two files ADR 0004 (development-mode container execution, Docker stopgap) names as the sanctioned
@@ -99,13 +84,9 @@ public sealed class ThirdPartySdkBoundaryTests
         "XE-Local-AI-Engine.Client.Application/Services/CloudProviders/Implementation/EntraTokenCacheStore.cs"
     ];
 
-    /// <summary>The three fences: what is banned, where it is still allowed, and what to do instead.</summary>
+    /// <summary>The two fences: what is banned, where it is still allowed, and what to do instead.</summary>
     private static readonly (string Name, string[] Symbols, string[] Allowlist, string Remedy)[] Fences =
     [
-        ("OllamaSharp", ["OllamaSharp"], OllamaSharpAllowlist,
-            "Reach Ollama through Providers.Abstractions or Providers.Ollama.Contracts; the SDK type belongs in "
-            + "Providers.Ollama, whose OllamaSharp reference is PrivateAssets=\"compile\" so nothing outside that "
-            + "project can compile against the SDK. This allowlist is empty and stays empty."),
         ("Docker.DotNet", ["Docker.DotNet"], DockerDotNetAllowlist,
             "Go through IContainerRuntime; the Docker SDK stays behind the two files ADR 0004 names."),
         ("Azure / MSAL", ["Azure.", "Microsoft.Identity.Client"], AzureAndMsalAllowlist,
@@ -116,8 +97,8 @@ public sealed class ThirdPartySdkBoundaryTests
     private static readonly (string Case, string Source, string Symbol)[] MustBeSeen =
     [
         ("URL in a regular string, then a real reference",
-            """var endpoint = "https://localhost:11434"; _ = typeof(OllamaSharp.OllamaApiClient);""",
-            "OllamaSharp"),
+            """var endpoint = "https://localhost:2375"; _ = typeof(Docker.DotNet.DockerClientConfiguration);""",
+            "Docker.DotNet"),
         ("double slash in a verbatim string, then a real reference",
             """var socket = @"npipe://./pipe/docker//engine"; _ = typeof(Docker.DotNet.DockerClient);""",
             "Docker.DotNet"),
@@ -132,7 +113,7 @@ public sealed class ThirdPartySdkBoundaryTests
     /// <summary>Prose naming an SDK. Documenting which dependency a seam replaces is not the dependency.</summary>
     private static readonly (string Case, string Source, string Symbol)[] MustNotBeSeen =
     [
-        ("line comment", "// The OllamaSharp client lives in Providers.Ollama.", "OllamaSharp"),
+        ("line comment", "// The Azure.AI.OpenAI client lives behind the cloud-provider service.", "Azure."),
         ("XML doc comment", "/// <summary>Replaces the direct Docker.DotNet dependency.</summary>", "Docker.DotNet"),
         ("block comment", "/* Azure.Identity is reached through the cloud-provider service. */", "Azure."),
         ("comment after a URL string",

@@ -37,7 +37,7 @@ internal sealed class NodeMetricsLlamaServerLoadTelemetry : ILlamaServerLoadTele
     ///     ADMISSION, or <see langword="null" /> when there is no such load to report.
     /// </summary>
     /// <remarks>
-    ///     No such load means a remote or Ollama model, a model already resident before the node started, a node that
+    ///     No such load means a remote model, a model already resident before the node started, a node that
     ///     has not loaded it at all, or an unadmitted reload since — which clears the reading rather than letting it
     ///     describe a replaced process.
     /// </remarks>

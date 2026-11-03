@@ -8,12 +8,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Hosting;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -47,28 +44,6 @@ public sealed class ServiceProviderValidationTests
         // Reaching here means Build() itself passed ValidateOnBuild: every non-factory registration's dependencies are
         // registered, and no singleton captures a scoped service.
         AssertEx.NotNull(host.App.Services);
-    }
-
-    /// <summary>
-    ///     The same real composition root with the OPTIONAL Ollama runtime gated off. This is the only host in the
-    ///     suite that runs a gate-off node in production shape: <c>TestServerWebAppFactory</c> registers a fake
-    ///     <c>IOllamaApiClient</c> unconditionally, which masked the fact that <c>OllamaModelService</c> — and, before
-    ///     it, <c>ModelCapabilityProber</c>'s capability client — had no dependency to resolve once the gate skipped
-    ///     the provider stack. <c>ValidateOnBuild</c> constructs every non-factory registration, so this covers the
-    ///     model catalog, capacity, classification, model-fit and the three local-model endpoints in one assertion.
-    /// </summary>
-    [Test]
-    public async Task CompositionRoot_WithTheOllamaRuntimeGateOff_BuildsWithScopeAndBuildValidationEnabled()
-    {
-        await using var host = await ValidatedHost.CreateAsync(new Dictionary<string, string?>(StringComparer.Ordinal)
-        {
-            [OllamaRuntimeGate.RuntimeEnabledConfigurationKey] = "false"
-        });
-
-        var modelService = host.App.Services.GetRequiredService<IOllamaModelService>();
-        AssertEx.True(modelService is UnavailableOllamaModelService,
-            $"A gate-off node must get the no-op Ollama model service, not {modelService.GetType().Name} (which needs an IOllamaApiClient the gate never registers).");
-        AssertEx.NotNull(host.App.Services.GetRequiredService<IModelCapabilityClient>());
 
         using var scope = host.App.Services.CreateScope();
         AssertEx.NotNull(scope.ServiceProvider.GetRequiredService<ILocalModelCatalogService>());
@@ -157,7 +132,7 @@ public sealed class ServiceProviderValidationTests
 
         public WebApplication App { get; }
 
-        public static async Task<ValidatedHost> CreateAsync(IReadOnlyDictionary<string, string?>? additionalConfiguration = null)
+        public static async Task<ValidatedHost> CreateAsync()
         {
             var webRoot = Path.Combine(Path.GetTempPath(), $"xe-di-validation-wwwroot-{Guid.NewGuid():N}");
             _ = Directory.CreateDirectory(webRoot);
@@ -170,16 +145,9 @@ public sealed class ServiceProviderValidationTests
             {
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={sqlitePath}",
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
-                ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["NodeData:Directory"] = nodeDataDirectory,
                 ["EntityFramework:ServiceProviderCaching"] = "false"
             };
-
-            // Last-wins overlay, so a caller can build the same real composition root under a different capability gate.
-            foreach (var (key, value) in additionalConfiguration ?? new Dictionary<string, string?>(StringComparer.Ordinal))
-            {
-                configuration[key] = value;
-            }
 
             var start = await Program.CreateAppAsync([], new ProgramAppCustomization
             {

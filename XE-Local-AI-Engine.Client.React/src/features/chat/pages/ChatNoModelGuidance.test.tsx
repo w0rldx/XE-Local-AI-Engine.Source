@@ -104,10 +104,8 @@ describe("Chat no-installed-model guidance", () => {
 	it("shows inline guidance with a Go to Models link on a node with no installed chat model and no cloud provider", async () => {
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 
 		renderChat();
@@ -120,10 +118,8 @@ describe("Chat no-installed-model guidance", () => {
 	it("shows the first-run download progress instead of the install hint while the default model downloads", async () => {
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 
 		renderChat({ modelName: "qwen3.5-9b-q4_k_m", pct: 42 });
@@ -132,6 +128,17 @@ describe("Chat no-installed-model guidance", () => {
 		expect(screen.getByText("Setting up your first model…")).toBeTruthy();
 		expect(screen.getByTestId("chat-no-model-guidance-models-link")).toBeTruthy();
 		expect(screen.queryByText("No chat model installed yet")).toBeNull();
+	});
+
+	it("does not claim nothing is installed when the model list read fails", async () => {
+		listLocalModelsQueryFn.mockRejectedValue(new Error("list failed"));
+
+		renderChat();
+
+		await waitFor(() => expect(listLocalModelsQueryFn).toHaveBeenCalled());
+		await expect(listLocalModelsQueryFn.mock.results[0]?.value).rejects.toThrow("list failed");
+		await screen.findByTestId("chat-model-selector-trigger");
+		expect(screen.queryByTestId("chat-no-model-guidance-models-link")).toBeNull();
 	});
 
 	it("hides the guidance once a local chat-capable model is installed", async () => {
@@ -148,10 +155,8 @@ describe("Chat no-installed-model guidance", () => {
 					isOverridden: false,
 				},
 			],
-			isAvailable: true,
 			selectedModelName: "llama3",
 			configuredDefaultModelName: "llama3",
-			error: null,
 		});
 
 		// A second download running beside an installed model is not first-run setup.
@@ -177,10 +182,8 @@ describe("Chat no-installed-model guidance", () => {
 					isOverridden: false,
 				},
 			],
-			isAvailable: true,
 			selectedModelName: null,
 			configuredDefaultModelName: null,
-			error: null,
 		});
 
 		renderChat();

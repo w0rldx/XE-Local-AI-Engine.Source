@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
@@ -454,8 +453,8 @@ public sealed class NodeChatStreamServiceToolOfferTests
     [Test]
     public async Task SendMessageAsync_WhenGgufModelIsToolCapable_OffersTools()
     {
-        // A llama.cpp (non-Ollama) model whose chat template was detected tool-capable must be offered tools — the GGUF
-        // capability resolver supplies the caps, NOT an /api/show probe (which would fail / stall in desktop mode).
+        // A llama.cpp model whose chat template was detected tool-capable must be offered tools — the GGUF capability
+        // resolver supplies the caps.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -463,14 +462,10 @@ public sealed class NodeChatStreamServiceToolOfferTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false))),
+                CreateModelCapabilityResolver(gguf:CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -538,14 +533,10 @@ public sealed class NodeChatStreamServiceToolOfferTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(agentResolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
+                CreateModelCapabilityResolver(gguf:CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -603,14 +594,10 @@ public sealed class NodeChatStreamServiceToolOfferTests
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         offerProvider.IsToolCapable(Arg.Any<string?>()).Returns(allowListed);
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
+                CreateModelCapabilityResolver(gguf:CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -691,14 +678,10 @@ public sealed class NodeChatStreamServiceToolOfferTests
                              }
                          ]
                          : []));
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                        .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(providerResolver: providerResolver,
-                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
+                CreateModelCapabilityResolver(gguf:CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),

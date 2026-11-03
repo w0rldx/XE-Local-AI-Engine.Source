@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using TUnit.Core.Exceptions;
-using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -37,9 +37,9 @@ public sealed class TestServerWebAppFactoryTimingTests
     private const int Iterations = 10;
 
     // Phase names, also the CSV's phase column.
-    private const string PhaseConstructor = "ctor (dirs + FakeOllama)";
-    private const string PhaseFakeOllamaAlone = "FakeOllamaServer.StartAsync (alone)";
-    private const string PhaseFakeOllamaDisposeAlone = "FakeOllamaServer.DisposeAsync (alone)";
+    private const string PhaseConstructor = "ctor (dirs + fake gateway)";
+    private const string PhaseFakeGatewayAlone = "FakeOpenAiGatewayServer.StartAsync (alone)";
+    private const string PhaseFakeGatewayDisposeAlone = "FakeOpenAiGatewayServer.DisposeAsync (alone)";
     private const string PhaseHostBuild = "EnsureApp: CreateAppAsync + StartAsync";
     private const string PhaseBuilderCompose = "  ...of which: builder + AddServices (pre-Build)";
     private const string PhaseBuildAndStart = "  ...of which: Build + migrate + start (post-Build)";
@@ -59,7 +59,7 @@ public sealed class TestServerWebAppFactoryTimingTests
         Directory.CreateDirectory(workspace);
         try
         {
-            await MeasureFakeOllamaAloneAsync(samples);
+            await MeasureFakeGatewayAloneAsync(samples);
             MeasureTemplateCopy(samples, workspace);
             await MeasureHostsAsync(samples);
         }
@@ -166,22 +166,19 @@ public sealed class TestServerWebAppFactoryTimingTests
     }
 
     /// <summary>The Kestrel listener the fixture constructor starts eagerly, timed on its own so the constructor's cost splits.</summary>
-    private static async Task MeasureFakeOllamaAloneAsync(List<Sample> samples)
+    private static async Task MeasureFakeGatewayAloneAsync(List<Sample> samples)
     {
         for (var iteration = 0; iteration < Iterations; iteration++)
         {
             var start = Stopwatch.StartNew();
-            var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
-            {
-                Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
-            });
+            var server = await FakeOpenAiGatewayServer.StartAsync(FakeGatewayLocalModelProvider.DefaultOptions());
             start.Stop();
-            Record(samples, iteration, PhaseFakeOllamaAlone, start.Elapsed);
+            Record(samples, iteration, PhaseFakeGatewayAlone, start.Elapsed);
 
             var dispose = Stopwatch.StartNew();
             await server.DisposeAsync();
             dispose.Stop();
-            Record(samples, iteration, PhaseFakeOllamaDisposeAlone, dispose.Elapsed);
+            Record(samples, iteration, PhaseFakeGatewayDisposeAlone, dispose.Elapsed);
         }
     }
 

@@ -6,7 +6,7 @@ import type { XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin } fr
 
 export interface LocalModelViewModel {
 	modelName: string;
-	// The runtime that serves this model ("llamacpp", "Ollama", "CodexOAuth", "AzureFoundry"). Only "llamacpp" models
+	// The runtime that serves this model ("llamacpp", "CodexOAuth", "AzureFoundry", "external"). Only "llamacpp" models
 	// honor a per-model launch-argument override, so the Advanced tab is gated on this.
 	provider: string;
 	origin: LocalModelOrigin | null;

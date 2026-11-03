@@ -114,7 +114,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Model-type classification store: the digest-keyed detection cache and the operator override, keyed by model name (NOCASE)
         // and unencrypted, since names, digests and kinds are not secrets. The service resolves the picker's effective kind through it.
         builder.Services.AddScoped<IModelClassificationStore, ModelClassificationStore>();
-        // Per-model→provider routing map: which local runtime (llamacpp / ollama) serves a model, so chat routing and the preview and
+        // Per-model→provider routing map: which local runtime serves a model, so chat routing and the preview and
         // embeddings resolvers dispatch correctly across restarts. Unencrypted; Scoped, and the singleton resolver reads it per lookup.
         builder.Services.AddScoped<IModelProviderMapStore, ModelProviderMapStore>();
         builder.Services.AddSingleton<KeyedCompositeLockDomain>();
@@ -131,15 +131,14 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<ILocalModelDeletionJournalReconciler>(static services =>
             services.GetRequiredService<LocalModelDeletionCoordinator>());
         builder.Services.AddScoped<ILocalModelAdministrationService, LocalModelAdministrationService>();
-        // Two-runtime unload fan-out for the eject route: every llama-server role, then the gated Ollama eviction. Singleton like the
-        // other lifecycle coordinators, since everything it consumes (process supervisor, Ollama model service, config) is one too.
+        // Unload fan-out for the eject route: every llama-server role. Singleton like the
+        // other lifecycle coordinators, since the process supervisor it consumes is one too.
         builder.Services.AddSingleton<IModelUnloadCoordinator, ModelUnloadCoordinator>();
         builder.Services.AddSingleton<DefaultModelSelectionPolicy>();
         builder.Services.AddHostedService<LocalModelDeletionStartupReconciler>();
         builder.Services.AddScoped<GgufAcquisitionStateProbe>();
         builder.Services.AddSingleton<GgufAcquisitionIdentityResolver>();
         builder.Services.AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>();
-        builder.Services.AddScoped<IOllamaProviderMapBackfillCoordinator, OllamaProviderMapBackfillCoordinator>();
         builder.Services.AddScoped<IModelLaunchArgumentsStore, ModelLaunchArgumentsStore>();
         // The LocalModels launch-argument endpoints' only path to that store. Scoped, matching the store it wraps.
         builder.Services.AddScoped<ModelLaunchArgumentsService>();

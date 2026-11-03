@@ -266,8 +266,9 @@ There is still **no scan-a-folder setting**, and copying `.gguf` files into the 
 hand is *not* reliably picked up, because the model list is driven by a manifest rather than by
 scanning the folder. Importing is what writes that manifest entry.
 
-Also available: if you already run **Ollama**, the app can list and use its models too. It won't
-install or manage Ollama for you.
+Also available: a model served by another program with an OpenAI-compatible API can be added as a
+[connection](cloud-providers.md#an-openai-compatible-connection). The app won't install or manage that
+program for you.
 
 → [Technical detail](for-experienced-users.md#using-ggufs-you-already-have)
 
@@ -493,8 +494,8 @@ Free to use today. No pricing decisions have been made about the future.
 **Windows and Linux, x64 only.** No macOS or ARM build exists. Linux ships as a Velopack AppImage and can update
 itself by replacing that AppImage → [Linux installation](install-linux.md).
 
-### Do I need Docker / Ollama / Python / .NET?
-**Docker, Python and Ollama: no** — Ollama is optional and only if you already use it.
+### Do I need Docker / Python / .NET?
+**Docker and Python: no.**
 
 **.NET: it depends on your platform.** The **Linux** AppImage is self-contained and needs nothing. The
 **Windows** portable build is framework-dependent, so it needs the **x64 ASP.NET Core Runtime 10.0**

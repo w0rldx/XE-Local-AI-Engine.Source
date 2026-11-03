@@ -137,7 +137,7 @@ public static class ExternalModelId
     /// </summary>
     /// <remarks>
     ///     The wire id is the REMOTE server's, so it is only constrained enough to stay safe: it may carry <c>/</c> (an
-    ///     <c>org/model</c> vLLM id) and <c>:</c> (an Ollama-style tag), but never a path traversal, a backslash, a
+    ///     <c>org/model</c> vLLM id) and <c>:</c> (a <c>name:tag</c> id), but never a path traversal, a backslash, a
     ///     scheme, or whitespace.
     /// </remarks>
     public static bool IsValidWireId([NotNullWhen(true)] string? wireId)

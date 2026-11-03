@@ -101,12 +101,15 @@ public sealed class LocalModelAdministrationServiceTests
     }
 
     [Test]
-    public async Task SelectDefaultAsync_PersistedEmbeddingModel_IsRefusedAsNotChat()
+    public async Task SelectDefaultAsync_ModelOverriddenToEmbedding_IsRefusedAsNotChat()
     {
         var settings = new FakeNodeSettingsStore(new StoredNodeSettings());
         var harness = new Harness(settings);
         harness.Classifications.GetByNameAsync("plain-model", Arg.Any<CancellationToken>())
-               .Returns(Classification("plain-model", ModelKind.Embedding));
+               .Returns(Classification("plain-model", ModelKind.Unknown) with
+               {
+                   OverrideKind = ModelKind.Embedding
+               });
 
         var result = await harness.Service.SelectDefaultAsync("plain-model", LocalModelSelectionPolicy.ConfiguredModel);
 
@@ -115,10 +118,12 @@ public sealed class LocalModelAdministrationServiceTests
         AssertEx.Equal(expected: 0, settings.WriteCount);
     }
 
+    // Nothing writes a detected kind any more, so an old row's value (even Embedding) no longer decides eligibility.
     [Test]
     [Arguments(ModelKind.Chat)]
     [Arguments(ModelKind.Unknown)]
-    public async Task SelectDefaultAsync_ChatOrUnknownKind_IsAccepted(ModelKind detectedKind)
+    [Arguments(ModelKind.Embedding)]
+    public async Task SelectDefaultAsync_StoredDetectedKindWithNoOverride_IsAccepted(ModelKind detectedKind)
     {
         var settings = new FakeNodeSettingsStore(new StoredNodeSettings());
         var harness = new Harness(settings);

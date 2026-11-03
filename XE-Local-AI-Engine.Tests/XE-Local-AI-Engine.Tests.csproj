@@ -16,14 +16,12 @@
     <PackageReference Include="NetArchTest.Rules"/>
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="NSubstitute.Analyzers.CSharp" PrivateAssets="all"/>
-    <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TngTech.ArchUnitNET"/>
     <PackageReference Include="TUnit"/>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeDocker\XE-Local-AI-Engine.Testing.FakeDocker.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOpenAiGateway\XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLauncher.csproj"/>
@@ -35,7 +33,6 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompat\XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>

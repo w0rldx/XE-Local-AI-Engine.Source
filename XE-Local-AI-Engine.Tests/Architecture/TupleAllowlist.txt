@@ -96,7 +96,7 @@ XE-Local-AI-Engine.Tests/Architecture/SqliteFileProbeConnectionStringGuardTests.
 XE-Local-AI-Engine.Tests/Architecture/Support/EnforcedSourceFiles.cs|3
 XE-Local-AI-Engine.Tests/Architecture/Support/SourceCommentStripperTests.cs|24
 XE-Local-AI-Engine.Tests/Architecture/TestCategoryConventionTests.cs|4
-XE-Local-AI-Engine.Tests/Architecture/ThirdPartySdkBoundaryTests.cs|20
+XE-Local-AI-Engine.Tests/Architecture/ThirdPartySdkBoundaryTests.cs|19
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkJudgeScoringContractsTests.cs|38
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkKldBaseCacheTests.cs|3
 XE-Local-AI-Engine.Tests/Benchmarks/BenchmarkNiahGeneratorTests.cs|1
@@ -264,7 +264,6 @@ XE-Local-AI-Engine.Tests/Sandbox/SandboxFilesystemIsolationContractTests.cs|2
 XE-Local-AI-Engine.Tests/Scheduler/ModelRecommendationCheckHandlerTests.cs|2
 XE-Local-AI-Engine.Tests/Scheduler/RunBenchmarkBatchHandlerTests.cs|3
 XE-Local-AI-Engine.Tests/Scheduler/SchedulerDispatchExecutorHistoryTests.cs|2
-XE-Local-AI-Engine.Tests/Services/Chat/ModelClassificationServiceTests.cs|2
 XE-Local-AI-Engine.Tests/Telemetry/GenAiCancellationStatusProcessorTests.cs|2
 XE-Local-AI-Engine.Tests/Telemetry/GenAiErrorDescriptionRedactionProcessorTests.cs|2
 XE-Local-AI-Engine.Tests/Telemetry/InvocationEfficiencyTelemetryTests.cs|4

@@ -28,7 +28,6 @@
         <Project Path="XE-Local-AI-Engine.Providers.CodexOAuth/XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.HuggingFace/XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.LlamaServer/XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
-        <Project Path="XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.OpenAICompat/XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.OpenAICompatible.Core/XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.ProcessSupervision/XE-Local-AI-Engine.Providers.ProcessSupervision.csproj"/>
@@ -46,7 +45,6 @@
     </Folder>
     <Folder Name="/Tests/Fixture/">
         <Project Path="XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"/>
-        <Project Path="XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
         <Project Path="XE-Local-AI-Engine.Testing.FakeOpenAiGateway/XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"/>
     </Folder>
 </Solution>

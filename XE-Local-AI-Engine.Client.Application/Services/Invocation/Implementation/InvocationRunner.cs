@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -117,8 +116,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string AttachmentShortenedNoticeMessage =
         "The attached file was shortened to fit this model's context window; the model was told it is incomplete.";
 
-    private readonly ICapabilityReporter _capabilityReporter;
-
     // Read once per turn to pin the external binding this invocation is authorized against. See
     // ExternalProviderInvocationPin for what the pin protects and why it is seeded here.
     private readonly IExternalProviderRegistry _externalProviderRegistry;
@@ -139,7 +136,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
-    private readonly ILocalModelProviderResolver _providerResolver;
     private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
 
@@ -165,8 +161,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IInvocationAgentFactory invocationAgentFactory,
         IOrchestrationAgentFactory orchestrationAgentFactory,
         IRuntimePackageValidator runtimePackageValidator,
-        ICapabilityReporter capabilityReporter,
-        ILocalModelProviderResolver providerResolver,
         LocalRuntimeWarmer localRuntimeWarmer,
         IProviderStreamResilience providerStreamResilience,
         IConversationContextBudgeter contextBudgeter,
@@ -175,7 +169,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IOptions<AgentToolPipelineOptions> toolPipelineOptions,
         IOptions<ProviderCallBudgetOptions> providerCallBudgetOptions,
         IToolRelevanceCoreSet toolRelevanceCoreSet,
-        IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         ToolApprovalCoordinator toolApprovalCoordinator,
         ApiToolCallBridge apiToolCallBridge,
@@ -194,8 +187,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
-        _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
-        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _localRuntimeWarmer = localRuntimeWarmer ?? throw new ArgumentNullException(nameof(localRuntimeWarmer));
         _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
         _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
@@ -208,7 +199,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
         _providerCallBudgetOptions = providerCallBudgetOptions.Value;
         _toolRelevanceCoreSet = toolRelevanceCoreSet ?? throw new ArgumentNullException(nameof(toolRelevanceCoreSet));
-        ArgumentNullException.ThrowIfNull(configuration);
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -218,9 +208,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // Read once at singleton construction from INodeRuntimeSettings (stored > appsettings seed > default) into plain fields the hot
-        // streaming/cleanup loops read, so an operator edit applies on the next restart. The out-of-band Ollama:ChatModel override still wins, as in the chat-connection fallback.
-        _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
-                        ?? runtimeSettings.GetDefaultModelName();
+        // streaming/cleanup loops read, so an operator edit applies on the next restart.
+        _defaultModel = runtimeSettings.GetDefaultModelName();
         _maxResponseSizeBytes = runtimeSettings.GetMaxResponseSizeMb() * 1024 * 1024;
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
     }
@@ -433,13 +422,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _logger.LogDebug("Tool-relevance filtering is ACTIVE for invocation {InvocationId}.", package.InvocationId);
         }
 
-        ModelResolution modelResolution;
-        using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
-        {
-            modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken);
-        }
-
-        var resolvedModel = modelResolution.Model;
+        var resolvedModel = ResolveModel(package.ModelProfile);
 
         // `auto` resolves into a concrete {model, effort} HERE, between model resolution and the local warm, so an admitted small-model swap is what
         // gets warmed. Declared FIRST so `using` disposes it LAST, after the ledger reservation made inside it; AsyncServiceScope's `default` is unsafe to dispose.
@@ -499,7 +482,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         var selection = new TurnModelSelection
         {
-            ModelResolution = modelResolution,
             Package = package,
             ResolvedModel = resolvedModel,
             OriginalModel = originalModel,
@@ -539,7 +521,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var dispatcher = turn.Dispatcher;
         var package = selection.Package;
         var resolvedModel = selection.ResolvedModel;
-        var modelResolution = selection.ModelResolution;
         var dispatchDecision = selection.DispatchDecision;
         var modelWasSwapped = selection.ModelWasSwapped;
 
@@ -556,14 +537,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         stream.ReasoningControl = reasoningControlTurn;
 
         var transport = new StreamTransport(this, dispatcher, package);
-
-        // Surface the model-substitution fallback as a visible, non-fatal chat notice rather than a log line only,
-        // which the transport (and therefore the dispatcher) now makes possible.
-        if (modelResolution.Substituted)
-        {
-            await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
-                BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel));
-        }
 
         // A decision the user did not make must be visible, but a NORMAL no-swap turn stays silent (noise), and the detail is the reason CODE only.
         // A SWAPPED turn is silent here too: it may still fall back at the send boundary, and a turn carries exactly ONE effort notice, emitted once the send resolves.
@@ -594,7 +567,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
 
         // Warm the local model BEFORE the watched streaming pull, so a cold big-model load runs in its own size-aware supervisor window and is never
-        // killed by the shorter stream-idle watchdog. Cloud and Ollama models no-op; the load is decoupled from this token, so a cancel only abandons the wait.
+        // killed by the shorter stream-idle watchdog. Cloud models no-op; the load is decoupled from this token, so a cancel only abandons the wait.
         var requestedContextTokens = turnPolicy.RequestedContextTokens ?? turnPolicy.ContextCapacityTokens;
         var localRuntime = await _localRuntimeWarmer.PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turn.TurnStartedTimestamp, invocationToken);
         var effectiveContextTokens = localRuntime.EffectiveContextTokens;
@@ -1037,7 +1010,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         CancellationToken invocationToken)
     {
         var (outputCap, reasoningBudgets) = await ResolveOutputPolicyAsync(package, invocationToken);
-        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, outputCap, reasoningBudgets, invocationToken);
+        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, outputCap, reasoningBudgets, invocationToken);
 
         // A participant runs on its OWN model, which the turn-level pin does not cover, so its sends would fall to the transport's weaker unpinned check while
         // the workflow carries node-local tool results between participants. One scope for all of them: the workflow interleaves participants in this single async flow.
@@ -1162,8 +1135,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     /// <summary>The model a turn runs on after model resolution and `auto` dispatch, plus the authorized originals the swap fallback restores.</summary>
     private sealed class TurnModelSelection
     {
-        public required ModelResolution ModelResolution { get; init; }
-
         public required RuntimePackage Package { get; init; }
 
         public required string ResolvedModel { get; init; }

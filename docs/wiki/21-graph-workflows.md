@@ -838,7 +838,7 @@ reads `run.input` is refused too while such a predecessor exists. (The `upstream
 
 | Config member | Meaning |
 |---|---|
-| `model` | Optional chat model. A node-local choice must be an installed node-managed GGUF chat model; Ollama, external models declared local, uninstalled and non-chat models are refused before inference. A cloud model (Codex, Azure Foundry, an external model declared cloud) runs only while `AllowCloudModelUnattendedRuns` is on. When omitted, the local-default resolver chooses one. The chosen model is not automatically swapped. |
+| `model` | Optional chat model. A node-local choice must be an installed node-managed GGUF chat model; external models declared local, uninstalled and non-chat models are refused before inference. A cloud model (Codex, Azure Foundry, an external model declared cloud) runs only while `AllowCloudModelUnattendedRuns` is on. When omitted, the local-default resolver chooses one. The chosen model is not automatically swapped. |
 | `systemPrompt` | Optional authored system instructions. Empty means no system-role message; no default assistant prompt is substituted. |
 | `prompt` | Required user instructions for this call. |
 | `inputBindings` | Optional object mapping names to dot paths in the node's input document. Values form a named JSON data block alongside the prompt; there is no placeholder expansion or implicit upstream context. |
@@ -1407,7 +1407,7 @@ See [Writing Tests](17-writing-tests.md) for which project a new test belongs in
 Two suites are worth naming because they are the ones that catch a wiring break the unit tests cannot:
 
 - **`GraphWorkflowEndToEndTests`** and **`GraphWorkflowPauseToolEndToEndTests`** drive the wired host over REST and a
-  real SignalR `HubConnection`, with the model runtime replaced by `Testing.FakeOllama`. The pause/tool suite asserts
+  real SignalR `HubConnection`, with the model runtime replaced by `Testing.FakeOpenAiGateway`. The pause/tool suite asserts
   the `gate` push twice, which is what proves the publisher decorator and the lowercase wire kind agree with the
   client.
 - The **E2E** class drives the real browser through the whole loop — create a definition, drop nodes from the

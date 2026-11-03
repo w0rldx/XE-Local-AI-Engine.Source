@@ -4,8 +4,8 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for <c>/loaded-models</c>: the llama.cpp models the process supervisor reports, with no
-///     Ollama section. No llama-server runs here and the endpoint degrades to an OK-empty list, so the empty panel
+///     Browser-driven E2E for <c>/loaded-models</c>: the llama.cpp models the process supervisor reports, and no other
+///     section. No llama-server runs here and the endpoint degrades to an OK-empty list, so the empty panel
 ///     is expected.
 /// </summary>
 /// <remarks>
@@ -17,7 +17,7 @@ public sealed class LoadedModelsPageE2ETests : XESerialE2ETestBase
 {
     [Test]
     [Category("Page")]
-    public async Task LoadedModels_Page_Renders_The_LlamaCpp_Panel_And_No_Ollama_Section()
+    public async Task LoadedModels_Page_Renders_Only_The_LlamaCpp_Panel()
     {
         var pageErrors = new List<string>();
         Page.PageError += (_, error) => pageErrors.Add(error);
@@ -40,7 +40,7 @@ public sealed class LoadedModelsPageE2ETests : XESerialE2ETestBase
         });
         await Expect(Page.GetByTestId("loaded-models-llamacpp-table")).ToHaveCountAsync(0);
 
-        // The removed Ollama section rendered one of these ids in every state; none may come back.
+        // The removed second-runtime section rendered one of these ids in every state; none may come back.
         await Expect(Page.GetByTestId("loaded-models-table")).ToHaveCountAsync(0);
         await Expect(Page.Locator("[data-testid='loaded-models-empty'], [data-testid='loaded-models-unavailable'], [data-testid='loaded-models-error']"))
             .ToHaveCountAsync(0);

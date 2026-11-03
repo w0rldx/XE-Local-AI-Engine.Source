@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 
 using System.Collections.Concurrent;
 
-/// <summary>The fake gateway's live state: its options, the fault queue, the reply script and the request log.</summary>
+/// <summary>The fake gateway's live state: its options, model list, fault queue, reply script, responder and request log.</summary>
 public sealed class FakeOpenAiGatewayState
 {
     private readonly ConcurrentQueue<FakeOpenAiGatewayFailure> _failures = new();
@@ -16,11 +16,27 @@ public sealed class FakeOpenAiGatewayState
     {
         ArgumentNullException.ThrowIfNull(options);
         Options = options;
+        Models = options.Models;
     }
 
     public FakeOpenAiGatewayOptions Options { get; }
 
+    /// <summary>What <c>GET models</c> lists right now; a test replaces it to add or remove a model.</summary>
+    public IReadOnlyList<FakeOpenAiGatewayModel> Models { get; set; }
+
+    /// <summary>
+    ///     Consulted before the queued script on every chat request: its answer replies, null falls through. It may await a
+    ///     test-held gate, on the request's abort token, to park the reply before any chunk is written.
+    /// </summary>
+    public Func<FakeOpenAiGatewayChatTurn, CancellationToken, Task<FakeOpenAiGatewayScript?>>? ChatResponder { get; set; }
+
     public IReadOnlyList<FakeOpenAiGatewayRequest> RecordedRequests => _requests.ToArray();
+
+    /// <summary>Whether a request naming <paramref name="model" /> is served rather than answered 404.</summary>
+    public bool Serves(string? model)
+    {
+        return Options.AllowUnlistedModels || Models.Any(known => string.Equals(known.Id, model, StringComparison.Ordinal));
+    }
 
     public void EnqueueFailure(FakeOpenAiGatewayFailure failure)
     {

@@ -28,8 +28,8 @@ public sealed class AgentUsageSummaryBucketResponse
     public required string ModelName { get; init; }
 
     /// <summary>
-    ///     Fine-grained runtime provider that served the runs (part of the group key): <c>local</c>, <c>ollama</c>,
-    ///     <c>codex</c>, <c>azure</c>, or <c>unknown</c>.
+    ///     Fine-grained runtime provider that served the runs (part of the group key): <c>local</c>, <c>codex</c>,
+    ///     <c>azure</c>, or <c>unknown</c>; older rows may carry <c>ollama</c>.
     /// </summary>
     public required string Provider { get; init; }
 
@@ -95,7 +95,7 @@ public sealed class AgentUsageSummaryTotalsResponse
 /// </summary>
 public sealed class AgentUsageProviderTotalsResponse
 {
-    /// <summary>Fine-grained runtime provider: <c>local</c>, <c>ollama</c>, <c>codex</c>, <c>azure</c>, or <c>unknown</c>.</summary>
+    /// <summary>Fine-grained runtime provider: <c>local</c>, <c>codex</c>, <c>azure</c>, or <c>unknown</c>; older rows may carry <c>ollama</c>.</summary>
     public required string Provider { get; init; }
 
     /// <summary>Number of run-envelope rows attributed to the provider.</summary>

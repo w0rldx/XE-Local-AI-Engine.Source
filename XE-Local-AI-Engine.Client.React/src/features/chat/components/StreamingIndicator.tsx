@@ -22,10 +22,10 @@ interface StreamingIndicatorProps {
 	isQueued?: boolean;
 	isActive: boolean;
 	// Pre-first-token runtime phase from the stream; "preparing_runtime"/"loading_model" drive the model-loading
-	// affordance. Absent (cloud/Ollama or after generation begins) falls back to the normal indicator.
+	// affordance. Absent (cloud or after generation begins) falls back to the normal indicator.
 	runtimePhase?: string | null;
 	// Server-stamped ISO-8601 UTC time of that phase transition. Anchors the cold-load elapsed timer so a
-	// reload mid-load resumes the count; absent (older node, cloud/Ollama) falls back to first-observed time.
+	// reload mid-load resumes the count; absent (older node, cloud) falls back to first-observed time.
 	runtimePhaseChangedAtUtc?: string | null;
 	// Why the model loads ("first-load" | "idle-unloaded" | "evicted-for-cap" | "evicted-for-memory") and how long its
 	// previous load took; both absent from an older node, which keeps the plain "Loading model…" text.

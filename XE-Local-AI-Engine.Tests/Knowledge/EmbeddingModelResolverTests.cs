@@ -10,10 +10,10 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The embedding-model resolver maps the configured (Ollama-style) embedding name to a model actually installed on
-///     the resolved provider so knowledge-base embedding works out of the box on either runtime:
-///     - exact configured name installed → keep it, CONFIDENT (an Ollama node is unaffected);
-///     - no exact match but an embedding-named GGUF installed → use that GGUF, CONFIDENT (a llama.cpp node);
+///     The embedding-model resolver maps the configured embedding name to a model actually installed on the resolved
+///     provider so knowledge-base embedding works out of the box:
+///     - exact configured name installed → keep it, CONFIDENT;
+///     - no exact match but an embedding-named GGUF installed → use that GGUF, CONFIDENT;
 ///     - nothing matching installed → keep the configured name, NOT confident (the caller's graceful failure path fires);
 ///     - a transport failure while listing models degrades to the configured name, NOT confident, never throwing.
 ///     The confidence bit lets a consumer (the catalog's staleness check) distinguish a real resolution from a bare

@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     <see cref="ModelTrustLocality.Local" />, and it is served by the llama-server provider. <b>The installed check is the load-bearing
 ///     one</b> — both resolvers default an UNKNOWN id to "node-local llama.cpp", so on a node with no cloud provider configured the pair
 ///     admits EVERY string, a cloud model id included. Registry membership is what makes the gate mean what its name says; the other two
-///     then refuse an installed GGUF an operator has since re-declared as external or remapped to Ollama.
+///     then refuse an installed GGUF an operator has since re-declared as external.
 /// </remarks>
 internal static class NodeLocalModelGate
 {

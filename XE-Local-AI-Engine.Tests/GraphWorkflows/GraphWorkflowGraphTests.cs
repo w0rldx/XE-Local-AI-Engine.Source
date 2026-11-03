@@ -160,21 +160,28 @@ public sealed class GraphWorkflowGraphTests
     [Arguments(ModelKind.Embedding)]
     [Arguments(ModelKind.Reranker)]
     [Arguments(ModelKind.Draft)]
-    public void LlmCallModelPolicy_RefusesEveryNonChatClassification(ModelKind kind)
+    public void LlmCallModelPolicy_RefusesEveryNonChatOverride(ModelKind kind)
     {
-        var classification = new ModelClassificationRecord
+        AssertEx.False(LocalGgufModelKindClassifier.IsChatModel("installed.gguf", Classification(ModelKind.Chat, overrideKind: kind)));
+    }
+
+    [Test]
+    public void LlmCallModelPolicy_IgnoresAStoredDetectedKind()
+    {
+        AssertEx.True(LocalGgufModelKindClassifier.IsChatModel("installed.gguf", Classification(ModelKind.Embedding, overrideKind: null)));
+    }
+
+    private static ModelClassificationRecord Classification(ModelKind detectedKind, ModelKind? overrideKind) =>
+        new()
         {
             ModelName = "installed.gguf",
             Digest = null,
-            DetectedKind = kind,
+            DetectedKind = detectedKind,
             DetectedCapabilitiesJson = null,
-            OverrideKind = null,
+            OverrideKind = overrideKind,
             DetectedAtUtc = null,
             UpdatedAtUtc = 0
         };
-
-        AssertEx.False(LocalGgufModelKindClassifier.IsChatModel("installed.gguf", classification));
-    }
 
     [Test]
     public void LlmCallModelPolicy_AllowsAnUnclassifiedOrdinaryInstalledGguf() =>

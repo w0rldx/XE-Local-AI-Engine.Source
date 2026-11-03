@@ -76,14 +76,14 @@ public sealed class InstalledModelSnapshotCoordinatorTests
             new ReadOnlyMapStore(mapping: null));
         var claimedCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(),
             claimed.Store,
-            new ReadOnlyMapStore(new ModelProviderMapRecord(claimed.Snapshot.ModelName, "ollama", UpdatedAtUtc: 1, Revision: "map-r1")));
+            new ReadOnlyMapStore(new ModelProviderMapRecord(claimed.Snapshot.ModelName, "external", UpdatedAtUtc: 1, Revision: "map-r1")));
 
         await using var unmappedLease = await unmappedCoordinator.AcquireReadSnapshotAsync(unmapped.Snapshot.ModelName);
         await using var claimedLease = await claimedCoordinator.AcquireReadSnapshotAsync(claimed.Snapshot.ModelName);
 
         AssertEx.Equal(LlamaServerProviderConstants.ProviderName, unmappedLease.Snapshot.ProviderName);
         AssertEx.Null(unmappedLease.Snapshot.ProviderMappingRevision);
-        AssertEx.Equal("ollama", claimedLease.Snapshot.ProviderName);
+        AssertEx.Equal("external", claimedLease.Snapshot.ProviderName);
     }
 
     /// <summary>

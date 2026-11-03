@@ -34,7 +34,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
 
         NotBlank(RuleFor(static request => request.DefaultModelName));
         NotBlank(RuleFor(static request => request.WebSearchSearxngUrl));
-        NotBlank(RuleFor(static request => request.OllamaEndpoint));
         NotBlank(RuleFor(static request => request.HuggingFaceDefaultQuant));
         NotBlank(RuleFor(static request => request.KeepModelWarmModelName));
         NotBlank(RuleFor(static request => request.RecommendedLlamaCppTag));
@@ -59,11 +58,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         NotClearable(RuleFor(static request => request.ExternalAccessProfile), nameof(SaveNodeSettingsRequest.ExternalAccessProfile));
         NotClearable(RuleFor(static request => request.UiMode), nameof(SaveNodeSettingsRequest.UiMode));
         NotClearable(RuleFor(static request => request.SandboxSecurityProfile), nameof(SaveNodeSettingsRequest.SandboxSecurityProfile));
-
-        RuleFor(static request => request.OllamaEndpoint!)
-            .Must(BeAbsoluteHttpUrl)
-            .When(static request => !string.IsNullOrWhiteSpace(request.OllamaEndpoint))
-            .WithMessage("Ollama endpoint must be an absolute http or https URL.");
 
         RuleFor(static request => request.WebSearchSearxngUrl!)
             .Must(BeAbsoluteHttpUrl)

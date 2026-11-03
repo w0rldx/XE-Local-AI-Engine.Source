@@ -36,7 +36,7 @@ public sealed class LlamaServerProviderContractTests
             provider.CreateChatClient(new LocalModelSelection
             {
                 ModelName = Model,
-                ProviderName = "ollama"
+                ProviderName = "external"
             }));
 
         AssertEx.Contains(ex.Message, "does not match", StringComparison.OrdinalIgnoreCase);
@@ -51,7 +51,7 @@ public sealed class LlamaServerProviderContractTests
             provider.CreateEmbeddingGenerator(new LocalModelSelection
             {
                 ModelName = Model,
-                ProviderName = "ollama"
+                ProviderName = "external"
             }));
     }
 

@@ -230,7 +230,6 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
             LocalModelDetailsResolution.Gguf gguf => gguf.Descriptor.MaxContextTokens is int ceiling and > 0 ? Math.Min(ceiling, nodeDefault) : null,
             LocalModelDetailsResolution.External external => external.Registration.Model.ContextLength,
             LocalModelDetailsResolution.Cloud cloud => cloud.ContextLength,
-            LocalModelDetailsResolution.Ollama ollama => ollama.Details.MaxContextTokens,
             _ => null
         };
 

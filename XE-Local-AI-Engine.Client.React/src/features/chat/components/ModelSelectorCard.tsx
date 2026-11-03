@@ -68,8 +68,7 @@ export function ModelSelectorCard({
 	// Distinct from `reasoningLabel`: that badge means "a graded reasoning control is available", this one means
 	// "the model reasons by default, on/off only".
 	const nativeReasoningLabel = t("pages.chat.nativeReasoningLabel", "Native reasoning");
-	const statusFallback = (option: ModelOption): string =>
-		option.isAvailable ? t("pages.chat.modelAvailable", "Available") : t("pages.chat.modelUnavailable", "Unavailable");
+	const statusFallback = t("pages.chat.modelAvailable", "Available");
 
 	const filtered = useMemo(() => {
 		const query = searchQuery.trim().toLowerCase();
@@ -117,21 +116,12 @@ export function ModelSelectorCard({
 		[filteredCloud],
 	);
 
-	const availableOptions = filtered.filter((option) => option.isAvailable);
-	const unavailableOptions = filtered.filter((option) => !option.isAvailable);
-
 	const closePicker = (): void => {
 		setPickerOpened(false);
 		setSearchQuery("");
 	};
 
 	const select = (value: string): void => {
-		// Accept selections from either local or cloud lists; cloud options are always available.
-		const localOption = modelOptions.find((o) => o.value === value);
-		if (localOption !== undefined && !localOption.isAvailable) {
-			return;
-		}
-
 		onModelChange(value);
 		closePicker();
 	};
@@ -237,17 +227,8 @@ export function ModelSelectorCard({
 						<ScrollArea.Autosize mah={320} type="auto" offsetScrollbars={true}>
 							<Stack gap={2}>
 								<ModelSelectorSection
-									items={availableOptions}
+									items={filtered}
 									title={t("pages.chat.modelSelector.availableModels", "Available models")}
-									reasoningLabel={reasoningLabel}
-									nativeReasoningLabel={nativeReasoningLabel}
-									selectedModel={selectedModel}
-									statusFallback={statusFallback}
-									onSelect={select}
-								/>
-								<ModelSelectorSection
-									items={unavailableOptions}
-									title={t("pages.chat.modelSelector.unavailableModels", "Unavailable models")}
 									reasoningLabel={reasoningLabel}
 									nativeReasoningLabel={nativeReasoningLabel}
 									selectedModel={selectedModel}

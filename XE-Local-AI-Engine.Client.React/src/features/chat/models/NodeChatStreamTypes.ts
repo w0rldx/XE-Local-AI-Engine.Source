@@ -145,7 +145,7 @@ export interface NodeChatStreamEventDto {
 	noticeDetail?: string | null;
 	// Runtime phase: present on the `assistant-phase` event only. One of "preparing_runtime" |
 	// "loading_model" | "generating" — emitted before the first token while a local model cold-loads, so the UI can
-	// show a distinct "Loading model…" indicator instead of the generic typing dots. Absent for cloud/Ollama turns.
+	// show a distinct "Loading model…" indicator instead of the generic typing dots. Absent for cloud turns.
 	runtimePhase?: string | null;
 	// When the runtime phase last CHANGED, as an ISO-8601 UTC string stamped by the server: present on the
 	// `assistant-phase` event only. This is the authoritative clock for the cold-load elapsed time — render from it, never

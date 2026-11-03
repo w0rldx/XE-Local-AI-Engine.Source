@@ -96,13 +96,6 @@ scrollbar fix that skips every autosize site and dialog body. **Authority:** `co
 
 **Rule:** a Mantine `inputContainer` (or any conditional wrapper around an input) is rendered in the same shape whether the field is empty or set; only its extra children are conditional. Test it by rerendering from blank to set and asserting the input is the same DOM node; a `fireEvent.change` test cannot see a remount. **Prevents:** the input losing focus after the first keystroke, so typing `1500` into an unset field leaves `1` (found only in the browser). **Authority:** `NodeSettingsNumberField`, `NodeSettingsFieldsCard.test.tsx` ("keeps the same input mounted ..."); model-matrix follow-ups, 2026-10-05.
 
-### A gated-off Ollama runtime is a UI state, not an empty list
-
-**Rule:** with `XE_OLLAMA_RUNTIME_ENABLED=false` the no-op runtime answers available-and-empty, which looks idle, so
-node settings branches on `ollamaConfigured` via `useOllamaRuntimeConfigured` (in `src/features/node-settings/queries/`), called at the page and passed down as `ollamaRuntimeDisabled`. It fails OPEN:
-only a definite `false` hides the endpoint input, never the form model, so the stored value round-trips.
-**Authority:** `NodeSettings.tsx`; `NodeSettingsOllamaCard.test.tsx`; `NodeSettings.test.tsx`.
-
 ### Races and flashes
 
 **Rule:** auto-advance only after observing unmet then met (arm resets on step change). Globally mounted TanStack

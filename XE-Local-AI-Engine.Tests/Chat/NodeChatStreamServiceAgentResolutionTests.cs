@@ -19,8 +19,9 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -1018,7 +1019,7 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
     public async Task SendMessage_WhenNoInstalledGgufButAgentPinsModel_RoutesThePin()
     {
         // The server-initiated companion to the case above: the node has NO installed GGUF chat model, but the bound
-        // agent pins a (non-GGUF, e.g. Ollama) model. The turn has a model to run, so it must route the pin instead of
+        // agent pins a (non-GGUF, e.g. external) model. The turn has a model to run, so it must route the pin instead of
         // failing with FailureCategory.ModelNotInstalled — the work-session step path, which never sets request.Model.
         // It must ALSO offer that pin's tools: capabilities keyed on the null active model would report not-capable and
         // strip the offer, leaving a work session unable to call update_work_plan/record_finding/complete_work_session.
@@ -1096,7 +1097,7 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
     public async Task SendMessageAsync_WhenLocalDefaultResolvesInstalledGgufModel_RoutesThatModel()
     {
         // A "Local runtime default" send where the resolver returns an installed GGUF chat model routes the turn on
-        // that model — the offer-time active model is the resolved GGUF, NOT the static config fallback or Ollama.
+        // that model — the offer-time active model is the resolved GGUF, NOT the static config fallback.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -1153,11 +1154,11 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenActiveModelIsCodexCloudModel_SkipsOllamaClassificationForCapabilities()
+    public async Task SendMessageAsync_WhenActiveModelIsCodexCloudModel_SkipsGgufResolutionForCapabilities()
     {
-        // Capability gating: a Codex cloud model is not an Ollama model. The capability gate must use the Codex
-        // provider's declared matrix (CodexProviderCapabilities.V0), NOT the Ollama /api/show classification — so the
-        // classification service is never consulted for a Codex model id (which the local runtime has never seen).
+        // Capability gating: a Codex cloud model is not a local model. The capability gate must use the Codex
+        // provider's declared matrix (CodexProviderCapabilities.V0), NOT the GGUF capability resolver — which is
+        // never consulted for a Codex model id (which the local runtime has never seen).
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -1165,12 +1166,12 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider();
-        var classificationService = CreateModelClassificationService();
+        var gguf = CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false));
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(classification: classificationService),
+                CreateModelCapabilityResolver(gguf: gguf),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -1210,14 +1211,11 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
 
-        // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
-        await classificationService.DidNotReceive()
-                                   .ClassifyAsync(Arg.Is<IEnumerable<ModelIdentity>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.6-sol", StringComparison.OrdinalIgnoreCase))),
-                                       Arg.Any<CancellationToken>());
+        // The GGUF resolver is never consulted for a Codex model id — capabilities come from the Codex matrix.
+        await gguf.DidNotReceive().ResolveOrNullAsync("gpt-5.6-sol", Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
-        // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier. The
-        // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
+        // honored for the Codex model even though the GGUF stub here reports not-capable. The offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
         _ = offerProvider.Received().GetOfferedToolsAsync("gpt-5.6-sol", true, Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
     }
 
@@ -1286,11 +1284,15 @@ public sealed class NodeChatStreamServiceAgentResolutionTests
 
         var detailsResolver = Substitute.For<ILocalModelDetailsResolver>();
         detailsResolver.ResolveAsync(model, Arg.Any<CancellationToken>())
-                       .Returns(new LocalModelDetailsResolution.Ollama(new OllamaModelDetails
+                       .Returns(new LocalModelDetailsResolution.Gguf(new LocalModelDescriptor
                        {
-                           MaxContextTokens = 32768,
-                           Capabilities = ["completion", "tools"]
-                       }));
+                           ModelName = model,
+                           ProviderName = LlamaServerProviderConstants.ProviderName,
+                           IsAvailable = true,
+                           SizeBytes = null,
+                           ModifiedAt = null,
+                           MaxContextTokens = null
+                       }, EffectiveContextTokens: 32768));
         var estimator = new HeuristicTokenEstimator();
         var estimateService = new ChatContextEstimateService(turnResolver,
             defaultAgentProvider,

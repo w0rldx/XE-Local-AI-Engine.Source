@@ -233,7 +233,6 @@ import {
 	getNodeChatMessageFeedback,
 	getNodeInfo,
 	getNodeSettings,
-	getRunningLocalModels,
 	getRuntimeAcquisitionStatus,
 	getRuntimeResidents,
 	getRuntimeResources,
@@ -1048,8 +1047,6 @@ import type {
 	GetNodeInfoResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
-	GetRunningLocalModelsData,
-	GetRunningLocalModelsResponse,
 	GetRuntimeAcquisitionStatusData,
 	GetRuntimeAcquisitionStatusResponse,
 	GetRuntimeResidentsData,
@@ -9583,28 +9580,6 @@ export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =
 			return data;
 		},
 		queryKey: listLocalModelsQueryKey(options),
-	});
-
-export const getRunningLocalModelsQueryKey = (options?: Options<GetRunningLocalModelsData>) =>
-	createQueryKey("getRunningLocalModels", options, false, ["Models"]);
-
-export const getRunningLocalModelsOptions = (options?: Options<GetRunningLocalModelsData>) =>
-	queryOptions<
-		GetRunningLocalModelsResponse,
-		AxiosError<DefaultError>,
-		GetRunningLocalModelsResponse,
-		ReturnType<typeof getRunningLocalModelsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getRunningLocalModels({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getRunningLocalModelsQueryKey(options),
 	});
 
 export const selectLocalModelMutation = (

@@ -14,10 +14,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The model-details endpoint's external branch: declarations, not a probe.
 /// </summary>
 /// <remarks>
-///     Details are a local-runtime concept, so without this branch an <c>ext:</c> id would be routed to the
-///     default provider and probed against Ollama's <c>/api/show</c> — a 500 for a model the local runtime has never
-///     seen, which is the same failure the Codex and Azure branches prevent. The one detail an external
-///     model genuinely has is the window its operator declared, and the chat context meter reads it.
+///     Details are a local-runtime concept, so without this branch an <c>ext:</c> id would be looked up in the installed
+///     GGUFs, a 404 for a model the local runtime has never seen, as the Codex and Azure branches prevent. The one
+///     detail an external model genuinely has is the window its operator declared, and the chat context meter reads it.
 /// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class ExternalModelDetailsEndpointTests
@@ -41,7 +40,7 @@ public sealed class ExternalModelDetailsEndpointTests
         // the same number, and the meter sizes against the effective one.
         AssertEx.Equal(expected: 65536, details.MaxContextTokens);
         AssertEx.Equal(expected: 65536, details.EffectiveContextTokens);
-        // Ollama Modelfile concepts a remote endpoint has no equivalent of.
+        // Local-file concepts a remote endpoint has no equivalent of.
         AssertEx.Null(details.Template);
         AssertEx.Null(details.License);
     }

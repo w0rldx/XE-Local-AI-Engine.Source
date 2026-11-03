@@ -22,7 +22,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // constant for the host-process llama-server runtime (LlamaServerProviderConstants.ProviderName).
     private const string ProviderName = "llamacpp";
 
-    // Ollama-style capability token surfaced for a model with a local mmproj projector — mirrors the tokens the GGUF
+    // Capability token surfaced for a model with a local mmproj projector — mirrors the tokens the GGUF
     // capability detector emits (completion/tools/thinking) so a vision model classifies consistently across the system.
     private const string VisionCapability = "vision";
     private readonly IHuggingFaceGgufDiscovery _discovery;
@@ -31,7 +31,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     /// <summary>
     ///     Per-ModelName gate so two concurrent <see cref="EnsureModelAsync" /> calls for the same file do not both
-    ///     download. Mirrors <c>OllamaLocalModelProvider</c>'s per-pull gate.
+    ///     download.
     /// </summary>
     /// <remarks>
     ///     The set is bounded by the node's model catalog (one entry per distinct model ever ensured for the process
@@ -538,7 +538,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             ReasoningBudgetEnforceable = facts.ReasoningBudgetEnforceable,
             IsMultimodalCapable = isMultimodalCapable,
             Capabilities = capabilities,
-            // Ollama's family is the architecture id too; the size is the converter's own label, never derived.
+            // The family is the architecture id; the size is the converter's own label, never derived.
             Family = facts.Family,
             ParameterSize = facts.ParameterSize,
             DecisionType = facts.DecisionType,
