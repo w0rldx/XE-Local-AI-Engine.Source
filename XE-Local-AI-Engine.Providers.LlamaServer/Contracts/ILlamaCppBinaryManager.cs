@@ -54,6 +54,16 @@ public interface ILlamaCppBinaryManager
     }
 
     /// <summary>
+    ///     Why <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" /> would refuse <paramref name="variant" /> for
+    ///     want of a runtime it may not download, or <see langword="null" /> when it would serve or acquire one. For a caller
+    ///     with work to spend before its first launch. Makes no request.
+    /// </summary>
+    Task<string?> GetImplicitAcquisitionRefusalAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return Task.FromResult<string?>(null);
+    }
+
+    /// <summary>
     ///     Resolves an ALREADY-AVAILABLE <c>llama-server</c> for <paramref name="variant" /> and returns
     ///     <see langword="null" /> when none is, instead of acquiring one.
     /// </summary>

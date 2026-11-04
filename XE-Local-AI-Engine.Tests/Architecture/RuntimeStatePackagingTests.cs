@@ -52,6 +52,51 @@ public sealed class RuntimeStatePackagingTests
         {
             ProjectGlob = "knowledge-base/**",
             GitIgnorePattern = "XE-Local-AI-Engine.Client/knowledge-base/"
+        },
+        new()
+        {
+            ProjectGlob = "training/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/training/"
+        },
+        new()
+        {
+            ProjectGlob = "runtime/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/runtime/"
+        },
+        new()
+        {
+            ProjectGlob = "external-apps/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/external-apps/"
+        },
+        new()
+        {
+            ProjectGlob = "model-lab/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/model-lab/"
+        },
+        new()
+        {
+            ProjectGlob = "benchmarks/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/benchmarks/"
+        },
+        new()
+        {
+            ProjectGlob = "dev-workflows/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/dev-workflows/"
+        },
+        new()
+        {
+            ProjectGlob = "work-sessions/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/work-sessions/"
+        },
+        new()
+        {
+            ProjectGlob = "dead-letter-queue/**",
+            GitIgnorePattern = "XE-Local-AI-Engine.Client/dead-letter-queue/"
+        },
+        new()
+        {
+            ProjectGlob = "tmp/**",
+            GitIgnorePattern = "tmp/"
         }
     ];
 
@@ -99,6 +144,56 @@ public sealed class RuntimeStatePackagingTests
                 protection.GitIgnorePattern,
                 $"Runtime directory '{protection.ProjectGlob}' must have a corresponding .gitignore entry.");
         }
+    }
+
+    /// <summary>The way this list drifted: a runtime directory gained its .gitignore line and never reached the project, so a used checkout published its contents.</summary>
+    [Test]
+    public void EveryGitIgnoredClientDirectory_IsARuntimeDirectoryProtection()
+    {
+        const string prefix = "XE-Local-AI-Engine.Client/";
+        var missing = File.ReadLines(RepositoryPaths.Combine(".gitignore"))
+                          .Select(static line => line.Trim())
+                          .Where(static line => line.StartsWith(prefix, StringComparison.Ordinal) && line.EndsWith('/'))
+                          .Where(static line => !RuntimeDirectoryProtections.Any(protection => string.Equals(protection.GitIgnorePattern, line, StringComparison.Ordinal)))
+                          .ToArray();
+
+        AssertEx.Empty(missing, $"Add these to the list here and to the project's Remove lists: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>The second guard: the packagers refuse an output holding any of them, whichever way one got past the project.</summary>
+    [Test]
+    public void EveryRuntimeDirectory_IsRefusedByTheReleasePackagerGuard()
+    {
+        var guard = File.ReadAllText(RepositoryPaths.Combine("publish", "package-rc.sh"));
+        var missing = RuntimeDirectoryProtections
+                      .Select(static protection => protection.ProjectGlob.Replace("/**", string.Empty, StringComparison.Ordinal))
+                      .Where(directory => !guard.Contains($"\"{directory}|", StringComparison.Ordinal))
+                      .ToArray();
+
+        AssertEx.Empty(missing, $"assert_publish_output_clean does not name: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>Off local mode the data root is the project directory, and the Web SDK's json glob takes a file a node writes there.</summary>
+    [Test]
+    [Arguments("node-settings.json")]
+    [Arguments("model-catalog-remote-cache.json")]
+    public void ClientRuntimeJsonFiles_AreRemovedFromContentAndNone_AndIgnored(string fileName)
+    {
+        var project = XDocument.Load(RepositoryPaths.ClientProject("XE-Local-AI-Engine.Client.csproj"));
+        foreach (var itemType in new[] { "Content", "None" })
+        {
+            AssertEx.True(project.Descendants(itemType).Any(item => string.Equals((string?)item.Attribute("Remove"), fileName, StringComparison.Ordinal)),
+                $"{itemType} must remove {fileName}.");
+        }
+
+        AssertEx.True(File.ReadLines(RepositoryPaths.Combine(".gitignore")).Any(line => string.Equals(line.Trim(), fileName, StringComparison.Ordinal)),
+            $"{fileName} must have a .gitignore line.");
+    }
+
+    [Test]
+    public void TheCatalogCacheFile_IsRefusedByTheReleasePackagerGuard()
+    {
+        AssertEx.Contains(File.ReadAllText(RepositoryPaths.Combine("publish", "package-rc.sh")), "\"model-catalog-remote-cache.json|", StringComparison.Ordinal);
     }
 
     [Test]

@@ -165,6 +165,7 @@ public sealed class ModelLabSteeringJobTests
         var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
         AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
         AssertEx.Contains(record.ErrorMessage!, "HTTP 500", StringComparison.Ordinal);
+        AssertEx.False(record.ErrorMessage!.Contains("Exception", StringComparison.Ordinal), record.ErrorMessage);
         AssertEx.Equal("baseline", ReadResult(record.ResultJson).Steering!.Arms.Single().Name);
         AssertEx.Null(host.Gate.ExclusiveKind);
         AssertEx.False(host.Supervisor.IsKeepWarmSuppressed());
@@ -431,6 +432,101 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Equal(ModelLabExperimentStatus.Cancelled, record.Status);
         AssertEx.Null(process.Request);
         AssertEx.Null(host.Gate.ExclusiveKind);
+    }
+
+    [Test]
+    public async Task AGgufThatCannotBeRead_FailsWithTheReason_AndNoTypeName()
+    {
+        var leases = Substitute.For<ITrainingEvaluationInstalledModelLeaseProvider>();
+        leases.AcquireAsync(Gguf, Arg.Any<CancellationToken>()).Returns<Task<ITrainingEvaluationInstalledModelLease>>(_ => throw new IOException("the file went away"));
+        using var process = new ScriptedProcess();
+        await using var host = await StartHostAsync(process, new ScriptedHarness(), leases: leases);
+
+        var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
+        AssertEx.Contains(record.ErrorMessage!, "the file went away", StringComparison.Ordinal);
+        AssertEx.False(record.ErrorMessage!.Contains("Exception", StringComparison.Ordinal), record.ErrorMessage);
+    }
+
+    /// <summary>A first server start can download the runtime, so the baseline phase must already show by then, and only once.</summary>
+    [Test]
+    public async Task TheBaselinePhase_IsAnnouncedBeforeTheFirstServerStarts_AndOnlyOnce()
+    {
+        using var process = new ScriptedProcess();
+        var harness = new ScriptedHarness();
+        await using var host = await StartHostAsync(process, harness);
+        var buffer = host.Services.GetRequiredService<ITrainingRunEventBuffer>();
+        var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+        var id = start.ExperimentId!.Value;
+        var phasesAtArm = new List<string[]>();
+        harness.BeforeBody = _ =>
+        {
+            phasesAtArm.Add(buffer.Replay(id, afterSequence: 0).Events
+                                  .Where(static item => item.Kind == TrainingRunEventKind.Phase)
+                                  .Select(static item => item.Payload.Phase!)
+                                  .ToArray());
+            return Task.CompletedTask;
+        };
+
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.Equal(expected: 3, phasesAtArm.Count);
+        AssertEx.Equal("arm-baseline", phasesAtArm[0][^1], "The body runs after the server is up, which is after any download.");
+        AssertEx.Equal(expected: 1, phasesAtArm[2].Count(static phase => phase == "arm-baseline"));
+    }
+
+    /// <summary>Refused while nothing is spent: no derive, no gate, no row. A trace starts no server, so it is not asked.</summary>
+    [Test]
+    public async Task AStartThatWouldHaveNoRuntime_IsRefused_BeforeTheDerive_AndATraceIsNot()
+    {
+        const string refusal = "No runtime, and the policy refused to fetch one.";
+        var manager = Substitute.For<ILlamaCppBinaryManager>();
+        manager.GetImplicitAcquisitionRefusalAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(refusal);
+        using var process = new ScriptedProcess();
+        await using var host = await StartHostAsync(process, new ScriptedHarness(), configure: services =>
+        {
+            services.RemoveAll<ILlamaCppBinaryManager>();
+            services.AddSingleton(manager);
+        });
+
+        var refused = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.RuntimeUnavailable, refused.Refusal!.Value);
+        AssertEx.Equal(refusal, refused.RefusalMessage);
+        AssertEx.Null(process.Request);
+        AssertEx.Null(host.Gate.ExclusiveKind);
+        AssertEx.Equal(expected: 0, (await host.Service.ListAsync(CancellationToken.None)).Count);
+
+        var trace = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        AssertEx.Null(trace.Refusal);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+    }
+
+    /// <summary>An Offline node on a platform with no prebuilt: the launch's own reason, not a server error.</summary>
+    [Test]
+    public async Task AStartWhoseRuntimeCannotBeResolved_IsRefusedWithTheReason()
+    {
+        var manager = Substitute.For<ILlamaCppBinaryManager>();
+        manager.GetImplicitAcquisitionRefusalAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+               .Returns<Task<string?>>(_ => throw new LlamaRuntimeException("No prebuilt for this host."));
+        using var process = new ScriptedProcess();
+        await using var host = await StartHostAsync(process, new ScriptedHarness(), configure: services =>
+        {
+            services.RemoveAll<ILlamaCppBinaryManager>();
+            services.AddSingleton(manager);
+        });
+
+        var refused = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.RuntimeUnavailable, refused.Refusal!.Value);
+        AssertEx.Equal("No prebuilt for this host.", refused.RefusalMessage);
+        AssertEx.Null(process.Request);
     }
 
     /// <summary>The wait has no watchdog of its own: a GGUF that never verifies would otherwise hold the GPU for good.</summary>

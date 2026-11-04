@@ -771,9 +771,10 @@ Write-Host ">> Publish output verified (SPA present)."
 # beside the executable). It fails the build rather than deleting quietly: a silent scrub is how the original leak
 # stayed invisible, and a maintainer who sees this throw learns the publish directory was executed in.
 #
-# These patterns are the state/secret classes specifically — logs and the dead-letter queue leak host paths, while
-# dp-keys / node.sqlite / node.key / *.enc would leak real secrets. *.map is the one debug-artifact class: production
-# SPA builds emit no source maps, so one here means the bundle was built with them. A strict allow-list of expected
+# These patterns cover three classes. State and secrets: logs and the dead-letter queue leak host paths, while
+# dp-keys / node.sqlite / node.key / *.enc would leak real secrets. A used checkout's local data: directories and files
+# a node writes under the project, which got past its Remove lists. Debug artifacts: production SPA builds emit no
+# source maps, so a *.map here means the bundle was built with them. A strict allow-list of expected
 # filenames would be stronger still, but authoring one requires a captured inventory of a real win-x64 publish; add
 # it here once that inventory exists rather than guessing at it and failing a release on a legitimate file.
 $forbiddenPublishArtifacts = @(
@@ -787,7 +788,23 @@ $forbiddenPublishArtifacts = @(
     @{ Pattern = "*.enc";            Reason = "encrypted secret store (HF token, GitHub token, provider credentials)" },
     @{ Pattern = "desktop-port.txt"; Reason = "persisted desktop loopback port" },
     @{ Pattern = "*.log";            Reason = "log file" },
-    @{ Pattern = "*.map";            Reason = "source map (debug artifact; production builds emit none)" }
+    @{ Pattern = "*.map";            Reason = "source map (debug artifact; production builds emit none)" },
+    @{ Pattern = "training"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "runtime"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "external-apps"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "model-lab"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "models"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "backups"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "knowledge-base"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "generated-images"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "uploaded-files"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "agent-home-state"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "development"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "dev-workflows"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "work-sessions"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "benchmarks"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "tmp"; Reason = "local data from a used checkout, past the project's Remove lists" },
+    @{ Pattern = "model-catalog-remote-cache.json"; Reason = "local data from a used checkout, past the project's Remove lists" }
 )
 $leakedArtifacts = [System.Collections.Generic.List[string]]::new()
 foreach ($forbidden in $forbiddenPublishArtifacts) {
@@ -805,10 +822,11 @@ $($leakedArtifacts -join "`n")
 Runtime state means the application was executed from '$publishDir'. Never run the published executable in place —
 it writes logs, queues and (in desktop mode) its database and keys next to itself. Delete that directory and
 re-run this script. Smoke-test the packed Portable.zip instead, which is what testers actually receive.
-A *.map means the SPA was built with source maps; rebuild it without them.
+A *.map means the SPA was built with source maps; rebuild it without them. A used checkout's local data means an
+entry is missing from the Client project's Remove lists; add it there.
 "@
 }
-Write-Host ">> Publish output carries no runtime state or source maps (no logs, queues, keys, databases or *.map)."
+Write-Host ">> Publish output carries no runtime state, local checkout data or source maps."
 
 $publishedUpdateConfigPath = Join-Path $publishDir "appsettings.AppUpdate.json"
 if (-not (Test-Path $publishedUpdateConfigPath -PathType Leaf)) {

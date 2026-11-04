@@ -69,6 +69,29 @@ public sealed class ImplicitRuntimeAcquisitionPolicyTests
         AssertEx.Equal(expected: 0, handler.CallCount);
     }
 
+    /// <summary>The question a caller asks before it spends anything, with the answer the launch itself would give. It makes no request.</summary>
+    [Test]
+    public async Task ImplicitAcquisitionRefusal_MatchesWhatTheLaunchWouldDo()
+    {
+        using var cache = new TempDirectory();
+        using var handler = new CountingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        ILlamaCppBinaryManager refusing = CreateManager(http, cache.Path, new RefusingPolicy());
+
+        AssertEx.Equal(Refusal, await refusing.GetImplicitAcquisitionRefusalAsync(GpuVariant.Cpu, CancellationToken.None));
+
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
+        await File.WriteAllTextAsync(serverPath, "fake-llama-server");
+        AssertEx.Null(await refusing.GetImplicitAcquisitionRefusalAsync(GpuVariant.Cpu, CancellationToken.None));
+
+        using var emptyCache = new TempDirectory();
+        ILlamaCppBinaryManager withoutPolicy = new LlamaCppBinaryManager(http, emptyCache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
+        AssertEx.Null(await withoutPolicy.GetImplicitAcquisitionRefusalAsync(GpuVariant.Cpu, CancellationToken.None));
+        AssertEx.Equal(expected: 0, handler.CallCount);
+    }
+
     /// <summary>
     ///     A pin bump must not strand an Offline node: the installed older tag is still on disk and is served, and the
     ///     live catalog, which would pick the new tag and then find nothing, is never asked.

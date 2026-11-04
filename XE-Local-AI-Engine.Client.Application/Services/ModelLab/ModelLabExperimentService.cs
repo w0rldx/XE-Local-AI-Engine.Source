@@ -264,7 +264,26 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 $"This model can be steered only at layers 1 to {steerableBlocks - 1}. Block 0 has no vector slot, and a layer past the model's trunk would be dropped silently."));
         }
 
+        // The first arm's server would be told the same, after the derive has spent its GPU time. A trace starts no server.
+        if (await GetRuntimeRefusalAsync(services, ct) is { } noRuntime)
+        {
+            return Refuse(ModelLabStartRefusal.RuntimeUnavailable, noRuntime);
+        }
+
         return await AdmitAndStartAsync(request, artifact, preflight, layer, interpreter, scriptPath, services, ct);
+    }
+
+    private static async Task<string?> GetRuntimeRefusalAsync(IServiceProvider services, CancellationToken ct)
+    {
+        try
+        {
+            var variant = await services.GetRequiredService<IGpuVariantSelector>().SelectVariantAsync(ct);
+            return await services.GetRequiredService<ILlamaCppBinaryManager>().GetImplicitAcquisitionRefusalAsync(variant, ct);
+        }
+        catch (LlamaRuntimeException exception)
+        {
+            return exception.Message;
+        }
     }
 
     public bool Cancel(Guid experimentId)
@@ -723,7 +742,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         catch (Exception exception) when (exception is InvalidOperationException or InstalledGgufSnapshotException or IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(exception, "Holding the GGUF for Model Lab experiment {ExperimentId} failed.", id);
-            return Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' could not be read as an installed model ({exception.GetType().Name}: {exception.Message}).");
+            return Finished(ModelLabExperimentStatus.Failed, $"'{request.InstalledModelName}' could not be read as an installed model ({exception.Message}).");
         }
 
         await using (model)
@@ -838,7 +857,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         catch (Exception exception) when (!active.SaveFailed)
         {
             _logger.LogError(exception, "An arm of Model Lab experiment {ExperimentId} failed.", active.ExperimentId);
-            return Finished(ModelLabExperimentStatus.Failed, $"An arm failed ({exception.GetType().Name}: {exception.Message}). The finished arms are kept.");
+            return Finished(ModelLabExperimentStatus.Failed, $"An arm failed ({exception.Message}). The finished arms are kept.");
         }
     }
 

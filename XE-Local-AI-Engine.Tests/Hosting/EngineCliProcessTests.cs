@@ -81,6 +81,39 @@ public sealed class EngineCliProcessTests : IDisposable
             "The CLI must stop claiming agentic scope is unenforced once scope persistence and policy enforcement ship.");
     }
 
+    /// <summary>With no node name in the environment only the shipped appsettings.json supplies it, as for an operator running an unpacked build from elsewhere.</summary>
+    [Test]
+    public async Task SetupAndMcpKey_FromAnotherWorkingDirectory_ReadTheShippedConfiguration()
+    {
+        var elsewhere = Directory.CreateDirectory(Path.Combine(_root, "elsewhere")).FullName;
+
+        var setup = await RunAsync(["--setup"], launchMode: null, nodeName: null, workingDirectory: elsewhere);
+        AssertEx.Equal(expected: 0, setup.ExitCode, setup.CombinedOutput);
+        AssertEx.Contains(setup.StandardOutput, "XE_SETUP=created");
+
+        var key = await RunAsync(["--mcp-key", "agentic"], launchMode: null, nodeName: null, workingDirectory: elsewhere);
+        AssertEx.Equal(expected: 0, key.ExitCode, key.CombinedOutput);
+        AssertEx.Contains(key.StandardOutput, "XE_MCP_KEY=xemcp_");
+    }
+
+    /// <summary>A plain launch and a reset keep the working directory as content root: off local mode that root is also their data directory, which a checkout relies on.</summary>
+    [Test]
+    public async Task APlainLaunchAndAReset_FromAnotherWorkingDirectory_StillReadThatDirectory()
+    {
+        var elsewhere = Directory.CreateDirectory(Path.Combine(_root, "elsewhere")).FullName;
+
+        // Names a database and no node. The shipped file does the reverse, so the error says which file was read.
+        await File.WriteAllTextAsync(Path.Combine(elsewhere, "appsettings.json"), "{\"ConnectionStrings\":{\"node-sqlite\":\"Filename=unused.sqlite\"}}");
+
+        var plain = await RunAsync([], launchMode: null, nodeName: null, workingDirectory: elsewhere);
+        AssertEx.NotEqual(notExpected: 0, plain.ExitCode);
+        AssertEx.Contains(plain.CombinedOutput, "WorkerNode:NodeName is required");
+
+        var reset = await RunAsync(["--reset-admin-password", AdminPassword, DesktopLaunch.RecoveryCodeStdinArgument], launchMode: null, nodeName: null, standardInput: "unused", workingDirectory: elsewhere);
+        AssertEx.NotEqual(notExpected: 0, reset.ExitCode);
+        AssertEx.Contains(reset.CombinedOutput, "WorkerNode:NodeName is required");
+    }
+
     [Test]
     public async Task McpOnlyPrimaryServe_EmitsCanonicalReadinessSupportsStatusAndEnforcesPortAndLeaseExits()
     {
@@ -658,9 +691,10 @@ public sealed class EngineCliProcessTests : IDisposable
         string? launchMode,
         string? dataDirectory = null,
         string? adminPassword = AdminPassword,
-        string nodeName = DefaultNodeName,
+        string? nodeName = DefaultNodeName,
         string? standardInput = null,
-        IReadOnlyDictionary<string, string>? environment = null)
+        IReadOnlyDictionary<string, string>? environment = null,
+        string? workingDirectory = null)
     {
         // 90 s, not 30: a real `--setup` measures 14-15 s idle at width 1 and can exceed 30 s on a shared 4-core
         // CI runner under four parallel groups with coverage. Every caller still asserts exit code and output.
@@ -670,6 +704,7 @@ public sealed class EngineCliProcessTests : IDisposable
             StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword, nodeName)
         };
         process.StartInfo.RedirectStandardInput = standardInput is not null;
+        process.StartInfo.WorkingDirectory = workingDirectory ?? process.StartInfo.WorkingDirectory;
         foreach (var (name, value) in environment ?? new Dictionary<string, string>(StringComparer.Ordinal))
         {
             process.StartInfo.Environment[name] = value;
@@ -730,7 +765,7 @@ public sealed class EngineCliProcessTests : IDisposable
         string? launchMode,
         string dataDirectory,
         string? adminPassword = AdminPassword,
-        string nodeName = DefaultNodeName)
+        string? nodeName = DefaultNodeName)
     {
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -748,7 +783,11 @@ public sealed class EngineCliProcessTests : IDisposable
 
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Testing";
         startInfo.Environment["DOTNET_ENVIRONMENT"] = "Testing";
-        startInfo.Environment["WorkerNode__NodeName"] = nodeName;
+        if (nodeName is not null)
+        {
+            startInfo.Environment["WorkerNode__NodeName"] = nodeName;
+        }
+
         startInfo.Environment[DesktopBootstrap.DataDirectoryEnvironmentVariable] = dataDirectory;
         startInfo.Environment[DesktopLaunch.AdminEmailEnvironmentVariable] = "agent@example.test";
         if (adminPassword is not null)

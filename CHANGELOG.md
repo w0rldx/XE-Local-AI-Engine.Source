@@ -578,6 +578,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **`--setup` and `--mcp-key` work from any directory on an unpacked build** — they failed with `WorkerNode:NodeName is required` outside the install directory, because they looked for the shipped configuration in the working directory.
+- **A publish from a used checkout no longer ships its local data** — the Client project excludes the directories a running node writes, such as `training/`, `runtime/` and `model-lab/`, and its remote catalog cache file, and the packagers refuse an output that holds one.
+- **A Model Lab steering run on an Offline node with no llama.cpp runtime is refused at the start** — with the same reason as before, instead of after the derive has spent its GPU time. A first-use runtime download now reads as the baseline phase, not as saving results, and a failed arm's message gives the reason without an exception type.
 - **A model that is not installed is no longer reported as a capacity problem** — a chat turn naming one fails as
   not installed, and the capacity gate's own reason says "Model 'X' is not installed on this node." instead of claiming
   its memory footprint could not be determined. A required context larger than the model's process can allocate gets

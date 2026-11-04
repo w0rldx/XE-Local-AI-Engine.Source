@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -236,6 +238,47 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertGreater(len(rc_entries), 0)
         self.assertEqual(rc_entries, win_entries)
         self.assertIn(("*.map", "source map (debug artifact; production builds emit none)"), rc_entries)
+
+    def test_publish_output_guard_refuses_a_planted_local_file_and_passes_the_linked_training_scripts(self) -> None:
+        guard = re.search(
+            r"^assert_publish_output_clean\(\) \{\n.*?^\}\n",
+            PACKAGE_RC.read_text(encoding="utf-8"),
+            re.DOTALL | re.MULTILINE,
+        )
+        self.assertIsNotNone(guard)
+
+        def run_guard(publish_dir: Path) -> subprocess.CompletedProcess[str]:
+            script = guard.group(0) + 'assert_publish_output_clean "$1"\n'
+            return subprocess.run(
+                ["bash", "-c", script, "guard", str(publish_dir)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+        for planted in (
+            "training/base/a/config.json",
+            "runtime/x",
+            "external-apps/x",
+            "model-lab/x",
+            "models/x",
+            "model-catalog-remote-cache.json",
+        ):
+            with self.subTest(planted=planted), tempfile.TemporaryDirectory() as root:
+                publish_dir = Path(root)
+                scripts = publish_dir / "training-scripts"
+                scripts.mkdir()
+                (scripts / "modellab.py").write_text("shipped", encoding="utf-8")
+                clean = run_guard(publish_dir)
+                self.assertEqual(0, clean.returncode, clean.stderr)
+
+                local_file = publish_dir / planted
+                local_file.parent.mkdir(parents=True, exist_ok=True)
+                local_file.write_text("local", encoding="utf-8")
+                leaked = run_guard(publish_dir)
+                self.assertEqual(1, leaked.returncode, leaked.stdout)
+                self.assertIn(planted.split("/")[0], leaked.stderr)
 
     def test_one_protected_serial_job_owns_explicit_bound_draft_creation(self) -> None:
         prepare_job = re.search(

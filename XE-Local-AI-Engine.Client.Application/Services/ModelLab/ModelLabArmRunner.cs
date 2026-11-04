@@ -57,6 +57,9 @@ public sealed class ModelLabArmRunner
             LaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
         };
         var phaseStart = _timeProvider.GetTimestamp();
+
+        // Before the harness: its first server start can spend most of a minute downloading the runtime, and the page would still read as the derive's last phase.
+        AppendArmPhase(experimentId, arm: 0);
         var results = await _harness.RunArmsAsync<bool>(heldLease,
             [
                 unsteered,
@@ -67,7 +70,11 @@ public sealed class ModelLabArmRunner
             {
                 var startup = _timeProvider.GetElapsedTime(phaseStart);
                 var name = ArmNames[arm];
-                _ = _events.Append(experimentId, TrainingRunEventKind.Phase, new TrainingRunPayload { Phase = $"arm-{name}" });
+                if (arm > 0)
+                {
+                    AppendArmPhase(experimentId, arm);
+                }
+
                 var generationStart = _timeProvider.GetTimestamp();
                 var outputs = new List<ModelLabArmOutput>(plan.Prompts.Count);
                 using var client = _httpClients.CreateClient(HttpClientName);
@@ -97,6 +104,9 @@ public sealed class ModelLabArmRunner
             ct);
         return results[^1].Teardown.ProcessExitObserved;
     }
+
+    private void AppendArmPhase(Guid experimentId, int arm) =>
+        _ = _events.Append(experimentId, TrainingRunEventKind.Phase, new TrainingRunPayload { Phase = $"arm-{ArmNames[arm]}" });
 
     private static async Task<ModelLabArmOutput> GenerateAsync(HttpClient client, TransientLlamaServerEvaluationSession session, string prompt, CancellationToken ct)
     {

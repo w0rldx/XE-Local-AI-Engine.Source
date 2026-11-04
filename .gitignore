@@ -439,6 +439,7 @@ CLAUDE.local.md
 
 # Runtime node settings (written to ContentRootPath at runtime; must never be committed or shipped)
 node-settings.json
+model-catalog-remote-cache.json
 
 # Generated at release time by scripts/generate-release-notes.sh (vpk --releaseNotes)
 RELEASE_NOTES.md
@@ -467,6 +468,10 @@ XE-Local-AI-Engine.Client/models/
 XE-Local-AI-Engine.Client/runtime/
 XE-Local-AI-Engine.Client/training/
 XE-Local-AI-Engine.Client/model-lab/
+XE-Local-AI-Engine.Client/benchmarks/
+XE-Local-AI-Engine.Client/dev-workflows/
+XE-Local-AI-Engine.Client/work-sessions/
+XE-Local-AI-Engine.Client/dead-letter-queue/
 
 # Internal agent tooling + planning archive — untracked pending migration to the
 # universal harness at .agent-harness. Kept locally, not shipped/open-sourced.

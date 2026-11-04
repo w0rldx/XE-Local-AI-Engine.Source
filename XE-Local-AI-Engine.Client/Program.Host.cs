@@ -52,7 +52,7 @@ namespace XE_Local_AI_Engine.Client
                 hostArgs = DesktopLaunch.HasExplicitLocalModeArgument(args) ? [.. stableRestartArgs] : [];
             }
 
-            var builder = CreateHostBuilder(hostArgs, customization, isLocalMode);
+            var builder = CreateHostBuilder(hostArgs, customization, pinContentRoot: needsLocalData);
 
             // Resolved in the local-data stage and applied after a locked vault (if any) is unwrapped, so the real host
             // re-binds the origin the unlock page used.
@@ -253,14 +253,14 @@ namespace XE_Local_AI_Engine.Client
             };
         }
 
-        private static WebApplicationBuilder CreateHostBuilder(string[] hostArgs, ProgramAppCustomization? customization, bool isLocalMode)
+        private static WebApplicationBuilder CreateHostBuilder(string[] hostArgs, ProgramAppCustomization? customization, bool pinContentRoot)
         {
-            // A desktop launch starts from an arbitrary working directory, so pin the content root to the executable's own directory, where the shipped appsettings.json and
-            // wwwroot live. Windows was masked by its launcher forcing WorkingDirectory; the Linux AppImage has none, so without this startup fails on WorkerNode:NodeName.
+            // These launches keep their data in the per-user directory and can start from anywhere, so the content root is the executable's own directory, where appsettings.json and
+            // wwwroot live; startup otherwise fails on WorkerNode:NodeName. Any other launch keeps the working directory, which off local mode is also its data directory.
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
                 Args = hostArgs,
-                ContentRootPath = customization?.ContentRootPath ?? (isLocalMode ? AppContext.BaseDirectory : null),
+                ContentRootPath = customization?.ContentRootPath ?? (pinContentRoot ? AppContext.BaseDirectory : null),
                 EnvironmentName = customization?.EnvironmentName,
                 WebRootPath = customization?.WebRootPath,
             });

@@ -199,8 +199,8 @@ assert_no_runtime_state() {
 # publish directory was executed in.
 #
 # Complements assert_no_runtime_state, which scans the STAGE for node-settings.json / *.enc / *.pin. This one scans the
-# publish output for the state and secret classes (plus source maps, a debug artifact), and names why each is
-# disqualifying.
+# publish output for the state and secret classes, a used checkout's local data that got past the project's Remove
+# lists, and source maps (a debug artifact), and names why each is disqualifying.
 assert_publish_output_clean() {
   local pub="$1" entry pattern reason match
   local leaks=""
@@ -218,6 +218,22 @@ assert_publish_output_clean() {
     "desktop-port.txt|persisted desktop loopback port"
     "*.log|log file"
     "*.map|source map (debug artifact; production builds emit none)"
+    "training|local data from a used checkout, past the project's Remove lists"
+    "runtime|local data from a used checkout, past the project's Remove lists"
+    "external-apps|local data from a used checkout, past the project's Remove lists"
+    "model-lab|local data from a used checkout, past the project's Remove lists"
+    "models|local data from a used checkout, past the project's Remove lists"
+    "backups|local data from a used checkout, past the project's Remove lists"
+    "knowledge-base|local data from a used checkout, past the project's Remove lists"
+    "generated-images|local data from a used checkout, past the project's Remove lists"
+    "uploaded-files|local data from a used checkout, past the project's Remove lists"
+    "agent-home-state|local data from a used checkout, past the project's Remove lists"
+    "development|local data from a used checkout, past the project's Remove lists"
+    "dev-workflows|local data from a used checkout, past the project's Remove lists"
+    "work-sessions|local data from a used checkout, past the project's Remove lists"
+    "benchmarks|local data from a used checkout, past the project's Remove lists"
+    "tmp|local data from a used checkout, past the project's Remove lists"
+    "model-catalog-remote-cache.json|local data from a used checkout, past the project's Remove lists"
   )
 
   for entry in "${forbidden[@]}"; do
@@ -237,10 +253,11 @@ assert_publish_output_clean() {
     echo "Runtime state means the application was executed from '${pub}'. Never run the published binary in" >&2
     echo "place — it writes logs, queues and (in desktop mode) its database and keys next to itself. Re-run this" >&2
     echo "script; it wipes the publish directory first. Smoke-test the zip instead, which is what a tester actually" >&2
-    echo "receives. A *.map means the SPA was built with source maps; rebuild it without them." >&2
+    echo "receives. A *.map means the SPA was built with source maps; rebuild it without them. A used checkout's local" >&2
+    echo "data means an entry is missing from the Client project's Remove lists; add it there." >&2
     exit 1
   fi
-  echo ">> Publish output carries no runtime state or source maps (no logs, queues, keys, databases or *.map)."
+  echo ">> Publish output carries no runtime state, local checkout data or source maps."
 }
 
 # Refuse to ship configuration that reads as live but is really placeholder text — the counterpart of the

@@ -252,12 +252,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         // A launch may download only when the policy (the Offline profile) allows it; an explicit operator install skips the question. A refused
         // launch serves a runtime already on disk, installed tag first, and never consults the live catalog: an Offline node makes no request.
-        var refusal = operatorRequested || _implicitAcquisitionPolicy is null
-            ? null
-            : await _implicitAcquisitionPolicy.GetRefusalAsync(ct).ConfigureAwait(false);
+        var (refusal, tagOnDisk) = operatorRequested
+            ? default
+            : await ReadImplicitAcquisitionAsync(variant, installed, ct).ConfigureAwait(false);
         var resolvedTag = refusal is null
             ? await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false)
-            : ResolveTagOnDisk(variant, installed) ?? throw new LlamaRuntimeNotInstalledException(refusal);
+            : tagOnDisk ?? throw new LlamaRuntimeNotInstalledException(refusal);
 
         // A GPU variant MUST resolve a GENUINE (os, arch, variant) asset via ResolveExactOrNull: Resolve() would substitute the CPU floor where no GPU prebuilt exists
         // — arm64 CUDA has none upstream — and the supervisor would emit GPU placement flags against a CPU build. CPU keeps the plain Resolve, its exact pin BEING the floor.
@@ -285,6 +285,38 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             acquisitionLock.Release();
         }
     }
+
+    /// <inheritdoc />
+    public async Task<string?> GetImplicitAcquisitionRefusalAsync(GpuVariant variant, CancellationToken ct)
+    {
+        // The two kinds of runtime EnsureCoreAsync serves before it reaches the policy; a broken one fails there with its own reason.
+        if (_overrideOptions?.IsActive == true)
+        {
+            return null;
+        }
+
+        var installed = _installedRuntimeStore is null
+            ? null
+            : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        if (installed?.SourceBuildPath is { Length: > 0 })
+        {
+            return null;
+        }
+
+        var (refusal, tagOnDisk) = await ReadImplicitAcquisitionAsync(variant, installed, ct).ConfigureAwait(false);
+        return tagOnDisk is null ? refusal : null;
+    }
+
+    /// <summary>The policy's answer and, when it refuses, the tag a launch can still serve from disk. A refusal with no tag is the launch's refusal.</summary>
+    private async Task<ImplicitAcquisition> ReadImplicitAcquisitionAsync(GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
+    {
+        var refusal = _implicitAcquisitionPolicy is null
+            ? null
+            : await _implicitAcquisitionPolicy.GetRefusalAsync(ct).ConfigureAwait(false);
+        return new ImplicitAcquisition(refusal, refusal is null ? null : ResolveTagOnDisk(variant, installed));
+    }
+
+    private readonly record struct ImplicitAcquisition(string? Refusal, string? TagOnDisk);
 
     private SemaphoreSlim AcquisitionLockFor(string variantDir)
     {
