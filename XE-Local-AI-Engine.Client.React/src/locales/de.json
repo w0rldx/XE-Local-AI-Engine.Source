@@ -2260,7 +2260,7 @@
 				"clientWatchdogNoFirstChunk": "Verbindungsüberwachung: In diesem Browser ist nie eine Antwort eingetroffen.",
 				"clientWatchdogStall": "Verbindungsüberwachung: In diesem Browser treffen keine Antwortdaten mehr ein.",
 				"goToModels": "Zu den Modellen",
-				"modelNotInstalled": "Kein Chat-Modell installiert. Laden Sie ein GGUF-Modell herunter, um zu chatten.",
+				"modelNotInstalled": "Das angeforderte Chat-Modell ist nicht installiert. Installieren Sie es oder wählen Sie ein anderes Modell.",
 				"providerError": "Der Modellanbieter hat die Anfrage abgelehnt oder nicht beantwortet.",
 				"title": "Antwort fehlgeschlagen"
 			},

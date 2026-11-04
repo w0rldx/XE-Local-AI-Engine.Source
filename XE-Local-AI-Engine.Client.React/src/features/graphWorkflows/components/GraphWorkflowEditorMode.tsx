@@ -160,7 +160,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 	);
 
 	const centre = (
-		<Stack gap="sm" h="100%" style={{ minHeight: 0 }} data-testid="gw-page-editor-pane">
+		<Stack gap="sm" h="100%" style={{ minHeight: 0, overflowY: "auto" }} data-testid="gw-page-editor-pane">
 			{saveConflict ? (
 				<Alert
 					color="yellow"
@@ -193,7 +193,8 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				/>
 			) : null}
 			<GraphWorkflowDesignerReviewBar editor={editor} onRegenerate={designer.regenerate} />
-			<div style={{ flex: 1, minHeight: 0 }}>
+			{/* Never below the canvas's own floor: on a short column the pane scrolls, rather than the strip below painting over it. */}
+			<div style={{ flex: 1, minHeight: "min-content" }}>
 				<GraphWorkflowEditorCanvas
 					editor={editor}
 					selectedNodeKey={selection.nodeKey}

@@ -2260,7 +2260,7 @@
 				"clientWatchdogNoFirstChunk": "Connection watchdog: the response never started arriving in this browser.",
 				"clientWatchdogStall": "Connection watchdog: the response stopped arriving in this browser.",
 				"goToModels": "Go to Models",
-				"modelNotInstalled": "No chat model installed. Pull a GGUF model to start chatting.",
+				"modelNotInstalled": "The requested chat model is not installed. Install it or choose another model.",
 				"providerError": "The model provider rejected or did not answer the request.",
 				"title": "Response failed"
 			},

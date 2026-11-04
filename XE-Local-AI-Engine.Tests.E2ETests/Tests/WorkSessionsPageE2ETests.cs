@@ -194,6 +194,9 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     [Category("Page")]
     public async Task Work_Session_Starts_And_Streams_Its_Lifecycle_To_The_Panes()
     {
+        // Three panes need a 1172 px container (the centre pane keeps its 440 px floor), which is 1456 px of viewport
+        // beside the app shell. Below that the detail page stacks by design, and the panes under test are not side by side.
+        await Page.SetViewportSizeAsync(1600, 1000);
         await PinChatModelOnSeededAgentAsync();
         await MarkChatModelToolCapableAsync();
 

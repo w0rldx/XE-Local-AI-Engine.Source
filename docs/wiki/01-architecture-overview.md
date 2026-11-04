@@ -339,8 +339,8 @@ re-selects local vs cloud and the target llama-server process by `ChatOptions.Mo
 `LocalModelProviderResolver` maps `ModelName` → `ProviderName` over the persisted `model_provider_map` and then
 `ProviderName` → `ILocalModelProvider` over the registered set. **An unmapped name defaults to `llamacpp`**: the
 shipped default model is a GGUF, so a name with no map row — a pre-existing GGUF install, or a registry/map
-divergence — still routes to llama.cpp. A chat turn on a model that is not installed is refused by the capacity gate,
-whose message says the model's memory footprint could not be determined. The resolver constructor validates that its default provider is registered, and `llamacpp`
+divergence — still routes to llama.cpp. A chat turn on a model that is not installed fails with `FailureCategory.ModelNotInstalled`:
+the capacity gate reports the missing model instead of a capacity shortage. The resolver constructor validates that its default provider is registered, and `llamacpp`
 always is. The supervisor's loaded-cap is surfaced through the same resolver for the preview reject-at-start check.
 See [Chat](05-chat.md) and [Agent Mode](04-agent-mode.md).
 

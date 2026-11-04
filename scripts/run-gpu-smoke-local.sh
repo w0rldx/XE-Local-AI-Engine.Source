@@ -50,6 +50,9 @@
 #                           job has already evicted the idle chat model (image VRAM eviction), so a
 #                           successful image runtime eject stands in for the chat eject; the VRAM
 #                           assertion is unchanged. Without --images, nothing to eject still FAILS.
+#                           A companion process that a fire-and-forget knowledge warm starts around
+#                           the eject is re-ejected: the step polls until the running listing is
+#                           empty and VRAM is back, and a process still listed at the bound FAILS.
 #
 # Configuration vs observable outcome — the lesson this script encodes
 #   Do not assert that a setting is set; assert the behaviour it should produce. Two live findings
@@ -144,6 +147,7 @@ SMOKE_PASSWORD="${XE_GPU_SMOKE_PASSWORD:-!Demo1234567}"
 MIN_UTIL_PERCENT="${XE_GPU_SMOKE_MIN_UTIL_PERCENT:-15}"
 MIN_VRAM_RISE_MIB="${XE_GPU_SMOKE_MIN_VRAM_RISE_MIB:-150}"
 EJECT_TOLERANCE_MIB="${XE_GPU_SMOKE_EJECT_TOLERANCE_MIB:-600}"
+EJECT_SETTLE_POLLS=60
 READY_TIMEOUT_SECONDS="${XE_GPU_SMOKE_TIMEOUT_SECONDS:-240}"
 SAMPLE_INTERVAL="${XE_GPU_SMOKE_SAMPLE_INTERVAL:-0.1}"
 GPU_INDEX="${XE_GPU_SMOKE_GPU_INDEX:-0}"
@@ -634,10 +638,80 @@ assert_vram_released() {
   log "eject: baselineVram=${baseline}MiB afterEject=${after}MiB excess=${excess}MiB (tolerance ${EJECT_TOLERANCE_MIB}MiB)"
   if [[ "${excess}" -gt "${EJECT_TOLERANCE_MIB}" ]]; then
     step_fail "7-eject" \
-      "VRAM stayed ${excess}MiB above the baseline after eject (tolerance ${EJECT_TOLERANCE_MIB}MiB). A process is still holding device memory — this is the orphaned-llama-server signature."
+      "VRAM stayed ${excess}MiB above the baseline after eject (tolerance ${EJECT_TOLERANCE_MIB}MiB). A process is still holding device memory — this is the orphaned-llama-server signature, or a late companion (embedder, reranker) still loading and so not yet listed."
     return 1
   fi
   return 0
+}
+
+# Ejects every process a `running` record block lists; sets EJECTED_ANY when an eject took effect.
+eject_listed() {
+  local records="$1" entry running_model running_role eject_records eject_outcome
+  while IFS= read -r entry; do
+    [[ -n "${entry}" ]] || continue
+    IFS='|' read -r running_model running_role <<<"${entry}"
+    log "ejecting ${running_model} (role=${running_role:-none})"
+    # HTTP 200 is not success here: the endpoint reports an `outcome`, and `timed_out_still_busy`
+    # means the process was LEFT RUNNING. Treating the status code as the verdict would count a
+    # refused eject as a completed one.
+    eject_records="$(drive eject --token "${TOKEN}" --model "${running_model}" --role "${running_role}" --force)" || eject_records=""
+    eject_outcome="$(record_value outcome "${eject_records}")"
+    if [[ -z "${eject_records}" ]]; then
+      warn "eject of ${running_model} reported an error"
+    elif [[ "${eject_outcome}" == *"still_busy"* || "${eject_outcome}" == *"timed_out"* ]]; then
+      warn "eject of ${running_model} returned outcome '${eject_outcome}' — the process was left running."
+    else
+      log "  outcome=${eject_outcome}"
+      EJECTED_ANY="true"
+    fi
+  done < <(record_values running "${records}")
+}
+
+# Polls until the running listing is empty AND VRAM is back within tolerance, ejecting whatever each
+# listing shows, then judges the release. One empty listing is not "settled": a process enters the
+# listing only once it is ready, so a companion a fire-and-forget knowledge warm has already spawned
+# is invisible while it loads, and it holds device memory the eject cannot reach until it registers.
+# Freeing device memory is not synchronous with the API returning either, hence the bounded poll.
+#
+# An unreadable sample must NOT end the loop. The VRAM comparison is an UPPER bound, so any
+# phantom-low value satisfies it — that is how a failed nvidia-smi read used to certify "VRAM
+# released" while a process still held the device. It is therefore treated as "not settled yet",
+# and if it never becomes readable the step fails on an unmeasurable value. A failed listing is
+# never read as an empty one, for the same reason.
+eject_until_settled() {
+  local chat_model="$1" baseline="$2" records="" count="" after="" readable="false" poll listed
+  for ((poll = 0; poll < EJECT_SETTLE_POLLS; poll++)); do
+    records="$(drive running --token "${TOKEN}")" || records=""
+    count="$(record_value count "${records}")"
+    eject_listed "${records}"
+    if [[ "${count}" == "0" ]]; then
+      if after="$(gpu_vram_now)"; then
+        readable="true"
+        [[ $((after - baseline)) -le "${EJECT_TOLERANCE_MIB}" ]] && break
+      else
+        readable="false"
+      fi
+    fi
+    sleep 1
+  done
+  if [[ -z "${count}" ]]; then
+    step_fail "7-eject" "the running-model listing could not be read after eject, so the release could not be verified. An unmeasurable result is not a pass."
+    return 1
+  fi
+  if [[ "${count}" != "0" ]]; then
+    listed="$(record_values running "${records}" | paste -sd ' ' -)"
+    if record_values running "${records}" | awk -F'|' -v m="${chat_model}" '$1 == m { found=1 } END { exit !found }'; then
+      step_fail "7-eject" "the chat model ${chat_model} is still listed after eject (listing: ${listed:-${count} unnamed})."
+    else
+      step_fail "7-eject" "a process is still listed after ${EJECT_SETTLE_POLLS} eject polls, likely a late companion that will not leave (listing: ${listed:-${count} unnamed})."
+    fi
+    return 1
+  fi
+  if [[ "${readable}" != "true" ]]; then
+    step_fail "7-eject" "nvidia-smi produced no usable VRAM reading after eject, so the release could not be verified. An unmeasurable result is not a pass."
+    return 1
+  fi
+  assert_vram_released "${baseline}" "${after}"
 }
 
 # nvidia-smi sampling.
@@ -1073,24 +1147,7 @@ log "=== Step 7: eject releases VRAM ==="
 ledger_expect "7-eject"
 RUNNING_RECORDS="$(drive running --token "${TOKEN}")" || RUNNING_RECORDS=""
 EJECTED_ANY="false"
-while IFS= read -r entry; do
-  [[ -n "${entry}" ]] || continue
-  IFS='|' read -r running_model running_role <<<"${entry}"
-  log "ejecting ${running_model} (role=${running_role:-none})"
-  # HTTP 200 is not success here: the endpoint reports an `outcome`, and `timed_out_still_busy`
-  # means the process was LEFT RUNNING. Treating the status code as the verdict would count a
-  # refused eject as a completed one.
-  EJECT_RECORDS="$(drive eject --token "${TOKEN}" --model "${running_model}" --role "${running_role}" --force)" || EJECT_RECORDS=""
-  EJECT_OUTCOME="$(record_value outcome "${EJECT_RECORDS}")"
-  if [[ -z "${EJECT_RECORDS}" ]]; then
-    warn "eject of ${running_model} reported an error"
-  elif [[ "${EJECT_OUTCOME}" == *"still_busy"* || "${EJECT_OUTCOME}" == *"timed_out"* ]]; then
-    warn "eject of ${running_model} returned outcome '${EJECT_OUTCOME}' — the process was left running."
-  else
-    log "  outcome=${EJECT_OUTCOME}"
-    EJECTED_ANY="true"
-  fi
-done < <(record_values running "${RUNNING_RECORDS}")
+eject_listed "${RUNNING_RECORDS}"
 
 if [[ "${RUN_IMAGES}" == "true" ]]; then
   EJECT_IMAGES_RECORDS="$(drive eject-images --token "${TOKEN}")" || EJECT_IMAGES_RECORDS=""
@@ -1111,29 +1168,8 @@ if [[ -z "${CHAT_MODEL}" ]]; then
   step_fail "7-eject" "no chat model was loaded, so VRAM release could not be exercised at all."
 elif [[ "${EJECTED_ANY}" != "true" ]]; then
   step_fail "7-eject" "no model was resident to eject, yet a chat turn had just run. Either the model was never loaded on the device or the running-model view is wrong."
-else
-  # Bounded settle: freeing device memory is not synchronous with the API returning.
-  #
-  # An unreadable sample must NOT end the loop. Step 7's comparison is an UPPER bound, so any
-  # phantom-low value satisfies it — that is how a failed nvidia-smi read used to certify "VRAM
-  # released" while a process still held the device. An unreadable sample is therefore treated as
-  # "not settled yet", and if it never becomes readable the step fails on an unmeasurable value.
-  AFTER_VRAM=""
-  VRAM_READABLE="false"
-  for _ in $(seq 1 30); do
-    if AFTER_VRAM="$(gpu_vram_now)"; then
-      VRAM_READABLE="true"
-      [[ $((AFTER_VRAM - BASELINE_VRAM)) -le "${EJECT_TOLERANCE_MIB}" ]] && break
-    else
-      VRAM_READABLE="false"
-    fi
-    sleep 1
-  done
-  if [[ "${VRAM_READABLE}" != "true" ]]; then
-    step_fail "7-eject" "nvidia-smi produced no usable VRAM reading after eject, so the release could not be verified. An unmeasurable result is not a pass."
-  elif assert_vram_released "${BASELINE_VRAM}" "${AFTER_VRAM}"; then
-    ledger_pass "7-eject"
-  fi
+elif eject_until_settled "${CHAT_MODEL}" "${BASELINE_VRAM}"; then
+  ledger_pass "7-eject"
 fi
 
 if ledger_finalize; then

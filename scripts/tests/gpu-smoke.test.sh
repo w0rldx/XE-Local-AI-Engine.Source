@@ -101,6 +101,7 @@ audit_unknown_rec='inferenceBackend\tunknown\ngpuExpected\ttrue\ncpuFallback\tfa
 audit_cuda_rec='inferenceBackend\tcuda\ngpuExpected\ttrue\ncpuFallback\tfalse\n'
 # shellcheck disable=SC2034 # read by the sourced script functions
 TOKEN=t
+# shellcheck disable=SC2329  # test double, called by the sourced script functions
 drive() {
   local n
   n="$(cat "${AUDIT_CALLS_FILE}")"; n=$((n + 1)); printf '%s' "${n}" >"${AUDIT_CALLS_FILE}"
@@ -321,6 +322,7 @@ EJECT_TOLERANCE_MIB=600
 out="$(assert_vram_released 3300 9000 2>&1)"; status=$?
 check "VRAM still held after eject fails" "1" "${status}"
 check_contains "held VRAM names the orphan signature" "orphaned-llama-server signature" "${out}"
+check_contains "held VRAM names a late companion" "late companion" "${out}"
 
 assert_vram_released 3353 3385 >/dev/null 2>&1
 check "VRAM returned to baseline passes" "0" "$?"
@@ -358,6 +360,132 @@ gpu_sample_once() { printf '%s\n' "7, 4552"; }
 check "gpu_vram_now returns the reading when valid" "4552" "$(gpu_vram_now)"
 gpu_vram_now >/dev/null 2>&1
 check "gpu_vram_now succeeds when valid" "0" "$?"
+
+echo "== eject re-poll =="
+
+# A fake node for eject_until_settled. Like the real supervisor, it lists a process only once it is
+# ready: a loading one holds device memory unlisted until its registration poll. State lives in
+# files because the code under test runs in a command substitution.
+NODE="${TEMP_ROOT}/fake-node"
+mkdir -p "${NODE}"
+fake_node() {
+  local listed="$1"
+  : >"${NODE}/ejects"
+  printf '0' >"${NODE}/polls"
+  rm -f "${NODE}/loading"
+  : >"${NODE}/listed"
+  [[ -z "${listed}" ]] || printf '%s\n' "${listed}" >"${NODE}/listed"
+  LOADING_ENTRY=""; LOADING_AT=0; STUCK=""; LISTING_FAILS="false"; VRAM_FAILS="false"; ORPHAN_MIB=0
+  EJECT_OUTCOME_DOUBLE="ejected"
+}
+fake_node_loading() {
+  LOADING_ENTRY="$1"; LOADING_AT="$2"
+  : >"${NODE}/loading"
+}
+# shellcheck disable=SC2329  # test double, called by the sourced script functions
+drive() {
+  local command="$1" polls entry
+  if [[ "${command}" == "running" ]]; then
+    polls="$(cat "${NODE}/polls")"; polls=$((polls + 1)); printf '%s' "${polls}" >"${NODE}/polls"
+    [[ "${LISTING_FAILS}" != "true" ]] || return 1
+    if [[ -e "${NODE}/loading" && "${polls}" -ge "${LOADING_AT}" ]]; then
+      printf '%s\n' "${LOADING_ENTRY}" >>"${NODE}/listed"
+      rm -f "${NODE}/loading"
+    fi
+    printf 'count\t%s\n' "$(wc -l <"${NODE}/listed")"
+    while IFS= read -r entry; do printf 'running\t%s\n' "${entry}"; done <"${NODE}/listed"
+    return 0
+  fi
+  entry="$5|$7"
+  printf '%s\n' "${entry}" >>"${NODE}/ejects"
+  if [[ "${entry}" != "${STUCK}" ]]; then
+    grep -vxF -- "${entry}" "${NODE}/listed" >"${NODE}/listed.next"
+    mv "${NODE}/listed.next" "${NODE}/listed"
+  fi
+  printf 'modelName\t%s\noutcome\t%s\n' "$5" "${EJECT_OUTCOME_DOUBLE}"
+}
+# shellcheck disable=SC2329  # test double, called by the sourced script functions
+gpu_vram_now() {
+  [[ "${VRAM_FAILS}" != "true" ]] || return 1
+  local residents; residents="$(wc -l <"${NODE}/listed")"
+  [[ ! -e "${NODE}/loading" ]] || residents=$((residents + 1))
+  printf '%s\n' "$((1000 + residents * 805 + ORPHAN_MIB))"
+}
+# shellcheck disable=SC2329  # test double, the bounded poll needs no real wait here
+sleep() { :; }
+settle() { eject_until_settled "chat-model" 1000 2>&1; }
+
+# The original defect: the embedder is loading, so the first listing is EMPTY while it holds VRAM.
+# Stopping on that empty listing would leave it resident and fail the VRAM check by ~805 MiB.
+fake_node ""
+fake_node_loading "embed-model|embedding" 3
+out="$(settle)"; status=$?
+check "an embedder that registers late is ejected and the step passes" "0" "${status}"
+check_contains "the late embedder was ejected" "embed-model|embedding" "$(cat "${NODE}/ejects")"
+check "an empty listing with VRAM still held does not end the polling" "4" "$(cat "${NODE}/polls")"
+
+# The warm starts the reranker first and the embedder after it, so ejecting one uncovers the next.
+fake_node "rerank-model|reranker"
+fake_node_loading "embed-model|embedding" 2
+out="$(settle)"; status=$?
+check "companions that appear one after the other are all ejected" "0" "${status}"
+check "both companions were ejected, once each" "rerank-model|reranker embed-model|embedding" "$(paste -sd ' ' - <"${NODE}/ejects")"
+
+fake_node "embed-model|embedding"
+STUCK="embed-model|embedding"
+out="$(settle)"; status=$?
+check "a process that never leaves fails" "1" "${status}"
+check_contains "the stuck process is named" "embed-model|embedding" "${out}"
+check_contains "the stuck process failure mentions a late companion" "late companion" "${out}"
+check "the polling stops at its bound" "${EJECT_SETTLE_POLLS}" "$(cat "${NODE}/polls")"
+
+fake_node "chat-model|chat"
+STUCK="chat-model|chat"
+out="$(settle)"; status=$?
+check "the chat model still listed fails" "1" "${status}"
+check_contains "the chat model failure names it" "the chat model chat-model is still listed" "${out}"
+
+# A model whose name only STARTS with the chat model's is another process, not the chat model.
+fake_node "chat-model-2|embedding"
+STUCK="chat-model-2|embedding"
+out="$(settle)"; status=$?
+check "a similarly named process still fails" "1" "${status}"
+check_contains "a similarly named process is not called the chat model" "late companion" "${out}"
+
+# A failed listing must never read as an empty one: VRAM is at baseline here, so it would pass.
+fake_node ""
+LISTING_FAILS="true"
+out="$(settle)"; status=$?
+check "an unreadable listing fails" "1" "${status}"
+check_contains "the unreadable listing is called out" "could not be read" "${out}"
+
+fake_node ""
+ORPHAN_MIB=805
+out="$(settle)"; status=$?
+check "an empty listing with VRAM held to the bound fails" "1" "${status}"
+check_contains "the held VRAM failure names the orphan signature" "orphaned-llama-server signature" "${out}"
+
+fake_node ""
+VRAM_FAILS="true"
+out="$(settle)"; status=$?
+check "an unreadable VRAM sample fails" "1" "${status}"
+check_contains "the unreadable sample is called out" "no usable VRAM reading" "${out}"
+
+fake_node "chat-model|chat"
+out="$(settle)"; status=$?
+check "a chat model that ejects cleanly passes" "0" "${status}"
+check_contains "the release is judged against the baseline" "baselineVram=1000MiB" "${out}"
+
+# Each outcome is still checked: a refused eject must not count as one that took effect.
+fake_node ""
+EJECT_OUTCOME_DOUBLE="timed_out_still_busy"
+out="$(EJECTED_ANY="false"; eject_listed "$(records 'count\t1\nrunning\tchat-model|chat\n')" 2>&1; echo "ejectedAny=${EJECTED_ANY}")"
+check_contains "a refused eject warns" "the process was left running" "${out}"
+check_contains "a refused eject does not count" "ejectedAny=false" "${out}"
+EJECT_OUTCOME_DOUBLE="ejected"
+out="$(EJECTED_ANY="false"; eject_listed "$(records 'count\t1\nrunning\tchat-model|chat\n')" 2>&1; echo "ejectedAny=${EJECTED_ANY}")"
+check_contains "a completed eject counts" "ejectedAny=true" "${out}"
+unset -f sleep
 
 echo "== model selection =="
 

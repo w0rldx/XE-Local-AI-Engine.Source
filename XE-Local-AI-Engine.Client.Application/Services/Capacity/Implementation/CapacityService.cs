@@ -24,6 +24,7 @@ public sealed class CapacityService : ICapacityService
     private const string ReasonQueueSameModel = "Model already running; the spawn will share that process.";
     private const string ReasonQueueSameModelLoading = "Model is loading; the request will share that load.";
     private const string ReasonRejectFootprintUnknown = "the model's memory footprint could not be determined.";
+    private const string ReasonRejectContextTooLarge = "the requested context is larger than the model's process can allocate.";
     private const string ReasonRejectByteBudget = "not enough free memory for another model.";
     private const string ReasonRejectProcessCap = "the maximum number of concurrent models is already loaded.";
     private const string ReasonRejectLaunchBlocker = "another model is still loading; try again when it finishes.";
@@ -98,7 +99,7 @@ public sealed class CapacityService : ICapacityService
         var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct);
 
         // An operator-registered external model runs on someone else's hardware: no process, no weights, no RAM or VRAM here, and the byte-budget path
-        // below would reject it as "footprint could not be determined". Both conditions are deliberate and neither grants trust: see docs/wiki/04-agent-mode.md ("Capacity gate & sub-agent spawn").
+        // below would reject it as not installed. Both conditions are deliberate and neither grants trust: see docs/wiki/04-agent-mode.md ("Capacity gate & sub-agent spawn").
         if (string.Equals(providerName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
             || ExternalModelId.HasExternalScheme(modelName))
         {
@@ -157,7 +158,13 @@ public sealed class CapacityService : ICapacityService
                 return AllowOverBudget(modelName, role, reservation: null);
             }
 
-            return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot);
+            if (footprint.IsNotInstalled)
+            {
+                return RejectNotInstalled(modelName, role);
+            }
+
+            return Reject(footprint.ExceedsProcessContext ? ReasonRejectContextTooLarge : ReasonRejectFootprintUnknown,
+                modelName, role, runningSnapshot, launchSnapshot);
         }
 
         // Process-count headroom mirrors the supervisor's chat-model cap: companions (embedder, reranker) hold their own slots, so only chat-class keys count.
@@ -298,6 +305,18 @@ public sealed class CapacityService : ICapacityService
         };
     }
 
+    /// <summary>A rejection that is not about capacity at all: the reason says only that the model is missing, since nothing loaded has any bearing on it.</summary>
+    private CapacityDecision RejectNotInstalled(string modelName, ModelRole role)
+    {
+        _logger.LogWarning("Capacity rejected {Model} ({Role}): the model is not installed.", modelName, role);
+        return new CapacityDecision
+        {
+            Verdict = CapacityVerdict.RejectInsufficient,
+            Reason = $"Model '{modelName}' is not installed on this node.",
+            IsNotInstalled = true
+        };
+    }
+
     /// <summary>A rejection whose reason names the requested model and what is loaded, logged at Warning so the refusal is visible in the node log.</summary>
     private CapacityDecision Reject(string detail,
         string modelName,
@@ -329,9 +348,10 @@ public sealed class CapacityService : ICapacityService
             };
         }
 
-        // Only a loaded model can be ejected; ejecting cannot make an unknown footprint known, and a launch blocker clears on its own.
+        // Only a loaded model can be ejected; ejecting cannot make an unknown footprint known or grow a process's window, and a launch blocker clears on its own.
         var hint = runningSnapshot.IsKnown && resident.Length > 0
                                            && !string.Equals(detail, ReasonRejectFootprintUnknown, StringComparison.Ordinal)
+                                           && !string.Equals(detail, ReasonRejectContextTooLarge, StringComparison.Ordinal)
                                            && !string.Equals(detail, ReasonRejectLaunchBlocker, StringComparison.Ordinal)
             ? " Eject one of them or pick a loaded model."
             : string.Empty;

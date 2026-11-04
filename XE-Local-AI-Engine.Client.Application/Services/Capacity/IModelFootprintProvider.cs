@@ -17,10 +17,12 @@ public interface IModelFootprintProvider
 {
     /// <summary>
     ///     Resolves the estimated footprint of the installed model <paramref name="modelName" /> against
-    ///     <paramref name="profile" />. Returns <see cref="ModelFootprint.Unknown" /> when the model is not installed or
-    ///     carries neither header metadata nor a usable file size. Never throws for an absent/unreadable model
-    ///     (cancellation excepted).
+    ///     <paramref name="profile" />. Never throws for an absent/unreadable model (cancellation excepted).
     /// </summary>
+    /// <remarks>
+    ///     <see cref="ModelFootprint.NotInstalled" /> when the model is not installed; <see cref="ModelFootprint.Unknown" /> when it
+    ///     carries neither header metadata nor a usable file size.
+    /// </remarks>
     Task<ModelFootprint> ResolveFootprintAsync(string modelName, ModelRole role, HardwareProfile profile, CancellationToken ct);
 
     /// <summary>
@@ -57,8 +59,8 @@ public interface IModelFootprintProvider
 ///     Unknown.
 /// </summary>
 /// <remarks>
-///     Unknown means the model is not installed, or that neither header metadata nor a file size was available. The capacity gate treats
-///     Unknown as a reject — the invariant is conservative on uncertainty.
+///     Not known means the model is not installed, the caller's required context exceeds what the process allocates, or neither header
+///     metadata nor a file size was available. The capacity gate treats each as a reject, with its own reason.
 /// </remarks>
 public sealed record ModelFootprint
 {
@@ -71,6 +73,12 @@ public sealed record ModelFootprint
 
     /// <summary>Whether a byte estimate is available. <see langword="false" /> ⇒ the gate rejects.</summary>
     public bool IsKnown { get; }
+
+    /// <summary>Whether there is no estimate because the model is not installed: no registry entry, or its file is gone.</summary>
+    public bool IsNotInstalled { get; private init; }
+
+    /// <summary>Whether there is no estimate because the caller's required context exceeds what the model's process allocates.</summary>
+    public bool ExceedsProcessContext { get; private init; }
 
     /// <summary>The estimated resident bytes when <see cref="IsKnown" />; otherwise <c>0</c> (do not consume it).</summary>
     public ResourceFootprint Resources { get; }
@@ -91,6 +99,18 @@ public sealed record ModelFootprint
     internal static ModelFootprint Known(ProcessLaunchAdmission admission) =>
         new(isKnown: true, admission.Allocation.Footprint, admission);
 
-    /// <summary>An undeterminable footprint (not installed, or no header metadata and no file size).</summary>
+    /// <summary>An undeterminable footprint of an installed model: no header metadata and no file size.</summary>
     public static ModelFootprint Unknown { get; } = new(isKnown: false, ResourceFootprint.Zero, admission: null);
+
+    /// <summary>The model is not installed on this node.</summary>
+    public static ModelFootprint NotInstalled { get; } = new(isKnown: false, ResourceFootprint.Zero, admission: null)
+    {
+        IsNotInstalled = true
+    };
+
+    /// <summary>The caller's required context exceeds what the model's process allocates.</summary>
+    public static ModelFootprint ContextTooLarge { get; } = new(isKnown: false, ResourceFootprint.Zero, admission: null)
+    {
+        ExceedsProcessContext = true
+    };
 }

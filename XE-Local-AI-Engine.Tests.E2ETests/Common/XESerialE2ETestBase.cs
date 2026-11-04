@@ -65,6 +65,16 @@ public abstract class XESerialE2ETestBase : XEE2ETestBase
     }
 
     /// <summary>
+    ///     Removes the app-shell banners from layout, as dismissing them would. Whether they show depends on the host's
+    ///     hardware and installed runtime, so a test that pins available height cannot leave them to chance.
+    /// </summary>
+    protected async Task HideHostDependentBannersAsync() =>
+        await Page.AddStyleTagAsync(new PageAddStyleTagOptions
+        {
+            Content = "[data-testid='cpu-fallback-banner'], [data-testid='llamacpp-update-banner'], [data-testid='pending-restart-banner'] { display: none !important; }"
+        });
+
+    /// <summary>
     ///     Opens the composer's model selector and picks <paramref name="modelName" />, so a test names the model it
     ///     sends against instead of relying on what the local default resolves to.
     /// </summary>

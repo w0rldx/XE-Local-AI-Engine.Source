@@ -835,7 +835,10 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             var decision = await services.GetRequiredService<ICapacityService>().DecideAsync(effectiveModel, ModelRole.Chat, runToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
-                await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CapacityRejected, "The node could not reserve capacity for the trigger's model.");
+                // The summary reaches the integration's caller, so only the reason that names nothing but the trigger's own model is passed on; the others list what is loaded.
+                await TerminalizeBeforeRunAsync(context,
+                    IntegrationFailureCategories.CapacityRejected,
+                    decision.IsNotInstalled ? decision.Reason : "The node could not reserve capacity for the trigger's model.");
                 return;
             }
 

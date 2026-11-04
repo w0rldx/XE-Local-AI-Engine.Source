@@ -290,6 +290,25 @@ public sealed class PooledRoleLaunchAdmissionTests
     }
 
     [Test]
+    public async Task NotInstalled_ThrowsItsOwnTypeWithoutEvicting()
+    {
+        const string notInstalled = "Model 'absent' is not installed on this node.";
+        await using var host = Host.Create(new CapacityDecision
+        {
+            Verdict = CapacityVerdict.RejectInsufficient,
+            Reason = notInstalled,
+            IsNotInstalled = true
+        });
+        var evictions = new EvictionRecorder("'idle/chat-GGUF:Q4_K_M' (Chat)");
+
+        var exception = await AssertEx.ThrowsAsync<LlamaModelNotInstalledException>(() =>
+            host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None));
+
+        AssertEx.Equal(notInstalled, exception.Message);
+        AssertEx.Equal(0, evictions.Calls);
+    }
+
+    [Test]
     public async Task Chat_WhenTheFreedVramNeverShows_TheWaitIsBounded()
     {
         var reservation = new TrackingDisposable();

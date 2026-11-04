@@ -88,6 +88,7 @@ internal static class BenchmarkCapacityAdmission
     ///     whose reservation the caller still owns and must dispose — or throws
     ///     <see cref="BenchmarkExecutionException" /> once the phase's budget is spent.
     /// </summary>
+    /// <remarks>A model that is not installed fails on the first decision: no wait can change that.</remarks>
     public static async Task<CapacityDecision> AdmitAsync(ICapacityService capacity,
         CapacityRequest request,
         BenchmarkAdmissionContext context,
@@ -130,15 +131,21 @@ internal static class BenchmarkCapacityAdmission
                 return decision;
             }
 
+            // The reason names what is loaded and what to eject; trimmed so a long resident list cannot crowd out the rest.
+            var reason = ConversationSummarizer.TruncateAtRuneBoundary(decision.Reason, MaxReasonChars);
+            if (reason.Length < decision.Reason.Length)
+            {
+                reason += "…";
+            }
+
+            // No wait can install a model, and the reason alone is the truth: nothing here is short of capacity.
+            if (decision.IsNotInstalled)
+            {
+                throw new BenchmarkExecutionException(reason);
+            }
+
             if (budget.Remaining == 0)
             {
-                // The reason names what is loaded and what to eject; trimmed so a long resident list cannot crowd out the rest.
-                var reason = ConversationSummarizer.TruncateAtRuneBoundary(decision.Reason, MaxReasonChars);
-                if (reason.Length < decision.Reason.Length)
-                {
-                    reason += "…";
-                }
-
                 throw new BenchmarkExecutionException($"{context.RejectedMessage} No capacity became free after {budget.Budget.TotalSeconds:0} s. {reason}");
             }
 

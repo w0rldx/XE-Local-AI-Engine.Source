@@ -308,7 +308,9 @@ public sealed partial class LlamaServerProcessSupervisor
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(modelFilePath))
         {
-            throw NonRetryable("The requested model is not installed.");
+            var notInstalled = new LlamaModelNotInstalledException("The requested model is not installed.");
+            notInstalled.Data[NonRetryableMarker] = true;
+            throw notInstalled;
         }
 
         // A LoRA-adapter model has no weights of its own: llama-server loads the installed BASE model and applies this entry's file as the adapter. Resolving it

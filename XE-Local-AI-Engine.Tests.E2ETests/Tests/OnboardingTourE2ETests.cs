@@ -163,6 +163,33 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
         }
     }
 
+    /// <summary>
+    ///     With no banner above it the chat target nearly fills a phone viewport, so no side has room for the tooltip. The
+    ///     banner-free arm is pinned because the other tests in this class land on either arm depending on the host.
+    /// </summary>
+    [Test]
+    [Category("Onboarding")]
+    public async Task QuickStart_WithoutBanners_KeepsNextAndSkipInsideThePhoneViewport()
+    {
+        await PrepareReadyQuickStartAsync();
+        await Page.SetViewportSizeAsync(390, 844);
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
+        await HideHostDependentBannersAsync();
+        await Page.GetByTestId("onboarding-welcome-start").ClickAsync();
+
+        await AssertTourStepAsync("navChat", "[data-tour='chat-overview']", QuickStartProgressKey);
+        await PrimaryTourAction.ClickAsync();
+        await AssertTourStepAsync("chatInput", "[data-testid='chat-input']", QuickStartProgressKey);
+
+        await Page.RunAndWaitForResponseAsync(async () => await ActiveTooltip.Locator("[data-action='skip']").ClickAsync(),
+            response => response.Url.Contains("tutorial-state", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase));
+        await AssertTutorialStatusAsync("main-app-v1", "skipped");
+    }
+
     [Test]
     [Category("Onboarding")]
     public async Task QuickStart_MissingModel_ShowsModelAndRecommendationTargets_WithoutDownloading()
@@ -264,6 +291,10 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
         var definitionRows = Page.Locator("[data-testid^='agent-definition-row-']");
         await AssertTourStepAsync("agentsOverview", "[data-tour='agents-overview']", AgentsProgressKey);
         var definitionCountBefore = await definitionRows.CountAsync();
+
+        // The phone width cap must leave a desktop tooltip at its full design width.
+        var tooltipBounds = await ActiveTooltip.BoundingBoxAsync() ?? throw new InvalidOperationException("The tutorial tooltip is not on screen.");
+        await Assert.That(tooltipBounds.Width).IsEqualTo(380f);
 
         await PrimaryTourAction.ClickAsync();
         await AssertTourStepAsync("agentsTemplates", "[data-tour='agents-templates']", AgentsProgressKey);
@@ -389,9 +420,12 @@ public sealed class OnboardingTourE2ETests : XESerialE2ETestBase
 
         var tooltipFitsViewport = await ActiveTooltip.EvaluateAsync<bool>("""
                                                                           element => {
-                                                                              const bounds = element.getBoundingClientRect();
-                                                                              return bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
-                                                                                  && bounds.right <= globalThis.innerWidth && bounds.bottom <= globalThis.innerHeight;
+                                                                              const fits = (node) => {
+                                                                                  const bounds = node.getBoundingClientRect();
+                                                                                  return bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
+                                                                                      && bounds.right <= globalThis.innerWidth && bounds.bottom <= globalThis.innerHeight;
+                                                                              };
+                                                                              return fits(element) && Array.from(element.querySelectorAll('[data-action]')).every(fits);
                                                                           }
                                                                           """);
         await Assert.That(tooltipFitsViewport).IsTrue();

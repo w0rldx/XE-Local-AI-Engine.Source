@@ -462,8 +462,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
             // Admission, which this host cannot answer truthfully: the graph-workflow Agent lane runs the real capacity
             // gate, and that gate sizes a model against an installed GGUF file. There is none here — every model is served
-            // by the fake gateway — so the footprint reads as unknown and the gate refuses the turn with "the model's memory
-            // footprint could not be determined" before a single provider call is made. The same five seams are
+            // by the fake gateway — so the footprint reads as not installed and the gate refuses the turn with "Model 'X' is
+            // not installed on this node." before a single provider call is made. The same five seams are
             // replaced for the same reason in the unit-side GraphWorkflowAgentHostFixture; this is the one of them the
             // browser suite needs, because everything else on the path is real here. What capacity ACTUALLY decides is
             // covered by CapacityServiceTests, not by a browser.

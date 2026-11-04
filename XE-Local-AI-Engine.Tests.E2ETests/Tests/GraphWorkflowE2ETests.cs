@@ -46,6 +46,9 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
 
     private const string PauseKey = "pause-1";
 
+    /// <summary>Measured to wrap the toolbar to four rows with the side panel open at this class's 1600 px width.</summary>
+    private const string ToolbarWrappingName = "E2E approval loop dad4766a57da46e498ce46ebe29082b3";
+
     /// <summary>
     ///     Wider than the harness default so the editor renders its three-column layout (list, canvas, config) rather
     ///     than moving the config panel into a drawer, and so every card is on screen for the handle drags below.
@@ -224,6 +227,54 @@ public sealed class GraphWorkflowE2ETests : XESerialE2ETestBase
             {
                 Timeout = 15_000
             });
+    }
+
+    /// <summary>
+    ///     A long name on a short column must still reach Fit View: the canvas keeps its floor and the pane scrolls, so the
+    ///     strip stays below it. Height and name are pinned, as each decides the overlap; the row count proves the setup.
+    /// </summary>
+    [Test]
+    [Category("GraphWorkflows")]
+    public async Task Editor_Keeps_Fit_View_Reachable_When_The_Toolbar_Wraps_On_A_Short_Column()
+    {
+        await Page.SetViewportSizeAsync(1600, 800);
+        await Page.GotoAsync($"{NodeAppUrl}/graph-workflows", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
+        await HideHostDependentBannersAsync();
+
+        await Page.GetByTestId("gw-definition-create").ClickAsync();
+        await Page.GetByTestId("gw-definition-meta-name").FillAsync(ToolbarWrappingName);
+        await Page.GetByTestId("gw-definition-meta-submit").ClickAsync();
+        await Expect(Page.GetByTestId("graph-workflow-editor")).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 15_000
+        });
+        await Expect(Page.Locator(".mantine-Modal-overlay")).ToHaveCountAsync(0);
+
+        // An unwired node is what puts the strip on screen, and the side panel it opens is what narrows the centre column.
+        await Page.GetByTestId("graph-workflow-palette-agent").ClickAsync();
+        await SelectNodeAsync(AgentKey);
+        var strip = Page.GetByTestId("graph-workflow-validation-strip");
+        await Expect(strip).ToBeVisibleAsync();
+
+        // Children of one wrapped row share a vertical centre, not a top: the title is shorter than the buttons beside it.
+        var toolbarRows = await Page.GetByTestId("gw-page-rename").EvaluateAsync<int>("""
+                                                                                      (rename) => new Set(Array.from(rename.parentElement.children, (child) => {
+                                                                                          const bounds = child.getBoundingClientRect();
+                                                                                          return Math.round(bounds.top + bounds.height / 2);
+                                                                                      })).size
+                                                                                      """);
+        await Assert.That(toolbarRows).IsGreaterThanOrEqualTo(4);
+
+        var fitView = Page.Locator(".react-flow__controls-fitview").First;
+        await fitView.ScrollIntoViewIfNeededAsync();
+        var fitViewBounds = await fitView.BoundingBoxAsync() ?? throw new InvalidOperationException("Fit View is not on screen.");
+        var stripBounds = await strip.BoundingBoxAsync() ?? throw new InvalidOperationException("The validation strip is not on screen.");
+        await Assert.That(fitViewBounds.Y + fitViewBounds.Height).IsLessThanOrEqualTo(stripBounds.Y);
+
+        await fitView.ClickAsync();
     }
 
     private ILocator Node(string key) =>

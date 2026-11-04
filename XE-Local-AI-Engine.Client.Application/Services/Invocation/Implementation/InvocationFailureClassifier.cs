@@ -122,6 +122,8 @@ internal static class InvocationFailureClassifier
             // Admission policies supply sanitized, user-facing refusal text. Surface it verbatim as an ordinary
             // terminal agent-runtime failure; the policy runs after warm-up but before any generation method is called.
             InvocationGenerationRejectedException generationRejected => new FailureClassification(FailureCategory.AgentRuntime, generationRejected.Message),
+            // The launch named a model this node does not have: no capacity is short, so it never reads as a capacity refusal.
+            LlamaModelNotInstalledException => new FailureClassification(FailureCategory.ModelNotInstalled, InvocationFailureMessages.ModelUnavailable),
             // A capacity refusal of the model's launch reaches the chat path unwrapped. Its sanitized reason names only models and says what to do
             // ("Eject one of them or pick a loaded model"), so it is surfaced verbatim under its own category rather than as a model-load failure.
             LlamaCapacityRefusedException capacityRefused => new FailureClassification(FailureCategory.InsufficientCapacity, capacityRefused.Message),

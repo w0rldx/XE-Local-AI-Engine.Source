@@ -29,12 +29,12 @@ public enum FailureCategory
     ModelLoadFailed = 9,
 
     /// <summary>
-    ///     A "Local runtime default" send could not resolve an installed GGUF (llama.cpp) chat-capable model — no chat model is installed
-    ///     on the node.
+    ///     The turn's model is not on this node: a "Local runtime default" send found no installed GGUF chat model, or the turn named a
+    ///     model that is not installed.
     /// </summary>
     /// <remarks>
-    ///     Surfaced instead of the generic <see cref="ProviderUnreachable" /> so the frontend can show a clear "pull a GGUF model" call to
-    ///     action rather than reporting an unreachable provider.
+    ///     Surfaced instead of <see cref="ProviderUnreachable" /> or <see cref="InsufficientCapacity" /> so the frontend can point at the
+    ///     Models page. Other chat models may be installed, so the two cases carry different server text.
     /// </remarks>
     ModelNotInstalled = 10,
 

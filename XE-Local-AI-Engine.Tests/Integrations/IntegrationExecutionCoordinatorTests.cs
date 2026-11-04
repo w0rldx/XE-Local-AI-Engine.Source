@@ -232,6 +232,28 @@ public sealed class IntegrationExecutionCoordinatorTests
         AssertEx.Equal(IntegrationFailureCategories.CapacityRejected, harness.Row(executionId).FailureCategory);
         AssertEx.Equal(expected: 0, harness.RunCount, "A rejected capacity decision must not reach the runner.");
         AssertEx.True(harness.LeaseDisposed, "The lease is taken first now, so a capacity rejection has to dispose it.");
+        AssertEx.Equal("The node could not reserve capacity for the trigger's model.", harness.Row(executionId).FailureSummary);
+    }
+
+    [Test]
+    public async Task Run_WhenTheModelIsNotInstalled_SaysSoInsteadOfBlamingCapacity()
+    {
+        const string notInstalled = "Model 'absent' is not installed on this node.";
+        using var harness = new Harness();
+        harness.Capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
+               .Returns(new CapacityDecision
+               {
+                   Verdict = CapacityVerdict.RejectInsufficient,
+                   Reason = notInstalled,
+                   IsNotInstalled = true
+               });
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(notInstalled, harness.Row(executionId).FailureSummary);
+        AssertEx.Equal(expected: 0, harness.RunCount, "A missing model must not reach the runner.");
+        AssertEx.True(harness.LeaseDisposed);
     }
 
     [Test]

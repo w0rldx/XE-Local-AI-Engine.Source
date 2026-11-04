@@ -27,7 +27,7 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > untouched: download or import a GGUF to replace them.
 > - `XE_OLLAMA_*` environment variables and `Ollama:*` configuration are ignored. Stored model-to-runtime rows naming it
 >   are deleted by a migration, so those names route to llama.cpp and fail like any model that is not installed: a chat
->   turn is refused with "the model's memory footprint could not be determined".
+>   turn fails with a not-installed error instead of a capacity refusal.
 > - `ollamaEndpoint` is gone from node settings. A stored settings file carrying it still loads, but a save request
 >   carrying it is rejected with a 400, so update any client that sends it.
 > - `GET models/running` is removed in favour of `GET model-fit/running`. `xe models` no longer shows VRAM, and its
@@ -547,6 +547,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **A model that is not installed is no longer reported as a capacity problem** — a chat turn naming one fails as
+  not installed, and the capacity gate's own reason says "Model 'X' is not installed on this node." instead of claiming
+  its memory footprint could not be determined. A required context larger than the model's process can allocate gets
+  its own reason too.
 - **A gateway denial no longer tells the operator to replace a working key** — only a 401 or a recognised credential
   code says so. Any other 403 (an archived project, a removed member, a quota, a tenant mismatch) reports that the
   provider or gateway denied the request and quotes why, a body's `reason` beside its `message`, and hyphenated codes

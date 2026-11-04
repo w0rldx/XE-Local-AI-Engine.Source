@@ -372,8 +372,9 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
             """);
 
         // Restore must succeed with no network: DevelopmentWorkspaceTools points NUGET_PACKAGES at a fresh
-        // per-session directory, so the ambient cache is invisible. Clearing the sources and declaring the host
-        // cache as a fallback folder resolves the graph from disk instead.
+        // per-session directory, so the ambient cache is invisible. The host cache is the only package SOURCE, from
+        // which the warm restore (a host child) fills that directory. Not a fallback folder: behind the filesystem
+        // boundary the host cache is invisible, and every later restore must resolve from the session's folder.
         await WriteAsync(repositoryRoot,
             "NuGet.config",
             $"""
@@ -381,14 +382,27 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
              <configuration>
                <packageSources>
                  <clear />
+                 <add key="host" value="{packagesRoot}" />
                </packageSources>
                <fallbackPackageFolders>
                  <clear />
-                 <add key="host" value="{packagesRoot}" />
                </fallbackPackageFolders>
              </configuration>
 
              """);
+
+        // Behind the boundary NuGet fails a fresh restore on the missing LOCAL source (NU1301) even with every package in
+        // NUGET_PACKAGES; a solution restore reads the switch here, a project restore in Probe.csproj.
+        await WriteAsync(repositoryRoot,
+            "Directory.Solution.props",
+            """
+            <Project>
+              <PropertyGroup>
+                <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+              </PropertyGroup>
+            </Project>
+
+            """);
 
         // Build output must be ignored: the patch is exported with `git add -A`, so an un-ignored bin/ or obj/
         // produced by validation would change the subject hash between validation and review and block apply for a
@@ -444,6 +458,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                <PropertyGroup>
                  <TargetFramework>net10.0</TargetFramework>
                  <OutputType>Exe</OutputType>
+                 <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
                  <Nullable>enable</Nullable>
                  <ImplicitUsings>enable</ImplicitUsings>
                </PropertyGroup>

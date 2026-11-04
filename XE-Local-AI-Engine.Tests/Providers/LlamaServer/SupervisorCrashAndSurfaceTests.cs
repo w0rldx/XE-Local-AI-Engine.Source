@@ -178,9 +178,11 @@ public sealed class SupervisorCrashAndSurfaceTests
     {
         await using var supervisor = SupervisorFactory.Create(modelStore: new FakeModelStore(null));
 
-        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("ghost", ModelRole.Chat, CancellationToken.None));
+        // No admission hook here: the path of a node with no free-VRAM reading, where the spawn is the first to see the missing file.
+        var ex = await AssertEx.ThrowsAsync<LlamaModelNotInstalledException>(() => supervisor.EnsureRunningAsync("ghost", ModelRole.Chat, CancellationToken.None));
 
         AssertEx.Contains(ex.Message, "not installed", StringComparison.OrdinalIgnoreCase);
+        AssertEx.True(ex.Data.Contains("LlamaServer.NonRetryable"), "A missing file cannot appear between restart attempts.");
     }
 
     [Test]

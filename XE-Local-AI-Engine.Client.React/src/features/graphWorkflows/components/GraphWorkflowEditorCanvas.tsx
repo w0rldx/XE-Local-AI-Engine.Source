@@ -214,8 +214,8 @@ function GraphWorkflowEditorCanvasInner({
 						);
 
 	return (
-		// `minHeight: 0` lets this column actually shrink inside the page's height-constrained pane. Without it the canvas
-		// floor below is a hard floor on the whole editor, and the validation strip is pushed over the canvas it sits under.
+		// `minHeight: 0` lets the canvas absorb a shrinking column down to its floor below. Under that floor the page's pane
+		// scrolls; its wrapper around this column holds the height, so the validation strip stays under the canvas.
 		<Stack gap="sm" style={{ height: "100%", minHeight: 0 }} data-testid="graph-workflow-editor">
 			<Group justify="space-between" align="flex-end" wrap="wrap" gap="sm">
 				<Group gap="xs" role="group" aria-label={t("pages.graphWorkflows.palette.title", "Add a node")}>

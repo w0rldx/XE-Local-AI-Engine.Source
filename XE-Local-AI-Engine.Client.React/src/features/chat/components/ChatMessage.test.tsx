@@ -431,9 +431,8 @@ describe("ChatMessage actions", () => {
 		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toBe("SomeFutureCategory");
 	});
 
-	it("renders the friendly ModelNotInstalled message and a Models link for the no-chat-model failure", () => {
+	it("renders the server's ModelNotInstalled message and a Models link for the no-chat-model failure", () => {
 		// A "Local runtime default" send with no installed GGUF chat model surfaces FailureCategory ModelNotInstalled.
-		// The alert must render the friendly i18n message + a "Go to Models" CTA, not just the raw backend string.
 		renderWithProviders(
 			<ChatMessage
 				message={assistantMessage({
@@ -452,6 +451,36 @@ describe("ChatMessage actions", () => {
 		expect(modelsLink.getAttribute("href")).toBe("/models");
 		// No headline key for this category, so the badge names it, localized.
 		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toBe("Model not installed");
+	});
+
+	it("does not claim no chat model is installed when one named model is missing beside others", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({
+					content: "",
+					status: "failed",
+					error: "The selected model is not installed or not reachable. Install it or choose another model.",
+				})}
+				failureCategory="ModelNotInstalled"
+			/>,
+		);
+
+		const errorBlock = screen.getByTestId("chat-message-error-assistant-1");
+		expect(errorBlock.textContent).toContain("The selected model is not installed or not reachable.");
+		expect(errorBlock.textContent).not.toContain("No chat model installed");
+		// Installing the missing model is still one of the two ways out the message names.
+		expect(screen.getByTestId("chat-message-error-models-link-assistant-1").getAttribute("href")).toBe("/models");
+	});
+
+	it("falls back to a localized ModelNotInstalled text that claims neither case when the server sent none", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ content: "", status: "failed" })} failureCategory="ModelNotInstalled" />,
+		);
+
+		const errorBlock = screen.getByTestId("chat-message-error-assistant-1");
+		expect(errorBlock.textContent).toContain("The requested chat model is not installed. Install it or choose another model.");
+		expect(errorBlock.textContent).not.toContain("No chat model installed");
+		expect(screen.getByTestId("chat-message-error-models-link-assistant-1").getAttribute("href")).toBe("/models");
 	});
 
 	it("renders the error block alongside partial content when a turn streamed text before failing", () => {

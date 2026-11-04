@@ -118,6 +118,8 @@ export function buildTutorialSteps(
 			blockTargetInteraction: !isQuickStartAction,
 			targetWaitTimeout: targetWaitTimeoutMs,
 			placement: stepId === "firstResponse" ? "top" : "auto",
+			// A target that nearly fills a phone leaves no side with room; only the cross axis can pull the tooltip back on screen.
+			floatingOptions: { shiftOptions: { crossAxis: true } },
 		};
 	});
 }

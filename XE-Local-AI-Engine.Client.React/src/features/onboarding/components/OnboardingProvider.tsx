@@ -310,7 +310,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				continuous={true}
 				onEvent={handleEvent}
 				locale={locale}
-				options={{ zIndex: TOUR_Z_INDEX, buttons: ["back", "skip", "primary"] }}
+				// The library's fixed 380 px leaves a phone no slack, so any boundary inset pushes the tooltip off screen.
+				options={{ zIndex: TOUR_Z_INDEX, buttons: ["back", "skip", "primary"], width: "min(380px, calc(100vw - 40px))" }}
 			/>
 			<WelcomeTourDialog
 				opened={welcomeOpen}

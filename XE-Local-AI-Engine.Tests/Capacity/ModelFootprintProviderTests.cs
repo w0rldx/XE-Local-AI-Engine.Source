@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Capacity;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -42,14 +43,49 @@ public sealed class ModelFootprintProviderTests
     }
 
     [Test]
-    public async Task Footprint_WhenAllocationUnknown_ReturnsUnknown()
+    public async Task Footprint_WhenInstalledModelHasNoFacts_ReturnsUnknown()
     {
-        var (provider, _) = BuildProvider(allocation: null);
+        var (provider, _) = BuildProvider(allocation: null, installedFilePath: "/models/a.gguf");
 
         var footprint = await provider.ResolveFootprintAsync(Model, ModelRole.Chat, GpuProfile(), CancellationToken.None);
 
         AssertEx.False(footprint.IsKnown);
+        AssertEx.False(footprint.IsNotInstalled);
+        AssertEx.False(footprint.ExceedsProcessContext);
         AssertEx.Equal(ResourceFootprint.Zero, footprint.Resources);
+    }
+
+    [Test]
+    public async Task Footprint_WhenModelIsNotInstalled_SaysSo()
+    {
+        var (provider, _) = BuildProvider(allocation: null, installedFilePath: null);
+
+        var footprint = await provider.ResolveFootprintAsync(Model, ModelRole.Chat, GpuProfile(), CancellationToken.None);
+
+        AssertEx.False(footprint.IsKnown);
+        AssertEx.True(footprint.IsNotInstalled);
+    }
+
+    [Test]
+    public async Task Footprint_WhenRequiredContextExceedsTheProcess_SaysSoWithoutCallingItNotInstalled()
+    {
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 16384,
+            ModelTrainContextTokens = 32768,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.Hybrid,
+            Footprint = new ResourceFootprint(6 * Gb, 3 * Gb),
+            ContentIdentity = "sha256",
+            CacheKey = "cache"
+        };
+        var (provider, _) = BuildProvider(allocation);
+
+        var footprint = await provider.ResolveFootprintAsync(Model, ModelRole.Chat, GpuProfile(), allocation.ProcessContextTokens + 1, kvCacheType: null, CancellationToken.None);
+
+        AssertEx.False(footprint.IsKnown);
+        AssertEx.True(footprint.ExceedsProcessContext);
+        AssertEx.False(footprint.IsNotInstalled);
     }
 
     [Test]
@@ -159,8 +195,12 @@ public sealed class ModelFootprintProviderTests
 
     private static (ModelFootprintProvider Provider, IProcessContextAllocationResolver AllocationResolver) BuildProvider(ProcessContextAllocation? allocation,
         ResolvedLaunchArguments? resolved = null,
-        GpuVariant variant = GpuVariant.Cuda)
+        GpuVariant variant = GpuVariant.Cuda,
+        string? installedFilePath = null)
     {
+        var modelStore = Substitute.For<IGgufModelStore>();
+        modelStore.ResolveModelFilePathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(installedFilePath));
+
         var variantSelector = Substitute.For<IGpuVariantSelector>();
         variantSelector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
 
@@ -179,7 +219,7 @@ public sealed class ModelFootprintProviderTests
                               Arg.Any<CancellationToken>())
                           .Returns(Task.FromResult(allocation));
 
-        return (new ModelFootprintProvider(variantSelector, profileResolver, allocationResolver), allocationResolver);
+        return (new ModelFootprintProvider(variantSelector, profileResolver, allocationResolver, modelStore), allocationResolver);
     }
 
     private static HardwareProfile GpuProfile()

@@ -13,7 +13,7 @@ public enum CapacityVerdict
     /// <summary>The target <c>(model, role)</c> is already running locally; the spawn must serialize on that one process (no second load).</summary>
     QueueSameModel = 1,
 
-    /// <summary>The local model cannot be admitted — it would overcommit the byte budget or the process cap, or its footprint/budget is unknown.</summary>
+    /// <summary>The local model cannot be admitted: it is not installed, it would overcommit the byte budget or the process cap, or its footprint/budget is unknown.</summary>
     RejectInsufficient = 2
 }
 
@@ -45,6 +45,9 @@ public sealed class CapacityDecision
     ///     a resident model can relieve. <see langword="false" /> for every other verdict and reason.
     /// </summary>
     public bool IsMemoryShortfall { get; init; }
+
+    /// <summary>Whether this is a reject because the named model is not installed on this node, which no retry or eviction can relieve.</summary>
+    public bool IsNotInstalled { get; init; }
 
     /// <summary>
     ///     Report-only: the llama.cpp launch admission a local Allow booked, or the last candidate a memory-shortfall reject found too large,

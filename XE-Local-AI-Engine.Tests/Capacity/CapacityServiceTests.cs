@@ -85,7 +85,7 @@ public sealed class CapacityServiceTests
     {
         // An external OpenAI-compatible model runs on someone else's hardware: no process, no weights, no RAM/VRAM. It
         // must be admitted without a probe — and it MUST be admitted, because the footprint provider has no GGUF to
-        // size, so the byte-budget path would otherwise reject every such send as "footprint could not be determined".
+        // size, so the byte-budget path would otherwise reject every such send as not installed.
         var harness = new Harness
         {
             ProviderName = ExternalProviderConstants.ProviderName
@@ -825,6 +825,89 @@ public sealed class CapacityServiceTests
                        + "Loaded now: 'running/a:Q4_K_M' (Chat).",
             decision.Reason);
         AssertRejectionLogged(harness, "footprint could not be determined", "'running/a:Q4_K_M' (Chat)");
+        AssertEx.False(decision.IsNotInstalled);
+    }
+
+    [Test]
+    public async Task Capacity_WhenModelIsNotInstalled_SaysSoWithoutACapacityClaimOrEjectHint()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = ModelFootprint.NotInstalled,
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        // Callers compare the verdict, so a missing model stays a reject; only the flag and the text tell it apart.
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.True(decision.IsNotInstalled);
+        AssertEx.False(decision.IsMemoryShortfall, "Unloading a resident model cannot install this one.");
+        AssertEx.Equal($"Model '{Model}' is not installed on this node.", decision.Reason);
+        AssertEx.Null(decision.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_EmbedderThatIsNotInstalled_IsStillNeverRejected()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = ModelFootprint.NotInstalled
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(EmbedderRequest(), CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.False(decision.IsNotInstalled);
+    }
+
+    [Test]
+    public async Task Capacity_WhenRequiredContextExceedsTheProcess_SaysSoWithoutAnEjectHint()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = ModelFootprint.ContextTooLarge,
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(new CapacityRequest
+        {
+            ModelName = Model,
+            Role = ModelRole.Chat,
+            RequiredContextTokens = 1_000_000
+        }, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.False(decision.IsNotInstalled);
+        AssertEx.False(decision.IsMemoryShortfall);
+        AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): the requested context is larger than the model's process can allocate. "
+                       + "Loaded now: 'running/a:Q4_K_M' (Chat).",
+            decision.Reason);
     }
 
     [Test]

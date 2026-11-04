@@ -161,6 +161,7 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
         {
             CapacityVerdict.Allow => decision.Reservation,
             CapacityVerdict.QueueSameModel => null,
+            _ when decision.IsNotInstalled => throw new LlamaModelNotInstalledException(decision.Reason),
             _ => throw new LlamaCapacityRefusedException(decision.Reason)
         };
 

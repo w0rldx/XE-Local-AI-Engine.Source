@@ -177,6 +177,22 @@ public sealed class SupervisorPooledAdmissionTests
     }
 
     [Test]
+    public async Task ChatHookNotInstalled_KeepsItsType_AndIsAskedOnce()
+    {
+        var launcher = new FakeProcessLauncher();
+        var hook = new RecordingPooledAdmission(registry: null)
+        {
+            Refusal = new LlamaModelNotInstalledException("Model 'chat-model' is not installed on this node.")
+        };
+        await using var supervisor = Create(launcher, new ProcessLaunchAdmissionRegistry(), hook);
+
+        await AssertEx.ThrowsAsync<LlamaModelNotInstalledException>(() => supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, hook.ChatCalls, "A missing model cannot appear between restart attempts.");
+        AssertEx.Equal(expected: 0, launcher.LaunchCount);
+    }
+
+    [Test]
     public async Task WarmPooledReuse_DoesNotAskTheHookAgain()
     {
         var hook = new RecordingPooledAdmission(registry: null);

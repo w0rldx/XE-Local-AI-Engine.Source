@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -10,15 +11,19 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
     private readonly IProcessContextAllocationResolver _allocationResolver;
     private readonly IInferenceProfileResolver _profileResolver;
     private readonly IGpuVariantSelector _variantSelector;
+    private readonly IGgufModelStore _modelStore;
 
     public ModelFootprintProvider(IGpuVariantSelector variantSelector,
         IInferenceProfileResolver profileResolver,
-        IProcessContextAllocationResolver allocationResolver)
+        IProcessContextAllocationResolver allocationResolver,
+        IGgufModelStore modelStore)
     {
         ArgumentNullException.ThrowIfNull(allocationResolver);
+        ArgumentNullException.ThrowIfNull(modelStore);
         ArgumentNullException.ThrowIfNull(profileResolver);
         ArgumentNullException.ThrowIfNull(variantSelector);
         _allocationResolver = allocationResolver;
+        _modelStore = modelStore;
         _profileResolver = profileResolver;
         _variantSelector = variantSelector;
     }
@@ -44,19 +49,33 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
         var variant = await _variantSelector.SelectVariantAsync(ct);
         var resolved = await _profileResolver.ResolveAsync(modelName, role, variant, ct);
         var allocation = await _allocationResolver.ResolveAsync(modelName, role, variant, resolved, kvCacheType, ct);
+        if (allocation is null)
+        {
+            // Only this failure path pays for the lookup (a registry read and a file check, no header read), so an admitted model adds no I/O under the decision gate.
+            return string.IsNullOrWhiteSpace(await _modelStore.ResolveModelFilePathAsync(modelName, ct)) ? ModelFootprint.NotInstalled : ModelFootprint.Unknown;
+        }
+
+        if (requiredContextTokens is <= 0)
+        {
+            return ModelFootprint.Unknown;
+        }
+
+        if (requiredContextTokens > allocation.ProcessContextTokens)
+        {
+            return ModelFootprint.ContextTooLarge;
+        }
+
         // The free-VRAM reading rides along on the admission purely as a receipt: the gate force-refreshed the profile immediately before this call,
         // so it is "free VRAM as of just before the load" at zero extra cost. Nothing downstream may branch on it — the fit arithmetic stays in the gate.
-        return allocation is null || requiredContextTokens is <= 0 || requiredContextTokens > allocation.ProcessContextTokens
-            ? ModelFootprint.Unknown
-            : ModelFootprint.Known(new ProcessLaunchAdmission
-            {
-                ModelName = modelName,
-                Role = role,
-                Variant = variant,
-                ResolvedArguments = resolved,
-                Allocation = allocation,
-                GlobalFreeVramBytesAtAdmission = profile.AvailableVramBytes
-            });
+        return ModelFootprint.Known(new ProcessLaunchAdmission
+        {
+            ModelName = modelName,
+            Role = role,
+            Variant = variant,
+            ResolvedArguments = resolved,
+            Allocation = allocation,
+            GlobalFreeVramBytesAtAdmission = profile.AvailableVramBytes
+        });
     }
 
     public bool TryDownTierForAdmission(ModelFootprint current, out ModelFootprint downTiered)
