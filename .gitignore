@@ -466,6 +466,7 @@ XE-Local-AI-Engine.Client/logs/
 XE-Local-AI-Engine.Client/models/
 XE-Local-AI-Engine.Client/runtime/
 XE-Local-AI-Engine.Client/training/
+XE-Local-AI-Engine.Client/model-lab/
 
 # Internal agent tooling + planning archive — untracked pending migration to the
 # universal harness at .agent-harness. Kept locally, not shipped/open-sourced.

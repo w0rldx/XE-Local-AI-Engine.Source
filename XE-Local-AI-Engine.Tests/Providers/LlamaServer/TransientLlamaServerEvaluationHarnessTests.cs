@@ -394,7 +394,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         }
     }
 
-    private sealed class CountingLoadAdmission : IGpuModelLoadAdmission
+    internal sealed class CountingLoadAdmission : IGpuModelLoadAdmission
     {
         public int Acquisitions { get; private set; }
 
@@ -412,17 +412,18 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         }
     }
 
-    private static (ITransientLlamaServerEvaluationHarness Harness, LlamaServerProcessSupervisor Supervisor, FakeProcessLauncher Launcher) CreateHarness(GpuVariant variant = GpuVariant.Cpu,
+    internal static (ITransientLlamaServerEvaluationHarness Harness, LlamaServerProcessSupervisor Supervisor, FakeProcessLauncher Launcher) CreateHarness(GpuVariant variant = GpuVariant.Cpu,
         FakeProcessLauncher? launcher = null,
         FakeHealthProbe? healthProbe = null,
         IGpuModelLoadAdmission? loadAdmission = null,
-        GpuVariant? servedVariant = null)
+        GpuVariant? servedVariant = null,
+        LlamaServerCapabilityManifest? manifest = null)
     {
         launcher ??= new FakeProcessLauncher();
         var variantSelector = new FakeVariantSelector(variant);
         var binaryManager = new FakeBinaryManager(servedVariant);
         healthProbe ??= new FakeHealthProbe();
-        var manifestProbe = new FakeLlamaServerCapabilityManifestProbe();
+        var manifestProbe = new FakeLlamaServerCapabilityManifestProbe(manifest);
         var launchPolicy = new LlamaServerLaunchPolicy(new LlamaServerLaunchPolicyOptions(), new FakeLaunchFallbackStore());
         var supervisor = SupervisorFactory.Create(launcher,
             variantSelector: variantSelector,
@@ -440,11 +441,12 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
             manifestProbe,
             launchPolicy,
             transient,
-            loadAdmission ?? new NoOpGpuModelLoadAdmission());
+            loadAdmission ?? new NoOpGpuModelLoadAdmission(),
+            ControlVectorFiles.RealGgufReader());
         return (harness, supervisor, launcher);
     }
 
-    private static TransientLlamaServerEvaluationRequest Request(string modelPath) =>
+    internal static TransientLlamaServerEvaluationRequest Request(string modelPath) =>
         new()
         {
             ModelFilePath = modelPath,
@@ -464,7 +466,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         return path;
     }
 
-    private sealed class TrackingGpuModelLoadAdmission : IGpuModelLoadAdmission
+    internal sealed class TrackingGpuModelLoadAdmission : IGpuModelLoadAdmission
     {
         private int _activeTickets;
 

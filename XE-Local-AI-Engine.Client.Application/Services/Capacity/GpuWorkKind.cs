@@ -8,5 +8,6 @@ public enum GpuWorkKind
     Export,
     Benchmark,
     DatasetGeneration,
-    ImageJob
+    ImageJob,
+    ModelLabExperiment
 }

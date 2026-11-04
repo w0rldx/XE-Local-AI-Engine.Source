@@ -114,7 +114,9 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         ILlamaServerLaunchPolicy launchPolicy,
         Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bindProvenance,
         Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
-        CancellationToken ct)
+        CancellationToken ct,
+        TransientLlamaServerPinnedModel? pinnedModel = null,
+        TransientLlamaServerControlVector? controlVector = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(binary);
@@ -133,7 +135,8 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             throw new LlamaRuntimeException("The evaluation model file to load was not found.");
         }
 
-        var model = await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false);
+        var model = pinnedModel?.Provenance
+                    ?? await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false);
         var resolved = ResolvedLaunchArguments.Replay(request.ContextTokens);
         LlamaServerLaunchPlan? plan = variant == GpuVariant.Cpu ? launchPolicy.ResolveCpuReplayPlan(resolved) : null;
         var modelId = Path.GetFileName(request.ModelFilePath);
@@ -157,7 +160,13 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             adapterFilePath: request.AdapterFilePath);
         spec = spec with
         {
-            Arguments = [.. spec.Arguments, "--alias", endpointModelAlias]
+            Arguments = controlVector is null
+                ? [.. spec.Arguments, "--alias", endpointModelAlias]
+                :
+                [
+                    .. spec.Arguments, "--alias", endpointModelAlias,
+                    LlamaServerManagedFlags.ControlVectorScaled, TransientLlamaServerControlVectorCheck.FormatArgument(request.ControlVectorPath!, controlVector.Scale)
+                ]
         };
         var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, manifest, requireMetrics: false);
         if (!capabilityDecision.IsCompatible)
@@ -180,10 +189,17 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
                 request.ReadinessTimeout,
                 ct,
                 endpointModelAlias).ConfigureAwait(false);
-            var stableModel = await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false);
-            if (stableModel != model)
+            var modelIsStable = pinnedModel?.IsUnchanged()
+                                ?? await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false) == model;
+            if (!modelIsStable)
             {
                 throw new LlamaRuntimeException("The evaluation model changed while the runtime was loading it.");
+            }
+
+            if (controlVector is not null
+                && !await TransientLlamaServerControlVectorCheck.IsUnchangedAsync(request.ControlVectorPath!, controlVector, ct).ConfigureAwait(false))
+            {
+                throw new LlamaRuntimeException("The control vector changed while the runtime was loading it.");
             }
 
             int? effectiveContext = null;
@@ -219,7 +235,8 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
                 BaseAddress = spec.BaseAddress,
                 ModelId = endpointModelAlias,
                 Model = model,
-                Launch = receipt
+                Launch = receipt,
+                ControlVector = controlVector
             };
             await bindProvenance(session.Provenance, ct).ConfigureAwait(false);
             value = await body(session, ct).ConfigureAwait(false);
@@ -258,11 +275,12 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
                 ProcessExitObserved = processExitObserved,
                 ExitObservationTimedOut = !processExitObserved,
                 HandleDisposed = true
-            }
+            },
+            ControlVector = controlVector
         };
     }
 
-    private static async Task<TransientLlamaServerModelProvenance> CaptureModelProvenanceAsync(string modelPath,
+    internal static async Task<TransientLlamaServerModelProvenance> CaptureModelProvenanceAsync(string modelPath,
         string? adapterPath,
         CancellationToken ct)
     {

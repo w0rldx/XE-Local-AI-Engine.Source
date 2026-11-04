@@ -70,6 +70,19 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Steered runs on the private evaluation server** — the transient harness can apply a control vector and run several arms under
+  one runtime lease (`RunArmsAsync`). llama-server drops a vector of the wrong size or layer without failing, so the harness compares
+  the file with the GGUF first and refuses before starting anything. No page uses this yet. `--control-vector*` is now a managed flag:
+  a per-model launch override can no longer set it, and a stored one is stripped at launch.
+- **Model Lab traces** — a Trace tab on `/model-lab` runs a checkpoint's layers through read-only hooks on the GPU and saves what they measured: three
+  layers, up to 128 tokens, a size-capped trace, encrypted at rest, newest 20 kept. It runs on the training runtime, Linux only, one job at a time. A loaded
+  model refuses the start with a message to eject it; a chat that needs a local model waits with a notice until the job ends or is cancelled. A checkpoint above
+  the card's fit limit is refused before any download, with the reason. A checkpoint already on the node can be picked and traced with no network, and
+  it cannot be deleted while an experiment uses it (409 `in-use-by-experiment`). A checkpoint of a model type Model Lab has not traced is refused before its
+  weights are downloaded.
+- **Model Lab checkpoint preflight** — `POST model-lab/checkpoint-preflight` answers whether a Hugging Face checkpoint can be
+  traced on this card (its safetensors size plus about 2 GiB against the card's total memory) and whether it pairs with a chosen
+  installed GGUF (embedding size and block count), before any weight is transferred. Only `config.json` is fetched. No page uses it yet.
 - **Model Lab** — a new page (Models → Model Lab, Advanced only). Same-prompt A/B runs one prompt with one seed and the same
   sampling against two installed llama.cpp models, one after the other, and shows outputs, token counts and timings side by
   side. Nothing is saved. The page states that identical settings do not guarantee identical results and that a difference
@@ -316,6 +329,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Base checkpoints are identified by commit.** A base artifact now always stores the commit the Hub resolved, and a repository
+  that reports none is refused. Requesting `main` used to store `main`, so one row could describe different weights over time. Because
+  requests now resolve to the commit, a checkpoint stored under a branch name such as `main` downloads again on its next request. The
+  old row keeps its name and can be deleted. Multimodal checkpoints also read their shape from `text_config`, so the training footprint estimate for one such
+  as Qwen3.5 now counts its real hidden size and layers instead of treating them as unknown.
+
+- **The training runtime can no longer be removed or reinstalled while a job using it runs:** a training run, an export or a trace. Both routes answer 409
+  `gpu-job-running`. Before, a remove during a training run deleted the interpreter it was running from. An evaluation does not use it and does not block.
 - **The enterprise AI gateway template starts its header row as `x-project-id`**, not `project-id`. Stored connections
   keep the header they were saved with.
 - **Dependency and runtime modernization** (closes issue #25; supersedes Dependabot #101, #102, #103, #124 and
@@ -882,6 +903,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Internal
 
+- **`TrainingRunStore.DeleteAsync` refuses a run still holding a launch receipt** (`ProcessNotConfirmedStopped`), as Model Lab does: the startup reaper needs that row to
+  find a surviving trainer. No route deletes a training run today, so nothing changes for an operator.
 - **One convention for absence** (wiki 16, "Absence"). A lookup where absence is normal returns `T?` and is never named
   `Try*`; `Try*` is `bool` with `[NotNullWhen]`/`[MaybeNullWhen]` out parameters; a mutation that can fail more than
   one way returns an outcome type; a missing client-supplied id throws a `ResourceNotFoundException` subtype that one

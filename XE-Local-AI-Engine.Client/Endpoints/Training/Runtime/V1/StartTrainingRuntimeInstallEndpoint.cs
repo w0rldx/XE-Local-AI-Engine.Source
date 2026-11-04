@@ -35,6 +35,14 @@ public sealed class StartTrainingRuntimeInstallEndpoint : EndpointWithoutRequest
             return;
         }
 
+        if (_runtime.IsGpuJobRunning)
+        {
+            await BlockAsync(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason,
+                "A GPU job is running. Wait for it to finish, or cancel it, before installing the runtime.",
+                prerequisites: null);
+            return;
+        }
+
         try
         {
             var result = await _runtime.InstallAsync(ct);

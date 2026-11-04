@@ -445,7 +445,7 @@ internal sealed class GgufHeaderReader
         return values.TryGetValue(key, out var v) && v is string s ? s : null;
     }
 
-    private static long? GetLongOrNull(IReadOnlyDictionary<string, object> values, string? key)
+    internal static long? GetLongOrNull(IReadOnlyDictionary<string, object> values, string? key)
     {
         if (key is null || !values.TryGetValue(key, out var v))
         {

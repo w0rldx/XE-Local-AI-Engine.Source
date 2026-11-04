@@ -35,7 +35,7 @@ public sealed record BaseCheckpointManifest
 {
     public required string RepoId { get; init; }
 
-    /// <summary>The resolved commit sha the enumeration was taken at.</summary>
+    /// <summary>The commit sha the Hub resolved the request to, never a branch or tag name.</summary>
     public required string Revision { get; init; }
 
     public required IReadOnlyList<BaseCheckpointFile> Files { get; init; }
@@ -63,8 +63,8 @@ public interface IBaseCheckpointStore
     ///     Enumerates the files required to fine-tune <paramref name="repoId" /> and reads its licensing metadata.
     /// </summary>
     /// <exception cref="BaseCheckpointNotTrainableException">
-    ///     The repo does not exist, or ships no <c>*.safetensors</c> weights — a GGUF-only or otherwise non-trainable
-    ///     repo (there is no attestation workaround).
+    ///     The repo does not exist, the Hub reported no commit for it, or it ships no <c>*.safetensors</c> weights — a
+    ///     GGUF-only or otherwise non-trainable repo (there is no attestation workaround).
     /// </exception>
     Task<BaseCheckpointManifest> ResolveAsync(string repoId, string? revision, CancellationToken ct);
 

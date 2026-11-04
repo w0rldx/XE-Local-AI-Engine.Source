@@ -20,6 +20,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 		release: vi.fn(),
 	}),
 }));
+vi.mock("@/features/modelLab/components/TraceExperiments", () => ({ TraceExperiments: () => null }));
 vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({ CodeEditor: () => null }));
 
 setupMswServer();

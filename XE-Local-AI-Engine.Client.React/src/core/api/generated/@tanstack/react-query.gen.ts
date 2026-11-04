@@ -38,6 +38,7 @@ import {
 	cancelImageModelDownload,
 	cancelIntegrationExecution,
 	cancelLlamaCppSourceBuild,
+	cancelModelLabExperiment,
 	cancelNodeChatMessage,
 	cancelScheduledJobRun,
 	cancelStableDiffusionCppSourceBuild,
@@ -113,6 +114,7 @@ import {
 	deleteLocalModel,
 	deleteMcpServer,
 	deleteModelKind,
+	deleteModelLabExperiment,
 	deleteModelLaunchArguments,
 	deleteNodeChatConversation,
 	deletePlaybookAction,
@@ -226,6 +228,8 @@ import {
 	getMcpServerTools,
 	getModelCatalogInfo,
 	getModelGgufInspection,
+	getModelLabExperiment,
+	getModelLabExperimentTrace,
 	getModelLaunchArguments,
 	getNodeChatContextEstimate,
 	getNodeChatConversation,
@@ -323,6 +327,7 @@ import {
 	listKnowledgeDocuments,
 	listLocalModels,
 	listMcpServers,
+	listModelLabExperiments,
 	listNodeAuthSessions,
 	listNodeBackups,
 	listNodeChatConversations,
@@ -364,6 +369,7 @@ import {
 	pauseWorkSession,
 	pinNodeChatConversation,
 	postWorkSessionMessage,
+	preflightModelLabCheckpoint,
 	previewAgentHomePatch,
 	previewDevelopmentPatch,
 	previewGgufImport,
@@ -443,6 +449,8 @@ import {
 	startImageModelDownload,
 	startLiveTranscriptionSession,
 	startLlamaCppSourceBuild,
+	startModelLabCheckpointDownload,
+	startModelLabExperiment,
 	startProcessCapture,
 	startStableDiffusionCppSourceBuild,
 	startTrainingExport,
@@ -562,6 +570,7 @@ import type {
 	CancelIntegrationExecutionError,
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildResponse,
+	CancelModelLabExperimentData,
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageError,
 	CancelNodeChatMessageResponse,
@@ -765,6 +774,9 @@ import type {
 	DeleteModelKindData,
 	DeleteModelKindError,
 	DeleteModelKindResponse,
+	DeleteModelLabExperimentData,
+	DeleteModelLabExperimentError,
+	DeleteModelLabExperimentResponse,
 	DeleteModelLaunchArgumentsData,
 	DeleteModelLaunchArgumentsError,
 	DeleteModelLaunchArgumentsResponse,
@@ -1031,6 +1043,11 @@ import type {
 	GetModelGgufInspectionData,
 	GetModelGgufInspectionError,
 	GetModelGgufInspectionResponse,
+	GetModelLabExperimentData,
+	GetModelLabExperimentResponse,
+	GetModelLabExperimentTraceData,
+	GetModelLabExperimentTraceError,
+	GetModelLabExperimentTraceResponse,
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsError,
 	GetModelLaunchArgumentsResponse,
@@ -1256,6 +1273,8 @@ import type {
 	ListLocalModelsResponse,
 	ListMcpServersData,
 	ListMcpServersResponse,
+	ListModelLabExperimentsData,
+	ListModelLabExperimentsResponse,
 	ListNodeAuthSessionsData,
 	ListNodeAuthSessionsResponse,
 	ListNodeBackupsData,
@@ -1353,6 +1372,9 @@ import type {
 	PostWorkSessionMessageData,
 	PostWorkSessionMessageError,
 	PostWorkSessionMessageResponse,
+	PreflightModelLabCheckpointData,
+	PreflightModelLabCheckpointError,
+	PreflightModelLabCheckpointResponse,
 	PreviewAgentHomePatchData,
 	PreviewAgentHomePatchError,
 	PreviewAgentHomePatchResponse,
@@ -1567,6 +1589,12 @@ import type {
 	StartLlamaCppSourceBuildData,
 	StartLlamaCppSourceBuildError,
 	StartLlamaCppSourceBuildResponse,
+	StartModelLabCheckpointDownloadData,
+	StartModelLabCheckpointDownloadError,
+	StartModelLabCheckpointDownloadResponse,
+	StartModelLabExperimentData,
+	StartModelLabExperimentError,
+	StartModelLabExperimentResponse,
 	StartProcessCaptureData,
 	StartProcessCaptureError,
 	StartProcessCaptureResponse,
@@ -9558,6 +9586,184 @@ export const getRuntimeResidentsOptions = (options?: Options<GetRuntimeResidents
 			return data;
 		},
 		queryKey: getRuntimeResidentsQueryKey(options),
+	});
+
+export const startModelLabCheckpointDownloadMutation = (
+	options?: Partial<Options<StartModelLabCheckpointDownloadData>>,
+): UseMutationOptions<
+	StartModelLabCheckpointDownloadResponse,
+	AxiosError<StartModelLabCheckpointDownloadError>,
+	Options<StartModelLabCheckpointDownloadData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartModelLabCheckpointDownloadResponse,
+		AxiosError<StartModelLabCheckpointDownloadError>,
+		Options<StartModelLabCheckpointDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startModelLabCheckpointDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const preflightModelLabCheckpointMutation = (
+	options?: Partial<Options<PreflightModelLabCheckpointData>>,
+): UseMutationOptions<
+	PreflightModelLabCheckpointResponse,
+	AxiosError<PreflightModelLabCheckpointError>,
+	Options<PreflightModelLabCheckpointData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		PreflightModelLabCheckpointResponse,
+		AxiosError<PreflightModelLabCheckpointError>,
+		Options<PreflightModelLabCheckpointData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await preflightModelLabCheckpoint({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listModelLabExperimentsQueryKey = (options?: Options<ListModelLabExperimentsData>) =>
+	createQueryKey("listModelLabExperiments", options, false, ["Model-Lab"]);
+
+export const listModelLabExperimentsOptions = (options?: Options<ListModelLabExperimentsData>) =>
+	queryOptions<
+		ListModelLabExperimentsResponse,
+		AxiosError<DefaultError>,
+		ListModelLabExperimentsResponse,
+		ReturnType<typeof listModelLabExperimentsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listModelLabExperiments({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listModelLabExperimentsQueryKey(options),
+	});
+
+export const startModelLabExperimentMutation = (
+	options?: Partial<Options<StartModelLabExperimentData>>,
+): UseMutationOptions<
+	StartModelLabExperimentResponse,
+	AxiosError<StartModelLabExperimentError>,
+	Options<StartModelLabExperimentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartModelLabExperimentResponse,
+		AxiosError<StartModelLabExperimentError>,
+		Options<StartModelLabExperimentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startModelLabExperiment({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteModelLabExperimentMutation = (
+	options?: Partial<Options<DeleteModelLabExperimentData>>,
+): UseMutationOptions<
+	DeleteModelLabExperimentResponse,
+	AxiosError<DeleteModelLabExperimentError>,
+	Options<DeleteModelLabExperimentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteModelLabExperimentResponse,
+		AxiosError<DeleteModelLabExperimentError>,
+		Options<DeleteModelLabExperimentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteModelLabExperiment({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getModelLabExperimentQueryKey = (options: Options<GetModelLabExperimentData>) =>
+	createQueryKey("getModelLabExperiment", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentOptions = (options: Options<GetModelLabExperimentData>) =>
+	queryOptions<
+		GetModelLabExperimentResponse,
+		AxiosError<DefaultError>,
+		GetModelLabExperimentResponse,
+		ReturnType<typeof getModelLabExperimentQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperiment({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentQueryKey(options),
+	});
+
+export const cancelModelLabExperimentMutation = (
+	options?: Partial<Options<CancelModelLabExperimentData>>,
+): UseMutationOptions<unknown, AxiosError<DefaultError>, Options<CancelModelLabExperimentData>> => {
+	const mutationOptions: UseMutationOptions<unknown, AxiosError<DefaultError>, Options<CancelModelLabExperimentData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelModelLabExperiment({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getModelLabExperimentTraceQueryKey = (options: Options<GetModelLabExperimentTraceData>) =>
+	createQueryKey("getModelLabExperimentTrace", options, false, ["Model-Lab"]);
+
+export const getModelLabExperimentTraceOptions = (options: Options<GetModelLabExperimentTraceData>) =>
+	queryOptions<
+		GetModelLabExperimentTraceResponse,
+		AxiosError<GetModelLabExperimentTraceError>,
+		GetModelLabExperimentTraceResponse,
+		ReturnType<typeof getModelLabExperimentTraceQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabExperimentTrace({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabExperimentTraceQueryKey(options),
 	});
 
 export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) =>

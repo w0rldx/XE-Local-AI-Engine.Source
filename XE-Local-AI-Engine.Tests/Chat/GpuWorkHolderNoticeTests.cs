@@ -14,6 +14,7 @@ public sealed class GpuWorkHolderNoticeTests
     [Arguments(GpuWorkKind.TrainingRun, "This message was queued behind a running training run.")]
     [Arguments(GpuWorkKind.EvaluationRun, "This message was queued behind a running training evaluation.")]
     [Arguments(GpuWorkKind.Export, "This message was queued behind a running model export.")]
+    [Arguments(GpuWorkKind.ModelLabExperiment, "This message was queued behind a running Model Lab experiment.")]
     public void ForModelLoad_AnExclusiveHolder_NamesIt(GpuWorkKind kind, string message)
     {
         var gate = new GpuWorkGate();

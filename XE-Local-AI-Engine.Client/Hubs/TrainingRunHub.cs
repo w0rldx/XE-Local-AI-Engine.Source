@@ -5,23 +5,27 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
 /// <summary>
-///     Operator-only, per-run delivery for live training progress. The caller joins the group before replay so the
-///     subscribe-after-publish race closes; the overlap is deduplicated client-side by event sequence.
+///     Operator-only, per-run delivery for live training and Model Lab progress. The caller joins the group before replay
+///     so the subscribe-after-publish race closes; the client deduplicates the overlap by event sequence.
 /// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class TrainingRunHub : Hub
 {
     private readonly ITrainingRunEventBuffer _events;
+    private readonly ModelLabExperimentService _experiments;
     private readonly ITrainingRunService _runs;
 
-    public TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events)
+    public TrainingRunHub(ITrainingRunService runs, ITrainingRunEventBuffer events, ModelLabExperimentService experiments)
     {
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(experiments);
         ArgumentNullException.ThrowIfNull(runs);
         _events = events;
+        _experiments = experiments;
         _runs = runs;
     }
 
@@ -41,15 +45,18 @@ public sealed class TrainingRunHub : Hub
         }
 
         var cancellationToken = Context.ConnectionAborted;
-        TrainingRunRecord run;
+        long runVersion = 0;
         try
         {
-            run = await _runs.GetAsync(runId, cancellationToken);
+            runVersion = (await _runs.GetAsync(runId, cancellationToken)).Version;
         }
         catch (TrainingNotFoundException exception)
         {
             // A hub has no exception handler: without this the caller would see SignalR\'s generic invocation error.
-            throw new HubException("The training run was not found.", exception);
+            if (!await _experiments.ExistsAsync(runId, cancellationToken))
+            {
+                throw new HubException("The training run was not found.", exception);
+            }
         }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), cancellationToken);
@@ -62,7 +69,7 @@ public sealed class TrainingRunHub : Hub
                 {
                     RunId = runId,
                     LatestSequence = replay.LatestSequence,
-                    RunVersion = run.Version
+                    RunVersion = runVersion
                 },
                 cancellationToken);
             return;

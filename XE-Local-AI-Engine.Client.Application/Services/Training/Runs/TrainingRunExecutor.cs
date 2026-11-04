@@ -190,7 +190,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
 
         // Durable BEFORE the first line is read: a host that dies now must still be able to prove which process is
         // this run's and reap it on the next boot.
-        await _store.SetLaunchReceiptAsync(run.Id, Serialize(ToPersisted(handle.Receipt)), CancellationToken.None);
+        await _store.SetLaunchReceiptAsync(run.Id, Serialize(TrainingProcessReaper.ToPersisted(handle.Receipt)), CancellationToken.None);
 
         var state = new StreamState(_timeProvider.GetUtcNow());
         // The registration is disposed before the handle is: an operator cancel that lands after the stream has closed
@@ -497,16 +497,6 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         await File.WriteAllBytesAsync(path, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), cancellationToken);
         return path;
     }
-
-    private static TrainingLaunchReceiptV1 ToPersisted(TrainingLaunchReceipt receipt) =>
-        new()
-        {
-            Pid = receipt.Pid,
-            Pgid = receipt.Pgid,
-            ExecutablePath = receipt.ExecutablePath,
-            StartTicks = receipt.StartTicks,
-            RunToken = receipt.RunToken
-        };
 
     private static byte[] Serialize<T>(T value) =>
         JsonSerializer.SerializeToUtf8Bytes(value, TrainingJson.Options);

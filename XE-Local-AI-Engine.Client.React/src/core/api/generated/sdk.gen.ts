@@ -91,6 +91,9 @@ import type {
 	CancelLlamaCppSourceBuildData,
 	CancelLlamaCppSourceBuildErrors,
 	CancelLlamaCppSourceBuildResponses,
+	CancelModelLabExperimentData,
+	CancelModelLabExperimentErrors,
+	CancelModelLabExperimentResponses,
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageErrors,
 	CancelNodeChatMessageResponses,
@@ -316,6 +319,9 @@ import type {
 	DeleteModelKindData,
 	DeleteModelKindErrors,
 	DeleteModelKindResponses,
+	DeleteModelLabExperimentData,
+	DeleteModelLabExperimentErrors,
+	DeleteModelLabExperimentResponses,
 	DeleteModelLaunchArgumentsData,
 	DeleteModelLaunchArgumentsErrors,
 	DeleteModelLaunchArgumentsResponses,
@@ -655,6 +661,12 @@ import type {
 	GetModelGgufInspectionData,
 	GetModelGgufInspectionErrors,
 	GetModelGgufInspectionResponses,
+	GetModelLabExperimentData,
+	GetModelLabExperimentErrors,
+	GetModelLabExperimentResponses,
+	GetModelLabExperimentTraceData,
+	GetModelLabExperimentTraceErrors,
+	GetModelLabExperimentTraceResponses,
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsErrors,
 	GetModelLaunchArgumentsResponses,
@@ -946,6 +958,9 @@ import type {
 	ListMcpServersData,
 	ListMcpServersErrors,
 	ListMcpServersResponses,
+	ListModelLabExperimentsData,
+	ListModelLabExperimentsErrors,
+	ListModelLabExperimentsResponses,
 	ListNodeAuthSessionsData,
 	ListNodeAuthSessionsErrors,
 	ListNodeAuthSessionsResponses,
@@ -1066,6 +1081,9 @@ import type {
 	PostWorkSessionMessageData,
 	PostWorkSessionMessageErrors,
 	PostWorkSessionMessageResponses,
+	PreflightModelLabCheckpointData,
+	PreflightModelLabCheckpointErrors,
+	PreflightModelLabCheckpointResponses,
 	PreviewAgentHomePatchData,
 	PreviewAgentHomePatchErrors,
 	PreviewAgentHomePatchResponses,
@@ -1303,6 +1321,12 @@ import type {
 	StartLlamaCppSourceBuildData,
 	StartLlamaCppSourceBuildErrors,
 	StartLlamaCppSourceBuildResponses,
+	StartModelLabCheckpointDownloadData,
+	StartModelLabCheckpointDownloadErrors,
+	StartModelLabCheckpointDownloadResponses,
+	StartModelLabExperimentData,
+	StartModelLabExperimentErrors,
+	StartModelLabExperimentResponses,
 	StartProcessCaptureData,
 	StartProcessCaptureErrors,
 	StartProcessCaptureResponses,
@@ -1549,6 +1573,7 @@ import {
 	zDeleteLocalModelResponse,
 	zDeleteMcpServerResponse,
 	zDeleteModelKindResponse,
+	zDeleteModelLabExperimentResponse,
 	zDeleteModelLaunchArgumentsResponse,
 	zDeleteNodeChatConversationResponse,
 	zDeletePlaybookActionResponse,
@@ -1662,6 +1687,8 @@ import {
 	zGetMcpServerToolsResponse,
 	zGetModelCatalogInfoResponse,
 	zGetModelGgufInspectionResponse,
+	zGetModelLabExperimentResponse,
+	zGetModelLabExperimentTraceResponse,
 	zGetModelLaunchArgumentsResponse,
 	zGetNodeChatContextEstimateResponse,
 	zGetNodeChatConversationContextStateResponse,
@@ -1759,6 +1786,7 @@ import {
 	zListKnowledgeDocumentsResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
+	zListModelLabExperimentsResponse,
 	zListNodeAuthSessionsResponse,
 	zListNodeBackupsResponse,
 	zListNodeChatConversationsResponse,
@@ -1799,6 +1827,7 @@ import {
 	zPauseWorkSessionResponse,
 	zPinNodeChatConversationResponse,
 	zPostWorkSessionMessageResponse,
+	zPreflightModelLabCheckpointResponse,
 	zPreviewAgentHomePatchResponse,
 	zPreviewDevelopmentPatchResponse,
 	zPreviewGgufImportResponse,
@@ -1877,6 +1906,8 @@ import {
 	zStartImageModelDownloadResponse,
 	zStartLiveTranscriptionSessionResponse,
 	zStartLlamaCppSourceBuildResponse,
+	zStartModelLabCheckpointDownloadResponse,
+	zStartModelLabExperimentResponse,
 	zStartProcessCaptureResponse,
 	zStartStableDiffusionCppSourceBuildResponse,
 	zStartTrainingExportResponse,
@@ -9785,6 +9816,191 @@ export const getRuntimeResidents = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-fit/runtime-residents",
+		...options,
+	});
+
+export const startModelLabCheckpointDownload = <ThrowOnError extends boolean = true>(
+	options: Options<StartModelLabCheckpointDownloadData, ThrowOnError>,
+): RequestResult<StartModelLabCheckpointDownloadResponses, StartModelLabCheckpointDownloadErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartModelLabCheckpointDownloadResponses, StartModelLabCheckpointDownloadErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zStartModelLabCheckpointDownloadResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/checkpoint-download",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const preflightModelLabCheckpoint = <ThrowOnError extends boolean = true>(
+	options: Options<PreflightModelLabCheckpointData, ThrowOnError>,
+): RequestResult<PreflightModelLabCheckpointResponses, PreflightModelLabCheckpointErrors, ThrowOnError> =>
+	(options.client ?? client).post<PreflightModelLabCheckpointResponses, PreflightModelLabCheckpointErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zPreflightModelLabCheckpointResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/checkpoint-preflight",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listModelLabExperiments = <ThrowOnError extends boolean = true>(
+	options?: Options<ListModelLabExperimentsData, ThrowOnError>,
+): RequestResult<ListModelLabExperimentsResponses, ListModelLabExperimentsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListModelLabExperimentsResponses, ListModelLabExperimentsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zListModelLabExperimentsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments",
+		...options,
+	});
+
+export const startModelLabExperiment = <ThrowOnError extends boolean = true>(
+	options: Options<StartModelLabExperimentData, ThrowOnError>,
+): RequestResult<StartModelLabExperimentResponses, StartModelLabExperimentErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartModelLabExperimentResponses, StartModelLabExperimentErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zStartModelLabExperimentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteModelLabExperiment = <ThrowOnError extends boolean = true>(
+	options: Options<DeleteModelLabExperimentData, ThrowOnError>,
+): RequestResult<DeleteModelLabExperimentResponses, DeleteModelLabExperimentErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteModelLabExperimentResponses, DeleteModelLabExperimentErrors, ThrowOnError>({
+		responseValidator: async (data) => await zDeleteModelLabExperimentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}",
+		...options,
+	});
+
+export const getModelLabExperiment = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentResponses, GetModelLabExperimentErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentResponses, GetModelLabExperimentErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}",
+		...options,
+	});
+
+export const cancelModelLabExperiment = <ThrowOnError extends boolean = true>(
+	options: Options<CancelModelLabExperimentData, ThrowOnError>,
+): RequestResult<CancelModelLabExperimentResponses, CancelModelLabExperimentErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelModelLabExperimentResponses, CancelModelLabExperimentErrors, ThrowOnError>({
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/cancel",
+		...options,
+	});
+
+export const getModelLabExperimentTrace = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabExperimentTraceData, ThrowOnError>,
+): RequestResult<GetModelLabExperimentTraceResponses, GetModelLabExperimentTraceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabExperimentTraceResponses, GetModelLabExperimentTraceErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabExperimentTraceResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/experiments/{experimentId}/trace",
 		...options,
 	});
 

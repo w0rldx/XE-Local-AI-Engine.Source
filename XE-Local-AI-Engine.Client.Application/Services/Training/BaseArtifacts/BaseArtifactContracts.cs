@@ -55,7 +55,10 @@ public enum BaseArtifactDeleteOutcome
     Deleted = 0,
 
     /// <summary>The download is still running. Cancel it first — deleting under it would race the writer.</summary>
-    Downloading = 1
+    Downloading = 1,
+
+    /// <summary>A live Model Lab job has it loaded or about to load, and deleting it would fail that job.</summary>
+    InUseByExperiment = 2
 }
 
 /// <summary>

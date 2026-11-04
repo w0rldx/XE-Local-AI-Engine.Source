@@ -22,7 +22,7 @@ public sealed class CreateBaseArtifactRequestValidator : Validator<CreateBaseArt
             .When(static request => !string.IsNullOrWhiteSpace(request.Revision));
     }
 
-    private static bool BeAHuggingFaceRepoId(string? repoId)
+    internal static bool BeAHuggingFaceRepoId(string? repoId)
     {
         if (string.IsNullOrWhiteSpace(repoId))
         {

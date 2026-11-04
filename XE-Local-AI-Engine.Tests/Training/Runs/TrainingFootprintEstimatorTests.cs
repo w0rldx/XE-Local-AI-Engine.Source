@@ -131,6 +131,29 @@ public sealed class TrainingFootprintEstimatorTests
         AssertEx.Equal(expected: 0L, TrainingFootprintEstimator.EstimateTrainableParameters(new BaseCheckpointConfigV1(), loraRank: 16));
     }
 
+    /// <summary>The shape of a multimodal checkpoint such as Qwen3.5: the text model's fields sit only under <c>text_config</c>.</summary>
+    [Test]
+    public async Task ReadConfig_LiftsTheNestedTextConfig_AndTheTopLevelWins()
+    {
+        var directory = Directory.CreateTempSubdirectory("training-config");
+        try
+        {
+            var path = Path.Combine(directory.FullName, "config.json");
+            await File.WriteAllTextAsync(path,
+                """{"architectures":["Qwen3_5ForConditionalGeneration"],"vocab_size":7,"text_config":{"hidden_size":4096,"num_hidden_layers":32,"vocab_size":99}}""");
+
+            var config = AssertEx.NotNull(TrainingFootprintEstimator.ReadConfigOrNull(path));
+
+            AssertEx.Equal(expected: 4096, config.HiddenSize!.Value);
+            AssertEx.Equal(expected: 32, config.NumHiddenLayers!.Value);
+            AssertEx.Equal(expected: 7, config.VocabSize!.Value, "A value stated at the top level is not overridden.");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Test]
     public async Task TryReadConfig_ParsesSnakeCaseAndToleratesAPartialDocument()
     {

@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     One list for both sides, so a flag the composer starts emitting is protected by the same edit. Reachability
 ///     (the node binds these to reach its process), memory-fit placement (decided before admission; an override would
-///     invalidate the memory ledger) and adapter identity. Ordinal: llama.cpp flags are ASCII. Rationale per flag:
+///     invalidate the memory ledger), adapter identity and steering. Ordinal: llama.cpp flags are ASCII. Rationale per flag:
 ///     docs/wiki/03-local-runtime-and-providers.md ("2.7 Per-model extra launch arguments (operator override)").
 /// </remarks>
 public static class LlamaServerManagedFlags
@@ -29,6 +29,9 @@ public static class LlamaServerManagedFlags
     public const string BatchSize = "-b";
     public const string UbatchSize = "-ub";
     public const string Lora = "--lora";
+    public const string ControlVector = "--control-vector";
+    public const string ControlVectorScaled = "--control-vector-scaled";
+    public const string ControlVectorLayerRange = "--control-vector-layer-range";
 
     /// <summary>Every managed spelling, aliases included, in match order.</summary>
     public static IReadOnlyList<string> All { get; } =
@@ -54,6 +57,9 @@ public static class LlamaServerManagedFlags
 
         // Adapter identity: the registry decides whether a model launches with an adapter and which one, and the launch-policy
         // fingerprint commits to that choice; an operator --lora would load weights the fingerprint, ledger and registry know nothing about.
-        Lora, "--lora-scaled"
+        Lora, "--lora-scaled",
+
+        // Steering: a vector changes every output of its process, so it stays on the private harness launch that records it.
+        ControlVector, ControlVectorScaled, ControlVectorLayerRange
     ];
 }

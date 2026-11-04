@@ -304,6 +304,8 @@ internal static class GgufTensorBlockReader
                 ? GgufQuantDetector.FileTypeNames.GetValueOrDefault(number, header.QuantType)
                 : null,
             BlockCount = header.BlockCount,
+            NextnPredictLayers = GgufHeaderReader.GetLongOrNull(values, $"{header.Architecture}.nextn_predict_layers"),
+            Alignment = GgufHeaderReader.GetLongOrNull(values, "general.alignment"),
             AttentionHeadCount = header.AttentionHeadCount,
             AttentionHeadCountKv = header.AttentionHeadCountKV,
             EmbeddingLength = header.EmbeddingLength,

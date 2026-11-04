@@ -49,6 +49,9 @@ public sealed class TransientLlamaServerEvaluationSession
 
     public required LlamaServerLaunchReceipt Launch { get; init; }
 
+    /// <summary>The vector this launch applied, or <see langword="null" /> for an unsteered one.</summary>
+    public TransientLlamaServerControlVector? ControlVector { get; init; }
+
     public TransientLlamaServerEvaluationProvenance Provenance =>
         new()
         {
@@ -67,6 +70,9 @@ public sealed class TransientLlamaServerEvaluationResult<T>
     public required LlamaServerLaunchReceipt Launch { get; init; }
 
     public required TransientLlamaServerTeardownEvidence Teardown { get; init; }
+
+    /// <summary>The vector this launch applied, or <see langword="null" /> for an unsteered one.</summary>
+    public TransientLlamaServerControlVector? ControlVector { get; init; }
 
     public TransientLlamaServerEvaluationProvenance Provenance =>
         new()
@@ -90,6 +96,20 @@ public interface ITransientLlamaServerEvaluationHarness
         Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bindProvenance,
         Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
         CancellationToken ct);
+
+    /// <summary>
+    ///     Runs every request in order, each on its own process and load ticket, under one runtime-mutation lease, so nothing else can
+    ///     load between arms. Each distinct GGUF is hashed once.
+    /// </summary>
+    /// <remarks>
+    ///     Every control vector is checked before the first load. A failing arm or cancellation stops the rest and releases the lease;
+    ///     results of finished arms are lost with the exception, so a body persists what it needs. Arms take no adapter. An arm whose
+    ///     process was not seen to exit stops the run the same way, but the last arm returns normally, so a caller must check its
+    ///     <see cref="TransientLlamaServerTeardownEvidence.ProcessExitObserved" />.
+    /// </remarks>
+    Task<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>> RunArmsAsync<T>(IReadOnlyList<TransientLlamaServerEvaluationRequest> requests,
+        Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
+        CancellationToken ct);
 }
 
 public sealed record TransientLlamaServerEvaluationRequest
@@ -111,4 +131,10 @@ public sealed record TransientLlamaServerEvaluationRequest
 
     /// <summary>Maximum post-tree-kill wait before teardown returns explicit timeout evidence.</summary>
     public TimeSpan TeardownTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>Absolute path to a control-vector GGUF. The harness refuses one that does not match the model before anything starts.</summary>
+    public string? ControlVectorPath { get; init; }
+
+    /// <summary>The multiplier for <see cref="ControlVectorPath" />; ignored without one.</summary>
+    public double ControlVectorScale { get; init; } = 1;
 }

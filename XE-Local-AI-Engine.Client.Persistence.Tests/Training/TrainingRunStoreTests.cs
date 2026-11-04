@@ -242,6 +242,49 @@ public sealed class TrainingRunStoreTests : IDisposable
         AssertEx.Equal(expected: 0, await verify.TrainingRuns.CountAsync(item => item.Id == runId));
     }
 
+    /// <summary>A failed inspect or kill at startup leaves the receipt, and it is the only thing that can identify a surviving trainer.</summary>
+    [Test]
+    public async Task Delete_RefusesARunStillHoldingAReceipt_UntilTheReaperClearsIt()
+    {
+        var databasePath = Path.Combine(_rootPath, "receipt-delete.sqlite");
+        await using var context = await CreateDatabaseAsync(databasePath);
+        var fixture = await SeedAsync(context);
+        var store = new TrainingRunStore(context, TimeProvider.System);
+        var run = await store.CreateAndEnqueueAsync(Command(fixture));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        await store.SetLaunchReceiptAsync(run.Id, """{"pid":4242}"""u8.ToArray());
+        _ = await store.RecoverOnStartupAsync();
+        var failed = AssertEx.NotNull(await store.GetAsync(run.Id));
+
+        var refused = await AssertEx.ThrowsAsync<TrainingConflictException>(() => store.DeleteAsync(run.Id, failed.Version));
+
+        AssertEx.Equal("ProcessNotConfirmedStopped", refused.Code);
+        _ = AssertEx.NotNull(await store.GetAsync(run.Id));
+        AssertEx.Equal(expected: 1, (await store.ListLaunchReceiptsAsync()).Count, "The next startup still finds it.");
+
+        await store.SetLaunchReceiptAsync(run.Id, launchReceiptJson: null);
+        await store.DeleteAsync(run.Id, failed.Version);
+        AssertEx.Null(await store.GetAsync(run.Id));
+    }
+
+    [Test]
+    public async Task Delete_AllowsANormallyFinishedRun_BecauseFinishingClearsItsReceipt()
+    {
+        var databasePath = Path.Combine(_rootPath, "finished-delete.sqlite");
+        await using var context = await CreateDatabaseAsync(databasePath);
+        var fixture = await SeedAsync(context);
+        var store = new TrainingRunStore(context, TimeProvider.System);
+        var run = await store.CreateAndEnqueueAsync(Command(fixture));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync());
+        await store.SetLaunchReceiptAsync(run.Id, """{"pid":4242}"""u8.ToArray());
+
+        var done = await store.CompleteRunAsync(run.Id, TrainingWorkStatus.Succeeded, errorMessage: null);
+
+        AssertEx.False(done.LaunchReceiptJson.HasValue);
+        await store.DeleteAsync(run.Id, done.Version);
+        AssertEx.Null(await store.GetAsync(run.Id));
+    }
+
     [Test]
     public async Task WorkItem_SecondItemForTheSameTarget_IsRejectedByTheUniqueIndex()
     {

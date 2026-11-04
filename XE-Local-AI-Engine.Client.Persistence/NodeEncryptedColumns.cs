@@ -253,6 +253,15 @@ internal static class NodeEncryptedColumns
             .Optional(entity => entity.LogTail, "training_run_log_tail")
             .Optional(entity => entity.LaunchReceiptJson, "training_run_launch_receipt_json"),
 
+        // Node-scoped. The prompt, the result and the error carry what the model was asked and answered; the receipt and the confirmation are what the reaper and an
+        // audit read back. A distinct AAD column name per column, so a writer cannot swap one for another.
+        NodeScoped<ModelLabExperiment>(entity => entity.Id)
+            .Required(entity => entity.Prompt, "model_lab_prompt")
+            .Required(entity => entity.LicenseConfirmationJson, "model_lab_license_confirmation_json")
+            .Optional(entity => entity.ResultJson, "model_lab_result_json")
+            .Optional(entity => entity.ErrorMessage, "model_lab_error_message")
+            .Optional(entity => entity.LaunchReceiptJson, "model_lab_launch_receipt_json"),
+
         // Evaluations and comparison reports are node-scoped, same flat layout as runs. Membership and verdicts carry distinct AAD column names: membership is what
         // makes a comparison's two sides comparable, and the verdicts are what the deltas are computed from.
         NodeScoped<TrainingEvaluationRun>(entity => entity.Id)

@@ -41,6 +41,13 @@ public sealed class RemoveTrainingRuntimeEndpoint : EndpointWithoutRequest<Train
             return;
         }
 
+        if (_runtime.IsGpuJobRunning)
+        {
+            await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.GpuJobRunningReason,
+                "A GPU job is running. Wait for it to finish, or cancel it, before removing the runtime."));
+            return;
+        }
+
         try
         {
             if (!await _runtime.RemoveAsync(ct))

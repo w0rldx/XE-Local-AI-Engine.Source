@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 /// <summary>Builds a <see cref="LlamaServerProcessSupervisor" /> over fakes with sensible test defaults.</summary>
 internal static class SupervisorFactory
 {
-    public static LlamaServerProcessSupervisor Create(FakeProcessLauncher? launcher = null,
+    public static LlamaServerProcessSupervisor Create(ILlamaServerProcessLauncher? launcher = null,
         ILlamaServerHealthProbe? healthProbe = null,
         FakeModelStore? modelStore = null,
         LlamaServerSupervisorOptions? options = null,

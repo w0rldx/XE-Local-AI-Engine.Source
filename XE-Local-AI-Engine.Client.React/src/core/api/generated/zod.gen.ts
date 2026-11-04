@@ -5251,6 +5251,64 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeReque
 	variant: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest = z.object({
+	repoId: z.string(),
+	revision: z.string().min(0).max(100).nullish(),
+	installedModelName: z.string().min(1),
+	licenseConfirmed: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightRequest = z.object({
+	baseArtifactId: z.guid().nullish(),
+	repoId: z.string().nullish(),
+	revision: z.string().min(0).max(100).nullish(),
+	installedModelName: z.string().min(1),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse = z.object({
+	step: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	layer: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: z.string(),
+	norm: z.number().nullable(),
+	percentiles: z.array(z.number().nullable()),
+	topIndices: z.array(
+		z
+			.int()
+			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	),
+	topValues: z.array(z.number().nullable()),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse = z.object({
+	records: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceRecordResponse),
+	truncated: z.boolean(),
+	droppedRecords: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	byteCap: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentRequest = z.object({
+	baseArtifactId: z.guid().min(1),
+	installedModelName: z.string().min(1),
+	prompt: z.string().min(0).max(8000),
+	licenseConfirmed: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = z.object({
+	experimentId: z.guid(),
+});
+
 export const zXeLocalAiEngineClientEndpointsNodeBackupsV1NodeBackupResponse = z.object({
 	name: z.string(),
 	sizeBytes: z.int(),
@@ -6987,6 +7045,13 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTrigg
 	expectedVersion: z.int().gt(0),
 });
 
+export const zXeLocalAiEngineClientPersistenceEntitiesModelLabExperimentStatus = z.enum([
+	"Running",
+	"Succeeded",
+	"Failed",
+	"Cancelled",
+]);
+
 export const zXeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState = z.enum(["Unverified", "Verified", "Rejected"]);
 
 export const zXeLocalAiEngineClientPersistenceEntitiesTrainingArtifactKind = z.enum([
@@ -7828,6 +7893,127 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse =
 	configured: z.boolean(),
 	apiKey: zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse.nullish(),
 	endpointUrl: z.string(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal = z.enum([
+	"UnsupportedPlatform",
+	"NotTrainable",
+	"VramUnknown",
+	"WeightSizeUnknown",
+	"CannotFitCard",
+	"ConfigUnreadable",
+	"GgufNotInstalled",
+	"GgufUnreadable",
+	"EmbeddingMismatch",
+	"BlockCountMismatch",
+	"LicenseNotConfirmed",
+	"DownloadRejected",
+	"UnsupportedModelType",
+]);
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse = z.object({
+	repoId: z.string(),
+	revision: z.string().nullable(),
+	weightBytes: z.int().nullable(),
+	requiredVramBytes: z.int().nullable(),
+	cardVramBytes: z.int().nullable(),
+	license: z.string().nullable(),
+	isGated: z.boolean(),
+	checkpointHiddenSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	checkpointBlockCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	ggufEmbeddingLength: z.int().nullable(),
+	ggufBlockCount: z.int().nullable(),
+	licenseConfirmationText: z.string().nullable(),
+	refusal: zXeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal.nullable(),
+	refusalMessage: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadResponse = z.object({
+	preflight: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse,
+	baseArtifactId: z.guid().nullable(),
+	artifactStatus: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabResultToken = z.object({
+	id: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	text: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum([
+	"UnsupportedPlatform",
+	"CheckpointNotFound",
+	"CheckpointNotReady",
+	"LicenseNotConfirmed",
+	"PreflightRefused",
+	"RuntimeUnavailable",
+	"Busy",
+	"ModelLoaded",
+	"InsufficientMemory",
+	"ProcessNotConfirmedStopped",
+]);
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse = z.object({
+	reason: zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal,
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabTraceResult = z.object({
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	tokens: z.array(zXeLocalAiEngineClientServicesModelLabModelLabResultToken).optional(),
+	text: z.string().optional(),
+	seconds: z.number().optional(),
+	peakVramBytes: z.int().optional(),
+	blockCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	modelClass: z.string().nullish(),
+	device: z.string().nullish(),
+	torch: z.string().nullish(),
+	transformers: z.string().nullish(),
+	python: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse = z.object({
+	id: z.guid(),
+	status: zXeLocalAiEngineClientPersistenceEntitiesModelLabExperimentStatus,
+	repoId: z.string(),
+	revision: z.string(),
+	installedModelName: z.string(),
+	prompt: z.string(),
+	errorMessage: z.string().nullable(),
+	traceByteCount: z.int().nullable(),
+	result: zXeLocalAiEngineClientServicesModelLabModelLabTraceResult.nullable(),
+	createdAtUtc: z.iso.datetime({ offset: true }),
+	updatedAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentListResponse = z.object({
+	platformSupported: z.boolean(),
+	unsupportedMessage: z.string().nullable(),
+	activeExperimentId: z.guid().nullable(),
+	maxRetainedExperiments: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	experiments: z.array(zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse),
 });
 
 export const zXeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = z.enum([
@@ -12867,6 +13053,64 @@ export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFi
  * Success
  */
 export const zGetRuntimeResidentsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse;
+
+export const zStartModelLabCheckpointDownloadBody = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest;
+
+/**
+ * Success
+ */
+export const zStartModelLabCheckpointDownloadResponse =
+	zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadResponse;
+
+export const zPreflightModelLabCheckpointBody = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightRequest;
+
+/**
+ * Success
+ */
+export const zPreflightModelLabCheckpointResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse;
+
+/**
+ * Success
+ */
+export const zListModelLabExperimentsResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentListResponse;
+
+export const zStartModelLabExperimentBody = zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentRequest;
+
+/**
+ * Accepted
+ */
+export const zStartModelLabExperimentResponse = zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse;
+
+export const zDeleteModelLabExperimentPath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteModelLabExperimentResponse = z.void();
+
+export const zGetModelLabExperimentPath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabExperimentResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse;
+
+export const zCancelModelLabExperimentPath = z.object({
+	experimentId: z.guid(),
+});
+
+export const zGetModelLabExperimentTracePath = z.object({
+	experimentId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabExperimentTraceResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse;
 
 /**
  * Success

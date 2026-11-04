@@ -1,7 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -733,6 +737,27 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Equal("1.1", spec.Arguments[IndexOf(spec.Arguments, "--repeat-penalty") + 1]);
         AssertEx.True(IndexOf(spec.Arguments, "--top-k") > IndexOf(spec.Arguments, "--jinja"),
             "Operator extra args must be appended after the built spec so they override policy defaults.");
+    }
+
+    /// <summary>A vector stored as a per-model override, past the write-side refusal, through the real resolver to a chat spawn.</summary>
+    [Test]
+    public async Task ChatLaunch_NoStoredOverrideCanCarryAControlVector()
+    {
+        var store = Substitute.For<IModelLaunchArgumentsStore>();
+        store.GetRawArgumentsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns("--top-k 40 --control-vector /v.gguf --control-vector-scaled=/v.gguf:2 --control-vector-scaled /v.gguf:3 --control-vector-layer-range 1 5");
+        await using var services = new ServiceCollection().AddScoped(_ => store).BuildServiceProvider();
+        var resolver = new LlamaServerExtraLaunchArgumentsResolver(services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<LlamaServerExtraLaunchArgumentsResolver>.Instance);
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, extraArgumentsResolver: resolver);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Equal("40", spec!.Arguments[IndexOf(spec.Arguments, "--top-k") + 1], "The override itself must still apply.");
+        AssertEx.False(spec.Arguments.Any(static argument => argument.Contains("control-vector", StringComparison.Ordinal) || argument.Contains("v.gguf", StringComparison.Ordinal)),
+            "A chat launch must never carry a control vector or its file.");
     }
 
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)

@@ -40,17 +40,17 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenEveryFieldAgrees_IsTrue() =>
-        AssertEx.True(TrainingRunStartupReaper.Matches(Receipt, LiveFacts()),
+        AssertEx.True(TrainingProcessReaper.Matches(Receipt, LiveFacts()),
             "A fully matching receipt is the only case that may be signalled.");
 
     [Test]
     public void Matches_WhenTheProcessIsGone_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, facts: null),
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, facts: null),
             "An unreadable or absent /proc entry means the process is gone; there is nothing to signal.");
 
     [Test]
     public void Matches_WhenTheProcessGroupDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
                 Pgid = 4243
             }),
@@ -58,7 +58,7 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheStartTimeDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
                 StartTicks = 987654322
             }),
@@ -66,7 +66,7 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheExecutableDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
                 ExecutablePath = "/usr/bin/python3"
             }),
@@ -74,7 +74,7 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheExecutableIsUnreadable_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
                 ExecutablePath = null
             }),
@@ -82,7 +82,7 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheRunTokenDiffers_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
                 RunToken = "00000000000000000000000000000000"
             }),
@@ -90,7 +90,7 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheRunTokenIsAbsent_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt, LiveFacts() with
             {
                 RunToken = null
             }),
@@ -240,12 +240,12 @@ public sealed class TrainingRunStartupReaperTests
             ExecutablePath = null
         };
 
-        AssertEx.True(TrainingRunStartupReaper.Matches(receipt, LiveFacts()), "A timed-out receipt still identifies its trainer.");
-        AssertEx.False(TrainingRunStartupReaper.Matches(receipt, LiveFacts() with
+        AssertEx.True(TrainingProcessReaper.Matches(receipt, LiveFacts()), "A timed-out receipt still identifies its trainer.");
+        AssertEx.False(TrainingProcessReaper.Matches(receipt, LiveFacts() with
         {
             StartTicks = 1
         }), "Without a path, the start time and run token carry the identity alone.");
-        AssertEx.False(TrainingRunStartupReaper.Matches(receipt, LiveFacts() with
+        AssertEx.False(TrainingProcessReaper.Matches(receipt, LiveFacts() with
         {
             RunToken = "different"
         }));
@@ -415,7 +415,7 @@ public sealed class TrainingRunStartupReaperTests
 
     [Test]
     public void Matches_WhenTheRecordedTokenIsEmpty_IsFalse() =>
-        AssertEx.False(TrainingRunStartupReaper.Matches(Receipt with
+        AssertEx.False(TrainingProcessReaper.Matches(Receipt with
             {
                 RunToken = string.Empty
             }, LiveFacts() with

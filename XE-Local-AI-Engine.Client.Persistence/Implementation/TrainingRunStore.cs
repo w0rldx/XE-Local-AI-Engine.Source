@@ -399,6 +399,12 @@ public sealed class TrainingRunStore : ITrainingRunStore
             throw new TrainingConflictException("RunActive");
         }
 
+        if (run.LaunchReceiptJson is not null)
+        {
+            // A finished run has none, so this one's process was not ruled out, and the row is the next startup's only way to find it.
+            throw new TrainingConflictException("ProcessNotConfirmedStopped");
+        }
+
         if (await _dbContext.TrainingArtifacts
                             .AnyAsync(item => item.RunId == runId && item.CommittedModelName != null, cancellationToken))
         {

@@ -163,6 +163,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<TrainingRun> TrainingRuns => Set<TrainingRun>();
 
+    internal DbSet<ModelLabExperiment> ModelLabExperiments => Set<ModelLabExperiment>();
+
     internal DbSet<TrainingWorkItem> TrainingWorkItems => Set<TrainingWorkItem>();
 
     internal DbSet<TrainingArtifact> TrainingArtifacts => Set<TrainingArtifact>();
@@ -727,6 +729,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new TrainingBaseArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new DatasetGenerationWorkItemConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingRunConfiguration());
+        modelBuilder.ApplyConfiguration(new ModelLabExperimentConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingWorkItemConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingEvaluationRunConfiguration());

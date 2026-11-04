@@ -129,10 +129,11 @@ public static class TrainingFootprintEstimator
             _ => 2
         };
 
-    /// <summary>
-    ///     Tolerant <c>config.json</c> read. A repository is free to omit any field, so a partial parse is the normal
-    ///     outcome and only a document that will not parse at all returns null.
-    /// </summary>
+    /// <summary>Tolerant <c>config.json</c> read: only a document that will not parse at all returns null.</summary>
+    /// <remarks>
+    ///     A repository is free to omit any field, so a partial parse is normal. A multimodal checkpoint keeps its shape under
+    ///     <c>text_config</c>, whose fields fill whatever the top level leaves out.
+    /// </remarks>
     public static BaseCheckpointConfigV1? ReadConfigOrNull(string configPath)
     {
         if (string.IsNullOrWhiteSpace(configPath) || !File.Exists(configPath))
@@ -143,7 +144,19 @@ public static class TrainingFootprintEstimator
         try
         {
             using var stream = File.OpenRead(configPath);
-            return JsonSerializer.Deserialize<BaseCheckpointConfigV1>(stream, TrainingJson.Options);
+            var config = JsonSerializer.Deserialize<BaseCheckpointConfigV1>(stream, TrainingJson.Options);
+            return config?.TextConfig is not { } text
+                ? config
+                : config with
+                {
+                    HiddenSize = config.HiddenSize ?? text.HiddenSize,
+                    IntermediateSize = config.IntermediateSize ?? text.IntermediateSize,
+                    NumHiddenLayers = config.NumHiddenLayers ?? text.NumHiddenLayers,
+                    NumAttentionHeads = config.NumAttentionHeads ?? text.NumAttentionHeads,
+                    VocabSize = config.VocabSize ?? text.VocabSize,
+                    MaxPositionEmbeddings = config.MaxPositionEmbeddings ?? text.MaxPositionEmbeddings,
+                    TorchDtype = config.TorchDtype ?? text.TorchDtype
+                };
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {

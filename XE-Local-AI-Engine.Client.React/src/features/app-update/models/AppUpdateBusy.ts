@@ -35,6 +35,7 @@ export function busyKindLabel(t: TFunction, kind: string): string {
 		trainingRun: t("pages.about.appUpdate.busy.kinds.trainingRun"),
 		evaluationRun: t("pages.about.appUpdate.busy.kinds.evaluationRun"),
 		trainingExport: t("pages.about.appUpdate.busy.kinds.trainingExport"),
+		modelLabExperiment: t("pages.about.appUpdate.busy.kinds.modelLabExperiment"),
 		modelDownload: t("pages.about.appUpdate.busy.kinds.modelDownload"),
 		imageModelDownload: t("pages.about.appUpdate.busy.kinds.imageModelDownload"),
 		transcriptionModelDownload: t("pages.about.appUpdate.busy.kinds.transcriptionModelDownload"),

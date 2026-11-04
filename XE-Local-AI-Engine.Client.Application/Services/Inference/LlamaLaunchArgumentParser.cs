@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Inference;
 
+using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -117,12 +118,22 @@ public static class LlamaLaunchArgumentParser
                 continue;
             }
 
-            // Drop a space-separated value that follows a bare reserved flag (e.g. `--host 0.0.0.0`); a `--host=…` token
+            // Drop the space-separated value(s) that follow a bare reserved flag (e.g. `--host 0.0.0.0`); a `--host=…` token
             // carries its own value. A following token that is itself a flag (starts with '-') is NOT consumed.
-            var isBareFlagWithValue = string.Equals(token, reserved, StringComparison.Ordinal)
-                                      && index + 1 < tokens.Count
-                                      && !tokens[index + 1].StartsWith('-');
-            index += isBareFlagWithValue ? 2 : 1;
+            index++;
+            if (!string.Equals(token, reserved, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // The layer range is the one managed flag with two values, and its END may be negative; a stray value would make llama-server refuse the whole launch.
+            var isLayerRange = string.Equals(reserved, LlamaServerManagedFlags.ControlVectorLayerRange, StringComparison.Ordinal);
+            for (var values = isLayerRange ? 2 : 1;
+                 values > 0 && index < tokens.Count && (!tokens[index].StartsWith('-') || (isLayerRange && int.TryParse(tokens[index], CultureInfo.InvariantCulture, out _)));
+                 values--)
+            {
+                index++;
+            }
         }
 
         return result;

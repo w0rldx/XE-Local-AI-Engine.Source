@@ -4,6 +4,10 @@ Pending rules awaiting operator approval. Not required reading: nothing here is 
 Add an entry in the normal format (`### <heading>`, then `**Rule:** … **Prevents:** … **Authority:** …`).
 Once the operator approves it, move the entry to its topic file and delete it here; a rejected entry is deleted.
 
+### `llama-server` drops a bad control vector and starts anyway
+
+**Rule:** never treat a clean start with `--control-vector*` as proof the vector applied. On b12014 a wrong size, a layer at or past the block count (MTP blocks excluded), layer 0, or a missing or unreadable file all leave the server ready and serving unsteered output, with at most one log line and for `direction.<n_layer>` none. Check the file against the GGUF before spawning; a log scan misses the silent case. **Prevents:** a steered arm that is really a second baseline. **Authority:** `TransientLlamaServerControlVectorCheck.CheckOrNullAsync`; `TransientLlamaServerEvaluationArmsTests.ABadVector_IsRefusedBeforeAnythingStarts`.
+
 ### Development behind the chain: the package folder keeps its host path, build servers are off
 
 **Rule:** coder and validation sandboxes run in the bubblewrap chain where advertised, the trusted workspace as the jail and engine mounts as binds after `/work`. Bind the package folder at its HOST path: the warm restore runs outside the chain (it needs egress) and writes that path into `obj/`. Set `UseSharedCompilation=false` behind the chain: a compiler server in a fresh namespace holds stdout and the command hangs to its timeout. A `NuGet.Config` naming a host-only local source fails restore there (`NU1301`). **Prevents:** a `--no-restore` build missing the warmed packages, validation timing out after a green build. **Authority:** `DevelopmentWorkspaceProvider.BuildMounts`, `DevelopmentWorkspaceTools.BuildEnvironment`, `DevelopmentMountBrokerTests`.

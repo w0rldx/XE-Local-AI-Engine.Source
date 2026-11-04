@@ -85,7 +85,8 @@ public sealed class TransientLlamaServerSpawnReceiptTests : IDisposable
             manifestProbe,
             launchPolicy,
             CreateLauncher(launcher, binaryManager),
-            new NoOpGpuModelLoadAdmission());
+            new NoOpGpuModelLoadAdmission(),
+            ControlVectorFiles.RealGgufReader());
         var presentDuringBody = false;
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.RunAsync<bool>(new TransientLlamaServerEvaluationRequest

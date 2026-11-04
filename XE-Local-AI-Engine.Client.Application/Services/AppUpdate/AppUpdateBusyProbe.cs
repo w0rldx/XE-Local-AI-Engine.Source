@@ -60,6 +60,7 @@ public sealed class AppUpdateBusyProbe
             GpuWorkKind.TrainingRun => AppUpdateBusyKind.TrainingRun,
             GpuWorkKind.EvaluationRun => AppUpdateBusyKind.EvaluationRun,
             GpuWorkKind.Export => AppUpdateBusyKind.TrainingExport,
+            GpuWorkKind.ModelLabExperiment => AppUpdateBusyKind.ModelLabExperiment,
             _ => null
         };
         if (gpuKind is { } kind)

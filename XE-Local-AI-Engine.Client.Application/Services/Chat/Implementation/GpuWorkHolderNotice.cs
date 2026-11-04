@@ -24,6 +24,8 @@ internal static class GpuWorkHolderNotice
 
     internal const string ExportMessage = "This message was queued behind a running model export.";
 
+    internal const string ModelLabExperimentMessage = "This message was queued behind a running Model Lab experiment.";
+
     /// <summary>Reports the notice when the turn is about to queue behind a benchmark measurement holding the invocation slot.</summary>
     public static async Task ReportIfQueuedBehindBenchmarkAsync(IGpuWorkGate gate,
         IWorkerEventDispatcher dispatcher,
@@ -51,6 +53,7 @@ internal static class GpuWorkHolderNotice
             GpuWorkKind.TrainingRun => Notice(invocationId, TrainingRunMessage),
             GpuWorkKind.EvaluationRun => Notice(invocationId, EvaluationRunMessage),
             GpuWorkKind.Export => Notice(invocationId, ExportMessage),
+            GpuWorkKind.ModelLabExperiment => Notice(invocationId, ModelLabExperimentMessage),
             _ => null
         };
 

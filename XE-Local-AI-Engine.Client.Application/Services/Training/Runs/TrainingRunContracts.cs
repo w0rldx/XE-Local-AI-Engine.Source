@@ -138,6 +138,9 @@ public sealed record TrainingLaunchReceiptV1
 /// </summary>
 public sealed record BaseCheckpointConfigV1
 {
+    [JsonPropertyName("model_type")]
+    public string? ModelType { get; init; }
+
     [JsonPropertyName("architectures")]
     public IReadOnlyList<string>? Architectures { get; init; }
 
@@ -161,6 +164,10 @@ public sealed record BaseCheckpointConfigV1
 
     [JsonPropertyName("torch_dtype")]
     public string? TorchDtype { get; init; }
+
+    /// <summary>The nested text model of a multimodal checkpoint; <see cref="TrainingFootprintEstimator.ReadConfigOrNull" /> lifts its fields to this level.</summary>
+    [JsonPropertyName("text_config")]
+    public BaseCheckpointConfigV1? TextConfig { get; init; }
 }
 
 /// <summary>What one run is expected to cost, and whether the host can pay it.</summary>

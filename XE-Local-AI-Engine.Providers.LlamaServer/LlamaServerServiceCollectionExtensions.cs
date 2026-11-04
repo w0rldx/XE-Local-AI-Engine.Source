@@ -242,7 +242,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaServerCapabilityManifestProbe>(),
                 sp.GetRequiredService<ILlamaServerLaunchPolicy>(),
                 sp.GetRequiredService<TransientLlamaServerLauncher>(),
-                sp.GetRequiredService<IGpuModelLoadAdmission>()));
+                sp.GetRequiredService<IGpuModelLoadAdmission>(),
+                sp.GetRequiredService<IGgufMetadataReader>()));
 
         services.TryAddSingleton<ILlamaCppSourceBuildService>(static sp =>
             new LlamaCppSourceBuildService(sp.GetRequiredService<ILlamaCppSourceBuildPrerequisiteProbe>(),

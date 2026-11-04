@@ -18775,6 +18775,425 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/checkpoint-download": {
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "startModelLabCheckpointDownload",
+        "requestBody": {
+          "x-name": "ModelLabCheckpointDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointDownloadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/checkpoint-preflight": {
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "preflightModelLabCheckpoint",
+        "requestBody": {
+          "x-name": "ModelLabCheckpointPreflightRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointPreflightRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/experiments": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "listModelLabExperiments",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "startModelLabExperiment",
+        "requestBody": {
+          "x-name": "StartModelLabExperimentRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1StartModelLabExperimentRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1StartModelLabExperimentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/experiments/{experimentId}": {
+      "delete": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "deleteModelLabExperiment",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabExperiment",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/experiments/{experimentId}/cancel": {
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "cancelModelLabExperiment",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/experiments/{experimentId}/trace": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabExperimentTrace",
+        "parameters": [
+          {
+            "name": "experimentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabTraceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/models": {
       "get": {
         "tags": [
@@ -45088,6 +45507,412 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId",
+          "installedModelName",
+          "licenseConfirmed"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0,
+            "nullable": true
+          },
+          "installedModelName": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "licenseConfirmed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preflight",
+          "baseArtifactId",
+          "artifactStatus"
+        ],
+        "properties": {
+          "preflight": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse"
+          },
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "artifactStatus": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointPreflightRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "installedModelName"
+        ],
+        "properties": {
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "repoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0,
+            "nullable": true
+          },
+          "installedModelName": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repoId",
+          "revision",
+          "weightBytes",
+          "requiredVramBytes",
+          "cardVramBytes",
+          "license",
+          "isGated",
+          "checkpointHiddenSize",
+          "checkpointBlockCount",
+          "ggufEmbeddingLength",
+          "ggufBlockCount",
+          "licenseConfirmationText",
+          "refusal",
+          "refusalMessage"
+        ],
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string",
+            "nullable": true
+          },
+          "weightBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "requiredVramBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "cardVramBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "isGated": {
+            "type": "boolean"
+          },
+          "checkpointHiddenSize": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "checkpointBlockCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ggufEmbeddingLength": {
+            "type": "integer",
+            "nullable": true
+          },
+          "ggufBlockCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "licenseConfirmationText": {
+            "type": "string",
+            "nullable": true
+          },
+          "refusal": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabCheckpointRefusal"
+              }
+            ]
+          },
+          "refusalMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "platformSupported",
+          "unsupportedMessage",
+          "activeExperimentId",
+          "maxRetainedExperiments",
+          "experiments"
+        ],
+        "properties": {
+          "platformSupported": {
+            "type": "boolean"
+          },
+          "unsupportedMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "activeExperimentId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "maxRetainedExperiments": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "experiments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "repoId",
+          "revision",
+          "installedModelName",
+          "prompt",
+          "errorMessage",
+          "traceByteCount",
+          "result",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesModelLabExperimentStatus"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "installedModelName": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "traceByteCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "result": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabTraceResult"
+              }
+            ]
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabStartRefusal"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabTraceRecordResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step",
+          "layer",
+          "kind",
+          "norm",
+          "percentiles",
+          "topIndices",
+          "topValues"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "layer": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "norm": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "percentiles": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          },
+          "topIndices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "topValues": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabTraceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "records",
+          "truncated",
+          "droppedRecords",
+          "byteCap"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabTraceRecordResponse"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "droppedRecords": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "byteCap": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1StartModelLabExperimentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseArtifactId",
+          "installedModelName",
+          "prompt",
+          "licenseConfirmed"
+        ],
+        "properties": {
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "installedModelName": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 0,
+            "nullable": false
+          },
+          "licenseConfirmed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1StartModelLabExperimentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "experimentId"
+        ],
+        "properties": {
+          "experimentId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeAutomaticBackupResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -52363,6 +53188,22 @@
           "Graph"
         ]
       },
+      "XE_Local_AI_EngineClientPersistenceEntitiesModelLabExperimentStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ]
+      },
       "XE_Local_AI_EngineClientPersistenceEntitiesToolMockVerificationState": {
         "type": "string",
         "description": "",
@@ -53126,6 +53967,131 @@
           "delegate",
           "agentic"
         ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabCheckpointRefusal": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "UnsupportedPlatform",
+          "NotTrainable",
+          "VramUnknown",
+          "WeightSizeUnknown",
+          "CannotFitCard",
+          "ConfigUnreadable",
+          "GgufNotInstalled",
+          "GgufUnreadable",
+          "EmbeddingMismatch",
+          "BlockCountMismatch",
+          "LicenseNotConfirmed",
+          "DownloadRejected",
+          "UnsupportedModelType"
+        ],
+        "enum": [
+          "UnsupportedPlatform",
+          "NotTrainable",
+          "VramUnknown",
+          "WeightSizeUnknown",
+          "CannotFitCard",
+          "ConfigUnreadable",
+          "GgufNotInstalled",
+          "GgufUnreadable",
+          "EmbeddingMismatch",
+          "BlockCountMismatch",
+          "LicenseNotConfirmed",
+          "DownloadRejected",
+          "UnsupportedModelType"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabResultToken": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabStartRefusal": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "UnsupportedPlatform",
+          "CheckpointNotFound",
+          "CheckpointNotReady",
+          "LicenseNotConfirmed",
+          "PreflightRefused",
+          "RuntimeUnavailable",
+          "Busy",
+          "ModelLoaded",
+          "InsufficientMemory",
+          "ProcessNotConfirmedStopped"
+        ],
+        "enum": [
+          "UnsupportedPlatform",
+          "CheckpointNotFound",
+          "CheckpointNotReady",
+          "LicenseNotConfirmed",
+          "PreflightRefused",
+          "RuntimeUnavailable",
+          "Busy",
+          "ModelLoaded",
+          "InsufficientMemory",
+          "ProcessNotConfirmedStopped"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabTraceResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "promptTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tokens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabResultToken"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "peakVramBytes": {
+            "type": "integer"
+          },
+          "blockCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modelClass": {
+            "type": "string",
+            "nullable": true
+          },
+          "device": {
+            "type": "string",
+            "nullable": true
+          },
+          "torch": {
+            "type": "string",
+            "nullable": true
+          },
+          "transformers": {
+            "type": "string",
+            "nullable": true
+          },
+          "python": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       },
       "XE_Local_AI_EngineClientServicesMonitoringPlaybookMonitorStatus": {
         "type": "string",

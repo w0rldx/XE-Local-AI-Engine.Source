@@ -100,7 +100,7 @@ public interface ITrainingRunStore
 
     /// <summary>
     ///     Deletes the run, its artifacts and its work item in that order. Refused while the work item is still
-    ///     non-terminal, and refused while any artifact has been promoted to the registry.
+    ///     non-terminal, while the run still holds a launch receipt, and while any artifact has been promoted to the registry.
     /// </summary>
     Task DeleteAsync(Guid runId, long expectedVersion, CancellationToken cancellationToken = default);
 

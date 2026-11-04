@@ -15,8 +15,6 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 /// </remarks>
 internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
 {
-    private const string DefaultRevision = "main";
-
     // Exact file names that are always required when present. Anything ending in .safetensors is picked up separately.
     private static readonly string[] ConfigFileNames =
     [
@@ -63,6 +61,12 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
         var detail = await _hubClient.GetRepoAsync(repoId, revision, ct).ConfigureAwait(false)
                      ?? throw new BaseCheckpointNotTrainableException("The base checkpoint repository could not be read from Hugging Face.");
 
+        // The commit is the checkpoint's identity: a branch name moves, so storing "main" would let the same row describe different weights over time.
+        if (string.IsNullOrWhiteSpace(detail.Revision))
+        {
+            throw new BaseCheckpointNotTrainableException("Hugging Face did not report a commit for this checkpoint, so it cannot be pinned.");
+        }
+
         var files = new List<BaseCheckpointFile>();
         foreach (var file in detail.Files)
         {
@@ -99,9 +103,7 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
         return new BaseCheckpointManifest
         {
             RepoId = detail.RepoId,
-            Revision = string.IsNullOrWhiteSpace(revision)
-                ? detail.Revision
-                : revision,
+            Revision = detail.Revision,
             Files = files,
             TotalBytes = files.Sum(static file => file.SizeBytes),
             License = detail.License,
@@ -123,8 +125,6 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
         {
             File.SetUnixFileMode(destinationDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
-
-        var revision = string.IsNullOrWhiteSpace(manifest.Revision) ? DefaultRevision : manifest.Revision;
 
         // A set total is only honest when every file declares a size; summing the known ones would report a total the
         // transfer overshoots, and a bar that passes 100% is worse than one that admits it cannot compute a percentage.
@@ -163,7 +163,7 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
 
             var result = await _downloadClient.DownloadAsync(manifest.RepoId,
                 file.FileName,
-                revision,
+                manifest.Revision,
                 manifest.RepoId,
                 destinationPath,
                 file.SizeBytes,

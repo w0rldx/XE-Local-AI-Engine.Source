@@ -68,6 +68,7 @@ internal static class TrainingEndpointSupport
             "TrainingBusy" => "Training, an evaluation or an export holds the GPU; dataset generation cannot start until it finishes.",
             "RunActive" => "The training run is still queued or running.",
             "RunTerminal" => "The training run has already finished.",
+            "ProcessNotConfirmedStopped" => "This run's process has not been confirmed stopped, and its record is what lets the node find it. The next start of the node checks it again; delete it after that.",
             "GenerationInactive" => "The dataset is not generating.",
             "RunEvaluated" => "An evaluation run was created from this training run and it cannot be deleted.",
             "EvaluationBound" => "The evaluation run is part of a comparison report.",

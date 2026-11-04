@@ -11,6 +11,9 @@ public static class TrainingScripts
     /// <summary>The adapter merge step. The GGUF conversion beside it runs llama.cpp's own scripts, not this one.</summary>
     public const string ExportScriptName = "export.py";
 
+    /// <summary>Model Lab's tracer. It runs on the training runtime and needs nothing beyond it.</summary>
+    public const string ModelLabScriptName = "modellab.py";
+
     private const string PublishedScriptsDirectoryName = "training-scripts";
     private const string RepositoryScriptsRelativePath = "tools/training";
 

@@ -16,6 +16,7 @@ public enum AppUpdateBusyKind
     TrainingRun,
     EvaluationRun,
     TrainingExport,
+    ModelLabExperiment,
     ModelDownload,
     ImageModelDownload,
     TranscriptionModelDownload,

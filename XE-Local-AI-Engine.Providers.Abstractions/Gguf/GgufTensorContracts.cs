@@ -62,6 +62,12 @@ public sealed class GgufTensorInspection
 
     public required long? BlockCount { get; init; }
 
+    /// <summary>The MTP blocks counted in <see cref="BlockCount" /> (<c>{arch}.nextn_predict_layers</c>), or <see langword="null" /> when absent.</summary>
+    public required long? NextnPredictLayers { get; init; }
+
+    /// <summary>The data alignment the file declares (<c>general.alignment</c>), or <see langword="null" /> for the format's default.</summary>
+    public required long? Alignment { get; init; }
+
     public required long? AttentionHeadCount { get; init; }
 
     public required long? AttentionHeadCountKv { get; init; }

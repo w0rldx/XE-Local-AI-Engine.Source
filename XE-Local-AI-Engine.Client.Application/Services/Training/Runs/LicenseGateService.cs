@@ -77,14 +77,22 @@ public sealed class LicenseGateService : ILicenseGateService
     }
 
     /// <summary>The exact wording the operator confirms. Public so the endpoint and the hash agree on one source.</summary>
-    public static string BuildText(string repoId, string? license, bool isGated, bool metadataPresent)
+    public static string BuildText(string repoId, string? license, bool isGated, bool metadataPresent) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{DescribeCheckpoint(repoId, license, isGated, metadataPresent)} I confirm I am permitted to fine-tune these weights and to use whatever this run produces.");
+
+    /// <summary>The same facts for a Model Lab experiment, which reads the weights and produces no model.</summary>
+    public static string BuildModelLabText(string repoId, string? license, bool isGated, bool metadataPresent) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{DescribeCheckpoint(repoId, license, isGated, metadataPresent)} I confirm I am permitted to download these weights and to run experiments on them.");
+
+    private static string DescribeCheckpoint(string repoId, string? license, bool isGated, bool metadataPresent)
     {
         var declaredTerms = license is { Length: > 0 } declared
             ? string.Create(CultureInfo.InvariantCulture, $"declares the license '{declared}'")
             : "declares no license";
         var terms = metadataPresent ? declaredTerms : "has no license metadata found for it";
         var gating = isGated ? " The repository is gated and its terms were accepted on Hugging Face." : string.Empty;
-        return string.Create(CultureInfo.InvariantCulture,
-            $"The base checkpoint '{repoId}' {terms}.{gating} I confirm I am permitted to fine-tune these weights and to use whatever this run produces.");
+        return string.Create(CultureInfo.InvariantCulture, $"The base checkpoint '{repoId}' {terms}.{gating}");
     }
 }

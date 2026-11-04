@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -74,6 +75,26 @@ public sealed class BaseArtifactServiceTests : IDisposable
         var exception = await AssertEx.ThrowsAsync<BaseArtifactRejectedException>(() => Service().StartDownloadAsync(RepoId, revision: null, CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "safetensors");
+    }
+
+    /// <summary>The training path records what the store resolved, so "main" never becomes an artifact's identity.</summary>
+    [Test]
+    public async Task StartDownload_RecordsTheResolvedCommit_NotTheRequestedBranch()
+    {
+        const string Commit = "2fc06364715b967f1860aea9cf38778875588b17";
+        _ = _checkpointStore.ResolveAsync(RepoId, "main", Arg.Any<CancellationToken>())
+                            .Returns(Manifest(1024) with
+                            {
+                                Revision = Commit
+                            });
+        _ = _freeSpaceProbe.GetAvailableFreeBytes(_root).Returns(long.MaxValue);
+        _ = _store.StartDownloadAsync(RepoId, Commit, Arg.Any<CancellationToken>())
+                  .Returns(Record(TrainingBaseArtifactStatus.Ready, Commit));
+
+        var view = await Service().StartDownloadAsync(RepoId, "main", CancellationToken.None);
+
+        AssertEx.Equal(Commit, view.Revision);
+        await _store.DidNotReceive().StartDownloadAsync(RepoId, "main", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -151,6 +172,7 @@ public sealed class BaseArtifactServiceTests : IDisposable
             _coordinator,
             _freeSpaceProbe,
             DataDirectory,
+            Substitute.For<IModelLabActiveJob>(),
             TimeProvider.System);
     }
 
@@ -175,13 +197,13 @@ public sealed class BaseArtifactServiceTests : IDisposable
         };
     }
 
-    private static TrainingBaseArtifactRecord Record(TrainingBaseArtifactStatus status)
+    private static TrainingBaseArtifactRecord Record(TrainingBaseArtifactStatus status, string revision = "main")
     {
         return new TrainingBaseArtifactRecord
         {
             Id = Guid.NewGuid(),
             RepoId = RepoId,
-            Revision = "main",
+            Revision = revision,
             Status = status,
             FilesJson = ReadOnlyMemory<byte>.Empty,
             TotalBytes = 0,

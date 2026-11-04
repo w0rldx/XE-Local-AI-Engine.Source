@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
 using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
@@ -24,6 +25,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
     private readonly IBaseCheckpointStore _checkpointStore;
     private readonly BaseArtifactDownloadCoordinator _coordinator;
     private readonly INodeDataDirectory _dataDirectory;
+    private readonly IModelLabActiveJob _labJob;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
     private readonly ITrainingBaseArtifactStore _store;
     private readonly TimeProvider _timeProvider;
@@ -33,9 +35,11 @@ internal sealed class BaseArtifactService : IBaseArtifactService
         BaseArtifactDownloadCoordinator coordinator,
         IFreeSpaceProbe freeSpaceProbe,
         INodeDataDirectory dataDirectory,
+        IModelLabActiveJob labJob,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(checkpointStore);
+        ArgumentNullException.ThrowIfNull(labJob);
         ArgumentNullException.ThrowIfNull(coordinator);
         ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(freeSpaceProbe);
@@ -44,6 +48,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
         _checkpointStore = checkpointStore;
         _coordinator = coordinator;
         _dataDirectory = dataDirectory;
+        _labJob = labJob;
         _freeSpaceProbe = freeSpaceProbe;
         _store = store;
         _timeProvider = timeProvider;
@@ -111,6 +116,11 @@ internal sealed class BaseArtifactService : IBaseArtifactService
             return BaseArtifactDeleteOutcome.Downloading;
         }
 
+        if (_labJob.ActiveBaseArtifactId == artifactId)
+        {
+            return BaseArtifactDeleteOutcome.InUseByExperiment;
+        }
+
         var deleted = await _store.DeleteAsync(artifactId, record.Version, ct);
         if (!deleted)
         {
@@ -157,7 +167,7 @@ internal sealed class BaseArtifactService : IBaseArtifactService
         };
     }
 
-    private static string FormatGigabytes(long bytes)
+    internal static string FormatGigabytes(long bytes)
     {
         return string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1024 * 1024 * 1024):0.#} GB");
     }

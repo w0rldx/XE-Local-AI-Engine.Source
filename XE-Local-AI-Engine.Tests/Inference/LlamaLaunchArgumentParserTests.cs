@@ -66,6 +66,12 @@ public sealed class LlamaLaunchArgumentParserTests
     [Arguments("--lora /tmp/tuned.gguf", "--lora")]
     [Arguments("--lora-scaled /tmp/tuned.gguf", "--lora-scaled")]
     [Arguments("--top-k 40 --lora=/tmp/tuned.gguf", "--lora")]
+    // Steering stays on the private harness launch.
+    [Arguments("--control-vector /tmp/v.gguf", "--control-vector")]
+    [Arguments("--control-vector=/tmp/v.gguf", "--control-vector")]
+    [Arguments("--control-vector-scaled /tmp/v.gguf:2", "--control-vector-scaled")]
+    [Arguments("--top-k 40 --control-vector-scaled=/tmp/v.gguf:2", "--control-vector-scaled")]
+    [Arguments("--control-vector-layer-range 1 5", "--control-vector-layer-range")]
     public void FindReservedFlag_DetectsManagedFlags(string raw, string expected)
     {
         AssertEx.Equal(expected, LlamaLaunchArgumentParser.FindReservedFlag(raw));
@@ -84,6 +90,26 @@ public sealed class LlamaLaunchArgumentParserTests
         AssertEx.Equal(expected: 4, counted.Count);
         AssertEx.False(counted.Contains("-ncmoe"), "The counted form must be stripped too.");
         AssertEx.False(counted.Contains("12"), "Its value must be stripped with it.");
+    }
+
+    [Test]
+    [Arguments("--control-vector /tmp/v.gguf")]
+    [Arguments("--control-vector=/tmp/v.gguf")]
+    [Arguments("--control-vector-scaled /tmp/v.gguf:2")]
+    [Arguments("--control-vector-scaled=/tmp/v.gguf:2")]
+    [Arguments("--control-vector-layer-range 1 5")]
+    [Arguments("--control-vector-layer-range 5 -1")]
+    public void ParseSanitized_StripsControlVectorFlags_WithAllTheirValues(string flag)
+    {
+        var result = LlamaLaunchArgumentParser.ParseSanitized($"--temp 0.7 {flag} --top-k 40");
+
+        AssertEx.Equal("--temp 0.7 --top-k 40", string.Join(' ', result));
+    }
+
+    [Test]
+    public void ParseSanitized_ALayerRangeWithOneValue_LeavesTheNextFlagAlone()
+    {
+        AssertEx.Equal("--top-k 40", string.Join(' ', LlamaLaunchArgumentParser.ParseSanitized("--control-vector-layer-range 1 --top-k 40")));
     }
 
     [Test]

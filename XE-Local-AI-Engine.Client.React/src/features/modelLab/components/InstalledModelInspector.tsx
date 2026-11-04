@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { ModelInspectPanel } from "@/core/models/inspect/ModelInspectPanel";
+import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { sameRepoVariants } from "@/core/models/ModelVariants";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 

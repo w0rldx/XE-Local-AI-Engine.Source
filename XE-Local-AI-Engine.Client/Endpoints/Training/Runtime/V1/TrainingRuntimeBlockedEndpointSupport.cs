@@ -15,6 +15,9 @@ internal static class TrainingRuntimeBlockedEndpointSupport
     /// <summary>The reason code both routes report while an install holds the runtime; each states its own next step.</summary>
     internal const string AlreadyInstallingReason = "already-installing";
 
+    /// <summary>Both routes report this while an exclusive job may be running Python out of the runtime.</summary>
+    internal const string GpuJobRunningReason = "gpu-job-running";
+
     internal static IResult Blocked(string reason, string message, TrainingRuntimePrerequisitesResponse? prerequisites = null) =>
         Results.Conflict(new TrainingRuntimeBlockedResponse
         {

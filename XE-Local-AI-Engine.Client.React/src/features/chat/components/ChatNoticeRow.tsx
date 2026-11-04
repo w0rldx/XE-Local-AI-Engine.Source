@@ -147,6 +147,7 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"This message was queued behind a running training run.": "chat.notices.queuedBehindTrainingRunText",
 	"This message was queued behind a running training evaluation.": "chat.notices.queuedBehindEvaluationRunText",
 	"This message was queued behind a running model export.": "chat.notices.queuedBehindExportText",
+	"This message was queued behind a running Model Lab experiment.": "chat.notices.queuedBehindModelLabExperimentText",
 	"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.":
 		"chat.notices.toolCallAsTextText",
 	"The model stopped while thinking before it could answer; its thoughts are kept above.":

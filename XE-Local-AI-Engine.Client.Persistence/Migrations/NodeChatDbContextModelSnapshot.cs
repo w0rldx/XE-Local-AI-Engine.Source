@@ -6018,6 +6018,95 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("model_fit_snapshots", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelLabExperiment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BaseArtifactId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_artifact_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("ErrorMessage")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("InstalledModelName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("installed_model_name");
+
+                    b.Property<byte[]>("LaunchReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("launch_receipt_json");
+
+                    b.Property<byte[]>("LicenseConfirmationJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("license_confirmation_json");
+
+                    b.Property<byte[]>("Prompt")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("prompt");
+
+                    b.Property<string>("RepoId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("repo_id");
+
+                    b.Property<byte[]>("ResultJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("result_json");
+
+                    b.Property<string>("Revision")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("TraceBlobId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trace_blob_id");
+
+                    b.Property<long?>("TraceByteCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trace_byte_count");
+
+                    b.Property<string>("TraceSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trace_sha256");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasDatabaseName("ix_model_lab_experiments_created");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_model_lab_experiments_status");
+
+                    b.ToTable("model_lab_experiments", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelLaunchArguments", b =>
                 {
                     b.Property<string>("ModelName")

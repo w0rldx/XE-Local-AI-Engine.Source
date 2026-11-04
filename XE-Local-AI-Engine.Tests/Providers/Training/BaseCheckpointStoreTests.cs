@@ -148,8 +148,12 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         AssertEx.Equal("abc123", manifest.Revision);
     }
 
+    /// <summary>A branch name moves, so storing one would let the same artifact row describe different weights over time.</summary>
     [Test]
-    public async Task Resolve_PinsAnExplicitRevisionOverTheRepoDefault()
+    [Arguments(null)]
+    [Arguments("main")]
+    [Arguments("refs/pr/7")]
+    public async Task Resolve_RecordsTheCommitTheHubResolved_NeverTheRequestedName(string? requested)
     {
         var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
@@ -158,11 +162,58 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         };
 
         using var handler = FileHandler(payloads);
-        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: "default-sha"));
+        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: "resolved-commit-sha"));
 
-        var manifest = await store.ResolveAsync(BaseRepo, "pinned-sha", CancellationToken.None);
+        var manifest = await store.ResolveAsync(BaseRepo, requested, CancellationToken.None);
 
-        AssertEx.Equal("pinned-sha", manifest.Revision);
+        AssertEx.Equal("resolved-commit-sha", manifest.Revision);
+    }
+
+    [Test]
+    public async Task Resolve_WhenTheHubReportsNoCommit_Refuses()
+    {
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = Encoding.UTF8.GetBytes("{}"),
+            ["model.safetensors"] = Encoding.UTF8.GetBytes("weights")
+        };
+
+        using var handler = FileHandler(payloads);
+        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: ""));
+
+        var rejection = await AssertEx.ThrowsAsync<BaseCheckpointNotTrainableException>(() => store.ResolveAsync(BaseRepo, "main", CancellationToken.None));
+
+        AssertEx.Contains(rejection.Message, "commit", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task Download_FetchesAtTheResolvedCommit_NotTheBranch()
+    {
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = Encoding.UTF8.GetBytes("{}"),
+            ["model.safetensors"] = Encoding.UTF8.GetBytes("weights")
+        };
+        var requestedUrls = new List<string>();
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
+        {
+            requestedUrls.Add(request.RequestUri!.AbsolutePath);
+            var bytes = payloads[request.RequestUri.Segments[^1].Trim('/')];
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(bytes)
+            };
+            response.Headers.TryAddWithoutValidation("X-Linked-Etag", $"\"{Sha256Of(bytes)}\"");
+            return response;
+        });
+        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: "resolved-commit-sha"));
+
+        var manifest = await store.ResolveAsync(BaseRepo, "main", CancellationToken.None);
+        await store.DownloadAsync(manifest, Path.Combine(_root, "pinned"), progress: null, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, requestedUrls.Count);
+        AssertEx.True(requestedUrls.TrueForAll(static url => url.Contains("/resolve/resolved-commit-sha/", StringComparison.Ordinal)),
+            $"Every file must come from the commit the manifest names; saw {string.Join(", ", requestedUrls)}.");
     }
 
     [Test]
@@ -201,7 +252,7 @@ public sealed class BaseCheckpointStoreTests : IDisposable
 
         var manifest = await store.ResolveAsync(BaseRepo, Revision, CancellationToken.None);
 
-        AssertEx.Equal(Revision, manifest.Revision, "A requested revision stays the manifest's revision.");
+        AssertEx.Equal("pinned-sha", manifest.Revision, "The manifest names the commit the requested revision resolved to.");
         AssertEx.Equal(expected: 3, manifest.Files.Count, "The manifest must describe the pinned revision's files.");
         AssertEx.True(manifest.Files.Any(file => file.FileName == "model-00001-of-00002.safetensors"),
             "The pinned revision's sharded weights must be what is resolved.");
@@ -241,11 +292,17 @@ public sealed class BaseCheckpointStoreTests : IDisposable
             });
 
     /// <summary>The same store with a caller-chosen Hub responder, so a test can serve a different body per URL.</summary>
-    private HuggingFaceBaseCheckpointStore Store(GgufStoreTestInfrastructure.ScriptedHandler fileHandler, Func<string, HttpResponseMessage> hubResponder)
+    private HuggingFaceBaseCheckpointStore Store(GgufStoreTestInfrastructure.ScriptedHandler fileHandler, Func<string, HttpResponseMessage> hubResponder) =>
+        CreateStore(_root, fileHandler, hubResponder);
+
+    /// <summary>The real store over a scripted Hub and file surface.</summary>
+    internal static HuggingFaceBaseCheckpointStore CreateStore(string modelsDirectory,
+        GgufStoreTestInfrastructure.ScriptedHandler fileHandler,
+        Func<string, HttpResponseMessage> hubResponder)
     {
         var options = new HuggingFaceOptions
         {
-            ModelsDirectory = _root,
+            ModelsDirectory = modelsDirectory,
             DiskMarginBytes = 0
         };
 

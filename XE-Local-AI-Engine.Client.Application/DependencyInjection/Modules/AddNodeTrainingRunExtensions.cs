@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
@@ -20,6 +21,16 @@ internal static class AddNodeTrainingRunExtensions
     public static IHostApplicationBuilder AddNodeTrainingRuns(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+
+        // Stateless over three singletons: the checkpoint store, the device audit and the GGUF inspection service.
+        builder.Services.AddSingleton<ModelLabCheckpointPreflightService>();
+
+        // A singleton for the same reason the export service is one: its job outlives the request that started it.
+        builder.Services.AddOptions<ModelLabJobOptions>();
+        builder.Services.AddSingleton<ModelLabExperimentService>();
+        builder.Services.AddSingleton<IModelLabActiveJob>(static provider => provider.GetRequiredService<ModelLabExperimentService>());
+        builder.Services.AddHostedService<ModelLabStartupReaper>();
+        builder.Services.AddHostedService(static provider => provider.GetRequiredService<ModelLabExperimentService>());
 
         builder.Services.AddOptions<TrainingRunEventBufferOptions>();
         builder.Services.AddOptions<TrainingRunQueueOptions>();
