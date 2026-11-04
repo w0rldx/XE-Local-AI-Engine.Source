@@ -477,6 +477,12 @@ public static class TrainingLifecycleE2ETestDoubles
             CancellationToken ct) =>
             throw new NotSupportedException("The training lifecycle runs no arms.");
 
+        public Task<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>> RunArmsAsync<T>(ILlamaServerRuntimeMutationLease heldLease,
+            IReadOnlyList<TransientLlamaServerEvaluationRequest> requests,
+            Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
+            CancellationToken ct) =>
+            throw new NotSupportedException("The training lifecycle runs no arms.");
+
         public async Task<TransientLlamaServerEvaluationResult<T>> RunAsync<T>(TransientLlamaServerEvaluationRequest request,
             Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bindProvenance,
             Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body, CancellationToken ct)

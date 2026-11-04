@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getModelLabExperimentOptions, getModelLabExperimentTraceOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
+import { SteeringExperimentResult } from "@/features/modelLab/components/SteeringExperimentResult";
 import { activeJobPollMs, toTraceTable } from "@/features/modelLab/models/ModelLabTrace";
 
 // A saved experiment, read-only: what was asked, what came back, and what the hooks measured.
@@ -15,8 +16,12 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 		...getModelLabExperimentOptions(path),
 		refetchInterval: (query) => (query.state.data?.status === "Running" ? activeJobPollMs(isLive) : false),
 	});
-	const succeeded = experiment.data?.status === "Succeeded";
+	// A steering row has no trace, and its result is not a generation.
+	const isSteering = experiment.data?.kind === "Steering";
+	const succeeded = experiment.data?.status === "Succeeded" && !isSteering;
 	const trace = useQuery({ ...getModelLabExperimentTraceOptions(path), enabled: succeeded });
+	// A label on what can be read: a row can say Succeeded over a blob that is gone or was tampered with.
+	const measured = succeeded && trace.status === "success";
 
 	if (experiment.status === "pending") {
 		return <Loader size="sm" />;
@@ -36,14 +41,14 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 		<Paper withBorder={true} p="md" data-testid="model-lab-trace-view">
 			<Stack gap="sm">
 				<Group gap="xs">
-					{succeeded && (
+					{measured && (
 						<Badge color="blue" data-testid="model-lab-trace-measured">
 							{t("pages.modelLab.trace.measured", "Measured")}
 						</Badge>
 					)}
 					<Text size="sm">{`${data.repoId} @ ${data.revision?.slice(0, 12)}`}</Text>
 				</Group>
-				{succeeded && (
+				{measured && (
 					<Text size="sm" c="dimmed">
 						{t(
 							"pages.modelLab.trace.measuredNote",
@@ -65,7 +70,8 @@ export function TraceExperimentView({ experimentId, isLive }: { experimentId: st
 						{data.errorMessage}
 					</Alert>
 				)}
-				{result && (
+				{isSteering && <SteeringExperimentResult result={result} running={data.status === "Running"} />}
+				{result && !isSteering && (
 					<>
 						<Text size="sm" fw={600}>
 							{t("pages.modelLab.trace.output", "Output")}

@@ -1,4 +1,17 @@
-import { Alert, Button, Checkbox, Group, Paper, Progress, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import {
+	Alert,
+	Button,
+	Checkbox,
+	Group,
+	Paper,
+	Progress,
+	SegmentedControl,
+	Select,
+	Stack,
+	Text,
+	Textarea,
+	TextInput,
+} from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +30,8 @@ import {
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
+import { SteeringForm } from "@/features/modelLab/components/SteeringForm";
+import { starterSteeringDraft } from "@/features/modelLab/models/ModelLabSteering";
 
 // The transfer has no hub of its own, so the page reads its progress while it runs.
 const downloadPollMs = 5_000;
@@ -39,6 +54,8 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const [revision, setRevision] = useState("");
 	const [licenseConfirmed, setLicenseConfirmed] = useState(false);
 	const [prompt, setPrompt] = useState("");
+	const [jobKind, setJobKind] = useState("trace");
+	const [steeringDraft, setSteeringDraft] = useState(starterSteeringDraft);
 
 	const preflight = useMutation(preflightModelLabCheckpointMutation());
 	const download = useMutation({
@@ -93,6 +110,14 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 					onChange={(value) => pick(() => setInstalledModelName(value))}
 					searchable={true}
 				/>
+				{saved.isError && (
+					<Alert color="yellow" data-testid="model-lab-saved-failed">
+						{apiErrorMessage(
+							saved.error,
+							t("pages.modelLab.trace.savedFailed", "The checkpoints on this node could not be read."),
+						)}
+					</Alert>
+				)}
 				{savedOptions.length > 0 && (
 					<Select
 						label={t("pages.modelLab.trace.saved", "Checkpoint on this node")}
@@ -138,6 +163,14 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 						{t("pages.modelLab.trace.check", "Check")}
 					</Button>
 				</Group>
+				{artifact.isError && (
+					<Alert color="red" data-testid="model-lab-artifact-failed">
+						{apiErrorMessage(
+							artifact.error,
+							t("pages.modelLab.trace.artifactFailed", "The checkpoint's state could not be read."),
+						)}
+					</Alert>
+				)}
 				{preflight.isError && (
 					<Alert color="red">
 						{apiErrorMessage(preflight.error, t("pages.modelLab.trace.checkFailed", "The check could not run."))}
@@ -194,42 +227,76 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 				)}
 				{ready && allowed && (
 					<>
-						<Textarea
-							label={t("pages.modelLab.trace.prompt", "Prompt")}
-							autosize={true}
-							minRows={2}
-							maxLength={8000}
-							value={prompt}
-							onChange={(event) => setPrompt(event.currentTarget.value)}
+						<SegmentedControl
+							value={jobKind}
+							onChange={setJobKind}
+							w="fit-content"
+							data={[
+								{ value: "trace", label: t("pages.modelLab.steer.jobTrace", "Trace") },
+								{ value: "steering", label: t("pages.modelLab.steer.jobSteering", "Steering") },
+							]}
+							data-testid="model-lab-job-kind"
 						/>
-						<Text size="xs" c="dimmed">
-							{t(
-								"pages.modelLab.trace.spec",
-								"Three layers across the stack, up to 128 tokens, greedy. The trace is capped in size and saved encrypted on this node, with the prompt and the output.",
-							)}
-						</Text>
-						<Group>
-							<Button
-								disabled={busy || prompt.trim().length === 0 || !licenseConfirmed}
+						{jobKind === "steering" ? (
+							<SteeringForm
+								defaultLayer={check.defaultSteeringLayer}
+								steerableBlockCount={check.steerableBlockCount}
+								layerTypes={check.checkpointLayerTypes}
+								draft={steeringDraft}
+								onDraftChange={setSteeringDraft}
+								disabled={busy || !licenseConfirmed}
 								loading={start.isPending}
-								onClick={() =>
+								onStart={(run) =>
 									start.mutate({
 										body: {
 											baseArtifactId: artifactId ?? "",
 											installedModelName: installedModelName ?? "",
-											prompt,
 											licenseConfirmed,
+											...run,
 										},
 									})
 								}
-								data-testid="model-lab-start"
-							>
-								{t("pages.modelLab.trace.start", "Start trace")}
-							</Button>
-						</Group>
+							/>
+						) : (
+							<>
+								<Textarea
+									label={t("pages.modelLab.trace.prompt", "Prompt")}
+									autosize={true}
+									minRows={2}
+									maxLength={8000}
+									value={prompt}
+									onChange={(event) => setPrompt(event.currentTarget.value)}
+								/>
+								<Text size="xs" c="dimmed">
+									{t(
+										"pages.modelLab.trace.spec",
+										"Three layers across the stack, up to 128 tokens, greedy. The trace is capped in size and saved encrypted on this node, with the prompt and the output.",
+									)}
+								</Text>
+								<Group>
+									<Button
+										disabled={busy || prompt.trim().length === 0 || !licenseConfirmed}
+										loading={start.isPending}
+										onClick={() =>
+											start.mutate({
+												body: {
+													baseArtifactId: artifactId ?? "",
+													installedModelName: installedModelName ?? "",
+													prompt,
+													licenseConfirmed,
+												},
+											})
+										}
+										data-testid="model-lab-start"
+									>
+										{t("pages.modelLab.trace.start", "Start trace")}
+									</Button>
+								</Group>
+							</>
+						)}
 						{start.isError && (
 							<Alert color="yellow" data-testid="model-lab-start-refused">
-								{apiErrorMessage(start.error, t("pages.modelLab.trace.startFailed", "The trace could not start."))}
+								{apiErrorMessage(start.error, t("pages.modelLab.trace.startFailed", "The experiment could not start."))}
 							</Alert>
 						)}
 					</>

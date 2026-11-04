@@ -102,13 +102,17 @@ export function TraceExperiments() {
 							<Progress value={100} animated={true} />
 						)}
 						<Text size="xs" c="dimmed">
-							{live.totalSteps
-								? t("pages.modelLab.trace.progress", "Token {{step}} of up to {{total}}, {{vram}} on the GPU.", {
-										step: live.step ?? 0,
-										total: live.totalSteps,
-										vram: humanizeBytes(live.vramBytes ?? 0),
-									})
-								: null}
+							{live.totalSteps &&
+								(live.phase === "tracing"
+									? t("pages.modelLab.trace.progress", "Token {{step}} of up to {{total}}, {{vram}} on the GPU.", {
+											step: live.step ?? 0,
+											total: live.totalSteps,
+											vram: humanizeBytes(live.vramBytes ?? 0),
+										})
+									: t("pages.modelLab.steer.progress", "Prompt {{step}} of {{total}}.", {
+											step: live.step ?? 0,
+											total: live.totalSteps,
+										}))}
 						</Text>
 						<Text size="sm" c="dimmed" data-testid="model-lab-chat-wait">
 							{t(
@@ -131,14 +135,21 @@ export function TraceExperiments() {
 							{experiments.map((experiment) => (
 								<Table.Tr key={experiment.id}>
 									<Table.Td>
-										<Button variant="subtle" size="compact-sm" onClick={() => setSelectedId(experiment.id ?? null)}>
-											{experiment.repoId}
-										</Button>
-									</Table.Td>
-									<Table.Td>
-										<Badge color={statusColors[experiment.status ?? ""] ?? "gray"}>
-											{t(`pages.modelLab.trace.status.${experiment.status}`, experiment.status ?? "")}
-										</Badge>
+										<Stack gap={2} align="flex-start">
+											<Button variant="subtle" size="compact-sm" onClick={() => setSelectedId(experiment.id ?? null)}>
+												{experiment.repoId}
+											</Button>
+											<Group gap={4}>
+												<Badge color={statusColors[experiment.status ?? ""] ?? "gray"}>
+													{t(`pages.modelLab.trace.status.${experiment.status}`, experiment.status ?? "")}
+												</Badge>
+												{experiment.kind === "Steering" && (
+													<Badge variant="light" color="gray" data-testid="model-lab-steering-badge">
+														{t("pages.modelLab.steer.jobSteering", "Steering")}
+													</Badge>
+												)}
+											</Group>
+										</Stack>
 									</Table.Td>
 									<Table.Td>
 										<Text size="xs" c="dimmed">

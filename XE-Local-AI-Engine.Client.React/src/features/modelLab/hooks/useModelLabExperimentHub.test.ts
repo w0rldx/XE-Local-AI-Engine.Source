@@ -13,6 +13,7 @@ const hub = vi.hoisted(() => ({
 	reconnecting: [] as (() => void)[],
 	reconnected: [] as (() => void)[],
 	closed: [] as (() => void)[],
+	handlers: new Map<string, (value: unknown) => void>(),
 }));
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
@@ -21,7 +22,7 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 			get state() {
 				return hub.state;
 			},
-			on: vi.fn(),
+			on: (name: string, handler: (value: unknown) => void) => hub.handlers.set(name, handler),
 			off: vi.fn(),
 			invoke: hub.invoke,
 		},
@@ -44,6 +45,49 @@ describe("useModelLabExperimentHub", () => {
 		hub.reconnecting.length = 0;
 		hub.reconnected.length = 0;
 		hub.closed.length = 0;
+	});
+
+	it("reads the row again when a phase starts, because a finished arm was saved just before it", async () => {
+		const onResync = vi.fn();
+		const { result } = renderHook(() => useModelLabExperimentHub(experimentId, onResync));
+		await waitFor(() => expect(result.current.isLive).toBe(true));
+		onResync.mockClear();
+
+		act(() =>
+			hub.handlers.get("trainingRun.event")?.({
+				runId: experimentId,
+				sequence: 1,
+				kind: "Progress",
+				payload: { step: 1, totalSteps: 7 },
+			}),
+		);
+		expect(onResync).not.toHaveBeenCalled();
+
+		act(() =>
+			hub.handlers.get("trainingRun.event")?.({
+				runId: experimentId,
+				sequence: 2,
+				kind: "Phase",
+				payload: { phase: "arm-vector" },
+			}),
+		);
+		expect(onResync).toHaveBeenCalledTimes(1);
+	});
+
+	it("drops a phase's count when the next phase starts", async () => {
+		const { result } = renderHook(() => useModelLabExperimentHub(experimentId, vi.fn()));
+		await waitFor(() => expect(result.current.isLive).toBe(true));
+		const send = (sequence: number, kind: string, payload: unknown) =>
+			act(() => hub.handlers.get("trainingRun.event")?.({ runId: experimentId, sequence, kind, payload }));
+
+		send(1, "Progress", { step: 16, totalSteps: 16 });
+		expect(result.current.totalSteps).toBe(16);
+
+		send(2, "Phase", { phase: "arm-baseline" });
+
+		expect(result.current.phase).toBe("arm-baseline");
+		expect(result.current.totalSteps).toBeNull();
+		expect(result.current.step).toBeNull();
 	});
 
 	it("is live only once the hub accepted the subscription, and not while it reconnects", async () => {

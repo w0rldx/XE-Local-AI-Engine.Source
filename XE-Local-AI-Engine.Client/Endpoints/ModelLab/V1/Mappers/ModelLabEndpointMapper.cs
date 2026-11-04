@@ -2,13 +2,12 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelLab.V1.Mappers;
 
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 
 internal static class ModelLabEndpointMapper
 {
-    private static readonly JsonSerializerOptions ResultJson = new(JsonSerializerDefaults.Web);
-
     public static ModelLabCheckpointPreflightResponse ToResponse(ModelLabCheckpointPreflight result) =>
         new()
         {
@@ -23,6 +22,9 @@ internal static class ModelLabEndpointMapper
             CheckpointBlockCount = result.CheckpointBlockCount,
             GgufEmbeddingLength = result.GgufEmbeddingLength,
             GgufBlockCount = result.GgufBlockCount,
+            SteerableBlockCount = result.GgufSteerableBlockCount,
+            CheckpointLayerTypes = result.CheckpointLayerTypes,
+            DefaultSteeringLayer = result.DefaultSteeringLayer,
             LicenseConfirmationText = result.LicenseConfirmationText,
             Refusal = result.Refusal,
             RefusalMessage = result.RefusalMessage
@@ -33,12 +35,13 @@ internal static class ModelLabEndpointMapper
         {
             Id = record.Id,
             Status = record.Status,
+            Kind = record.Kind,
             RepoId = record.RepoId,
             Revision = record.Revision,
             InstalledModelName = record.InstalledModelName,
             Prompt = record.Prompt,
             ErrorMessage = record.ErrorMessage,
-            TraceByteCount = record.TraceByteCount,
+            TraceByteCount = record.Kind == ModelLabExperimentKind.Trace ? record.TraceByteCount : null,
             Result = includeResult && record.ResultJson is { } json ? ReadResult(json) : null,
             CreatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
             UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.UpdatedAtUtc)
@@ -48,7 +51,7 @@ internal static class ModelLabEndpointMapper
     {
         try
         {
-            return JsonSerializer.Deserialize<ModelLabTraceResult>(Encoding.UTF8.GetString(json.Span), ResultJson);
+            return JsonSerializer.Deserialize<ModelLabTraceResult>(Encoding.UTF8.GetString(json.Span), ModelLabTraceSpec.ResultJson);
         }
         catch (JsonException)
         {

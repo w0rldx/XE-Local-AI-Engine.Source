@@ -34,6 +34,9 @@ public sealed class StartModelLabExperimentRequest
     public required string Prompt { get; init; }
 
     public required bool LicenseConfirmed { get; init; }
+
+    /// <summary>Makes this a steering job. Left out, it is a trace.</summary>
+    public ModelLabSteeringRequest? Steering { get; init; }
 }
 
 public sealed class StartModelLabExperimentResponse
@@ -55,6 +58,8 @@ public sealed class ModelLabExperimentResponse
 
     public required ModelLabExperimentStatus Status { get; init; }
 
+    public required ModelLabExperimentKind Kind { get; init; }
+
     public required string RepoId { get; init; }
 
     public required string Revision { get; init; }
@@ -65,9 +70,10 @@ public sealed class ModelLabExperimentResponse
 
     public required string? ErrorMessage { get; init; }
 
+    /// <summary>A trace's size; null for a steering job, which has no trace to read.</summary>
     public required long? TraceByteCount { get; init; }
 
-    /// <summary>Set on the single-experiment read of a finished trace; a list leaves it out.</summary>
+    /// <summary>Set on the single-experiment read: a finished trace, or as much as a steering job has done. A list leaves it out.</summary>
     public required ModelLabTraceResult? Result { get; init; }
 
     public required DateTimeOffset CreatedAtUtc { get; init; }

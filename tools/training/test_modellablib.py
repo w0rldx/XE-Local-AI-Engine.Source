@@ -4,7 +4,9 @@ Assert-based with no framework, like test_trainlib.py, so it runs inside the tra
 """
 
 import json
+import math
 import os
+import struct
 import sys
 import tempfile
 import threading
@@ -13,12 +15,19 @@ from unittest import mock
 from modellablib import (
     CONTRACT_VERSION,
     FOOTER_RESERVE_BYTES,
+    STEERING_KIND,
+    TRACE_KIND,
     CappedTraceWriter,
     JobError,
+    control_vector_bytes,
+    heartbeat_counts,
     layer_kind,
     out_of_range_layers,
+    scaled_to_norm,
+    steering_vector,
     trace_record,
     validate_job,
+    vector_norm,
 )
 
 
@@ -52,6 +61,7 @@ RECORD = trace_record(3, 15, "F", 3.14159, [-0.1234, 0.0, 0.1234], [1, 2], [0.55
 
 VALID_JOB = {
     "contractVersion": CONTRACT_VERSION,
+    "kind": TRACE_KIND,
     "checkpointPath": "/checkpoint",
     "prompt": "hello",
     "tracePath": "/work/trace.jsonl",
@@ -215,8 +225,8 @@ def test_a_missing_compiler_says_what_to_do():
     )
     assert len(errors) == 1
     message = errors[0]["message"]
-    assert "needs a C compiler" in message
-    assert "Install gcc" in message
+    assert "no gcc or clang on the node's PATH" in message
+    assert "Install one or make it visible" in message
     assert "CC environment" not in message, "A user can set neither of the remedies Triton names."
 
 
@@ -242,6 +252,7 @@ def test_a_valid_job_passes():
 def test_every_unusable_field_is_refused():
     bad_values = {
         "contractVersion": [None, CONTRACT_VERSION + 1],
+        "kind": [None, "other"],
         "checkpointPath": [None, "", 1],
         "prompt": [None, ""],
         "tracePath": [None],
@@ -274,6 +285,116 @@ def test_layer_kinds():
     assert layer_kind("linear_attention") == "L"
     assert layer_kind("full_attention") == "F"
     assert layer_kind(None) == "?"
+
+
+VALID_STEERING_JOB = {
+    "contractVersion": CONTRACT_VERSION,
+    "kind": STEERING_KIND,
+    "checkpointPath": "/checkpoint",
+    "positivePrompts": ["good"],
+    "negativePrompts": ["bad"],
+    "layer": 15,
+    "vectorPath": "/work/steer.gguf",
+    "randomVectorPath": "/work/random.gguf",
+    "resultPath": "/work/result.json",
+    "seed": 1234,
+}
+
+
+def test_a_valid_steering_job_passes():
+    assert validate_job(dict(VALID_STEERING_JOB)) == VALID_STEERING_JOB
+
+
+def test_every_unusable_steering_field_is_refused():
+    bad_values = {
+        "checkpointPath": [None, ""],
+        "vectorPath": [None, ""],
+        "randomVectorPath": [None],
+        "resultPath": [None],
+        "positivePrompts": [None, [], [""], ["  "], [1]],
+        "negativePrompts": [None, []],
+        "layer": [None, 0, -1, "15", True],
+        "seed": [None, "1"],
+    }
+    for field, values in bad_values.items():
+        for value in values:
+            try:
+                validate_job({**VALID_STEERING_JOB, field: value})
+            except JobError:
+                continue
+            raise AssertionError(f"{field}={value!r} must be refused.")
+
+
+def test_a_steering_vector_is_the_normalised_difference_at_half_the_residual_length():
+    vector, difference_norm = steering_vector([3.0, 4.0], [0.0, 0.0], reference_norm=4.0)
+
+    assert difference_norm == 5.0
+    assert math.isclose(vector_norm(vector), 2.0)
+    assert math.isclose(vector[0] / vector[1], 0.75), "The direction is kept."
+
+
+def test_identical_sets_have_no_direction_and_say_so():
+    try:
+        steering_vector([1.0, 2.0], [1.0, 2.0], reference_norm=4.0)
+    except ValueError as error:
+        assert "no usable length" in str(error)
+        return
+    raise AssertionError("A zero difference must not become a vector.")
+
+
+def test_a_control_has_the_same_norm_in_its_own_direction():
+    control = scaled_to_norm([1.0, -1.0, 2.0], 3.0)
+
+    assert math.isclose(vector_norm(control), 3.0)
+    assert math.isclose(control[1], -control[0])
+
+
+def _read_control_vector(data):
+    """The layout llama.cpp's loader and the host's check read, parsed by hand, not through the writer's helpers."""
+    assert data[:4] == b"GGUF"
+    version, tensors, keys = struct.unpack_from("<IQQ", data, 4)
+    position = 24
+
+    def string():
+        nonlocal position
+        (length,) = struct.unpack_from("<Q", data, position)
+        position += 8 + length
+        return data[position - length : position].decode()
+
+    assert (version, tensors, keys) == (3, 1, 1)
+    assert string() == "general.architecture"
+    assert struct.unpack_from("<I", data, position) == (8,)
+    position += 4
+    assert string() == "controlvector"
+    name = string()
+    dimensions, count, ggml_type, offset = struct.unpack_from("<IQIQ", data, position)
+    position += 24
+    assert (dimensions, ggml_type, offset) == (1, 0, 0)
+    start = position + (-position % 32)
+    assert len(data) == start + count * 4, "Nothing may follow the one tensor."
+    return name, list(struct.unpack_from(f"<{count}f", data, start))
+
+
+def test_a_control_vector_file_has_the_layout_the_loader_reads():
+    name, values = _read_control_vector(control_vector_bytes(19, [0.5, -0.25, 1.0]))
+
+    assert name == "direction.19"
+    assert values == [0.5, -0.25, 1.0]
+
+
+def test_a_vector_the_runtime_would_drop_or_poison_is_not_written():
+    for layer, values in ((0, [1.0]), (5, []), (5, [0.0, 0.0]), (5, [1.0, float("nan")]), (5, [float("inf")])):
+        try:
+            control_vector_bytes(layer, values)
+        except ValueError:
+            continue
+        raise AssertionError(f"layer {layer} with {values} must be refused.")
+
+
+def test_deriving_vouches_like_tracing_once_prompts_flow():
+    assert heartbeat_counts("deriving", progress_seen=False)
+    assert not heartbeat_counts("deriving", progress_seen=True)
+    assert heartbeat_counts("saving", progress_seen=True)
 
 
 if __name__ == "__main__":

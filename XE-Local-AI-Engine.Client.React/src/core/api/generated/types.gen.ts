@@ -5134,6 +5134,9 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightR
 	checkpointBlockCount: number | null;
 	ggufEmbeddingLength: number | null;
 	ggufBlockCount: number | null;
+	steerableBlockCount: number | null;
+	checkpointLayerTypes: Array<string> | null;
+	defaultSteeringLayer: number | null;
 	licenseConfirmationText: string | null;
 	refusal: XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal | null;
 	refusalMessage: string | null;
@@ -5150,6 +5153,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentListRespon
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse = {
 	id: string;
 	status: XeLocalAiEngineClientPersistenceEntitiesModelLabExperimentStatus;
+	kind: XeLocalAiEngineClientPersistenceEntitiesModelLabExperimentKind;
 	repoId: string;
 	revision: string;
 	installedModelName: string;
@@ -5192,6 +5196,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReque
 	installedModelName: string;
 	prompt: string;
 	licenseConfirmed: boolean;
+	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringRequest | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = {
@@ -7168,6 +7173,8 @@ export type XeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus = "
 
 export type XeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = "Agent" | "Graph";
 
+export type XeLocalAiEngineClientPersistenceEntitiesModelLabExperimentKind = "Trace" | "Steering";
+
 export type XeLocalAiEngineClientPersistenceEntitiesModelLabExperimentStatus = "Running" | "Succeeded" | "Failed" | "Cancelled";
 
 export type XeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState = "Unverified" | "Verified" | "Rejected";
@@ -7359,6 +7366,13 @@ export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 
 export type XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = "delegate" | "agentic";
 
+export type XeLocalAiEngineClientServicesModelLabModelLabArmOutput = {
+	prompt: string;
+	text: string;
+	tokenIds: Array<number>;
+	finishReason?: string | null;
+};
+
 export type XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal =
 	| "UnsupportedPlatform"
 	| "NotTrainable"
@@ -7389,7 +7403,46 @@ export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =
 	| "Busy"
 	| "ModelLoaded"
 	| "InsufficientMemory"
-	| "ProcessNotConfirmedStopped";
+	| "ProcessNotConfirmedStopped"
+	| "InvalidLayer";
+
+export type XeLocalAiEngineClientServicesModelLabModelLabSteeringArm = {
+	name: string;
+	outputs: Array<XeLocalAiEngineClientServicesModelLabModelLabArmOutput>;
+	startupSeconds?: number;
+	generationSeconds?: number;
+	runtime?: string | null;
+	build?: string | null;
+	executableSha256?: string | null;
+	modelSha256?: string | null;
+	vectorSha256?: string | null;
+	scale?: number | null;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabSteeringRequest = {
+	positivePrompts: Array<string>;
+	negativePrompts: Array<string>;
+	additionalTestPrompts?: Array<string>;
+	layer?: number | null;
+	scale?: number;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabSteeringResult = {
+	layer?: number;
+	layerKind?: string;
+	scale?: number;
+	referenceNorm?: number | null;
+	differenceNorm?: number | null;
+	vectorNorm?: number | null;
+	randomSeed?: number;
+	loadSeconds?: number;
+	vectorSha256?: string | null;
+	randomVectorSha256?: string | null;
+	vectorBytes?: number;
+	positivePrompts?: Array<string>;
+	negativePrompts?: Array<string>;
+	arms?: Array<XeLocalAiEngineClientServicesModelLabModelLabSteeringArm>;
+};
 
 export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	promptTokens?: number;
@@ -7403,6 +7456,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabTraceResult = {
 	torch?: string | null;
 	transformers?: string | null;
 	python?: string | null;
+	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringResult | null;
 };
 
 export type XeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = "InsufficientData" | "Improved" | "Flat" | "Regressed";

@@ -8,12 +8,21 @@ public enum ModelLabExperimentStatus
     Cancelled
 }
 
+/// <summary>What a job measures: one generation's trace, or a derived vector compared across arms.</summary>
+public enum ModelLabExperimentKind
+{
+    Trace,
+    Steering
+}
+
 /// <summary>One Model Lab job and its evidence. <c>Running</c> rows do not survive a restart.</summary>
 internal sealed record class ModelLabExperiment
 {
     public Guid Id { get; set; }
 
     public ModelLabExperimentStatus Status { get; set; }
+
+    public ModelLabExperimentKind Kind { get; set; }
 
     public string RepoId { get; set; } = string.Empty;
 
@@ -31,7 +40,7 @@ internal sealed record class ModelLabExperiment
     /// <summary>Encrypted: what the operator confirmed about the checkpoint's license for this experiment.</summary>
     public byte[] LicenseConfirmationJson { get; set; } = [];
 
-    /// <summary>Encrypted: the generated tokens and the job's measured facts. Set on success only.</summary>
+    /// <summary>Encrypted: the generated tokens and the job's measured facts. A trace sets it on success; a steering job after the derive and after each arm, so a failed run keeps what it has.</summary>
     public byte[]? ResultJson { get; set; }
 
     /// <summary>Encrypted UTF-8: a script's error can quote what it was given.</summary>
@@ -40,7 +49,7 @@ internal sealed record class ModelLabExperiment
     /// <summary>Encrypted, like a training run's. Cleared on normal completion and by the startup reaper.</summary>
     public byte[]? LaunchReceiptJson { get; set; }
 
-    /// <summary>The trace's blob in the Model Lab store, whose scope is this row's id. Null until the job has stored it.</summary>
+    /// <summary>The kind's one blob in the Model Lab store, whose scope is this row's id: the trace, or a steering job's derived vector. Null until the job has stored it.</summary>
     public Guid? TraceBlobId { get; set; }
 
     public string? TraceSha256 { get; set; }

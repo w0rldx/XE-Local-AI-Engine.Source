@@ -201,11 +201,14 @@ function sourceFilesUnder(directory) {
 
 export function checkI18nDefaults({
 	sourceRoot = resolve(frontendRoot, "src"),
-	bundlePath = resolve(frontendRoot, "src/locales/en.json"),
+	bundlePaths = [
+		resolve(frontendRoot, "src/locales/en.json"),
+		resolve(frontendRoot, "src/features/modelLab/locales/model-lab-en.json"),
+	],
 	failOnMissing = process.env.XE_I18N_MISSING_KEYS !== "warn",
 	root = frontendRoot,
 } = {}) {
-	const bundle = flattenBundle(JSON.parse(readFileSync(bundlePath, "utf8")));
+	const bundle = Object.assign({}, ...bundlePaths.map((path) => flattenBundle(JSON.parse(readFileSync(path, "utf8")))));
 	const files = sourceFilesUnder(sourceRoot);
 	const drifted = [];
 	const missing = [];

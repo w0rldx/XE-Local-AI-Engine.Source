@@ -12,6 +12,7 @@ internal sealed class ModelLabExperimentConfiguration : IEntityTypeConfiguration
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Id).HasColumnName("id");
         builder.Property(entity => entity.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(16);
+        builder.Property(entity => entity.Kind).HasColumnName("kind").HasConversion<string>().HasMaxLength(16).HasDefaultValue(ModelLabExperimentKind.Trace).HasSentinel((ModelLabExperimentKind)(-1));
         builder.Property(entity => entity.RepoId).HasColumnName("repo_id").HasMaxLength(255).IsRequired();
         builder.Property(entity => entity.Revision).HasColumnName("revision").HasMaxLength(100).IsRequired();
         builder.Property(entity => entity.BaseArtifactId).HasColumnName("base_artifact_id");

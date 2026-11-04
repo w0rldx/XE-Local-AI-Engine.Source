@@ -85,6 +85,10 @@ export const languageData: ILanguageItem[] = [
 
 That's the whole wiring. The picker, persistence, lazy fetch, and fallback are all automatic.
 
+## Strings outside `src/locales`
+
+Model Lab's strings are in `src/features/modelLab/locales/model-lab-<code>.json`, loaded with its route. Add `model-lab-<code>.json` and its entry in `src/features/modelLab/models/ModelLabStrings.ts`; `ModelLabStrings.test.ts` holds it to the same keys as English.
+
 ## Keeping locales in sync (key parity)
 
 Structural parity — every locale having the **same set of key paths** as `en` — is enforced by

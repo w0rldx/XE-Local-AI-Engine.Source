@@ -80,6 +80,16 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   the card's fit limit is refused before any download, with the reason. A checkpoint already on the node can be picked and traced with no network, and
   it cannot be deleted while an experiment uses it (409 `in-use-by-experiment`). A checkpoint of a model type Model Lab has not traced is refused before its
   weights are downloaded.
+- **Model Lab steering** — the Trace tab starts a steering run from an editable starter set, with test prompts, a layer that shows its kind, and a scale, and shows baseline, vector and random control side by side with what they cannot say. Through the API, `POST model-lab/experiments` takes an optional `steering`: two contrasting prompt sets, more test prompts, an optional layer and a
+  scale. The job derives a vector from the checkpoint with hooks, then runs baseline, vector and a random control of the same norm on the installed GGUF, on the same prompts
+  and seed. The arms, the layer and its kind, the scale, the runtime, build and hashes are saved encrypted in the row's `result`, arm by arm, so a failed or cancelled run keeps
+  what finished. Block 0 and layers past the model's trunk are refused before anything runs (`InvalidLayer`). Pairing is by shape only: a different model of the same shape
+  takes the vector silently. `model_lab_experiments` gains a `kind` column; existing rows read as traces. Model Lab's strings moved out of the app-wide locale files into chunks of their own.
+- **A refused request says why** — a 400 from field validation now shows its fields' own reasons wherever the page shows the server's message, instead of "One or more validation errors occurred."
+- **Model Lab's edges** — a delete of the checkpoint during a start's wait for the runtime is refused, and the start re-reads it after taking the gate; a job with no
+  task yet is cancelled by a host stop; a following page always gets a last State event, Failed when the row could not be saved; a missing compiler's message says there
+  is no gcc or clang on the node's PATH; a trace that cannot be read is no longer labelled Measured; the checkpoint form shows when its own reads fail. A control vector
+  holding non-finite values or only zeros is refused before anything starts, on every harness run. A `llama-server` self-check that cannot launch now logs why.
 - **Model Lab checkpoint preflight** — `POST model-lab/checkpoint-preflight` answers whether a Hugging Face checkpoint can be
   traced on this card (its safetensors size plus about 2 GiB against the card's total memory) and whether it pairs with a chosen
   installed GGUF (embedding size and block count), before any weight is transferred. Only `config.json` is fetched. No page uses it yet.

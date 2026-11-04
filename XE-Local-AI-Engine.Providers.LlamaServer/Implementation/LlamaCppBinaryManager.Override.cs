@@ -40,7 +40,7 @@ public sealed partial class LlamaCppBinaryManager
     ///     the OVERRIDE's configured variant, not the caller-passed one, and <see cref="LlamaBinary.Version" /> is the
     ///     sentinel <c>"override"</c>, surfaced verbatim in the runtime version card.
     /// </remarks>
-    private static async Task<LlamaBinary> ResolveOverrideBinaryAsync(LlamaServerRuntimeOverrideOptions options, CancellationToken ct)
+    private async Task<LlamaBinary> ResolveOverrideBinaryAsync(LlamaServerRuntimeOverrideOptions options, CancellationToken ct)
     {
         // IsActive guarantees a non-blank path; the local is non-null.
         var serverPath = options.ServerPath!;

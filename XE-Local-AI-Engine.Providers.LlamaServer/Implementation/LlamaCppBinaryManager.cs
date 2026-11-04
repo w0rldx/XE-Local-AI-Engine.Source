@@ -1207,7 +1207,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     non-zero exit, a launch failure or a timeout is a fail.
     /// </summary>
     /// <remarks>The process is tree-killed on timeout so no orphan lingers.</remarks>
-    private static async Task<bool> SmokeTestAsync(string serverPath, CancellationToken ct)
+    private async Task<bool> SmokeTestAsync(string serverPath, CancellationToken ct)
     {
         try
         {
@@ -1245,9 +1245,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A launch failure (missing exec bit, wrong arch, missing GPU runtime) is a failed self-check, not a crash.
+            _logger.LogWarning(exception, "The llama-server self-check could not run {ServerPath}.", serverPath);
             return false;
         }
     }

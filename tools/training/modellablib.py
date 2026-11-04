@@ -1,19 +1,31 @@
-"""Pure-python helpers for modellab.py: no torch and no transformers, so they run without a GPU or the venv.
+"""Pure-python helpers for modellab.py: no torch, no transformers and no gguf, so they run without a GPU or the venv.
 
 Run the checks with ``python3 tools/training/test_modellablib.py``.
 """
 
 import json
 import math
+import struct
 from typing import Any, TypeGuard
 
 # Separate from trainlib.CONTRACT_VERSION: this script and train.py change independently.
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
+
+TRACE_KIND = "trace"
+STEERING_KIND = "steering"
 
 # Room kept for the footer line, so the file including its footer can never exceed the cap.
 FOOTER_RESERVE_BYTES = 160
 
 MAX_NEW_TOKENS_LIMIT = 4096
+
+# A vector this long against the residual norm: the spike's choice from six scales.
+STEERING_NORM_FACTOR = 0.5
+
+# What llama.cpp's loader reads: a GGUF v3 file with one 1-D F32 tensor named direction.<layer>, data aligned to 32.
+_GGUF_STRING_TYPE = 8
+_GGUF_F32_TYPE = 0
+_GGUF_ALIGNMENT = 32
 
 
 class JobError(ValueError):
@@ -21,14 +33,17 @@ class JobError(ValueError):
 
 
 def validate_job(job):
-    """Checks every field the host fixes for a trace, before the model is loaded."""
+    """Checks every field the host fixes, before the model is loaded."""
     if not isinstance(job, dict):
         raise JobError("The job file is not a JSON object.")
     if job.get("contractVersion") != CONTRACT_VERSION:
         raise JobError("The job's contract version is not supported by this script.")
-    for name in ("checkpointPath", "prompt", "tracePath", "resultPath"):
-        if not isinstance(job.get(name), str) or not job[name]:
-            raise JobError(f"The job has no usable '{name}'.")
+    kind = job.get("kind")
+    if kind == STEERING_KIND:
+        return _validated_steering_job(job)
+    if kind != TRACE_KIND:
+        raise JobError("The job has no usable 'kind'.")
+    _require_strings(job, ("checkpointPath", "prompt", "tracePath", "resultPath"))
     layers = job.get("layers")
     if not isinstance(layers, list) or not layers or not all(_is_int(layer) and layer >= 0 for layer in layers):
         raise JobError("The job has no usable 'layers'.")
@@ -43,6 +58,30 @@ def validate_job(job):
     if not _is_int(job.get("seed")):
         raise JobError("The job has no usable 'seed'.")
     return job
+
+
+def _validated_steering_job(job):
+    _require_strings(job, ("checkpointPath", "vectorPath", "randomVectorPath", "resultPath"))
+    for name in ("positivePrompts", "negativePrompts"):
+        prompts = job.get(name)
+        usable = (
+            isinstance(prompts, list) and prompts and all(isinstance(text, str) and text.strip() for text in prompts)
+        )
+        if not usable:
+            raise JobError(f"The job has no usable '{name}'.")
+    layer = job.get("layer")
+    # Block 0 has no direction tensor: llama.cpp's loader rejects index 0.
+    if not _is_int(layer) or layer < 1:
+        raise JobError("The job has no usable 'layer'.")
+    if not _is_int(job.get("seed")):
+        raise JobError("The job has no usable 'seed'.")
+    return job
+
+
+def _require_strings(job, names):
+    for name in names:
+        if not isinstance(job.get(name), str) or not job[name]:
+            raise JobError(f"The job has no usable '{name}'.")
 
 
 def _is_int(value: Any) -> TypeGuard[int]:
@@ -63,18 +102,56 @@ def layer_kind(block_type):
 def heartbeat_counts(phase, progress_seen):
     """Whether a heartbeat may speak for this phase.
 
-    Its thread keeps beating while the main thread is wedged, so once tokens flow only they show life. Loading, saving
-    and a first forward that may be compiling kernels have no such events, so there it is all the host can get.
+    Its thread keeps beating while the main thread is wedged, so once tokens or prompts flow only they show life.
+    Loading, saving and a first forward that may be compiling kernels have no such events, so there it is all the host
+    can get.
     """
-    return phase != "tracing" or not progress_seen
+    return phase not in ("tracing", "deriving") or not progress_seen
+
+
+def vector_norm(values):
+    return math.sqrt(sum(value * value for value in values))
+
+
+def scaled_to_norm(values, norm):
+    """The same direction at the given length. A direction of no length has none to keep, so it is an error."""
+    current = vector_norm(values)
+    if not math.isfinite(current) or current == 0:
+        raise ValueError("The vector has no usable length: its prompts may not differ at this layer.")
+    return [value * norm / current for value in values]
+
+
+def steering_vector(positive_mean, negative_mean, reference_norm):
+    """The sets' mean difference as a direction, at STEERING_NORM_FACTOR times the residual's own length."""
+    difference = [positive - negative for positive, negative in zip(positive_mean, negative_mean, strict=True)]
+    return scaled_to_norm(difference, STEERING_NORM_FACTOR * reference_norm), vector_norm(difference)
+
+
+def control_vector_bytes(layer, values):
+    """A control vector file. The host's check reads it back against the model before any launch."""
+    if layer < 1:
+        raise ValueError("Block 0 cannot be steered.")
+    if not values or not all(math.isfinite(value) for value in values) or not any(values):
+        raise ValueError("A control vector needs finite values that are not all zero.")
+    metadata = (
+        _gguf_string("general.architecture") + struct.pack("<I", _GGUF_STRING_TYPE) + _gguf_string("controlvector")
+    )
+    tensor = _gguf_string(f"direction.{layer}") + struct.pack("<IQIQ", 1, len(values), _GGUF_F32_TYPE, 0)
+    header = b"GGUF" + struct.pack("<IQQ", 3, 1, 1) + metadata + tensor
+    return header + b"\0" * (-len(header) % _GGUF_ALIGNMENT) + struct.pack(f"<{len(values)}f", *values)
+
+
+def _gguf_string(text):
+    encoded = text.encode()
+    return struct.pack("<Q", len(encoded)) + encoded
 
 
 def describe_failure(error):
     """The row's reason. Triton's text for a missing compiler offers remedies a user cannot reach, so it is replaced."""
     if "Failed to find C compiler" in str(error):
         return (
-            "The first trace on this machine needs a C compiler, and none was found. "
-            "Install gcc, then start the trace again."
+            "The first trace on this machine needs a C compiler, and there is no gcc or clang on the node's PATH. "
+            "Install one or make it visible to the node, then start the trace again."
         )
     # Shortened, and the type kept: str(error) can be empty.
     return f"{type(error).__name__}: {str(error)[:400]}"

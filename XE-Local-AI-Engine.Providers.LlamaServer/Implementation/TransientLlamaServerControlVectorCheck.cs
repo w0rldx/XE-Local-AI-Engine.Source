@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -9,8 +10,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     A vector of the wrong size or layer, or a missing or unreadable file, leaves the server starting, reporting ready and serving
 ///     unsteered output, with at most one log line and sometimes none (measured on build 12014). A "steered" arm would then be a
-///     second baseline, so the file's tensor, layer, size and layout are checked here, before a process exists.
-///     Accepted ceiling: tensor values are not read, so all-zero or NaN data passes.
+///     second baseline, so the file's tensor, layer, size, layout and values are checked here, before a process exists.
 /// </remarks>
 internal static class TransientLlamaServerControlVectorCheck
 {
@@ -89,6 +89,8 @@ internal static class TransientLlamaServerControlVectorCheck
                 $"The control vector has {tensor.ElementCount} elements, and this model's embedding size is {embeddingLength}."));
         }
 
+        await EnsureValuesCanSteerAsync(request.ControlVectorPath, dataStart, tensor.ElementCount * sizeof(float), ct).ConfigureAwait(false);
+
         var file = await FileSha256.ComputeWithLengthAsync(request.ControlVectorPath, ct).ConfigureAwait(false);
         return new TransientLlamaServerControlVector
         {
@@ -116,6 +118,34 @@ internal static class TransientLlamaServerControlVectorCheck
 
     public static string FormatArgument(string path, double scale) =>
         string.Create(CultureInfo.InvariantCulture, $"{path}:{scale:R}");
+
+    /// <summary>All-zero data applies nothing, and a NaN turns every activation it touches into NaN, while the server still reports ready.</summary>
+    private static async Task EnsureValuesCanSteerAsync(string path, long dataStart, long byteSize, CancellationToken ct)
+    {
+        var bytes = new byte[byteSize];
+        await using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, useAsync: true))
+        {
+            stream.Seek(dataStart, SeekOrigin.Begin);
+            await stream.ReadExactlyAsync(bytes, ct).ConfigureAwait(false);
+        }
+
+        var values = MemoryMarshal.Cast<byte, float>(bytes);
+        var allZero = true;
+        foreach (var value in values)
+        {
+            if (!float.IsFinite(value))
+            {
+                throw new LlamaRuntimeException("The control vector holds values that are not finite.");
+            }
+
+            allZero &= value == 0f;
+        }
+
+        if (allZero)
+        {
+            throw new LlamaRuntimeException("The control vector is all zero, so it would change nothing.");
+        }
+    }
 
     private static GgufTensorInfo SingleDirectionTensorOrThrow(GgufTensorInspection vector)
     {

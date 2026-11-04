@@ -165,6 +165,10 @@ public sealed record BaseCheckpointConfigV1
     [JsonPropertyName("torch_dtype")]
     public string? TorchDtype { get; init; }
 
+    /// <summary>Each block's kind, in order, on a model that mixes them.</summary>
+    [JsonPropertyName("layer_types")]
+    public IReadOnlyList<string>? LayerTypes { get; init; }
+
     /// <summary>The nested text model of a multimodal checkpoint; <see cref="TrainingFootprintEstimator.ReadConfigOrNull" /> lifts its fields to this level.</summary>
     [JsonPropertyName("text_config")]
     public BaseCheckpointConfigV1? TextConfig { get; init; }

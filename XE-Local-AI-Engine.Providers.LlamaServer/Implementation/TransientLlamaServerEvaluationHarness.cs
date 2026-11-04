@@ -65,6 +65,22 @@ internal sealed class TransientLlamaServerEvaluationHarness : ITransientLlamaSer
         Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
         CancellationToken ct)
     {
+        EnsureArmsCanRun(requests, body);
+        return WithRuntimeAsync<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>>((runtime, token) => RunArmsCoreAsync(requests, body, runtime, token), ct);
+    }
+
+    public Task<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>> RunArmsAsync<T>(ILlamaServerRuntimeMutationLease heldLease,
+        IReadOnlyList<TransientLlamaServerEvaluationRequest> requests,
+        Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(heldLease);
+        EnsureArmsCanRun(requests, body);
+        return WithHeldRuntimeAsync<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>>(heldLease, (runtime, token) => RunArmsCoreAsync(requests, body, runtime, token), ct);
+    }
+
+    private static void EnsureArmsCanRun<T>(IReadOnlyList<TransientLlamaServerEvaluationRequest> requests, Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body)
+    {
         ArgumentNullException.ThrowIfNull(requests);
         ArgumentNullException.ThrowIfNull(body);
         if (requests.Count == 0)
@@ -80,48 +96,51 @@ internal sealed class TransientLlamaServerEvaluationHarness : ITransientLlamaSer
                 throw new ArgumentException("An arm does not take an adapter.", nameof(requests));
             }
         }
+    }
 
-        return WithRuntimeAsync<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>>(async (runtime, token) =>
+    private async Task<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>> RunArmsCoreAsync<T>(IReadOnlyList<TransientLlamaServerEvaluationRequest> requests,
+        Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
+        EvaluationRuntime runtime,
+        CancellationToken ct)
+    {
+        // All refusals come before the first load, so a bad vector in the last arm costs no load at all.
+        var controlVectors = new TransientLlamaServerControlVector?[requests.Count];
+        for (var arm = 0; arm < requests.Count; arm++)
         {
-            // All refusals come before the first load, so a bad vector in the last arm costs no load at all.
-            var controlVectors = new TransientLlamaServerControlVector?[requests.Count];
-            for (var arm = 0; arm < requests.Count; arm++)
+            controlVectors[arm] = await TransientLlamaServerControlVectorCheck.CheckOrNullAsync(requests[arm], runtime.Manifest, _ggufReader, ct).ConfigureAwait(false);
+        }
+
+        var pinnedModels = new Dictionary<string, TransientLlamaServerPinnedModel>(StringComparer.Ordinal);
+        var results = new List<TransientLlamaServerEvaluationResult<T>>(requests.Count);
+        for (var arm = 0; arm < requests.Count; arm++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var request = requests[arm];
+            if (!pinnedModels.TryGetValue(request.ModelFilePath, out var pinnedModel))
             {
-                controlVectors[arm] = await TransientLlamaServerControlVectorCheck.CheckOrNullAsync(requests[arm], runtime.Manifest, _ggufReader, token).ConfigureAwait(false);
+                pinnedModel = await TransientLlamaServerPinnedModel.CaptureAsync(request.ModelFilePath, ct).ConfigureAwait(false);
+                pinnedModels[request.ModelFilePath] = pinnedModel;
             }
 
-            var pinnedModels = new Dictionary<string, TransientLlamaServerPinnedModel>(StringComparer.Ordinal);
-            var results = new List<TransientLlamaServerEvaluationResult<T>>(requests.Count);
-            for (var arm = 0; arm < requests.Count; arm++)
+            var armIndex = arm;
+            var result = await RunOneAsync(request,
+                runtime,
+                static (_, _) => Task.CompletedTask,
+                (session, bodyToken) => body(armIndex, session, bodyToken),
+                pinnedModel,
+                controlVectors[arm],
+                ct).ConfigureAwait(false);
+            results.Add(result);
+
+            // The next arm would load beside a process that may still hold VRAM.
+            if (!result.Teardown.ProcessExitObserved && arm < requests.Count - 1)
             {
-                token.ThrowIfCancellationRequested();
-                var request = requests[arm];
-                if (!pinnedModels.TryGetValue(request.ModelFilePath, out var pinnedModel))
-                {
-                    pinnedModel = await TransientLlamaServerPinnedModel.CaptureAsync(request.ModelFilePath, token).ConfigureAwait(false);
-                    pinnedModels[request.ModelFilePath] = pinnedModel;
-                }
-
-                var armIndex = arm;
-                var result = await RunOneAsync(request,
-                    runtime,
-                    static (_, _) => Task.CompletedTask,
-                    (session, bodyToken) => body(armIndex, session, bodyToken),
-                    pinnedModel,
-                    controlVectors[arm],
-                    token).ConfigureAwait(false);
-                results.Add(result);
-
-                // The next arm would load beside a process that may still hold VRAM.
-                if (!result.Teardown.ProcessExitObserved && arm < requests.Count - 1)
-                {
-                    throw new LlamaRuntimeException(string.Create(CultureInfo.InvariantCulture,
-                        $"Arm {arm}'s model runtime (process {result.Teardown.ProcessId}) did not exit, so the next arm was not started and the finished arms' results are lost."));
-                }
+                throw new LlamaRuntimeException(string.Create(CultureInfo.InvariantCulture,
+                    $"Arm {arm}'s model runtime (process {result.Teardown.ProcessId}) did not exit, so the next arm was not started."));
             }
+        }
 
-            return results;
-        }, ct);
+        return results;
     }
 
     private static void EnsureSupportedPolicy(TransientLlamaServerEvaluationRequest request)
@@ -142,24 +161,29 @@ internal sealed class TransientLlamaServerEvaluationHarness : ITransientLlamaSer
 
         await using (mutationLease.ConfigureAwait(false))
         {
-            var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
-            var binary = await _binaryManager.EnsureBinaryAsync(variant, mutationLease, ct).ConfigureAwait(false);
-
-            // Follow the served build, as the supervisor and the transient launcher do: it decides the spec's GPU arguments AND whether this evaluation takes a
-            // VRAM admission ticket. A GPU build spawned under a Cpu selection would otherwise load onto the device without ever entering the gate.
-            var manifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
-            if (!manifest.ProbeSucceeded)
-            {
-                throw new LlamaRuntimeException("The selected llama.cpp runtime could not report its supported server options.");
-            }
-
-            return await work(new EvaluationRuntime
-            {
-                Binary = binary,
-                Variant = binary.Variant,
-                Manifest = manifest
-            }, ct).ConfigureAwait(false);
+            return await WithHeldRuntimeAsync(mutationLease, work, ct).ConfigureAwait(false);
         }
+    }
+
+    private async Task<TResult> WithHeldRuntimeAsync<TResult>(ILlamaServerRuntimeMutationLease mutationLease, Func<EvaluationRuntime, CancellationToken, Task<TResult>> work, CancellationToken ct)
+    {
+        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        var binary = await _binaryManager.EnsureBinaryAsync(variant, mutationLease, ct).ConfigureAwait(false);
+
+        // Follow the served build, as the supervisor and the transient launcher do: it decides the spec's GPU arguments AND whether this evaluation takes a
+        // VRAM admission ticket. A GPU build spawned under a Cpu selection would otherwise load onto the device without ever entering the gate.
+        var manifest = await _capabilityManifestProbe.GetManifestAsync(binary, ct).ConfigureAwait(false);
+        if (!manifest.ProbeSucceeded)
+        {
+            throw new LlamaRuntimeException("The selected llama.cpp runtime could not report its supported server options.");
+        }
+
+        return await work(new EvaluationRuntime
+        {
+            Binary = binary,
+            Variant = binary.Variant,
+            Manifest = manifest
+        }, ct).ConfigureAwait(false);
     }
 
     private async Task<TransientLlamaServerEvaluationResult<T>> RunOneAsync<T>(TransientLlamaServerEvaluationRequest request,

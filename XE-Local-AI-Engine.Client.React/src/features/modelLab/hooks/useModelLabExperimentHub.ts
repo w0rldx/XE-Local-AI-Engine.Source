@@ -64,12 +64,14 @@ export function useModelLabExperimentHub(experimentId: string | null, onResync: 
 				experimentId,
 				progress: {
 					phase: phase ?? current.progress.phase,
-					step: step ?? current.progress.step,
-					totalSteps: totalSteps ?? current.progress.totalSteps,
+					// A count belongs to its phase: the next one must not start on the last one's total.
+					step: step ?? (phase ? null : current.progress.step),
+					totalSteps: totalSteps ?? (phase ? null : current.progress.totalSteps),
 					vramBytes: vramBytes ?? current.progress.vramBytes,
 				},
 			}));
-			if (gap || value.kind === "State") {
+			// A phase can follow a saved arm, whose outputs only the row holds; the hub carries no event of its own for that.
+			if (gap || value.kind === "State" || value.kind === "Phase") {
 				resyncRef.current();
 			}
 		};

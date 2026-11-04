@@ -9,6 +9,8 @@ public sealed class ModelLabExperimentRecord
 
     public required ModelLabExperimentStatus Status { get; init; }
 
+    public required ModelLabExperimentKind Kind { get; init; }
+
     public required string RepoId { get; init; }
 
     public required string Revision { get; init; }
@@ -38,6 +40,8 @@ public sealed class ModelLabExperimentCreate
 {
     public required Guid Id { get; init; }
 
+    public ModelLabExperimentKind Kind { get; init; } = ModelLabExperimentKind.Trace;
+
     public required string RepoId { get; init; }
 
     public required string Revision { get; init; }
@@ -51,8 +55,8 @@ public sealed class ModelLabExperimentCreate
     public required ReadOnlyMemory<byte> LicenseConfirmationJson { get; init; }
 }
 
-/// <summary>How a job ended. The trace fields are set together, and only when its blob has been written.</summary>
-public sealed class ModelLabExperimentCompletion
+/// <summary>How a job ended. The blob fields are set together, and only when its blob has been written. What is left null keeps what the row already holds.</summary>
+public sealed record ModelLabExperimentCompletion
 {
     public required ModelLabExperimentStatus Status { get; init; }
 
@@ -65,6 +69,16 @@ public sealed class ModelLabExperimentCompletion
     public string? TraceSha256 { get; init; }
 
     public long? TraceByteCount { get; init; }
+}
+
+/// <summary>A blob written to the Model Lab store, as a row refers to it.</summary>
+public sealed class ModelLabBlobReference
+{
+    public required Guid BlobId { get; init; }
+
+    public required string Sha256 { get; init; }
+
+    public required long ByteCount { get; init; }
 }
 
 public enum ModelLabExperimentDeleteOutcome
@@ -99,6 +113,9 @@ public interface IModelLabExperimentStore
     Task<IReadOnlyList<ModelLabExperimentRecord>> ListAsync(CancellationToken cancellationToken = default);
 
     Task SetLaunchReceiptAsync(Guid id, ReadOnlyMemory<byte>? launchReceiptJson, CancellationToken cancellationToken = default);
+
+    /// <summary>Saves what a running job has so far, so a job that fails or dies later still shows it. A null keeps what the row holds.</summary>
+    Task SetProgressAsync(Guid id, ReadOnlyMemory<byte> resultJson, ModelLabBlobReference? blob, CancellationToken cancellationToken = default);
 
     /// <summary>Terminalizes a <c>Running</c> row and clears its receipt: the caller has seen the process exit.</summary>
     Task CompleteAsync(Guid id, ModelLabExperimentCompletion completion, CancellationToken cancellationToken = default);

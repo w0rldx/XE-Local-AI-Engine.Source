@@ -165,12 +165,16 @@ public sealed class ModelLabCheckpointPreflightService
         }
 
         var config = await readConfig(ct);
+        var steerableBlocks = gguf.BlockCount - (gguf.NextnPredictLayers ?? 0);
         result = result with
         {
             CheckpointHiddenSize = config?.HiddenSize,
             CheckpointBlockCount = config?.NumHiddenLayers,
             GgufEmbeddingLength = gguf.EmbeddingLength,
-            GgufBlockCount = gguf.BlockCount
+            GgufBlockCount = gguf.BlockCount,
+            GgufSteerableBlockCount = steerableBlocks,
+            CheckpointLayerTypes = config?.LayerTypes,
+            DefaultSteeringLayer = steerableBlocks >= 2 ? ModelLabTraceSpec.DefaultSteeringLayer((int)steerableBlocks.Value, config?.LayerTypes) : null
         };
 
         if (gguf.Failure != GgufTensorReadFailure.None || gguf.EmbeddingLength is null || gguf.BlockCount is null)

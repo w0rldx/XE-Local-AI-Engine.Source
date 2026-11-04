@@ -18,6 +18,9 @@ using XE_Local_AI_Engine.Client.Services.Training.Runs;
 /// </remarks>
 internal static class AddNodeTrainingRunExtensions
 {
+    /// <summary>One prompt on a loaded arm server. Generous beside the seconds it takes, because a timeout fails the arm and a wedged server has no other bound here.</summary>
+    private static readonly TimeSpan ModelLabArmRequestTimeout = TimeSpan.FromMinutes(5);
+
     public static IHostApplicationBuilder AddNodeTrainingRuns(this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -27,6 +30,17 @@ internal static class AddNodeTrainingRunExtensions
 
         // A singleton for the same reason the export service is one: its job outlives the request that started it.
         builder.Services.AddOptions<ModelLabJobOptions>();
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately: Aspire's standard pipeline times a generation out at seconds and retries it.
+        builder.Services.AddHttpClient(ModelLabArmRunner.HttpClientName, static client => client.Timeout = ModelLabArmRequestTimeout)
+               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+               {
+                   // Loopback only: a proxy from the environment must not carry an arm's request, and its server has no reason to redirect one.
+                   AllowAutoRedirect = false,
+                   UseProxy = false
+               })
+               .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+        builder.Services.AddSingleton<ModelLabArmRunner>();
         builder.Services.AddSingleton<ModelLabExperimentService>();
         builder.Services.AddSingleton<IModelLabActiveJob>(static provider => provider.GetRequiredService<ModelLabExperimentService>());
         builder.Services.AddHostedService<ModelLabStartupReaper>();

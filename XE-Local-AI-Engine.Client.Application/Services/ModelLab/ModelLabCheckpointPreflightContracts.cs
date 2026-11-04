@@ -44,6 +44,15 @@ public sealed record ModelLabCheckpointPreflight
 
     public long? GgufBlockCount { get; init; }
 
+    /// <summary>Blocks llama.cpp can apply a vector at: an MTP block counts in <see cref="GgufBlockCount" />, but a vector there is dropped.</summary>
+    public long? GgufSteerableBlockCount { get; init; }
+
+    /// <summary>Each block's kind from the checkpoint's config, or null when it does not say.</summary>
+    public IReadOnlyList<string>? CheckpointLayerTypes { get; init; }
+
+    /// <summary>The layer a steering job takes when none is named, or null on a model too short to steer.</summary>
+    public int? DefaultSteeringLayer { get; init; }
+
     /// <summary>The text the operator confirms before the download, set once the checkpoint's license has been read.</summary>
     public string? LicenseConfirmationText { get; init; }
 

@@ -6043,6 +6043,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("installed_model_name");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Trace")
+                        .HasColumnName("kind");
+
                     b.Property<byte[]>("LaunchReceiptJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("launch_receipt_json");

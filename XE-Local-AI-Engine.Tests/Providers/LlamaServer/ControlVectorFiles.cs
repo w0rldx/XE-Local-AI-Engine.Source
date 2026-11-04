@@ -94,10 +94,21 @@ internal sealed class ControlVectorFiles : IDisposable
                 new byte[64],
                 Data(embeddingLength, 0.5f)),
             "wrong-name" => Vector("blk.15.attn_norm.weight", embeddingLength),
+            "all-zero" => Vector("direction.15", embeddingLength, fill: 0f),
+            "has-nan" => WithLastValue(Vector("direction.15", embeddingLength), float.NaN),
+            "has-infinity" => WithLastValue(Vector("direction.15", embeddingLength), float.PositiveInfinity),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown bad-vector case.")
         };
 
     public void Dispose() => _directory.Delete(recursive: true);
+
+    private static string WithLastValue(string path, float value)
+    {
+        var bytes = File.ReadAllBytes(path);
+        BitConverter.TryWriteBytes(bytes.AsSpan(bytes.Length - sizeof(float)), value);
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
 
     private string Write(params byte[][] parts)
     {

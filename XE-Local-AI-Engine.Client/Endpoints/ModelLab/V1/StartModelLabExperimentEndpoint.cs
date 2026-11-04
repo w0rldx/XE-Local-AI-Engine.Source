@@ -28,12 +28,13 @@ public sealed class StartModelLabExperimentEndpoint : Endpoint<StartModelLabExpe
 
     public override async Task HandleAsync(StartModelLabExperimentRequest request, CancellationToken ct)
     {
-        var start = await _experiments.StartTraceAsync(new ModelLabTraceRequest
+        var start = await _experiments.StartExperimentAsync(new ModelLabExperimentRequest
         {
             BaseArtifactId = request.BaseArtifactId,
             InstalledModelName = request.InstalledModelName,
             Prompt = request.Prompt,
-            LicenseConfirmed = request.LicenseConfirmed
+            LicenseConfirmed = request.LicenseConfirmed,
+            Steering = request.Steering
         }, ct);
         if (start.ExperimentId is { } id)
         {
@@ -44,7 +45,7 @@ public sealed class StartModelLabExperimentEndpoint : Endpoint<StartModelLabExpe
         await Send.ResultAsync(TypedResults.Conflict(new ModelLabStartBlockedResponse
         {
             Reason = start.Refusal ?? ModelLabStartRefusal.Busy,
-            Message = start.RefusalMessage ?? "The trace cannot start right now."
+            Message = start.RefusalMessage ?? "The experiment cannot start right now."
         }));
     }
 }

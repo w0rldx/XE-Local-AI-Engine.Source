@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -137,6 +138,27 @@ public sealed class OverrideBinaryManagerTests
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+    }
+
+    /// <summary>The exception is the only record of why a self-check could not run, and one unexplained failure has already been seen.</summary>
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task EnsureBinary_WhenTheSelfCheckCannotLaunch_LogsTheException()
+    {
+        using var dir = new TempDir();
+        var serverPath = WriteExecutableStub(dir.Path, "#!/nonexistent/interpreter\n");
+        var options = ActiveOverride(serverPath, GpuVariant.Cpu);
+        var logger = new ExceptionCapturingLogger();
+
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, logger: logger, overrideOptions: options);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+
+        AssertEx.True(logger.Exception is not null, "The launch exception must reach the log.");
     }
 
     [Test]
@@ -276,5 +298,18 @@ public sealed class OverrideBinaryManagerTests
                 // Best-effort temp cleanup.
             }
         }
+    }
+
+    private sealed class ExceptionCapturingLogger : ILogger<LlamaCppBinaryManager>
+    {
+        public Exception? Exception { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Exception ??= exception;
     }
 }

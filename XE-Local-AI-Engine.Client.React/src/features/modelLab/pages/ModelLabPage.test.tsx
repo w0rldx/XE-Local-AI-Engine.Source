@@ -3,7 +3,7 @@
 // The Inspect tab against stubbed models and inspection routes (MSW): it opens the shared panel for a chosen installed
 // model, offers that repo's other variants, and shows both ways a read can fail.
 
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -81,8 +81,15 @@ function stubRoutes(respond: () => Response): void {
 	);
 }
 
+// The page suspends on its strings' import, and React retries that inside an awaited act scope only.
+async function renderPage(): Promise<void> {
+	await act(async () => {
+		renderWithProviders(<ModelLabPage />);
+	});
+}
+
 async function openInspectDropdown(): Promise<ReturnType<typeof within>> {
-	fireEvent.click(screen.getByRole("tab", { name: "Inspect" }));
+	fireEvent.click(await screen.findByRole("tab", { name: "Inspect" }));
 	const input = screen.getByRole("combobox", { name: "Installed model" });
 	fireEvent.click(input);
 	return within(
@@ -104,7 +111,7 @@ async function openInspectAndPick(): Promise<void> {
 describe("ModelLabPage inspect tab", () => {
 	it("offers installed llama.cpp models only", async () => {
 		stubRoutes(() => HttpResponse.json(inspection));
-		renderWithProviders(<ModelLabPage />);
+		await renderPage();
 
 		const dropdown = await openInspectDropdown();
 
@@ -117,9 +124,9 @@ describe("ModelLabPage inspect tab", () => {
 		["model-lab-no-models", () => HttpResponse.json({ items: [] })],
 	])("shows %s on the tab when there is nothing to pick", async (testId, respond) => {
 		server.use(http.get(localApiPath("models"), respond));
-		renderWithProviders(<ModelLabPage />);
+		await renderPage();
 
-		fireEvent.click(screen.getByRole("tab", { name: "Inspect" }));
+		fireEvent.click(await screen.findByRole("tab", { name: "Inspect" }));
 
 		// The A/B panel stays mounted and shows the same notice, one per tab.
 		expect(await screen.findAllByTestId(testId)).toHaveLength(2);
@@ -127,7 +134,7 @@ describe("ModelLabPage inspect tab", () => {
 
 	it("opens the shared panel for the chosen installed llama.cpp model", async () => {
 		stubRoutes(() => HttpResponse.json(inspection));
-		renderWithProviders(<ModelLabPage />);
+		await renderPage();
 
 		await openInspectAndPick();
 
@@ -138,7 +145,7 @@ describe("ModelLabPage inspect tab", () => {
 
 	it("shows a partial read as the panel's warning", async () => {
 		stubRoutes(() => HttpResponse.json({ ...inspection, readFailure: "truncated", blocks: [] }));
-		renderWithProviders(<ModelLabPage />);
+		await renderPage();
 
 		await openInspectAndPick();
 
@@ -147,7 +154,7 @@ describe("ModelLabPage inspect tab", () => {
 
 	it("shows a failed request as an error and no panel", async () => {
 		stubRoutes(() => HttpResponse.json({ title: "gone" }, { status: 500 }));
-		renderWithProviders(<ModelLabPage />);
+		await renderPage();
 
 		await openInspectAndPick();
 

@@ -28,6 +28,19 @@ describe("ApiError", () => {
 		expect(error.message).toBe("The official source repository is selected by the server.");
 	});
 
+	it("names a validation 400's field reasons rather than its generic title", () => {
+		const error = new ApiError(400, {
+			title: "One or more validation errors occurred.",
+			status: 400,
+			errors: [
+				{ name: "steering.scale", reason: "The scale must be between 0.001 and 20." },
+				{ name: "steering.positivePrompts", reason: "Enter 1 to 32 positive prompts." },
+			],
+		} as never);
+
+		expect(error.message).toBe("The scale must be between 0.001 and 20. Enter 1 to 32 positive prompts.");
+	});
+
 	it("falls back to the title when neither detail nor message carries text", () => {
 		const error = new ApiError(409, { type: "about:blank", title: "Conflict", status: 409, detail: "  " });
 

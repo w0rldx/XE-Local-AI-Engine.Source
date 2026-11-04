@@ -45602,6 +45602,9 @@
           "checkpointBlockCount",
           "ggufEmbeddingLength",
           "ggufBlockCount",
+          "steerableBlockCount",
+          "checkpointLayerTypes",
+          "defaultSteeringLayer",
           "licenseConfirmationText",
           "refusal",
           "refusalMessage"
@@ -45649,6 +45652,22 @@
           },
           "ggufBlockCount": {
             "type": "integer",
+            "nullable": true
+          },
+          "steerableBlockCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "checkpointLayerTypes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultSteeringLayer": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "licenseConfirmationText": {
@@ -45710,6 +45729,7 @@
         "required": [
           "id",
           "status",
+          "kind",
           "repoId",
           "revision",
           "installedModelName",
@@ -45727,6 +45747,9 @@
           },
           "status": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesModelLabExperimentStatus"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesModelLabExperimentKind"
           },
           "repoId": {
             "type": "string"
@@ -45897,6 +45920,14 @@
           },
           "licenseConfirmed": {
             "type": "boolean"
+          },
+          "steering": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabSteeringRequest"
+              }
+            ]
           }
         }
       },
@@ -53188,6 +53219,18 @@
           "Graph"
         ]
       },
+      "XE_Local_AI_EngineClientPersistenceEntitiesModelLabExperimentKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Trace",
+          "Steering"
+        ],
+        "enum": [
+          "Trace",
+          "Steering"
+        ]
+      },
       "XE_Local_AI_EngineClientPersistenceEntitiesModelLabExperimentStatus": {
         "type": "string",
         "description": "",
@@ -53968,6 +54011,34 @@
           "agentic"
         ]
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArmOutput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prompt",
+          "text",
+          "tokenIds"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "tokenIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "finishReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabCheckpointRefusal": {
         "type": "string",
         "description": "",
@@ -54028,7 +54099,8 @@
           "Busy",
           "ModelLoaded",
           "InsufficientMemory",
-          "ProcessNotConfirmedStopped"
+          "ProcessNotConfirmedStopped",
+          "InvalidLayer"
         ],
         "enum": [
           "UnsupportedPlatform",
@@ -54040,8 +54112,167 @@
           "Busy",
           "ModelLoaded",
           "InsufficientMemory",
-          "ProcessNotConfirmedStopped"
+          "ProcessNotConfirmedStopped",
+          "InvalidLayer"
         ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringArm": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "outputs"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArmOutput"
+            }
+          },
+          "startupSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "generationSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "runtime": {
+            "type": "string",
+            "nullable": true
+          },
+          "build": {
+            "type": "string",
+            "nullable": true
+          },
+          "executableSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "vectorSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "scale": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "positivePrompts",
+          "negativePrompts"
+        ],
+        "properties": {
+          "positivePrompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "negativePrompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "additionalTestPrompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "layer": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "scale": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "layer": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "layerKind": {
+            "type": "string"
+          },
+          "scale": {
+            "type": "number",
+            "format": "double"
+          },
+          "referenceNorm": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "differenceNorm": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vectorNorm": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "randomSeed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "loadSeconds": {
+            "type": "number",
+            "format": "double"
+          },
+          "vectorSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "randomVectorSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "vectorBytes": {
+            "type": "integer"
+          },
+          "positivePrompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "negativePrompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "arms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabSteeringArm"
+            }
+          }
+        }
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabTraceResult": {
         "type": "object",
@@ -54090,6 +54321,14 @@
           "python": {
             "type": "string",
             "nullable": true
+          },
+          "steering": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabSteeringResult"
+              }
+            ]
           }
         }
       },

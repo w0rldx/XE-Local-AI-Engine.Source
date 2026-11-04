@@ -97,7 +97,7 @@ test("a key missing from en.json fails by default, and XE_I18N_MISSING_KEYS=warn
 		source: `const label = t("pages.chat.absent", "Gone");`,
 		en: { pages: { chat: { send: "Send" } } },
 	});
-	const options = { sourceRoot: join(root, "src"), bundlePath: join(root, "src", "locales", "en.json"), root };
+	const options = { sourceRoot: join(root, "src"), bundlePaths: [join(root, "src", "locales", "en.json")], root };
 	const previous = process.env.XE_I18N_MISSING_KEYS;
 
 	try {

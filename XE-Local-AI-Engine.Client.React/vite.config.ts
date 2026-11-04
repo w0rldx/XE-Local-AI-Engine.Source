@@ -265,6 +265,7 @@ export default defineConfig(({ command, mode }) => {
 					"src/routeTree.gen.ts",
 					"src/core/api/generated/**",
 					"src/locales/**",
+					"src/features/modelLab/locales/**",
 					"src/test/**",
 				],
 				thresholds: coverageThresholds,

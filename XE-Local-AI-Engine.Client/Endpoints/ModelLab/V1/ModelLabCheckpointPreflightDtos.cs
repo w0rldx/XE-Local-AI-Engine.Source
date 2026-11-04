@@ -42,6 +42,15 @@ public sealed class ModelLabCheckpointPreflightResponse
 
     public required long? GgufBlockCount { get; init; }
 
+    /// <summary>Blocks a steering vector can reach. A layer must be 1 or more and below this.</summary>
+    public required long? SteerableBlockCount { get; init; }
+
+    /// <summary>Each block's kind from the checkpoint's config, in order, or null when it does not say.</summary>
+    public required IReadOnlyList<string>? CheckpointLayerTypes { get; init; }
+
+    /// <summary>The layer a steering job takes when none is named.</summary>
+    public required int? DefaultSteeringLayer { get; init; }
+
     /// <summary>The text the operator confirms before the download. Null until the checkpoint's license has been read.</summary>
     public required string? LicenseConfirmationText { get; init; }
 

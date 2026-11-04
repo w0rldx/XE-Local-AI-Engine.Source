@@ -110,6 +110,15 @@ public interface ITransientLlamaServerEvaluationHarness
     Task<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>> RunArmsAsync<T>(IReadOnlyList<TransientLlamaServerEvaluationRequest> requests,
         Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
         CancellationToken ct);
+
+    /// <summary>The same, for a job that already holds the runtime across an earlier phase of its own, so nothing can load in the gap.</summary>
+    /// <remarks>
+    ///     The other overload would wait on the caller's own lease forever. The lease stays the caller's: it is not released here, on any path.
+    /// </remarks>
+    Task<IReadOnlyList<TransientLlamaServerEvaluationResult<T>>> RunArmsAsync<T>(ILlamaServerRuntimeMutationLease heldLease,
+        IReadOnlyList<TransientLlamaServerEvaluationRequest> requests,
+        Func<int, TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body,
+        CancellationToken ct);
 }
 
 public sealed record TransientLlamaServerEvaluationRequest

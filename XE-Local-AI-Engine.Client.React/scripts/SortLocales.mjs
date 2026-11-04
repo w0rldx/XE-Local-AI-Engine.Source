@@ -12,7 +12,8 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const localesDirectory = join(frontendRoot, "src", "locales");
+// The app-wide bundles, then a feature's own lazy ones.
+const localesDirectories = [join(frontendRoot, "src", "locales"), join(frontendRoot, "src", "features", "modelLab", "locales")];
 
 export const compareKeys = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
 
@@ -73,7 +74,7 @@ export function sortLocaleText(text) {
 	return `${serializeSorted(JSON.parse(text))}\n`;
 }
 
-export function sortLocales({ directory = localesDirectory, check = false } = {}) {
+export function sortLocales({ directory, check = false }) {
 	const problems = [];
 	for (const name of readdirSync(directory)
 		.filter((file) => file.endsWith(".json"))
@@ -97,7 +98,7 @@ export function sortLocales({ directory = localesDirectory, check = false } = {}
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
 	const check = process.argv.includes("--check");
-	const problems = sortLocales({ check });
+	const problems = localesDirectories.flatMap((directory) => sortLocales({ directory, check }));
 	if (problems.length > 0) {
 		process.stderr.write(`Unsorted locale file. Run \`pnpm run locales:sort\`.\n  ${problems[0]}\n`);
 		process.exitCode = 1;

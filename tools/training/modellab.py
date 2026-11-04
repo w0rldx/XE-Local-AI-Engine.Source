@@ -1,14 +1,16 @@
-"""Model Lab: traces chosen layers of a local safetensors checkpoint with read-only forward hooks.
+"""Model Lab: reads chosen layers of a local safetensors checkpoint with forward hooks that change no value.
 
-Input is one ``job.json`` (see ``ModelLabTraceJobV1`` on the C# side). The host fixes the layers, token count and byte
-cap; nothing in the job can name code to run. Offline, no remote code, no unsloth.
+Two kinds of ``job.json``. A trace (``ModelLabTraceJobV1`` on the C# side) records statistics while generating; the
+host fixes the layers, token count and byte cap. A steering job (``ModelLabSteeringJobV1``) derives a control vector
+from two contrasting prompt sets and writes it with a random one of the same norm. Nothing in a job can name code to
+run. Offline, no remote code, no unsloth.
 
 The protocol is the trainer's JSON-lines shape with its own contract version, on stdout:
 
-    {"event": "handshake", "contractVersion": 1, ...versions}
-    {"event": "phase",     "phase": "loading" | "tracing" | "saving"}
-    {"event": "progress",  "step", "totalSteps", "vramBytes"}
-    {"event": "heartbeat", "phase"}          until the first progress, and while saving; tokens prove life between
+    {"event": "handshake", "contractVersion": 2, ...versions}
+    {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "saving"}
+    {"event": "progress",  "step", "totalSteps", "vramBytes"}    a token, or a contrast prompt
+    {"event": "heartbeat", "phase"}          until the first progress, and while saving; progress proves life between
     {"event": "done",      "cancelled": bool}
     {"event": "error",     "category", "message"}
 
@@ -30,14 +32,19 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, 
 
 from modellablib import (
     CONTRACT_VERSION,
+    STEERING_KIND,
     CappedTraceWriter,
     JobError,
+    control_vector_bytes,
     describe_failure,
     heartbeat_counts,
     layer_kind,
     out_of_range_layers,
+    scaled_to_norm,
+    steering_vector,
     trace_record,
     validate_job,
+    vector_norm,
 )
 from trainlib import CANCELLED_EXIT_CODE
 
@@ -168,17 +175,39 @@ def stop_tokens(tokenizer, generation_eos):
     return sorted(token for token in tokens if token is not None)
 
 
-def trace(job, run):
+def load_model(job, run):
     run.enter("loading")
     if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is not available to the training runtime, and Model Lab traces on the GPU only.")
+        raise RuntimeError("CUDA is not available to the training runtime, and Model Lab runs on the GPU only.")
     path = job["checkpointPath"]
     # A local directory fixed by the host, offline, so there is no revision to pin.
     tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True, trust_remote_code=False)  # nosec B615
     model = AutoModelForCausalLM.from_pretrained(  # nosec B615
         path, dtype=torch.bfloat16, local_files_only=True, trust_remote_code=False, use_safetensors=True
     )
-    model = model.to("cuda").eval()
+    return tokenizer, model.to("cuda").eval()
+
+
+def measured_facts(model, blocks):
+    """What every result carries about where it was measured."""
+    return {
+        "peakVramBytes": torch.cuda.max_memory_allocated(),
+        "blockCount": len(blocks),
+        "modelClass": type(model).__name__,
+        "device": torch.cuda.get_device_name(0),
+        "torch": torch.__version__,
+        "transformers": transformers.__version__,
+        "python": platform.python_version(),
+    }
+
+
+def write_result(job, result):
+    with open(job["resultPath"], "w", encoding="utf-8") as handle:
+        json.dump(result, handle, ensure_ascii=False)
+
+
+def trace(job, run):
+    tokenizer, model = load_model(job, run)
     blocks = blocks_of(model)
     if outside := out_of_range_layers(job["layers"], len(blocks)):
         raise JobError(f"The job names layers {outside}, and this checkpoint has {len(blocks)} blocks.")
@@ -216,21 +245,108 @@ def trace(job, run):
     run.enter("saving")
     writer.close()
     generated = output[0, prompt_tokens:].tolist()
-    result = {
-        "promptTokens": prompt_tokens,
-        "tokens": [{"id": token, "text": tokenizer.decode([token])} for token in generated],
-        "text": tokenizer.decode(generated),
-        "seconds": round(seconds, 3),
-        "peakVramBytes": torch.cuda.max_memory_allocated(),
-        "blockCount": len(blocks),
-        "modelClass": type(model).__name__,
-        "device": torch.cuda.get_device_name(0),
-        "torch": torch.__version__,
-        "transformers": transformers.__version__,
-        "python": platform.python_version(),
-    }
-    with open(job["resultPath"], "w", encoding="utf-8") as handle:
-        json.dump(result, handle, ensure_ascii=False)
+    write_result(
+        job,
+        {
+            "promptTokens": prompt_tokens,
+            "tokens": [{"id": token, "text": tokenizer.decode([token])} for token in generated],
+            "text": tokenizer.decode(generated),
+            "seconds": round(seconds, 3),
+            **measured_facts(model, blocks),
+        },
+    )
+    return False
+
+
+class _ResidualReader:
+    """The chosen block's output for one prompt: its mean over positions and its residuals' mean length. Reads only."""
+
+    def __init__(self, block):
+        self._last = torch.empty(0)
+        self._handle = block.register_forward_hook(self._read)
+
+    def _read(self, _module, _args, output):
+        self._last = (output[0] if isinstance(output, tuple) else output)[0].float()
+
+    def take(self):
+        residuals = self._last
+        return residuals.mean(0), residuals.norm(dim=-1).mean().item()
+
+    def remove(self):
+        self._handle.remove()
+
+
+def derive(job, run):
+    """Writes the vector and its random control, the only outputs that leave this process besides the result."""
+    load_started = time.perf_counter()
+    tokenizer, model = load_model(job, run)
+    load_seconds = time.perf_counter() - load_started
+    blocks = blocks_of(model)
+    layer = job["layer"]
+    if layer >= len(blocks):
+        raise JobError(f"The job names layer {layer}, and this checkpoint has {len(blocks)} blocks.")
+
+    positive, negative = job["positivePrompts"], job["negativePrompts"]
+    total = len(positive) + len(negative)
+    torch.manual_seed(job["seed"])
+    torch.cuda.manual_seed_all(job["seed"])
+    torch.cuda.reset_peak_memory_stats()
+    reader = _ResidualReader(blocks[layer])
+    run.enter("deriving")
+    started = time.perf_counter()
+    done = 0
+
+    def set_mean(prompts):
+        nonlocal done
+        means, norms = [], []
+        for text in prompts:
+            ids = tokenizer(text, return_tensors="pt").input_ids.to("cuda")
+            model(ids, use_cache=False)
+            mean, norm = reader.take()
+            means.append(mean)
+            norms.append(norm)
+            done += 1
+            run.progress_seen = True
+            emit("progress", step=done, totalSteps=total, vramBytes=torch.cuda.memory_allocated())
+        return torch.stack(means).mean(0), sum(norms) / len(norms)
+
+    try:
+        with torch.inference_mode():
+            positive_mean, positive_norm = set_mean(positive)
+            negative_mean, negative_norm = set_mean(negative)
+        torch.cuda.synchronize()
+        seconds = time.perf_counter() - started
+    finally:
+        reader.remove()
+
+    run.enter("saving")
+    reference_norm = (positive_norm + negative_norm) / 2
+    vector, difference_norm = steering_vector(positive_mean.tolist(), negative_mean.tolist(), reference_norm)
+    # On the CPU generator, so the control does not depend on the GPU's random state or on the prompts.
+    noise = torch.randn(
+        len(vector), generator=torch.Generator("cpu").manual_seed(job["seed"]), dtype=torch.float32
+    ).tolist()
+    random_vector = scaled_to_norm(noise, vector_norm(vector))
+    with open(job["vectorPath"], "wb") as handle:
+        handle.write(control_vector_bytes(layer, vector))
+    with open(job["randomVectorPath"], "wb") as handle:
+        handle.write(control_vector_bytes(layer, random_vector))
+    write_result(
+        job,
+        {
+            "seconds": round(seconds, 3),
+            **measured_facts(model, blocks),
+            "steering": {
+                "layer": layer,
+                "layerKind": layer_kind(getattr(blocks[layer], "block_type", None)),
+                "referenceNorm": reference_norm,
+                "differenceNorm": difference_norm,
+                "vectorNorm": vector_norm(vector),
+                "randomSeed": job["seed"],
+                "loadSeconds": round(load_seconds, 3),
+            },
+        },
+    )
     return False
 
 
@@ -247,12 +363,13 @@ def main():
     run.start_heartbeat()
     try:
         with open(arguments.config, encoding="utf-8") as handle:
-            cancelled = trace(validate_job(json.load(handle)), run)
+            job = validate_job(json.load(handle))
+        cancelled = derive(job, run) if job["kind"] == STEERING_KIND else trace(job, run)
     except JobError as error:
         emit("error", category="contract", message=str(error))
         return 1
     except torch.cuda.OutOfMemoryError:
-        emit("error", category="out-of-memory", message="The GPU ran out of memory during the trace.")
+        emit("error", category="out-of-memory", message="The GPU ran out of memory during the job.")
         return 1
     except Exception as error:
         emit("error", category="trace", message=describe_failure(error))

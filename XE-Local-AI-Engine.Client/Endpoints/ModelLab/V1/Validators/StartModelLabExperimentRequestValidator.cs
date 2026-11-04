@@ -24,5 +24,9 @@ public sealed class StartModelLabExperimentRequestValidator : Validator<StartMod
             .WithMessage("Choose the installed GGUF that will apply the vector.");
 
         this.AddBodyBoundModelNameRule(static request => request.InstalledModelName);
+
+        RuleFor(static request => request.Steering!)
+            .SetValidator(new ModelLabSteeringRequestValidator())
+            .When(static request => request.Steering is not null);
     }
 }

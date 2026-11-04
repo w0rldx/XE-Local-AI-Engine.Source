@@ -73,6 +73,9 @@ const preflightBase = {
 	isGated: false,
 	checkpointHiddenSize: 1024,
 	checkpointBlockCount: 24,
+	steerableBlockCount: 24,
+	checkpointLayerTypes: Array.from({ length: 24 }, (_, block) => (block % 4 === 3 ? "full_attention" : "linear_attention")),
+	defaultSteeringLayer: 15,
 	ggufEmbeddingLength: 1024,
 	ggufBlockCount: 24,
 	licenseConfirmationText: "The base checkpoint declares the license 'apache-2.0'.",
@@ -266,6 +269,190 @@ describe("TraceExperiments", () => {
 		expect(starts[0]).toMatchObject({ baseArtifactId: artifactId, installedModelName: gguf, licenseConfirmed: true });
 	});
 
+	it("marks a steering row in the list, and only that one", async () => {
+		const row = {
+			repoId: "Qwen/Qwen3.5-0.8B",
+			revision: "rev",
+			installedModelName: gguf,
+			prompt: "hello",
+			errorMessage: null,
+			traceByteCount: null,
+			result: null,
+			status: "Succeeded",
+			createdAtUtc: "2026-11-03T00:00:00Z",
+			updatedAtUtc: "2026-11-03T00:00:00Z",
+		};
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () =>
+				HttpResponse.json({
+					...emptyList,
+					experiments: [
+						{ ...row, id: experimentId, kind: "Steering" },
+						{ ...row, id: artifactId, kind: "Trace" },
+					],
+				}),
+			),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+
+		expect(await screen.findAllByTestId("model-lab-steering-badge")).toHaveLength(1);
+	});
+
+	it("says so when the saved checkpoints could not be read, instead of hiding the picker", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ title: "Nope" }, { status: 500 })),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+
+		expect(await screen.findByTestId("model-lab-saved-failed")).toBeTruthy();
+	});
+
+	it("says so when the chosen checkpoint could not be read, instead of offering nothing", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json({ title: "Nope" }, { status: 500 })),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+
+		expect(await screen.findByTestId("model-lab-artifact-failed")).toBeTruthy();
+	});
+
+	it("starts a steering run from the edited starter set, names the layer's kind, and shows a refused layer's reason", async () => {
+		const starts: { steering: { positivePrompts: string[] } }[] = [];
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/experiments"), async ({ request }) => {
+				starts.push((await request.json()) as { steering: { positivePrompts: string[] } });
+				return HttpResponse.json(
+					{ reason: "InvalidLayer", message: "This model can be steered only at layers 1 to 23." },
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox"));
+		fireEvent.click(await screen.findByRole("radio", { name: "Steering" }));
+
+		expect((await screen.findByTestId("model-lab-steering-layer-kind")).textContent).toBe("Layer 15 of 23: full attention.");
+		fireEvent.change(screen.getByRole("textbox", { name: /Layer/ }), { target: { value: "12" } });
+		expect(screen.getByTestId("model-lab-steering-layer-kind").textContent).toBe("Layer 12 of 23: linear attention.");
+		fireEvent.change(screen.getByRole("textbox", { name: /Test prompts/ }), { target: { value: "first\n\n  second  " } });
+		fireEvent.change(screen.getByRole("textbox", { name: /Negative prompts/ }), { target: { value: "only one" } });
+		fireEvent.click(screen.getByTestId("model-lab-steering-start"));
+
+		expect((await screen.findByTestId("model-lab-start-refused")).textContent).toContain("layers 1 to 23");
+		expect(starts[0]).toMatchObject({
+			prompt: "first",
+			licenseConfirmed: true,
+			steering: { additionalTestPrompts: ["second"], negativePrompts: ["only one"], layer: 12, scale: 1 },
+		});
+		expect(starts[0]?.steering.positivePrompts).toHaveLength(8);
+	});
+
+	async function openSteeringForm(): Promise<void> {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox"));
+		fireEvent.click(await screen.findByRole("radio", { name: "Steering" }));
+		await screen.findByTestId("model-lab-steering-form");
+	}
+
+	const repeatLines = (count: number, line = "x"): string => Array.from({ length: count }, () => line).join("\n");
+
+	it.each([
+		["more than 32 prompts in a set", "Positive prompts", repeatLines(33), "1 to 32 prompts"],
+		["a prompt over 2,000 characters", "Negative prompts", "x".repeat(2001), "1 to 32 prompts"],
+		["more than 8 test prompts", "Test prompts", repeatLines(9), "1 to 8 test prompts"],
+		["a test prompt over 8,000 characters", "Test prompts", "x".repeat(8001), "1 to 8 test prompts"],
+	])("blocks the start and says why for %s", async (_case, field, value, message) => {
+		await openSteeringForm();
+
+		fireEvent.change(screen.getByRole("textbox", { name: new RegExp(field) }), { target: { value } });
+
+		expect(screen.getByTestId("model-lab-steering-problem").textContent).toContain(message);
+		expect((screen.getByTestId("model-lab-steering-start") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it.each(["0", "21", "-21"])("blocks the start and says why for scale %s", async (value) => {
+		await openSteeringForm();
+
+		fireEvent.change(screen.getByRole("textbox", { name: /Scale/ }), { target: { value } });
+
+		expect(screen.getByTestId("model-lab-steering-problem").textContent).toContain("scale");
+		expect((screen.getByTestId("model-lab-steering-start") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("takes a negative scale and shows no problem with the starter set", async () => {
+		await openSteeringForm();
+
+		fireEvent.change(screen.getByRole("textbox", { name: /Scale/ }), { target: { value: "-1" } });
+
+		expect(screen.queryByTestId("model-lab-steering-problem")).toBeNull();
+		expect((screen.getByTestId("model-lab-steering-start") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("keeps the steering edits across a switch of job kind", async () => {
+		await openSteeringForm();
+		fireEvent.change(screen.getByRole("textbox", { name: /Test prompts/ }), { target: { value: "my own prompt" } });
+		fireEvent.change(screen.getByRole("textbox", { name: /Layer/ }), { target: { value: "12" } });
+
+		fireEvent.click(screen.getByRole("radio", { name: "Trace" }));
+		await screen.findByTestId("model-lab-start");
+		fireEvent.click(screen.getByRole("radio", { name: "Steering" }));
+
+		expect((await screen.findByRole<HTMLTextAreaElement>("textbox", { name: /Test prompts/ })).value).toBe("my own prompt");
+		expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Layer/ }).value).toBe("12");
+	});
+
+	it("offers no steering start with an empty set", async () => {
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox"));
+		fireEvent.click(await screen.findByRole("radio", { name: "Steering" }));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Positive prompts/ }), { target: { value: "   " } });
+
+		expect((screen.getByTestId("model-lab-steering-start") as HTMLButtonElement).disabled).toBe(true);
+	});
+
 	it("offers the download again after it failed, and reads the row anew", async () => {
 		let status = "Failed";
 		let downloads = 0;
@@ -302,6 +489,7 @@ describe("TraceExperiments", () => {
 		const row = () => ({
 			id: experimentId,
 			status,
+			kind: "Trace",
 			repoId: "Qwen/Qwen3.5-0.8B",
 			revision: preflightBase.revision,
 			installedModelName: gguf,
@@ -346,6 +534,7 @@ describe("TraceExperiments", () => {
 						{
 							id: experimentId,
 							status: "Running",
+							kind: "Trace",
 							repoId: "Qwen/Qwen3.5-0.8B",
 							revision: preflightBase.revision,
 							installedModelName: gguf,
@@ -378,6 +567,7 @@ describe("TraceExperiments", () => {
 		const saved = {
 			id: experimentId,
 			status: "Succeeded",
+			kind: "Trace",
 			repoId: "Qwen/Qwen3.5-0.8B",
 			revision: preflightBase.revision,
 			installedModelName: gguf,

@@ -82,6 +82,9 @@ public sealed class TransientLlamaServerEvaluationArmsTests
     [Arguments("wrong-name", "exactly one")]
     [Arguments("non-zero-offset", "exactly one")]
     [Arguments("custom-alignment", "exactly one")]
+    [Arguments("all-zero", "all zero")]
+    [Arguments("has-nan", "not finite")]
+    [Arguments("has-infinity", "not finite")]
     public async Task ABadVector_IsRefusedBeforeAnythingStarts(string kind, string expectedMessage)
     {
         using var files = new ControlVectorFiles();
@@ -405,6 +408,59 @@ public sealed class TransientLlamaServerEvaluationArmsTests
             AssertEx.True(launcher.Handles.All(static handle => handle is { WasTreeKilled: true, WasDisposed: true }));
             AssertEx.Equal(expected: 0, admission.ActiveTickets);
             await (await competing!.WaitAsync(TimeSpan.FromSeconds(3)) ?? throw new InvalidOperationException("The lease was not released.")).DisposeAsync();
+        }
+    }
+
+    /// <summary>A job that holds the lease from an earlier phase: the other overload would wait on that lease forever, so the finite budget here is the deadlock check.</summary>
+    [Test]
+    public async Task Arms_UnderAHeldLease_RunWithoutWaitingOnIt_AndLeaveItHeld()
+    {
+        using var files = new ControlVectorFiles();
+        var model = files.Model(EmbeddingSize, BlockCount);
+        var (harness, supervisor, launcher) = CreateHarness();
+        await using (supervisor)
+        {
+            var held = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
+            var results = await harness.RunArmsAsync(held!,
+                [Request(model), Request(model) with { ControlVectorPath = files.Vector("direction.15", EmbeddingSize) }],
+                static (arm, _, _) => Task.FromResult(arm),
+                CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+            AssertEx.Equal("0,1", string.Join(',', results.Select(static result => result.Value)));
+            AssertEx.Equal(expected: 2, launcher.LaunchCount);
+
+            var competing = WrapLeaseAsync(supervisor);
+            await Task.Yield();
+            AssertEx.False(competing.IsCompleted, "The lease stays the caller's after the arms.");
+
+            await held!.DisposeAsync();
+            await (await competing.WaitAsync(TimeSpan.FromSeconds(10)) ?? throw new InvalidOperationException("The lease was not released.")).DisposeAsync();
+        }
+    }
+
+    [Test]
+    public async Task Arms_UnderAHeldLease_WhenAnArmFails_StillLeaveItHeld()
+    {
+        using var files = new ControlVectorFiles();
+        var model = files.Model(EmbeddingSize, BlockCount);
+        var (harness, supervisor, launcher) = CreateHarness();
+        await using (supervisor)
+        {
+            var held = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
+
+            await AssertEx.ThrowsAsync<InvalidOperationException>(() => harness.RunArmsAsync(held!,
+                [Request(model), Request(model)],
+                static (arm, _, _) => arm == 0 ? Task.FromException<bool>(new InvalidOperationException("Synthetic arm failure.")) : Task.FromResult(true),
+                CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30)));
+
+            AssertEx.Equal(expected: 1, launcher.LaunchCount);
+            AssertEx.True(launcher.Handles.Single() is { WasTreeKilled: true, WasDisposed: true });
+            var competing = WrapLeaseAsync(supervisor);
+            await Task.Yield();
+            AssertEx.False(competing.IsCompleted, "A failed arm leaves the lease with the caller, whose next phase still needs it.");
+
+            await held!.DisposeAsync();
+            await (await competing.WaitAsync(TimeSpan.FromSeconds(10)) ?? throw new InvalidOperationException("The lease was not released.")).DisposeAsync();
         }
     }
 

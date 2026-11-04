@@ -27,6 +27,7 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
         {
             Id = command.Id,
             Status = ModelLabExperimentStatus.Running,
+            Kind = command.Kind,
             RepoId = command.RepoId,
             Revision = command.Revision,
             BaseArtifactId = command.BaseArtifactId,
@@ -70,6 +71,26 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task SetProgressAsync(Guid id, ReadOnlyMemory<byte> resultJson, ModelLabBlobReference? blob, CancellationToken cancellationToken = default)
+    {
+        var row = await _dbContext.ModelLabExperiments.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (row is not { Status: ModelLabExperimentStatus.Running })
+        {
+            return;
+        }
+
+        row.ResultJson = resultJson.ToArray();
+        if (blob is not null)
+        {
+            row.TraceBlobId = blob.BlobId;
+            row.TraceSha256 = blob.Sha256;
+            row.TraceByteCount = blob.ByteCount;
+        }
+
+        row.UpdatedAtUtc = Now();
+        _ = await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task CompleteAsync(Guid id, ModelLabExperimentCompletion completion, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(completion);
@@ -81,10 +102,10 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
 
         row.Status = completion.Status;
         row.ErrorMessage = completion.ErrorMessage is { } message ? Encoding.UTF8.GetBytes(message) : null;
-        row.ResultJson = completion.ResultJson?.ToArray();
-        row.TraceBlobId = completion.TraceBlobId;
-        row.TraceSha256 = completion.TraceSha256;
-        row.TraceByteCount = completion.TraceByteCount;
+        row.ResultJson = completion.ResultJson?.ToArray() ?? row.ResultJson;
+        row.TraceBlobId = completion.TraceBlobId ?? row.TraceBlobId;
+        row.TraceSha256 = completion.TraceSha256 ?? row.TraceSha256;
+        row.TraceByteCount = completion.TraceByteCount ?? row.TraceByteCount;
         row.LaunchReceiptJson = null;
         row.UpdatedAtUtc = Now();
         _ = await _dbContext.SaveChangesAsync(cancellationToken);
@@ -167,12 +188,14 @@ public sealed class ModelLabExperimentStore : IModelLabExperimentStore
         {
             Id = row.Id,
             Status = row.Status,
+            Kind = row.Kind,
             RepoId = row.RepoId,
             Revision = row.Revision,
             BaseArtifactId = row.BaseArtifactId,
             InstalledModelName = row.InstalledModelName,
             Prompt = Encoding.UTF8.GetString(row.Prompt),
-            ResultJson = row.ResultJson,
+            // The cast decides it: a null array, or a bare null beside a memory, converts to an empty memory, and "no result" would read as one.
+            ResultJson = row.ResultJson is null ? null : (ReadOnlyMemory<byte>?)row.ResultJson,
             ErrorMessage = row.ErrorMessage is { } error ? Encoding.UTF8.GetString(error) : null,
             TraceBlobId = row.TraceBlobId,
             TraceSha256 = row.TraceSha256,
