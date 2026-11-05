@@ -209,6 +209,31 @@ public sealed class ListScheduledJobsResponse
     public required IReadOnlyList<ScheduledJobResponse> Items { get; init; }
 }
 
+/// <summary>Query for <c>GET scheduler/upcoming</c>; an omitted limit returns the handler's default count.</summary>
+public sealed class ListUpcomingScheduledJobsRequest
+{
+    public int? Limit { get; init; }
+}
+
+/// <summary>One enabled job's next automatic fire, as Quartz will run it.</summary>
+public sealed class UpcomingScheduledJobResponse
+{
+    public required Guid ScheduledJobId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required ScheduleKind ScheduleKind { get; init; }
+
+    /// <summary>The earliest future fire time across the job's triggers (unix-ms, UTC).</summary>
+    public required long NextFireTimeUtc { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET scheduler/upcoming</c>, soonest fire first.</summary>
+public sealed class ListUpcomingScheduledJobsResponse
+{
+    public required IReadOnlyList<UpcomingScheduledJobResponse> Items { get; init; }
+}
+
 /// <summary>
 ///     Query-string request for <c>GET scheduler/runs</c>. All filters are optional; omitted filters are ignored by the
 ///     service layer.

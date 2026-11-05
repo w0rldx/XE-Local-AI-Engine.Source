@@ -567,6 +567,7 @@
 		"externalAppsGroup": "External Apps",
 		"externalAppsInstalled": "Installed",
 		"graphWorkflows": "Graph Workflows",
+		"home": "Home",
 		"images": "Image Generation",
 		"integrationExecutions": "Executions",
 		"integrationKeys": "API Keys",
@@ -733,6 +734,38 @@
 			"skip": "Skip",
 			"start": "Start tour",
 			"title": "Welcome — let's get you to your first answer"
+		}
+	},
+	"operations": {
+		"ggufDownload": {
+			"failed": "{{model}} could not be downloaded",
+			"running": "Downloading {{model}}",
+			"succeeded": "{{model}} is downloaded"
+		},
+		"ggufImport": {
+			"failed": "{{model}} could not be imported",
+			"running": "Importing {{model}}",
+			"succeeded": "{{model}} is imported"
+		},
+		"indicator": {
+			"actionRequired": "Action required",
+			"runningPercent": "1 running · {{pct}}%",
+			"running_one": "{{count}} running",
+			"running_other": "{{count}} running"
+		},
+		"progress": "{{completed}} of {{total}}",
+		"progressUnknownTotal": "{{completed}} downloaded",
+		"runtime": {
+			"detectingGpu": "Detecting your graphics hardware…",
+			"downloading": "Downloading the llama.cpp runtime…",
+			"extracting": "Installing the runtime…",
+			"failed": "The local AI runtime could not be installed",
+			"failedFallback": "The llama.cpp runtime could not be downloaded. Check your internet connection and try again.",
+			"retryError": "The runtime download could not be restarted.",
+			"running": "Setting up the local AI runtime",
+			"step": "Step {{index}} of {{count}}",
+			"succeeded": "The local AI runtime is installed",
+			"verifying": "Verifying the downloaded runtime…"
 		}
 	},
 	"pages": {
@@ -5063,6 +5096,61 @@
 				"Schedule": "Schedule"
 			}
 		},
+		"home": {
+			"activity": {
+				"open": "Open",
+				"retry": "Try again",
+				"title": "Activity"
+			},
+			"recent": {
+				"empty": "No chats yet. Your conversations show up here.",
+				"loadError": "Recent chats could not be loaded.",
+				"title": "Recent chats",
+				"untitled": "Untitled chat"
+			},
+			"subtitle": "Pick up a chat and see what this node has been doing.",
+			"title": "Home",
+			"upcoming": {
+				"empty": "Nothing scheduled",
+				"loadError": "Upcoming jobs could not be loaded.",
+				"open": "Open scheduler",
+				"title": "Upcoming"
+			},
+			"usage": {
+				"empty": "No runs recorded in this window.",
+				"estimatedCost": "Est. cost",
+				"loadError": "Usage could not be loaded.",
+				"open": "Open usage",
+				"runs": "Runs",
+				"scope": "Chat and integration runs, last {{days}} days",
+				"title": "Usage",
+				"totalTokens": "Total tokens"
+			},
+			"welcome": {
+				"continue": "Continue last chat",
+				"greeting": {
+					"afternoon": "Good afternoon",
+					"evening": "Good evening",
+					"morning": "Good morning"
+				},
+				"installModel": "Install a model",
+				"loading": "Checking installed models",
+				"newChat": "New chat",
+				"noModel": "No chat model is installed yet, so this node cannot answer anything. Install one to get started.",
+				"ready": "Start a new chat or pick up where you left off.",
+				"setup": {
+					"progress": "{{model}} · {{pct}}%",
+					"title": "Setting up your first model…"
+				}
+			},
+			"whatsNew": {
+				"showLess": "Show less",
+				"showMore": "Show more",
+				"title": "What's new in {{version}}",
+				"truncated": "These notes are shortened.",
+				"updateAvailable": "Update available: {{version}}. Install it from About."
+			}
+		},
 		"images": {
 			"edit": {
 				"action": "Edit",
@@ -7425,24 +7513,6 @@
 				"title": "Related settings"
 			},
 			"llamaCpp": {
-				"acquisition": {
-					"detectingGpu": "Detecting your graphics hardware…",
-					"dismiss": "Dismiss",
-					"downloading": "Downloading the llama.cpp runtime…",
-					"eta": "about {{eta}} left",
-					"explainer": "Chat is unavailable until this finishes. You can keep using the rest of the app.",
-					"extracting": "Installing the runtime…",
-					"failedFallback": "The llama.cpp runtime could not be downloaded. Check your internet connection and try again.",
-					"failedTitle": "The local AI runtime could not be installed",
-					"progress": "{{completed}} of {{total}}",
-					"progressUnknownTotal": "{{completed}} downloaded",
-					"rate": "{{rate}}/s",
-					"retry": "Try again",
-					"retrying": "Retrying…",
-					"step": "Step {{index}} of {{count}}",
-					"title": "Setting up the local AI runtime",
-					"verifying": "Verifying the downloaded runtime…"
-				},
 				"cudaBuild": {
 					"logEmpty": "Waiting for build output…",
 					"phaseLabel": "Phase"

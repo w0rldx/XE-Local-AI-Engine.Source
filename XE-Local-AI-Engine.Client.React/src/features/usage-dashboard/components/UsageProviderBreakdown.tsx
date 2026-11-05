@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/ResponsiveTable";
 import type { ProviderTotalsDto } from "@/features/usage-dashboard/models/UsageDashboardModel";
-import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import { formatCostUsd, formatCount, formatTokensCompact } from "@/core/formatting/NumberFormatting";
 import { providerColor, providerLabel } from "@/features/usage-dashboard/models/UsageProviderPresentation";
 
 // The width the four columns need; also the table's flex basis beside the donut.

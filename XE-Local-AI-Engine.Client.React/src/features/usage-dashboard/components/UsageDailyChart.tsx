@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { UsageDailyPoint } from "@/features/usage-dashboard/models/UsageDashboardModel";
-import { formatDayLabel, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import { formatTokensCompact } from "@/core/formatting/NumberFormatting";
+import { formatDayLabel } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
 // Daily total-tokens time series. `daily` is expected pre-aggregated + ascending by day (see aggregateByDay).
 export function UsageDailyChart({ daily }: { readonly daily: readonly UsageDailyPoint[] }) {

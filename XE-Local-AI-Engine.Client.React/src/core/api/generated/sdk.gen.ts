@@ -463,6 +463,9 @@ import type {
 	GetAiAcknowledgementData,
 	GetAiAcknowledgementErrors,
 	GetAiAcknowledgementResponses,
+	GetAppReleaseNotesData,
+	GetAppReleaseNotesErrors,
+	GetAppReleaseNotesResponses,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusErrors,
 	GetAppUpdateStatusResponses,
@@ -1021,6 +1024,9 @@ import type {
 	ListTranscriptionSessionsData,
 	ListTranscriptionSessionsErrors,
 	ListTranscriptionSessionsResponses,
+	ListUpcomingScheduledJobsData,
+	ListUpcomingScheduledJobsErrors,
+	ListUpcomingScheduledJobsResponses,
 	ListUploadedImagesData,
 	ListUploadedImagesErrors,
 	ListUploadedImagesResponses,
@@ -1621,6 +1627,7 @@ import {
 	zGetAgentPlaybookMonitorResponse,
 	zGetAgentUsageSummaryResponse,
 	zGetAiAcknowledgementResponse,
+	zGetAppReleaseNotesResponse,
 	zGetAppUpdateStatusResponse,
 	zGetBaseArtifactLicenseResponse,
 	zGetBaseArtifactResponse,
@@ -1807,6 +1814,7 @@ import {
 	zListTrainingSamplesResponse,
 	zListTranscriptionModelsResponse,
 	zListTranscriptionSessionsResponse,
+	zListUpcomingScheduledJobsResponse,
 	zListUploadedImagesResponse,
 	zListWorkSessionArtifactsResponse,
 	zListWorkSessionCheckpointsResponse,
@@ -2828,6 +2836,28 @@ export const setAppUpdateChannel = <ThrowOnError extends boolean = true>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getAppReleaseNotes = <ThrowOnError extends boolean = true>(
+	options?: Options<GetAppReleaseNotesData, ThrowOnError>,
+): RequestResult<GetAppReleaseNotesResponses, GetAppReleaseNotesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetAppReleaseNotesResponses, GetAppReleaseNotesErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetAppReleaseNotesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/app-update/release-notes",
+		...options,
 	});
 
 export const getAppUpdateStatus = <ThrowOnError extends boolean = true>(
@@ -10790,6 +10820,28 @@ export const listScheduledJobTemplates = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/scheduler/templates",
+		...options,
+	});
+
+export const listUpcomingScheduledJobs = <ThrowOnError extends boolean = true>(
+	options?: Options<ListUpcomingScheduledJobsData, ThrowOnError>,
+): RequestResult<ListUpcomingScheduledJobsResponses, ListUpcomingScheduledJobsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListUpcomingScheduledJobsResponses, ListUpcomingScheduledJobsErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zListUpcomingScheduledJobsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/scheduler/upcoming",
 		...options,
 	});
 

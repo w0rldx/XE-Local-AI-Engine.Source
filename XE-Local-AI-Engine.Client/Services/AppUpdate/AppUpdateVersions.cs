@@ -42,4 +42,60 @@ internal static class AppUpdateVersions
                      .MaxBy(static asset => asset.Version)
                      ?.Version.ToString();
     }
+
+    /// <summary>How many release notes the snapshot keeps: the running version plus the newest updates.</summary>
+    internal const int MaxReleaseNotes = 3;
+
+    /// <summary>The per-version cap on notes markdown, so one huge release body cannot bloat the response.</summary>
+    internal const int MaxNotesLength = 16_000;
+
+    /// <summary>One note per version that carries packaged notes, read from the full-package entries of a feed.</summary>
+    internal static IReadOnlyList<AppReleaseNote> ReleaseNotes(IReadOnlyList<VelopackAsset> assets)
+    {
+        ArgumentNullException.ThrowIfNull(assets);
+
+        return
+        [
+            .. assets.Where(static asset => asset.Type == VelopackAssetType.Full && !string.IsNullOrWhiteSpace(asset.NotesMarkdown))
+                     .DistinctBy(static asset => asset.Version)
+                     .Select(static asset => Capped(asset.Version.ToString(), asset.NotesMarkdown))
+        ];
+    }
+
+    /// <summary>
+    ///     The running version's note first, then newer versions newest first, at most <see cref="MaxReleaseNotes" />.
+    ///     Older versions and unparseable ones are dropped; a version seen on two feeds counts once.
+    /// </summary>
+    internal static IReadOnlyList<AppReleaseNote> SelectReleaseNotes(IEnumerable<AppReleaseNote> notes, string currentVersion)
+    {
+        ArgumentNullException.ThrowIfNull(notes);
+        if (!SemanticVersion.TryParse(currentVersion, out var running))
+        {
+            return [];
+        }
+
+        var kept = notes.Where(note => VersionOf(note) is { } version && version >= running)
+                        .DistinctBy(VersionOf)
+                        .ToList();
+        var runningNote = kept.Where(note => VersionOf(note) == running);
+        var newer = kept.Where(note => VersionOf(note) > running)
+                        .OrderByDescending(VersionOf)
+                        .Select(static note => note with { IsNewerThanRunning = true });
+        return [.. runningNote.Concat(newer).Take(MaxReleaseNotes)];
+    }
+
+    private static SemanticVersion? VersionOf(AppReleaseNote note) =>
+        SemanticVersion.TryParse(note.Version, out var version) ? version : null;
+
+    private static AppReleaseNote Capped(string version, string markdown)
+    {
+        if (markdown.Length <= MaxNotesLength)
+        {
+            return new AppReleaseNote { Version = version, NotesMarkdown = markdown };
+        }
+
+        // Never cut between the two halves of a surrogate pair.
+        var length = char.IsHighSurrogate(markdown[MaxNotesLength - 1]) ? MaxNotesLength - 1 : MaxNotesLength;
+        return new AppReleaseNote { Version = version, NotesMarkdown = markdown[..length], IsTruncated = true };
+    }
 }

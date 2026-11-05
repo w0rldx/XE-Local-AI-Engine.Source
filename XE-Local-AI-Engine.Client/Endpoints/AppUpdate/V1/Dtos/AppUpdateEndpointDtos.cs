@@ -57,6 +57,35 @@ public sealed class AppUpdateStatusResponse
     public string? AvailableChannel { get; init; }
 }
 
+/// <summary>
+///     Response for <c>GET app-update/release-notes</c>: the notes the last update check read from the feed, never a
+///     new request. Empty before the first check, off a Velopack install, and when the feed carries no notes.
+/// </summary>
+public sealed class AppReleaseNotesResponse
+{
+    /// <summary>The running app version.</summary>
+    public required string CurrentVersion { get; init; }
+
+    /// <summary>The running version's notes first when the feed has them, then newer versions newest first; at most three.</summary>
+    public required IReadOnlyList<AppReleaseNoteResponse> Items { get; init; }
+}
+
+/// <summary>One published version's release notes.</summary>
+public sealed class AppReleaseNoteResponse
+{
+    /// <summary>The version these notes were packaged with.</summary>
+    public required string Version { get; init; }
+
+    /// <summary>The packaged notes as untrusted markdown; render through the sanitizing renderer only.</summary>
+    public required string NotesMarkdown { get; init; }
+
+    /// <summary>True when the notes were longer than the server's cap and were cut.</summary>
+    public required bool IsTruncated { get; init; }
+
+    /// <summary>True for a version newer than the running one, false for the running version.</summary>
+    public required bool IsNewerThanRunning { get; init; }
+}
+
 /// <summary>Request body for <c>PUT app-update/channel</c>.</summary>
 public sealed class SetAppUpdateChannelRequest
 {

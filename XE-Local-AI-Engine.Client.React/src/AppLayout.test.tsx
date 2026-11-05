@@ -2,6 +2,7 @@
 
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
 import { cleanup, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppLayout } from "@/AppLayout";
@@ -11,18 +12,26 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 // Layout's job here is the page skeleton: the landmark, the skip link and the scroll container. Its children are
 // full features that each pull in SignalR hubs, queries and stores; stubbing them keeps this a test of the
 // skeleton rather than of everything mounted inside it.
-vi.mock("@/core/layout/components/HeaderBar/HeaderBar", () => ({ HeaderBar: () => <div>header</div> }));
+vi.mock("@/core/layout/components/HeaderBar/HeaderBar", () => ({
+	HeaderBar: ({ headerIndicator }: { headerIndicator?: ReactNode }) => <div>header{headerIndicator}</div>,
+}));
+vi.mock("@/core/operations/components/ActiveOperationsIndicator", () => ({
+	ActiveOperationsIndicator: () => <div data-testid="active-operations-indicator-mount" />,
+}));
+vi.mock("@/core/operations/components/OperationToastCoordinator", () => ({
+	OperationToastCoordinator: () => <div data-testid="operation-toast-coordinator-mount" />,
+}));
 vi.mock("@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar", () => ({
 	DesktopNavigationBar: () => <nav aria-label="Main navigation" />,
 }));
 vi.mock("@/features/chat/components/ChatConnectionStatusChip", () => ({ ChatConnectionStatusChip: () => null }));
+vi.mock("@/features/onboarding/components/AiAcknowledgementGate", () => ({
+	AiAcknowledgementGate: () => <div data-testid="ai-acknowledgement-gate-mount" />,
+}));
 // The dev-only devtools mount asynchronously and throw when a test unmounts them before they finished mounting.
 vi.mock("@/core/dev-tools/components/DevelopmentUi/DevelopmentUi", () => ({ DevelopmentUi: () => null }));
 vi.mock("@/features/model-fit/components/CpuFallbackBanner", () => ({ CpuFallbackBanner: () => null }));
 vi.mock("@/features/node-settings/components/LlamaCppUpdateBanner", () => ({ LlamaCppUpdateBanner: () => null }));
-vi.mock("@/features/node-settings/components/RuntimeAcquisitionBanner", () => ({
-	RuntimeAcquisitionBanner: () => <div data-testid="runtime-acquisition-banner-mount" />,
-}));
 vi.mock("@/features/node-settings/components/PendingRestartBanner", () => ({
 	PendingRestartBanner: () => <div data-testid="pending-restart-banner-mount" />,
 }));
@@ -68,14 +77,29 @@ describe("Layout", () => {
 		expect(main.className).toContain("min-h-0");
 	});
 
-	// A chat send can start the runtime download, so the banner lives in the shell above every page, Chat included.
-	it("mounts the runtime acquisition banner above the routed page on the chat route", async () => {
+	// The runtime download starts at host boot and a chat send can start one too, so the operations signal lives in the
+	// shell's header on every page, and the toast coordinator is mounted once outside the routed page.
+	it("mounts the operations indicator in the header and one toast coordinator outside the routed page", async () => {
 		renderWithProviders(<AppLayout />, { route: "/chat" });
 
 		const main = await screen.findByRole("main");
-		const banner = screen.getByTestId("runtime-acquisition-banner-mount");
-		expect(main.contains(banner)).toBe(false);
-		expect(banner.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		const indicator = screen.getByTestId("active-operations-indicator-mount");
+		expect(main.contains(indicator)).toBe(false);
+		expect(indicator.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		const coordinators = screen.getAllByTestId("operation-toast-coordinator-mount");
+		expect(coordinators).toHaveLength(1);
+		expect(main.contains(coordinators[0] as Node)).toBe(false);
+	});
+
+	// The AI notice must open on whichever authenticated page comes first, Home included, so the shell mounts it once
+	// rather than one page doing so.
+	it.each(["/", "/models"])("mounts the AI acknowledgement gate once, outside the routed page, on %s", async (route) => {
+		renderWithProviders(<AppLayout />, { route });
+
+		const main = await screen.findByRole("main");
+		const gates = screen.getAllByTestId("ai-acknowledgement-gate-mount");
+		expect(gates).toHaveLength(1);
+		expect(main.contains(gates[0] as Node)).toBe(false);
 	});
 
 	// A restart-gated save is invisible until the node restarts, so the reminder sits in the shell on every page.

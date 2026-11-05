@@ -66,6 +66,13 @@ export function isLocalChatModel(model: LocalModelDto | undefined): model is Loc
 	return model?.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? "") && !isExternalModel(model);
 }
 
+// Whether the catalog offers anything the chat page can send to: an installed local chat model, an external
+// endpoint's chat model, or a signed-in cloud provider's entry. Home's first-run hint asks this; the chat page derives
+// the same answer from its picker lists.
+export function hasAnyChatModel(models: readonly LocalModelDto[]): boolean {
+	return models.some((model) => CLOUD_PROVIDERS.has(model.provider ?? "") || model.kind === "Chat");
+}
+
 // Strict picker filter: only chat-capable local models reach the composer's model selector.
 // Embedding and Unknown models are hidden because they have no completion head and reject the chat endpoint.
 // Cloud provider entries (CodexOAuth / AzureFoundry) are excluded here — they appear in the separate cloud

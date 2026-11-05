@@ -15,7 +15,10 @@ public sealed class AppUpdateContractTests
         ["XE-Local-AI-Engine.Client", "XE-Local-AI-Engine.Desktop", "XE-Local-AI-Engine.WindowsLauncher"];
 
     private static readonly Type[] ResponseContracts =
-        [typeof(AppUpdateStatusResponse), typeof(ApplyAppUpdateResponse), typeof(SetAppUpdateChannelRequest)];
+    [
+        typeof(AppUpdateStatusResponse), typeof(ApplyAppUpdateResponse), typeof(SetAppUpdateChannelRequest),
+        typeof(AppReleaseNotesResponse), typeof(AppReleaseNoteResponse)
+    ];
 
     [Test]
     public void PublicAppUpdateContracts_ContainNoAuthenticationFields()
@@ -46,6 +49,7 @@ public sealed class AppUpdateContractTests
         foreach (var fileName in new[]
                  {
                      "GetAppUpdateStatusEndpoint.cs",
+                     "GetAppReleaseNotesEndpoint.cs",
                      "ApplyAppUpdateEndpoint.cs",
                      "SetAppUpdateChannelEndpoint.cs"
                  })

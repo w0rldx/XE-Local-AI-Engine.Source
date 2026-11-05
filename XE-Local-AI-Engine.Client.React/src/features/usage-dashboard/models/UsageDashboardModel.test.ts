@@ -5,15 +5,9 @@ import {
 	aggregateByDay,
 	aggregateByModel,
 	clampDateRange,
-	defaultDateRange,
-	formatCostUsd,
-	formatCount,
-	formatTokensCompact,
 	isUsageEmpty,
 	isoDateToUtcMs,
 	retentionFloorMs,
-	startOfUtcDay,
-	toQueryRange,
 	utcMsToIsoDate,
 } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
@@ -115,41 +109,8 @@ describe("UsageDashboardModel aggregation", () => {
 	});
 });
 
-describe("UsageDashboardModel formatting", () => {
-	it("formatTokensCompact abbreviates large counts", () => {
-		expect(formatTokensCompact(999)).toBe("999");
-		expect(formatTokensCompact(1_500_000)).toMatch(/1\.5M/);
-	});
-
-	it("formatCount groups thousands", () => {
-		// Grouping separator is locale-dependent; assert the digits survive and a separator is present.
-		expect(formatCount(1234567)).toMatch(/1\D?234\D?567/);
-	});
-
-	it("formatCostUsd renders an em-dash for free/unpriced and a currency value otherwise", () => {
-		// Zero / non-positive = free/local/unpriced -> em-dash, not "$0.00".
-		expect(formatCostUsd(0)).toBe("—");
-		expect(formatCostUsd(-1)).toBe("—");
-		// A positive cost renders as a USD currency value (symbol + the digits, locale-formatted).
-		expect(formatCostUsd(12.5)).toMatch(/\$?12[.,]50/);
-		// A priced-but-tiny value still shows a currency value (distinct from the free em-dash).
-		expect(formatCostUsd(0.004)).toMatch(/0[.,]00/);
-	});
-});
-
 describe("UsageDashboardModel date range", () => {
 	const now = DAY_2 + 12 * 3_600_000;
-
-	it("defaultDateRange spans 30 days by default, ending today", () => {
-		const range = defaultDateRange(now);
-		expect(range.toMs).toBe(DAY_2);
-		expect(range.fromMs).toBe(DAY_2 - 29 * MS_PER_DAY);
-	});
-
-	it("defaultDateRange narrows to a shorter retention window", () => {
-		const range = defaultDateRange(now, 7);
-		expect(range.fromMs).toBe(DAY_2 - 6 * MS_PER_DAY);
-	});
 
 	it("clampDateRange keeps the range within retention and ordered", () => {
 		const floor = retentionFloorMs(now, 7);
@@ -161,14 +122,9 @@ describe("UsageDashboardModel date range", () => {
 		expect(inverted.toMs).toBeGreaterThanOrEqual(inverted.fromMs);
 	});
 
-	it("toQueryRange makes the upper bound half-open (end day + 1)", () => {
-		expect(toQueryRange({ fromMs: DAY_1, toMs: DAY_2 })).toEqual({ fromEpochMs: DAY_1, toEpochMs: DAY_2 + MS_PER_DAY });
-	});
-
 	it("iso <-> utc-ms round trip on day boundaries", () => {
 		expect(isoDateToUtcMs("2026-05-25")).toBe(DAY_2);
 		expect(utcMsToIsoDate(DAY_2)).toBe("2026-05-25");
-		expect(startOfUtcDay(now)).toBe(DAY_2);
 		expect(isoDateToUtcMs("")).toBeNull();
 	});
 });

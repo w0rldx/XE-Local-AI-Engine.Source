@@ -8,7 +8,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getAppUpdateStatusQueryKey: vi.fn(() => [{ _id: "getAppUpdateStatus" }]),
 	applyAppUpdateMutation: vi.fn(),
 	setAppUpdateChannelMutation: vi.fn(),
+	getAppReleaseNotesQueryKey: vi.fn(() => [{ _id: "getAppReleaseNotes" }]),
 }));
+
+const releaseNotesKey = [{ _id: "getAppReleaseNotes" }];
 
 vi.mock("@/core/api/generated/sdk.gen", () => ({ getAppUpdateStatus: vi.fn() }));
 
@@ -87,6 +90,21 @@ describe("useRefreshAppUpdateStatus", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(statusMock).toHaveBeenCalledWith({ query: { refresh: true } });
 		expect(queryClient.getQueryData(getAppUpdateStatusQueryKey({ query: { refresh: null } }))).toEqual(refreshedSnapshot);
+	});
+
+	it("re-reads the release notes the check rebuilt", async () => {
+		statusMock.mockReturnValue({
+			queryKey: [{ _id: "getAppUpdateStatus", query: { refresh: true } }],
+			queryFn: async () => ({ isDesktop: true, isConfigured: true, updateAvailable: false, currentVersion: "1.0.0" }),
+		} as never);
+		const { wrapper, queryClient } = makeWrapper();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		const { result } = renderHook(() => useRefreshAppUpdateStatus(), { wrapper });
+
+		result.current.mutate();
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: releaseNotesKey });
 	});
 });
 
@@ -196,6 +214,18 @@ describe("useSetAppUpdateChannel", () => {
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect(queryClient.getQueryData(key)).toBeUndefined();
+	});
+
+	it("re-reads the release notes the channel change cleared", async () => {
+		vi.mocked(setAppUpdateChannelMutation).mockReturnValue({ mutationFn: async () => ({}) } as never);
+		const { wrapper, queryClient } = makeWrapper();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		const { result } = renderHook(() => useSetAppUpdateChannel(), { wrapper });
+
+		result.current.mutate({ body: { channel: "development" } } as never);
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: releaseNotesKey });
 	});
 });
 

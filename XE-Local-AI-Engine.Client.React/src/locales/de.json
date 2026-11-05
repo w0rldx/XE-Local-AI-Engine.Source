@@ -567,6 +567,7 @@
 		"externalAppsGroup": "Externe Apps",
 		"externalAppsInstalled": "Installiert",
 		"graphWorkflows": "Graph-Workflows",
+		"home": "Start",
 		"images": "Bildgenerierung",
 		"integrationExecutions": "Ausführungen",
 		"integrationKeys": "API-Schlüssel",
@@ -733,6 +734,38 @@
 			"skip": "Überspringen",
 			"start": "Tour starten",
 			"title": "Willkommen — so kommen Sie zu Ihrer ersten Antwort"
+		}
+	},
+	"operations": {
+		"ggufDownload": {
+			"failed": "{{model}} konnte nicht heruntergeladen werden",
+			"running": "{{model}} wird heruntergeladen",
+			"succeeded": "{{model}} ist heruntergeladen"
+		},
+		"ggufImport": {
+			"failed": "{{model}} konnte nicht importiert werden",
+			"running": "{{model}} wird importiert",
+			"succeeded": "{{model}} ist importiert"
+		},
+		"indicator": {
+			"actionRequired": "Aktion erforderlich",
+			"runningPercent": "1 läuft · {{pct}} %",
+			"running_one": "{{count}} läuft",
+			"running_other": "{{count}} laufen"
+		},
+		"progress": "{{completed}} von {{total}}",
+		"progressUnknownTotal": "{{completed}} heruntergeladen",
+		"runtime": {
+			"detectingGpu": "Grafikhardware wird erkannt…",
+			"downloading": "llama.cpp-Laufzeit wird heruntergeladen…",
+			"extracting": "Laufzeit wird installiert…",
+			"failed": "Die lokale KI-Laufzeit konnte nicht installiert werden",
+			"failedFallback": "Die llama.cpp-Laufzeit konnte nicht heruntergeladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+			"retryError": "Der Download der Laufzeit konnte nicht neu gestartet werden.",
+			"running": "Lokale KI-Laufzeit wird eingerichtet",
+			"step": "Schritt {{index}} von {{count}}",
+			"succeeded": "Die lokale KI-Laufzeit ist installiert",
+			"verifying": "Heruntergeladene Laufzeit wird überprüft…"
 		}
 	},
 	"pages": {
@@ -5063,6 +5096,61 @@
 				"Schedule": "Zeitplan"
 			}
 		},
+		"home": {
+			"activity": {
+				"open": "Öffnen",
+				"retry": "Erneut versuchen",
+				"title": "Aktivität"
+			},
+			"recent": {
+				"empty": "Noch keine Chats. Ihre Unterhaltungen erscheinen hier.",
+				"loadError": "Die letzten Chats konnten nicht geladen werden.",
+				"title": "Letzte Chats",
+				"untitled": "Chat ohne Titel"
+			},
+			"subtitle": "Setzen Sie einen Chat fort und sehen Sie, was dieser Knoten zuletzt getan hat.",
+			"title": "Start",
+			"upcoming": {
+				"empty": "Nichts geplant",
+				"loadError": "Anstehende Ausführungen konnten nicht geladen werden.",
+				"open": "Planer öffnen",
+				"title": "Anstehend"
+			},
+			"usage": {
+				"empty": "In diesem Zeitraum wurden keine Läufe erfasst.",
+				"estimatedCost": "Geschätzte Kosten",
+				"loadError": "Die Nutzung konnte nicht geladen werden.",
+				"open": "Nutzung öffnen",
+				"runs": "Läufe",
+				"scope": "Chat- und Integrationsläufe der letzten {{days}} Tage",
+				"title": "Nutzung",
+				"totalTokens": "Tokens gesamt"
+			},
+			"welcome": {
+				"continue": "Letzten Chat fortsetzen",
+				"greeting": {
+					"afternoon": "Guten Tag",
+					"evening": "Guten Abend",
+					"morning": "Guten Morgen"
+				},
+				"installModel": "Modell installieren",
+				"loading": "Installierte Modelle werden geprüft",
+				"newChat": "Neuer Chat",
+				"noModel": "Es ist noch kein Chat-Modell installiert, daher kann dieser Knoten noch nichts beantworten. Installieren Sie eines, um zu beginnen.",
+				"ready": "Starten Sie einen neuen Chat oder machen Sie dort weiter, wo Sie aufgehört haben.",
+				"setup": {
+					"progress": "{{model}} · {{pct}}%",
+					"title": "Ihr erstes Modell wird eingerichtet…"
+				}
+			},
+			"whatsNew": {
+				"showLess": "Weniger anzeigen",
+				"showMore": "Mehr anzeigen",
+				"title": "Neu in {{version}}",
+				"truncated": "Diese Hinweise sind gekürzt.",
+				"updateAvailable": "Update verfügbar: {{version}}. Installieren Sie es über „Über“."
+			}
+		},
 		"images": {
 			"edit": {
 				"action": "Bearbeiten",
@@ -7425,24 +7513,6 @@
 				"title": "Verwandte Einstellungen"
 			},
 			"llamaCpp": {
-				"acquisition": {
-					"detectingGpu": "Grafikhardware wird erkannt…",
-					"dismiss": "Schließen",
-					"downloading": "llama.cpp-Laufzeit wird heruntergeladen…",
-					"eta": "noch etwa {{eta}}",
-					"explainer": "Der Chat ist erst nach Abschluss verfügbar. Die übrige App können Sie weiter nutzen.",
-					"extracting": "Laufzeit wird installiert…",
-					"failedFallback": "Die llama.cpp-Laufzeit konnte nicht heruntergeladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
-					"failedTitle": "Die lokale KI-Laufzeit konnte nicht installiert werden",
-					"progress": "{{completed}} von {{total}}",
-					"progressUnknownTotal": "{{completed}} heruntergeladen",
-					"rate": "{{rate}}/s",
-					"retry": "Erneut versuchen",
-					"retrying": "Wird wiederholt…",
-					"step": "Schritt {{index}} von {{count}}",
-					"title": "Lokale KI-Laufzeit wird eingerichtet",
-					"verifying": "Heruntergeladene Laufzeit wird überprüft…"
-				},
 				"cudaBuild": {
 					"logEmpty": "Warten auf Build-Ausgabe…",
 					"phaseLabel": "Phase"

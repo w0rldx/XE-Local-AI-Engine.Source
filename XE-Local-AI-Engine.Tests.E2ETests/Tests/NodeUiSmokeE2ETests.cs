@@ -43,14 +43,22 @@ public sealed class NodeUiSmokeE2ETests : XEPooledE2ETestBase
 
     [Test]
     [Category("Smoke")]
-    public async Task Root_Route_Lands_On_Chat()
+    public async Task Root_Route_Renders_Home()
     {
         await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
-        // Root "/" is the _layout index route, which redirects to Chat, the landing page.
-        await Expect(Page).ToHaveURLAsync($"{NodeAppUrl}/chat");
+        // Root "/" is the _layout index route rendering Home, the landing page; it no longer redirects.
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Home",
+                Level = 1
+            }))
+            .ToBeVisibleAsync();
+        await Expect(Page.GetByTestId("home-welcome")).ToBeVisibleAsync();
+        await Expect(Page.GetByTestId("home-new-chat")).ToBeVisibleAsync();
+        await Expect(Page).ToHaveURLAsync($"{NodeAppUrl}/");
     }
 }

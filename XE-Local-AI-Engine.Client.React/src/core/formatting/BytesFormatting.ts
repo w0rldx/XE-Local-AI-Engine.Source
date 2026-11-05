@@ -13,7 +13,7 @@ export function formatBytesAsGb(bytes: number | null): string {
 
 /**
  * Formats a byte count into a compact, locale-neutral size (e.g. "324 MB", "1.2 GB"). Shared by every byte-progress
- * surface — the GGUF download panel, the llama.cpp runtime-acquisition banner, the image model manager and the
+ * surface — the GGUF download panel, the operations feed, the image model manager and the
  * whisper model catalog — so they never drift into disagreeing about how a transfer's size reads. Deliberately NOT
  * {@link formatBytesAsGb}, which is GB-only and would render a 78 MB whisper weight as "0.1 GB".
  */

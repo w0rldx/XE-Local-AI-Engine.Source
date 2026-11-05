@@ -5,7 +5,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RuntimeAcquisitionStatus } from "@/features/node-settings/queries/useLocalRuntime";
+import type { RuntimeAcquisitionStatus } from "@/core/runtime-acquisition/queries/useRuntimeAcquisitionStatus";
 
 const { acquisitionQueryKey, hubMock, hydrateMock } = vi.hoisted(() => ({
 	acquisitionQueryKey: [{ _id: "getRuntimeAcquisitionStatus" }] as const,
@@ -45,7 +45,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	}),
 }));
 
-import { useRuntimeAcquisitionHub } from "@/features/node-settings/hooks/useRuntimeAcquisitionHub";
+import { useRuntimeAcquisitionHub } from "@/core/runtime-acquisition/hooks/useRuntimeAcquisitionHub";
 
 function status(overrides: Partial<RuntimeAcquisitionStatus> & { sequence: number; phase: string }): RuntimeAcquisitionStatus {
 	return { variant: "cpu", tag: "b9692", completedBytes: null, totalBytes: null, stepIndex: 1, stepCount: 1, ...overrides };
@@ -94,7 +94,7 @@ describe("useRuntimeAcquisitionHub", () => {
 		hydrateMock.queryFn.mockReturnValue(new Promise(() => undefined));
 	});
 
-	it("hydrates on mount so a client that joined mid-acquisition still sees the banner", async () => {
+	it("hydrates on mount so a client that joined mid-acquisition still sees the operation", async () => {
 		const hydrate = deferredHydrate();
 		const { result } = renderHub();
 
@@ -121,7 +121,7 @@ describe("useRuntimeAcquisitionHub", () => {
 
 	it("keeps a terminal push when a stale hydrate response lands after it", async () => {
 		// The failure mode the sequence guard exists for: the GET was issued before the acquisition failed, so it carries
-		// an older sequence, yet it *arrives* after the terminal push. Taking the later arrival would put the banner back
+		// an older sequence, yet it *arrives* after the terminal push. Taking the later arrival would put the operation back
 		// into a download that has already ended, with nothing left to ever end it.
 		const hydrate = deferredHydrate();
 		const { queryClient, result } = renderHub();

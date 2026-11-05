@@ -8,16 +8,16 @@ import {
 	keepLatestAcquisitionStatus,
 	type RuntimeAcquisitionStatus,
 	useRuntimeAcquisitionStatus,
-} from "@/features/node-settings/queries/useLocalRuntime";
+} from "@/core/runtime-acquisition/queries/useRuntimeAcquisitionStatus";
 
-// Live view of the host's llama.cpp runtime acquisition (GPU probe → download → verify → extract), for the global
-// first-run banner. Unlike the other local hubs this one does NOT keep its own React state: it hydrates from the
-// read endpoint on mount and reconciles hub pushes into that SAME query cache entry, because hydrate and push are two
-// views of one server-side status and the banner must render exactly one of them.
+// Live view of the host's llama.cpp runtime acquisition (GPU probe → download → verify → extract), one of the
+// sources of the app-wide active operations. Unlike the other local hubs this one does NOT keep its own React state:
+// it hydrates from the read endpoint on mount and reconciles hub pushes into that SAME query cache entry, because
+// hydrate and push are two views of one server-side status and every consumer must render exactly one of them.
 //
 // The late-join case is the whole point of the hydrate leg: acquisition starts within seconds of host boot, usually
 // before the client has authenticated and opened this connection, so a push-only subscription would miss the entire
-// download on precisely the slow first run the banner exists to explain.
+// download on precisely the slow first run the operation indicator exists to explain.
 //
 // Connection lifetime copies the race-safe pattern from the other local hubs (source-build): a shared
 // refcounted connection, a per-mount handler so this subscriber coexists with any other, and a deferred release so a

@@ -602,6 +602,18 @@ export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeR
 	name: string;
 };
 
+export type XeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNoteResponse = {
+	version: string;
+	notesMarkdown: string;
+	isTruncated: boolean;
+	isNewerThanRunning: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNotesResponse = {
+	currentVersion: string;
+	items: Array<XeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNoteResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateBusyItemResponse = {
 	kind: string;
 	displayName?: string | null;
@@ -5735,6 +5747,14 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsResponse =
 	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse>;
 };
 
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsSchedulerV1UpcomingScheduledJobResponse>;
+};
+
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind = "Cron" | "OneShot" | "SimpleInterval" | "Manual";
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobActionRequest = {
@@ -5823,6 +5843,13 @@ export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus =
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger = "Schedule" | "Manual" | "Agent" | "System";
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy = "Smart" | "SkipMissed" | "FireOnceNow";
+
+export type XeLocalAiEngineClientEndpointsSchedulerV1UpcomingScheduledJobResponse = {
+	scheduledJobId: string;
+	displayName: string;
+	scheduleKind: XeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind;
+	nextFireTimeUtc: number;
+};
 
 export type XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest = {
 	templateId: string;
@@ -8740,6 +8767,33 @@ export type SetAppUpdateChannelResponses = {
 };
 
 export type SetAppUpdateChannelResponse = SetAppUpdateChannelResponses[keyof SetAppUpdateChannelResponses];
+
+export type GetAppReleaseNotesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/app-update/release-notes";
+};
+
+export type GetAppReleaseNotesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAppReleaseNotesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNotesResponse;
+};
+
+export type GetAppReleaseNotesResponse = GetAppReleaseNotesResponses[keyof GetAppReleaseNotesResponses];
 
 export type GetAppUpdateStatusData = {
 	body?: never;
@@ -19885,6 +19939,41 @@ export type ListScheduledJobTemplatesResponses = {
 };
 
 export type ListScheduledJobTemplatesResponse = ListScheduledJobTemplatesResponses[keyof ListScheduledJobTemplatesResponses];
+
+export type ListUpcomingScheduledJobsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		limit?: number | null;
+	};
+	url: "/api/local/v1/scheduler/upcoming";
+};
+
+export type ListUpcomingScheduledJobsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListUpcomingScheduledJobsError = ListUpcomingScheduledJobsErrors[keyof ListUpcomingScheduledJobsErrors];
+
+export type ListUpcomingScheduledJobsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsResponse;
+};
+
+export type ListUpcomingScheduledJobsResponse = ListUpcomingScheduledJobsResponses[keyof ListUpcomingScheduledJobsResponses];
 
 export type ListSkillsData = {
 	body?: never;

@@ -37,7 +37,8 @@ public sealed class SchedulerFeatureGateTests
                  {
                      $"{ApiPrefix}/scheduler/jobs",
                      $"{ApiPrefix}/scheduler/templates",
-                     $"{ApiPrefix}/scheduler/runs"
+                     $"{ApiPrefix}/scheduler/runs",
+                     $"{ApiPrefix}/scheduler/upcoming"
                  })
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, route);

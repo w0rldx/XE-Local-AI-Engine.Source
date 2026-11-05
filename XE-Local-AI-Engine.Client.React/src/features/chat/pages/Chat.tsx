@@ -209,6 +209,15 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 			createConversationMutate();
 		}
 	}, [isCreatingConversation, createConversationMutate]);
+	// Home's "New chat" arrives through the same hand-off store and runs this page's own create path, so the new thread
+	// gets the same title, cleared agent and cleared web choice as the sidebar button. Consumed under scope without
+	// acting, like the pending id above.
+	const consumeNewConversationRequest = usePendingChatConversationStore((state) => state.actions.consumeNewConversationRequest);
+	useEffect(() => {
+		if (consumeNewConversationRequest() && !isScoped) {
+			createConversationMutate();
+		}
+	}, [consumeNewConversationRequest, createConversationMutate, isScoped]);
 
 	const { cacheConversationDetail, cacheConversation, resolveSendConversation, refreshConversation } = useChatConversationCache({
 		conversationListQueryKey,

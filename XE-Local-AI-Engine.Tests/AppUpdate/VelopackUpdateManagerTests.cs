@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Security.Authentication;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Velopack;
 using Velopack.Exceptions;
@@ -98,11 +99,38 @@ public sealed class VelopackUpdateManagerTests
         return $"https://github.com/example/public-repo/releases/download/v{version}/releases.win.json";
     }
 
-    private static string FeedJson(string version)
+    private static string FeedJson(string version, string? notesMarkdown = null)
     {
+        var notes = notesMarkdown is null ? "" : ",\"NotesMarkdown\":" + JsonSerializer.Serialize(notesMarkdown);
         return "{\"Assets\":[{\"PackageId\":\"XE-Local-AI-Engine\",\"Version\":\"" + version
                                                                                    + "\",\"Type\":\"Full\",\"FileName\":\"XE-Local-AI-Engine-" + version
-                                                                                   + "-full.nupkg\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":1}]}";
+                                                                                   + "-full.nupkg\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":1" + notes + "}]}";
+    }
+
+    [Test]
+    public async Task CheckForUpdate_CarriesTheReleaseNotesTheFeedItReadPackaged()
+    {
+        // The notes ride in each release's releases.<channel>.json, which Velopack's own feed read already downloads,
+        // so they arrive with the check and need no request of their own.
+        var downloader = new FakeVelopackFileDownloader(new Dictionary<string, string>
+        {
+            ["https://api.github.com/repos/example/public-repo/releases?per_page=100&page=1"] =
+                ReleasesJson("2.0.0", "1.0.0"),
+            [FeedUrl("2.0.0")] = FeedJson("2.0.0", "## 2.0.0\n- New"),
+            [FeedUrl("1.0.0")] = FeedJson("1.0.0")
+        });
+        var source = PaginatingGithubSource.WithDownloader("https://github.com/example/public-repo", prerelease: false, "win", downloader);
+        await source.GetReleaseFeed(NullVelopackLogger.Instance, appId: "XE-Local-AI-Engine", "win");
+        var manager = new VelopackUpdateManager(new PortableTestUpdateManager(updateInfo: new UpdateInfo(Asset("2.0.0"), false, null, [])), source);
+        var requestsBeforeCheck = downloader.StringRequests.Count + downloader.ByteRequests.Count;
+
+        var result = await manager.CheckForUpdateAsync(CancellationToken.None);
+
+        // The 1.0.0 feed carries no notes, so it contributes none.
+        AssertEx.Equal(1, result.ReleaseNotes.Count);
+        AssertEx.Equal("2.0.0", result.ReleaseNotes[0].Version);
+        AssertEx.Equal("## 2.0.0\n- New", result.ReleaseNotes[0].NotesMarkdown);
+        AssertEx.Equal(requestsBeforeCheck, downloader.StringRequests.Count + downloader.ByteRequests.Count);
     }
 
     private static string ReleasesJson(params string[] versions)

@@ -2041,6 +2041,40 @@
         ]
       }
     },
+    "/api/local/v1/app-update/release-notes": {
+      "get": {
+        "tags": [
+          "App-Update"
+        ],
+        "operationId": "getAppReleaseNotes",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1AppReleaseNotesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/app-update/status": {
       "get": {
         "tags": [
@@ -20864,6 +20898,61 @@
         ]
       }
     },
+    "/api/local/v1/scheduler/upcoming": {
+      "get": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "listUpcomingScheduledJobs",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/skills": {
       "get": {
         "tags": [
@@ -29076,6 +29165,49 @@
         "properties": {
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAppUpdateV1AppReleaseNoteResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "notesMarkdown",
+          "isTruncated",
+          "isNewerThanRunning"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "notesMarkdown": {
+            "type": "string"
+          },
+          "isTruncated": {
+            "type": "boolean"
+          },
+          "isNewerThanRunning": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAppUpdateV1AppReleaseNotesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "currentVersion",
+          "items"
+        ],
+        "properties": {
+          "currentVersion": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1AppReleaseNoteResponse"
+            }
           }
         }
       },
@@ -48107,6 +48239,25 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1UpcomingScheduledJobResponse"
+            }
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduleKind": {
         "type": "string",
         "description": "",
@@ -48433,6 +48584,31 @@
           "SkipMissed",
           "FireOnceNow"
         ]
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1UpcomingScheduledJobResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scheduledJobId",
+          "displayName",
+          "scheduleKind",
+          "nextFireTimeUtc"
+        ],
+        "properties": {
+          "scheduledJobId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "scheduleKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduleKind"
+          },
+          "nextFireTimeUtc": {
+            "type": "integer"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsSchedulerV1UpdateScheduledJobRequest": {
         "type": "object",

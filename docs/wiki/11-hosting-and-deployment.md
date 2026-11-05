@@ -661,6 +661,12 @@ default channel agree before it packs (`Verify packaged update release track` in
 and must not be replaced with placeholders. The manual packagers are deprecated, reference-only, and not release
 alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release-install-guide.md).
 
+**Release notes in the app.** `vpk pack --releaseNotes` embeds `RELEASE_NOTES.md` into every entry of the release's
+`releases.<channel>.json`, and Velopack's feed read already downloads that file, so the check keeps the notes it saw
+(`AppUpdateVersions.ReleaseNotes`) and `GET app-update/release-notes` serves them with no request of its own. The
+feed holds only the newest few releases per index (`PaginatingGithubSource.MaxReleasesPerIndex`), so a node several
+builds behind sees the newer versions' notes but not its own. The repo-root `CHANGELOG.md` is never shipped or read.
+
 ---
 
 ## 7. Installers & uninstaller

@@ -12,24 +12,27 @@ import {
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import {
+	DEFAULT_RANGE_DAYS,
+	defaultDateRange,
+	startOfUtcDay,
+	toQueryRange,
+	type UsageDateRange,
+} from "@/core/usage/UsageDateRange";
 import { UsageDailyChart } from "@/features/usage-dashboard/components/UsageDailyChart";
 import { UsageDateRangeControl } from "@/features/usage-dashboard/components/UsageDateRangeControl";
 import { UsageModelTable } from "@/features/usage-dashboard/components/UsageModelTable";
 import { UsageProviderBreakdown } from "@/features/usage-dashboard/components/UsageProviderBreakdown";
 import { UsageTotalsCards } from "@/features/usage-dashboard/components/UsageTotalsCards";
-import type { UsageDateRange } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import {
 	aggregateByDay,
 	aggregateByModel,
 	clampDateRange,
-	defaultDateRange,
 	isUsageEmpty,
 	retentionFloorMs,
-	startOfUtcDay,
-	toQueryRange,
 } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
-const FALLBACK_RETENTION_DAYS = 30;
+const FALLBACK_RETENTION_DAYS = DEFAULT_RANGE_DAYS;
 
 // Skeleton stand-in shown while the first summary loads, so the page keeps its shape instead of collapsing.
 function UsageSkeleton() {

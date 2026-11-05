@@ -76,6 +76,8 @@ const sampleBody = {
 const jobsKey = schedulerInvalidationKey(schedulerQueryIds.listJobs);
 const runsKey = schedulerInvalidationKey(schedulerQueryIds.listRuns);
 const runKey = schedulerInvalidationKey(schedulerQueryIds.getRun);
+// Home's upcoming card reads this endpoint; a job edit can move a next fire.
+const upcomingKey = schedulerInvalidationKey(schedulerQueryIds.listUpcoming);
 
 const invalidatedKeys: unknown[] = [];
 
@@ -115,6 +117,7 @@ describe("useScheduler mutations", () => {
 		// TanStack v5 passes (variables, context) — assert the first arg.
 		expect(mutationFns.createScheduledJob.mock.calls[0]?.[0]).toEqual({ body: sampleBody });
 		expect(invalidatedKeys).toContainEqual(jobsKey);
+		expect(invalidatedKeys).toContainEqual(upcomingKey);
 	});
 
 	it("update forwards path + body and invalidates the jobs list", async () => {

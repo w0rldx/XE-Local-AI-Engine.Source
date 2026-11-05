@@ -1,11 +1,9 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
-import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { Home } from "@/features/home/pages/Home";
 
+// Home is the landing page. Every "go home" target (capability gates, setup pages, the error fallback, the post-login
+// default) points at `/`, so all of them land here.
 export const Route = createFileRoute("/_layout/")({
-	// Chat is the landing page. `/` stays a route because every "go home" target (capability gates, setup pages, the
-	// error fallback, the post-login default) points here; it carries no page of its own.
-	beforeLoad: () => {
-		throw redirect({ to: nodeRoutePaths.chat });
-	},
+	component: Home,
 });

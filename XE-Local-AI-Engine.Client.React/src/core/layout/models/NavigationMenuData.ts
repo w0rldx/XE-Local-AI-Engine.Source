@@ -6,6 +6,7 @@ import {
 	IconCpu,
 	IconDatabase,
 	IconFlask,
+	IconHome,
 	IconListDetails,
 	IconMessageCircle,
 	IconMicrophone,
@@ -88,6 +89,7 @@ export interface INavigationLink {
 // Exported for the classification guard in NavigationMenuData.test.ts, which has to see EVERY leaf — including the
 // ones the capability filter below removes from the default build — to prove none of them is missing its `simple` flag.
 export const allNavigationLinks: INavigationLink[] = [
+	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home, simple: true },
 	{
 		id: "chat",
 		icon: IconMessageCircle,
@@ -339,10 +341,15 @@ export const allNavigationLinks: INavigationLink[] = [
 export const navLinkActiveOptions = { exact: true } as const;
 
 // A nav target is active when the current path equals it, or is a sub-path of it (so /models/123 still
-// highlights the Models → Installed entry). Shared by both nav bars so the active-route rule stays in one place.
+// highlights the Models → Installed entry). The home route ("/") only matches exactly: every path is under it. Shared
+// by both nav bars so the active-route rule stays in one place.
 export function matchesNavRoute(pathname: string, to: string | undefined): boolean {
 	if (!to) {
 		return false;
+	}
+
+	if (to === nodeRoutePaths.home) {
+		return pathname === nodeRoutePaths.home;
 	}
 
 	if (pathname === to) {

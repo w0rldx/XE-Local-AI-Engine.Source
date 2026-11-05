@@ -560,6 +560,18 @@ export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProb
 	name: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNoteResponse = z.object({
+	version: z.string(),
+	notesMarkdown: z.string(),
+	isTruncated: z.boolean(),
+	isNewerThanRunning: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNotesResponse = z.object({
+	currentVersion: z.string(),
+	items: z.array(zXeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNoteResponse),
+});
+
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateBusyItemResponse = z.object({
 	kind: z.string(),
 	displayName: z.string().nullish(),
@@ -5381,6 +5393,8 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsReque
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind = z.enum(["Cron", "OneShot", "SimpleInterval", "Manual"]);
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobActionRequest = z.record(z.string(), z.never());
@@ -5512,6 +5526,17 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateRespo
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1UpcomingScheduledJobResponse = z.object({
+	scheduledJobId: z.guid(),
+	displayName: z.string(),
+	scheduleKind: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind,
+	nextFireTimeUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsSchedulerV1UpcomingScheduledJobResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest = z.object({
@@ -10477,6 +10502,11 @@ export const zSetAppUpdateChannelBody = zXeLocalAiEngineClientEndpointsAppUpdate
  */
 export const zSetAppUpdateChannelResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
 
+/**
+ * Success
+ */
+export const zGetAppReleaseNotesResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppReleaseNotesResponse;
+
 export const zGetAppUpdateStatusQuery = z.object({
 	refresh: z.boolean().nullish(),
 });
@@ -13452,6 +13482,19 @@ export const zCancelScheduledJobRunResponse = zXeLocalAiEngineClientEndpointsSch
  * Success
  */
 export const zListScheduledJobTemplatesResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse;
+
+export const zListUpcomingScheduledJobsQuery = z.object({
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListUpcomingScheduledJobsResponse = zXeLocalAiEngineClientEndpointsSchedulerV1ListUpcomingScheduledJobsResponse;
 
 /**
  * Success

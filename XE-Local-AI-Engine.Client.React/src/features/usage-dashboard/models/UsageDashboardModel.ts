@@ -1,4 +1,5 @@
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { MS_PER_DAY, startOfUtcDay, type UsageDateRange } from "@/core/usage/UsageDateRange";
 
 import type {
 	XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse as ProviderTotalsDto,
@@ -44,31 +45,6 @@ export interface UsageModelRow {
 // run predates the provider dimension or its provider could not be resolved.
 const KNOWN_PROVIDERS = ["local", "ollama", "codex", "azure", "unknown"] as const;
 export type KnownProvider = (typeof KNOWN_PROVIDERS)[number];
-
-const MS_PER_DAY = 86_400_000;
-
-// Compact token formatter (e.g. 1234 → "1.2K", 1_500_000 → "1.5M"). Large token counts dominate this dashboard, so
-// the default display is compact; the full value is available via {@link formatCount} for tooltips/aria.
-const compactNumberFormat = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
-// Grouped full-precision formatter (thousands separators) for exact counts (run counts, tooltip values).
-const fullNumberFormat = new Intl.NumberFormat();
-// USD currency formatter for the estimated-cost figures (server rates are USD per the wire `currency` field).
-const usdCurrencyFormat = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
-
-export function formatTokensCompact(value: number): string {
-	return compactNumberFormat.format(value);
-}
-
-export function formatCount(value: number): string {
-	return fullNumberFormat.format(value);
-}
-
-// Formats a server-computed estimated cost (USD) for display. A zero (or non-positive / non-finite) cost means the
-// usage was free/local/unpriced and renders as an em-dash rather than "$0.00", so a genuinely-free row reads as free
-// while a priced-but-tiny row still shows a currency value. Never recomputes cost — it only formats the wire value.
-export function formatCostUsd(value: number): string {
-	return value > 0 ? usdCurrencyFormat.format(value) : "—";
-}
 
 // True when the summary carries no recorded usage — drives the empty-state guidance card. Checks the grand total
 // run count (the authoritative "nothing happened" signal) rather than the items array, so a range with buckets but
@@ -161,14 +137,8 @@ export function formatDayLabel(dayStartUtcMs: number): string {
 	return formatTimestamp(dayStartUtcMs, { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-// Date controls use whole UTC days and the backend's half-open [from, to) range.
-
-const DEFAULT_RANGE_DAYS = 30;
-
-// Start-of-UTC-day (00:00:00.000Z) for the given instant.
-export function startOfUtcDay(epochMs: number): number {
-	return Math.floor(epochMs / MS_PER_DAY) * MS_PER_DAY;
-}
+// Date controls use whole UTC days and the backend's half-open [from, to) range; the default window and the query
+// translation live in core/usage/UsageDateRange.ts, shared with the Home usage card.
 
 // Converts a YYYY-MM-DD value (from a native date input, interpreted as a UTC calendar day) to its start-of-day
 // unix-ms. Returns null for an empty/invalid value.
@@ -185,26 +155,6 @@ export function utcMsToIsoDate(epochMs: number): string {
 	return new Date(startOfUtcDay(epochMs)).toISOString().slice(0, 10);
 }
 
-export interface UsageDateRange {
-	// Inclusive first UTC day (start-of-day unix-ms) — sent as fromEpochMs.
-	readonly fromMs: number;
-	// Inclusive last UTC day the user selected (start-of-day unix-ms). Sent as toEpochMs after adding one day so the
-	// backend's half-open [from, to) range covers the whole selected end day.
-	readonly toMs: number;
-}
-
-// Default range: the last `min(DEFAULT_RANGE_DAYS, retentionDays)` whole UTC days ending today (inclusive). When
-// retention is unknown (first render, before the summary loads) it falls back to DEFAULT_RANGE_DAYS. `nowMs` is a
-// parameter so the pure function stays testable.
-export function defaultDateRange(nowMs: number, retentionDays?: number): UsageDateRange {
-	const spanDays = Math.max(1, Math.min(DEFAULT_RANGE_DAYS, retentionDays ?? DEFAULT_RANGE_DAYS));
-	const todayStart = startOfUtcDay(nowMs);
-	return {
-		fromMs: todayStart - (spanDays - 1) * MS_PER_DAY,
-		toMs: todayStart,
-	};
-}
-
 // The earliest selectable UTC day given the retention window (start-of-day unix-ms), used as the date input `min`.
 export function retentionFloorMs(nowMs: number, retentionDays: number): number {
 	const days = Math.max(1, retentionDays);
@@ -219,10 +169,4 @@ export function clampDateRange(range: UsageDateRange, nowMs: number, retentionDa
 	const fromMs = Math.min(Math.max(range.fromMs, floor), todayStart);
 	const toMs = Math.min(Math.max(range.toMs, fromMs), todayStart);
 	return { fromMs, toMs };
-}
-
-// Translates the inclusive UTC-day range into the query params the backend expects: fromEpochMs is the from-day
-// start; toEpochMs is the day AFTER the selected end day (half-open upper bound).
-export function toQueryRange(range: UsageDateRange): { fromEpochMs: number; toEpochMs: number } {
-	return { fromEpochMs: range.fromMs, toEpochMs: range.toMs + MS_PER_DAY };
 }

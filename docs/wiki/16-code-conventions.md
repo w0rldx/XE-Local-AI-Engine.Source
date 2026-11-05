@@ -766,7 +766,7 @@ viewport, so a grid that adds columns at `md` usually wants `lg`.
 Three mechanisms cover the app; copy the one that matches what has to change:
 
 - **`SimpleGrid cols={{ base, sm, lg }}`** when a card or list grid only needs to reflow. Reference:
-  `features/dashboard/pages/Dashboard.tsx`.
+  `features/home/pages/Home.tsx`.
 - **`useWindowDimensions` compared against a named `LayoutBreakpoints` constant** when the layout swaps a
   whole subtree (a pane becomes a Drawer) and the VIEWPORT really is the space in question. Reference:
   `core/layout/components/Layout/Layout.tsx`. Mantine's `visibleFrom`/`hiddenFrom` is used in one file

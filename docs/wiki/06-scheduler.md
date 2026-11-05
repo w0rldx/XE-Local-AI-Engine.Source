@@ -322,9 +322,12 @@ All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Sch
 | `jobs/{scheduledJobId}` (GET / PUT / DELETE) | `GetScheduledJobEndpoint` / `UpdateScheduledJobEndpoint` / `DeleteScheduledJobEndpoint` |
 | `jobs/{scheduledJobId}/enable` · `/disable` | `EnableScheduledJobEndpoint` / `DisableScheduledJobEndpoint` |
 | `jobs/{scheduledJobId}/trigger` | `TriggerScheduledJobEndpoint` |
+| `upcoming` (GET, `?limit=` 1–20, default 5) | `ListUpcomingScheduledJobsEndpoint` |
 | `runs` (GET, query-filtered) | `ListScheduledJobRunsEndpoint` |
 | `runs/{runId}` (GET) | `GetScheduledJobRunEndpoint` |
 | `runs/{runId}/cancel` | `CancelScheduledJobRunEndpoint` |
+
+`upcoming` is the only read that asks Quartz rather than the store: `IScheduledJobManagementService.ListUpcomingAsync` takes, for each enabled live definition, the earliest future `NextFireTimeUtc` across the triggers of its Quartz job, sorts soonest first and returns the definition's id, display name and schedule kind with that time (unix-ms). A Manual job has no trigger, a disabled or deleted one no Quartz job, and a Quartz job whose definition is no longer enabled is skipped, so none of them is listed; neither is a trigger whose next fire is already past.
 
 These endpoints are local/loopback, operator-authenticated, and strict on Host/Origin like the rest of the local admin surface ([Security & Privacy](12-security-and-privacy.md)). The OpenAPI document generated from them is the single source for the React REST clients (hey-api) — see [React Client](10-react-client.md).
 

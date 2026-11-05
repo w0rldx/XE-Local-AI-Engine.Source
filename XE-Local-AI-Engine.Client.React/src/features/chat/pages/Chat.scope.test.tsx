@@ -162,7 +162,7 @@ describe("Chat scope seam", () => {
 		adapter.resumeConversation.mockImplementation(() => emptyResumeStream());
 		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("chat-1");
 		useNodeChatPreferencesStore.getState().actions.setSelectedModel("qwen3:8b");
-		usePendingChatConversationStore.setState({ pendingConversationId: "" });
+		usePendingChatConversationStore.setState({ pendingConversationId: "", newConversationRequested: false });
 	});
 
 	afterEach(() => {
@@ -330,6 +330,28 @@ describe("Chat scope seam", () => {
 
 		await waitFor(() => expect(usePendingChatConversationStore.getState().pendingConversationId).toBe(""));
 		expect(useNodeChatPreferencesStore.getState().selectedConversationId).toBe("chat-1");
+	});
+
+	// Home's "New chat" asks through the same store; `/chat` runs its own create path once and selects the result.
+	it("starts one new conversation when another surface asked for it", async () => {
+		adapter.createConversation.mockResolvedValue(conversation("chat-new", "New conversation"));
+		usePendingChatConversationStore.getState().actions.requestNewConversation();
+
+		renderChat();
+
+		await waitFor(() => expect(useNodeChatPreferencesStore.getState().selectedConversationId).toBe("chat-new"));
+		expect(adapter.createConversation).toHaveBeenCalledTimes(1);
+		expect(adapter.createConversation).toHaveBeenCalledWith({ title: "New conversation" });
+		expect(usePendingChatConversationStore.getState().newConversationRequested).toBe(false);
+	});
+
+	it("swallows a new-conversation request under scope without creating one", async () => {
+		usePendingChatConversationStore.getState().actions.requestNewConversation();
+
+		renderChat({ conversationId: "session-conversation", embedded: true });
+
+		await waitFor(() => expect(usePendingChatConversationStore.getState().newConversationRequested).toBe(false));
+		expect(adapter.createConversation).not.toHaveBeenCalled();
 	});
 
 	it("never writes the global conversation preference under scope", async () => {

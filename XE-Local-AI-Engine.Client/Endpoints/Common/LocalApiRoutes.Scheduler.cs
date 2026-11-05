@@ -19,6 +19,9 @@ public static partial class LocalApiRoutes
         public const string JobDisable = "scheduler/jobs/{scheduledJobId}/disable";
         public const string JobTrigger = "scheduler/jobs/{scheduledJobId}/trigger";
 
+        // The next automatic fire per enabled job, soonest first: a short read for dashboards, not the full job list.
+        public const string Upcoming = "scheduler/upcoming";
+
         // Run history uses a flat query-filtered collection plus an individual run resource.
         public const string Runs = "scheduler/runs";
         public const string RunById = "scheduler/runs/{runId}";

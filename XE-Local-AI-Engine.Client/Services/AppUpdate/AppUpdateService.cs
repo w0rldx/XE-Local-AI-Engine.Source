@@ -91,7 +91,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             DefaultChannel = _channelOptions.DefaultChannel,
             AvailableVersion = stale ? null : snapshot.AvailableVersion,
             UpdateAvailable = !stale && snapshot.UpdateAvailable,
-            AvailableChannel = stale ? null : snapshot.AvailableChannel
+            AvailableChannel = stale ? null : snapshot.AvailableChannel,
+            ReleaseNotes = stale ? [] : snapshot.ReleaseNotes
         };
     }
 
@@ -220,6 +221,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             }
         }
 
+        // Every feed contributes: a Development node reads the main and the dev feed, and a version on both counts once.
+        var releaseNotes = AppUpdateVersions.SelectReleaseNotes(results.SelectMany(static result => result.ReleaseNotes), currentVersion);
         if (winner is not null && winningFeed is not null)
         {
             return StoreCheckedSnapshot(Snapshot(currentVersion,
@@ -229,7 +232,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
                 isConfigured: true,
                 checkStatus: AppUpdateCheckStatus.Ready,
                 recommendedVersion: recommendedVersion,
-                availableChannel: OfferingChannel(winningFeed, winner.AvailableVersion)));
+                availableChannel: OfferingChannel(winningFeed, winner.AvailableVersion),
+                releaseNotes: releaseNotes));
         }
 
         var status = AggregateOutcome(results);
@@ -244,7 +248,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             selectedChannel,
             isConfigured: true,
             checkStatus: status,
-            recommendedVersion: recommendedVersion));
+            recommendedVersion: recommendedVersion,
+            releaseNotes: releaseNotes));
     }
 
     /// <summary>
@@ -354,7 +359,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
                     applied.SelectedChannel,
                     isConfigured: true,
                     checkStatus: AppUpdateCheckStatus.Ready,
-                    recommendedVersion: applied.RecommendedVersion));
+                    recommendedVersion: applied.RecommendedVersion,
+                    releaseNotes: applied.ReleaseNotes));
                 return new AppUpdateApplyResult
                 {
                     Applying = applying,
@@ -505,9 +511,11 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         bool isConfigured = false,
         AppUpdateCheckStatus checkStatus = AppUpdateCheckStatus.NotChecked,
         string? recommendedVersion = null,
-        AppUpdateChannel? availableChannel = null) =>
+        AppUpdateChannel? availableChannel = null,
+        IReadOnlyList<AppReleaseNote>? releaseNotes = null) =>
         new()
         {
+            ReleaseNotes = releaseNotes ?? [],
             CurrentVersion = currentVersion,
             AvailableVersion = availableVersion,
             UpdateAvailable = updateAvailable,

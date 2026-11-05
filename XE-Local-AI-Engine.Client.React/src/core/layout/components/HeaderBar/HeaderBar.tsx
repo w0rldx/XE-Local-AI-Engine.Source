@@ -16,12 +16,14 @@ import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeMo
 export interface IHeaderBarProperties {
 	/** Desktop-only status area on the left of the bar. */
 	headerStatus: ReactNode;
+	/** Status rendered before `headerStatus` on desktop AND mobile, for signals no screen size may hide. */
+	headerIndicator?: ReactNode;
 	/** Desktop-only actions between the theme toggle and the language menu. */
 	headerActions: ReactNode;
 	drawerActions: IMobileNavigationDrawerActions;
 }
 
-export function HeaderBar({ headerStatus, headerActions, drawerActions }: IHeaderBarProperties) {
+export function HeaderBar({ headerStatus, headerIndicator, headerActions, drawerActions }: IHeaderBarProperties) {
 	const { t } = useTranslation();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const { logout: handleLogout, logoutPending } = useNodeLogout();
@@ -47,7 +49,8 @@ export function HeaderBar({ headerStatus, headerActions, drawerActions }: IHeade
 					</div>
 				)}
 				{/* min-w-0 + overflow-hidden: when the header crowds, the gauge gives way, never the cluster with Logout. */}
-				<div className="flex-grow min-w-0 overflow-hidden flex flex-row items-center justify-start">
+				<div className="flex-grow min-w-0 overflow-hidden flex flex-row items-center justify-start gap-2">
+					{headerIndicator}
 					{/* Desktop shell only, like the right cluster; the widget gates itself on capability and session. */}
 					{isDesktop ? headerStatus : null}
 				</div>

@@ -162,6 +162,7 @@ import {
 	getAgentPlaybookMonitor,
 	getAgentUsageSummary,
 	getAiAcknowledgement,
+	getAppReleaseNotes,
 	getAppUpdateStatus,
 	getBaseArtifact,
 	getBaseArtifactLicense,
@@ -348,6 +349,7 @@ import {
 	listTrainingSamples,
 	listTranscriptionModels,
 	listTranscriptionSessions,
+	listUpcomingScheduledJobs,
 	listUploadedImages,
 	listWorkSessionArtifacts,
 	listWorkSessionCheckpoints,
@@ -895,6 +897,8 @@ import type {
 	GetAgentUsageSummaryResponse,
 	GetAiAcknowledgementData,
 	GetAiAcknowledgementResponse,
+	GetAppReleaseNotesData,
+	GetAppReleaseNotesResponse,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusResponse,
 	GetBaseArtifactData,
@@ -1317,6 +1321,9 @@ import type {
 	ListTranscriptionSessionsData,
 	ListTranscriptionSessionsError,
 	ListTranscriptionSessionsResponse,
+	ListUpcomingScheduledJobsData,
+	ListUpcomingScheduledJobsError,
+	ListUpcomingScheduledJobsResponse,
 	ListUploadedImagesData,
 	ListUploadedImagesError,
 	ListUploadedImagesResponse,
@@ -2719,6 +2726,28 @@ export const setAppUpdateChannelMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getAppReleaseNotesQueryKey = (options?: Options<GetAppReleaseNotesData>) =>
+	createQueryKey("getAppReleaseNotes", options, false, ["App-Update"]);
+
+export const getAppReleaseNotesOptions = (options?: Options<GetAppReleaseNotesData>) =>
+	queryOptions<
+		GetAppReleaseNotesResponse,
+		AxiosError<DefaultError>,
+		GetAppReleaseNotesResponse,
+		ReturnType<typeof getAppReleaseNotesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAppReleaseNotes({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAppReleaseNotesQueryKey(options),
+	});
 
 export const getAppUpdateStatusQueryKey = (options?: Options<GetAppUpdateStatusData>) =>
 	createQueryKey("getAppUpdateStatus", options, false, ["App-Update"]);
@@ -10510,6 +10539,28 @@ export const listScheduledJobTemplatesOptions = (options?: Options<ListScheduled
 			return data;
 		},
 		queryKey: listScheduledJobTemplatesQueryKey(options),
+	});
+
+export const listUpcomingScheduledJobsQueryKey = (options?: Options<ListUpcomingScheduledJobsData>) =>
+	createQueryKey("listUpcomingScheduledJobs", options, false, ["Scheduler"]);
+
+export const listUpcomingScheduledJobsOptions = (options?: Options<ListUpcomingScheduledJobsData>) =>
+	queryOptions<
+		ListUpcomingScheduledJobsResponse,
+		AxiosError<ListUpcomingScheduledJobsError>,
+		ListUpcomingScheduledJobsResponse,
+		ReturnType<typeof listUpcomingScheduledJobsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listUpcomingScheduledJobs({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listUpcomingScheduledJobsQueryKey(options),
 	});
 
 export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options, false, ["Skills"]);

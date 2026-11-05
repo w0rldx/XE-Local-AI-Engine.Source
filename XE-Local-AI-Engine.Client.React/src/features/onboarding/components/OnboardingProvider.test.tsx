@@ -198,13 +198,12 @@ describe("AI acknowledgement first", () => {
 		expect(screen.getByTestId("onboarding-welcome-start")).toBeTruthy();
 	});
 
-	// Only the chat route asks for the acknowledgement; a first visit that starts on a deep link would otherwise never
-	// see the welcome dialog.
-	it("does not hold the welcome dialog back on a route that does not ask for the acknowledgement", () => {
+	// The layout mounts the acknowledgement on every page, so a first visit that starts on a deep link waits for it too.
+	it("holds the welcome dialog for the acknowledgement on a route other than chat", () => {
 		acknowledgementRef.current = { data: { acknowledged: false }, isPending: false };
 		pathnameRef.current = "/models";
 		renderProvider();
-		expect(screen.getByTestId("onboarding-welcome-start")).toBeTruthy();
+		expect(screen.queryByTestId("onboarding-welcome-start")).toBeNull();
 	});
 });
 

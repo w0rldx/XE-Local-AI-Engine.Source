@@ -70,6 +70,21 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Home is the landing page again** — `/` renders Home instead of redirecting to Chat, and Home is the first navigation
+  entry. A greeting card starts a new chat or continues the last one, and on a node with no chat model says so, links to
+  Models and shows the first-run model download. Recent chats lists the last five conversations by activity. In Advanced
+  mode a usage card shows the last 30 days of chat and integration runs (tokens, runs, estimated cost), capped at the usage
+  retention window, with a link to `/usage`. Every "go home" target (disabled-feature redirects, setup pages, the
+  not-found page) now lands on Home. The one-time AI notice opens on the first page after sign-in, whichever it is,
+  instead of only on Chat. An Activity card lists running and failed model downloads and imports and the llama.cpp
+  runtime download, with progress, the reason for a failure, a link to where to act and, for the runtime, a retry. The
+  runtime-download banner above every page is gone: a header chip on every page and screen size shows how many
+  operations run, turns into "Action required" while one has failed, and links to Home; a finished or failed operation
+  also shows one notification. In Advanced mode an Upcoming card lists the next five scheduled job runs with their local
+  time and a link to the scheduler (absent while the scheduler is off), backed by the new `GET scheduler/upcoming`. On
+  the desktop app a What's New card shows the release notes the last update check read from the update feed for the
+  running version, and names a newer version when one is available (`GET app-update/release-notes`); it never starts a
+  check of its own and is absent before the first one.
 - **Steered runs on the private evaluation server** — the transient harness can apply a control vector and run several arms under
   one runtime lease (`RunArmsAsync`). llama-server drops a vector of the wrong size or layer without failing, so the harness compares
   the file with the GGUF first and refuses before starting anything. No page uses this yet. `--control-vector*` is now a managed flag:

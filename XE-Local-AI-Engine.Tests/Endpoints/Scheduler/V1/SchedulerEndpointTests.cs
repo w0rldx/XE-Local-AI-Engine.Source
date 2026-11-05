@@ -53,6 +53,11 @@ public sealed class SchedulerEndpointTests
         return $"{ApiPrefix}/scheduler/jobs/{id}/trigger";
     }
 
+    private static string UpcomingRoute()
+    {
+        return $"{ApiPrefix}/scheduler/upcoming";
+    }
+
     private static string RunsRoute()
     {
         return $"{ApiPrefix}/scheduler/runs";
@@ -461,6 +466,82 @@ public sealed class SchedulerEndpointTests
         });
 
         AssertEx.Contains(payload, "End time must not be before the start time.");
+    }
+
+    [Test]
+    public async Task ListUpcoming_WhenNoBearerToken_ReturnsUnauthorized()
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await client.GetAsync(UpcomingRoute());
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(21)]
+    public async Task ListUpcoming_WithLimitOutOfRange_ReturnsBadRequest(int limit)
+    {
+        using var client = Factory.CreateClient();
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, await SendAsync(Factory, client, HttpMethod.Get, $"{UpcomingRoute()}?limit={limit}"));
+    }
+
+    [Test]
+    public async Task ListUpcoming_ListsACronJobWithItsNextFire_AndDropsItOnceDeleted()
+    {
+        using var client = Factory.CreateClient();
+        // A start next year keeps the job from firing during the run, and its first hourly fire is the start itself.
+        var start = new DateTimeOffset(DateTimeOffset.UtcNow.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        using var create = new HttpRequestMessage(HttpMethod.Post, JobsRoute())
+        {
+            Content = JsonContent.Create(new
+            {
+                templateId = "model-recommendation-check",
+                displayName = "Upcoming cron",
+                scheduleKind = "Cron",
+                cronExpression = "0 0 * * * ?",
+                startAtUtc = start.ToUnixTimeMilliseconds(),
+                timeZoneId = "UTC"
+            })
+        };
+        Factory.AddNodeBearerToken(create);
+        using var created = await client.SendAsync(create);
+        var createdPayload = await created.Content.ReadAsStringAsync();
+        AssertEx.True(created.IsSuccessStatusCode, $"Create must succeed, got {(int)created.StatusCode}: {createdPayload}");
+        using var createdDocument = JsonDocument.Parse(createdPayload);
+        var jobId = createdDocument.RootElement.GetProperty("id").GetGuid();
+
+        var found = await FindUpcomingAsync(client, jobId);
+        AssertEx.True(found.HasValue, "The created cron job must be listed as upcoming.");
+        var item = found.GetValueOrDefault();
+        AssertEx.Equal("Upcoming cron", item.GetProperty("displayName").GetString());
+        AssertEx.Equal("Cron", item.GetProperty("scheduleKind").GetString());
+        AssertEx.Equal(start.ToUnixTimeMilliseconds(), item.GetProperty("nextFireTimeUtc").GetInt64());
+
+        AssertEx.Equal(HttpStatusCode.NoContent, await SendAsync(Factory, client, HttpMethod.Delete, JobByIdRoute(jobId)));
+        AssertEx.Null(await FindUpcomingAsync(client, jobId));
+    }
+
+    private async Task<JsonElement?> FindUpcomingAsync(HttpClient client, Guid jobId)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{UpcomingRoute()}?limit=20");
+        Factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        var payload = await response.Content.ReadAsStringAsync();
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, $"body was: {payload}");
+
+        using var document = JsonDocument.Parse(payload);
+        foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            if (item.GetProperty("scheduledJobId").GetGuid() == jobId)
+            {
+                return item.Clone();
+            }
+        }
+
+        return null;
     }
 
     private async Task<string> PostJobExpectingBadRequestAsync(object body)

@@ -42,7 +42,8 @@ public sealed class AppUpdateEndpointDesktopGateTests
 
     private static readonly string[] GetRoutes =
     [
-        "/api/local/v1/app-update/status"
+        "/api/local/v1/app-update/status",
+        "/api/local/v1/app-update/release-notes"
     ];
 
     [Test]

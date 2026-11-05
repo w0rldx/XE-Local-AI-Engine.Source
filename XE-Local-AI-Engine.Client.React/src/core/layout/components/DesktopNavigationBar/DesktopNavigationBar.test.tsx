@@ -103,6 +103,17 @@ describe("DesktopNavigationBar", () => {
 		expect(current.map((link) => link.getAttribute("href"))).toEqual(["/chat"]);
 	});
 
+	// Every path sits under "/", so Home is the current page only on "/" itself (the /chat case above proves the other
+	// half: Home is not announced there).
+	it("marks Home as the current page on the root route", async () => {
+		renderNavigationBar(false, "/");
+
+		const home = await screen.findByRole("link", { name: "Home" });
+		expect(home.getAttribute("aria-current")).toBe("page");
+		const current = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") !== null);
+		expect(current.map((link) => link.getAttribute("href"))).toEqual(["/"]);
+	});
+
 	// TanStack's Link stamps aria-current on itself from its own prefix match, which the caller's props cannot
 	// override: on /training/datasets the sibling /training entry was announced as the current page as well.
 	it("marks exactly one entry as the current page when a sibling route is a prefix of it", async () => {

@@ -1,7 +1,7 @@
 import { Group, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import type { UsageDateRange } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import type { UsageDateRange } from "@/core/usage/UsageDateRange";
 import { isoDateToUtcMs, utcMsToIsoDate } from "@/features/usage-dashboard/models/UsageDashboardModel";
 
 interface UsageDateRangeControlProps {

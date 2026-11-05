@@ -49,6 +49,9 @@ public sealed class VelopackCheckResult
     ///     main feed's answer is meaningful.
     /// </remarks>
     public string? RecommendedVersion { get; init; }
+
+    /// <summary>The release notes the feed this check read carries, one per version; empty when no feed was read.</summary>
+    public IReadOnlyList<AppReleaseNote> ReleaseNotes { get; init; } = [];
 }
 
 /// <summary>

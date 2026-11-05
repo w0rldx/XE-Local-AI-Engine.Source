@@ -65,13 +65,15 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
 
             // Read AFTER the check: the source only captures the feed while serving it, and no extra request is made.
             var recommended = _source is null ? null : AppUpdateVersions.NewestStable(_source.LastFeedAssets);
+            var releaseNotes = AppUpdateVersions.ReleaseNotes(_source?.LastFeedAssets ?? []);
             if (updateInfo is null)
             {
                 return new VelopackCheckResult
                 {
                     Outcome = VelopackCheckOutcome.UpToDate,
                     AvailableVersion = null,
-                    RecommendedVersion = recommended
+                    RecommendedVersion = recommended,
+                    ReleaseNotes = releaseNotes
                 };
             }
 
@@ -80,7 +82,8 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
             {
                 Outcome = VelopackCheckOutcome.UpdateAvailable,
                 AvailableVersion = version,
-                RecommendedVersion = recommended
+                RecommendedVersion = recommended,
+                ReleaseNotes = releaseNotes
             };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

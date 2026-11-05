@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import {
 	groupExternalModelOptions,
+	hasAnyChatModel,
 	resolveLocalDefaultModelCapabilities,
 	resolveLocalDefaultModelName,
 	toChatModelOptions,
@@ -348,5 +349,16 @@ describe("model picker strings in German", () => {
 	it("translates the picker's reasoning badges", () => {
 		expect(de.pages.chat.reasoningLabel).not.toBe(en.pages.chat.reasoningLabel);
 		expect(de.pages.chat.nativeReasoningLabel).not.toBe(en.pages.chat.nativeReasoningLabel);
+	});
+});
+
+describe("hasAnyChatModel", () => {
+	it("counts a local, an external or a cloud chat entry and nothing else", () => {
+		expect(hasAnyChatModel([])).toBe(false);
+		expect(hasAnyChatModel([model({ kind: "Embedding" })])).toBe(false);
+		expect(hasAnyChatModel([model({ provider: "external", kind: "Embedding" })])).toBe(false);
+		expect(hasAnyChatModel([model({})])).toBe(true);
+		expect(hasAnyChatModel([model({ provider: "external" })])).toBe(true);
+		expect(hasAnyChatModel([model({ provider: "CodexOAuth", kind: "Unknown" })])).toBe(true);
 	});
 });

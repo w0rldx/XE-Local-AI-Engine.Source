@@ -30,6 +30,7 @@ describe("navigationLinks", () => {
 
 	it("groups the related node pages under Models / Settings / Automation with flat entries around them", () => {
 		expect(navigationLinks.map((link) => link.id)).toEqual([
+			"home",
 			"chat",
 			"knowledgeBase",
 			"models",
@@ -380,6 +381,7 @@ describe("filterNavigationLinksByUiMode", () => {
 		// child, and a collapsible with one item inside — under an "Automation"/"Preview" heading that is itself an
 		// Advanced idea — defeats the point of the mode.
 		expect(filterNavigationLinksByUiMode(navigationLinks, "simple").map((link) => link.id)).toEqual([
+			"home",
 			"chat",
 			"knowledgeBase",
 			"models",
@@ -535,6 +537,12 @@ describe("matchesNavRoute", () => {
 		expect(matchesNavRoute("/training/datasets", "/training")).toBe(false);
 		// A detail route no entry claims still highlights its parent.
 		expect(matchesNavRoute("/training/run-1", "/training")).toBe(true);
+	});
+
+	it("matches the home route only exactly", () => {
+		expect(matchesNavRoute("/", "/")).toBe(true);
+		expect(matchesNavRoute("/models", "/")).toBe(false);
+		expect(matchesNavRoute("/chat", "/")).toBe(false);
 	});
 
 	it("never matches an undefined target (a group toggle has no route)", () => {

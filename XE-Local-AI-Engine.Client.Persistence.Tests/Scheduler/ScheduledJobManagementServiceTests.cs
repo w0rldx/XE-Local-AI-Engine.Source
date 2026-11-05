@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Scheduler;
 
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -1332,6 +1333,75 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task ListUpcomingAsync_OrdersCronAndIntervalJobsBySoonestFire_AndHonoursTheLimit()
+    {
+        var dbPath = GetDatabasePath("upcoming-order.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var start = NextYearStart();
+
+        // Created out of order, so the result order can only come from the fire times.
+        var late = await service.CreateJobAsync(ScheduleInput(ScheduleKind.Cron, start.AddHours(2), endAt: null, displayName: "Late cron"));
+        var interval = await service.CreateJobAsync(ScheduleInput(ScheduleKind.SimpleInterval, start.AddMinutes(30), endAt: null, displayName: "Interval"));
+        var early = await service.CreateJobAsync(ScheduleInput(ScheduleKind.Cron, start, endAt: null, displayName: "Early cron"));
+
+        var all = await service.ListUpcomingAsync(limit: 5);
+        var firstTwo = await service.ListUpcomingAsync(limit: 2);
+
+        AssertEx.Equal(string.Join(Environment.NewLine,
+                UpcomingRow(early.Id, "Early cron", ScheduleKind.Cron, start),
+                UpcomingRow(interval.Id, "Interval", ScheduleKind.SimpleInterval, start.AddMinutes(30)),
+                UpcomingRow(late.Id, "Late cron", ScheduleKind.Cron, start.AddHours(2))),
+            string.Join(Environment.NewLine, all.Select(static job => UpcomingRow(job))));
+        AssertEx.Equal(string.Join(',', early.Id, interval.Id), string.Join(',', firstTwo.Select(static job => job.ScheduledJobId)));
+    }
+
+    [Test]
+    public async Task ListUpcomingAsync_OmitsDisabledDeletedManualAndAlreadyPassedJobs()
+    {
+        var dbPath = GetDatabasePath("upcoming-omitted.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var start = NextYearStart();
+
+        var live = await service.CreateJobAsync(ScheduleInput(ScheduleKind.Cron, start, endAt: null, displayName: "Live"));
+        var disabled = await service.CreateJobAsync(ScheduleInput(ScheduleKind.Cron, start, endAt: null, displayName: "Disabled"));
+        _ = await service.SetEnabledAsync(disabled.Id, enabled: false);
+        var deleted = await service.CreateJobAsync(ScheduleInput(ScheduleKind.Cron, start, endAt: null, displayName: "Deleted"));
+        await service.DeleteJobAsync(deleted.Id);
+        _ = await service.CreateJobAsync(ManualInput());
+        // Its only fire lies in the past: an unstarted scheduler still holds the trigger, a started one has already fired it.
+        _ = await service.CreateJobAsync(ScheduleInput(ScheduleKind.OneShot, new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), endAt: null));
+
+        var upcoming = await service.ListUpcomingAsync(limit: 20);
+
+        AssertEx.Equal(live.Id.ToString(), string.Join(',', upcoming.Select(static job => job.ScheduledJobId)));
+    }
+
+    [Test]
+    public async Task ListUpcomingAsync_SkipsAQuartzJobWhoseDefinitionIsNoLongerEnabled()
+    {
+        var dbPath = GetDatabasePath("upcoming-orphan.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var scheduler = await provider.GetRequiredService<ISchedulerFactory>().GetScheduler(CancellationToken.None);
+        var record = await service.CreateJobAsync(ScheduleInput(ScheduleKind.Cron, NextYearStart(), endAt: null));
+
+        // The store flag flips without the service, so the Quartz trigger outlives the enabled definition.
+        _ = await provider.GetRequiredService<IScheduledJobDefinitionStore>().SetEnabledAsync(record.Id, enabled: false);
+        var triggers = await scheduler.GetTriggersOfJob(new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None);
+        AssertEx.Equal(expected: 1, triggers.Count, "the Quartz trigger must still exist for this case to mean anything");
+
+        AssertEx.Empty(await service.ListUpcomingAsync(limit: 5));
+    }
+
 
     private string GetDatabasePath(string fileName)
     {
@@ -1511,18 +1581,26 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     private static DateTimeOffset NextYearStart() =>
         new(DateTimeOffset.UtcNow.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+    // One upcoming entry as comparable text, so a wrong order or field names the whole row in the failure.
+    private static string UpcomingRow(UpcomingScheduledJob job) =>
+        UpcomingRow(job.ScheduledJobId, job.DisplayName, job.ScheduleKind, DateTimeOffset.FromUnixTimeMilliseconds(job.NextFireTimeUtc));
+
+    private static string UpcomingRow(Guid id, string displayName, ScheduleKind kind, DateTimeOffset nextFire) =>
+        string.Join('|', id, displayName, kind, nextFire.ToString("O", CultureInfo.InvariantCulture));
+
     // A schedule on the template that supports the kind: test.echo for Cron and OneShot, the simple-interval test handler otherwise.
     private static ScheduledJobManagementInput ScheduleInput(ScheduleKind kind,
         DateTimeOffset? startAt,
         DateTimeOffset? endAt,
         string cronExpression = "0 0 * * * ?",
         long intervalSeconds = 3600,
-        SchedulerMisfirePolicy misfirePolicy = SchedulerMisfirePolicy.Smart)
+        SchedulerMisfirePolicy misfirePolicy = SchedulerMisfirePolicy.Smart,
+        string displayName = "Schedule bounds")
     {
         return new ScheduledJobManagementInput
         {
             TemplateId = kind == ScheduleKind.SimpleInterval ? SimpleIntervalOnlyHandler.Id : TestEchoScheduledJobHandler.Id,
-            DisplayName = "Schedule bounds",
+            DisplayName = displayName,
             Description = null,
             ScheduleKind = kind,
             CronExpression = kind == ScheduleKind.Cron ? cronExpression : null,

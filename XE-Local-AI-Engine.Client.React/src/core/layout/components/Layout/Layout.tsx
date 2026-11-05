@@ -36,7 +36,7 @@ export interface ILayoutProperties extends IHeaderBarProperties {
 	overlay: ReactNode;
 }
 
-export function Layout({ headerStatus, headerActions, drawerActions, banners, overlay }: ILayoutProperties) {
+export function Layout({ headerStatus, headerIndicator, headerActions, drawerActions, banners, overlay }: ILayoutProperties) {
 	const { t } = useTranslation();
 	const sideBarCollapsed = useDesktopNavigationBarStore((state) => state.sidebarState);
 	const setSideBarCollapsed = useDesktopNavigationBarStore((state) => state.actions.setSidebarState);
@@ -87,7 +87,12 @@ export function Layout({ headerStatus, headerActions, drawerActions, banners, ov
 					}}
 				>
 					<div className="flex-shrink-0">
-						<HeaderBar headerStatus={headerStatus} headerActions={headerActions} drawerActions={drawerActions} />
+						<HeaderBar
+							headerStatus={headerStatus}
+							headerIndicator={headerIndicator}
+							headerActions={headerActions}
+							drawerActions={drawerActions}
+						/>
 						{banners}
 					</div>
 

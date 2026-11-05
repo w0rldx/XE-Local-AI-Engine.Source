@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { StatTile } from "@/core/ui/components/StatTile/StatTile";
 import type { UsageTotalsDto } from "@/features/usage-dashboard/models/UsageDashboardModel";
-import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import { formatCostUsd, formatCount, formatTokensCompact } from "@/core/formatting/NumberFormatting";
 
 interface StatCardProps {
 	readonly label: string;

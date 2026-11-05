@@ -45,6 +45,12 @@ public sealed record AppUpdateSnapshot
     /// </summary>
     public AppUpdateChannel? AvailableChannel { get; init; }
 
+    /// <summary>
+    ///     The running version's notes first, then newer ones newest first, from the feeds the last check read; empty
+    ///     before the first check.
+    /// </summary>
+    public IReadOnlyList<AppReleaseNote> ReleaseNotes { get; init; } = [];
+
     /// <summary>The empty pre-check snapshot.</summary>
     public static AppUpdateSnapshot Empty { get; } = new()
     {

@@ -735,6 +735,60 @@ public sealed class AppUpdateServiceTests
     }
 
     [Test]
+    public async Task CheckForUpdates_MergesTheReleaseNotesOfEveryFeedAgainstTheRunningVersion()
+    {
+        // The running version (0.1.0) comes first; 0.2.0 is on both feeds and counts once; 0.0.9 is older and dropped.
+        var main = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpToDate,
+            AvailableVersion = null,
+            ReleaseNotes = [ReleaseNote("0.0.9"), ReleaseNote("0.1.0"), ReleaseNote("0.2.0")]
+        });
+        var dev = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpToDate,
+            AvailableVersion = null,
+            ReleaseNotes = [ReleaseNote("0.2.0"), ReleaseNote("0.2.1-dev.20261105.1")]
+        });
+        using var service = CreateService(DevelopmentFactory(main, dev), isDesktop: true,
+            settingsStore: StoreWith(AppUpdateChannelNames.Development));
+
+        AssertEx.Empty((await service.GetStatusAsync(CancellationToken.None)).ReleaseNotes);
+        var snapshot = await service.CheckForUpdatesAsync(CancellationToken.None);
+
+        AssertEx.Equal("0.1.0:False,0.2.1-dev.20261105.1:True,0.2.0:True",
+            string.Join(',', snapshot.ReleaseNotes.Select(static note => $"{note.Version}:{note.IsNewerThanRunning}")));
+    }
+
+    [Test]
+    public async Task GetStatus_WhenTheChannelChangedWithoutACheck_DropsTheOtherChannelsReleaseNotes()
+    {
+        var store = StoreWith(AppUpdateChannelNames.Development);
+        var dev = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpToDate,
+            AvailableVersion = null,
+            ReleaseNotes = [ReleaseNote("0.1.1-dev.20261105.1")]
+        });
+        using var service = CreateService(DevelopmentFactory(UpToDate(), dev), isDesktop: true, settingsStore: store);
+        AssertEx.NotEmpty((await service.CheckForUpdatesAsync(CancellationToken.None)).ReleaseNotes);
+
+        await store.SaveAsync(new StoredNodeSettings
+        {
+            UpdateChannel = AppUpdateChannelNames.Stable
+        });
+
+        AssertEx.Empty((await service.GetStatusAsync(CancellationToken.None)).ReleaseNotes);
+    }
+
+    private static AppReleaseNote ReleaseNote(string version) =>
+        new()
+        {
+            Version = version,
+            NotesMarkdown = $"## {version}"
+        };
+
+    [Test]
     public async Task CheckForUpdates_WhenTheDevelopmentFeedFails_StillOffersTheMainFeedUpdate()
     {
         var dev = NewManager();

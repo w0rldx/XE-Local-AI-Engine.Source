@@ -28,6 +28,7 @@ export const schedulerQueryIds = {
 	listJobs: "listScheduledJobs",
 	listRuns: "listScheduledJobRuns",
 	getRun: "getScheduledJobRun",
+	listUpcoming: "listUpcomingScheduledJobs",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one scheduler endpoint. */
@@ -97,8 +98,12 @@ export function useScheduledJobRun(runId: string | null) {
 	});
 }
 
-function invalidateJobs(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-	return queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) });
+// A job edit can move its next fire, so Home's upcoming list refreshes with the job list.
+async function invalidateJobs(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
+	await Promise.all([
+		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) }),
+		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listUpcoming) }),
+	]);
 }
 
 async function invalidateRuns(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {

@@ -6,7 +6,7 @@ import { ResponsiveTable } from "@/core/ui/components/ResponsiveTable/Responsive
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { UsageModelRow } from "@/features/usage-dashboard/models/UsageDashboardModel";
-import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import { formatCostUsd, formatCount, formatTokensCompact } from "@/core/formatting/NumberFormatting";
 import { providerColor, providerLabel } from "@/features/usage-dashboard/models/UsageProviderPresentation";
 
 // Persisted page-size preference (its own key so this table remembers a size independent of other tables).

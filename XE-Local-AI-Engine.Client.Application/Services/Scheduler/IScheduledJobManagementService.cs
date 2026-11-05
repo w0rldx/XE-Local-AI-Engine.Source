@@ -87,6 +87,16 @@ public interface IScheduledJobManagementService
     Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Returns the next future fire of each enabled, live definition that has a Quartz trigger, soonest first, at most
+    ///     <paramref name="limit" /> of them.
+    /// </summary>
+    /// <remarks>
+    ///     Quartz holds a job only while its definition is enabled, so a disabled, deleted or Manual job has nothing to
+    ///     report. A Quartz job no enabled definition owns is skipped, and a fire time already past is not upcoming.
+    /// </remarks>
+    Task<IReadOnlyList<UpcomingScheduledJob>> ListUpcomingAsync(int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Returns run-history records matching the supplied filters (each <c>null</c> filter is ignored), ordered by
     ///     actual fire time descending.
     /// </summary>

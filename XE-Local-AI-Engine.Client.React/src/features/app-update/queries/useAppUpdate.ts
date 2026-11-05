@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { GetAppUpdateStatusResponse } from "@/core/api/generated";
 import {
 	applyAppUpdateMutation,
+	getAppReleaseNotesQueryKey,
 	getAppUpdateStatusOptions,
 	getAppUpdateStatusQueryKey,
 	setAppUpdateChannelMutation,
@@ -17,12 +18,19 @@ export function useAppUpdateStatus(refresh?: boolean) {
 	});
 }
 
+// The release notes are their own cache entry, but the server rebuilds them on a check and drops them on a channel
+// change, so every mutation that does either re-reads them too.
+function invalidateReleaseNotes(queryClient: QueryClient) {
+	queryClient.invalidateQueries({ queryKey: getAppReleaseNotesQueryKey() }).catch(() => undefined);
+}
+
 export function useRefreshAppUpdateStatus() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
 		mutationFn: () => queryClient.fetchQuery(getAppUpdateStatusOptions({ query: { refresh: true } })),
 		onSuccess: (data) => {
+			invalidateReleaseNotes(queryClient);
 			const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
 			const cached = queryClient.getQueryData<GetAppUpdateStatusResponse>(statusKey);
 			// A channel change that landed while this check ran makes the two disagree, and either side may be the
@@ -79,6 +87,7 @@ export function useSetAppUpdateChannel() {
 			// element so prefix matching leaves it alone; nothing subscribes to it as a query. Not awaited and not
 			// returned: the callback must not make `mutateAsync` wait for a refetch.
 			queryClient.invalidateQueries({ queryKey: statusKey }).catch(() => undefined);
+			invalidateReleaseNotes(queryClient);
 		},
 	});
 }

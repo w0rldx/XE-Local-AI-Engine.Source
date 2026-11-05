@@ -336,6 +336,48 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return healedCount;
     }
 
+    public async Task<IReadOnlyList<UpcomingScheduledJob>> ListUpcomingAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
+        var definitions = await _definitionStore.ListAsync(includeDeleted: false, cancellationToken);
+        var now = _timeProvider.GetUtcNow();
+        var upcoming = new List<UpcomingScheduledJob>();
+
+        foreach (var definition in definitions)
+        {
+            // The join of both sides: Quartz decides whether and when it fires, the enabled definition owns the job and its name.
+            if (!definition.Enabled)
+            {
+                continue;
+            }
+
+            var triggers = await scheduler.GetTriggersOfJob(BuildJobKey(definition.Id), cancellationToken);
+            var nextFire = triggers.Select(static trigger => trigger.NextFireTimeUtc)
+                                   .Where(candidate => candidate > now)
+                                   .Min();
+
+            if (nextFire is { } next)
+            {
+                upcoming.Add(new UpcomingScheduledJob
+                {
+                    ScheduledJobId = definition.Id,
+                    DisplayName = definition.DisplayName,
+                    ScheduleKind = definition.ScheduleKind,
+                    NextFireTimeUtc = next.ToUnixTimeMilliseconds()
+                });
+            }
+        }
+
+        return
+        [
+            .. upcoming.OrderBy(static job => job.NextFireTimeUtc)
+                       .ThenBy(static job => job.DisplayName, StringComparer.Ordinal)
+                       .Take(limit)
+        ];
+    }
+
     public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,

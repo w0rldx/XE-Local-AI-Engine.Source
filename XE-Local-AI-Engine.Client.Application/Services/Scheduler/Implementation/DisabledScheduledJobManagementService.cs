@@ -45,6 +45,9 @@ internal sealed class DisabledScheduledJobManagementService : IScheduledJobManag
     public Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default) =>
         throw Disabled();
 
+    public Task<IReadOnlyList<UpcomingScheduledJob>> ListUpcomingAsync(int limit, CancellationToken cancellationToken = default) =>
+        throw Disabled();
+
     public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,
