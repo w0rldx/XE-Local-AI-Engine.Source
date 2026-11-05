@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -23,7 +24,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ModelLabHarnessLiveTests
 {
     private const string Prompt = "Write one sentence about the weather today.";
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+
+    private static readonly JsonSerializerOptions Indented = new()
+    {
+        WriteIndented = true
+    };
 
     [Test]
     public async Task VectorArms_OnTheRealRuntime()
@@ -70,8 +75,14 @@ public sealed class ModelLabHarnessLiveTests
                 ReadinessTimeout = TimeSpan.FromMinutes(2),
                 LaunchPolicy = LlamaServerBenchmarkLaunchPolicy.DeterministicV1
             };
-            var steered = request with { ControlVectorPath = vector };
-            var random = request with { ControlVectorPath = randomVector };
+            var steered = request with
+            {
+                ControlVectorPath = vector
+            };
+            var random = request with
+            {
+                ControlVectorPath = randomVector
+            };
             Task<ILlamaServerRuntimeMutationLease?>? competing = null;
             var competingCompletedDuringArms = false;
 
@@ -117,13 +128,33 @@ public sealed class ModelLabHarnessLiveTests
                 arms[0].Model.ModelSha256,
                 arms[0].Model.ModelSizeBytes
             };
-            evidence["lease"] = new { competingCompletedDuringArms, releasedAfterArms = leaseAfterArms is not null };
+            evidence["lease"] = new
+            {
+                competingCompletedDuringArms,
+                releasedAfterArms = leaseAfterArms is not null
+            };
             var perLaunch = (bytesRead - oneArm) / 5.0;
             var ggufReadsInArms = (oneArm - perLaunch) / modelBytes;
             var ggufReadsInSingleRun = (singleRun - perLaunch) / modelBytes;
-            evidence["hash"] = new { modelBytes, oneArmBytesRead = oneArm, sixArmsBytesRead = bytesRead, singleRunBytesRead = singleRun, perLaunch, ggufReadsInArms, ggufReadsInSingleRun };
-            evidence["timing"] = new { sixArmsSeconds = watch.Elapsed.TotalSeconds };
-            evidence["gpuMemory"] = new { before = memoryBefore, during = memoryDuring };
+            evidence["hash"] = new
+            {
+                modelBytes,
+                oneArmBytesRead = oneArm,
+                sixArmsBytesRead = bytesRead,
+                singleRunBytesRead = singleRun,
+                perLaunch,
+                ggufReadsInArms,
+                ggufReadsInSingleRun
+            };
+            evidence["timing"] = new
+            {
+                sixArmsSeconds = watch.Elapsed.TotalSeconds
+            };
+            evidence["gpuMemory"] = new
+            {
+                before = memoryBefore,
+                during = memoryDuring
+            };
             AssertEx.False(competingCompletedDuringArms, "Nothing may take the runtime during the arms.");
             AssertEx.Equal(arms[0].Value.TokenKey, arms[3].Value.TokenKey, "The baseline must repeat.");
             AssertEx.Equal(arms[1].Value.TokenKey, arms[4].Value.TokenKey, "The vector arm must repeat.");
@@ -139,14 +170,39 @@ public sealed class ModelLabHarnessLiveTests
             var before = launches.Specs.Count;
             var badVectors = new Dictionary<string, TransientLlamaServerEvaluationRequest>(StringComparer.Ordinal)
             {
-                ["wrong-size 512"] = request with { ControlVectorPath = files.Vector("direction.15", 512) },
-                ["9B-sized 4096 on the 0.8B"] = request with { ControlVectorPath = files.Vector("direction.15", 4096) },
-                ["0.8B vector on the 9B"] = request with { ModelFilePath = otherGguf, ControlVectorPath = vector },
-                ["direction.24"] = request with { ControlVectorPath = files.Vector("direction.24", 1024) },
-                ["direction.99"] = request with { ControlVectorPath = files.Vector("direction.99", 1024) },
-                ["direction.0"] = request with { ControlVectorPath = files.Vector("direction.0", 1024) },
-                ["garbage"] = request with { ControlVectorPath = files.BadVector("garbage", 1024) },
-                ["missing"] = request with { ControlVectorPath = files.BadVector("missing", 1024) }
+                ["wrong-size 512"] = request with
+                {
+                    ControlVectorPath = files.Vector("direction.15", 512)
+                },
+                ["9B-sized 4096 on the 0.8B"] = request with
+                {
+                    ControlVectorPath = files.Vector("direction.15", 4096)
+                },
+                ["0.8B vector on the 9B"] = request with
+                {
+                    ModelFilePath = otherGguf,
+                    ControlVectorPath = vector
+                },
+                ["direction.24"] = request with
+                {
+                    ControlVectorPath = files.Vector("direction.24", 1024)
+                },
+                ["direction.99"] = request with
+                {
+                    ControlVectorPath = files.Vector("direction.99", 1024)
+                },
+                ["direction.0"] = request with
+                {
+                    ControlVectorPath = files.Vector("direction.0", 1024)
+                },
+                ["garbage"] = request with
+                {
+                    ControlVectorPath = files.BadVector("garbage", 1024)
+                },
+                ["missing"] = request with
+                {
+                    ControlVectorPath = files.BadVector("missing", 1024)
+                }
             };
             foreach (var (name, bad) in badVectors)
             {
@@ -254,11 +310,14 @@ public sealed class ModelLabHarnessLiveTests
     }
 
     private static long BytesRead() =>
-        long.Parse(File.ReadLines("/proc/self/io").First(static line => line.StartsWith("rchar:", StringComparison.Ordinal))["rchar:".Length..].Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        long.Parse(File.ReadLines("/proc/self/io").First(static line => line.StartsWith("rchar:", StringComparison.Ordinal))["rchar:".Length..].Trim(), CultureInfo.InvariantCulture);
 
     private static string GpuMemoryUsed()
     {
-        using var process = Process.Start(new ProcessStartInfo("nvidia-smi", "--query-gpu=memory.used --format=csv,noheader") { RedirectStandardOutput = true })!;
+        using var process = Process.Start(new ProcessStartInfo("nvidia-smi", "--query-gpu=memory.used --format=csv,noheader")
+        {
+            RedirectStandardOutput = true
+        })!;
         var output = process.StandardOutput.ReadToEnd().Trim();
         process.WaitForExit(10_000);
         return output;

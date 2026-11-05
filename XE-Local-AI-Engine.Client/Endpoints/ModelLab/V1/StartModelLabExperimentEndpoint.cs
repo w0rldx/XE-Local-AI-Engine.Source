@@ -38,7 +38,10 @@ public sealed class StartModelLabExperimentEndpoint : Endpoint<StartModelLabExpe
         }, ct);
         if (start.ExperimentId is { } id)
         {
-            await Send.ResultAsync(TypedResults.Accepted((string?)null, new StartModelLabExperimentResponse { ExperimentId = id }));
+            await Send.ResultAsync(TypedResults.Accepted((string?)null, new StartModelLabExperimentResponse
+            {
+                ExperimentId = id
+            }));
             return;
         }
 

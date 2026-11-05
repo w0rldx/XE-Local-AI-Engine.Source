@@ -297,8 +297,17 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
         // JSON frames the values, so moving text between two fields changes the hash. The secret flag joins too: it decides what the built client's error guard redacts.
         return Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]
         {
-            new[] { connection.ApiKey, connection.EntraClientSecret }
-        }.Concat(connection.Headers.Select(static header => new[] { header.Name, header.Value, header.IsSecret ? "secret" : "plain" })))));
+            new[]
+            {
+                connection.ApiKey,
+                connection.EntraClientSecret
+            }
+        }.Concat(connection.Headers.Select(static header => new[]
+        {
+            header.Name,
+            header.Value,
+            header.IsSecret ? "secret" : "plain"
+        })))));
     }
 
     /// <summary>Builds a Codex selection for the given session and the (already-resolved) model id to build it with.</summary>

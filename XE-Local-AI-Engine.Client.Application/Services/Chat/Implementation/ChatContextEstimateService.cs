@@ -166,7 +166,8 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
 
         // No user turn exists yet, so a null retrieval query takes the playbook fast path, which never builds an
         // embedding client (as the Default Assistant offer read does).
-        var resolution = await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery: null, userPickedConcreteModel, cancellationToken, isPlain: isPlain);
+        var resolution = await _turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery: null, userPickedConcreteModel, cancellationToken,
+            isPlain: isPlain);
         var offer = await ChatToolOfferResolver.ResolveAsync(useLocalTools, resolution, _runtimeSettings, _localToolOfferProvider, _toolApprovalPolicy, cancellationToken);
         var systemPrompt = isPlain
             ? plainMode?.PlainSystemPrompt ?? string.Empty

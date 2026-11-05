@@ -100,7 +100,8 @@ internal sealed class ControlVectorFiles : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown bad-vector case.")
         };
 
-    public void Dispose() => _directory.Delete(recursive: true);
+    public void Dispose() =>
+        _directory.Delete(recursive: true);
 
     private static string WithLastValue(string path, float value)
     {
@@ -117,7 +118,8 @@ internal sealed class ControlVectorFiles : IDisposable
         return path;
     }
 
-    private static byte[] Pad(byte[] header) => [.. header, .. new byte[(32 - (header.Length % 32)) % 32]];
+    private static byte[] Pad(byte[] header) =>
+        [.. header, .. new byte[(32 - (header.Length % 32)) % 32]];
 
     private static byte[] Data(int elements, float fill)
     {

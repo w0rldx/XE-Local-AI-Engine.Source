@@ -587,7 +587,10 @@ public sealed class TrainingExportServiceTests : IDisposable
         /// <summary>The same row recording <paramref name="path" />, a value no file has to back.</summary>
         public TrainingArtifactRecord PointArtifactAt(TrainingArtifactRecord artifact, string path)
         {
-            var pointed = artifact with { Path = path };
+            var pointed = artifact with
+            {
+                Path = path
+            };
             _ = Store.GetArtifactAsync(pointed.Id, Arg.Any<CancellationToken>()).Returns(pointed);
             return pointed;
         }

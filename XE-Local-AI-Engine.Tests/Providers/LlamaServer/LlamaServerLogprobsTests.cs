@@ -71,7 +71,13 @@ public sealed class LlamaServerLogprobsTests
     [Test]
     public async Task Request_ComposesWithAPriorPatch_AndLeavesTheCallersOptionsAlone()
     {
-        var options = new ChatOptions { RawRepresentationFactory = static _ => new ChatCompletionOptions { EndUserId = "prior" } };
+        var options = new ChatOptions
+        {
+            RawRepresentationFactory = static _ => new ChatCompletionOptions
+            {
+                EndUserId = "prior"
+            }
+        };
 
         var requested = LlamaServerLogprobs.Request(options, topLogprobs: 7);
 

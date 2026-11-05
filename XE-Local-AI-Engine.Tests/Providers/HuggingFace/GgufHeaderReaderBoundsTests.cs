@@ -54,14 +54,16 @@ public sealed class GgufHeaderReaderBoundsTests
             // A full range each time, so only the cap can stop the loop.
             var body = new byte[request.Headers.Range!.Ranges.Single().To!.Value + 1];
             header.CopyTo(body, index: 0);
-            return new HttpResponseMessage { Content = new ByteArrayContent(body) };
+            return new HttpResponseMessage
+            {
+                Content = new ByteArrayContent(body)
+            };
         });
 
         var metadata = await ReadRemoteAsync(handler, probeBytes: 20 * MiB);
 
         AssertEarlierKeysKept(metadata);
-        AssertEx.Equal(
-            $"bytes=0-{(20 * MiB) - 1},bytes=0-{(40 * MiB) - 1},bytes=0-{(64 * MiB) - 1}",
+        AssertEx.Equal($"bytes=0-{(20 * MiB) - 1},bytes=0-{(40 * MiB) - 1},bytes=0-{(64 * MiB) - 1}",
             string.Join(separator: ',', handler.Requests.Select(static request => request.Range)));
     }
 
@@ -71,7 +73,10 @@ public sealed class GgufHeaderReaderBoundsTests
     {
         var body = new byte[3 * MiB];
         EarlierKeys().Build().CopyTo(body, index: 0);
-        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage { Content = new StreamContent(new CappedBodyStream(body, MiB)) });
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage
+        {
+            Content = new StreamContent(new CappedBodyStream(body, MiB))
+        });
 
         var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
 
@@ -83,7 +88,10 @@ public sealed class GgufHeaderReaderBoundsTests
     [Test]
     public async Task ReadHeader_ServerDroppingTheBody_ReturnsEmptyMetadata()
     {
-        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage { Content = new StreamContent(new DroppedBodyStream()) });
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage
+        {
+            Content = new StreamContent(new DroppedBodyStream())
+        });
 
         var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
 
@@ -111,7 +119,10 @@ public sealed class GgufHeaderReaderBoundsTests
                     .WithNestedArray("nested")
                     .WithUint32("qwen35.block_count", value: 32)
                     .Build();
-        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage { Content = new ByteArrayContent(bytes) });
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage
+        {
+            Content = new ByteArrayContent(bytes)
+        });
 
         var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
 
@@ -136,7 +147,10 @@ public sealed class GgufHeaderReaderBoundsTests
             // A full first range, so the parse itself must report that it stopped short.
             var body = new byte[MiB];
             header.CopyTo(body, index: 0);
-            return new HttpResponseMessage { Content = new ByteArrayContent(body) };
+            return new HttpResponseMessage
+            {
+                Content = new ByteArrayContent(body)
+            };
         });
 
         var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
@@ -160,7 +174,10 @@ public sealed class GgufHeaderReaderBoundsTests
     public async Task ReadHeader_StringLengthIntMaxValue_KeepsTheKeysBeforeIt()
     {
         var bytes = EarlierKeys().WithRawValue("text", TypeString, Convert.FromHexString(StringLengthIntMaxValueHex)).Build();
-        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage { Content = new ByteArrayContent(bytes) });
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage
+        {
+            Content = new ByteArrayContent(bytes)
+        });
 
         var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
 
@@ -222,7 +239,10 @@ public sealed class GgufHeaderReaderBoundsTests
     private static async Task<GgufHeaderMetadata> ReadRemoteAsync(HttpMessageHandler handler, long probeBytes)
     {
         using var http = new HttpClient(handler, disposeHandler: false);
-        var options = new HuggingFaceOptions { HeaderProbeBytes = probeBytes };
+        var options = new HuggingFaceOptions
+        {
+            HeaderProbeBytes = probeBytes
+        };
         var reader = new GgufHeaderReader(http, GgufStoreTestInfrastructure.NoTokenStore(), options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
         return await reader.ReadHeaderAsync("org/repo", "model.gguf", "main", CancellationToken.None);
     }

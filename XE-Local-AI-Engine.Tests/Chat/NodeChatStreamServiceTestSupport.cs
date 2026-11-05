@@ -208,7 +208,8 @@ internal static partial class NodeChatStreamServiceTestSupport
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision))),
+                CreateModelCapabilityResolver(
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: supportsTools, SupportsVision: supportsVision))),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),

@@ -371,9 +371,11 @@ public sealed class InvocationFailureClassifierTests
         "The provider does not offer the selected model to this connection (model-not-approved: The model is not approved for the project.). Check the model id on the connection.")]
     [Arguments(403, """{"error":{"message":"You are not allowed to sample from this model","type":"invalid_request_error","code":"model_not_allowed"}}""", FailureCategory.ModelUnavailable,
         "The provider does not offer the selected model to this connection (model_not_allowed: You are not allowed to sample from this model). Check the model id on the connection.")]
-    [Arguments(403, """{"error":{"message":"You have insufficient permissions for this operation.","type":"insufficient_permissions","code":"insufficient_permissions"}}""", FailureCategory.ProviderAuthFailed,
+    [Arguments(403, """{"error":{"message":"You have insufficient permissions for this operation.","type":"insufficient_permissions","code":"insufficient_permissions"}}""",
+        FailureCategory.ProviderAuthFailed,
         DeniedMessage + " (insufficient_permissions: You have insufficient permissions for this operation.)")]
-    [Arguments(403, """{"error":{"message":"Country, region, or territory not supported","type":"request_forbidden","code":"unsupported_country_region_territory"}}""", FailureCategory.ProviderAuthFailed,
+    [Arguments(403, """{"error":{"message":"Country, region, or territory not supported","type":"request_forbidden","code":"unsupported_country_region_territory"}}""",
+        FailureCategory.ProviderAuthFailed,
         DeniedMessage + " (unsupported_country_region_territory: Country, region, or territory not supported)")]
     // The organization id makes the real message fail the grammar: the reader is told it was denied, and to rotate nothing.
     [Arguments(403, """{"error":{"message":"Project `proj_abc123` does not have access to model `gpt-5`","type":"invalid_request_error"}}""", FailureCategory.ProviderAuthFailed,

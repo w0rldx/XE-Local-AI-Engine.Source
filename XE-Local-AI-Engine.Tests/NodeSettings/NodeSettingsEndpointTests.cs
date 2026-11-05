@@ -2884,7 +2884,8 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = new StringContent("""{"llamaMaxLoadedProcesses":null,"webSearchSearxngUrl":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
+        request.Content = new StringContent(
+            """{"llamaMaxLoadedProcesses":null,"webSearchSearxngUrl":null,"enableTools":null,"usageRates":null,"speculativeDraftGpuLayers":null,"updateChannel":null}""",
             Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request);
 

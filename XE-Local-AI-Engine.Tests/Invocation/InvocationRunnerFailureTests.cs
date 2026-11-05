@@ -17,7 +17,7 @@ using static InvocationRunnerTestSupport;
 public sealed class InvocationRunnerFailureTests
 {
     [Test]
-    [Arguments("registry.example/library/gemma:12b does not support thinking","This model does not support reasoning.")]
+    [Arguments("registry.example/library/gemma:12b does not support thinking", "This model does not support reasoning.")]
     [Arguments("this model does not support tools", "This model does not support tool calling.")]
     public async Task RunAsync_WhenModelRejectsCapability_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage, string expectedError)
     {

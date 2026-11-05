@@ -180,7 +180,11 @@ public sealed class RuntimeStatePackagingTests
     public void ClientRuntimeJsonFiles_AreRemovedFromContentAndNone_AndIgnored(string fileName)
     {
         var project = XDocument.Load(RepositoryPaths.ClientProject("XE-Local-AI-Engine.Client.csproj"));
-        foreach (var itemType in new[] { "Content", "None" })
+        foreach (var itemType in new[]
+                 {
+                     "Content",
+                     "None"
+                 })
         {
             AssertEx.True(project.Descendants(itemType).Any(item => string.Equals((string?)item.Attribute("Remove"), fileName, StringComparison.Ordinal)),
                 $"{itemType} must remove {fileName}.");

@@ -26,7 +26,12 @@ public sealed class LocalChatHubDirectInferenceTests
         await connection.StartAsync();
 
         var events = await connection.StreamAsync<DirectInferenceEvent>(Method,
-                                         new DirectInferenceRequest { ModelId = "qwen3.5:0.8b", SystemPrompt = "Be terse.", Prompt = "hello" })
+                                         new DirectInferenceRequest
+                                         {
+                                             ModelId = "qwen3.5:0.8b",
+                                             SystemPrompt = "Be terse.",
+                                             Prompt = "hello"
+                                         })
                                      .ToListAsync();
 
         AssertEx.True(events.Count >= 3, $"expected deltas, usage and done; got {string.Join(",", events.Select(static e => e.Type))}");
@@ -53,7 +58,10 @@ public sealed class LocalChatHubDirectInferenceTests
                                 {
                                     ModelId = "qwen3.5:0.8b",
                                     Prompt = "hello",
-                                    SamplingOptions = new SamplingOptions { TopP = 1.5f }
+                                    SamplingOptions = new SamplingOptions
+                                    {
+                                        TopP = 1.5f
+                                    }
                                 })
                             .ToListAsync());
 
@@ -67,27 +75,42 @@ public sealed class LocalChatHubDirectInferenceTests
         var service = Substitute.For<IDirectInferenceService>();
         service.StreamAsync(Arg.Any<DirectInferenceRequest>(), Arg.Any<CancellationToken>())
                .Returns(new[]
+               {
+                   new DirectInferenceEvent
                    {
-                       new DirectInferenceEvent
-                       {
-                           Type = DirectInferenceEventTypes.Logprobs,
-                           Logprobs =
-                           [
-                               new DirectInferenceLogprobEntry
-                               {
-                                   Text = "🌏",
-                                   Logprob = -0.5f,
-                                   IsReasoning = true,
-                                   Alternatives = [new DirectInferenceLogprobAlternative { Text = "�", Logprob = -float.MaxValue }]
-                               }
-                           ]
-                       }
-                   }.ToAsyncEnumerable());
-        await using var factory = new TestServerWebAppFactory { ConfigureAdditionalTestServices = services => services.AddSingleton(service) };
+                       Type = DirectInferenceEventTypes.Logprobs,
+                       Logprobs =
+                       [
+                           new DirectInferenceLogprobEntry
+                           {
+                               Text = "🌏",
+                               Logprob = -0.5f,
+                               IsReasoning = true,
+                               Alternatives =
+                               [
+                                   new DirectInferenceLogprobAlternative
+                                   {
+                                       Text = "�",
+                                       Logprob = -float.MaxValue
+                                   }
+                               ]
+                           }
+                       ]
+                   }
+               }.ToAsyncEnumerable());
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services => services.AddSingleton(service)
+        };
         await using var connection = CreateHubConnection(factory, authorized: true);
         await connection.StartAsync();
 
-        var received = await connection.StreamAsync<DirectInferenceEvent>(Method, new DirectInferenceRequest { ModelId = "m", Prompt = "hello", TopLogprobs = 1 }).ToListAsync();
+        var received = await connection.StreamAsync<DirectInferenceEvent>(Method, new DirectInferenceRequest
+        {
+            ModelId = "m",
+            Prompt = "hello",
+            TopLogprobs = 1
+        }).ToListAsync();
 
         var entry = AssertEx.NotNull(received.Single().Logprobs).Single();
         AssertEx.Equal("🌏", entry.Text);

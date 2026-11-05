@@ -174,13 +174,13 @@ public sealed class SchedulerDispatchJobRunnerTests
         context.Scheduler.Returns(scheduler);
         var executor = Substitute.For<ISchedulerDispatchExecutor>();
         executor.DispatchAsync(JobId,
-                     "fire-x",
-                     Arg.Any<DateTimeOffset?>(),
-                     Arg.Any<DateTimeOffset>(),
-                     Arg.Any<CancellationToken>(),
-                     Arg.Any<IReadOnlyDictionary<string, string>?>(),
-                     Arg.Any<ScheduledRunTrigger>(),
-                     Arg.Any<Guid?>())
+                    "fire-x",
+                    Arg.Any<DateTimeOffset?>(),
+                    Arg.Any<DateTimeOffset>(),
+                    Arg.Any<CancellationToken>(),
+                    Arg.Any<IReadOnlyDictionary<string, string>?>(),
+                    Arg.Any<ScheduledRunTrigger>(),
+                    Arg.Any<Guid?>())
                 .Returns(_ => interrupted.Task.WaitAsync(TestBudgets.Contended));
 
         await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context, TimeSpan.FromDays(1), TimeProvider.System, CancellationToken.None);

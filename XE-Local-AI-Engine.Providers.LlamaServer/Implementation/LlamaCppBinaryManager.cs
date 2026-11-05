@@ -350,10 +350,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
             var stagingDir = await _archiveDownloader.DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir,
-                    reporter,
-                    stepIndex: 1,
-                    ct)
-                .ConfigureAwait(false);
+                                                         reporter,
+                                                         stepIndex: 1,
+                                                         ct)
+                                                     .ConfigureAwait(false);
 
             // Pair the CUDA runtime libraries (pinned companion) INTO THE STAGING DIR, then publish: a CUDA build without its cudart archive silently degrades to
             // CPU-only, and a published half-CUDA dir let the device probe cache an empty GPU list. A cudart failure discards the staging dir and throws.

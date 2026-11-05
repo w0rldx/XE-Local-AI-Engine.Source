@@ -341,13 +341,19 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         // A steering row's blob is its vector, which has no route out of this node.
         if (record is not { Kind: ModelLabExperimentKind.Trace, TraceBlobId: { } blobId, TraceSha256: { } hash, TraceByteCount: { } bytes })
         {
-            return new ModelLabTrace { Status = ModelLabTraceReadStatus.NotFound };
+            return new ModelLabTrace
+            {
+                Status = ModelLabTraceReadStatus.NotFound
+            };
         }
 
         var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
         return read.Status == ManagedBlobReadStatus.Found
             ? ModelLabTraceSpec.ParseTrace(read.Content)
-            : new ModelLabTrace { Status = ModelLabTraceReadStatus.Unavailable };
+            : new ModelLabTrace
+            {
+                Status = ModelLabTraceReadStatus.Unavailable
+            };
     }
 
     public Task StartAsync(CancellationToken cancellationToken) =>
@@ -483,7 +489,10 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 #pragma warning restore CA2025
             }
 
-            return new ModelLabStart { ExperimentId = id };
+            return new ModelLabStart
+            {
+                ExperimentId = id
+            };
         }
         catch (OperationCanceledException) when (active.Cancellation.IsCancellationRequested)
         {
@@ -755,7 +764,12 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         var vectorBytes = await File.ReadAllBytesAsync(job.VectorPath, CancellationToken.None);
         var blobId = Guid.NewGuid();
         var written = await _blobs.WriteAsync(id, blobId, vectorBytes, CancellationToken.None);
-        await SetProgressAsync(active, result, new ModelLabBlobReference { BlobId = blobId, Sha256 = written.ContentHash, ByteCount = written.ByteCount });
+        await SetProgressAsync(active, result, new ModelLabBlobReference
+        {
+            BlobId = blobId,
+            Sha256 = written.ContentHash,
+            ByteCount = written.ByteCount
+        });
 
         return await RunArmsAsync(active, result, derived, new ModelLabArmPlan
         {
@@ -798,7 +812,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     }
 
     /// <summary>The arms' own bound: the script's watchdog has gone, and each request has its own timeout. Every arm finished by now is already on the row.</summary>
-    private async Task<ModelLabExperimentCompletion> RunArmsAsync(ActiveJob active, ModelLabTraceResult result, ModelLabSteeringResult derived, ModelLabArmPlan plan, ILlamaServerRuntimeMutationLease lease)
+    private async Task<ModelLabExperimentCompletion> RunArmsAsync(ActiveJob active, ModelLabTraceResult result, ModelLabSteeringResult derived, ModelLabArmPlan plan,
+        ILlamaServerRuntimeMutationLease lease)
     {
         using var deadline = new CancellationTokenSource(_options.MaxDuration, _timeProvider);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(active.Cancellation.Token, deadline.Token);
@@ -806,12 +821,22 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         {
             var lastExitSeen = await _arms.RunAsync(active.ExperimentId, plan, lease, async arm =>
             {
-                derived = derived with { Arms = [.. derived.Arms, arm] };
-                await SetProgressAsync(active, result with { Steering = derived }, blob: null);
+                derived = derived with
+                {
+                    Arms = [.. derived.Arms, arm]
+                };
+                await SetProgressAsync(active, result with
+                {
+                    Steering = derived
+                }, blob: null);
             }, linked.Token);
             return lastExitSeen
-                ? new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Succeeded }
-                : Finished(ModelLabExperimentStatus.Failed, "The last arm's server was not seen to exit, so it may still be running and holding GPU memory. Its results are kept. Check for a llama-server process and stop it.");
+                ? new ModelLabExperimentCompletion
+                {
+                    Status = ModelLabExperimentStatus.Succeeded
+                }
+                : Finished(ModelLabExperimentStatus.Failed,
+                    "The last arm's server was not seen to exit, so it may still be running and holding GPU memory. Its results are kept. Check for a llama-server process and stop it.");
         }
         catch (OperationCanceledException) when (active.Cancellation.IsCancellationRequested)
         {

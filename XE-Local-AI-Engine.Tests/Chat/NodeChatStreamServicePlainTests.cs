@@ -141,7 +141,11 @@ public sealed class NodeChatStreamServicePlainTests
             ConversationId = harness.ConversationId,
             ModelName = model
         }));
-        var inputs = await estimateService.ResolveAsync(model, agentId: null, useLocalTools: true, CancellationToken.None, new NodeChatConversationPlainMode { IsPlain = true, PlainSystemPrompt = prompt });
+        var inputs = await estimateService.ResolveAsync(model, agentId: null, useLocalTools: true, CancellationToken.None, new NodeChatConversationPlainMode
+        {
+            IsPlain = true,
+            PlainSystemPrompt = prompt
+        });
 
         var package = AssertEx.NotNull(harness.Runner.LastPackage);
         AssertEx.Equal(package.ResolvedSystemPrompt, inputs.SystemPrompt);
@@ -175,7 +179,11 @@ public sealed class NodeChatStreamServicePlainTests
                 PlainSystemPrompt = plainSystemPrompt
             };
             Persistence.GetConversationForTurnAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
-            Persistence.GetConversationPlainModeAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationPlainMode { IsPlain = isPlain, PlainSystemPrompt = plainSystemPrompt });
+            Persistence.GetConversationPlainModeAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationPlainMode
+            {
+                IsPlain = isPlain,
+                PlainSystemPrompt = plainSystemPrompt
+            });
         }
 
         /// <summary>A turn into <paramref name="conversationId" /> over the given persistence, or a substitute that stores nothing when null.</summary>

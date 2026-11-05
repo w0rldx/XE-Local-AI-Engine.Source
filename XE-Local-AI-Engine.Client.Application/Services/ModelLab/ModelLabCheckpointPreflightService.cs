@@ -29,7 +29,11 @@ public sealed class ModelLabCheckpointPreflightService
     private const long MaxConfigBytes = 1024 * 1024;
 
     /// <summary>What <c>modellab.py</c> has traced. Its hooks need <c>model.model</c>'s blocks, which not every layout has; extend this after tracing one.</summary>
-    private static readonly HashSet<string> TracedModelTypes = new(StringComparer.Ordinal) { "qwen3_5", "qwen3_5_text" };
+    private static readonly HashSet<string> TracedModelTypes = new(StringComparer.Ordinal)
+    {
+        "qwen3_5",
+        "qwen3_5_text"
+    };
 
     private readonly IBaseCheckpointStore _checkpointStore;
     private readonly IRuntimeDeviceAudit _deviceAudit;
@@ -128,10 +132,10 @@ public sealed class ModelLabCheckpointPreflightService
         if (Array.Exists(weightSizes, static size => size <= 0))
         {
             return Refuse(result with
-            {
-                WeightBytes = null,
-                RequiredVramBytes = null
-            }, ModelLabCheckpointRefusal.WeightSizeUnknown, $"Hugging Face did not report the size of every weight file of {repoId}, so its fit cannot be checked.");
+                {
+                    WeightBytes = null,
+                    RequiredVramBytes = null
+                }, ModelLabCheckpointRefusal.WeightSizeUnknown, $"Hugging Face did not report the size of every weight file of {repoId}, so its fit cannot be checked.");
         }
 
         if (cardBytes is not { } card)
@@ -197,7 +201,8 @@ public sealed class ModelLabCheckpointPreflightService
         if (hiddenSize != gguf.EmbeddingLength)
         {
             return Refuse(result, ModelLabCheckpointRefusal.EmbeddingMismatch,
-                string.Create(CultureInfo.InvariantCulture, $"{repoId} has hidden size {hiddenSize} and '{installedModelName}' has embedding size {gguf.EmbeddingLength}, so a vector from one cannot apply to the other."));
+                string.Create(CultureInfo.InvariantCulture,
+                    $"{repoId} has hidden size {hiddenSize} and '{installedModelName}' has embedding size {gguf.EmbeddingLength}, so a vector from one cannot apply to the other."));
         }
 
         if (blockCount == gguf.BlockCount)
@@ -207,7 +212,8 @@ public sealed class ModelLabCheckpointPreflightService
 
         var hint = gguf.BlockCount > blockCount ? " A GGUF exported with its MTP head counts that head as an extra block; use an export without it." : string.Empty;
         return Refuse(result, ModelLabCheckpointRefusal.BlockCountMismatch,
-            string.Create(CultureInfo.InvariantCulture, $"{repoId} has {blockCount} blocks and '{installedModelName}' has {gguf.BlockCount}, so a layer from one does not name the same layer in the other.{hint}"));
+            string.Create(CultureInfo.InvariantCulture,
+                $"{repoId} has {blockCount} blocks and '{installedModelName}' has {gguf.BlockCount}, so a layer from one does not name the same layer in the other.{hint}"));
     }
 
     private async Task<BaseCheckpointConfigV1?> ReadConfigOrNullAsync(BaseCheckpointManifest manifest, CancellationToken ct)

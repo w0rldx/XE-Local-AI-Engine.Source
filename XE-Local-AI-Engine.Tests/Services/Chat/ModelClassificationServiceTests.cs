@@ -86,10 +86,14 @@ public sealed class ModelClassificationServiceTests
         AssertEx.Empty(result.Capabilities);
     }
 
-    private ModelClassificationService CreateService() => new(_store, _ggufModelStore);
+    private ModelClassificationService CreateService() =>
+        new(_store, _ggufModelStore);
 
     private void WithInstalled(LocalModelDescriptor descriptor) =>
-        _ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(new[] { descriptor });
+        _ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(new[]
+        {
+            descriptor
+        });
 
     /// <summary>
     ///     A faithful in-memory <see cref="IModelClassificationStore" /> used so the service tests exercise real

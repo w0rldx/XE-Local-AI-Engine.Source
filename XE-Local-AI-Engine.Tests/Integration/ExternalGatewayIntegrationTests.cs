@@ -440,9 +440,10 @@ public sealed class ExternalGatewayIntegrationTests
     // the body raw. Neither may reach the operator or the exception chain a log prints; the status and its fixed text remain.
     [Test]
     [MatrixDataSource]
-    public async Task GatewayEchoingACredential_ReachesNeitherTheOperatorNorTheChain(
-        [Matrix(400, 401, 403, 404, 429, 500)] int status,
-        [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""", """{"error":{"message":"Key: sk/%s/x"}}""", """{"seen":["\u006c%s"]}""", "Invalid key %s")] string shape,
+    public async Task GatewayEchoingACredential_ReachesNeitherTheOperatorNorTheChain([Matrix(400, 401, 403, 404, 429, 500)] int status,
+        [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""",
+            """{"error":{"message":"Key: sk/%s/x"}}""", """{"seen":["\u006c%s"]}""", "Invalid key %s")]
+        string shape,
         [Matrix(LettersOnlyKey, LettersOnlyHeaderSecret)] string secret)
     {
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions

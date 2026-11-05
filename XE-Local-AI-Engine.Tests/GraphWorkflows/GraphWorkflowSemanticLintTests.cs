@@ -23,14 +23,14 @@ public sealed class GraphWorkflowSemanticLintTests
                                     """;
 
     private const string UpstreamSkipsAPredecessor = """
-                                                       { "nodes": [{ "key": "start", "kind": "Start" },
-                                                                   { "key": "first", "kind": "LlmCall", "config": { "prompt": "Work.", "inputBindings": { "value": "run.input.message" } } },
-                                                                   { "key": "second", "kind": "LlmCall", "config": { "prompt": "Work.", "inputBindings": { "value": "upstream.start.output.input" } } },
-                                                                   { "key": "end", "kind": "End", "config": { "outcome": "completed" } }],
-                                                         "edges": [{ "key": "e1", "from": "start", "to": "first" },
-                                                                   { "key": "e2", "from": "first", "to": "second" },
-                                                                   { "key": "e3", "from": "second", "to": "end" }] }
-                                                       """;
+                                                     { "nodes": [{ "key": "start", "kind": "Start" },
+                                                                 { "key": "first", "kind": "LlmCall", "config": { "prompt": "Work.", "inputBindings": { "value": "run.input.message" } } },
+                                                                 { "key": "second", "kind": "LlmCall", "config": { "prompt": "Work.", "inputBindings": { "value": "upstream.start.output.input" } } },
+                                                                 { "key": "end", "kind": "End", "config": { "outcome": "completed" } }],
+                                                       "edges": [{ "key": "e1", "from": "start", "to": "first" },
+                                                                 { "key": "e2", "from": "first", "to": "second" },
+                                                                 { "key": "e3", "from": "second", "to": "end" }] }
+                                                     """;
 
     [Test]
     public void ExclusiveBranches_IntoAnAllJoin_AreAnErrorOnTheJoinNamingTheDecision()
@@ -284,7 +284,8 @@ public sealed class GraphWorkflowSemanticLintTests
 
         var validation = await service.ValidateAsync(graphJson);
         AssertEx.False(validation.IsValid, "validate must refuse the graph");
-        AssertEx.Contains(validation.Errors, error => error.Key == key && error.Message.Contains(message, StringComparison.Ordinal), $"validate names the finding: {string.Join(" | ", validation.Errors)}");
+        AssertEx.Contains(validation.Errors, error => error.Key == key && error.Message.Contains(message, StringComparison.Ordinal),
+            $"validate names the finding: {string.Join(" | ", validation.Errors)}");
         AssertEx.Empty(validation.Warnings.Where(warning => warning.Key == key), "the finding is not repeated as a warning");
 
         var refused = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() => service.CreateAsync("lint", description: null, graphJson));

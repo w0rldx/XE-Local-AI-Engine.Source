@@ -239,7 +239,11 @@ public sealed class ConversationPlainTests : IDisposable
         var service = CreateService(provider);
         var created = await CreateConversationAsync(service);
 
-        AssertEx.Equal(new NodeChatConversationPlainMode { IsPlain = false, PlainSystemPrompt = null }, await service.GetConversationPlainModeAsync(created.ConversationId));
+        AssertEx.Equal(new NodeChatConversationPlainMode
+        {
+            IsPlain = false,
+            PlainSystemPrompt = null
+        }, await service.GetConversationPlainModeAsync(created.ConversationId));
 
         await service.SetConversationPlainAsync(new NodeChatSetConversationPlainRequest
         {
@@ -249,7 +253,11 @@ public sealed class ConversationPlainTests : IDisposable
             UpdatedAtUtc = 20
         });
 
-        AssertEx.Equal(new NodeChatConversationPlainMode { IsPlain = true, PlainSystemPrompt = prompt }, await service.GetConversationPlainModeAsync(created.ConversationId));
+        AssertEx.Equal(new NodeChatConversationPlainMode
+        {
+            IsPlain = true,
+            PlainSystemPrompt = prompt
+        }, await service.GetConversationPlainModeAsync(created.ConversationId));
         AssertEx.Null(await service.GetConversationPlainModeAsync(Guid.NewGuid()));
     }
 

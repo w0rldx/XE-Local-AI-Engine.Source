@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -70,7 +71,12 @@ public sealed class ModelLabExperimentEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-lab/checkpoint-download")
         {
-            Content = JsonContent.Create(new { repoId = "Qwen/Qwen3.5-0.8B", installedModelName = "org/Some-GGUF:Q4_K_M", licenseConfirmed = true })
+            Content = JsonContent.Create(new
+            {
+                repoId = "Qwen/Qwen3.5-0.8B",
+                installedModelName = "org/Some-GGUF:Q4_K_M",
+                licenseConfirmed = true
+            })
         };
         factory.AddNonOperatorBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
@@ -202,7 +208,10 @@ public sealed class ModelLabExperimentEndpointTests
                 BaseArtifactId = Guid.NewGuid(),
                 InstalledModelName = "org/Some-GGUF:Q4_K_M",
                 Prompt = "hello",
-                LicenseConfirmationJson = new byte[] { 1 }
+                LicenseConfirmationJson = new byte[]
+                {
+                    1
+                }
             });
             await store.CompleteAsync(id, new ModelLabExperimentCompletion
             {
@@ -212,29 +221,29 @@ public sealed class ModelLabExperimentEndpointTests
         }
 
         using (var request = Authorized(factory, HttpMethod.Get, $"{Experiments}/{id}"))
-        using (var response = await client.SendAsync(request))
-        {
-            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            AssertEx.Equal("hello", body.RootElement.GetProperty("prompt").GetString());
-            AssertEx.Equal("Succeeded", body.RootElement.GetProperty("status").GetString());
-            var result = body.RootElement.GetProperty("result");
-            AssertEx.Equal(expected: 3, result.GetProperty("promptTokens").GetInt32());
-            AssertEx.Equal("hi", result.GetProperty("tokens")[0].GetProperty("text").GetString());
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                AssertEx.Equal("hello", body.RootElement.GetProperty("prompt").GetString());
+                AssertEx.Equal("Succeeded", body.RootElement.GetProperty("status").GetString());
+                var result = body.RootElement.GetProperty("result");
+                AssertEx.Equal(expected: 3, result.GetProperty("promptTokens").GetInt32());
+                AssertEx.Equal("hi", result.GetProperty("tokens")[0].GetProperty("text").GetString());
+            }
 
         using (var request = Authorized(factory, HttpMethod.Get, Experiments))
-        using (var response = await client.SendAsync(request))
-        {
-            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            AssertEx.Equal(JsonValueKind.Null, body.RootElement.GetProperty("experiments")[0].GetProperty("result").ValueKind, "A list leaves the tokens out.");
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                AssertEx.Equal(JsonValueKind.Null, body.RootElement.GetProperty("experiments")[0].GetProperty("result").ValueKind, "A list leaves the tokens out.");
+            }
 
         using (var request = Authorized(factory, HttpMethod.Delete, $"{Experiments}/{id}"))
-        using (var response = await client.SendAsync(request))
-        {
-            AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            }
     }
 
     [Test]
@@ -305,12 +314,18 @@ public sealed class ModelLabExperimentEndpointTests
                 BaseArtifactId = Guid.NewGuid(),
                 InstalledModelName = "org/Some-GGUF:Q4_K_M",
                 Prompt = "hello",
-                LicenseConfirmationJson = new byte[] { 1 }
+                LicenseConfirmationJson = new byte[]
+                {
+                    1
+                }
             });
         }
 
-        var events = factory.Services.GetRequiredService<XE_Local_AI_Engine.Client.Services.Training.Runs.ITrainingRunEventBuffer>();
-        _ = events.Append(id, XE_Local_AI_Engine.Client.Services.Training.Runs.TrainingRunEventKind.Phase, new XE_Local_AI_Engine.Client.Services.Training.Runs.TrainingRunPayload { Phase = "tracing" });
+        var events = factory.Services.GetRequiredService<ITrainingRunEventBuffer>();
+        _ = events.Append(id, TrainingRunEventKind.Phase, new TrainingRunPayload
+        {
+            Phase = "tracing"
+        });
         var token = factory.CreateNodeAccessToken();
         await using var connection = new HubConnectionBuilder()
                                      .WithUrl(new Uri(factory.Server.BaseAddress, LocalApiRoutes.Training.RunHub),

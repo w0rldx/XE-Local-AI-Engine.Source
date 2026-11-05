@@ -621,7 +621,10 @@ public sealed class AzureFoundryChatClientFactoryTests
         };
 
         using var before = (AzureFoundryErrorTranslatingChatClient)factory.Create(connection, "gpt-4o");
-        using var after = (AzureFoundryErrorTranslatingChatClient)factory.Create(connection with { ApiKey = "key-v2" }, "gpt-4o");
+        using var after = (AzureFoundryErrorTranslatingChatClient)factory.Create(connection with
+        {
+            ApiKey = "key-v2"
+        }, "gpt-4o");
 
         AssertEx.Equal("entra-v1,header-v1,key-v1", string.Join(',', before.SentSecrets.Order(StringComparer.Ordinal)));
         AssertEx.Equal("entra-v1,header-v1,key-v2", string.Join(',', after.SentSecrets.Order(StringComparer.Ordinal)));

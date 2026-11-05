@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Globalization;
-using System.Net.Http.Json;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -63,8 +62,16 @@ public sealed class ModelLabArmRunner
         var results = await _harness.RunArmsAsync<bool>(heldLease,
             [
                 unsteered,
-                unsteered with { ControlVectorPath = plan.VectorPath, ControlVectorScale = plan.Scale },
-                unsteered with { ControlVectorPath = plan.RandomVectorPath, ControlVectorScale = plan.Scale }
+                unsteered with
+                {
+                    ControlVectorPath = plan.VectorPath,
+                    ControlVectorScale = plan.Scale
+                },
+                unsteered with
+                {
+                    ControlVectorPath = plan.RandomVectorPath,
+                    ControlVectorScale = plan.Scale
+                }
             ],
             async (arm, session, token) =>
             {
@@ -81,7 +88,11 @@ public sealed class ModelLabArmRunner
                 foreach (var prompt in plan.Prompts)
                 {
                     outputs.Add(await GenerateAsync(client, session, prompt, token));
-                    _ = _events.Append(experimentId, TrainingRunEventKind.Progress, new TrainingRunPayload { Step = outputs.Count, TotalSteps = plan.Prompts.Count });
+                    _ = _events.Append(experimentId, TrainingRunEventKind.Progress, new TrainingRunPayload
+                    {
+                        Step = outputs.Count,
+                        TotalSteps = plan.Prompts.Count
+                    });
                 }
 
                 var generation = _timeProvider.GetElapsedTime(generationStart);
@@ -106,14 +117,24 @@ public sealed class ModelLabArmRunner
     }
 
     private void AppendArmPhase(Guid experimentId, int arm) =>
-        _ = _events.Append(experimentId, TrainingRunEventKind.Phase, new TrainingRunPayload { Phase = $"arm-{ArmNames[arm]}" });
+        _ = _events.Append(experimentId, TrainingRunEventKind.Phase, new TrainingRunPayload
+        {
+            Phase = $"arm-{ArmNames[arm]}"
+        });
 
     private static async Task<ModelLabArmOutput> GenerateAsync(HttpClient client, TransientLlamaServerEvaluationSession session, string prompt, CancellationToken ct)
     {
         using var response = await client.PostAsJsonAsync(new Uri(session.BaseAddress, "/v1/chat/completions"), new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["model"] = session.ModelId,
-            ["messages"] = new[] { new Dictionary<string, string>(StringComparer.Ordinal) { ["role"] = "user", ["content"] = prompt } },
+            ["messages"] = new[]
+            {
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["role"] = "user",
+                    ["content"] = prompt
+                }
+            },
             ["max_tokens"] = ModelLabTraceSpec.MaxNewTokens,
             ["temperature"] = 0,
             ["seed"] = ModelLabTraceSpec.Seed,
@@ -122,7 +143,10 @@ public sealed class ModelLabArmRunner
             ["logprobs"] = true,
             ["top_logprobs"] = 1,
             ["stream"] = false,
-            ["chat_template_kwargs"] = new Dictionary<string, bool>(StringComparer.Ordinal) { ["enable_thinking"] = false }
+            ["chat_template_kwargs"] = new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                ["enable_thinking"] = false
+            }
         }, ct);
         if (!response.IsSuccessStatusCode)
         {

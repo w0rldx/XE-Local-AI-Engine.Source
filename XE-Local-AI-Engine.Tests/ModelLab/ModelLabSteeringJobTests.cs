@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.ModelLab.ModelLabExperimentServiceTests;
+using static ModelLabExperimentServiceTests;
 
 /// <summary>
 ///     A steering job on the node's real DI: real gate, lease, ledger, store and blobs. The script, the harness and the arm servers are scripted.
@@ -175,7 +175,10 @@ public sealed class ModelLabSteeringJobTests
     public async Task ALastServerNotSeenToExit_FailsTheRow_AndKeepsAllThreeArms()
     {
         using var process = new ScriptedProcess();
-        var harness = new ScriptedHarness { LastExitObserved = false };
+        var harness = new ScriptedHarness
+        {
+            LastExitObserved = false
+        };
         await using var host = await StartHostAsync(process, harness);
         var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
         process.Finish(CompleteRun, exitCode: 0);
@@ -254,12 +257,72 @@ public sealed class ModelLabSteeringJobTests
 
         foreach (var steering in new object[]
                  {
-                     new { positivePrompts = Array.Empty<string>(), negativePrompts = new[] { "b" } },
-                     new { positivePrompts = new[] { "a" }, negativePrompts = new[] { "   " } },
-                     new { positivePrompts = new[] { new string('a', ModelLabTraceSpec.MaxContrastPromptCharacters + 1) }, negativePrompts = new[] { "b" } },
-                     new { positivePrompts = new[] { "a" }, negativePrompts = new[] { "b" }, scale = 0.0 },
-                     new { positivePrompts = new[] { "a" }, negativePrompts = new[] { "b" }, scale = 21.0 },
-                     new { positivePrompts = new[] { "a" }, negativePrompts = new[] { "b" }, additionalTestPrompts = Enumerable.Repeat("t", ModelLabTraceSpec.MaxAdditionalTestPrompts + 1).ToArray() }
+                     new
+                     {
+                         positivePrompts = Array.Empty<string>(),
+                         negativePrompts = new[]
+                         {
+                             "b"
+                         }
+                     },
+                     new
+                     {
+                         positivePrompts = new[]
+                         {
+                             "a"
+                         },
+                         negativePrompts = new[]
+                         {
+                             "   "
+                         }
+                     },
+                     new
+                     {
+                         positivePrompts = new[]
+                         {
+                             new string('a', ModelLabTraceSpec.MaxContrastPromptCharacters + 1)
+                         },
+                         negativePrompts = new[]
+                         {
+                             "b"
+                         }
+                     },
+                     new
+                     {
+                         positivePrompts = new[]
+                         {
+                             "a"
+                         },
+                         negativePrompts = new[]
+                         {
+                             "b"
+                         },
+                         scale = 0.0
+                     },
+                     new
+                     {
+                         positivePrompts = new[]
+                         {
+                             "a"
+                         },
+                         negativePrompts = new[]
+                         {
+                             "b"
+                         },
+                         scale = 21.0
+                     },
+                     new
+                     {
+                         positivePrompts = new[]
+                         {
+                             "a"
+                         },
+                         negativePrompts = new[]
+                         {
+                             "b"
+                         },
+                         additionalTestPrompts = Enumerable.Repeat("t", ModelLabTraceSpec.MaxAdditionalTestPrompts + 1).ToArray()
+                     }
                  })
         {
             using var request = host.Authorized(HttpMethod.Post, "/api/local/v1/model-lab/experiments");
@@ -540,7 +603,10 @@ public sealed class ModelLabSteeringJobTests
             return Lease();
         });
         using var process = new ScriptedProcess();
-        await using var host = await StartHostAsync(process, new ScriptedHarness(), leases: leases, options: new ModelLabJobOptions { MaxDuration = TimeSpan.FromMilliseconds(50) });
+        await using var host = await StartHostAsync(process, new ScriptedHarness(), leases: leases, options: new ModelLabJobOptions
+        {
+            MaxDuration = TimeSpan.FromMilliseconds(50)
+        });
 
         var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
@@ -624,7 +690,11 @@ public sealed class ModelLabSteeringJobTests
         await using var host = await StartHostAsync(process, new ScriptedHarness());
         using var client = host.Factory.CreateClient();
         using var request = host.Authorized(HttpMethod.Post, "/api/local/v1/model-lab/checkpoint-preflight");
-        request.Content = JsonContent.Create(new { baseArtifactId = host.Request().BaseArtifactId, installedModelName = Gguf });
+        request.Content = JsonContent.Create(new
+        {
+            baseArtifactId = host.Request().BaseArtifactId,
+            installedModelName = Gguf
+        });
 
         using var response = await client.SendAsync(request);
 
@@ -726,7 +796,13 @@ public sealed class ModelLabSteeringJobTests
 
             if (_count == EmptyOnRequest)
             {
-                return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { choices = Array.Empty<object>() }) };
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        choices = Array.Empty<object>()
+                    })
+                };
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK)
@@ -737,9 +813,29 @@ public sealed class ModelLabSteeringJobTests
                     {
                         new
                         {
-                            message = new { content = $"arm {CurrentArm}" },
+                            message = new
+                            {
+                                content = $"arm {CurrentArm}"
+                            },
                             finish_reason = "stop",
-                            logprobs = new { content = new[] { new { id = 7 }, new { id = 8 }, new { id = 9 } } }
+                            logprobs = new
+                            {
+                                content = new[]
+                                {
+                                    new
+                                    {
+                                        id = 7
+                                    },
+                                    new
+                                    {
+                                        id = 8
+                                    },
+                                    new
+                                    {
+                                        id = 9
+                                    }
+                                }
+                            }
                         }
                     }
                 })

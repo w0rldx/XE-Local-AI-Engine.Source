@@ -209,15 +209,33 @@ public sealed class ActiveCloudChatClientFactoryTests
             },
             "header-value" => original with
             {
-                Headers = [original.Headers[0] with { Value = "proj-000002" }]
+                Headers =
+                [
+                    original.Headers[0] with
+                    {
+                        Value = "proj-000002"
+                    }
+                ]
             },
             "header-secret-flag" => original with
             {
-                Headers = [original.Headers[0] with { IsSecret = true }]
+                Headers =
+                [
+                    original.Headers[0] with
+                    {
+                        IsSecret = true
+                    }
+                ]
             },
             _ => original with
             {
-                Headers = [original.Headers[0] with { Name = "y-project-id" }]
+                Headers =
+                [
+                    original.Headers[0] with
+                    {
+                        Name = "y-project-id"
+                    }
+                ]
             }
         };
         var harness = new Harness();

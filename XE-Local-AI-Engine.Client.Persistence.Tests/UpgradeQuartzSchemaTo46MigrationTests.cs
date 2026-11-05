@@ -100,13 +100,13 @@ public sealed class UpgradeQuartzSchemaTo46MigrationTests : IDisposable
     private static async Task InsertCronJobAsync(SqliteConnection connection)
     {
         await ExecuteAsync(connection, """
-            INSERT INTO QRTZ_JOB_DETAILS (SCHED_NAME, JOB_NAME, JOB_GROUP, JOB_CLASS_NAME, IS_DURABLE, IS_NONCONCURRENT, IS_UPDATE_DATA, REQUESTS_RECOVERY)
-            VALUES ('s', 'job', 'g', 'Job, Assembly', 1, 0, 0, 0);
-            INSERT INTO QRTZ_TRIGGERS (SCHED_NAME, TRIGGER_NAME, TRIGGER_GROUP, JOB_NAME, JOB_GROUP, TRIGGER_STATE, TRIGGER_TYPE, START_TIME)
-            VALUES ('s', 'trigger', 'g', 'job', 'g', 'WAITING', 'CRON', 0);
-            INSERT INTO QRTZ_CRON_TRIGGERS (SCHED_NAME, TRIGGER_NAME, TRIGGER_GROUP, CRON_EXPRESSION)
-            VALUES ('s', 'trigger', 'g', '0 0 * * * ?');
-            """);
+                                       INSERT INTO QRTZ_JOB_DETAILS (SCHED_NAME, JOB_NAME, JOB_GROUP, JOB_CLASS_NAME, IS_DURABLE, IS_NONCONCURRENT, IS_UPDATE_DATA, REQUESTS_RECOVERY)
+                                       VALUES ('s', 'job', 'g', 'Job, Assembly', 1, 0, 0, 0);
+                                       INSERT INTO QRTZ_TRIGGERS (SCHED_NAME, TRIGGER_NAME, TRIGGER_GROUP, JOB_NAME, JOB_GROUP, TRIGGER_STATE, TRIGGER_TYPE, START_TIME)
+                                       VALUES ('s', 'trigger', 'g', 'job', 'g', 'WAITING', 'CRON', 0);
+                                       INSERT INTO QRTZ_CRON_TRIGGERS (SCHED_NAME, TRIGGER_NAME, TRIGGER_GROUP, CRON_EXPRESSION)
+                                       VALUES ('s', 'trigger', 'g', '0 0 * * * ?');
+                                       """);
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

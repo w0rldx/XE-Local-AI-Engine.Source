@@ -1955,7 +1955,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     private static async Task<NodeChatConversationSummaryDto[]> ListBothQueriesAsync(NodeChatPersistenceService service) =>
     [
         (await service.ListConversationsAsync(new NodeChatListConversationsRequest())).Single(),
-        (await service.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true })).Single()
+        (await service.ListConversationsAsync(new NodeChatListConversationsRequest
+        {
+            IncludeArchived = true
+        })).Single()
     ];
 
     [Test]

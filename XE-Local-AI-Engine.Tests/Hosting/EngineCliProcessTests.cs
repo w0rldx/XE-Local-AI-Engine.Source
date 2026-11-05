@@ -109,7 +109,8 @@ public sealed class EngineCliProcessTests : IDisposable
         AssertEx.NotEqual(notExpected: 0, plain.ExitCode);
         AssertEx.Contains(plain.CombinedOutput, "WorkerNode:NodeName is required");
 
-        var reset = await RunAsync(["--reset-admin-password", AdminPassword, DesktopLaunch.RecoveryCodeStdinArgument], launchMode: null, nodeName: null, standardInput: "unused", workingDirectory: elsewhere);
+        var reset = await RunAsync(["--reset-admin-password", AdminPassword, DesktopLaunch.RecoveryCodeStdinArgument], launchMode: null, nodeName: null, standardInput: "unused",
+            workingDirectory: elsewhere);
         AssertEx.NotEqual(notExpected: 0, reset.ExitCode);
         AssertEx.Contains(reset.CombinedOutput, "WorkerNode:NodeName is required");
     }

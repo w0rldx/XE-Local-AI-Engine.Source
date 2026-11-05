@@ -17,9 +17,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ModelLabEndpointTests
 {
     private const string Route = "/api/local/v1/model-lab/checkpoint-preflight";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
     [Test]

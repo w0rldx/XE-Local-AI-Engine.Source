@@ -251,7 +251,8 @@ public sealed partial class WhisperCppSourceBuildService
     }
 
     // whisper.cpp has no hub: progress is observed by polling the status endpoint.
-    protected override Task PublishStatusAsync(StatusChange change, CancellationToken ct) => Task.CompletedTask;
+    protected override Task PublishStatusAsync(StatusChange change, CancellationToken ct) =>
+        Task.CompletedTask;
 
     protected override string BackendDirectoryName(WhisperBackend backend)
     {

@@ -26,7 +26,8 @@ internal sealed class TransientLlamaServerPinnedModel
         return new TransientLlamaServerPinnedModel(path, stamp, provenance);
     }
 
-    public bool IsUnchanged() => FileStamp.ReadOrNull(_path) == _stamp;
+    public bool IsUnchanged() =>
+        FileStamp.ReadOrNull(_path) == _stamp;
 
     /// <summary>The final target of any symlink: a link's own stamp would not see the file behind it change.</summary>
     private sealed record FileStamp

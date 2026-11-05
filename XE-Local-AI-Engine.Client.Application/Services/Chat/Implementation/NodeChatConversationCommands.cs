@@ -500,8 +500,7 @@ internal sealed class NodeChatConversationCommands
         ArgumentNullException.ThrowIfNull(request);
         if (request.PlainSystemPrompt?.Length > NodeChatSetConversationPlainRequest.MaxPlainSystemPromptLength)
         {
-            throw new NodeChatInvalidRequestException(
-                $"The system prompt is longer than {NodeChatSetConversationPlainRequest.MaxPlainSystemPromptLength} characters.");
+            throw new NodeChatInvalidRequestException($"The system prompt is longer than {NodeChatSetConversationPlainRequest.MaxPlainSystemPromptLength} characters.");
         }
 
         var prompt = string.IsNullOrWhiteSpace(request.PlainSystemPrompt) ? null : request.PlainSystemPrompt;

@@ -630,7 +630,11 @@ public sealed class ChatContextEstimateServiceTests
         public Guid AddConversation(bool isPlain, string? plainSystemPrompt)
         {
             var conversationId = Guid.NewGuid();
-            Persistence.GetConversationPlainModeAsync(conversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationPlainMode { IsPlain = isPlain, PlainSystemPrompt = plainSystemPrompt });
+            Persistence.GetConversationPlainModeAsync(conversationId, Arg.Any<CancellationToken>()).Returns(new NodeChatConversationPlainMode
+            {
+                IsPlain = isPlain,
+                PlainSystemPrompt = plainSystemPrompt
+            });
             return conversationId;
         }
 

@@ -116,16 +116,15 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
 
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.ExecuteSqlRawAsync(
-                """
-                INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc, revision) VALUES
-                    ('old-lower', 'ollama', 1, 'r1'),
-                    ('old-upper', 'OLLAMA', 2, 'r2'),
-                    ('old-mixed', 'Ollama', 3, 'r3'),
-                    ('kept-gguf', 'llamacpp', 4, 'r4'),
-                    ('kept-external', 'external', 5, 'r5'),
-                    ('kept-lookalike', 'ollama2', 6, 'r6');
-                """);
+            await context.Database.ExecuteSqlRawAsync("""
+                                                      INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc, revision) VALUES
+                                                          ('old-lower', 'ollama', 1, 'r1'),
+                                                          ('old-upper', 'OLLAMA', 2, 'r2'),
+                                                          ('old-mixed', 'Ollama', 3, 'r3'),
+                                                          ('kept-gguf', 'llamacpp', 4, 'r4'),
+                                                          ('kept-external', 'external', 5, 'r5'),
+                                                          ('kept-lookalike', 'ollama2', 6, 'r6');
+                                                      """);
             await context.Database.MigrateAsync();
         }
 

@@ -275,7 +275,8 @@ public sealed class ModelLabCheckpointPreflightServiceTests : IDisposable
         GgufHeader(embeddingLength: 1024, blockCount: 24);
         using var files = Files(Config08B);
 
-        var result = await Service(files, Weights08B).CheckDownloadedAsync(Saved(ConfigOfType(modelType), new BaseArtifactLicenseView("Qwen/Saved", "apache-2.0", IsGated: false, DateTimeOffset.UnixEpoch)), Gguf, CancellationToken.None);
+        var result = await Service(files, Weights08B)
+            .CheckDownloadedAsync(Saved(ConfigOfType(modelType), new BaseArtifactLicenseView("Qwen/Saved", "apache-2.0", IsGated: false, DateTimeOffset.UnixEpoch)), Gguf, CancellationToken.None);
 
         AssertEx.Null(result.Refusal, result.RefusalMessage);
         AssertEx.Equal(LicenseGateService.BuildModelLabText("Qwen/Saved", "apache-2.0", isGated: false, metadataPresent: true), result.LicenseConfirmationText!);

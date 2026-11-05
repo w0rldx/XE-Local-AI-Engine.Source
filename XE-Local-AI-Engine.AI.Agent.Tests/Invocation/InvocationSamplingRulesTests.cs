@@ -14,18 +14,54 @@ public sealed class InvocationSamplingRulesTests
 {
     public static IEnumerable<Func<InvocationSamplingOptions>> OutOfRange()
     {
-        yield return () => new InvocationSamplingOptions { Temperature = 2.01f };
-        yield return () => new InvocationSamplingOptions { Temperature = float.NaN };
-        yield return () => new InvocationSamplingOptions { TopP = -0.1f };
-        yield return () => new InvocationSamplingOptions { TopK = 0 };
-        yield return () => new InvocationSamplingOptions { MinP = 1.5f };
-        yield return () => new InvocationSamplingOptions { PresencePenalty = -2.5f };
-        yield return () => new InvocationSamplingOptions { FrequencyPenalty = 3f };
-        yield return () => new InvocationSamplingOptions { RepeatPenalty = -1f };
-        yield return () => new InvocationSamplingOptions { RepeatLastN = -2 };
-        yield return () => new InvocationSamplingOptions { Seed = -2 };
-        yield return () => new InvocationSamplingOptions { NumCtx = 0 };
-        yield return () => new InvocationSamplingOptions { MaxOutputTokens = -5 };
+        yield return () => new InvocationSamplingOptions
+        {
+            Temperature = 2.01f
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            Temperature = float.NaN
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            TopP = -0.1f
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            TopK = 0
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            MinP = 1.5f
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            PresencePenalty = -2.5f
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            FrequencyPenalty = 3f
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            RepeatPenalty = -1f
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            RepeatLastN = -2
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            Seed = -2
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            NumCtx = 0
+        };
+        yield return () => new InvocationSamplingOptions
+        {
+            MaxOutputTokens = -5
+        };
     }
 
     [Test]

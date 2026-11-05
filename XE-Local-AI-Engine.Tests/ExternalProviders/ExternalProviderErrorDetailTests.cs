@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.ExternalProviders;
 
 using System.Text;
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -83,7 +84,10 @@ public sealed class ExternalProviderErrorDetailTests
     [Arguments("Owner's id 3f2a9c81 is refused.")]
     public void Parse_HostileMessage_IsDroppedWhole(string message)
     {
-        var body = System.Text.Json.JsonSerializer.Serialize(new { message });
+        var body = JsonSerializer.Serialize(new
+        {
+            message
+        });
 
         AssertEx.Null(ExternalProviderErrorDetail.Parse(Encoding.UTF8.GetBytes(body)).Text);
     }

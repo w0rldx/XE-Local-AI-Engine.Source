@@ -41,10 +41,18 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
             BaseArtifactId = Guid.NewGuid(),
             InstalledModelName = "org/model:Q4",
             Prompt = Prompt,
-            LicenseConfirmationJson = new byte[] { 1 }
+            LicenseConfirmationJson = new byte[]
+            {
+                1
+            }
         });
 
-        await store.SetProgressAsync(id, Encoding.UTF8.GetBytes("arm-one-plaintext"), new ModelLabBlobReference { BlobId = blobId, Sha256 = "hash", ByteCount = 7 });
+        await store.SetProgressAsync(id, Encoding.UTF8.GetBytes("arm-one-plaintext"), new ModelLabBlobReference
+        {
+            BlobId = blobId,
+            Sha256 = "hash",
+            ByteCount = 7
+        });
         await store.SetProgressAsync(id, Encoding.UTF8.GetBytes("arm-two-plaintext"), blob: null);
         await store.RecoverOnStartupAsync();
         context.ChangeTracker.Clear();
@@ -69,7 +77,11 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         var id = Guid.NewGuid();
         await store.CreateRunningAsync(Create(id));
 
-        await store.CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Failed, ErrorMessage = "failed" });
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Failed,
+            ErrorMessage = "failed"
+        });
         context.ChangeTracker.Clear();
 
         AssertEx.Null((await context.ModelLabExperiments.AsNoTracking().SingleAsync(item => item.Id == id)).ResultJson);
@@ -85,7 +97,11 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         await store.CreateRunningAsync(Create(id));
         await store.SetProgressAsync(id, Encoding.UTF8.GetBytes("one-arm"), blob: null);
 
-        await store.CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Cancelled, ErrorMessage = "cancelled" });
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Cancelled,
+            ErrorMessage = "cancelled"
+        });
         context.ChangeTracker.Clear();
 
         var read = (await store.GetAsync(id))!;
@@ -138,10 +154,19 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         var store = new ModelLabExperimentStore(context, TimeProvider.System);
         var id = Guid.NewGuid();
         await store.CreateRunningAsync(Create(id));
-        await store.SetLaunchReceiptAsync(id, new byte[] { 1 });
+        await store.SetLaunchReceiptAsync(id, new byte[]
+        {
+            1
+        });
 
-        await store.CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Cancelled });
-        await store.CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Succeeded });
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Cancelled
+        });
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Succeeded
+        });
 
         AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await store.GetAsync(id))!.Status);
         AssertEx.Equal(expected: 0, (await store.ListLaunchReceiptsAsync()).Count);
@@ -155,9 +180,15 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         var running = Guid.NewGuid();
         var finished = Guid.NewGuid();
         await store.CreateRunningAsync(Create(running));
-        await store.SetLaunchReceiptAsync(running, new byte[] { 1 });
+        await store.SetLaunchReceiptAsync(running, new byte[]
+        {
+            1
+        });
         await store.CreateRunningAsync(Create(finished));
-        await store.CompleteAsync(finished, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Succeeded });
+        await store.CompleteAsync(finished, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Succeeded
+        });
 
         var recovered = await store.RecoverOnStartupAsync();
 
@@ -181,7 +212,10 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
             await store.CreateRunningAsync(Create(id));
             if (i != 0)
             {
-                await store.CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Succeeded });
+                await store.CompleteAsync(id, new ModelLabExperimentCompletion
+                {
+                    Status = ModelLabExperimentStatus.Succeeded
+                });
             }
         }
 
@@ -201,11 +235,20 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         var store = new ModelLabExperimentStore(context, clock);
         var oldest = Guid.NewGuid();
         await store.CreateRunningAsync(Create(oldest));
-        await store.CompleteAsync(oldest, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Failed });
-        await store.SetLaunchReceiptAsync(oldest, new byte[] { 1 });
+        await store.CompleteAsync(oldest, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Failed
+        });
+        await store.SetLaunchReceiptAsync(oldest, new byte[]
+        {
+            1
+        });
         var next = Guid.NewGuid();
         await store.CreateRunningAsync(Create(next));
-        await store.CompleteAsync(next, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Failed });
+        await store.CompleteAsync(next, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Failed
+        });
         await store.CreateRunningAsync(Create(Guid.NewGuid()));
 
         var removed = await store.TrimToNewestAsync(keep: 1);
@@ -221,8 +264,14 @@ public sealed class ModelLabExperimentStoreTests : IDisposable
         var store = new ModelLabExperimentStore(context, TimeProvider.System);
         var id = Guid.NewGuid();
         await store.CreateRunningAsync(Create(id));
-        await store.CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Failed });
-        await store.SetLaunchReceiptAsync(id, new byte[] { 1 });
+        await store.CompleteAsync(id, new ModelLabExperimentCompletion
+        {
+            Status = ModelLabExperimentStatus.Failed
+        });
+        await store.SetLaunchReceiptAsync(id, new byte[]
+        {
+            1
+        });
 
         AssertEx.Equal(ModelLabExperimentDeleteOutcome.ProcessNotConfirmedStopped, await store.DeleteAsync(id));
 

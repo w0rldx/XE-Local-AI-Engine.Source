@@ -366,7 +366,12 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
             // Hidden entries included, and an unreadable directory throws rather than being skipped. The first link ends the walk, so none is followed.
             return Directory.Exists(artifact)
                    && new DirectoryInfo(artifact)
-                      .EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.None, IgnoreInaccessible = false })
+                      .EnumerateFileSystemInfos("*", new EnumerationOptions
+                      {
+                          RecurseSubdirectories = true,
+                          AttributesToSkip = FileAttributes.None,
+                          IgnoreInaccessible = false
+                      })
                       .Any(static entry => entry.LinkTarget is not null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

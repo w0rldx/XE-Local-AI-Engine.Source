@@ -44,7 +44,12 @@ public static class ModelLabTraceSpec
     public static IReadOnlyList<int> LayersFor(int blockCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockCount);
-        return new[] { blockCount / 4, blockCount / 2, blockCount * 3 / 4 }.Distinct().ToArray();
+        return new[]
+        {
+            blockCount / 4,
+            blockCount / 2,
+            blockCount * 3 / 4
+        }.Distinct().ToArray();
     }
 
     /// <summary>The full-attention block nearest to about 0.6 depth, the measured steering depth; any block near there when the config names no kinds.</summary>
@@ -94,7 +99,10 @@ public static class ModelLabTraceSpec
             catch (JsonException)
             {
                 // The blob's hash was verified, so this is a script bug, not tampering; the trace is shown as unreadable.
-                return new ModelLabTrace { Status = ModelLabTraceReadStatus.Unavailable };
+                return new ModelLabTrace
+                {
+                    Status = ModelLabTraceReadStatus.Unavailable
+                };
             }
         }
 

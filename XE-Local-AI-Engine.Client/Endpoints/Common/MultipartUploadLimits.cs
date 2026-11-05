@@ -14,7 +14,8 @@ internal static class MultipartUploadLimits
     // Room for the multipart boundary and part headers around the file, so a file right at the cap is not refused for its envelope.
     internal const long EnvelopeBytes = 64 * 1024;
 
-    internal static long MaxUploadBytes(SecurityOptions options) => options.MaxUploadFileSizeMb * 1024L * 1024L;
+    internal static long MaxUploadBytes(SecurityOptions options) =>
+        options.MaxUploadFileSizeMb * 1024L * 1024L;
 
     internal static string TooLargeMessage(long maxUploadBytes) =>
         $"The file exceeds the maximum upload size of {maxUploadBytes / (1024L * 1024L)} MB.";

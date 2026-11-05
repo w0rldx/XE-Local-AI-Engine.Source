@@ -1064,7 +1064,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     }
 
     // A plain conversation ignores the knowledge-base opt-in: its turns carry only what the user sent.
-    private static bool UsesKnowledgeBase(NodeChatStreamRequest request, ChatTurnResolution resolution) => request.UseKnowledgeBase && !resolution.IsPlain;
+    private static bool UsesKnowledgeBase(NodeChatStreamRequest request, ChatTurnResolution resolution) =>
+        request.UseKnowledgeBase && !resolution.IsPlain;
 
     private static bool OffersAgentHomeTools(IReadOnlyList<AllowedToolDto>? allowedTools)
     {

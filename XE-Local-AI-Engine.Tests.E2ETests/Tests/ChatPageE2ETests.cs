@@ -36,7 +36,9 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     // Placeholder value comes from the en.json key "pages.chat.inputPlaceholder".
     private const string ChatInputPlaceholder = "Type your message";
     private const string SendButtonTestId = "chat-send-button";
+
     private const string GatedAnswerText = "this answer must never arrive";
+
     // Holds the fake's answer open until the after-hook releases it; only the cancel test installs it.
     private readonly TaskCompletionSource<bool> _answerGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

@@ -583,7 +583,12 @@ public sealed class LlamaCppSourceBuildServiceTests
         }
         finally
         {
-            foreach (var directory in Directory.EnumerateDirectories(sourceBuildRoot, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.None }))
+            foreach (var directory in Directory.EnumerateDirectories(sourceBuildRoot, "*", new EnumerationOptions
+                     {
+                         RecurseSubdirectories = true,
+                         IgnoreInaccessible = true,
+                         AttributesToSkip = FileAttributes.None
+                     }))
             {
                 File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }

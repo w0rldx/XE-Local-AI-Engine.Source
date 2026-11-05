@@ -63,7 +63,12 @@ public sealed class DirectInferenceServiceTests
                                           ModelId = $" {ModelId} ",
                                           SystemPrompt = "Be terse.",
                                           Prompt = "Say hello.",
-                                          SamplingOptions = new SamplingOptions { Temperature = 0.5f, TopK = 40, Seed = "7" }
+                                          SamplingOptions = new SamplingOptions
+                                          {
+                                              Temperature = 0.5f,
+                                              TopK = 40,
+                                              Seed = "7"
+                                          }
                                       },
                                       CancellationToken.None)
                                   .ToListAsync();
@@ -101,7 +106,12 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Updates(new ChatResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("thinking")]), Text("answer"), Finish()));
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, SystemPrompt = "  ", Prompt = "Hi" }, CancellationToken.None)
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+                                  {
+                                      ModelId = ModelId,
+                                      SystemPrompt = "  ",
+                                      Prompt = "Hi"
+                                  }, CancellationToken.None)
                                   .ToListAsync();
 
         var message = AssertEx.NotNull(harness.SentMessages).Single();
@@ -125,7 +135,11 @@ public sealed class DirectInferenceServiceTests
             {
                 ModelId = ModelId,
                 Prompt = "Hi",
-                SamplingOptions = new SamplingOptions { Temperature = temperature, Seed = seed }
+                SamplingOptions = new SamplingOptions
+                {
+                    Temperature = temperature,
+                    Seed = seed
+                }
             },
             CancellationToken.None));
 
@@ -150,7 +164,11 @@ public sealed class DirectInferenceServiceTests
         AssertEx.Succeeded(harness.Gate.TryBeginExclusive(GpuWorkKind.TrainingRun, out var hold));
         using var holdScope = hold;
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
 
         var error = events.Single();
         AssertEx.Equal(DirectInferenceEventTypes.Error, error.Type);
@@ -165,7 +183,11 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Failing(new HttpRequestException("connection refused")));
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
 
         var error = events.Single();
         AssertEx.Equal(DirectInferenceEventTypes.Error, error.Type);
@@ -185,7 +207,11 @@ public sealed class DirectInferenceServiceTests
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var streamEvent in harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, cancellation.Token))
+            await foreach (var streamEvent in harness.Service.StreamAsync(new DirectInferenceRequest
+                           {
+                               ModelId = ModelId,
+                               Prompt = "Hi"
+                           }, cancellation.Token))
             {
                 received.Add(streamEvent);
                 await cancellation.CancelAsync();
@@ -241,7 +267,11 @@ public sealed class DirectInferenceServiceTests
         var providerWaiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         harness.Stream = token => HangingBeforeTheFirstToken(harness, providerWaiting, token);
 
-        var stream = harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync().AsTask();
+        var stream = harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync().AsTask();
         await providerWaiting.Task.WaitAsync(TimeSpan.FromSeconds(30));
         harness.Time.Advance(TimeSpan.FromSeconds(harness.Settings.Current.MaxMessageRequestTimeoutSeconds));
         var received = await stream.WaitAsync(TimeSpan.FromSeconds(30));
@@ -254,7 +284,11 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Updates(Text("late"), Finish()));
         var holder = await harness.Dispatcher.ReportInvocationAssignedAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
-        var stream = harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync().AsTask();
+        var stream = harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync().AsTask();
         AssertEx.False(stream.IsCompleted, "the request queues behind the slot's holder");
 
         AssertEx.Equal(0, harness.Time.ArmedTimerCount, "no deadline is armed while queued");
@@ -274,7 +308,11 @@ public sealed class DirectInferenceServiceTests
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var _ in harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, cancellation.Token))
+            await foreach (var _ in harness.Service.StreamAsync(new DirectInferenceRequest
+                           {
+                               ModelId = ModelId,
+                               Prompt = "Hi"
+                           }, cancellation.Token))
             {
                 await cancellation.CancelAsync();
                 harness.Time.Advance(TimeSpan.FromSeconds(harness.Settings.Current.MaxMessageRequestTimeoutSeconds));
@@ -292,7 +330,11 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Updates(Text("x"), Finish()));
 
-        _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
 
         AssertEx.Equal(16_384, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
     }
@@ -307,7 +349,11 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Updates(Text("x"), Finish()));
 
-        _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = modelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = modelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
 
         var options = AssertEx.NotNull(harness.SentOptions);
         AssertEx.Null(options.MaxOutputTokens);
@@ -320,7 +366,11 @@ public sealed class DirectInferenceServiceTests
         var harness = new Harness(Updates(Text("x"), Finish()));
         harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns("another-runtime");
 
-        _ = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+        _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
 
         AssertEx.Null(AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
     }
@@ -337,13 +387,16 @@ public sealed class DirectInferenceServiceTests
         var harness = new Harness(Updates(Text("x"), Finish()));
 
         _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+                             {
+                                 ModelId = modelId,
+                                 Prompt = "Hi",
+                                 SamplingOptions = new SamplingOptions
                                  {
-                                     ModelId = modelId,
-                                     Prompt = "Hi",
-                                     SamplingOptions = new SamplingOptions { MaxOutputTokens = 100 }
-                                 },
-                                 CancellationToken.None)
-                             .ToListAsync();
+                                     MaxOutputTokens = 100
+                                 }
+                             },
+                             CancellationToken.None)
+                         .ToListAsync();
 
         AssertEx.Equal(100, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
     }
@@ -370,13 +423,17 @@ public sealed class DirectInferenceServiceTests
         var harness = new Harness(Updates(Text("x"), Finish()));
 
         _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+                             {
+                                 ModelId = ModelId,
+                                 Prompt = "Hi",
+                                 SamplingOptions = new SamplingOptions
                                  {
-                                     ModelId = ModelId,
-                                     Prompt = "Hi",
-                                     SamplingOptions = new SamplingOptions { MaxOutputTokens = maxOutputTokens, NumCtx = numCtx }
-                                 },
-                                 CancellationToken.None)
-                             .ToListAsync();
+                                     MaxOutputTokens = maxOutputTokens,
+                                     NumCtx = numCtx
+                                 }
+                             },
+                             CancellationToken.None)
+                         .ToListAsync();
 
         AssertEx.Equal(expected, AssertEx.NotNull(harness.SentOptions).MaxOutputTokens);
     }
@@ -410,14 +467,17 @@ public sealed class DirectInferenceServiceTests
         var harness = new Harness(Updates(Text("x"), Finish()));
 
         _ = await harness.Service.StreamAsync(new DirectInferenceRequest
+                             {
+                                 ModelId = ModelId,
+                                 Prompt = "Hi",
+                                 TopLogprobs = topLogprobs,
+                                 SamplingOptions = new SamplingOptions
                                  {
-                                     ModelId = ModelId,
-                                     Prompt = "Hi",
-                                     TopLogprobs = topLogprobs,
-                                     SamplingOptions = new SamplingOptions { TopK = 40 }
-                                 },
-                                 CancellationToken.None)
-                             .ToListAsync();
+                                     TopK = 40
+                                 }
+                             },
+                             CancellationToken.None)
+                         .ToListAsync();
 
         // The deferred client's body patches run on top of what the service sends, as they do on the real path.
         var sent = AssertEx.NotNull(DeferredLlamaServerChatClient.ApplySamplingPassthrough(AssertEx.NotNull(harness.SentOptions)));
@@ -433,7 +493,11 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Updates(Chunk(MultiByteChunkJson), Finish()));
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None).ToListAsync();
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi"
+        }, CancellationToken.None).ToListAsync();
 
         var options = AssertEx.NotNull(harness.SentOptions);
         AssertEx.Null(options.RawRepresentationFactory, "the request stays byte-identical to one without the feature");
@@ -450,7 +514,12 @@ public sealed class DirectInferenceServiceTests
     {
         var harness = new Harness(Updates(Text("never")));
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = modelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = modelId,
+            Prompt = "Hi",
+            TopLogprobs = 3
+        }, CancellationToken.None).ToListAsync();
 
         var refusal = events.Single();
         AssertEx.Equal(DirectInferenceEventTypes.Error, refusal.Type);
@@ -465,7 +534,12 @@ public sealed class DirectInferenceServiceTests
         var harness = new Harness(Updates(Text("never")));
         harness.Providers.ResolveProviderNameForModelAsync(ModelId, Arg.Any<CancellationToken>()).Returns("another-runtime");
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi",
+            TopLogprobs = 3
+        }, CancellationToken.None).ToListAsync();
 
         AssertEx.Equal(DirectInferenceErrorCodes.LogprobsLocalOnly, events.Single().ErrorCode);
     }
@@ -477,7 +551,12 @@ public sealed class DirectInferenceServiceTests
         reasoningChunk.Contents = [new TextReasoningContent("thinking")];
         var harness = new Harness(Updates(reasoningChunk, Chunk(MultiByteChunkJson), Text("no entry for this delta"), Usage(), Finish()));
 
-        var events = await harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi", TopLogprobs = 3 }, CancellationToken.None).ToListAsync();
+        var events = await harness.Service.StreamAsync(new DirectInferenceRequest
+        {
+            ModelId = ModelId,
+            Prompt = "Hi",
+            TopLogprobs = 3
+        }, CancellationToken.None).ToListAsync();
 
         var relayed = events.Where(static e => e.Type == DirectInferenceEventTypes.Logprobs).Select(static e => AssertEx.NotNull(e.Logprobs).Single()).ToList();
         AssertEx.Equal(2, relayed.Count, "the delta with no entry adds nothing and fails nothing");
@@ -508,7 +587,11 @@ public sealed class DirectInferenceServiceTests
     private static async Task<List<DirectInferenceEvent>> RunPastTheDeadlineAsync(Harness harness)
     {
         List<DirectInferenceEvent> received = [];
-        await foreach (var streamEvent in harness.Service.StreamAsync(new DirectInferenceRequest { ModelId = ModelId, Prompt = "Hi" }, CancellationToken.None))
+        await foreach (var streamEvent in harness.Service.StreamAsync(new DirectInferenceRequest
+                       {
+                           ModelId = ModelId,
+                           Prompt = "Hi"
+                       }, CancellationToken.None))
         {
             received.Add(streamEvent);
             if (received.Count == 1)
@@ -543,10 +626,21 @@ public sealed class DirectInferenceServiceTests
         new(ChatRole.Assistant, text);
 
     private static ChatResponseUpdate Usage() =>
-        new(ChatRole.Assistant, [new UsageContent(new UsageDetails { InputTokenCount = 12, OutputTokenCount = 3, TotalTokenCount = 15, CachedInputTokenCount = 4 })]);
+        new(ChatRole.Assistant, [
+            new UsageContent(new UsageDetails
+            {
+                InputTokenCount = 12,
+                OutputTokenCount = 3,
+                TotalTokenCount = 15,
+                CachedInputTokenCount = 4
+            })
+        ]);
 
     private static ChatResponseUpdate Finish() =>
-        new(ChatRole.Assistant, string.Empty) { FinishReason = ChatFinishReason.Stop };
+        new(ChatRole.Assistant, string.Empty)
+        {
+            FinishReason = ChatFinishReason.Stop
+        };
 
     private static Func<CancellationToken, IAsyncEnumerable<ChatResponseUpdate>> Updates(params ChatResponseUpdate[] updates) =>
         _ => updates.ToAsyncEnumerable();

@@ -17,10 +17,16 @@ public sealed class DeferredLlamaServerLogprobsTests
     public async Task Streaming_SendsTheCountBesideTheThinkingSwitch_AndEveryEntryStaysReadable()
     {
         using var server = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer.Start(ThinkingStream, "text/event-stream");
-        using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor { EnsureEndpoint = server.BaseAddress }, "qwen3:8b", TimeSpan.FromSeconds(30));
+        using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor
+        {
+            EnsureEndpoint = server.BaseAddress
+        }, "qwen3:8b", TimeSpan.FromSeconds(30));
         var options = LlamaServerLogprobs.Request(new ChatOptions
             {
-                AdditionalProperties = new AdditionalPropertiesDictionary { [DeferredLlamaServerChatClient.DisableThinkingMarkerKey] = true }
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    [DeferredLlamaServerChatClient.DisableThinkingMarkerKey] = true
+                }
             },
             topLogprobs: 2);
 

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using static XE_Local_AI_Engine.Tests.Providers.LlamaServer.TransientLlamaServerEvaluationHarnessTests;
+using static TransientLlamaServerEvaluationHarnessTests;
 
 /// <summary>Control vectors and multi-arm runs on the harness, over the real GGUF reader and a fake process launcher.</summary>
 [Category(TestCategories.Unit)]
@@ -239,10 +239,12 @@ public sealed class TransientLlamaServerEvaluationArmsTests
         await using (supervisor)
         {
             var bodyCalled = false;
-            var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => harness.RunArmsAsync([Request(files.Model(EmbeddingSize, BlockCount)) with
-                {
-                    ControlVectorPath = vector
-                }],
+            var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => harness.RunArmsAsync([
+                    Request(files.Model(EmbeddingSize, BlockCount)) with
+                    {
+                        ControlVectorPath = vector
+                    }
+                ],
                 (_, _, _) =>
                 {
                     bodyCalled = true;
@@ -291,10 +293,12 @@ public sealed class TransientLlamaServerEvaluationArmsTests
         var (harness, supervisor, _) = CreateHarness(launcher: new FakeProcessLauncher(_ => new FakeProcessTreeHandle(++pid, exitOnTreeKill: false)));
         await using (supervisor)
         {
-            var results = await harness.RunArmsAsync([Request(files.Model(EmbeddingSize, BlockCount)) with
-                {
-                    TeardownTimeout = TimeSpan.FromMilliseconds(20)
-                }],
+            var results = await harness.RunArmsAsync([
+                    Request(files.Model(EmbeddingSize, BlockCount)) with
+                    {
+                        TeardownTimeout = TimeSpan.FromMilliseconds(20)
+                    }
+                ],
                 static (_, _, _) => Task.FromResult(true), CancellationToken.None);
 
             AssertEx.False(results[0].Teardown.ProcessExitObserved);
@@ -377,8 +381,7 @@ public sealed class TransientLlamaServerEvaluationArmsTests
         {
             Task<IAsyncDisposable?>? competing = null;
             var seen = new List<int>();
-            var results = await harness.RunArmsAsync(
-                [
+            var results = await harness.RunArmsAsync([
                     Request(model),
                     Request(model) with
                     {
@@ -422,7 +425,12 @@ public sealed class TransientLlamaServerEvaluationArmsTests
         {
             var held = await supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
             var results = await harness.RunArmsAsync(held!,
-                [Request(model), Request(model) with { ControlVectorPath = files.Vector("direction.15", EmbeddingSize) }],
+                [
+                    Request(model), Request(model) with
+                    {
+                        ControlVectorPath = files.Vector("direction.15", EmbeddingSize)
+                    }
+                ],
                 static (arm, _, _) => Task.FromResult(arm),
                 CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
 
@@ -590,10 +598,12 @@ public sealed class TransientLlamaServerEvaluationArmsTests
         var (harness, supervisor, _) = CreateHarness();
         await using (supervisor)
         {
-            await AssertEx.ThrowsAsync<ArgumentException>(() => harness.RunArmsAsync([Request(model) with
-                {
-                    AdapterFilePath = model
-                }],
+            await AssertEx.ThrowsAsync<ArgumentException>(() => harness.RunArmsAsync([
+                    Request(model) with
+                    {
+                        AdapterFilePath = model
+                    }
+                ],
                 static (_, _, _) => Task.FromResult(true), CancellationToken.None));
             await AssertEx.ThrowsAsync<ArgumentException>(() => harness.RunArmsAsync<bool>([],
                 static (_, _, _) => Task.FromResult(true), CancellationToken.None));

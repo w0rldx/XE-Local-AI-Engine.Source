@@ -277,10 +277,14 @@ public sealed class AzureFoundryProviderSurfaceTests
     [Arguments(403, """{"error":"api-key-invalid","message":"The API key is not valid."}""", ApiKeyText + " (api-key-invalid: The API key is not valid.)")]
     [Arguments(403, """{"error":"project-archived","message":"The project is archived."}""", DeniedText + " (project-archived: The project is archived.)")]
     [Arguments(403, """{"error":"model-not-approved","message":"The model is not approved for the project."}""", DeniedText + " (model-not-approved: The model is not approved for the project.)")]
-    [Arguments(403, """{"error":"token_quota_exceeded","message":"Token limit is exceeded.","reason":"project-quota"}""", DeniedText + " (token_quota_exceeded: Token limit is exceeded. (reason: project-quota))")]
+    [Arguments(403, """{"error":"token_quota_exceeded","message":"Token limit is exceeded.","reason":"project-quota"}""",
+        DeniedText + " (token_quota_exceeded: Token limit is exceeded. (reason: project-quota))")]
     [Arguments(403, """{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation."}}""", RbacDeniedText + " (PermissionDenied)")]
-    [Arguments(403, """{"error":{"code":"PermissionDenied","message":"The principal `00000000-1111-2222-3333-444444444444` lacks the required data action `Microsoft.CognitiveServices/accounts/OpenAI/responses/write` to perform `POST /openai/v1/responses` operation."}}""", RbacDeniedText + " (PermissionDenied)")]
-    [Arguments(403, """{"error":{"code":"AuthenticationTypeDisabled","message":"Key based authentication is disabled for this resource."}}""", DeniedText + " (Key based authentication is disabled for this resource.)")]
+    [Arguments(403,
+        """{"error":{"code":"PermissionDenied","message":"The principal `00000000-1111-2222-3333-444444444444` lacks the required data action `Microsoft.CognitiveServices/accounts/OpenAI/responses/write` to perform `POST /openai/v1/responses` operation."}}""",
+        RbacDeniedText + " (PermissionDenied)")]
+    [Arguments(403, """{"error":{"code":"AuthenticationTypeDisabled","message":"Key based authentication is disabled for this resource."}}""",
+        DeniedText + " (Key based authentication is disabled for this resource.)")]
     [Arguments(403, """{"error":{"code":"403","message":"Access denied due to Virtual Network/Firewall rules."}}""", DeniedText)]
     [Arguments(403, """{"message":"See https://gateway.example/why with key sk-abc123."}""", DeniedText)]
     [Arguments(403, "<html>Forbidden</html>", DeniedText)]
@@ -300,9 +304,10 @@ public sealed class AzureFoundryProviderSurfaceTests
     // A body echoing a credential is not quoted, wherever the credential sits, on either SDK's exception and on both statuses; the fixed text stays.
     [Test]
     [MatrixDataSource]
-    public async Task ErrorTranslatingChatClient_WhenAnAuthBodyEchoesACredential_KeepsOnlyTheFixedText(
-        [Matrix(401, 403)] int status,
-        [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""", """{"detail":{"seen":["%s"]}}""")] string shape,
+    public async Task ErrorTranslatingChatClient_WhenAnAuthBodyEchoesACredential_KeepsOnlyTheFixedText([Matrix(401, 403)] int status,
+        [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""",
+            """{"detail":{"seen":["%s"]}}""")]
+        string shape,
         [Matrix(false, true)] bool azureSdkException)
     {
         const string secret = "lettersonlysecret";

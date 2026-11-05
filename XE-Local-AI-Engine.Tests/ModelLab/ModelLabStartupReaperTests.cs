@@ -61,7 +61,10 @@ public sealed class ModelLabStartupReaperTests
     {
         await using var factory = new TestServerWebAppFactory();
         var id = await SeedRunningAsync(factory);
-        var inspector = new FakeTrainingProcessInspector(Live with { RunToken = "someone-else" });
+        var inspector = new FakeTrainingProcessInspector(Live with
+        {
+            RunToken = "someone-else"
+        });
 
         await Reaper(factory, inspector).StartAsync(CancellationToken.None);
 
@@ -94,7 +97,12 @@ public sealed class ModelLabStartupReaperTests
         var id = await SeedRunningAsync(factory);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetLaunchReceiptAsync(id, new byte[] { 1, 2, 3 });
+            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetLaunchReceiptAsync(id, new byte[]
+            {
+                1,
+                2,
+                3
+            });
         }
 
         var inspector = new FakeTrainingProcessInspector(Live);
@@ -123,7 +131,10 @@ public sealed class ModelLabStartupReaperTests
             BaseArtifactId = Guid.NewGuid(),
             InstalledModelName = "org/Some-GGUF:Q4_K_M",
             Prompt = "secret",
-            LicenseConfirmationJson = new byte[] { 1 }
+            LicenseConfirmationJson = new byte[]
+            {
+                1
+            }
         });
         await store.SetLaunchReceiptAsync(id, JsonSerializer.SerializeToUtf8Bytes(Receipt, TrainingJson.Options));
         return id;

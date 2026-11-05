@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.ModelLab;
 
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -16,8 +18,10 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -39,6 +43,7 @@ public sealed class ModelLabExperimentServiceTests
     private const string Prompt = "the secret prompt under test";
 
     internal static readonly string Handshake = $"{{\"event\":\"handshake\",\"contractVersion\":{ModelLabTraceSpec.ContractVersion}}}";
+
     internal static readonly string[] CompleteRun =
     [
         Handshake,
@@ -109,7 +114,10 @@ public sealed class ModelLabExperimentServiceTests
     {
         const string record = """{"s":0,"l":6,"k":"F","n":3.5,"p":[-1.0,0.0,1.0],"ti":[7,8],"tv":[0.5,-0.25]}""";
         const string footer = """{"footer":true,"truncated":true,"records":1,"dropped":9,"payloadBytes":10,"cap":262144}""";
-        using var process = new ScriptedProcess { TraceContent = record + "\n" + footer + "\n" };
+        using var process = new ScriptedProcess
+        {
+            TraceContent = record + "\n" + footer + "\n"
+        };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         process.Finish(CompleteRun, exitCode: 0);
@@ -151,7 +159,10 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public async Task ATraceOverItsByteCap_IsNotKept_EvenWhenTheScriptClaimsSuccess()
     {
-        using var process = new ScriptedProcess { TraceContent = new string('x', ModelLabTraceSpec.TraceByteCap + 1) };
+        using var process = new ScriptedProcess
+        {
+            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCap + 1)
+        };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         process.Finish(CompleteRun, exitCode: 0);
@@ -191,8 +202,14 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public async Task Cancel_KillsAScriptThatIgnoresTheStop_AndTheOutcomeIsStillCancelled()
     {
-        using var process = new ScriptedProcess { IgnoresStop = true };
-        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions { ExitGracePeriod = TimeSpan.FromMilliseconds(50) });
+        using var process = new ScriptedProcess
+        {
+            IgnoresStop = true
+        };
+        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
+        {
+            ExitGracePeriod = TimeSpan.FromMilliseconds(50)
+        });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await process.Spawned.WaitAsync(TestBudgets.Contended);
         var id = start.ExperimentId!.Value;
@@ -243,7 +260,8 @@ public sealed class ModelLabExperimentServiceTests
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         var noise = Enumerable.Range(0, 30).Select(static i => $"noise {i}");
-        process.Finish([Handshake, .. noise, "cuda_utils.c:9:10: fatal error: Python.h: No such file or directory", """{"event":"error","category":"trace","message":"CalledProcessError"}"""], exitCode: 1);
+        process.Finish([Handshake, .. noise, "cuda_utils.c:9:10: fatal error: Python.h: No such file or directory", """{"event":"error","category":"trace","message":"CalledProcessError"}"""],
+            exitCode: 1);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
         var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
@@ -256,7 +274,10 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public async Task AnotherProtocolVersion_IsKilledAtTheHandshake()
     {
-        using var process = new ScriptedProcess { IgnoresStop = true };
+        using var process = new ScriptedProcess
+        {
+            IgnoresStop = true
+        };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         process.Say($"{{\"event\":\"handshake\",\"contractVersion\":{ModelLabTraceSpec.ContractVersion + 1}}}");
@@ -270,8 +291,14 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public async Task ASilentScript_IsKilledByTheWatchdog()
     {
-        using var process = new ScriptedProcess { IgnoresStop = true };
-        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions { InactivityTimeout = TimeSpan.FromMilliseconds(50) });
+        using var process = new ScriptedProcess
+        {
+            IgnoresStop = true
+        };
+        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
+        {
+            InactivityTimeout = TimeSpan.FromMilliseconds(50)
+        });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
@@ -284,9 +311,16 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public async Task AScriptPastItsMaximumDuration_IsKilled_AndSaysSo()
     {
-        using var process = new ScriptedProcess { IgnoresStop = true };
+        using var process = new ScriptedProcess
+        {
+            IgnoresStop = true
+        };
         // The short grace is what shortens the poll, since a bound is never rounded up to it.
-        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions { MaxDuration = TimeSpan.FromMilliseconds(50), ExitGracePeriod = TimeSpan.FromMilliseconds(200) });
+        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
+        {
+            MaxDuration = TimeSpan.FromMilliseconds(50),
+            ExitGracePeriod = TimeSpan.FromMilliseconds(200)
+        });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
@@ -299,8 +333,14 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public async Task AScriptThatClosesItsOutputAndNeverExits_IsKilled_AndSaysSo()
     {
-        using var process = new ScriptedProcess { IgnoresStop = true };
-        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions { ExitGracePeriod = TimeSpan.FromMilliseconds(50) });
+        using var process = new ScriptedProcess
+        {
+            IgnoresStop = true
+        };
+        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions
+        {
+            ExitGracePeriod = TimeSpan.FromMilliseconds(50)
+        });
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         await process.Spawned.WaitAsync(TestBudgets.Contended);
         process.CloseOutput();
@@ -317,8 +357,8 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(process);
-        var seen = new List<XE_Local_AI_Engine.Client.Services.Training.Runs.TrainingRunEvent>();
-        var buffer = host.Services.GetRequiredService<XE_Local_AI_Engine.Client.Services.Training.Runs.ITrainingRunEventBuffer>();
+        var seen = new List<TrainingRunEvent>();
+        var buffer = host.Services.GetRequiredService<ITrainingRunEventBuffer>();
         buffer.EventPublished += (_, args) =>
         {
             lock (seen)
@@ -332,7 +372,7 @@ public sealed class ModelLabExperimentServiceTests
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
         var id = start.ExperimentId!.Value;
-        List<XE_Local_AI_Engine.Client.Services.Training.Runs.TrainingRunEvent> events;
+        List<TrainingRunEvent> events;
         lock (seen)
         {
             events = seen.Where(item => item.RunId == id).ToList();
@@ -399,16 +439,28 @@ public sealed class ModelLabExperimentServiceTests
         using var process = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(process);
 
-        var unknown = await host.Service.StartExperimentAsync(host.Request() with { BaseArtifactId = Guid.NewGuid() }, CancellationToken.None);
+        var unknown = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            BaseArtifactId = Guid.NewGuid()
+        }, CancellationToken.None);
         AssertEx.Equal(ModelLabStartRefusal.CheckpointNotFound, unknown.Refusal!.Value);
 
-        var unconfirmed = await host.Service.StartExperimentAsync(host.Request() with { LicenseConfirmed = false }, CancellationToken.None);
+        var unconfirmed = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            LicenseConfirmed = false
+        }, CancellationToken.None);
         AssertEx.Equal(ModelLabStartRefusal.LicenseNotConfirmed, unconfirmed.Refusal!.Value);
 
-        var uninstalled = await host.Service.StartExperimentAsync(host.Request() with { InstalledModelName = "org/Other-GGUF:Q4_K_M" }, CancellationToken.None);
+        var uninstalled = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            InstalledModelName = "org/Other-GGUF:Q4_K_M"
+        }, CancellationToken.None);
         AssertEx.Equal(ModelLabStartRefusal.PreflightRefused, uninstalled.Refusal!.Value);
 
-        var notReady = await host.Service.StartExperimentAsync(host.Request() with { BaseArtifactId = await host.SeedDownloadingArtifactAsync() }, CancellationToken.None);
+        var notReady = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            BaseArtifactId = await host.SeedDownloadingArtifactAsync()
+        }, CancellationToken.None);
         AssertEx.Equal(ModelLabStartRefusal.CheckpointNotReady, notReady.Refusal!.Value);
 
         host.Runtime.ResolveInterpreterPath().Returns((string?)null);
@@ -458,13 +510,22 @@ public sealed class ModelLabExperimentServiceTests
         await using var host = await LabHost.StartAsync(process);
         host.Checkpoints.ResolveAsync("Qwen/Qwen3.5-0.8B", Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Manifest("Qwen/Qwen3.5-0.8B", WeightBytes));
-        host.Checkpoints.DownloadAsync(Arg.Any<BaseCheckpointManifest>(), Arg.Any<string>(), Arg.Any<IProgress<XE_Local_AI_Engine.Providers.Abstractions.Contracts.PullProgress>?>(), Arg.Any<CancellationToken>())
+        host.Checkpoints.DownloadAsync(Arg.Any<BaseCheckpointManifest>(), Arg.Any<string>(), Arg.Any<IProgress<PullProgress>?>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 var manifest = call.Arg<BaseCheckpointManifest>();
                 var path = Path.Combine(call.Arg<string>(), "config.json");
                 File.WriteAllText(path, LabHost.Config);
-                return manifest with { Files = [.. manifest.Files.Select(file => file with { LocalPath = path })] };
+                return manifest with
+                {
+                    Files =
+                    [
+                        .. manifest.Files.Select(file => file with
+                        {
+                            LocalPath = path
+                        })
+                    ]
+                };
             });
 
         var refused = await host.Service.StartCheckpointDownloadAsync("Qwen/Qwen3.5-0.8B", revision: null, Gguf, licenseConfirmed: false, CancellationToken.None);
@@ -474,7 +535,7 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.True(refused.Preflight.RefusalMessage!.Contains("declares the license 'apache-2.0'", StringComparison.Ordinal), refused.Preflight.RefusalMessage);
         await host.Checkpoints.DidNotReceive().DownloadAsync(Arg.Is<BaseCheckpointManifest>(manifest => manifest.Files.Any(file => file.Role == BaseCheckpointFileRole.Weights)),
             Arg.Any<string>(),
-            Arg.Any<IProgress<XE_Local_AI_Engine.Providers.Abstractions.Contracts.PullProgress>?>(),
+            Arg.Any<IProgress<PullProgress>?>(),
             Arg.Any<CancellationToken>());
 
         var allowed = await host.Service.StartCheckpointDownloadAsync("Qwen/Qwen3.5-0.8B", revision: null, Gguf, licenseConfirmed: true, CancellationToken.None);
@@ -541,22 +602,22 @@ public sealed class ModelLabExperimentServiceTests
         using var client = host.Factory.CreateClient();
 
         using (var request = host.Authorized(HttpMethod.Delete, artifactRoute))
-        using (var response = await client.SendAsync(request))
-        {
-            AssertEx.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
-            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            AssertEx.Equal("in-use-by-experiment", body.RootElement.GetProperty("reason").GetString());
-            AssertEx.True(body.RootElement.GetProperty("message").GetString()!.Contains("Model Lab", StringComparison.Ordinal));
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+                using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                AssertEx.Equal("in-use-by-experiment", body.RootElement.GetProperty("reason").GetString());
+                AssertEx.True(body.RootElement.GetProperty("message").GetString()!.Contains("Model Lab", StringComparison.Ordinal));
+            }
 
         process.Finish(CompleteRun, exitCode: 0);
         await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
 
         using (var request = host.Authorized(HttpMethod.Delete, artifactRoute))
-        using (var response = await client.SendAsync(request))
-        {
-            AssertEx.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
-        }
+            using (var response = await client.SendAsync(request))
+            {
+                AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            }
     }
 
     /// <summary>A failed <c>CompleteAsync</c> leaves such a row until the next startup. Nothing runs, so nothing is protected by refusing.</summary>
@@ -574,7 +635,7 @@ public sealed class ModelLabExperimentServiceTests
         await host.SeedRunningAsync(Guid.NewGuid());
         using var request = host.Authorized(HttpMethod.Delete, $"/api/local/v1/training/base-artifacts/{host.Request().BaseArtifactId}");
         using var response = await client.SendAsync(request);
-        AssertEx.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
     /// <summary>The receipt is the next startup's only way to find and kill an orphan.</summary>
@@ -587,14 +648,17 @@ public sealed class ModelLabExperimentServiceTests
         await host.SeedFinishedAsync(id);
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetLaunchReceiptAsync(id, new byte[] { 1 });
+            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().SetLaunchReceiptAsync(id, new byte[]
+            {
+                1
+            });
         }
 
         using var client = host.Factory.CreateClient();
         using var request = host.Authorized(HttpMethod.Delete, $"/api/local/v1/model-lab/experiments/{id}");
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal(nameof(ModelLabStartRefusal.ProcessNotConfirmedStopped), body.RootElement.GetProperty("reason").GetString());
         AssertEx.True(body.RootElement.GetProperty("message").GetString()!.Contains("next start", StringComparison.Ordinal), "It says why, and when it clears.");
@@ -608,7 +672,7 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(process);
-        var buffer = host.Services.GetRequiredService<XE_Local_AI_Engine.Client.Services.Training.Runs.ITrainingRunEventBuffer>();
+        var buffer = host.Services.GetRequiredService<ITrainingRunEventBuffer>();
         string? state = null;
         Guid? activeAtEvent = Guid.NewGuid();
         GpuWorkKind? gateAtEvent = GpuWorkKind.ImageJob;
@@ -641,7 +705,7 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(process);
-        var buffer = host.Services.GetRequiredService<XE_Local_AI_Engine.Client.Services.Training.Runs.ITrainingRunEventBuffer>();
+        var buffer = host.Services.GetRequiredService<ITrainingRunEventBuffer>();
         Guid? activeAtEvent = Guid.NewGuid();
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         var id = start.ExperimentId!.Value;
@@ -715,7 +779,10 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var aborted = new CancellationTokenSource();
         using var process = new ScriptedProcess();
-        await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, store => new FaultingStore(store) { AfterCreate = aborted.Cancel }));
+        await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, store => new FaultingStore(store)
+        {
+            AfterCreate = aborted.Cancel
+        }));
 
         var start = await host.Service.StartExperimentAsync(host.Request(), aborted.Token);
 
@@ -729,7 +796,10 @@ public sealed class ModelLabExperimentServiceTests
     public async Task AFailedTrim_NeitherFailsTheStart_NorStrandsTheRow()
     {
         using var process = new ScriptedProcess();
-        await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, static store => new FaultingStore(store) { TrimFailure = new InvalidOperationException("database is locked") }));
+        await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, static store => new FaultingStore(store)
+        {
+            TrimFailure = new InvalidOperationException("database is locked")
+        }));
 
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
 
@@ -745,7 +815,10 @@ public sealed class ModelLabExperimentServiceTests
     {
         const string record = """{"s":0,"l":6,"k":"F","n":null,"p":[null,0.0,1.0],"ti":[7,8],"tv":[null,-0.25]}""";
         const string footer = """{"footer":true,"truncated":false,"records":1,"dropped":0,"payloadBytes":10,"cap":262144}""";
-        using var process = new ScriptedProcess { TraceContent = record + "\n" + footer + "\n" };
+        using var process = new ScriptedProcess
+        {
+            TraceContent = record + "\n" + footer + "\n"
+        };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         process.Finish(CompleteRun, exitCode: 0);
@@ -757,7 +830,7 @@ public sealed class ModelLabExperimentServiceTests
         request.Headers.Add("Origin", "http://localhost");
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var read = body.RootElement.GetProperty("records")[0];
         AssertEx.Equal(JsonValueKind.Null, read.GetProperty("norm").ValueKind);
@@ -775,13 +848,17 @@ public sealed class ModelLabExperimentServiceTests
         using var client = host.Factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-lab/checkpoint-preflight")
         {
-            Content = JsonContent.Create(new { baseArtifactId = host.Request().BaseArtifactId, installedModelName = Gguf })
+            Content = JsonContent.Create(new
+            {
+                baseArtifactId = host.Request().BaseArtifactId,
+                installedModelName = Gguf
+            })
         };
         host.Factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
         using var response = await client.SendAsync(request);
 
-        AssertEx.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         AssertEx.Equal(JsonValueKind.Null, body.RootElement.GetProperty("refusal").ValueKind);
         AssertEx.True(body.RootElement.GetProperty("licenseConfirmationText").GetString()!.Contains("apache-2.0", StringComparison.Ordinal));
@@ -820,8 +897,11 @@ public sealed class ModelLabExperimentServiceTests
     public async Task ACompletionThatCannotBeRecorded_StillEndsTheRunsEvents_AsFailed()
     {
         using var process = new ScriptedProcess();
-        await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, static store => new FaultingStore(store) { CompleteFailure = new InvalidOperationException("database is locked") }));
-        var buffer = host.Services.GetRequiredService<XE_Local_AI_Engine.Client.Services.Training.Runs.ITrainingRunEventBuffer>();
+        await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, static store => new FaultingStore(store)
+        {
+            CompleteFailure = new InvalidOperationException("database is locked")
+        }));
+        var buffer = host.Services.GetRequiredService<ITrainingRunEventBuffer>();
         string? state = null;
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
         var id = start.ExperimentId!.Value;
@@ -985,8 +1065,18 @@ public sealed class ModelLabExperimentServiceTests
             TotalBytes = weightBytes + 100,
             Files =
             [
-                new BaseCheckpointFile { Role = BaseCheckpointFileRole.Config, FileName = "config.json", SizeBytes = 100 },
-                new BaseCheckpointFile { Role = BaseCheckpointFileRole.Weights, FileName = "model.safetensors", SizeBytes = weightBytes }
+                new BaseCheckpointFile
+                {
+                    Role = BaseCheckpointFileRole.Config,
+                    FileName = "config.json",
+                    SizeBytes = 100
+                },
+                new BaseCheckpointFile
+                {
+                    Role = BaseCheckpointFileRole.Weights,
+                    FileName = "model.safetensors",
+                    SizeBytes = weightBytes
+                }
             ]
         };
 
@@ -1039,13 +1129,17 @@ public sealed class ModelLabExperimentServiceTests
             return TrimFailure is null ? await _inner.TrimToNewestAsync(keep, cancellationToken) : throw TrimFailure;
         }
 
-        public Task<ModelLabExperimentRecord?> GetAsync(Guid id, CancellationToken cancellationToken = default) => _inner.GetAsync(id, cancellationToken);
+        public Task<ModelLabExperimentRecord?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
+            _inner.GetAsync(id, cancellationToken);
 
-        public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default) => _inner.ExistsAsync(id, cancellationToken);
+        public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default) =>
+            _inner.ExistsAsync(id, cancellationToken);
 
-        public Task<IReadOnlyList<ModelLabExperimentRecord>> ListAsync(CancellationToken cancellationToken = default) => _inner.ListAsync(cancellationToken);
+        public Task<IReadOnlyList<ModelLabExperimentRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(cancellationToken);
 
-        public Task SetLaunchReceiptAsync(Guid id, ReadOnlyMemory<byte>? launchReceiptJson, CancellationToken cancellationToken = default) => _inner.SetLaunchReceiptAsync(id, launchReceiptJson, cancellationToken);
+        public Task SetLaunchReceiptAsync(Guid id, ReadOnlyMemory<byte>? launchReceiptJson, CancellationToken cancellationToken = default) =>
+            _inner.SetLaunchReceiptAsync(id, launchReceiptJson, cancellationToken);
 
         public Task SetProgressAsync(Guid id, ReadOnlyMemory<byte> resultJson, ModelLabBlobReference? blob, CancellationToken cancellationToken = default)
         {
@@ -1059,11 +1153,14 @@ public sealed class ModelLabExperimentServiceTests
             return CompleteFailure is null ? _inner.CompleteAsync(id, completion, cancellationToken) : throw CompleteFailure;
         }
 
-        public Task<ModelLabExperimentDeleteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken = default) => _inner.DeleteAsync(id, cancellationToken);
+        public Task<ModelLabExperimentDeleteOutcome> DeleteAsync(Guid id, CancellationToken cancellationToken = default) =>
+            _inner.DeleteAsync(id, cancellationToken);
 
-        public Task<IReadOnlyList<ModelLabLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default) => _inner.ListLaunchReceiptsAsync(cancellationToken);
+        public Task<IReadOnlyList<ModelLabLaunchReceipt>> ListLaunchReceiptsAsync(CancellationToken cancellationToken = default) =>
+            _inner.ListLaunchReceiptsAsync(cancellationToken);
 
-        public Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default) => _inner.RecoverOnStartupAsync(cancellationToken);
+        public Task<IReadOnlyList<Guid>> RecoverOnStartupAsync(CancellationToken cancellationToken = default) =>
+            _inner.RecoverOnStartupAsync(cancellationToken);
     }
 
     /// <summary>The real gate, with a step just before it is taken: the last moment a delete can pass the guard.</summary>
@@ -1082,20 +1179,21 @@ public sealed class ModelLabExperimentServiceTests
 
         public IReadOnlyList<GpuWorkKind> Holders => _inner.Holders;
 
-        public bool TryBeginExclusive(GpuWorkKind kind, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IDisposable? handle)
+        public bool TryBeginExclusive(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle)
         {
             BeforeBegin?.Invoke().GetAwaiter().GetResult();
             return _inner.TryBeginExclusive(kind, out handle);
         }
 
-        public bool TryBeginShared(GpuWorkKind kind, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IDisposable? handle) =>
+        public bool TryBeginShared(GpuWorkKind kind, [NotNullWhen(true)] out IDisposable? handle) =>
             _inner.TryBeginShared(kind, out handle);
     }
 
     /// <summary>A real test host, with one artifact Ready and an installed GGUF that pairs with it.</summary>
     internal sealed class LabHost : IAsyncDisposable
     {
-        public const string Config = """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"layer_types":["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"]}}""";
+        public const string Config =
+            """{"model_type":"qwen3_5","text_config":{"hidden_size":1024,"num_hidden_layers":24,"layer_types":["linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention","linear_attention","linear_attention","linear_attention","full_attention"]}}""";
 
         private readonly TestServerWebAppFactory _factory;
         private readonly Guid _artifactId;
@@ -1261,7 +1359,10 @@ public sealed class ModelLabExperimentServiceTests
                 BaseArtifactId = _artifactId,
                 InstalledModelName = Gguf,
                 Prompt = "seed",
-                LicenseConfirmationJson = new byte[] { 1 }
+                LicenseConfirmationJson = new byte[]
+                {
+                    1
+                }
             });
         }
 
@@ -1269,7 +1370,11 @@ public sealed class ModelLabExperimentServiceTests
         {
             await SeedRunningAsync(id);
             await using var scope = Services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().CompleteAsync(id, new ModelLabExperimentCompletion { Status = ModelLabExperimentStatus.Failed, ErrorMessage = "seed" });
+            await scope.ServiceProvider.GetRequiredService<IModelLabExperimentStore>().CompleteAsync(id, new ModelLabExperimentCompletion
+            {
+                Status = ModelLabExperimentStatus.Failed,
+                ErrorMessage = "seed"
+            });
         }
 
         public async Task<Guid> SeedDownloadingArtifactAsync()
@@ -1315,7 +1420,8 @@ public sealed class ModelLabExperimentServiceTests
 
         public byte[] RandomVectorContent { get; init; } = "the-random-vector-bytes"u8.ToArray();
 
-        public string DerivedResult { get; init; } = """{"seconds":1.5,"peakVramBytes":10,"blockCount":24,"steering":{"layer":15,"layerKind":"F","referenceNorm":3.9,"differenceNorm":0.8,"vectorNorm":1.95,"randomSeed":1234,"loadSeconds":2.5}}""";
+        public string DerivedResult { get; init; } =
+            """{"seconds":1.5,"peakVramBytes":10,"blockCount":24,"steering":{"layer":15,"layerKind":"F","referenceNorm":3.9,"differenceNorm":0.8,"vectorNorm":1.95,"randomSeed":1234,"loadSeconds":2.5}}""";
 
         public bool IgnoresStop { get; init; }
 
@@ -1395,7 +1501,8 @@ public sealed class ModelLabExperimentServiceTests
             else
             {
                 await File.WriteAllTextAsync(job.RootElement.GetProperty("tracePath").GetString()!, TraceContent);
-                await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!, """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""");
+                await File.WriteAllTextAsync(job.RootElement.GetProperty("resultPath").GetString()!,
+                    """{"promptTokens":3,"tokens":[{"id":9,"text":"hi"}],"text":"hi","seconds":0.5,"peakVramBytes":10,"blockCount":24}""");
             }
 
             foreach (var line in lines)

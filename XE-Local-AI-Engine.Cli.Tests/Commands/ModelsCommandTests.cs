@@ -60,7 +60,13 @@ public sealed class ModelsCommandTests
     private static LocalModelList Installed(params string[] names) =>
         new()
         {
-            Items = [.. names.Select(static name => new LocalModel { ModelName = name })]
+            Items =
+            [
+                .. names.Select(static name => new LocalModel
+                {
+                    ModelName = name
+                })
+            ]
         };
 
     private static RunningModelList Running(params RunningModel[] processes) =>

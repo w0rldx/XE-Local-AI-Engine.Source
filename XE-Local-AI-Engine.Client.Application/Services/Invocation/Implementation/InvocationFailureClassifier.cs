@@ -382,7 +382,11 @@ internal static class InvocationFailureClassifier
         var readableWait = ReadableWait(retryAfter);
         if (readableWait is not null && detail.Message?.Contains("second", StringComparison.OrdinalIgnoreCase) == true)
         {
-            detail = detail with { Message = detail.Reason, Reason = null };
+            detail = detail with
+            {
+                Message = detail.Reason,
+                Reason = null
+            };
         }
 
         var limit = detail.Code == ExternalProviderErrorDetail.TokenQuotaExceededCode ? ProviderQuotaExhaustedMessage : ProviderRateLimitedMessage;
