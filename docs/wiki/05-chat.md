@@ -187,7 +187,7 @@ nothing, and no tools. It reads only those two columns (`GetConversationPlainMod
 
 `NodeChatPartAccumulator` (`Services/Chat/Implementation/NodeChatPartAccumulator.cs`) is the single place that observes **both** producers of a turn — the reasoning deltas fanned out by the persistence pump and the tool-call lifecycle events — so it can write an ordered `NodeChatMessagePart` list, which is the **render source of truth on reload**.
 
-Ordering model ("Option A"):
+Ordering model (reasoning and tools interleave in stream order):
 
 - Reasoning deltas extend the trailing reasoning segment.
 - A tool event between two reasoning runs **closes** the current reasoning segment, so one turn can render more than one Thoughts block.
@@ -274,7 +274,7 @@ notice. The "Invocation completed" log line carries `FinishReason`, so a silent 
 
 ### Work-session write declaration
 
-This is the runtime half of invariant **`GRAPH-C4-2`** (named in [API & hubs](09-api-and-hubs.md), embedded in the refusal the operator sees, and asserted on by name in the work-session and dev-workflow tests). A development-workflow Agent node that declares no `WriteExecute` capability arms a runtime refusal on every turn of the session it drives (`request.RefuseUndeclaredWrites` → `WorkSessionWriteDeclarationGuard.Refuse` in `NodeChatStreamService.ResolveDeclaredWriteOfferAsync`). The earlier check at node dispatch resolves the definition separately and is the *friendly* refusal, not the enforcing one — between that check and the send, the definition can be widened, or deleted so the turn falls back to the default persona and its whole offer. The enforcing check therefore asks the rule of the **offer this turn will really hand the model**, resolved once and reused verbatim by the package: one resolution, one decision, nothing in between for an edit to land in. The supervisor turns the throw into the gate's own row and the session's terminal reason.
+This is the runtime half of invariant **`GRAPH-2`** (named in [API & hubs](09-api-and-hubs.md), embedded in the refusal the operator sees, and asserted on by name in the work-session and dev-workflow tests). A development-workflow Agent node that declares no `WriteExecute` capability arms a runtime refusal on every turn of the session it drives (`request.RefuseUndeclaredWrites` → `WorkSessionWriteDeclarationGuard.Refuse` in `NodeChatStreamService.ResolveDeclaredWriteOfferAsync`). The earlier check at node dispatch resolves the definition separately and is the *friendly* refusal, not the enforcing one — between that check and the send, the definition can be widened, or deleted so the turn falls back to the default persona and its whole offer. The enforcing check therefore asks the rule of the **offer this turn will really hand the model**, resolved once and reused verbatim by the package: one resolution, one decision, nothing in between for an edit to land in. The supervisor turns the throw into the gate's own row and the session's terminal reason.
 
 ### Withdrawing operator tools from a workflow-owned session
 
@@ -309,7 +309,7 @@ pump and the run start. The search handler records exactly the hits it serialize
 pre-turn sources first, then tool hits, deduplicated by chunk id and capped at `MaxPersistedSources`.
 
 A grounded turn that passes that gate on a node with **no embedding model** carries a `KnowledgeUnavailable`
-notice, on send and on regenerate (model-matrix F13): without one no upload is indexed, so the turn cannot be grounded.
+notice, on send and on regenerate: without one no upload is indexed, so the turn cannot be grounded.
 "No embedding model" is `IChatTurnContextBuilder.IsKnowledgeEmbeddingAvailableAsync`, the same
 `IEmbeddingModelResolver` resolution ingestion and search use (not confident = none installed). The SPA localizes
 the sentence.
@@ -332,7 +332,7 @@ Large pasted text takes a different, deliberately smaller path. `Security:MaxMes
 
 **Two injection modes** (`NodeChatStreamService.cs`): the synthetic prepended context differs by turn mode.
 
-- **Plain chat** inlines the extracted text directly. `ChatTurnContextBuilder.BuildAttachmentContextAsync` loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`ConversationContextBuilder.Build` places it in the first slot and shifts the history down). Returns `null` on the common no-attachment path so the prompt stays byte-identical. That fixed cap knows nothing of the window, so the message also carries `ShortenAttachment`, which recomposes it under a smaller budget (fence intact, truncation note for the model). When the first round does not fit the launched window but would without the attachment, `InvocationRunner.FitFirstRoundToWindow` shrinks it to the room left and emits an `AttachmentShortened` notice; if not even an empty recomposition fits, the turn fails with "The attached file does not fit this model's context window, even shortened" (model-matrix F6: a 30k-character file failed every first turn at 4k and 8k).
+- **Plain chat** inlines the extracted text directly. `ChatTurnContextBuilder.BuildAttachmentContextAsync` loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`ConversationContextBuilder.Build` places it in the first slot and shifts the history down). Returns `null` on the common no-attachment path so the prompt stays byte-identical. That fixed cap knows nothing of the window, so the message also carries `ShortenAttachment`, which recomposes it under a smaller budget (fence intact, truncation note for the model). When the first round does not fit the launched window but would without the attachment, `InvocationRunner.FitFirstRoundToWindow` shrinks it to the room left and emits an `AttachmentShortened` notice; if not even an empty recomposition fits, the turn fails with "The attached file does not fit this model's context window, even shortened" (a 30k-character file failed every first turn at 4k and 8k).
 - **Agent mode** never inlines content. When the turn offers tools, the sandbox is re-staged with this conversation's attachments and the model is handed a pointer message naming the staged paths — see the sandbox-staging path below.
 
 **Agent-mode sandbox staging:** `IConversationSandboxStager.PrepareConversationAttachmentsAsync` re-stages the node sandbox so it holds **only** this conversation's extracted attachments under the workspace `attachments/` alias, then `ChatTurnContextBuilder.BuildAgentAttachmentHint` emits a pointer message listing those staged paths so a weak model reads the right files with its `read_file` / `list_files` / `search_text` tools. `NodeChatStreamService.StageConversationAttachmentsAsync` calls the stager before the turn context is built; a workspace that cannot be prepared, or is busy, terminalizes the assistant message as failed with that reason before the run starts. The stager lives in Agent Mode; see [Agent Mode](04-agent-mode.md).
@@ -388,8 +388,8 @@ marker emitters — `InvocationAgentFactory` (single-agent) and `ParticipantReas
 (orchestration participants, MCP-bound children, spawned sub-agents) — put it on the in-process marker
 `xe.llama.reasoning_budget_tokens`, which `DeferredLlamaServerChatClient.ApplyReasoningBudget` patches onto the
 outbound body as `reasoning_budget_tokens` (clamped to the launched window by `ClampToGenerationRoom`). An
-unspecified effort gets the rung of the default-effort node setting, shipped `low` (model-matrix 2026-10-04; tester
-round 6 had set `medium`, and before that it sent nothing and a hard prompt thought until `finish_reason: length` with
+unspecified effort gets the rung of the default-effort node setting, shipped `low` (model matrix, 2026-10-04; it was
+`medium` before that, and earlier still it sent nothing and a hard prompt thought until `finish_reason: length` with
 no answer). Explicit `none` turns thinking off: `enable_thinking=false` plus `reasoning_budget_tokens: 0`, see
 [Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the thinking budget").
 
@@ -412,7 +412,7 @@ finish reason qualifies: a budget-forced end of the reasoning block finishes `st
 ### Output cap and the "stopped at length" notice
 
 A single-agent turn's output is capped by the node setting `chatOutputCapMode` (Node Settings → Chat → Answer length;
-operator decision 4, model-matrix F2, where a 0.8B repeated `000…` until the 65k window ran out). The cap bounds the
+operator decision, after a 0.8B repeated `000…` until the 65k window ran out). The cap bounds the
 **answer**, and the thinking budget bounds the thinking, so they add: under `cap` (shipped) the limit sent is the turn's
 applied reasoning budget (the rung after the window clamp, zero with thinking off) plus the answer cap, half the launched
 window at most `chatOutputCapMaxTokens` (shipped 16384), never more than the window
@@ -933,12 +933,14 @@ Organized by concern:
 | Folder | Highlights |
 |---|---|
 | `api/` | `NodeChatAdapter` (REST via hey-api generated clients + the SignalR streaming bridge), `NodeChatConnection` (the persistent local hub connection), `NodeChatMapper` (DTO → view model), `NodeChatStreamGuard` / `NodeChatStreamState` (stream state machine) / `NodeChatStreamParts` (its pure `parts[]` accumulator), `useNodeChatConnectionReadiness` |
-| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge` (the trigger of `ContextUsagePopover`), `ContextUsagePopover` (`components/ContextUsagePopover/`, with the pure `ContextUsageBreakdown` helpers), `CompactButton` (manual compaction, beside the badge), `ContextStatePanel` (read-only drawer over the distilled state, opened beside `CompactButton` in `ChatInputArea/ChatComposerToolbar`), `MessageFeedbackControl` |
-| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation`, `ContextWindowModels` (the context snapshot view types), and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping |
-| `pages/` | `Chat.tsx` (top-level orchestration), model-picker filters; the option mapping (`ChatModelOptions`, `ModelOption`) lives in `core/models/` |
+| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `ChatSourcesStrip`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge` (the trigger of `ContextUsagePopover`), `ContextUsagePopover` (`components/ContextUsagePopover/`, with the pure `ContextUsageBreakdown` helpers), `CompactButton` (manual compaction, beside the badge), `ContextStatePanel` (read-only drawer over the distilled state, opened beside `CompactButton` in `ChatInputArea/ChatComposerToolbar`), `MessageFeedbackControl`, `ChatNotice` (`chatNotice`, a plain function so "no notice" stays `undefined`) |
+| `hooks/` | `useChatStreamController` (the race-coupled send, regenerate, resume and cancel loops), `useChatConversationCache` (cache writers, `refreshConversation`, the `resolveSendConversation` wrong-conversation guard), `useChatConversationActions` (rename, pin, archive, temporary, plain, delete), `useChatMessageActions` (revision, branch, feedback), and the selection hooks for conversation, model, agent and revision |
+| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ContextUsageDerivation`, `ContextWindowModels` (the context snapshot view types), and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping; `ChatTurnResolution` for the send path's request model, effective agent, first-send title and failure message rules |
+| `pages/` | `Chat.tsx` (hook wiring whose order is load-bearing, readiness gate, `ChatDisplayShell` prop assembly), model-picker filters; the option mapping (`ChatModelOptions`, `ModelOption`) lives in `core/models/` |
 | `queries/` | `useCodexModelOptions`, `useContextEstimate` (the pre-send estimate, fetched only while the popover is open with no snapshot); the key factory `NodeChatQueryKeys` lives in `core/chat/queries/` |
 | `stores/` | `NodeChatPreferencesStore` (model/effort/local-tools selection + `clampReasoningEffort`), `ChatSamplingPreferencesStore` |
-| `workflow/` | Chat workflow mode: `useChatWorkflow`, `WorkflowSelectorCard`, `WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels`, `ChatWorkflowStore` |
+| `core/chat/` (shared, not this folder) | The ordered-parts renderer `benchmarks` and `training` also mount: `MessageParts` + `ThoughtsSection` + `ToolCallCard`, `AskUserQuestionCard`, `WebReviewCard`, `ChatMarkdown`, and `ChatCapabilityGates`; `AgentSelectorCard` and the composer toolbar's CSS module. The part types are in `core/models/ChatMessageParts` |
+| `workflow/` | Chat workflow mode: `useChatWorkflow`, `WorkflowSelectorCard`, `WorkflowNodeLiveDetail`, `useGraphWorkflowNodeActivity`, `ChatWorkflowStore`. The run view it renders (`WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels`) lives in `features/graphWorkflows/` |
 
 ### Chat workflow mode in the client
 

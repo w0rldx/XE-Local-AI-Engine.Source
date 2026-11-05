@@ -233,8 +233,7 @@ internal static class DevWorkflowGraphs
 
     /// <summary>
     ///     A producer and the tool node whose commands judge what it made. The smallest shape in which a Tool node has
-    ///     anything upstream to record consuming — until it did, the sandbox lane consumed everything and recorded
-    ///     nothing.
+    ///     anything upstream to record consuming.
     /// </summary>
     public const string ToolAfterAProducer = """
                                              {
@@ -287,7 +286,7 @@ internal static class DevWorkflowGraphs
 
     /// <summary>
     ///     A decomposing node whose template is unreachable on purpose. Its template leaf is a <c>DevTask</c>, which
-    ///     <c>GRAPH-C4-1</c>'s fourth step does not ask for an out-edge from: no verdict row is ever written under a
+    ///     <c>GRAPH-1</c>'s fourth step does not ask for an out-edge from: no verdict row is ever written under a
     ///     DevTask template key, so it can neither satisfy nor block the completion predicate.
     /// </summary>
     public const string Decomposition = """

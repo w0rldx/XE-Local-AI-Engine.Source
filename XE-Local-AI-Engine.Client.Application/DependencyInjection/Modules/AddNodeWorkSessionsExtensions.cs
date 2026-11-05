@@ -86,7 +86,7 @@ internal static class AddNodeWorkSessionsExtensions
         // the permissive and node tool-approval policies use.
         builder.Services.TryAddSingleton<IWorkSessionEventPublisher, NoOpWorkSessionEventPublisher>();
 
-        // Reserved: no work-session tool needs a jail in v1, so nothing injects this yet.
+        // Reserved: no work-session tool needs a jail, so nothing injects this yet.
         builder.Services.AddSingleton(SandboxProviderSelector.ResolveWorkSession);
         return builder;
     }

@@ -11,7 +11,6 @@ import { downsampleToInt16 } from "@/core/audio/capture/Pcm16DownsamplerWorklet.
  * It is also the worklet's only incoming edge that a human reads: `PcmCapture.ts` imports it for its URL alone.
  */
 describe("downsampleToInt16", () => {
-	// Plan §4.3: Downsample_AtRatioOne_IsAPassthrough
 	it("is a passthrough at ratio 1, which is what a honoured 16 kHz request gives", () => {
 		const input = Float32Array.from([0, 0.5, -0.5, 1]);
 		const out = new Int16Array(4);
@@ -23,7 +22,6 @@ describe("downsampleToInt16", () => {
 		expect(advanced.cursor).toBe(4);
 	});
 
-	// Plan §4.3: Downsample_At48kTo16k_KeepsEveryThirdSample
 	it("keeps every third sample at 48 kHz to 16 kHz", () => {
 		const input = Float32Array.from([0.1, 0.9, -0.9, 0.2, 0.8, -0.8, 0.3, 0.7, -0.7]);
 		const out = new Int16Array(3);
@@ -38,7 +36,6 @@ describe("downsampleToInt16", () => {
 		expect(advanced.outIndex).toBe(3);
 	});
 
-	// Plan §4.3: Downsample_ClampsBeyondFullScale
 	it("clamps beyond full scale rather than wrapping around", () => {
 		const input = Float32Array.from([2, -2]);
 		const out = new Int16Array(2);

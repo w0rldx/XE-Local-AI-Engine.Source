@@ -144,7 +144,7 @@ public sealed class ProviderProcessSupervisionWiringTests
     private static async Task AssertWritesUnderAsync(ProcessSpawnReceiptStore store, string directory)
     {
         AssertEx.True(store.IsEnabled, "A host with a data directory must get an enabled store.");
-        using var handle = new FakeProcessHandle(Environment.ProcessId);
+        using var handle = new FakeProcessTreeHandle(Environment.ProcessId);
         var tracked = await store.TrackAsync(handle, Environment.ProcessPath!, "wiring", CancellationToken.None);
         AssertEx.True(File.Exists(Path.Combine(directory, $"{Environment.ProcessId}.json")), $"The receipt must be written under {directory}.");
         tracked.Dispose();

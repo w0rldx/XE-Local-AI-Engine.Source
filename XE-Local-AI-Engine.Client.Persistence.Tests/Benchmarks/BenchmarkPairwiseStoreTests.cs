@@ -357,8 +357,8 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null);
         var (runA, runB) = runs[0].CompareTo(runs[1]) < 0 ? (runs[0], runs[1]) : (runs[1], runs[0]);
 
-        // The B side is the one the old guard could not see: a comparison's work item names only the canonical FIRST
-        // run, so deleting B walked straight past "is anything queued for this run".
+        // The B side is the one a work-item guard cannot see: a comparison's work item names only the canonical FIRST
+        // run, so deleting B would walk straight past "is anything queued for this run".
         var refusedB = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => DeleteAsync(store, runB));
         var refusedA = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => DeleteAsync(store, runA));
 

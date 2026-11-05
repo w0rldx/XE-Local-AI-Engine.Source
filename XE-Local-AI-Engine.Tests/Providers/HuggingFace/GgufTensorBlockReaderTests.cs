@@ -180,6 +180,17 @@ public sealed class GgufTensorBlockReaderTests
     }
 
     [Test]
+    public async Task Read_NestedArray_ReturnsMalformedFailure_KeepingTheKeysBeforeIt()
+    {
+        var bytes = BaseHeader().WithNestedArray("nested").Build();
+
+        var result = await ReadAsync(bytes);
+
+        AssertEx.Equal(GgufTensorReadFailure.Malformed, result.Failure);
+        AssertEx.Equal("qwen35", result.Architecture!);
+    }
+
+    [Test]
     public async Task Read_NonGgufBytes_ReturnsUnreadableFailure()
     {
         var result = await ReadAsync("this is plainly not a GGUF header"u8.ToArray());

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 
 using FastEndpoints;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
@@ -20,8 +19,6 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 /// </remarks>
 public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedImageResponse>
 {
-    // Room for the multipart boundary and part headers around the file, so a file right at the cap is not refused for its envelope.
-
     private readonly UploadedImageService _uploads;
     private readonly long _maxUploadBytes;
 
@@ -29,7 +26,8 @@ public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedI
     {
         ArgumentNullException.ThrowIfNull(uploads);
         _uploads = uploads;
-        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+        ArgumentNullException.ThrowIfNull(securityOptions);
+        _maxUploadBytes = MultipartUploadLimits.MaxUploadBytes(securityOptions.Value);
     }
 
     public override void Configure()
@@ -61,7 +59,7 @@ public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedI
         {
             try
             {
-                var section = await NextFileSectionAsync(sections);
+                var section = await MultipartUploadLimits.NextFileSectionAsync(sections);
                 if (section is null)
                 {
                     await SendErrorAsync("A file is required.", ct);
@@ -75,13 +73,13 @@ public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedI
                     return;
                 }
 
-                if (await NextFileSectionAsync(sections) is not null)
+                if (await MultipartUploadLimits.NextFileSectionAsync(sections) is not null)
                 {
                     await SendErrorAsync("Exactly one file is accepted.", ct);
                     return;
                 }
             }
-            catch (Exception exception) when (exception is IOException or InvalidDataException)
+            catch (Exception exception) when (MultipartUploadLimits.IsMalformedBody(exception))
             {
                 // A body that is not a well-formed multipart document (or was cut off mid-file) is a client error.
                 await SendErrorAsync("The uploaded file could not be read.", ct);
@@ -120,20 +118,6 @@ public sealed class UploadImageEndpoint : Endpoint<UploadImageRequest, UploadedI
         }
 
         return buffer.ToArray();
-    }
-
-    /// <summary>Advances to the next FILE section, skipping the nulls the reader yields for every other part.</summary>
-    private static async Task<FileMultipartSection?> NextFileSectionAsync(IAsyncEnumerator<FileMultipartSection?> sections)
-    {
-        while (await sections.MoveNextAsync())
-        {
-            if (sections.Current is not null)
-            {
-                return sections.Current;
-            }
-        }
-
-        return null;
     }
 
     private async Task SendErrorAsync(string message, CancellationToken ct)

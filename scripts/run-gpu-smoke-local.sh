@@ -121,9 +121,9 @@
 #
 # Why 5 exists, since this is the script a pre-RC checklist keys on: "the GPU did not do the work"
 # is a product defect that should block an RC, while "the AppHost never came up on this laptop" is
-# local infrastructure that blocks nothing. Both used to exit 1, indistinguishable to any caller,
-# with the only discriminator (whether a summary was printed) undocumented and unkeyable. A
-# wrapper can now treat 1 as "product says no" and 5 as "fix your machine and re-run".
+# local infrastructure that blocks nothing. A shared exit code would leave a caller nothing to key
+# on but whether a summary was printed. A wrapper treats 1 as "product says no" and 5 as "fix your
+# machine and re-run".
 #
 # 1 remains deliberately broad WITHIN judged runs: an assertion failure and a vacuous step both
 # mean "this run did not earn a pass" and both need the same response — read the summary.
@@ -157,41 +157,13 @@ warn() { echo "[gpu-smoke] WARN: $*" >&2; }
 prereq_fail() { echo "[gpu-smoke] PREREQUISITE MISSING: $*" >&2; exit 2; }
 
 # Step ledger — the anti-vacuous-pass mechanism.
-#
-# Every step declares itself expected BEFORE it runs and records a verdict when it finishes. The
-# final gate asserts that every expected step recorded PASS and that at least one step ran. A step
-# that dies, is skipped by accident, or silently returns early therefore fails the run instead of
-# leaving a green summary behind — the same rule run-e2e-local.sh applies to a zero-test run.
-LEDGER_EXPECTED=()
-LEDGER_PASSED=()
+# shellcheck source=scripts/lib/smoke-ledger.sh
+source "${GPU_SMOKE_PROJECT_ROOT}/scripts/lib/smoke-ledger.sh" "gpu-smoke"
+
+# This smoke also has opt-in steps and a switch that disables one, so it adds a skip verdict and its own final gate.
 LEDGER_SKIPPED=()
-LEDGER_FAILED=()
-FAILURES=()
 
-ledger_expect() { LEDGER_EXPECTED+=("$1"); }
-ledger_pass()   { LEDGER_PASSED+=("$1"); log "PASS  $1"; }
 ledger_skip()   { LEDGER_SKIPPED+=("$1"); }
-
-# Record a failure and keep going where it is safe to, so one run reports every broken step
-# rather than only the first. The step name is tracked separately from the message so the summary
-# can distinguish "this step ran and FAILED" from "this step produced no verdict at all" — the
-# latter means something died unexpectedly and is a materially different thing to investigate.
-step_fail() {
-  local step="$1"; shift
-  LEDGER_FAILED+=("${step}")
-  FAILURES+=("${step}: $*")
-  echo "[gpu-smoke] FAIL  ${step}: $*" >&2
-  return 1
-}
-
-ledger_contains() {
-  local needle="$1"; shift
-  local item
-  for item in "$@"; do
-    [[ "${item}" == "${needle}" ]] && return 0
-  done
-  return 1
-}
 
 # The final gate. Returns non-zero when anything failed, when an expected step produced no
 # verdict, or when nothing ran at all.
@@ -674,8 +646,8 @@ eject_listed() {
 # Freeing device memory is not synchronous with the API returning either, hence the bounded poll.
 #
 # An unreadable sample must NOT end the loop. The VRAM comparison is an UPPER bound, so any
-# phantom-low value satisfies it — that is how a failed nvidia-smi read used to certify "VRAM
-# released" while a process still held the device. It is therefore treated as "not settled yet",
+# phantom-low value satisfies it, and a failed nvidia-smi read would certify "VRAM released"
+# while a process still holds the device. It is therefore treated as "not settled yet",
 # and if it never becomes readable the step fails on an unmeasurable value. A failed listing is
 # never read as an empty one, for the same reason.
 eject_until_settled() {

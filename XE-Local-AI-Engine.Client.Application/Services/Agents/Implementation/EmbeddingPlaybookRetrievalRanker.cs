@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
@@ -138,7 +138,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         }
 
         return candidates
-               .Select((candidate, index) => new ScoredCandidate(candidate, CosineScore(queryVector, candidateVectors[index])))
+               .Select((candidate, index) => new ScoredCandidate(candidate, KnowledgeVectorMath.CosineScore(queryVector, candidateVectors[index])))
                .OrderByDescending(scored => scored.Score)
                .ThenBy(scored => scored.Action.Priority)
                .ThenBy(scored => scored.Action.CreatedAtUtc)
@@ -180,19 +180,6 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
     private static string CandidateText(PlaybookActionRecord candidate)
     {
         return candidate.TriggerCondition ?? candidate.Behavior;
-    }
-
-    private static float CosineScore(ReadOnlyMemory<float> query, ReadOnlyMemory<float> candidate)
-    {
-        // Mismatched-dimension or empty vectors carry no comparable signal; treat as no overlap so the deterministic
-        // tiebreak orders them. CosineSimilarity returns NaN for a zero-magnitude vector — guard that to 0 as well.
-        if (query.IsEmpty || candidate.IsEmpty || query.Length != candidate.Length)
-        {
-            return 0f;
-        }
-
-        var score = TensorPrimitives.CosineSimilarity(query.Span, candidate.Span);
-        return float.IsNaN(score) ? 0f : score;
     }
 
     private readonly record struct EmbeddingCacheKey(Guid ActionId, int Version, string Model);

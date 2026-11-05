@@ -89,6 +89,8 @@ SHELL_TARGETS=(
   "scripts/tests/build-lock.test.sh"
   "scripts/tests/entry-point-location.test.sh"
   "scripts/lib/test-sizing.sh"
+  "scripts/lib/smoke-ledger.sh"
+  "scripts/lib/discover-llama-server.sh"
   "scripts/tests/test-sizing.test.sh"
   "scripts/assembly-guard.sh"
 )

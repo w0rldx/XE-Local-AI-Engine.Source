@@ -230,7 +230,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     /// </summary>
     private static List<ToolRelevanceCandidate> BuildLiveCatalogue()
     {
-        const string Stub = "Test-only stub for the C3 tool-relevance live validation ({0}). Never invoked.";
+        const string Stub = "Test-only stub for the tool-relevance live validation ({0}). Never invoked.";
 
         return
         [

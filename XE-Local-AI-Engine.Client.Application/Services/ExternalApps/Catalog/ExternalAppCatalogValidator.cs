@@ -1305,7 +1305,7 @@ public static partial class ExternalAppCatalogValidator
     /// <summary>The application-wide facts the per-service and per-variable rules read.</summary>
     /// <remarks>
     ///     Which service names exist, which publish a UI port, which declare a healthcheck, which variables are
-    ///     declared, plus the running tallies the cross-application rules A17–A19 and the per-application
+    ///     declared, plus the running tallies the cross-application rules and the per-application
     ///     port-uniqueness rule need.
     /// </remarks>
     private sealed class ApplicationValidationContext

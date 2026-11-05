@@ -130,7 +130,7 @@ public sealed class IntegrationSessionHostFixture : IAsyncInitializer, IAsyncDis
         CapturedContexts.Add(package.ConversationContext);
         CapturedToolNames.Add([.. package.AllowedTools.Select(static tool => tool.Name)]);
 
-        // The two things the REAL runner does that this slice depends on: the ambient conversation scope for the whole
+        // The two things the REAL runner does that these tests depend on: the ambient conversation scope for the whole
         // tool loop, and calling the registered handler.
         using (AgentRunConversationContext.BeginScope(package.ConversationId))
         {

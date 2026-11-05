@@ -135,7 +135,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
             "A consumed-by edge is captured idempotently.");
     }
 
-    /// <summary>T-10: the migrated schema and the one EnsureCreated builds must agree, or a fresh box and an upgraded one diverge.</summary>
+    /// <summary>The migrated schema and the one EnsureCreated builds must agree, or a fresh box and an upgraded one diverge.</summary>
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {

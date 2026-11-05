@@ -5,7 +5,7 @@
 - **Scope:** How a curated application container installed under [ADR 0010](0010-external-apps-container-execution.md)
   calls this node's local model server. It changes nothing about how such an application is installed, hardened,
   stored or reconciled.
-- **Authority:** Operator rulings on the container-bridge work item and the implementation rulings that closed it.
+- **Authority:** Operator rulings on the container bridge.
 - **Amends:** nothing. It closes a gap ADR 0010 disclosed rather than solved.
 
 ## Context
@@ -182,14 +182,14 @@ repeated `EnsureRunning` calls for different installed models and thrashing the 
 container that wanted to hurt the host has cheaper ways, so this is recorded as a decision rather than closed.
 
 **Docker Desktop is code-reviewed, not live-validated.** The `host.docker.internal` branch of both the endpoint
-resolver and the host-name allow list has unit coverage and no live round behind it. Do not read a green suite as
+resolver and the host-name allow list has unit coverage and no live run behind it. Do not read a green suite as
 Desktop parity.
 
 **The bridge is off unless External Apps is on.** `ContainerBridge:Enabled` defaults to `false` in code and ships
 `true`, the same fail-closed asymmetry `ExternalApps` carries, and the listener opens only when both are true — the
 bridge exists for application containers and a node without that feature has none.
 
-**2026-10-15 (rc.3 decision D6):** "External Apps is on" now also requires the catalog to list an application when
+**2026-10-15:** "External Apps is on" now also requires the catalog to list an application when
 the node starts. `NodeStartupSettings.Read` reads the bundled seed and the last-good copy for the configured refresh
 URL through `ExternalAppStartupCatalog`. An empty catalog keeps the listener closed, and a later refresh that adds an
 entry asks for a node restart instead of admitting installs.

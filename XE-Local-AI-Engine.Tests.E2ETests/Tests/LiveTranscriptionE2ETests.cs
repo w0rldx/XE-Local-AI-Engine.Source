@@ -46,8 +46,8 @@ public sealed class LiveTranscriptionE2ETests : XEFakeAudioE2ETestBase
         }
         finally
         {
-            // The wall time to the first commit and the correlation that accepted it are the two numbers the slice
-            // report quotes; the threshold is calibrated from them, not from the plan's initial guess. Written on the
+            // The wall time to the first commit and the correlation that accepted it are the two numbers the
+            // threshold is calibrated from. Written on the
             // failure path too: "no commit" has three causes (no audio reached the node, the provenance check
             // rejected it, the commit never rendered) and the measured correlation is what tells them apart.
             await RecordDiagnosticAsync(

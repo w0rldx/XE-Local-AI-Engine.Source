@@ -129,7 +129,6 @@ public static class WhisperCppServiceCollectionExtensions
         // The managed Linux CUDA source-build lane. There is no prebuilt Linux CUDA asset upstream, so this is the
         // only way a Linux node gets GPU transcription without a bring-your-own binary.
         services.TryAddSingleton<IWhisperCppSourceBuildPrerequisiteProbe, WhisperCppSourceBuildPrerequisiteProbe>();
-        services.TryAddSingleton<IWhisperCppSourceBuildEventPublisher, NullWhisperCppSourceBuildEventPublisher>();
         services.TryAddSingleton<IWhisperCppSourceBuildService, WhisperCppSourceBuildService>();
 
         // The hosted service is not optional bookkeeping: it republishes the managed-runtime signal at start, and the backend selector trusts a managed CUDA build only once that signal is set.

@@ -367,7 +367,7 @@ public sealed class DevWorkflowMaterializationTests
 
         AssertEx.Contains(materialized.Nodes.Keys, key => key.Contains('#', StringComparison.Ordinal), "the clones are in the graph being judged.");
         AssertEx.NotEmpty(materialized.Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply),
-            "and so is the apply node whose validation ancestry GRAPH-C4-3 asks about.");
+            "and so is the apply node whose validation ancestry GRAPH-3 asks about.");
     }
 
     /// <summary>
@@ -506,7 +506,7 @@ public sealed class DevWorkflowMaterializationTests
 
         var integrate = await harness.ReadNodeRunAsync(runId, "integrate");
         AssertEx.NotEqual(DevWorkflowNodeRunStatus.Pending, integrate.Status, "the apply was dispatched at all, or this asserts nothing about the pre-check.");
-        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-C4-3", StringComparison.Ordinal),
+        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-3", StringComparison.Ordinal),
             $"the apply must not be blocked for want of a validation that was written for it: {integrate.FailureClass} — {integrate.TerminalReason}");
     }
 
@@ -514,9 +514,8 @@ public sealed class DevWorkflowMaterializationTests
     ///     The counter-proof, and the rule the pre-check exists for: when the validation the apply's proof rested on is
     ///     no longer a success, the apply is blocked for a human rather than applying patches nothing has judged.
     ///     <para>
-    ///         The row is moved directly, which is what the harness's own escape hatch is for: at this baseline every
-    ///         reachable path to an apply keeps its validation succeeded, and the shape this models is the one the
-    ///         follow-up round introduces — an operator's skip that an <c>All</c> join now carries on past.
+    ///         The row is moved directly, which is what the harness's own escape hatch is for: the shape this models is
+    ///         an operator's skip that an <c>All</c> join carries on past.
     ///     </para>
     /// </summary>
     [Test]
@@ -534,7 +533,7 @@ public sealed class DevWorkflowMaterializationTests
         AssertEx.Equal(DevWorkflowFailureClasses.Policy,
             integrate.FailureClass,
             "a policy refusal needs a person; calling it a configuration fault sends them to fix a definition that is fine.");
-        AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "GRAPH-C4-3", StringComparison.Ordinal);
+        AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "GRAPH-3", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -894,7 +893,7 @@ public sealed class DevWorkflowMaterializationTests
             "the sibling ran to its own answer.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
             (await harness.ReadNodeRunAsync(runId, "join")).Status,
-            "and only THEN does the join answer, with the answer C1 ruled: an operator's skip over ancestors that all succeeded is "
+            "and only THEN does the join answer: an operator's skip over ancestors that all succeeded is "
             + "WAIVED rather than dead, so an All join fires on the branch that did land instead of throwing it away.");
         AssertEx.False((await harness.ReadNodeRunAsync(runId, "verify")).Status is DevWorkflowNodeRunStatus.Pending or DevWorkflowNodeRunStatus.Skipped,
             "and the verification is asked to judge what the run DID produce, rather than being skipped with it.");

@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class IntegrationSseWriterTests
 {
-    /// <summary>Test 23 — the frame bytes, in the order SseFormatter emits them.</summary>
+    /// <summary>The frame bytes, in the order SseFormatter emits them.</summary>
     [Test]
     public async Task WriteAsync_FramesAnEventAsEventThenDataThenId()
     {
@@ -37,10 +37,10 @@ public sealed class IntegrationSseWriterTests
         AssertEx.Equal(IntegrationSseWriteOutcome.Streamed, outcome);
         var expected = $"event: {IntegrationStreamEventTypes.ExecutionCompleted}\ndata: {JsonSerializer.Serialize(streamEvent, Web)}\nid: {streamEvent.Sequence}\n\n";
         AssertEx.Equal(expected, Encoding.UTF8.GetString(body.ToArray()),
-            "The brief's id/event/data ordering is not achievable through the BCL formatter; ADR 0008 R1-8 amends it to this order, which SSE treats as equivalent.");
+            "An id/event/data ordering is not achievable through the BCL formatter; ADR 0008 R1-8 sets this order, which SSE treats as equivalent.");
     }
 
-    /// <summary>Test 24 — the headers, and the buffering the proxy path also has to turn off.</summary>
+    /// <summary>The headers, and the buffering the proxy path also has to turn off.</summary>
     [Test]
     public async Task WriteAsync_SetsTheStreamingHeadersAndDisablesResponseBuffering()
     {
@@ -58,7 +58,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.True(responseFeature.BufferingDisabled, "Without this the first tokens sit in a buffer and `curl -N` shows the whole answer at once.");
     }
 
-    /// <summary>Test 25 — the keepalive clock, driven by hand.</summary>
+    /// <summary>The keepalive clock, driven by hand.</summary>
     [Test]
     public async Task WriteAsync_WhenTheSourceIsSilent_WritesOneKeepaliveCommentEveryFifteenSeconds()
     {
@@ -81,7 +81,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.Equal(expected: 2, CountKeepalives(text), "A comment is the one keepalive form an EventSource ignores in silence.");
     }
 
-    /// <summary>Test 26 — a caller that goes away ends forwarding and nothing else.</summary>
+    /// <summary>A caller that goes away ends forwarding and nothing else.</summary>
     [Test]
     public async Task WriteAsync_WhenTheCallerAborts_StopsForwardingWithoutTouchingTheRun()
     {
@@ -101,7 +101,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.True(buffer.IsTracked(executionId), "The run's own state is untouched: nothing here cancels an invocation.");
     }
 
-    /// <summary>Test 27 — a payload holding a newline still frames as one data: line.</summary>
+    /// <summary>A payload holding a newline still frames as one data: line.</summary>
     [Test]
     public async Task WriteAsync_WithAMultiLinePayload_StillEmitsASingleDataLine()
     {
@@ -124,7 +124,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.Contains(text, "line one\\nline two");
     }
 
-    /// <summary>Test 28 — a gap raised after the 200 ends the response cleanly.</summary>
+    /// <summary>A gap raised after the 200 ends the response cleanly.</summary>
     [Test]
     public async Task WriteAsync_WhenTheRingMovesPastTheReaderMidStream_EndsTheResponseWithoutAFurtherFrame()
     {
@@ -146,7 +146,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
-    /// <summary>Test 29 — all three pre-header refusals, and that none of them touches the reader.</summary>
+    /// <summary>All three pre-header refusals, and that none of them touches the reader.</summary>
     [Test]
     [Arguments(false, 1L, 5L, 0L)]
     [Arguments(true, 4L, 9L, 0L)]
@@ -170,7 +170,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.Equal(StatusCodes.Status200OK, context.Response.StatusCode, "The status is still the default, i.e. unset — the route is free to write 410.");
     }
 
-    /// <summary>Test 29a — the ordinary first attach is served, not refused.</summary>
+    /// <summary>The ordinary first attach is served, not refused.</summary>
     [Test]
     public async Task WriteAsync_AtTheWindowEdge_Streams()
     {
@@ -189,7 +189,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.True(stub.ReadCalled);
     }
 
-    /// <summary>Test 29b — the open-stream cap, and that closing one stream frees exactly one slot.</summary>
+    /// <summary>The open-stream cap, and that closing one stream frees exactly one slot.</summary>
     [Test]
     public async Task WriteAsync_WhenEveryStreamSlotIsHeld_ReturnsBusyWithoutTouchingTheResponse()
     {
@@ -226,7 +226,7 @@ public sealed class IntegrationSseWriterTests
     }
 
     /// <summary>
-    ///     Test 43 — a dead peer on the keepalive write, with a move still parked. Two failures at once: the write path
+    ///     A dead peer on the keepalive write, with a move still parked. Two failures at once: the write path
     ///     caught only cancellation, and the enumerator was then disposed with that move in flight, which a
     ///     compiler-generated async iterator answers with <c>NotSupportedException</c> thrown outside every catch.
     /// </summary>
@@ -251,7 +251,7 @@ public sealed class IntegrationSseWriterTests
         AssertEx.True(logger.HasEntry(LogLevel.Debug, "ended early"), "A disconnect is logged at debug, never thrown.");
     }
 
-    /// <summary>Test 44 — the ordinary client-disconnect path: an abort landing while a move is parked.</summary>
+    /// <summary>The ordinary client-disconnect path: an abort landing while a move is parked.</summary>
     [Test]
     public async Task WriteAsync_WhenTheCallerAbortsWhileAMoveIsParked_DisposesTheEnumeratorCleanly()
     {

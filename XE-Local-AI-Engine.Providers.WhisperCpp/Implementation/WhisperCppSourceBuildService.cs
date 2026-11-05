@@ -20,20 +20,17 @@ public sealed partial class WhisperCppSourceBuildService
 {
     private readonly WhisperCppRuntimeAdoption _adoption;
     private readonly IWhisperCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
-    private readonly IWhisperCppSourceBuildEventPublisher _publisher;
 
     public WhisperCppSourceBuildService(IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         IManagedRuntimeStore<WhisperBackend> runtimeStore,
         IManagedSourceBuildSignal<WhisperBackend> managedSignal,
         IWhisperRuntimeActivityGate activityGate,
-        IWhisperCppSourceBuildEventPublisher publisher,
         ILogger<WhisperCppSourceBuildService> logger,
         TimeProvider timeProvider)
         : this(prerequisiteProbe,
             runtimeStore,
             managedSignal,
             activityGate,
-            publisher,
             logger,
             RuntimeCacheDirectory.Resolve(),
             new SourceCommandRunner(),
@@ -45,7 +42,6 @@ public sealed partial class WhisperCppSourceBuildService
         IManagedRuntimeStore<WhisperBackend> runtimeStore,
         IManagedSourceBuildSignal<WhisperBackend> managedSignal,
         IWhisperRuntimeActivityGate activityGate,
-        IWhisperCppSourceBuildEventPublisher publisher,
         ILogger<WhisperCppSourceBuildService> logger,
         string cacheRoot,
         ISourceCommandRunner runner,
@@ -66,7 +62,6 @@ public sealed partial class WhisperCppSourceBuildService
             isLinux)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
-        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _adoption = new WhisperCppRuntimeAdoption(cacheRoot, runtimeStore, managedSignal, timeProvider, logger);
     }
 
@@ -93,7 +88,7 @@ public sealed partial class WhisperCppSourceBuildService
                         : null,
                     BuildId = Guid.NewGuid()
                 };
-                return new StartPlan<WhisperCppSourceBuildPrerequisiteReport>
+                return new StartPlan<SourceBuildPrerequisiteReport>
                 {
                     Prerequisites = prerequisites,
                     CanBuild = prerequisites.CanBuild,
@@ -255,19 +250,8 @@ public sealed partial class WhisperCppSourceBuildService
         };
     }
 
-    protected override Task PublishStatusAsync(StatusChange change, CancellationToken ct)
-    {
-        return _publisher.PublishStatusAsync(new WhisperCppSourceBuildStatusEvent
-            {
-                Phase = (WhisperCppSourceBuildPhase)change.Phase,
-                AppendedLogLines = change.AppendedLogLines,
-                AppendedLogStartSequence = change.AppendedLogStartSequence,
-                Terminal = change.Terminal,
-                SanitizedError = change.SanitizedError,
-                CurrentBuild = change.CurrentBuild
-            },
-            ct);
-    }
+    // whisper.cpp has no hub: progress is observed by polling the status endpoint.
+    protected override Task PublishStatusAsync(StatusChange change, CancellationToken ct) => Task.CompletedTask;
 
     protected override string BackendDirectoryName(WhisperBackend backend)
     {

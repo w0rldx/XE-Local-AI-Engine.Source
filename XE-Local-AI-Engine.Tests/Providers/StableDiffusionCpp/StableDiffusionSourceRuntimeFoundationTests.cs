@@ -836,7 +836,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     {
         var prerequisites = Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
         prerequisites.ProbeAsync(Arg.Any<SdGpuBackend>(), Arg.Any<CancellationToken>())
-                     .Returns(new StableDiffusionCppSourceBuildPrerequisiteReport
+                     .Returns(new SourceBuildPrerequisiteReport
                      {
                          CanBuild = true,
                          Items = []

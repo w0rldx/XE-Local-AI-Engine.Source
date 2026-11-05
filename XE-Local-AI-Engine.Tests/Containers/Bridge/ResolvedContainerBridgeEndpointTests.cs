@@ -30,7 +30,7 @@ public sealed class ResolvedContainerBridgeEndpointTests
         AssertEx.True(Endpoint().Matches(BridgeAddress, BridgePort), "This is the bridge listener's own local endpoint.");
     }
 
-    /// <summary>The P2 case: same port, the node's OWN listener. It is not the bridge and must never be treated as one.</summary>
+    /// <summary>Same port, the node's OWN listener. It is not the bridge and must never be treated as one.</summary>
     [Test]
     public void Matches_OnTheSamePortButTheLoopbackListener_IsFalse()
     {

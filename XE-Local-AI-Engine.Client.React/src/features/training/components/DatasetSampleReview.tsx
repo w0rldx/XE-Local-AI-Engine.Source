@@ -3,8 +3,8 @@ import { IconCheck, IconX } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MessageParts } from "@/core/chat/components/MessageParts";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { MessageParts } from "@/features/chat/components/MessageParts";
 import type { SampleReviewState, TrainingDataset, TrainingSample } from "@/features/training/models/TrainingModels";
 import { useReviewTrainingSample, useTrainingSamples } from "@/features/training/queries/useTrainingDatasets";
 

@@ -91,7 +91,7 @@ this file holds only the traps those pages lack. Benchmarks, knowledge base, tra
 
 ### llama.cpp "offloaded N/N layers to GPU" does not mean GPU-resident under expert offload
 
-**Rule:** read placement from the launch argv (`--cpu-moe`, `-ot …exps=CPU`), not from the load banner: llama.cpp counts a layer offloaded when only its attention tensors are on the GPU. Pick a chat tier GPU-resident before expert offload (down to 16,384), and size hybrid recurrent stacks from `{arch}.full_attention_interval`. **Prevents:** a 35B-A3B that fits resident at 32k launched `-c 65536 --cpu-moe` (45 vs 222 tok/s) and shown as 41/41 on GPU. **Authority:** `ProcessContextAllocationResolver.ResolveCoreAsync`, `MemoryFitEstimator.TotalKvTokensAcrossLayers`, `LlamaServerProcessSupervisor.PinsExpertsToCpu`; model-matrix round F17, 2026-10-04.
+**Rule:** read placement from the launch argv (`--cpu-moe`, `-ot …exps=CPU`), not from the load banner: llama.cpp counts a layer offloaded when only its attention tensors are on the GPU. Pick a chat tier GPU-resident before expert offload (down to 16,384), and size hybrid recurrent stacks from `{arch}.full_attention_interval`. **Prevents:** a 35B-A3B that fits resident at 32k launched `-c 65536 --cpu-moe` (45 vs 222 tok/s) and shown as 41/41 on GPU. **Authority:** `ProcessContextAllocationResolver.ResolveCoreAsync`, `MemoryFitEstimator.TotalKvTokensAcrossLayers`, `LlamaServerProcessSupervisor.PinsExpertsToCpu`; 2026-10-04.
 
 ### An exclusive profiling or benchmark body holds the per-key ensure gate, never the GPU-load gate
 

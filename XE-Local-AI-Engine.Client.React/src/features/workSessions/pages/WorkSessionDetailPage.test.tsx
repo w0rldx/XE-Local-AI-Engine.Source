@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ReactNode } from "react";
-
+import type { ChatScope } from "@/core/models/ChatScope";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
-import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { WorkSessionDetailPage } from "@/features/workSessions/pages/WorkSessionDetailPage";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";

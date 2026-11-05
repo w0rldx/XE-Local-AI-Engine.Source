@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-15
 - **Scope:** The Training group (dataset generation, fine-tuning runs, export, evaluation). Nothing else.
-- **Authority:** Locked decisions 1, 13 and 14 of the 2026-08-15 training-module plan. Decision 1 was made by the maintainer on 2026-08-15; decisions 13 and 14 were closed by review evidence in the same round and confirmed by the maintainer. This record states them precisely enough to be enforced and to be revisited; it does not reopen them.
+- **Authority:** Three decisions of 2026-08-15. Python exclusivity was decided by the maintainer on that date; whole-node GPU exclusivity and the project placement were closed by review evidence and confirmed by the maintainer. This record states them precisely enough to be enforced and to be revisited; it does not reopen them.
 - **Relates to:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) — unchanged and unamended by this record. See "Relationship to ADR 0004" below.
 - **Amended by:** [ADR 0016](0016-managed-python-shared-uv-layer.md) (2026-09-27) — Decision §3 only: the generic uv mechanics (uv acquisition and pin, the uv environment allowlist, the scrubbed runner) move to a shared `Providers.Python` that `Providers.Training` references. The text below is unchanged.
 
@@ -68,7 +68,7 @@ Stated honestly, including the ones that are costs.
 
 - **Two projects means a boundary that will be pushed on.** The pressure to put "just one" queue concern into `Providers.Training`, or one subprocess detail into `Client.Application`, is constant and each individual instance looks harmless. The `LayerDependencyTests` lists catch illegal *references*; they do not catch a misplaced class within a legal reference. That one is a review responsibility.
 
-- **Revisiting this is expected.** If a maintained .NET fine-tuning path appears, or if the node grows a second GPU that makes whole-node exclusivity unnecessary, decisions 1 and 13 respectively should be superseded rather than quietly widened.
+- **Revisiting this is expected.** If a maintained .NET fine-tuning path appears, or if the node grows a second GPU that makes whole-node exclusivity unnecessary, the Python-exclusivity and whole-node-exclusivity decisions respectively should be superseded rather than quietly widened.
 
 ## Relationship to ADR 0004
 

@@ -2,7 +2,7 @@ import { Badge, Group, Menu, Text, Tooltip, UnstyledButton } from "@mantine/core
 import { IconCheck, IconChevronDown, IconSitemap } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
+import classes from "@/core/chat/components/ChatComposerToolbar.module.css";
 
 export interface WorkflowSelectorOption {
 	readonly id: string;

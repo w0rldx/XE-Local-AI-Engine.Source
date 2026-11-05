@@ -56,7 +56,7 @@ public sealed class DevWorkflowAttemptCostTests
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     T8: a real failure the retry policy re-attempts leaves the failing attempt's whole cost vector on its
+    ///     A real failure the retry policy re-attempts leaves the failing attempt's whole cost vector on its
     ///     <c>node.retry.scheduled</c> event, beside the members the retry policy itself wrote — and the node run's own
     ///     columns are empty afterwards, because the reset that starts the next attempt ran.
     /// </summary>
@@ -155,7 +155,7 @@ public sealed class DevWorkflowAttemptCostTests
     }
 
     /// <summary>
-    ///     T10: fail, fail, succeed — the node row carries attempt three alone, the two retry events carry attempts one
+    ///     Fail, fail, succeed — the node row carries attempt three alone, the two retry events carry attempts one
     ///     and two, and <c>row + snapshot₁ + snapshot₂</c> equals what the three attempts actually spent, for every one
     ///     of the ten additive members. A reflection assertion pins the member list against the telemetry record
     ///     itself, so a column added to it later cannot quietly stop being carried.
@@ -212,7 +212,7 @@ public sealed class DevWorkflowAttemptCostTests
     }
 
     /// <summary>
-    ///     T10's second write path. A cross-node retry never crosses the same-node transition — it routes through the
+    ///     The second write path. A cross-node retry never crosses the same-node transition — it routes through the
     ///     store's own retry-route command — so the enrichment has to be on that method too, or every fix loop loses an
     ///     attempt from every total.
     /// </summary>

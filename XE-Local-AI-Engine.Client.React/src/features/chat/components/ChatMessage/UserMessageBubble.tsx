@@ -1,7 +1,7 @@
 import { Group, Paper, Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 
-import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
+import { ChatMarkdown } from "@/core/chat/components/ChatMarkdown";
 import type { ChatMessageDisplay } from "@/features/chat/models/ChatMessageDisplay";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 

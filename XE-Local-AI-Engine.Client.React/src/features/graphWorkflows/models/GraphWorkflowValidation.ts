@@ -1,6 +1,6 @@
 // The client half of the graph editor's save gate.
 //
-// `validateGraphWorkflowGraph` mirrors a deliberate SUBSET of the server's graph parser (brief §3.1) — the rules the
+// `validateGraphWorkflowGraph` mirrors a deliberate SUBSET of the server's graph parser (wiki page 21 §2) — the rules the
 // canvas can actually break — so the operator is told which node is wrong instead of reading a 400 that names none.
 // THE SERVER WINS on any disagreement: this list is advisory, a save still renders whatever the server refuses, and
 // `serverErrorsToIssues` maps the server's own `errors[]` into the same shape so one component draws both.
@@ -16,7 +16,9 @@
 // the Zod schemas in GraphWorkflowConfigSchemas run per field in the drawer and only produce a field message. Their messages are full i18n
 // KEYS, so a form renders `t(issue.message)` without a lookup table of its own.
 
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import {
+	configRecord,
 	GRAPH_WORKFLOW_KEY_PATTERN,
 	GRAPH_WORKFLOW_MAX_NODES,
 	type GraphWorkflowGraph,
@@ -29,6 +31,7 @@ import {
 	narrowGraphWorkflowDefinitionKind,
 	narrowGraphWorkflowJoinPolicy,
 	normalizeGraphWorkflowConditionOperator,
+	stringOrEmpty,
 	toGraphWorkflowDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
@@ -101,19 +104,6 @@ export interface GraphWorkflowGraphIssue {
 	readonly subject?: string;
 	/** The server's own text, for `serverRejected` and `serverWarned`. Client rules carry none: their message is the i18n key. */
 	readonly message?: string;
-}
-
-/** The wire's `config` as a bag. Anything that is not a plain object reads as empty, so a malformed node still renders. */
-function configRecord(config: unknown): Record<string, unknown> {
-	return typeof config === "object" && config !== null && !Array.isArray(config) ? (config as Record<string, unknown>) : {};
-}
-
-function isPlainObject(value: unknown): boolean {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function text(value: unknown): string {
-	return typeof value === "string" ? value : "";
 }
 
 function isNodeKind(value: string | null | undefined): value is GraphWorkflowNodeKind {
@@ -238,7 +228,7 @@ function isPresent(value: unknown): boolean {
  */
 function decisionShapeIssues(key: string, config: Record<string, unknown>): readonly GraphWorkflowGraphIssue[] {
 	const issues: GraphWorkflowGraphIssue[] = [];
-	const type = text(config["questionType"]).trim() || "choice";
+	const type = stringOrEmpty(config["questionType"]).trim() || "choice";
 	const labels = config["labels"];
 	const criteria = config["criteria"];
 	if (type === "choice") {
@@ -247,12 +237,12 @@ function decisionShapeIssues(key: string, config: Record<string, unknown>): read
 		}
 		if (isPresent(criteria)) {
 			const known = Array.isArray(labels) ? labels : [];
-			if (!isPlainObject(criteria) || Object.keys(criteria as object).some((label) => !known.includes(label))) {
+			if (!isPlainRecord(criteria) || Object.keys(criteria).some((label) => !known.includes(label))) {
 				issues.push({ rule: "decisionCriteriaKeyUnknown", subject: key });
 			}
 			if (
-				isPlainObject(criteria) &&
-				Object.values(criteria as object).some(
+				isPlainRecord(criteria) &&
+				Object.values(criteria).some(
 					(description) => typeof description === "string" && description.length > GRAPH_WORKFLOW_MAX_CRITERION_LENGTH,
 				)
 			) {
@@ -266,7 +256,7 @@ function decisionShapeIssues(key: string, config: Record<string, unknown>): read
 	} else if (type === "noul" && (isPresent(labels) || isPresent(criteria))) {
 		issues.push({ rule: "decisionNoulHasLabels", subject: key });
 	}
-	const provider = text(config["provider"]).trim() || "llm";
+	const provider = stringOrEmpty(config["provider"]).trim() || "llm";
 	if (!(graphWorkflowDecisionProviders as readonly string[]).includes(provider)) {
 		issues.push({ rule: "decisionProviderUnknown", subject: key });
 	}
@@ -274,13 +264,13 @@ function decisionShapeIssues(key: string, config: Record<string, unknown>): read
 	if (provider === "llm" && (type === "noul" || type === "score")) {
 		issues.push({ rule: "decisionTypeUnsupportedByProvider", subject: key });
 	}
-	if (provider === "systemone" && text(config["model"]).trim().length === 0) {
+	if (provider === "systemone" && stringOrEmpty(config["model"]).trim().length === 0) {
 		issues.push({ rule: "decisionModelRequired", subject: key });
 	}
 	// systemone decides on the bound text alone (the question is its instructions), so with no binding it has nothing
 	// to read. `llm` still has the question as its prompt and stays unaffected.
 	const bindings = config["inputBindings"];
-	if (provider === "systemone" && !(isPlainObject(bindings) && Object.keys(bindings as object).length > 0)) {
+	if (provider === "systemone" && !(isPlainRecord(bindings) && Object.keys(bindings).length > 0)) {
 		issues.push({ rule: "decisionInputBindingRequired", subject: key });
 	}
 	return issues;
@@ -304,12 +294,12 @@ function chatNodeIssues(
 		if (!chat.isChat) {
 			issues.push({ rule: "chatInputOutsideChatGraph", subject: key });
 		}
-		if (text(config["prompt"]).trim().length === 0) {
+		if (stringOrEmpty(config["prompt"]).trim().length === 0) {
 			issues.push({ rule: "chatInputPromptMissing", subject: key });
 		}
 	}
 	if (kind === "DecisionModel") {
-		if (text(config["question"]).trim().length === 0) {
+		if (stringOrEmpty(config["question"]).trim().length === 0) {
 			issues.push({ rule: "decisionQuestionMissing", subject: key });
 		}
 		issues.push(...decisionShapeIssues(key, config));
@@ -354,23 +344,23 @@ function nodeIssues(
 		const config = configRecord(node.config);
 		for (const member of jsonObjectMembers(kind)) {
 			const value = config[member];
-			if (value !== undefined && value !== null && !isPlainObject(value)) {
+			if (value !== undefined && value !== null && !isPlainRecord(value)) {
 				issues.push({ rule: "invalidJson", subject: key });
 			}
 		}
 		// The four members the server's `ParseConfig` refuses outright. Mirrored because the drawer authors all of them
 		// and a save that fails on an empty prompt should say which node, not just 400.
-		if (kind === "Tool" && text(config["toolName"]).trim().length === 0) {
+		if (kind === "Tool" && stringOrEmpty(config["toolName"]).trim().length === 0) {
 			issues.push({ rule: "toolNameMissing", subject: key });
 		}
-		if (kind === "Agent" && text(config["instructions"]).trim().length === 0) {
+		if (kind === "Agent" && stringOrEmpty(config["instructions"]).trim().length === 0) {
 			issues.push({ rule: "agentInstructionsMissing", subject: key });
 		}
-		if (kind === "LlmCall" && text(config["prompt"]).trim().length === 0) {
+		if (kind === "LlmCall" && stringOrEmpty(config["prompt"]).trim().length === 0) {
 			issues.push({ rule: "llmPromptMissing", subject: key });
 		}
 		if (kind === "Pause") {
-			if (text(config["prompt"]).trim().length === 0) {
+			if (stringOrEmpty(config["prompt"]).trim().length === 0) {
 				issues.push({ rule: "pausePromptMissing", subject: key });
 			}
 			const allowed = config["allowedDecisions"];
@@ -378,7 +368,7 @@ function nodeIssues(
 				issues.push({ rule: "pauseNoDecisions", subject: key });
 			}
 		}
-		if (kind === "End" && text(config["outcome"]).trim().length === 0) {
+		if (kind === "End" && stringOrEmpty(config["outcome"]).trim().length === 0) {
 			issues.push({ rule: "endOutcomeMissing", subject: key });
 		}
 		issues.push(...chatNodeIssues(kind, key, config, chat));
@@ -395,7 +385,7 @@ function edgeIssues(
 	const edgeKeys = new Set<string>();
 	const unconditionalPairs = new Set<string>();
 	for (const edge of edges) {
-		// Edge keys answer to the same charset and the same namespace as node keys (brief §3.1), which is what keeps an
+		// Edge keys answer to the same charset and the same namespace as node keys (wiki page 21 §2.2), which is what keeps an
 		// issue's `subject` unambiguous about what it points at.
 		const key = edge.key ?? "";
 		if (key.length === 0) {
@@ -434,8 +424,8 @@ function edgeIssues(
 			issues.push({ rule: "unknownConditionOperator", subject: edgeSubject(edge) });
 		}
 		const sourceKind = source.kind ?? "";
-		const inheritedPath = sourceKind === "Condition" ? text(configRecord(source.config)["path"]) : "";
-		if (text(condition.path).trim().length === 0 && inheritedPath.trim().length === 0) {
+		const inheritedPath = sourceKind === "Condition" ? stringOrEmpty(configRecord(source.config)["path"]) : "";
+		if (stringOrEmpty(condition.path).trim().length === 0 && inheritedPath.trim().length === 0) {
 			// An edge with no path of its own inherits its source Condition node's `config.path`; every
 			// conditional edge must resolve a path from one of the two, `Exists`/`NotExists` included.
 			issues.push({ rule: "conditionEdgeHasNoPath", subject: edgeSubject(edge) });
@@ -451,7 +441,7 @@ function routesDecision(edge: GraphWorkflowGraphEdge, decision: string): boolean
 	}
 	const condition = edge.condition ?? {};
 	return (
-		text(condition.path) === "output.decision" &&
+		stringOrEmpty(condition.path) === "output.decision" &&
 		normalizeGraphWorkflowConditionOperator(condition.op) === "Eq" &&
 		condition.value === decision
 	);

@@ -9,8 +9,8 @@ per-attempt history lives on the run's `node.retry.scheduled` events.
 ## Why this exists
 
 A workflow node run is the unit a cost question is actually about: one attempt, one agent or one development task,
-one settle. Before this slice the numbers existed only inside a live budget object that was disposed when the step
-ended, so the only honest answer to "did that change make it cheaper" was to watch a terminal. The fifteen columns
+one settle. Otherwise the numbers exist only inside a live budget object that is disposed when the step
+ends, and the only honest answer to "did that change make it cheaper" is to watch a terminal. The fifteen columns
 below are that answer written down, and this page is how to read them without over-claiming.
 
 **Nothing here routes anything.** Every column is written at the transition that settles an attempt and read by
@@ -57,7 +57,7 @@ Page on `sinceSeq` while `hasMore` is true (`ListDevWorkflowRunEventsResponse(It
 `DevWorkflowRunEventFeedRequest` in `DevWorkflowContracts.cs`, default limit 200), and add the result
 member-by-member to the final-row rollup below. **Report the pair, not one of them:** `final` (what the successful
 attempt cost) and `total`
-(`final + retries`, what the run actually spent). A slice that improves cost by removing retries shows it only in
+(`final + retries`, what the run actually spent). A change that improves cost by removing retries shows it only in
 `total`.
 
 ```sql

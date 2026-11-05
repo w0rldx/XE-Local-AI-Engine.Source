@@ -282,7 +282,7 @@ Three things decide how the numbers may be read.
   after a park timeout, a pause, an interruption or a crash records its own `StepStarted`/`StepEnded`/`ParkTimedOut` rows and
   its own consumption; treat the sum across attempts as a lower bound only when a crash landed mid-attempt. The four state
   tool handlers still key by step number, so a `complete_work_session` call repeated by a re-run attempt dedups onto the
-  first attempt's row (known limit, live QA F-38).
+  first attempt's row (known limit).
 
 A step stopped through the cancellation registry — paused, cancelled, an expired park, a blown deadline — writes no row
 at all, deliberately: the run may still be unwinding when the supervisor sees its terminal, so its counters would be a

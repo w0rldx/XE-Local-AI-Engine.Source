@@ -106,7 +106,7 @@ public sealed class SkillImportEndpointTests
         AssertEx.True(skill.GetProperty("canImport").GetBoolean(), "A well-formed skill previews as importable.");
         AssertEx.Equal(expected: 1, skill.GetProperty("resources").GetArrayLength());
 
-        // The whole point of phase 1: the library never saw this skill.
+        // The whole point of preview: the library never saw this skill.
         AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name)).Count);
     }
 

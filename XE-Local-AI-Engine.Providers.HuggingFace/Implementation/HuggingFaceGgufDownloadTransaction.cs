@@ -117,14 +117,20 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
 
         Directory.CreateDirectory(_options.ModelsDirectory);
         var operationId = Guid.NewGuid().ToString("N");
-        var temporaryWeightPath = finalWeightPath + $".{operationId}.part";
-        var temporarySidecarPath = finalSidecarPath + $".{operationId}.part";
-        var temporaryProjectorPath = finalProjectorPath is null ? null : finalProjectorPath + $".{operationId}.part";
 
         // One stable partial per final file lets an interrupted download resume on the next attempt; only verified bytes take
         // the per-operation name. The acquisition registry admits one operation per model, so nothing else writes it.
-        var weightPartPath = PartPathFor(finalWeightPath);
-        var projectorPartPath = finalProjectorPath is null ? null : PartPathFor(finalProjectorPath);
+        var paths = new StagingPaths
+        {
+            FinalWeight = finalWeightPath,
+            FinalProjector = finalProjectorPath,
+            TemporaryWeight = finalWeightPath + $".{operationId}.part",
+            TemporarySidecar = finalSidecarPath + $".{operationId}.part",
+            TemporaryProjector = finalProjectorPath is null ? null : finalProjectorPath + $".{operationId}.part",
+            WeightPart = PartPathFor(finalWeightPath),
+            ProjectorPart = finalProjectorPath is null ? null : PartPathFor(finalProjectorPath),
+            Intent = IntentPathFor(finalWeightPath)
+        };
         AdoptLegacyPartials(finalWeightPath);
         if (finalProjectorPath is not null)
         {
@@ -133,13 +139,12 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
 
         var weightVerified = false;
         var projectorVerified = false;
-        var intentPath = IntentPathFor(finalWeightPath);
         // ONE total for the whole set (weight + projector): the intent file, so an interrupted row, and both legs' live progress report against it.
         var setTotalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
         var partCount = source.Projector is null ? 1 : 2;
         try
         {
-            await File.WriteAllTextAsync(intentPath,
+            await File.WriteAllTextAsync(paths.Intent,
                 JsonSerializer.Serialize(new InterruptedGgufDownload
                 {
                     ModelName = destination.CanonicalModelName,
@@ -150,13 +155,13 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                 source.SourceDisplayName,
                 source.ResolvedRevision,
                 destination.CanonicalModelName,
-                temporaryWeightPath,
-                weightPartPath,
+                paths.TemporaryWeight,
+                paths.WeightPart,
                 source.SourceSizeBytes,
                 source.SourceSha256,
                 progress is null ? null : new SetProgressAdapter(progress, destination.CanonicalModelName, completedInPriorParts: 0, setTotalBytes, partIndex: 1, partCount),
                 cancellationToken).ConfigureAwait(false);
-            var weightHash = await VerifyStagedAsync(temporaryWeightPath,
+            var weightHash = await VerifyStagedAsync(paths.TemporaryWeight,
                 source.SourceSizeBytes,
                 source.SourceSha256,
                 cancellationToken).ConfigureAwait(false);
@@ -174,15 +179,15 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
                     source.Projector.SourceDisplayName,
                     source.ResolvedRevision,
                     $"{destination.CanonicalModelName} projector",
-                    temporaryProjectorPath!,
-                    projectorPartPath!,
+                    paths.TemporaryProjector!,
+                    paths.ProjectorPart!,
                     source.Projector.SourceSizeBytes,
                     source.Projector.SourceSha256,
                     progress is null
                         ? null
                         : new SetProgressAdapter(progress, destination.CanonicalModelName, completedInPriorParts: source.SourceSizeBytes, setTotalBytes, partIndex: 2, partCount),
                     cancellationToken).ConfigureAwait(false);
-                projectorHash = await VerifyStagedAsync(temporaryProjectorPath!,
+                projectorHash = await VerifyStagedAsync(paths.TemporaryProjector!,
                     source.Projector.SourceSizeBytes,
                     source.Projector.SourceSha256,
                     cancellationToken).ConfigureAwait(false);
@@ -190,102 +195,16 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var weightFingerprint = GgufMemberFingerprint.Compute(weightHash, source.SourceSizeBytes);
-            var projectorFingerprint = projectorHash is null
-                ? null
-                : GgufMemberFingerprint.Compute(projectorHash, source.Projector!.SourceSizeBytes);
-            var contentMembers = new List<GgufModelContentMember>
-            {
-                new()
-                {
-                    RelativePath = destination.RelativeGgufPath,
-                    Role = InstalledModelPhysicalMemberRole.Weight,
-                    SizeBytes = source.SourceSizeBytes,
-                    Sha256 = weightHash,
-                    OwningAliases = [destination.CanonicalModelName]
-                }
-            };
-            if (projectorHash is not null)
-            {
-                contentMembers.Add(new GgufModelContentMember
-                {
-                    RelativePath = destination.ProjectorRelativePath!,
-                    Role = InstalledModelPhysicalMemberRole.Projector,
-                    SizeBytes = source.Projector!.SourceSizeBytes,
-                    Sha256 = projectorHash,
-                    OwningAliases = [destination.CanonicalModelName]
-                });
-            }
-
-            var modelFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
-            var acquiredAt = _timeProvider.GetUtcNow();
-            var entry = new GgufModelRegistryEntry
-            {
-                ModelName = destination.CanonicalModelName,
-                RepoId = source.RepoId,
-                FileName = Path.GetFileName(finalWeightPath),
-                Quant = destination.CanonicalQuant,
-                LocalPath = finalWeightPath,
-                SizeBytes = source.SourceSizeBytes,
-                Sha256 = weightHash,
-                SourceRevision = source.ResolvedRevision,
-                DownloadedAtUtc = acquiredAt,
-                Role = source.Role,
-                ProjectorFileName = source.Projector?.SourceDisplayName,
-                ProjectorLocalPath = finalProjectorPath,
-                ProjectorSizeBytes = source.Projector?.SourceSizeBytes,
-                ProjectorSha256 = projectorHash,
-                Origin = LocalModelOrigin.HuggingFace,
-                SourceDisplayName = source.SourceDisplayName,
-                MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                ModelContentFingerprint = modelFingerprint
-            };
-            var registryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
-            entry = entry with
-            {
-                RegistryRevision = registryRevision
-            };
-            var sidecar = new GgufAcquisitionMetadata
-            {
-                SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
-                RegistryRevision = registryRevision,
-                ModelName = entry.ModelName,
-                Origin = LocalModelOrigin.HuggingFace,
-                LocalFileName = entry.FileName,
-                Quantization = entry.Quant,
-                WeightContentSha256 = weightHash,
-                WeightSizeBytes = entry.SizeBytes,
-                WeightMemberFingerprint = weightFingerprint,
-                SourceDisplayName = source.SourceDisplayName,
-                AcquiredAtUtc = acquiredAt,
-                RegistryRepoId = source.RepoId,
-                RegistrySourceRevision = source.ResolvedRevision,
-                Role = source.Role,
-                ProjectorRelativePath = destination.ProjectorRelativePath,
-                ProjectorSourceDisplayName = source.Projector?.SourceDisplayName,
-                ProjectorSourceSha256 = source.Projector?.SourceSha256,
-                ProjectorSourceSizeBytes = source.Projector?.SourceSizeBytes,
-                ProjectorContentSha256 = projectorHash,
-                ProjectorContentSizeBytes = source.Projector?.SourceSizeBytes,
-                ProjectorMemberFingerprint = projectorFingerprint,
-                ModelContentFingerprint = modelFingerprint
-            };
-            await GgufAcquisitionSidecar.WriteAsync(temporarySidecarPath, sidecar, cancellationToken).ConfigureAwait(false);
-            File.Delete(intentPath);
-            return new PreparedGgufDownload
-            {
-                OperationId = operationId,
-                Source = source,
-                Destination = destination,
-                TemporaryGgufPath = temporaryWeightPath,
-                TemporarySidecarPath = temporarySidecarPath,
-                TemporaryProjectorPath = temporaryProjectorPath,
-                RegistryEntry = entry,
-                Sidecar = sidecar,
-                WeightMemberFingerprint = weightFingerprint,
-                ProjectorMemberFingerprint = projectorFingerprint,
-                ModelContentFingerprint = modelFingerprint
-            };
+            var prepared = ComposeArtifact(operationId,
+                source,
+                destination,
+                paths,
+                weightHash,
+                projectorHash,
+                _timeProvider.GetUtcNow());
+            await GgufAcquisitionSidecar.WriteAsync(paths.TemporarySidecar, prepared.Sidecar, cancellationToken).ConfigureAwait(false);
+            File.Delete(paths.Intent);
+            return prepared;
         }
         catch (Exception exception)
         {
@@ -294,62 +213,15 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
             var abandoned = exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
             if (!abandoned && weightVerified)
             {
-                HandBackVerified(temporaryWeightPath, weightPartPath, source.SourceSizeBytes, source.ResolvedRevision);
+                HandBackVerified(paths.TemporaryWeight, paths.WeightPart, source.SourceSizeBytes, source.ResolvedRevision);
             }
 
             if (!abandoned && projectorVerified)
             {
-                HandBackVerified(temporaryProjectorPath!, projectorPartPath!, source.Projector!.SourceSizeBytes, source.ResolvedRevision);
+                HandBackVerified(paths.TemporaryProjector!, paths.ProjectorPart!, source.Projector!.SourceSizeBytes, source.ResolvedRevision);
             }
 
-            var artifacts = new List<OwnedArtifact>
-            {
-                new()
-                {
-                    Path = temporarySidecarPath,
-                    Owned = true
-                },
-                new()
-                {
-                    Path = intentPath,
-                    Owned = abandoned
-                },
-                new()
-                {
-                    Path = temporaryWeightPath,
-                    Owned = true
-                },
-                new()
-                {
-                    Path = weightPartPath,
-                    Owned = abandoned
-                },
-                new()
-                {
-                    Path = weightPartPath + HfDownloadClient.RangeSidecarSuffix,
-                    Owned = abandoned
-                }
-            };
-            if (temporaryProjectorPath is not null)
-            {
-                artifacts.Add(new OwnedArtifact
-                {
-                    Path = temporaryProjectorPath,
-                    Owned = true
-                });
-                artifacts.Add(new OwnedArtifact
-                {
-                    Path = projectorPartPath!,
-                    Owned = abandoned
-                });
-                artifacts.Add(new OwnedArtifact
-                {
-                    Path = projectorPartPath + HfDownloadClient.RangeSidecarSuffix,
-                    Owned = abandoned
-                });
-            }
-
-            var cleanupFailure = OwnedArtifactCleanup.DeleteAllOrFailure([.. artifacts]);
+            var cleanupFailure = OwnedArtifactCleanup.DeleteAllOrFailure(OwnedArtifactsFor(abandoned, paths));
             if (cleanupFailure is not null)
             {
                 throw new GgufAcquisitionCleanupException("Download cleanup requires recovery.",
@@ -358,6 +230,165 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
 
             throw;
         }
+    }
+
+    private PreparedGgufDownload ComposeArtifact(string operationId,
+        ResolvedGgufDownload source,
+        GgufDownloadDestination destination,
+        StagingPaths paths,
+        string weightHash,
+        string? projectorHash,
+        DateTimeOffset acquiredAt)
+    {
+        var weightFingerprint = GgufMemberFingerprint.Compute(weightHash, source.SourceSizeBytes);
+        var projectorFingerprint = projectorHash is null
+            ? null
+            : GgufMemberFingerprint.Compute(projectorHash, source.Projector!.SourceSizeBytes);
+        var contentMembers = new List<GgufModelContentMember>
+        {
+            new()
+            {
+                RelativePath = destination.RelativeGgufPath,
+                Role = InstalledModelPhysicalMemberRole.Weight,
+                SizeBytes = source.SourceSizeBytes,
+                Sha256 = weightHash,
+                OwningAliases = [destination.CanonicalModelName]
+            }
+        };
+        if (projectorHash is not null)
+        {
+            contentMembers.Add(new GgufModelContentMember
+            {
+                RelativePath = destination.ProjectorRelativePath!,
+                Role = InstalledModelPhysicalMemberRole.Projector,
+                SizeBytes = source.Projector!.SourceSizeBytes,
+                Sha256 = projectorHash,
+                OwningAliases = [destination.CanonicalModelName]
+            });
+        }
+
+        var modelFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
+        var entry = new GgufModelRegistryEntry
+        {
+            ModelName = destination.CanonicalModelName,
+            RepoId = source.RepoId,
+            FileName = Path.GetFileName(paths.FinalWeight),
+            Quant = destination.CanonicalQuant,
+            LocalPath = paths.FinalWeight,
+            SizeBytes = source.SourceSizeBytes,
+            Sha256 = weightHash,
+            SourceRevision = source.ResolvedRevision,
+            DownloadedAtUtc = acquiredAt,
+            Role = source.Role,
+            ProjectorFileName = source.Projector?.SourceDisplayName,
+            ProjectorLocalPath = paths.FinalProjector,
+            ProjectorSizeBytes = source.Projector?.SourceSizeBytes,
+            ProjectorSha256 = projectorHash,
+            Origin = LocalModelOrigin.HuggingFace,
+            SourceDisplayName = source.SourceDisplayName,
+            MetadataSchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            ModelContentFingerprint = modelFingerprint
+        };
+        var registryRevision = GgufRegistryRevision.ComputeV1(entry, _options.ModelsDirectory);
+        entry = entry with
+        {
+            RegistryRevision = registryRevision
+        };
+        var sidecar = new GgufAcquisitionMetadata
+        {
+            SchemaVersion = GgufAcquisitionMetadata.CurrentSchemaVersion,
+            RegistryRevision = registryRevision,
+            ModelName = entry.ModelName,
+            Origin = LocalModelOrigin.HuggingFace,
+            LocalFileName = entry.FileName,
+            Quantization = entry.Quant,
+            WeightContentSha256 = weightHash,
+            WeightSizeBytes = entry.SizeBytes,
+            WeightMemberFingerprint = weightFingerprint,
+            SourceDisplayName = source.SourceDisplayName,
+            AcquiredAtUtc = acquiredAt,
+            RegistryRepoId = source.RepoId,
+            RegistrySourceRevision = source.ResolvedRevision,
+            Role = source.Role,
+            ProjectorRelativePath = destination.ProjectorRelativePath,
+            ProjectorSourceDisplayName = source.Projector?.SourceDisplayName,
+            ProjectorSourceSha256 = source.Projector?.SourceSha256,
+            ProjectorSourceSizeBytes = source.Projector?.SourceSizeBytes,
+            ProjectorContentSha256 = projectorHash,
+            ProjectorContentSizeBytes = source.Projector?.SourceSizeBytes,
+            ProjectorMemberFingerprint = projectorFingerprint,
+            ModelContentFingerprint = modelFingerprint
+        };
+        return new PreparedGgufDownload
+        {
+            OperationId = operationId,
+            Source = source,
+            Destination = destination,
+            TemporaryGgufPath = paths.TemporaryWeight,
+            TemporarySidecarPath = paths.TemporarySidecar,
+            TemporaryProjectorPath = paths.TemporaryProjector,
+            RegistryEntry = entry,
+            Sidecar = sidecar,
+            WeightMemberFingerprint = weightFingerprint,
+            ProjectorMemberFingerprint = projectorFingerprint,
+            ModelContentFingerprint = modelFingerprint
+        };
+    }
+
+    /// <summary>
+    ///     What a failed preparation deletes: staged files always, and the intent, stable partials and resume cursors only
+    ///     when the operator <paramref name="abandoned" /> the download.
+    /// </summary>
+    private static OwnedArtifact[] OwnedArtifactsFor(bool abandoned, StagingPaths paths)
+    {
+        var artifacts = new List<OwnedArtifact>
+        {
+            new()
+            {
+                Path = paths.TemporarySidecar,
+                Owned = true
+            },
+            new()
+            {
+                Path = paths.Intent,
+                Owned = abandoned
+            },
+            new()
+            {
+                Path = paths.TemporaryWeight,
+                Owned = true
+            },
+            new()
+            {
+                Path = paths.WeightPart,
+                Owned = abandoned
+            },
+            new()
+            {
+                Path = paths.WeightPart + HfDownloadClient.RangeSidecarSuffix,
+                Owned = abandoned
+            }
+        };
+        if (paths.TemporaryProjector is not null)
+        {
+            artifacts.Add(new OwnedArtifact
+            {
+                Path = paths.TemporaryProjector,
+                Owned = true
+            });
+            artifacts.Add(new OwnedArtifact
+            {
+                Path = paths.ProjectorPart!,
+                Owned = abandoned
+            });
+            artifacts.Add(new OwnedArtifact
+            {
+                Path = paths.ProjectorPart + HfDownloadClient.RangeSidecarSuffix,
+                Owned = abandoned
+            });
+        }
+
+        return [.. artifacts];
     }
 
     public async Task<GgufDownloadCommitReceipt> CommitAsync(PreparedGgufDownload preparedDownload, CancellationToken cancellationToken)
@@ -722,4 +753,24 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
 
     private static HuggingFaceDownloadException IntegrityFailure(string message) =>
         new(HuggingFaceDownloadFailure.HashMismatch, message);
+
+    /// <summary>Every path one preparation works with; the projector members are null for a weights-only download.</summary>
+    private sealed class StagingPaths
+    {
+        public required string FinalWeight { get; init; }
+
+        public required string? FinalProjector { get; init; }
+
+        public required string TemporaryWeight { get; init; }
+
+        public required string TemporarySidecar { get; init; }
+
+        public required string? TemporaryProjector { get; init; }
+
+        public required string WeightPart { get; init; }
+
+        public required string? ProjectorPart { get; init; }
+
+        public required string Intent { get; init; }
+    }
 }

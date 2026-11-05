@@ -109,10 +109,10 @@
 #     JOBS=10 PAR=1   9:08 wall   1433 MB per batch      JOBS=10 PAR=2   8:20   2921 MB
 #     JOBS=16 PAR=1   7:02 wall   1369 MB per batch      JOBS=16 PAR=2   6:52   2951 MB
 #   All four green at 12132/0. Two things follow. Width 2 buys 2 % of wall for 2.2x the memory, so
-#   PAR stays 1 — and the DevWorkflows width-2 exception that used to live here was REMOVED on the
-#   same evidence: with JOBS=16 the host is saturated, so the family finishing ~20 % sooner only hands
-#   its cores to another namespace (GraphWorkflows grew 314 s -> 330 s) and the module's wall did not
-#   move (7:02 without it, 7:08 with it) while peak RSS per batch rose from 1369 MB to 2064 MB.
+#   PAR stays 1, and DevWorkflows gets no width-2 exception on the same evidence: with JOBS=16 the
+#   host is saturated, so the family finishing ~20 % sooner only hands its cores to another namespace
+#   (GraphWorkflows grew 314 s -> 330 s) and the module's wall did not move (7:02 without an
+#   exception, 7:08 with one) while peak RSS per batch rose from 1369 MB to 2064 MB.
 #   Second, JOBS is the lever, and its best value tracks the host — hence the two measured defaults
 #   below rather than one number. Free RAM caps them: with no profile and no explicit JOBS,
 #   JOBS = clamp(1, default, floor((MemAvailable − 5 − 4) / 1.5)) in GB, printed as a ">> Sizing:"

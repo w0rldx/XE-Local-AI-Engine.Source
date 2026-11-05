@@ -283,7 +283,7 @@ internal sealed class DevWorkflowRetryPolicy
                 cancellationToken);
         }
 
-        // GRAPH-C4-4: this node's own fix loop, bounded by what the definition said; absent means no cap, a parse-time default silently tightening every stored definition.
+        // GRAPH-4: this node's own fix loop, bounded by what the definition said; absent means no cap, a parse-time default silently tightening every stored definition.
         // Attempt is the right base and needs no column, an operator Retry is subtracted from it, and two nodes routing to one target over-attributes — which errs toward blocking.
         if (node.MaxLoopIterations is { } maxLoopIterations)
         {
@@ -296,7 +296,7 @@ internal sealed class DevWorkflowRetryPolicy
                     nodeRun,
                     DevWorkflowFailureClasses.BudgetExhausted,
                     $"{failure.SanitizedReason} This node's fix loop has been re-run {loops} {(loops == 1 ? "time" : "times")}, which is as many as it allows "
-                    + "(invariant GRAPH-C4-4).",
+                    + "(invariant GRAPH-4).",
                     failure.OutputJson,
                     cancellationToken);
             }
@@ -606,7 +606,7 @@ internal sealed class DevWorkflowRetryPolicy
         return 1;
     }
 
-    /// <summary>The pre-B3 settle, kept for the one run status that must not re-attempt: one being cancelled.</summary>
+    /// <summary>The settle with no re-attempt, kept for the one run status that must not re-attempt: one being cancelled.</summary>
     private static async Task<int> FailAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,

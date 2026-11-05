@@ -179,7 +179,7 @@ Stated as what the boundary *is*, not as a rating.
   to node data, the engine directory or any ungranted path (a folder with an `ALL APPLICATION PACKAGES` ACE is readable),
   no network; Win32k allowed with clipboard and input injection denied and UI isolation `Container`; the child can read the real
   screen and show windows on the desktop, while foreign windows, desktop switching and key observation are blocked (ADR 0019
-  amendment and round-5 evidence, with its UI spoofing and screen-reading residual risk); host path names visible and
+  amendment and its 2026-10-12 evidence, with its UI spoofing and screen-reading residual risk); host path names visible and
   OS system trees readable; no CPU, memory or process ceiling, so the command timeout is the only bound. A kernel-shared
   user-mode boundary, weaker than a VM. Never reported as `Isolated`.
 

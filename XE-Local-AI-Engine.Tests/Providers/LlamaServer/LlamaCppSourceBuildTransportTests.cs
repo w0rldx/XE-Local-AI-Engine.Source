@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -510,18 +511,18 @@ public sealed class LlamaCppSourceBuildTransportTests
     {
         var probe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
         probe.ProbeAsync(LlamaCppSourceBackend.Vulkan, Arg.Any<CancellationToken>())
-             .Returns(new LlamaCppSourceBuildPrerequisiteReport
+             .Returns(new SourceBuildPrerequisiteReport
              {
                  CanBuild = true,
                  Items =
                  [
-                     new LlamaCppSourceBuildPrerequisiteItem
+                     new SourceBuildPrerequisiteRow
                      {
                          Key = "cmake",
                          Satisfied = true,
                          Detail = "4.0.1"
                      },
-                     new LlamaCppSourceBuildPrerequisiteItem
+                     new SourceBuildPrerequisiteRow
                      {
                          Key = "vulkan-sdk",
                          Satisfied = true,

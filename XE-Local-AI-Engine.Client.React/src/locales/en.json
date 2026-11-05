@@ -260,8 +260,7 @@
 			},
 			"resultLabel": "Result",
 			"sending": "Sending",
-			"thinkingLive": "Thinking…",
-			"thoughtFor": "Thought for {{s}}s"
+			"thinkingLive": "Thinking…"
 		},
 		"webRequest": {
 			"allow": "Allow",
@@ -317,9 +316,6 @@
 		"pagination": {
 			"rowsPerPage": "Rows per page",
 			"showingRange": "Showing {{from}}–{{to}} of {{total}}"
-		},
-		"providers": {
-			"cloudflareAccess": "Cloudflare Access"
 		},
 		"refresh": "Refresh",
 		"refreshing": "Refreshing...",
@@ -377,13 +373,7 @@
 			"preview": "Preview"
 		},
 		"mobileNavigation": {
-			"languageTitle": "Language",
-			"userAvatarMenu": {
-				"logout": "Logout",
-				"signedInAs": "Signed in as",
-				"title": "User",
-				"userSettings": "User Settings"
-			}
+			"languageTitle": "Language"
 		},
 		"sideNavigationBar": {
 			"ariaCollapse": "Collapse sidebar",
@@ -1203,7 +1193,7 @@
 						"label": "State"
 					},
 					"triggerCondition": {
-						"description": "Optional advisory note describing when this applies (display-only in this phase).",
+						"description": "Optional note describing when this applies. Retrieval ranks the action on it.",
 						"label": "Trigger condition",
 						"placeholder": "When the user asks for…",
 						"tooLong": "Trigger condition must be {{max}} characters or fewer"
@@ -7905,54 +7895,6 @@
 			"saveError": "Could not save your choice. Try again.",
 			"setupSubtitle": "This decides what happens when this host cannot isolate a workload the way it asks to be isolated. You can change it later in Node settings.",
 			"setupTitle": "How strict should the sandbox be?"
-		},
-		"schedule": {
-			"adminPanel": {
-				"hide": "Hide user appointments",
-				"loadError": "Failed to load users.",
-				"searchPlaceholder": "Search users...",
-				"show": "Show user appointments",
-				"title": "User Appointments"
-			},
-			"appointmentCreated": "Appointment created successfully",
-			"appointmentDeleted": "Appointment deleted successfully",
-			"appointmentUpdated": "Appointment updated successfully",
-			"createAppointment": "Create Appointment",
-			"deleteAppointment": "Delete Appointment",
-			"deleteConfirmText": "Are you sure you want to delete this appointment?",
-			"deleteConfirmTitle": "Delete Appointment",
-			"editAppointment": "Edit Appointment",
-			"fields": {
-				"color": "Color",
-				"description": "Description",
-				"descriptionPlaceholder": "Enter description (optional)",
-				"end": "End",
-				"isShared": "System appointment (visible to all users)",
-				"start": "Start",
-				"title": "Title",
-				"titlePlaceholder": "Enter appointment title",
-				"user": "Assign to user"
-			},
-			"scheduler": {
-				"day": "Day",
-				"month": "Month",
-				"more": "More",
-				"next": "Next",
-				"previous": "Previous",
-				"today": "Today",
-				"week": "Week",
-				"year": "Year"
-			},
-			"systemBadge": "System",
-			"title": "Schedule",
-			"validation": {
-				"endAfterStart": "End time must be after start time",
-				"titleMaxLength": "Title must not exceed 200 characters",
-				"titleRequired": "Title is required",
-				"titleTrimmed": "Title must not start or end with whitespace."
-			},
-			"viewAppointment": "Appointment Details",
-			"viewOnlyNotice": "You can view appointments but cannot manage them."
 		},
 		"scheduler": {
 			"createButton": "Create job",

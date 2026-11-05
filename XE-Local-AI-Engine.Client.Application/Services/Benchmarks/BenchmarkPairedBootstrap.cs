@@ -117,8 +117,8 @@ public static class BenchmarkPairedBootstrap
         }
 
         Array.Sort(means);
-        var low = Percentile(means, 0.025);
-        var high = Percentile(means, 0.975);
+        var low = BenchmarkStatistics.NearestRank(means, 0.025);
+        var high = BenchmarkStatistics.NearestRank(means, 0.975);
         return new BenchmarkPairedDelta
         {
             SharedItemCount = deltas.Length,
@@ -129,12 +129,5 @@ public static class BenchmarkPairedBootstrap
             // a delta of exactly 0 is inside [0, 0], which is the all-equal case and the clearest "no difference".
             Separated = low > 0 || high < 0
         };
-    }
-
-    /// <summary>Nearest-rank percentile, matching <see cref="BenchmarkBradleyTerry" />'s so two intervals agree.</summary>
-    private static double Percentile(IReadOnlyList<double> ordered, double quantile)
-    {
-        var rank = (int)Math.Ceiling(quantile * ordered.Count) - 1;
-        return ordered[Math.Clamp(rank, 0, ordered.Count - 1)];
     }
 }

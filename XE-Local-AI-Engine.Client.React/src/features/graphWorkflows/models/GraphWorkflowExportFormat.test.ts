@@ -4,15 +4,16 @@
 
 import { describe, expect, it } from "vitest";
 
-import { canvasToGraph, graphToCanvas, graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { canvasToGraph, graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
+import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowEquality";
 import {
 	GRAPH_WORKFLOW_EXPORT_FORMAT,
 	GRAPH_WORKFLOW_EXPORT_FORMAT_VERSION,
+	GRAPH_WORKFLOW_IMPORT_MAX_BYTES,
 	type GraphWorkflowExportEnvelope,
 	graphWorkflowAllowedUrls,
-	graphWorkflowImportRequestBytes,
-	GRAPH_WORKFLOW_IMPORT_MAX_BYTES,
 	graphWorkflowExportFileName,
+	graphWorkflowImportRequestBytes,
 	parseGraphWorkflowExportFile,
 } from "@/features/graphWorkflows/models/GraphWorkflowExportFormat";
 import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";

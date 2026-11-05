@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the bounded Lane 4 llama-server scheduling experiment."""
+"""Run the bounded llama-server scheduling experiment."""
 
 from __future__ import annotations
 

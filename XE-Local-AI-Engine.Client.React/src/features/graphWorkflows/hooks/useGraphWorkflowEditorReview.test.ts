@@ -7,7 +7,8 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
-import { canvasToGraph, graphToCanvas, graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { canvasToGraph, graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
+import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowEquality";
 import { designerChanges, designerProposal, eightNodeGraph } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
 function renderEditor() {

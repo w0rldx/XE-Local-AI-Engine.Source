@@ -34,7 +34,7 @@ one session; sign out everywhere, password change and reset revoke all. **Preven
 
 ### A new pre-host file read must skip the test content root
 
-**Rule:** a read of node state before the host is built takes the same `customization is null` guard `Program.cs` passes to `NodeStartupSettings.Read` (`includeLegacyContentRoot`): a test host's content root is the developer's source directory, so a legacy-path fallback there reads whatever file a dev run left behind. **Prevents:** test hosts whose registrations depend on a stray `node-settings.json` in `XE-Local-AI-Engine.Client/`, green on CI and red on one machine. **Authority:** `NodeStartupSettings.Read`, `Program.cs` (`includeLegacyContentRoot: customization is null`), node-settings tier B S0.
+**Rule:** a read of node state before the host is built takes the same `customization is null` guard `Program.cs` passes to `NodeStartupSettings.Read` (`includeLegacyContentRoot`): a test host's content root is the developer's source directory, so a legacy-path fallback there reads whatever file a dev run left behind. **Prevents:** test hosts whose registrations depend on a stray `node-settings.json` in `XE-Local-AI-Engine.Client/`, green on CI and red on one machine. **Authority:** `NodeStartupSettings.Read`, `Program.cs` (`includeLegacyContentRoot: customization is null`).
 
 ### A host that dies at startup may be a stale key ring, not the change
 
@@ -168,8 +168,8 @@ weakened containment. **Authority:** `DockerDaemonEndpointResolverTests`, `Devel
 **Rule:** storage deletion and the `XE_` prefix are in wiki 23; verify a delete by counting what is
 left, never by `rm` exit 0, and assert a probe off the engine (an `XE_…` probe is refused and the catalog path falls back to
 cache). Validate a whole string with `\A…\z`, not `^…$` (`$` matches before a trailing `\n`). The External Apps architecture
-guard greps raw text, comments included, so a banned member name in a comment fails it. `Plans/` is ignored: put a live
-round's evidence in `docs/roadmaps/<feature>-status.md`, never `git add -f`. **Prevents:** false passes and lost evidence.
+guard greps raw text, comments included, so a banned member name in a comment fails it. The git-ignored plan folder is not durable: put a
+live round's evidence in `docs/roadmaps/<feature>-status.md`, never `git add -f`. **Prevents:** false passes and lost evidence.
 **Authority:** `ExternalAppService.Pipeline.BuildStorageHelper`, `ExternalAppStateObserver`,
 `docs/roadmaps/external-apps-status.md`.
 
@@ -271,7 +271,7 @@ unmeasurable means. Test against a real second mount (`SeparateMountScratch`). *
 
 ### Never open the node database on a shared cache: busy_timeout does not cover its table locks
 
-**Rule:** the node database runs on a private cache; `AddNodeModelRuntime` strips Aspire's `Cache=Shared` through `NodeSqlitePragmas.WithPrivateCache`. Read extended code 262 as SQLITE_LOCKED_SHAREDCACHE: on a shared cache one connection's uncommitted DDL blocks every other connection's next prepare. The buffer address decides the form: an `ArgumentOutOfRangeException` from SQLitePCL, or SQLite error 6 once the driver's retry hits its command timeout. A test of it accepts both and sets a short `DefaultTimeout`. **Prevents:** the readiness probe's rolled-back `CREATE TABLE` failing an identity lookup with 500 and dropping a SignalR long-poll stream; a repro test that flakes on the 60 s form. **Authority:** `NodeSqlitePragmasTests` (`SharedCache_*`, `WithPrivateCache_*`); model-matrix F16, 2026-10-03.
+**Rule:** the node database runs on a private cache; `AddNodeModelRuntime` strips Aspire's `Cache=Shared` through `NodeSqlitePragmas.WithPrivateCache`. Read extended code 262 as SQLITE_LOCKED_SHAREDCACHE: on a shared cache one connection's uncommitted DDL blocks every other connection's next prepare. The buffer address decides the form: an `ArgumentOutOfRangeException` from SQLitePCL, or SQLite error 6 once the driver's retry hits its command timeout. A test of it accepts both and sets a short `DefaultTimeout`. **Prevents:** the readiness probe's rolled-back `CREATE TABLE` failing an identity lookup with 500 and dropping a SignalR long-poll stream; a repro test that flakes on the 60 s form. **Authority:** `NodeSqlitePragmasTests` (`SharedCache_*`, `WithPrivateCache_*`); 2026-10-03.
 
 ### A stable-diffusion.cpp source build closes stdin on every child
 

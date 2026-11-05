@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
 ///     The terminal events' payloads: <c>execution.completed</c> is <c>{tokens?, durationMs}</c> and
-///     <c>execution.failed</c> is <c>{category, summary}</c>, per the brief's envelope.
+///     <c>execution.failed</c> is <c>{category, summary}</c>.
 /// </summary>
 /// <remarks>
 ///     Built ONCE per terminal and used twice: the bytes persisted as the terminal row's detail and the element

@@ -115,7 +115,7 @@ class LocalFileTests(unittest.TestCase):
 
 class WireRuleTests(unittest.TestCase):
     def test_default_limit_is_budget_plus_cap(self) -> None:
-        # Shipped defaults at 65,536: low budget 2048 + cap min(32768, 16384) — the live round's n_predict 18432.
+        # Shipped defaults at 65,536: low budget 2048 + cap min(32768, 16384) gives n_predict 18432.
         self.assertEqual(driver.expected_default_limit({}, 65536, reasoning=True), 18432)
         # A non-reasoning model gets no budget: half the window at 4,096 (Granite's n_predict 2048).
         self.assertEqual(driver.expected_default_limit({}, 4096, reasoning=False), 2048)

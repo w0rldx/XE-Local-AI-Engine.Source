@@ -306,7 +306,7 @@ describe("validateDevWorkflowGraph", () => {
 
 	it("refuses a gate out-edge no answer would take, and names the gate that owns it", () => {
 		// "Approved" is the past participle. It validates, it never fires, and the branch behind it is dead — which is
-		// exactly the mistake GRAPH-C4-1 exists to catch at authoring time.
+		// exactly the mistake GRAPH-1 exists to catch at authoring time.
 		const dead = validateDevWorkflowGraph(
 			chain({
 				nodes: [node("research"), node("approval", { nodeType: "HumanGate" }), node("integrate")],
@@ -382,7 +382,7 @@ describe("validateDevWorkflowGraph", () => {
 	});
 
 	it("refuses a template VALIDATION node no edge leaves, and only that", () => {
-		// GRAPH-C4-1's fourth step. A template check with no out-edge is an end of the run, and a decomposition that
+		// GRAPH-1's fourth step. A template check with no out-edge is an end of the run, and a decomposition that
 		// finds no work writes a succeeded verdict row under that very key — so the run would read as finished though
 		// its real tail never ran. The editor lets an operator delete `validate → join`, so the mirror has to say so
 		// before Save rather than after the server's 400.

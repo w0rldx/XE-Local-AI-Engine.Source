@@ -22,7 +22,7 @@
 # Gotchas encoded here (learned the hard way):
 #   - .env is gitignored: a fresh checkout builds the SPA without VITE_ values. The env
 #     schema check runs at APP STARTUP in the browser (not during `vite build`), so a
-#     missing value used to surface only as a blank page. Seed .env from .env.template.
+#     missing value surfaces only as a blank page. Seed .env from .env.template.
 #   - vpk 1.2.161 `pack` has NO --pre flag; prerelease state rides the SemVer suffix.
 #     --pre IS valid on `vpk upload github`.
 #   - If HEAD is already tagged, git-cliff --unreleased is EMPTY (commits-after-latest-tag)

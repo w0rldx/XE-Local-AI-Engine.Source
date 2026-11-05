@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -361,7 +362,7 @@ internal static class ModelFitMapper
         return (LlamaCppSourceBackend)(int)backend;
     }
 
-    public static LlamaCppSourceBuildPrerequisitesResponse ToResponse(this LlamaCppSourceBuildPrerequisiteReport report,
+    public static LlamaCppSourceBuildPrerequisitesResponse ToResponse(this SourceBuildPrerequisiteReport report,
         LlamaCppSourceBackend backend)
     {
         return new LlamaCppSourceBuildPrerequisitesResponse

@@ -10,12 +10,9 @@ import {
 	type NodeSettingsFieldsCardProps,
 } from "@/features/node-settings/components/NodeSettingsFieldsCard";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
-import {
-	type NodeSettingsFieldsForm,
-	toNodeSettingsFieldBounds,
-	toNodeSettingsFieldsForm,
-	type UsageRateRow,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { toNodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
+import { type NodeSettingsFieldsForm, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import type { UsageRateRow } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
 import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
 import { nonEnglishLocales } from "@/test/Locales";

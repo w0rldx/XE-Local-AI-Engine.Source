@@ -531,7 +531,7 @@ public sealed class NodeAuthEndpointTests
         AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfilePending, stored.SandboxSecurityProfile);
     }
 
-    // R5b's ordering, from the failure side: the profile write lands, the operation is cancelled, and the identity
+    // The write-before-commit ordering, from the failure side: the profile write lands, the operation is cancelled, and the identity
     // transaction never commits. The orphan this leaves is the harmless one — a pending profile with no administrator —
     // and both halves are asserted, because the whole point of writing before the commit is that the OTHER orphan
     // ("administrator exists, profile null", which the boot backfill would decide as recommended) is unreachable.
@@ -761,7 +761,7 @@ public sealed class NodeAuthEndpointTests
 
     /// <summary>
     ///     Decorates the REAL store and interrupts only the FIRST write: the mutation is persisted, then the caller is
-    ///     cancelled. That is the window R5b's ordering is chosen for — the profile is already durable while the
+    ///     cancelled. That is the window the write-before-commit ordering is chosen for — the profile is already durable while the
     ///     identity transaction has not committed — and leaving later writes alone is what lets a retry run against a
     ///     node that genuinely holds the orphaned value.
     /// </summary>

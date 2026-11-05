@@ -13,7 +13,7 @@ import type {
  * is put back to run again — and without this it simply un-completes with no account of itself, which reads as the
  * module losing work.
  *
- * The evidence is `node.retry.routed`, which B4 emits against the node that FAILED, naming the target the loop routed
+ * The evidence is `node.retry.routed`, which the run engine emits against the node that FAILED, naming the target the loop routed
  * back to. This node's own log says only that it was re-scheduled, so the two are joined on sequence: the routed event
  * immediately preceding this node's latest reset is the round that reset it. A routed event this node's own row
  * produced is not a cascade — it is this node failing and retrying itself, which the attempts list already says.

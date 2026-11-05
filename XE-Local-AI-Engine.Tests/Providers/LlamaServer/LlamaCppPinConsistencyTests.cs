@@ -113,7 +113,7 @@ public sealed class LlamaCppPinConsistencyTests
     public void PinnedSourceCommitSha_IsAFullyQualified40CharSha()
     {
         // The in-app source build hard-fails unless the freshly-cloned HEAD equals this exactly, so an abbreviated SHA
-        // would brick the only Linux GPU path rather than degrade gracefully. [secHIGH-1]
+        // would brick the only Linux GPU path rather than degrade gracefully.
         AssertEx.Equal(40, LlamaCppReleasePins.PinnedCudaSourceCommitSha.Length,
             "PinnedCudaSourceCommitSha must be a full 40-character commit SHA, never abbreviated.");
         AssertEx.True(LlamaCppReleasePins.PinnedCudaSourceCommitSha.All(Uri.IsHexDigit),

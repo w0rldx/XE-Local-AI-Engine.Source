@@ -178,7 +178,7 @@ public sealed class DevelopmentManagementServiceTests
     {
         // An ext: id is invisible to the cloud provider resolver — it falls THROUGH cloud selection by design — so
         // without its own check the LocalOnly guard below would have waved a hosted endpoint straight through. It is
-        // refused under CloudScoped too: the plan admits no dev-mode support for a declared-cloud external model.
+        // refused under CloudScoped too: dev mode has no support for a declared-cloud external model.
         var (store, coordinator, repositoryBindings, projectId, taskId) = ExternalModelFixture("ext:cloud-box/qwen3", egressPolicy);
         var trust = new FakeModelTrustResolver().Register("cloud-box", "qwen3", ExternalProviderLocality.Cloud);
         var service = CreateService(store,

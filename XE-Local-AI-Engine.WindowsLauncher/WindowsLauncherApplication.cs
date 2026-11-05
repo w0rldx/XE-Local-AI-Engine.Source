@@ -107,7 +107,7 @@ internal static partial class WindowsLauncherApplication
         try
         {
             // Every prerequisite check that prints has passed, so the GUI shell leaves nothing more for this console
-            // to show; releasing it closes the window the tester saw hanging around for the whole session.
+            // to show; releasing it closes the window, which otherwise stays open for the whole session.
             if (detachConsole && OperatingSystem.IsWindows())
             {
                 _ = FreeConsole();

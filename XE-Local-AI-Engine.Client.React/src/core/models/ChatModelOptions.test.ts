@@ -229,7 +229,7 @@ describe("resolveLocalDefaultModelName", () => {
 	});
 });
 
-describe("external-provider containment (D10)", () => {
+describe("external-provider containment", () => {
 	const externalModel = (overrides: Partial<LocalModelDto> = {}): LocalModelDto =>
 		model({
 			modelName: "ext:unsloth-box/qwen3-27b",

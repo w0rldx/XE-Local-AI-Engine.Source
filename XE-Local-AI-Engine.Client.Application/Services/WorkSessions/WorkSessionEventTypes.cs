@@ -55,7 +55,7 @@ internal static class WorkSessionEventTypes
 
     /// <summary>
     ///     The <see cref="StepEnded" /> outcome for a turn the write-declaration guard refused before it was sent
-    ///     (<c>GRAPH-C4-2</c>).
+    ///     (<c>GRAPH-2</c>).
     /// </summary>
     /// <remarks>
     ///     Unlike the other outcomes here this one IS terminal — the session settles Failed — and its row is the durable record of
@@ -100,7 +100,7 @@ internal static class WorkSessionStepPhases
     public const string ToolGate = "tool-gate";
 
     /// <summary>
-    ///     A step the write-declaration guard stopped before it was sent (<c>GRAPH-C4-2</c>). Its own phase for the
+    ///     A step the write-declaration guard stopped before it was sent (<c>GRAPH-2</c>). Its own phase for the
     ///     same reason as <see cref="ToolGate" />: sharing one would let idempotency swallow the row a step that really
     ///     ran would write.
     /// </summary>

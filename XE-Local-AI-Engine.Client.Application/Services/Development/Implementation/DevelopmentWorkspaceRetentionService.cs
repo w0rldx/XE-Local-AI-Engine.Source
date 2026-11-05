@@ -281,9 +281,9 @@ internal sealed partial class DevelopmentWorkspaceRetentionService : BackgroundS
         return info.LinkTarget is not null || (info.Exists && info.Attributes.HasFlag(FileAttributes.ReparsePoint));
     }
 
-    private bool IsUnderDataRoot(string path) =>
-        Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(_dataDirectoryRoot) + Path.DirectorySeparatorChar,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    /// <summary>The gate in front of every delete; exposed to the tests because the sweep only ever composes paths that pass it.</summary>
+    internal bool IsUnderDataRoot(string path) =>
+        PathContainment.IsUnderRoot(path, _dataDirectoryRoot);
 
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct TaskKey(Guid ProjectId, Guid TaskId);

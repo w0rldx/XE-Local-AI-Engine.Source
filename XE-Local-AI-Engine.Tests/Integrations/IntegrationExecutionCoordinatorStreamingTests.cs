@@ -77,7 +77,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
             "tool.* rows are the ONLY rows the mapper writes, and neither assistant type is ever persisted.");
     }
 
-    /// <summary>Test 19 — the mapper is detached with the coordinator's own subscription.</summary>
+    /// <summary>The mapper is detached with the coordinator's own subscription.</summary>
     [Test]
     public async Task Run_AfterTheCoordinatorUnsubscribed_AppendsNothingMore()
     {
@@ -99,7 +99,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
         AssertEx.Equal(head, harness.Buffer.LastSequence(executionId), "the stream attaches to the execution's lifetime and never opens its own, so a late raise reaches nothing.");
     }
 
-    /// <summary>Test 22, at the coordinator: a drain failure is the run's failure.</summary>
+    /// <summary>At the coordinator: a drain failure is the run's failure.</summary>
     [Test]
     public async Task Run_WhenTheToolEventCannotBePersisted_TerminalizesInternalFailure()
     {
@@ -128,7 +128,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
     /// <summary>
     ///     A NEGATIVE requirement: neither the coordinator nor the SSE writer registers an attachment handle,
     ///     so the reaper cannot see an integration run at all. If either ever attached, an integrator that closed its
-    ///     stream to poll instead would have its run cancelled 300 s later — the exact failure the brief forbids.
+    ///     stream to poll instead would have its run cancelled 300 s later — the exact failure this forbids.
     /// </summary>
     [Test]
     public async Task DetachedInvocationReaper_NeverSeesAnIntegrationRun_EvenAfterAStreamCameAndWent()

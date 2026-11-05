@@ -12,12 +12,8 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import {
-	devWorkflowEventsPageSize,
-	devWorkflowInvalidationKey,
-	devWorkflowQueryIds,
-	useDevWorkflowRunEvents,
-} from "@/features/devWorkflows/queries/useDevWorkflows";
+import { devWorkflowInvalidationKey, devWorkflowQueryIds } from "@/features/devWorkflows/queries/useDevWorkflows";
+import { devWorkflowEventsPageSize, useDevWorkflowRunEvents } from "@/features/devWorkflows/queries/useDevWorkflowRunEvents";
 import { devWorkflowRunEvent, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";

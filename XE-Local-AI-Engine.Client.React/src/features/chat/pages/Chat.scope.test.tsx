@@ -9,11 +9,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ChatScope } from "@/core/models/ChatScope";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
-import type { ChatConversationModel, ChatScope } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
@@ -273,7 +274,7 @@ describe("Chat scope seam", () => {
 		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalledTimes(2));
 	});
 
-	it("keeps a live re-attach when resumeNonce bumps, and still aborts it on a conversation switch (F-30)", async () => {
+	it("keeps a live re-attach when resumeNonce bumps, and still aborts it on a conversation switch", async () => {
 		const signals: AbortSignal[] = [];
 		adapter.resumeConversation.mockImplementation((conversationId, signal) => {
 			signals.push(signal);

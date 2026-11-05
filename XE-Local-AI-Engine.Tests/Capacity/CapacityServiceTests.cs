@@ -431,7 +431,7 @@ public sealed class CapacityServiceTests
         AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): another model is still loading; try again when it finishes. "
                        + "Loaded now: 'running/a:Q4_K_M' (Chat). Loading now: 'direct/x:Q4_K_M' (Chat).",
             decision.Reason,
-            "R7-03: the refusal names the direct launch it waits on, not only the resident models.");
+            "the refusal names the direct launch it waits on, not only the resident models.");
         AssertRejectionLogged(harness, "still loading", "'running/a:Q4_K_M' (Chat)");
         ticket!.Dispose();
     }

@@ -9,13 +9,15 @@ import { isActiveDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features
 import {
 	type DevWorkflowEventsAnchor,
 	devWorkflowEventsAnchorParam,
+	useDevWorkflowRunEvents,
+} from "@/features/devWorkflows/queries/useDevWorkflowRunEvents";
+import {
 	useDecideDevWorkflowNodeRun,
 	useDeleteDevWorkflowWorkItem,
 	useDevWorkflowArtifacts,
 	useDevWorkflowDefinitions,
 	useDevWorkflowNodeRun,
 	useDevWorkflowRun,
-	useDevWorkflowRunEvents,
 	useDevWorkflowRunLifecycle,
 	useDevWorkflowWorkItem,
 	useStartDevWorkflowRun,

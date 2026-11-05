@@ -29,7 +29,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         word-boundary rule is needed to keep the fence off the repository's own vocabulary.
 ///     </para>
 ///     <para>
-///         Ratchet (P1): the allowlists freeze the files that reference an SDK today so no NEW one can land.
+///         Ratchet: the allowlists freeze the files that reference an SDK today so no NEW one can land.
 ///         <see cref="EveryAllowlistedFile_StillReferencesItsSdkToday" /> is the other half — an entry that stopped
 ///         violating is deleted, so the lists only shrink.
 ///     </para>
@@ -62,7 +62,7 @@ public sealed class ThirdPartySdkBoundaryTests
     ];
 
     /// <summary>
-    ///     The Azure SDK and MSAL surface as found on this baseline: every file is under
+    ///     The Azure SDK and MSAL surface: every file is under
     ///     <c>Client.Application/Services/CloudProviders/</c>, which is where the Entra and Foundry integration lives.
     ///     No slice is scheduled to empty this list; a new entry means the cloud-provider seam leaked.
     /// </summary>

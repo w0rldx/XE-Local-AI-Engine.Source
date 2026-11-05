@@ -117,16 +117,16 @@ public sealed class DeferredLlamaServerStructuredOutputTests
 
         AssertEx.Equal("answer,score",
             string.Join(',', schema.GetProperty("required").EnumerateArray().Select(static entry => entry.GetString())),
-            "'notes' was left optional by the author and must stay optional — the transform used to make every property required.");
+            "'notes' was left optional by the author and must stay optional.");
         AssertEx.False(ContainsKeyword(schema, "additionalProperties"),
-            "the author closed nothing, so nothing may be closed for them: the transform used to inject additionalProperties: false.");
+            "the author closed nothing, so nothing may be closed for them.");
     }
 
     /// <summary>
     ///     The one thing the passthrough must still take away. llama.cpp compiles this schema into GBNF and refuses a
     ///     repetition bound above <see cref="LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound" /> outright —
-    ///     HTTP 400 <c>Failed to initialize samplers</c>, the turn never reaches inference. The strict transform used to
-    ///     hide that by accident; the passthrough now does it on purpose, and ONLY to the offending keywords.
+    ///     HTTP 400 <c>Failed to initialize samplers</c>, the turn never reaches inference. The passthrough
+    ///     hides that on purpose, and ONLY for the offending keywords.
     /// </summary>
     [Test]
     public async Task JsonSchemaResponseFormat_CarriesNoBoundGrammarCannotCompile()

@@ -37,8 +37,8 @@ const FILL: CSSProperties = { flex: 1, minHeight: 0 };
  * This is layout only — WHAT is in a pane stays in the feature that owns it, which is why every pane arrives as a
  * node and the Drawers that carry a pane on a narrow viewport stay at the call site: their position, size, title and
  * open-state are feature state, and a prop object for each would share the word `Drawer` and nothing else.
- * (`docs/wiki/22-workflow-engines-divergence-register.md` D2/D10 keep the two workflow engines' *behavior* apart;
- * the owner has ruled that this arithmetic is not engine behavior and is shared deliberately.)
+ * (`docs/wiki/22-workflow-engines-divergence-register.md` keeps the two workflow engines' *behavior* apart; this
+ * arithmetic is not engine behavior and is shared deliberately.)
  *
  * `isNarrow` is a prop rather than a viewport read of this component's own. The decision belongs to the page and is
  * made ONCE there, because the page's Drawers, its header toggles and this grid must agree exactly — and because the

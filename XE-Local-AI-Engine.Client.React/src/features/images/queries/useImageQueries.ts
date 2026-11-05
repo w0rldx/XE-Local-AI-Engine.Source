@@ -24,14 +24,12 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { imageBlobQueryKey } from "@/features/images/hooks/useImageObjectUrl";
 import {
-	toImageJobView,
 	toImageModelCatalogEntryView,
 	toImageModelDownloadView,
-	toImageModelView,
 	toImageRepositoryFileView,
 	toImageRepositoryView,
-	toUploadedImageView,
-} from "@/features/images/models/ImageModels";
+} from "@/features/images/models/ImageModelInstallModels";
+import { toImageJobView, toImageModelView, toUploadedImageView } from "@/features/images/models/ImageModels";
 
 // Server-state for the image feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
 // AbortSignal wired automatically) with a `select` mapping the optional-field generated response into the strict

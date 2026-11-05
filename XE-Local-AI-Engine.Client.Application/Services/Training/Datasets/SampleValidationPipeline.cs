@@ -2,49 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-
-/// <summary>What the pipeline needs beyond the raw completion: the definition it was generated from, and the models to reach.</summary>
-public sealed class SampleValidationContext
-{
-    public required DatasetDefinitionBodyV1 Definition { get; init; }
-
-    public required string Kind { get; init; }
-
-    public required TrainingSampleLabel RequestedLabel { get; init; }
-
-    public required JsonElement RecordSchema { get; init; }
-
-    public required IChatClient? CriticChatClient { get; init; }
-
-    /// <summary>"label|normalized user turn" keys this generation already accepted; the caller owns one set per run.</summary>
-    public ISet<string> AcceptedUserMessages { get; init; } = new HashSet<string>(StringComparer.Ordinal);
-}
-
-/// <summary>
-///     A pipeline verdict. <see cref="Accepted" /> false means the turn could not be turned into a sample at all and is
-///     counted as a rejection; a schema-valid turn that failed a later layer is accepted and retained with the
-///     <see cref="TrainingSampleLabel.Bad" /> label (decision #9), never discarded.
-/// </summary>
-public sealed class SampleValidationOutcome
-{
-    public required bool Accepted { get; init; }
-
-    public required string? RejectionReason { get; init; }
-
-    public required TrainingSampleLabel Label { get; init; }
-
-    public required TrainingSampleContentV1? Content { get; init; }
-
-    public required TrainingSampleValidationV1 Validation { get; init; }
-}
-
-public interface ISampleValidationPipeline
-{
-    Task<SampleValidationOutcome> ValidateAsync(string rawCompletion, SampleValidationContext context, CancellationToken cancellationToken = default);
-}
 
 /// <summary>
 ///     The ordered validation layers for one generated turn: record schema → tool-name resolution → argument

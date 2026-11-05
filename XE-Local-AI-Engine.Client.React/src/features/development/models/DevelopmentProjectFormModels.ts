@@ -1,4 +1,4 @@
-import type { DevelopmentRepository } from "@/features/development/models/DevelopmentModels";
+import type { DevelopmentRepository } from "@/core/development/queries/useDevelopmentRepositories";
 
 export interface RegisterDevelopmentRepositoryValues {
 	readonly alias: string;

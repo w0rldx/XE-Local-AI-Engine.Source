@@ -78,8 +78,8 @@ This is a denylist with known residue, not a complete inventory: app token store
 
 The home directory itself, every volume root, `AppData`, `Roaming` and `Local` are refused as roots, but a tree beneath them that is not
 a credential or profile store is fine: `~/.nvm/versions/node/v22/bin` exposes a node install, while `$HOME` exposes the
-operator. (A subfolder of a credential store was bindable before the round-5 Windows run found Firefox profile data
-readable through one; it is refused now.) Refusing every
+operator. (A subfolder of a credential store is refused too: a Windows run on 2026-10-12 found Firefox profile data
+readable through one.) Refusing every
 subtree of home would make `npx`- and `uvx`-based servers unusable at the default tier, which is how a security
 control gets switched off. Both sides are compared after normalization and full link resolution — every ancestor, not just the final
 component, because the kernel resolves the whole chain when bwrap binds by descriptor. A symlink anywhere in

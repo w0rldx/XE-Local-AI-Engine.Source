@@ -3,6 +3,7 @@
 // rather than by a 400 after a save that also costs a forced re-judge. The node stays the authority: everything here
 // is a pre-check, never a substitute for its validation.
 
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import { benchmarkSceneLimits, benchmarkScenePrimitives } from "@/features/benchmarks/models/BenchmarkSceneSpec";
 
 /**
@@ -59,7 +60,7 @@ export function parseVerifierConfig(config: string | null | undefined): Benchmar
 	}
 	try {
 		const parsed: unknown = JSON.parse(config);
-		return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as BenchmarkVerifierConfig) : {};
+		return isPlainRecord(parsed) ? parsed : {};
 	} catch {
 		return {};
 	}
@@ -126,9 +127,6 @@ export type BenchmarkVerifierIssue =
 	| "scenePrimitives"
 	| "sceneRelations";
 
-const isObject = (value: unknown): value is BenchmarkVerifierConfig =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
 const nonEmptyString = (value: unknown): boolean => typeof value === "string" && value.trim().length > 0;
 
 /**
@@ -154,14 +152,14 @@ export function parseMathAnswerNumber(value: unknown): number | null {
 }
 
 function schemaIssue(schema: unknown): BenchmarkVerifierIssue | null {
-	if (!isObject(schema)) {
+	if (!isPlainRecord(schema)) {
 		return "schemaRequired";
 	}
 	for (const [keyword, value] of Object.entries(schema)) {
 		if (!supportedSchemaKeywords.includes(keyword)) {
 			return "schemaKeyword";
 		}
-		if (keyword === "properties" && isObject(value)) {
+		if (keyword === "properties" && isPlainRecord(value)) {
 			for (const property of Object.values(value)) {
 				const nested = schemaIssue(property);
 				if (nested !== null) {
@@ -238,7 +236,7 @@ function sceneSpecIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssue
 		relations?: unknown;
 	};
 	if (objectCount !== undefined) {
-		if (!isObject(objectCount) || !sceneCount(objectCount["min"]) || !sceneCount(objectCount["max"])) {
+		if (!isPlainRecord(objectCount) || !sceneCount(objectCount["min"]) || !sceneCount(objectCount["max"])) {
 			return "sceneObjectCount";
 		}
 		const { min, max } = objectCount as { min?: number; max?: number };
@@ -260,7 +258,7 @@ function sceneSpecIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssue
 			relations.length > benchmarkSceneLimits.maxRelations ||
 			relations.some(
 				(relation) =>
-					!isObject(relation) ||
+					!isPlainRecord(relation) ||
 					Object.keys(relation).some((key) => !["kind", "a", "b"].includes(key)) ||
 					!sceneRelationKinds.includes(relation["kind"] as string) ||
 					!nonEmptyString(relation["a"]) ||

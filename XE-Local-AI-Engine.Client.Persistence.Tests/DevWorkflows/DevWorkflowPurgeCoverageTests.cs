@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class DevWorkflowPurgeCoverageTests
 {
     /// <summary>
-    ///     T-7: no <c>dev_workflow_*</c> table may declare <c>conversation_id</c> or <c>message_id</c>. A chat purge
+    ///     No <c>dev_workflow_*</c> table may declare <c>conversation_id</c> or <c>message_id</c>. A chat purge
     ///     deletes every table keyed by those columns, so one such column would put the whole workflow audit — the thing
     ///     the design exists to keep — inside the blast radius of deleting a conversation.
     /// </summary>
@@ -46,7 +46,7 @@ public sealed class DevWorkflowPurgeCoverageTests
     }
 
     /// <summary>
-    ///     T-8: every work-item-scoped table must appear in <c>CoveredChildTables</c>. Cascades never fire on this
+    ///     Every work-item-scoped table must appear in <c>CoveredChildTables</c>. Cascades never fire on this
     ///     connection, so a table added to the model and forgotten here would orphan encrypted rows forever.
     /// </summary>
     [Test]
@@ -86,7 +86,7 @@ public sealed class DevWorkflowPurgeCoverageTests
             + $"{string.Join(", ", covered.Except(discovered, StringComparer.Ordinal))}.");
     }
 
-    /// <summary>T-8, round trip: a full delete leaves zero rows across all seven work-item-scoped tables, and the definition survives.</summary>
+    /// <summary>Round trip: a full delete leaves zero rows across all seven work-item-scoped tables, and the definition survives.</summary>
     [Test]
     public async Task DeleteWorkItem_LeavesZeroRowsAcrossEverySevenTableAndKeepsTheDefinition()
     {

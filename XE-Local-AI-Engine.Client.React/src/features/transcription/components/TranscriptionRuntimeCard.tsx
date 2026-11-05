@@ -2,15 +2,12 @@ import { Alert, Badge, Button, Group, Loader, Stack, Text } from "@mantine/core"
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { TranscriptionModelManager } from "@/features/transcription/components/TranscriptionModelManager";
-import {
-	useEjectTranscriptionRuntime,
-	useTranscriptionModels,
-	useTranscriptionRuntimeStatus,
-} from "@/features/transcription/queries/useTranscriptionQueries";
+import { useTranscriptionModels, useTranscriptionRuntimeStatus } from "@/features/transcription/queries/useTranscriptionQueries";
 
 /**
  * The whisper runtime at a glance: process state, the effective model, VAD and the managed build, with an eject —

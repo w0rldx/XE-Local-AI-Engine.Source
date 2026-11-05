@@ -51,7 +51,7 @@ public sealed class InvocationToolResolverTests
     [Test]
     public void Resolve_TightensSpawnSubagent_WrapsResolvedExecutableInApproval()
     {
-        // spawn_subagent is a built-in resolved from the catalog; the audit found tightening it currently has no effect.
+        // spawn_subagent is a built-in resolved from the catalog; tightening it wraps what the catalog resolved.
         var catalog = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "spawn_subagent"));
         var offered = new[]
         {
@@ -252,7 +252,7 @@ public sealed class InvocationToolResolverTests
         }) as string);
         AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(result), "the refusal is recorded as a failed call");
         AssertEx.Contains(result, "compute is off");
-        AssertEx.True(result.EndsWith(ToolFailureText.NotRunNotice, StringComparison.Ordinal), $"N-88: the refusal must say nothing ran (got: {result})");
+        AssertEx.True(result.EndsWith(ToolFailureText.NotRunNotice, StringComparison.Ordinal), $"the refusal must say nothing ran (got: {result})");
         AssertEx.Equal(expected: 0, handler.Executions, "the approval-free variant never reaches the handler");
     }
 

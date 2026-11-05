@@ -31,10 +31,10 @@ XE-Local-AI-Engine.AI.Agent.Tests/Chat/ToolRelevanceChatClientTests.cs|run|7
 XE-Local-AI-Engine.AI.Agent.Tests/Chat/ToolRelevanceChatClientTests.cs|summary|1
 XE-Local-AI-Engine.AI.Agent.Tests/Eval/MafPlaybookEvalAgentRunnerTests.cs|summary|1
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/FrameworkApprovalGateTests.cs|summary|2
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|block|2
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|remarks|1
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|run|10
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|summary|5
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowContractTests.cs|block|2
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowContractTests.cs|remarks|1
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowContractTests.cs|run|10
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowContractTests.cs|summary|5
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/InvocationAgentFactoryTests.cs|run|13
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/InvocationAgentFactoryTests.cs|summary|3
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/Orchestration/IdleStreamGuardTests.cs|run|1
@@ -55,7 +55,7 @@ XE-Local-AI-Engine.AI.Agent.Tests/Tools/InvocationToolResolverTests.cs|run|1
 XE-Local-AI-Engine.AI.Agent.Tests/Tools/InvocationToolResolverTests.cs|summary|1
 XE-Local-AI-Engine.AI.Agent.Tests/Tools/LexicalToolRelevanceSelectorTests.cs|run|4
 XE-Local-AI-Engine.AI.Agent.Tests/Tools/LexicalToolRelevanceSelectorTests.cs|summary|1
-XE-Local-AI-Engine.Client.Persistence.Tests/AddBenchmarkP2DiscriminationMigrationTests.cs|summary|3
+XE-Local-AI-Engine.Client.Persistence.Tests/AddBenchmarkDiscriminationMigrationTests.cs|summary|3
 XE-Local-AI-Engine.Client.Persistence.Tests/AddBenchmarkTaskItemsMigrationTests.cs|summary|3
 XE-Local-AI-Engine.Client.Persistence.Tests/AddConversationListIndexMigrationTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/AddToolSchemaTokenTelemetryMigrationTests.cs|run|1
@@ -106,7 +106,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/ExternalApps/ExternalAppEncryptionTe
 XE-Local-AI-Engine.Client.Persistence.Tests/ExternalApps/ExternalAppInstanceStoreTests.cs|run|2
 XE-Local-AI-Engine.Client.Persistence.Tests/ExternalApps/ExternalAppInstanceStoreTests.cs|summary|3
 XE-Local-AI-Engine.Client.Persistence.Tests/FeedbackInsightsStoreTests.cs|run|3
-XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/AddGraphWorkflowsMigrationTests.cs|summary|2
+XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/AddGraphWorkflowsMigrationTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/CanvasWorkflowImportReadTests.cs|summary|3
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowEncryptionTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/GraphWorkflows/GraphWorkflowRunStoreTests.cs|summary|5
@@ -320,7 +320,7 @@ XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs|run|1
 XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs|summary|5
 XE-Local-AI-Engine.Tests/Architecture/ExternalAppsRuntimeIsolationArchitectureTests.cs|block|1
 XE-Local-AI-Engine.Tests/Architecture/ExternalAppsRuntimeIsolationArchitectureTests.cs|run|1
-XE-Local-AI-Engine.Tests/Architecture/ExternalAppsRuntimeIsolationArchitectureTests.cs|summary|5
+XE-Local-AI-Engine.Tests/Architecture/ExternalAppsRuntimeIsolationArchitectureTests.cs|summary|4
 XE-Local-AI-Engine.Tests/Architecture/HostServiceResolutionTests.cs|block|1
 XE-Local-AI-Engine.Tests/Architecture/HostServiceResolutionTests.cs|remarks|1
 XE-Local-AI-Engine.Tests/Architecture/HostServiceResolutionTests.cs|summary|5
@@ -535,8 +535,8 @@ XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRuleSetPolicyTests.cs|run|1
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRuleSetPolicyTests.cs|summary|6
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRunQueryServiceTests.cs|summary|2
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRunServiceTests.cs|summary|10
-XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSliceATests.cs|run|2
-XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSliceATests.cs|summary|5
+XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSeededTemplateEndToEndTests.cs|run|2
+XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSeededTemplateEndToEndTests.cs|summary|5
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowStateMachineTests.cs|summary|11
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolExecutorTests.cs|summary|11
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolOverlayTests.cs|summary|7
@@ -550,8 +550,8 @@ XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowDispatcherTests.cs|run
 XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowDispatcherTests.cs|summary|20
 XE-Local-AI-Engine.Tests/DevWorkflows/Dispatch/DevWorkflowRestartTests.cs|summary|15
 XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowAgentExecutorTests.cs|run|1
-XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowAgentExecutorTests.cs|summary|33
-XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowAttemptCostTests.cs|summary|4
+XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowAgentExecutorTests.cs|summary|32
+XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowAttemptCostTests.cs|summary|3
 XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowDeadlineTests.cs|run|1
 XE-Local-AI-Engine.Tests/DevWorkflows/Execution/DevWorkflowDeadlineTests.cs|summary|2
 XE-Local-AI-Engine.Tests/DevWorkflows/FakeDevWorkflowAgentSession.cs|run|1
@@ -574,7 +574,7 @@ XE-Local-AI-Engine.Tests/DevWorkflows/PublishingDevWorkflowStoreTests.cs|run|2
 XE-Local-AI-Engine.Tests/DevWorkflows/PublishingDevWorkflowStoreTests.cs|summary|6
 XE-Local-AI-Engine.Tests/DevWorkflows/StubDevWorkflowNodeTelemetrySource.cs|run|1
 XE-Local-AI-Engine.Tests/DevWorkflows/StubDevWorkflowNodeTelemetrySource.cs|summary|3
-XE-Local-AI-Engine.Tests/Development/DevelopmentArtifactSanitizerRootsTests.cs|run|3
+XE-Local-AI-Engine.Tests/Development/DevelopmentArtifactSanitizerRootsTests.cs|run|2
 XE-Local-AI-Engine.Tests/Development/DevelopmentArtifactSanitizerRootsTests.cs|summary|6
 XE-Local-AI-Engine.Tests/Development/DevelopmentAttemptFailureReportingTests.cs|summary|3
 XE-Local-AI-Engine.Tests/Development/DevelopmentCommandProfileTests.cs|run|1
@@ -849,7 +849,7 @@ XE-Local-AI-Engine.Tests/Integrations/IntegrationExecutionEventBufferTests.cs|ru
 XE-Local-AI-Engine.Tests/Integrations/IntegrationExecutionEventBufferTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Integrations/IntegrationExecutionQueryServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/Integrations/IntegrationExecutionQueryServiceTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Integrations/IntegrationExternalAccessTests.cs|run|2
+XE-Local-AI-Engine.Tests/Integrations/IntegrationExternalAccessTests.cs|run|1
 XE-Local-AI-Engine.Tests/Integrations/IntegrationExternalAccessTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Integrations/IntegrationInvocationServiceTests.cs|run|2
 XE-Local-AI-Engine.Tests/Integrations/IntegrationInvocationServiceTests.cs|summary|1

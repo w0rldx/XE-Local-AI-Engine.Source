@@ -99,7 +99,7 @@ export const devWorkflowArtifactKinds = [
 export type DevWorkflowArtifactKind = (typeof devWorkflowArtifactKinds)[number];
 
 /**
- * The detail page's tab selection, carried in ONE `?tab=` search param across two Tabs components (ruled):
+ * The detail page's tab selection, carried in ONE `?tab=` search param across two Tabs components:
  * `graph`/`nodes` select the CENTER pane, `artifacts`/`events` the side pane. Each component derives its own value with
  * its own default — `graph` for the center, `artifacts` for the side — so an absent or foreign-pane value simply reads
  * as that pane's default rather than blanking it. One param, because a URL that carries two tab states for a surface

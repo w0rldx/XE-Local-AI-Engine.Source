@@ -15,6 +15,8 @@ import type {
 	GraphWorkflowDesignerChangeResponse,
 	GraphWorkflowDesignerTurnResponse,
 	GraphWorkflowGraph,
+	GraphWorkflowGraphEdge,
+	GraphWorkflowGraphNode,
 	GraphWorkflowNodeRunResponse,
 	GraphWorkflowNodeRunSummaryResponse,
 	GraphWorkflowRunEventResponse,
@@ -41,6 +43,11 @@ export function graphWorkflowTestGuid(index: number): string {
 }
 
 export const graphWorkflowTestGraphHash = "sha256:0f2a9c1d4e6b8a70";
+
+/** A schema-version-1 wire graph from its nodes and edges. */
+export function wireGraph(nodes: GraphWorkflowGraphNode[], edges: GraphWorkflowGraphEdge[]): GraphWorkflowGraph {
+	return { schemaVersion: 1, nodes, edges };
+}
 
 /**
  * The canonical fixture graph: Start → Agent → Condition → { Pause | Tool } → Parallel → Join → End. Eight nodes,

@@ -768,8 +768,7 @@ public abstract class ManagedSourceBuildService<TBackend, TDescriptor> : IDispos
 
         var root = Path.GetFullPath(RuntimeRoot);
         var installRoot = Path.GetFullPath(Path.Combine(root, BackendDirectoryName(installed.DesiredBackend), installed.SourceCommit));
-        var rootPrefix = root + Path.DirectorySeparatorChar;
-        if (!installRoot.StartsWith(rootPrefix, StringComparison.Ordinal))
+        if (!PathContainment.IsUnderRoot(installRoot, root))
         {
             throw RuntimeError($"The recorded managed {_managedRuntimeLabel} path is outside the managed cache.");
         }

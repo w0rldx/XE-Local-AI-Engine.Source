@@ -38,9 +38,9 @@ import {
 	NodeSettingsKnowledgeSearchCard,
 } from "@/features/node-settings/components/NodeSettingsKnowledgeCards";
 import { NodeSettingsWebAccessCard } from "@/features/node-settings/components/NodeSettingsWebAccessCard";
+import type { NodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import type {
 	ExternalAccessPreset,
-	NodeSettingsFieldBounds,
 	NodeSettingsFieldsForm,
 	NodeSettingsModelOption,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";

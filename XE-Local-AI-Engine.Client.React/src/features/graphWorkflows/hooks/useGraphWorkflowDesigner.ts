@@ -8,10 +8,8 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import type { GraphWorkflowEditorState } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
 import type { GraphWorkflowDesignerMessage } from "@/features/graphWorkflows/models/GraphWorkflowDesignerModels";
 import type { GraphWorkflowDesignerErrorResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import {
-	useGraphWorkflowDesignerTurn,
-	useGraphWorkflowLlmModelOptions,
-} from "@/features/graphWorkflows/queries/useGraphWorkflows";
+import { useGraphWorkflowLlmModelOptions } from "@/features/graphWorkflows/queries/useGraphWorkflowPickerOptions";
+import { useGraphWorkflowDesignerTurn } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 export type GraphWorkflowSideTab = "inspector" | "assistant";
 

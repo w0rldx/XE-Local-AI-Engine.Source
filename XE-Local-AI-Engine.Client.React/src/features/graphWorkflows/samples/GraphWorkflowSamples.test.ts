@@ -4,7 +4,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { canvasToGraph, graphToCanvas, graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { canvasToGraph, graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
+import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowEquality";
 import { validateGraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
 import en from "@/locales/en.json";

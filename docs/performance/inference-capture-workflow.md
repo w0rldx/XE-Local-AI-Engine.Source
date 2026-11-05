@@ -1,7 +1,7 @@
 # Local inference performance evidence workflow
 
-This workflow implements the performance plan's Lane 0 baseline, Lane 1 empirical
-fit/replay proof, and Lane 2 rebaseline contract. It produces **evidence**, not a
+This workflow implements the performance baseline, the empirical
+fit/replay proof, and the rebaseline contract. It produces **evidence**, not a
 performance claim: an artifact is comparable only when the capture tool confirms
 that the model, corpus, runtime binary, launch vector, machine, and device list are
 identical.
@@ -77,7 +77,7 @@ relative paths plus each file hash. The spec must also fix:
   sibling `.so` files), and the recorded `--list-devices` output;
 - cache state and the exact cache preparation procedure;
 - warmup/repeat counts per command;
-- the statistical rule. Use median plus nearest-rank p95. Lane 4 may ship only at
+- the statistical rule. Use median plus nearest-rank p95. A scheduling optimization may ship only at
   **at least 20% throughput improvement and no more than 5% RAM/VRAM regression**;
 - every unvalidated target, with a reason. An empty or omitted gap list is rejected.
 
@@ -86,7 +86,7 @@ measurements. The capture tool retains raw stdout/stderr, elapsed time, ambient
 load, free memory, global NVIDIA VRAM, exact argv, and aggregates. Keep secrets out
 of argv and output.
 
-Lane 0/2 artifacts have four explicit evidence partitions:
+Baseline and rebaseline artifacts have four explicit evidence partitions:
 
 - `native-performance`: identical `llama-bench` chat/embedding commands. These
   isolate the fixed llama.cpp binary and must not be attributed to framework work.
@@ -95,7 +95,7 @@ Lane 0/2 artifacts have four explicit evidence partitions:
   growing class.
 - `application-harness`: exact pre-existing chat harness tests covering tool-loop
   timing and metrics parsing. The current implementation must run the same methods;
-  new role tests are additional, non-comparable Lane 3 evidence.
+  new role tests are additional, non-comparable role-test evidence.
 - `provider-contract`: exact reranker route/order/degradation tests. A pre-change
   real reranker throughput value is impossible because the shipped harness calls
   chat for that role; the artifact records that gap rather than inventing a number.
@@ -338,11 +338,11 @@ Exit `2` takes precedence over `3`. No active CI invokes this command; it is an
 explicit local/release decision aid until repository authority adds external
 enforcement.
 
-### Specialized Lane 4 compound gate
+### Specialized scheduling compound gate
 
 The generic example above covers throughput command aggregates only. It does not
 certify RAM or VRAM and does not replace
-`scripts/performance/run_scheduling_grid.py`, whose specialized Lane 4 evaluator
+`scripts/performance/run_scheduling_grid.py`, whose specialized evaluator
 remains authoritative for the compound gate: role-request preflight, context
 readback, token/correctness checks, repeat determinism, canonical-baseline
 semantic equivalence, all five corpus scenarios at least 20% faster by median,

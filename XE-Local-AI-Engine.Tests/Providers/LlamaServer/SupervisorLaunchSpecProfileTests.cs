@@ -482,7 +482,7 @@ public sealed class SupervisorLaunchSpecProfileTests
         // come from an in-spawn fallback candidate.
         var launcher = new FakeProcessLauncher(_ => Interlocked.Increment(ref launches) == 1
             ? throw new InvalidOperationException("simulated launch failure")
-            : new FakeProcessHandle(pid: 4242));
+            : new FakeProcessTreeHandle(pid: 4242));
         var fallbackStore = new FakeLaunchFallbackStore();
         await using var supervisor = SupervisorFactory.Create(launcher,
             options: SingleAttemptOptions,

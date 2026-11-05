@@ -1,4 +1,3 @@
-import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import type {
 	ChatMessagePart,
 	ChatNoticePart,
@@ -6,9 +5,10 @@ import type {
 	ChatTextPart,
 	ChatToolImage,
 	ChatToolPart,
+	NodeChatWebReviewPreviewDto,
+	PendingUserQuestion,
 	ToolCallState,
-} from "@/features/chat/models/ChatModels";
-import type { NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
+} from "@/core/models/ChatMessageParts";
 
 /**
  * Single source of truth for the ordered interleave (`reasoning → tool → reasoning → …`). Both the streaming

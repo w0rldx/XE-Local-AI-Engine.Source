@@ -38,7 +38,7 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 
     public ConcurrentQueue<ImageServerLaunchSpec> Launches { get; } = new();
 
-    public ConcurrentBag<FakeImageProcessHandle> Handles { get; } = new();
+    public ConcurrentBag<FakeProcessTreeHandle> Handles { get; } = new();
 
     public int LaunchCount => Launches.Count;
 
@@ -46,7 +46,7 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
     {
         Launches.Enqueue(spec);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
-        var handle = new FakeImageProcessHandle(_processId ?? Interlocked.Increment(ref _nextPid));
+        var handle = new FakeProcessTreeHandle(_processId ?? Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
         if (_bornDeadExitCode is { } exitCode)
         {
@@ -55,66 +55,6 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 
         Handles.Add(handle);
         return handle;
-    }
-}
-
-/// <summary>An in-memory image-server handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeImageProcessHandle : IProcessTreeHandle
-{
-    private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private int _exited;
-    private int _killed;
-
-    public FakeImageProcessHandle(int pid)
-    {
-        ProcessId = pid;
-    }
-
-    public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
-
-    public bool WasDisposed { get; private set; }
-
-    public int ProcessId { get; }
-
-    public bool HasExited => Volatile.Read(ref _exited) != 0;
-
-    public int? ExitCode { get; private set; }
-
-    public string? StderrTail { get; private set; }
-
-    // The supervisor waits on a registered daemon's exit to tick residency; completes on a kill or a simulated exit.
-    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
-    {
-        try
-        {
-            await _exitSignal.Task.WaitAsync(timeout, ct);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-    }
-
-    public void TreeKill()
-    {
-        Interlocked.Exchange(ref _killed, value: 1);
-        Interlocked.Exchange(ref _exited, value: 1);
-        _exitSignal.TrySetResult();
-    }
-
-    public void Dispose()
-    {
-        WasDisposed = true;
-    }
-
-    /// <summary>Simulates a daemon crash/exit so the next ensure-running sees a dead process, optionally with the diagnostics the real handle would carry.</summary>
-    public void SimulateExit(int? exitCode = null, string? stderrTail = null)
-    {
-        ExitCode = exitCode;
-        StderrTail = stderrTail;
-        Interlocked.Exchange(ref _exited, value: 1);
-        _exitSignal.TrySetResult();
     }
 }
 
@@ -289,7 +229,7 @@ internal sealed class AdvanceableClock : TimeProvider
 internal static class ImageSupervisorFactory
 {
     // The launcher is the interface, not the shared fake: a test that needs a handle whose tree-kill blocks supplies its
-    // own double (the shared FakeImageProcessHandle kills instantly and cannot express that).
+    // own launcher (FakeImageProcessLauncher hands out handles that kill instantly and cannot express that).
     public static ImageServerProcessSupervisor Create(IImageServerProcessLauncher? launcher = null,
         FakeImageReadinessProbe? readinessProbe = null,
         FakeImageModelStore? modelStore = null,

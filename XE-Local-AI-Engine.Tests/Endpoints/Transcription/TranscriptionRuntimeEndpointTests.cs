@@ -125,8 +125,8 @@ public sealed class TranscriptionRuntimeEndpointTests
     [Test]
     public async Task GetStatus_WithNoManagedRuntimeRecord_ReportsManagedRuntimeNull()
     {
-        // The field is on the contract from the first slice so the generated client's shape does not change under it
-        // later; a node that has never adopted a build reports null here.
+        // The field is always on the contract so the generated client's shape does not change under it; a
+        // node that has never adopted a build reports null here.
         await using var factory = FactoryWith(new StubTranscriptionRuntimeService());
         using var client = factory.CreateClient();
 

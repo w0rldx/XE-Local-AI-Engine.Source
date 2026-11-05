@@ -226,7 +226,7 @@ public sealed class WorkSessionRuntimeOverride
     public required string? ReasoningEffort { get; init; }
 
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Default
+    ///     <c>GRAPH-2</c>'s runtime half, carried per drive because the thing it judges is mutable. Default
     ///     <see langword="false" />, which is every caller but the workflow runtime.
     /// </summary>
     /// <remarks>

@@ -45,9 +45,9 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
             : throw new ArgumentException("The scripts directory is required.", nameof(scriptsDirectory));
     }
 
-    public async Task<TrainingRuntimePrerequisiteReport> ProbeAsync(CancellationToken ct)
+    public async Task<SourceBuildPrerequisiteReport> ProbeAsync(CancellationToken ct)
     {
-        var items = new List<TrainingRuntimePrerequisiteItem>
+        var items = new List<SourceBuildPrerequisiteRow>
         {
             ProbePlatform(),
             ProbeDisk(),
@@ -59,30 +59,30 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         // binary answering a question the platform item has already refused.
         items.Add(OperatingSystem.IsLinux()
             ? await ProbeNvidiaDriverAsync(ct).ConfigureAwait(false)
-            : new TrainingRuntimePrerequisiteItem
+            : new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
                 Satisfied = false,
                 Detail = "The NVIDIA driver was not checked because training is available on Linux only."
             });
 
-        return new TrainingRuntimePrerequisiteReport
+        return new SourceBuildPrerequisiteReport
         {
-            CanInstall = items.TrueForAll(static item => item.Satisfied),
+            CanBuild = items.TrueForAll(static item => item.Satisfied),
             Items = items
         };
     }
 
-    private static TrainingRuntimePrerequisiteItem ProbePlatform()
+    private static SourceBuildPrerequisiteRow ProbePlatform()
     {
         return OperatingSystem.IsLinux()
-            ? new TrainingRuntimePrerequisiteItem
+            ? new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.Platform,
                 Satisfied = true,
                 Detail = "Running on Linux."
             }
-            : new TrainingRuntimePrerequisiteItem
+            : new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.Platform,
                 Satisfied = false,
@@ -90,20 +90,20 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
             };
     }
 
-    private TrainingRuntimePrerequisiteItem ProbeDisk()
+    private SourceBuildPrerequisiteRow ProbeDisk()
     {
         var required = FormatGigabytes(RequiredFreeDiskBytes);
         try
         {
             var available = FreeSpace.GetAvailableFreeBytes(_cacheRoot);
             return available >= RequiredFreeDiskBytes
-                ? new TrainingRuntimePrerequisiteItem
+                ? new SourceBuildPrerequisiteRow
                 {
                     Key = TrainingRuntimePrerequisiteKeys.FreeDisk,
                     Satisfied = true,
                     Detail = $"{FormatGigabytes(available)} free ({required} required)."
                 }
-                : new TrainingRuntimePrerequisiteItem
+                : new SourceBuildPrerequisiteRow
                 {
                     Key = TrainingRuntimePrerequisiteKeys.FreeDisk,
                     Satisfied = false,
@@ -115,7 +115,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         catch (Exception exception)
             when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         {
-            return new TrainingRuntimePrerequisiteItem
+            return new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.FreeDisk,
                 Satisfied = false,
@@ -124,13 +124,13 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         }
     }
 
-    private static TrainingRuntimePrerequisiteItem ProbeMemory()
+    private static SourceBuildPrerequisiteRow ProbeMemory()
     {
         var required = FormatGigabytes(RequiredSystemMemoryBytes);
         var total = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         if (total <= 0)
         {
-            return new TrainingRuntimePrerequisiteItem
+            return new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.SystemMemory,
                 Satisfied = false,
@@ -139,13 +139,13 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         }
 
         return total >= RequiredSystemMemoryBytes
-            ? new TrainingRuntimePrerequisiteItem
+            ? new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.SystemMemory,
                 Satisfied = true,
                 Detail = $"{FormatGigabytes(total)} of system memory ({required} required)."
             }
-            : new TrainingRuntimePrerequisiteItem
+            : new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.SystemMemory,
                 Satisfied = false,
@@ -153,14 +153,14 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
             };
     }
 
-    private TrainingRuntimePrerequisiteItem ProbeLockfile()
+    private SourceBuildPrerequisiteRow ProbeLockfile()
     {
         var lockfile = Path.Combine(_scriptsDirectory, TrainingRuntimeLayout.LockfileName);
         var project = Path.Combine(_scriptsDirectory, TrainingRuntimeLayout.ProjectFileName);
         var probe = Path.Combine(_scriptsDirectory, TrainingRuntimeLayout.ProbeScriptName);
         if (File.Exists(lockfile) && File.Exists(project) && File.Exists(probe))
         {
-            return new TrainingRuntimePrerequisiteItem
+            return new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.Lockfile,
                 Satisfied = true,
@@ -168,7 +168,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
             };
         }
 
-        return new TrainingRuntimePrerequisiteItem
+        return new SourceBuildPrerequisiteRow
         {
             Key = TrainingRuntimePrerequisiteKeys.Lockfile,
             Satisfied = false,
@@ -176,7 +176,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         };
     }
 
-    private async Task<TrainingRuntimePrerequisiteItem> ProbeNvidiaDriverAsync(CancellationToken ct)
+    private async Task<SourceBuildPrerequisiteRow> ProbeNvidiaDriverAsync(CancellationToken ct)
     {
         var lines = new List<string>();
         try
@@ -193,7 +193,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
 
             if (exitCode != 0 || lines.Count == 0)
             {
-                return new TrainingRuntimePrerequisiteItem
+                return new SourceBuildPrerequisiteRow
                 {
                     Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
                     Satisfied = false,
@@ -207,7 +207,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         }
         catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException or IOException or UnauthorizedAccessException)
         {
-            return new TrainingRuntimePrerequisiteItem
+            return new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
                 Satisfied = false,
@@ -216,7 +216,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
         }
 
         // "999.99, NVIDIA GeForce RTX 5090" — reported back verbatim; it names hardware, not a path or a secret.
-        return new TrainingRuntimePrerequisiteItem
+        return new SourceBuildPrerequisiteRow
         {
             Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
             Satisfied = true,

@@ -50,7 +50,7 @@ server-side capture source (see [Windows per-application capture](#windows-per-a
 backend of **dictation**, an ephemeral live session that stores nothing (see [Dictation sessions](#dictation-sessions)).
 
 The decisions behind the feature — browser-first capture, channel attribution instead of diarization, the managed
-Linux CUDA source build, the slice order, and the never-persist-audio rule — are recorded in
+Linux CUDA source build, the build order, and the never-persist-audio rule — are recorded in
 [ADR 0012](../adr/0012-audio-transcription-runtime-and-capture.md).
 
 ## Where the code lives
@@ -304,7 +304,7 @@ had already recorded — a finished session is never resurrected by a start that
 
 **The start warms the runtime first.** `StartLiveAsync` calls `EnsureRunningAsync` for the session's model before the
 compare-and-set, as the upload path does before its inference, so the daemon spawn and model load happen while the
-browser is still waiting on the start rather than while frames queue behind the first inference (the S4 live round
+browser is still waiting on the start rather than while frames queue behind the first inference (a live run
 measured about 7 s to the first commit without it). A spawn that fails leaves the row untouched. The request can take
 up to the supervisor's readiness budget; the SPA holds its starting state for as long as the request runs.
 
@@ -905,7 +905,7 @@ teardown cannot wait on its own producer. The registry remains the only owner of
 `LiveTranscriptionSessionRegistryTests.ProcessCapture_UnexpectedEnd_FailsAndPublishesToTheWatchingBrowser` covers a
 clean unexpected end, a recorder exception and an uncancelled cancellation exception with the real registry;
 `ProcessCapture_RequestedCompletion_PreservesTheGracefulFlush` covers normal completion. The native WASAPI outcome
-still needs the Windows live round.
+needs a live run on Windows.
 
 ### Stopping when the hub cannot deliver: the REST fallback
 
@@ -1051,7 +1051,7 @@ operator has no reason to enable made the feature unfindable. It calls the five
 `CudaBuildLogView`, `SourceBuildPrerequisiteList` and the helpers in `models/SourceBuildModels.ts` with the other two
 cards — each keeps its own i18n subtree, so the prerequisite list takes the key prefix as a prop. It differs from
 them in one way that matters: whisper.cpp registers **no SignalR hub**
-(`IWhisperCppSourceBuildEventPublisher` has only its no-op floor and the host substitutes nothing), so the card's
+(`WhisperCppSourceBuildService.PublishStatusAsync` publishes nothing), so the card's
 live phase and log come from a three-second poll of the status route, and that poll's terminal transition is what
 re-reads the runtime status after an adoption. An invalid managed record shows its sanitized reason and keeps
 eject/remove usable, which is the only in-app exit from a fail-closed tombstone. The transcription runtime card

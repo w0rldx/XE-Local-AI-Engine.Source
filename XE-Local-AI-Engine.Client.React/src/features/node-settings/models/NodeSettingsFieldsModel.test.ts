@@ -1,30 +1,34 @@
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
+import { toNodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import {
 	applyExternalAccessPreset,
-	buildNodeSettingsRequest,
 	featureSwitchFields,
 	isExternalAccessBooleanField,
-	kvCacheTypeSelectValues,
-	lowersSandboxSecurityProfile,
-	newUsageRateRow,
 	nodeSettingsDisplayScale,
 	nodeSettingsFieldDefaults,
 	nodeSettingsScaleOf,
 	shippedDefaults,
-	speculativeModeSelectValues,
-	summarizePendingChanges,
-	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
-	toUsageRateRows,
+} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { kvCacheTypeSelectValues, speculativeModeSelectValues } from "@/features/node-settings/models/NodeSettingsRuntimeModes";
+import {
+	buildNodeSettingsRequest,
+	lowersSandboxSecurityProfile,
+	summarizePendingChanges,
 	touchesRestartGatedField,
 	turnsOnExecutionPreviews,
-	type UsageRateRow,
 	validateOptionalHttpUrl,
 	validateToolCapableModels,
+} from "@/features/node-settings/models/NodeSettingsSaveRequest";
+import { nodeSettingsSectionOf } from "@/features/node-settings/models/NodeSettingsSections";
+import {
+	newUsageRateRow,
+	toUsageRateRows,
+	type UsageRateRow,
 	validateUsageRates,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+} from "@/features/node-settings/models/NodeSettingsUsageRateModel";
 
 // A slice of the node's restart gate as the settings response serves it (`restartRequiredFields`). Which fields are
 // gated is the backend's call (NodeSettingsRestartGate); these tests cover only how the form uses the list.
@@ -201,6 +205,20 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors).toEqual({});
 		expect(body).toEqual({ defaultModelName: "qwen3:8b" });
+	});
+
+	it("reports errors in a fixed order, because a failed save jumps to the first error's section", () => {
+		const form = {
+			...baseline,
+			agentHomeMaxRunSeconds: "",
+			defaultContextTokens: 1,
+			llamaMaxLoadedProcesses: 99,
+			webSearchSearxngUrl: "not-a-url",
+		};
+		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, true);
+		const fields = Object.keys(errors);
+		expect(fields).toEqual(["webSearchSearxngUrl", "llamaMaxLoadedProcesses", "defaultContextTokens", "agentHomeMaxRunSeconds"]);
+		expect(fields.map(nodeSettingsSectionOf)).toEqual(["knowledge", "runtime", "chat", "workspaces"]);
 	});
 
 	it("sends the custom-tools kill-switch only when toggled", () => {
@@ -1001,7 +1019,7 @@ describe("curated tunables", () => {
 
 	it("sends the reasoning budgets and the unspecified-effort rung live, within the shared token range", () => {
 		const baseline = toNodeSettingsFieldsForm(undefined);
-		// Operator decision 3 (model-matrix 2026-10-04): these mirror ReasoningBudgets.Default in the backend.
+		// These mirror ReasoningBudgets.Default in the backend.
 		expect(shippedDefaults).toMatchObject({
 			reasoningBudgetMinimalTokens: 1024,
 			reasoningBudgetLowTokens: 2048,
@@ -1035,7 +1053,7 @@ describe("curated tunables", () => {
 
 	it("sends the chat output cap live, its ceiling within its own range", () => {
 		const baseline = toNodeSettingsFieldsForm(undefined);
-		// Operator decision 4 (model-matrix 2026-10-04): cap plus notice, at most 16384 tokens.
+		// Cap plus notice, at most 16384 tokens.
 		expect(shippedDefaults.chatOutputCapMode).toBe("cap");
 		expect(shippedDefaults.chatOutputCapMaxTokens).toBe(16384);
 		expect(baseline.chatOutputCapMode).toBe("");

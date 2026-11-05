@@ -17,8 +17,8 @@ using Assembly = System.Reflection.Assembly;
 /// <summary>
 ///     Freezes the endpoint conventions the host already follows, so the next endpoint cannot quietly break them.
 ///     <para>
-///         R1/R2 — one endpoint type per file, and the file is named after it. R3 — no plural grouping file may
-///         declare an endpoint; the allowlist that held thirty-four of them is empty. R4 — every endpoint is sealed. R5 — a
+///         One endpoint type per file, and the file is named after it. No plural grouping file may declare an
+///         endpoint; the allowlist for them is empty. Every endpoint is sealed. A
 ///         route is never a string literal; it comes from <c>LocalApiRoutes</c>, which is what keeps the SPA client,
 ///         the MCP surface and the endpoint in agreement about a path.
 ///     </para>
@@ -32,7 +32,7 @@ using Assembly = System.Reflection.Assembly;
 ///         found and rejected instead of silently escaping the filename rules while the floor still passes.
 ///     </para>
 ///     <para>
-///         R5 is a text rule because that is what it polices: the shape of the expression a developer typed. It
+///         The route rule is a text rule because that is what it polices: the shape of the expression a developer typed. It
 ///         accepts three forms and nothing else, and deliberately never trusts "the text mentions LocalApiRoutes" —
 ///         <c>var fake = "LocalApiRoutes"; Get(fake);</c> mentions it and routes nowhere near it. A new legitimate
 ///         route-building shape is a reason to widen the rule on purpose, not a false positive to silence.
@@ -53,7 +53,7 @@ public sealed class EndpointConventionTests
 
     private const string EndpointsPrefix = "XE-Local-AI-Engine.Client/Endpoints/";
 
-    /// <summary>Files that group several endpoints under one plural name. Empty: R1/R2 hold with no exception.</summary>
+    /// <summary>Files that group several endpoints under one plural name. Empty: the per-file rules hold with no exception.</summary>
     /// <remarks>
     ///     Every endpoint class has its own file, so the rule has no allowlist to outlive. The list stays as the
     ///     mechanism because it is also what refuses
@@ -174,7 +174,7 @@ public sealed class EndpointConventionTests
         }
 
         AssertEx.Empty(offenders,
-            $"Endpoint file naming (R1/R2): {string.Join(" | ", offenders)}");
+            $"Endpoint file naming: {string.Join(" | ", offenders)}");
     }
 
     [Test]

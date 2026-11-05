@@ -230,7 +230,7 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.queryByTestId("sandbox-isolation-reason-run_python")).toBeNull();
 		expect(screen.getByTestId("sandbox-isolation-reason-development").textContent).toContain("not requested by this role");
 
-		// The second axis, and the follow-up that changed it: every executing role asks for the node's ceilings now, so
+		// The second axis: every executing role asks for the node's ceilings, so
 		// on a host that can impose them Development Mode is bounded and carries no reason at all. A role on a backend
 		// that cannot impose them still says which kind of No it is — the host's, not the role's.
 		expect(screen.getByTestId("sandbox-isolation-limits-development").textContent).toBe("Yes");

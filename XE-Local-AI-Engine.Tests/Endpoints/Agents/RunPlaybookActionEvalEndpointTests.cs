@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Playbook eval endpoint (<c>POST agents/{id}/playbook/{actionId}/eval</c>). The happy path is exercised against
 ///     a Suggested action with NO golden cases — the eval service short-circuits to a failing result without calling the
 ///     model, so the full endpoint → service → persist path runs with no runtime. The model-dependent scoring path is
-///     covered by the Wave-2 service unit tests.
+///     covered by <c>PlaybookEvalServiceTests</c>.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class RunPlaybookActionEvalEndpointTests

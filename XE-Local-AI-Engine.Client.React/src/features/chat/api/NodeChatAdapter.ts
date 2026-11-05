@@ -279,7 +279,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		// The ids bind from the route; the body carries the optional selected-revision map so the branched thread
 		// matches the revisions the user was viewing (variantGroupId -> selectedMessageId). Omitting it (undefined)
 		// serializes to `{}`, which keeps the server's newest-per-group default. A non-empty body also documents a
-		// request content-type, so FastEndpoints no longer 415s the (formerly body-less) POST at model-binding.
+		// request content-type, so FastEndpoints does not 415 the POST at model-binding.
 		const { data } = await branchNodeChatConversation({
 			path: { conversationId, messageId },
 			body: { selectedRevisions },

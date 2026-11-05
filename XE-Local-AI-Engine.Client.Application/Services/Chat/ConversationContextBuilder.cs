@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 ///     conversation plus the turn's own user message.
 /// </summary>
 /// <remarks>
-///     It was extracted verbatim from the chat send path so an integration execution continuing a caller-managed
+///     Shared with the chat send path so an integration execution continuing a caller-managed
 ///     session replays a conversation exactly as chat does, rather than growing a second, diverging assembly. It is a
 ///     static class with no interface and no DI registration, the shape <see cref="CompactionContextResolver" />
 ///     already has, because it is a pure function of its arguments. The regenerate path keeps its own builder: it

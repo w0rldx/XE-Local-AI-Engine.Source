@@ -77,7 +77,7 @@ public sealed class WorkSessionServiceTests
     }
 
     /// <summary>
-    ///     FU-5: the caller's own model pin BEATS the bound agent's, and is what the tool gate judges — in both
+    ///     The caller's own model pin BEATS the bound agent's, and is what the tool gate judges — in both
     ///     directions, because an override that only ever loosened or only ever tightened would not be a pin.
     /// </summary>
     [Test]

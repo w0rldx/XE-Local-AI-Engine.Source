@@ -107,6 +107,9 @@ public static class NodeApplicationServiceCollectionExtensions
         // client AddNodeModelRuntime registers.
         builder.AddNodeTrainingRuntime();
 
+        // Before the run queue, so its reaper and its service start ahead of the queue's hosted services.
+        builder.AddNodeModelLab();
+
         // After the runtime module (run store + process spawner) and after the llama.cpp module, whose supervisor
         // provides the runtime-mutation lease the run queue acquires before every claim.
         builder.AddNodeTrainingRuns();

@@ -12,7 +12,6 @@ import {
 	getDevelopmentProjectOptions,
 	getDevWorkflowRunOptions,
 	listDevelopmentProjectsOptions,
-	listDevelopmentRepositoriesOptions,
 	listDevelopmentTemplatesOptions,
 	previewDevelopmentPatchMutation,
 	reconnectDevelopmentRepositoryMutation,
@@ -23,7 +22,6 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import {
 	type DevelopmentProjectDetail,
-	type DevelopmentRepository,
 	type DevelopmentTemplate,
 	isActiveAttempt,
 } from "@/features/development/models/DevelopmentModels";
@@ -64,25 +62,6 @@ export function useConfirmDevelopmentContainerRuntime() {
 	return useMutation({
 		...confirmDevelopmentContainerRuntimeMutation(),
 		onSettled: () => queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.capability) }),
-	});
-}
-
-export function useDevelopmentRepositories(enabled = true) {
-	return useQuery({
-		...listDevelopmentRepositoriesOptions(),
-		enabled,
-		select: (data): readonly DevelopmentRepository[] =>
-			(data.items ?? []).flatMap((repository) =>
-				repository.id && repository.alias
-					? [
-							{
-								id: repository.id,
-								alias: repository.alias,
-								availability: repository.availability ?? "Unavailable",
-							},
-						]
-					: [],
-			),
 	});
 }
 

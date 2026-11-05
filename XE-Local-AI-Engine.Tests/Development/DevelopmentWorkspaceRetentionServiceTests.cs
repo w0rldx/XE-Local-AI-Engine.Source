@@ -207,6 +207,25 @@ public sealed class DevelopmentWorkspaceRetentionServiceTests : IDisposable
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "is a link"), "a refused sweep says why, once.");
     }
 
+    /// <summary>The sweep only composes paths that pass this gate, so its refusals are pinned directly.</summary>
+    [Test]
+    public void IsUnderDataRoot_AdmitsOnlyStrictDescendantsOfTheDataRoot()
+    {
+        var root = _dataRoot.Path;
+        using var service = new DevelopmentWorkspaceRetentionService(Options.Create(new DevelopmentWorkspaceRetentionOptions()),
+            new FakeNodeDataDirectory(root),
+            Substitute.For<IServiceScopeFactory>(),
+            new ManualTimeProvider(Now),
+            new RecordingLogger<DevelopmentWorkspaceRetentionService>());
+
+        AssertEx.True(service.IsUnderDataRoot(Path.Combine(root, "development", "workspaces")), "inside");
+        AssertEx.False(service.IsUnderDataRoot(Path.Combine(root, "..", "elsewhere")), "outside, through a '..'");
+        AssertEx.False(service.IsUnderDataRoot(root + "-other" + Path.DirectorySeparatorChar + "workspaces"), "a sibling sharing the root's prefix");
+        AssertEx.False(service.IsUnderDataRoot(root), "the root itself");
+        AssertEx.False(service.IsUnderDataRoot(root + Path.DirectorySeparatorChar), "the root itself, with its trailing separator");
+        AssertEx.False(service.IsUnderDataRoot("\0invalid"), "a malformed path is refused rather than thrown out of the sweep");
+    }
+
     private async Task SweepAsync(RecordingLogger<DevelopmentWorkspaceRetentionService>? logger = null)
     {
         var store = Substitute.For<IDevelopmentStore>();

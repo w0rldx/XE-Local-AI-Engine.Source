@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runtime;
 
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
@@ -49,7 +50,7 @@ public sealed class TrainingRuntimeOrchestrationService
     ///     Reports whether this machine can provision the Python training runtime. Read-only: probing never mutates
     ///     the cache root, so the UI may call it freely before the operator commits to a multi-gigabyte install.
     /// </summary>
-    public Task<TrainingRuntimePrerequisiteReport> ProbeAsync(CancellationToken ct)
+    public Task<SourceBuildPrerequisiteReport> ProbeAsync(CancellationToken ct)
     {
         return _prerequisiteProbe.ProbeAsync(ct);
     }

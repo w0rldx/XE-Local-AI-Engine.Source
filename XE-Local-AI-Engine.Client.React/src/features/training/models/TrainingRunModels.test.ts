@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { TrainingRunEvent } from "@/features/training/models/TrainingModels";
-import {
-	applyRunEvent,
-	emptyTrainingRunProgress,
-	isRunActive,
-	runPercent,
-	trainingRunEventSchema,
-} from "@/features/training/models/TrainingModels";
+import type { RunStreamEvent } from "@/core/api/signalr/useRunStreamSubscription";
+import { runStreamEventSchema } from "@/core/api/signalr/useRunStreamSubscription";
+import { applyRunEvent, emptyTrainingRunProgress, isRunActive, runPercent } from "@/features/training/models/TrainingModels";
 
-function event(kind: TrainingRunEvent["kind"], payload: TrainingRunEvent["payload"], sequence = 1): TrainingRunEvent {
+function event(kind: RunStreamEvent["kind"], payload: RunStreamEvent["payload"], sequence = 1): RunStreamEvent {
 	return { runId: "run-1", sequence, kind, payload };
 }
 
@@ -41,11 +36,11 @@ describe("training run progress folding", () => {
 
 describe("training run event schema", () => {
 	it("accepts an event whose optional payload fields are absent", () => {
-		expect(trainingRunEventSchema.safeParse({ runId: "run-1", sequence: 1, kind: "Progress", payload: {} }).success).toBe(true);
+		expect(runStreamEventSchema.safeParse({ runId: "run-1", sequence: 1, kind: "Progress", payload: {} }).success).toBe(true);
 	});
 
 	it("rejects an unknown event kind rather than folding it as progress", () => {
-		expect(trainingRunEventSchema.safeParse({ runId: "run-1", sequence: 1, kind: "Nope", payload: {} }).success).toBe(false);
+		expect(runStreamEventSchema.safeParse({ runId: "run-1", sequence: 1, kind: "Nope", payload: {} }).success).toBe(false);
 	});
 });
 

@@ -775,7 +775,7 @@ internal static class RetrievalEvalLiveReportWriter
         }
 
         Line(md, string.Empty);
-        Line(md, "## Top-1 score distribution (D6 capture)");
+        Line(md, "## Top-1 score distribution");
         Line(md, string.Empty);
         Line(md, "Grouped by the top hit's ScoreKind: a gate-skipped or degraded query is Fusion even in a rerank config, and the scales do not mix. "
                  + "margin = top-1 minus top-2 score. Spreads are nearest-rank min/p10/p50/p90/max; queries with no hit are left out. "

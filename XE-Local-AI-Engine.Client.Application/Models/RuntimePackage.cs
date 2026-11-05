@@ -33,7 +33,7 @@ public sealed record RuntimePackage
 
     /// <summary>
     ///     Developer-gated per-send sampling overrides (temperature, top-p, min-p, num_ctx, …). Null when no overrides were requested,
-    ///     which keeps the no-override path byte-identical to today.
+    ///     which adds nothing to the request.
     /// </summary>
     /// <remarks>
     ///     Deliberately excluded from the config hash (mirrors <see cref="SupportsThinking" />): sampling is a loopback-only per-send knob,
@@ -154,8 +154,8 @@ public sealed record RuntimePackage
     ///     mapping).
     /// </summary>
     /// <remarks>
-    ///     Set only by the benchmark judge, whose reply is parsed strictly; every other path leaves it null, which keeps the request
-    ///     byte-identical to today. Deliberately excluded from <see cref="ConfigHash" /> (mirrors <see cref="SamplingOptions" />): it is a
+    ///     Set only by the benchmark judge, whose reply is parsed strictly; every other path leaves it null, which adds nothing to the
+    ///     request. Deliberately excluded from <see cref="ConfigHash" /> (mirrors <see cref="SamplingOptions" />): it is a
     ///     per-send decoding constraint, not agent configuration, so the cross-repo encrypted/server digest stays stable.
     /// </remarks>
     public JsonElement? ResponseJsonSchema { get; init; }

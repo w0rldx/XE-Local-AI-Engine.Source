@@ -4,8 +4,7 @@
 - **Date:** 2026-08-25
 - **Scope:** How a feature obtains an execution sandbox, and how a backend is chosen for it. It does not change what any
   backend enforces, and it does not add or remove a backend.
-- **Authority:** Decided by the maintainer on 2026-08-25. Drafted from the secure-agent-execution review and
-  the lane evidence beside it.
+- **Authority:** Decided by the maintainer on 2026-08-25, from the secure-agent-execution review.
 - **Amends:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) Decision §1 only — see
   [What this amends, and what it deliberately does not](#what-this-amends-and-what-it-deliberately-does-not).
 
@@ -110,7 +109,7 @@ OpenSandbox under §8.8's three flip conditions. Neither is adopted here.
 > carries the "not a security boundary" qualification quoted above (microsoft/mxc#1388). It is now the Windows **Preview**
 > launch mechanism inside the `process` backend, not a backend of its own: [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md).
 
-**Unamended — ADR 0004 Decision §4.** `PLAN-sandbox-hardening-2026-07-01.md` stays complementary; the process backend
+**Unamended — ADR 0004 Decision §4.** Process-provider hardening stays complementary; the process backend
 is not superseded, and it remains the backend that serves every consumer with no image-backed toolchain need.
 
 **Unamended — ADR 0004 Decision §5.** Repository-supplied container configuration stays rejected wholesale: engine-

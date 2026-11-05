@@ -636,6 +636,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
             MODULE.check_tracked_secrets,
             MODULE.check_tool_names,
             MODULE.check_host_phrasing,
+            MODULE.check_plan_references,
         ):
             with self.subTest(check=check.__name__):
                 result = check(root)
@@ -779,6 +780,91 @@ class DocsInventoryCheckTests(unittest.TestCase):
             [item.name for item in result.missing],
         )
 
+    def test_plan_references_report_a_plan_folder_citation_in_every_scanned_kind_of_file(self) -> None:
+        root = self.make_repo()
+        planted = {
+            "docs/wiki/20-new.md": "See Plans/x/notes for the decision.\n",
+            "AGENTS.md": "Status lives in `Plans/x`.\n",
+            "src/A.cs": "// Decided in src/Plans/x.\n",
+            "scripts/a.sh": "# See Plans/x.\n",
+            ".github/workflows/ci.yml": "# See Plans/x.\n",
+        }
+        self.track(root, planted)
+
+        result = MODULE.check_plan_references(root)
+
+        self.assertEqual(sorted(planted), sorted(item.doc.as_posix() for item in result.missing))
+        self.assertEqual({"Plans/"}, {item.name for item in result.missing})
+        rendered = result.missing[0].render()
+        self.assertTrue(rendered.startswith("PLAN-REF plan-references: "))
+        self.assertIn("must not cite the git-ignored plan folder or number delivery phases", rendered)
+        self.assertIn("state the decision or evidence inline", rendered)
+
+    def test_plan_references_report_a_plan_file_name_or_the_operator_queue(self) -> None:
+        root = self.make_repo()
+        names = ["PLAN.md", "KICKOFF.md", "REPORT-111.md", "ASSESSMENT-v1.2.md", "OPERATOR-QUEUE"]
+        self.track(root, {"src/A.cs": "".join(f"// See {name} for why.\n" for name in names)})
+
+        result = MODULE.check_plan_references(root)
+
+        self.assertEqual(names, [item.name for item in result.missing])
+
+    def test_plan_references_report_a_numbered_delivery_phase_except_in_dated_audits(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "docs/wiki/20-new.md": "Landed in Phase 2.\n",
+                "src/A.cs": "// Added in phase 3.\n",
+                "docs/audits/2026-01-02-report.md": "## Phase 0 baseline\nDecided in Plans/x.\n",
+            },
+        )
+
+        result = MODULE.check_plan_references(root)
+
+        self.assertEqual(
+            [
+                ("docs/audits/2026-01-02-report.md", "Plans/"),
+                ("docs/wiki/20-new.md", "Phase 2"),
+                ("src/A.cs", "phase 3"),
+            ],
+            sorted((item.doc.as_posix(), item.name) for item in result.missing),
+        )
+
+    def test_plan_references_skip_exempt_paths(self) -> None:
+        root = self.make_repo()
+        cited = "Phase 1 of Plans/x, per PLAN.md and OPERATOR-QUEUE.\n"
+        self.track(
+            root,
+            {
+                "Plans/.gitignore": cited,
+                "CHANGELOG.md": cited,
+                "scripts/docs-inventory-check.py": cited,
+                "scripts/tests/test_docs_inventory_check.py": cited,
+                "XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/agent-templates.seed.json": cited,
+                "XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/sources/x/agent.md": cited,
+                "tools/benchmark/corpus/raw.txt": cited,
+            },
+        )
+
+        self.assertEqual((), MODULE.check_plan_references(root).missing)
+
+    def test_plan_references_pass_domain_words(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "src/A.cs": (
+                    "enum InvocationRuntimePhase { Starting }\n"
+                    "// The startup phase; a two-phase commit; phase = 1.\n"
+                    'var dir = Path.Combine(root, "MyPlans/x", "my-Plans/y", ".Plans/z");\n'
+                ),
+                "docs/wiki/20-new.md": "Every phase logs its plan and a report.md under TEST_REPORT.md.\n",
+            },
+        )
+
+        self.assertEqual((), MODULE.check_plan_references(root).missing)
+
     def test_tool_names_scan_javascript_sources(self) -> None:
         root = self.make_repo()
         planted = {
@@ -891,7 +977,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
         )
 
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
-        self.assertIn("13 checks", completed.stdout)
+        self.assertIn("14 checks", completed.stdout)
 
     def test_main_is_clean_on_the_real_repository(self) -> None:
         stdout = io.StringIO()

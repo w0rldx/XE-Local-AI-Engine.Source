@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </remarks>
 internal static class GgufTensorBlockReader
 {
-    private const uint GgufMagic = 0x4655_4747;
     private const int BufferSize = 1024 * 1024;
     private const int MaxDimensions = 8;
     private const long MaxTensorCount = 65_536;
@@ -57,7 +56,7 @@ internal static class GgufTensorBlockReader
         uint? version = null;
         try
         {
-            if (await cursor.ReadUInt32Async(ct).ConfigureAwait(false) != GgufMagic)
+            if (await cursor.ReadUInt32Async(ct).ConfigureAwait(false) != GgufHeaderReader.GgufMagic)
             {
                 return Failed(GgufTensorReadFailure.Unreadable, version, values: null, cursor.Length);
             }
@@ -188,7 +187,7 @@ internal static class GgufTensorBlockReader
         }
     }
 
-    // Mirrors GgufHeaderReader's value typing (long for narrow integers, ulong for UINT64, double for floats) so its projection reads the same dictionary.
+    // Same value typing as GgufSpanReader (long for narrow integers, ulong for UINT64, double for floats), so GgufHeaderReader.Build, the shared projection, reads the same dictionary.
     private static async Task<object?> ReadValueAsync(Cursor cursor, uint valueType, CancellationToken ct)
     {
         switch (valueType)

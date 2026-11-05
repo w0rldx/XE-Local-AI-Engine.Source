@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The platform-independent half of Windows per-application capture: the documented build floor and the PCM
 ///     conversion chain. Everything here runs on every operating system, because on this project's Linux gate it is
-///     the only coverage the slice has — the WASAPI half is <c>[RunOn(OS.Windows)]</c> and reports skipped.
+///     the only coverage — the WASAPI half is <c>[RunOn(OS.Windows)]</c> and reports skipped.
 /// </summary>
 /// <remarks>
 ///     The converter is exercised against the <b>real</b> NAudio types rather than a mock: <c>BufferedWaveProvider</c>,

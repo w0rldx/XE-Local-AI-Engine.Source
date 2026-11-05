@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>The supported llama.cpp source-build backends.</summary>
 public enum LlamaCppSourceBackend
 {
@@ -83,7 +85,7 @@ public sealed class LlamaCppSourceBuildStartResult
 {
     public required LlamaCppSourceBuildStartOutcome Outcome { get; init; }
 
-    public LlamaCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
+    public SourceBuildPrerequisiteReport? Prerequisites { get; init; }
 
     public int RunningProcessCount { get; init; }
 }

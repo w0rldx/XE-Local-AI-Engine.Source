@@ -4,8 +4,7 @@
 - **Date:** 2026-09-05
 - **Scope:** How the engine runs curated, user-installed application containers. It changes nothing a sandbox backend
   enforces and does not touch the sandbox SPI.
-- **Authority:** Operator rulings D1–D14 recorded with the External Apps brief (`00-brief.md` §2), and the
-  reconciliation rounds that closed it.
+- **Authority:** Operator rulings on External Apps, stated in the Decision section below.
 - **Amends:** nothing.
 
 ## Context

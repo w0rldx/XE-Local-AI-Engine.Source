@@ -30,7 +30,7 @@ describe("deriveChatMessageDisplay role label", () => {
 		await i18next.changeLanguage("en");
 	});
 
-	it("labels the user and assistant turns from the bundle (F-37)", async () => {
+	it("labels the user and assistant turns from the bundle", async () => {
 		expect(labelFor("user")).toBe("You");
 		expect(labelFor("assistant")).toBe("Assistant");
 

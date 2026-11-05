@@ -146,7 +146,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             CreatedAtUtc = 2001
         });
 
-        // reasoning -> tool -> reasoning: a tool call between two reasoning runs is the Option A interleave that
+        // reasoning -> tool -> reasoning: a tool call between two reasoning runs is the interleave that
         // produces a second Thoughts block. The tool part carries args + result (the completed-phase data).
         var parts = new List<NodeChatMessagePart>
         {
@@ -3224,7 +3224,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     public async Task BranchConversationAsync_WithLateRegeneratedEarlyRevisionAndNoSelection_KeepsNewestMember()
     {
         // Same shape as above but with NO explicit selection: the branch must carry the NEWEST member of the early
-        // group (what the UI displays by default), not the old original the pre-fix per-message filter would fall back to.
+        // group (what the UI displays by default), not the oldest original a per-message filter would fall back to.
         await using var provider = await BuildProviderAsync("branch-late-early-default.sqlite");
         var service = CreateService(provider);
         var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest

@@ -1,9 +1,6 @@
 # XE Local AI Engine tester quickstart
 
-This file previously described the retired private tester-repository and manual packaging flow. Those instructions
-are no longer valid and have been removed.
-
-Use the current public documentation:
+The private tester-repository and manual packaging flow is retired. Use the current public documentation:
 
 - [User guide](../docs/user-guide/README.md)
 - [Download from GitHub](../docs/user-guide/docs/download-from-github.md)

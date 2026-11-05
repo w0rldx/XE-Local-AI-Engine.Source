@@ -235,7 +235,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-1</c>. The bug class this closes is a real one and reads correctly:
+    ///     <c>GRAPH-1</c>. The bug class this closes is a real one and reads correctly:
     ///     <c>value: "Approved"</c> — the past participle — is not an answer the gate can give, so the branch behind it
     ///     is written and unreachable. The complaint names the GATE, because that is where the damage is; the run could
     ///     not complete from there whatever is behind it.
@@ -255,7 +255,7 @@ public sealed class DevWorkflowGraphTests
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(StrandedBranch)).Message;
 
         AssertEx.Contains(refusal, "Node 'planapproval' is a human gate with an out-edge that can never fire");
-        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal, "the id is what the operator quotes and what the client mirrors.");
+        AssertEx.Contains(refusal, "GRAPH-1", StringComparison.Ordinal, "the id is what the operator quotes and what the client mirrors.");
     }
 
     /// <summary>
@@ -279,7 +279,7 @@ public sealed class DevWorkflowGraphTests
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(DeadBesideLive)).Message;
 
         AssertEx.Contains(refusal, "The edge 'approve' → 'rework' leaves a human gate and is false for all three answers");
-        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+        AssertEx.Contains(refusal, "GRAPH-1", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -302,7 +302,7 @@ public sealed class DevWorkflowGraphTests
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ChainedGates)).Message;
 
         AssertEx.Contains(refusal, "Node 'beta' is a human gate with an out-edge that can never fire");
-        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+        AssertEx.Contains(refusal, "GRAPH-1", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -310,7 +310,7 @@ public sealed class DevWorkflowGraphTests
     ///     shape that made the augmented graph cyclic: the virtual edge 'm' → 't' closes the loop 't' → 'j' → 'm' → 't'
     ///     that <see cref="DevWorkflowGraph" />'s cycle check cannot see, because it walks the authored edges only. The
     ///     fixpoint then ran over an order that was not topological and under-approximated, refusing this graph with a
-    ///     GRAPH-C4-2 complaint although 'start' is a human gate on every path into 't'.
+    ///     GRAPH-2 complaint although 'start' is a human gate on every path into 't'.
     /// </summary>
     [Test]
     public void Parse_WithAMaterializationJoiningIntoOneOfItsOwnAncestors_IsRejected()
@@ -328,7 +328,7 @@ public sealed class DevWorkflowGraphTests
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(JoinUpstream)).Message;
 
         AssertEx.Contains(refusal, "names join node 'j', which is 'm' itself or one of its ancestors");
-        AssertEx.False(refusal.Contains("GRAPH-C4-2", StringComparison.Ordinal),
+        AssertEx.False(refusal.Contains("GRAPH-2", StringComparison.Ordinal),
             "and it is refused for the shape it is, not with a gating complaint that is false.");
     }
 
@@ -373,7 +373,7 @@ public sealed class DevWorkflowGraphTests
 
         AssertEx.Contains(refusal, "Node 'validate' validates inside the materialization template of 'decompose' and no edge leaves it");
         AssertEx.Contains(refusal, "Give it an edge to the join node 'join'");
-        AssertEx.Contains(refusal, "GRAPH-C4-1", StringComparison.Ordinal);
+        AssertEx.Contains(refusal, "GRAPH-1", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -400,7 +400,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-1</c>'s fourth step is what makes the no-op verdict row safe, so the shape it protects has to be
+    ///     <c>GRAPH-1</c>'s fourth step is what makes the no-op verdict row safe, so the shape it protects has to be
     ///     accepted: a template validation node wired to the join is not an end of the run.
     /// </summary>
     [Test]
@@ -482,7 +482,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     What the rule is deliberately NOT: answer coverage. Both seeded gates carry an <c>Approve</c> edge and
-    ///     nothing else, so a rejection ends the run, working as designed. Reading C4-1 as "every answer has
+    ///     nothing else, so a rejection ends the run, working as designed. Reading GRAPH-1 as "every answer has
     ///     somewhere to go" would refuse the product's own templates.
     /// </summary>
     [Test]
@@ -512,7 +512,7 @@ public sealed class DevWorkflowGraphTests
                             .Nodes.Count);
 
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>. An author who declares a write is declaring a real one, so a run must not be able to
+    ///     <c>GRAPH-2</c>. An author who declares a write is declaring a real one, so a run must not be able to
     ///     reach the node without an operator having been asked. The apply-gate rule does not catch this: the node is an Agent, not an
     ///     apply.
     /// </summary>
@@ -522,7 +522,7 @@ public sealed class DevWorkflowGraphTests
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(DeclaredWrite(gated: false, waived: false))).Message;
 
         AssertEx.Contains(refusal, "Node 'release' can write outside its sandbox and a run can reach it without an operator ever being asked");
-        AssertEx.Contains(refusal, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Contains(refusal, "GRAPH-2", StringComparison.Ordinal);
     }
 
     [Test]
@@ -531,7 +531,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     The escape hatch is the TEMPLATE's, written once and in the open, rather than each node quietly opting
-    ///     itself out. It waives C4-2 and nothing else — a gate is still required in front of an apply node, because
+    ///     itself out. It waives GRAPH-2 and nothing else — a gate is still required in front of an apply node, because
     ///     approval policy here is tighten-only.
     /// </summary>
     [Test]
@@ -559,7 +559,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-3</c> at an <c>Any</c> convergence, where <c>Combine</c> is AND: only one branch may have run,
+    ///     <c>GRAPH-3</c> at an <c>Any</c> convergence, where <c>Combine</c> is AND: only one branch may have run,
     ///     so a validation on one of them assures nothing. Driven down the branch that skips the check, the apply would
     ///     integrate patches nothing judged.
     /// </summary>
@@ -585,7 +585,7 @@ public sealed class DevWorkflowGraphTests
         var refusal = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(HalfValidated)).Message;
 
         AssertEx.Contains(refusal, "Node 'integrate' applies approved patches and a run can reach it without any validation node having run");
-        AssertEx.Contains(refusal, "GRAPH-C4-3", StringComparison.Ordinal);
+        AssertEx.Contains(refusal, "GRAPH-3", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -659,7 +659,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     And every test fixture, found by REFLECTION rather than listed, so a fixture added later cannot quietly fall
-    ///     out of coverage — which is how the two added by the follow-up round are covered here without an edit.
+    ///     out of coverage.
     /// </summary>
     [Test]
     public void EveryFixtureGraphStillValidates()
@@ -786,7 +786,7 @@ public sealed class DevWorkflowGraphTests
     /// <summary>
     ///     The same rule catches the shape that would otherwise be silent: a node the run really does have to execute,
     ///     which the template also reaches, is swallowed into the template — given no row at run start while the live
-    ///     graph waits on it. That is the mirror of the plan's "no edge leaves the subtree except to the join", and it
+    ///     graph waits on it. That is the mirror of the rule "no edge leaves the subtree except to the join", and it
     ///     is the half a subtree defined by what it reaches cannot break any other way.
     /// </summary>
     [Test]
@@ -933,7 +933,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     Every <c>GRAPH-C4-4</c> parse refusal names the rule, the shared number parsers' own complaints included —
+    ///     Every <c>GRAPH-4</c> parse refusal names the rule, the shared number parsers' own complaints included —
     ///     the id is what the operator quotes, and a bare "must be positive" would be the one cap message that could
     ///     not be traced back to the invariant that raised it.
     /// </summary>
@@ -942,7 +942,7 @@ public sealed class DevWorkflowGraphTests
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":0}],"edges":[{"from":"a","to":"b"}]}""")]
     [Arguments("""{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Tool","retryTarget":"a","maxLoopIterations":1.5}],"edges":[{"from":"a","to":"b"}]}""")]
     public void Parse_WithAnUnusableLoopCap_NamesTheInvariant(string json) =>
-        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, "GRAPH-C4-4", StringComparison.Ordinal);
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message, "GRAPH-4", StringComparison.Ordinal);
 
     [Test]
     public void Parse_WithNoEntryNode_IsRejected()
@@ -1386,7 +1386,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-5</c>: a comparison <c>DevWorkflowCondition</c> can never make against the member's type never fires.
+    ///     <c>GRAPH-5</c>: a comparison <c>DevWorkflowCondition</c> can never make against the member's type never fires.
     ///     Strings still order ordinally, so a relational op on a string member stays legal; a boolean only takes eq or ne.
     /// </summary>
     [Test]
@@ -1401,7 +1401,7 @@ public sealed class DevWorkflowGraphTests
     {
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TypedOutputRoute(condition))).Message;
 
-        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "GRAPH-5", StringComparison.Ordinal);
         AssertEx.Contains(message, "could never fire", StringComparison.Ordinal);
     }
 
@@ -1424,7 +1424,7 @@ public sealed class DevWorkflowGraphTests
          "edges":[{"from":"a","to":"b","condition":
         """ + condition + "}]}";
 
-    /// <summary><c>GRAPH-C4-5</c> clause 1: a path the schema does not declare, a nested one included, is an edge that never fires.</summary>
+    /// <summary><c>GRAPH-5</c> clause 1: a path the schema does not declare, a nested one included, is an edge that never fires.</summary>
     [Test]
     [Arguments("output.severity")]
     [Arguments("output.kind.label")]
@@ -1436,7 +1436,7 @@ public sealed class DevWorkflowGraphTests
 
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
 
-        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "GRAPH-5", StringComparison.Ordinal);
         AssertEx.Contains(message, $"routes on '{path}'");
     }
 
@@ -1450,7 +1450,7 @@ public sealed class DevWorkflowGraphTests
 
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
 
-        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "GRAPH-5", StringComparison.Ordinal);
         AssertEx.Contains(message, "\"defect\"");
     }
 
@@ -1460,7 +1460,7 @@ public sealed class DevWorkflowGraphTests
     {
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Classifier("feature", "bug"))).Message;
 
-        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "GRAPH-5", StringComparison.Ordinal);
         AssertEx.Contains(message, "\"question\", \"unclear\"");
     }
 
@@ -1473,7 +1473,7 @@ public sealed class DevWorkflowGraphTests
 
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(json)).Message;
 
-        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "GRAPH-5", StringComparison.Ordinal);
         AssertEx.Contains(message, "'required'", StringComparison.Ordinal);
     }
 
@@ -1500,7 +1500,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-5</c>: an <c>unmetOn</c> answer blocks the node, so a classifier owes it no edge, and an eq edge naming it is
+    ///     <c>GRAPH-5</c>: an <c>unmetOn</c> answer blocks the node, so a classifier owes it no edge, and an eq edge naming it is
     ///     refused as one that never fires.
     /// </summary>
     [Test]
@@ -1511,7 +1511,7 @@ public sealed class DevWorkflowGraphTests
         var message = AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(
             UnmetOnVerdict("""{"from":"verify","to":"next","condition":{"path":"output.verdict","op":"eq","value":"refused"}}"""))).Message;
 
-        AssertEx.Contains(message, "GRAPH-C4-5", StringComparison.Ordinal);
+        AssertEx.Contains(message, "GRAPH-5", StringComparison.Ordinal);
         AssertEx.Contains(message, "'unmetOn'", StringComparison.Ordinal);
     }
 

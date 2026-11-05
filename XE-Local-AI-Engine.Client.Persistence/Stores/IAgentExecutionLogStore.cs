@@ -309,14 +309,14 @@ public sealed class AgentRunEnvelopeRecord
 
     public required long CreatedAtUtc { get; init; }
 
-    // Tool-schema token estimate for the turn. DELIBERATELY wider than the int? token members above: the cumulative counter is a long at its source and P-C1 sums
+    // Tool-schema token estimate for the turn. DELIBERATELY wider than the int? token members above: the cumulative counter is a long at its source and the cost telemetry sums
     // this column across a whole session, so narrowing it here would truncate silently. The per-round maximum stays an int, matching its own source.
     public long? ToolSchemaTokens { get; init; }
 
     public int? MaxToolSchemaTokens { get; init; }
 
     // What reasoning effort `auto` resolved to for this turn: the tier label and the authored effort that asked for it. Both null on every turn that authored a
-    // concrete effort, which is what makes `authored_effort IS NULL` the before-population of the measurement in P-C2 section 8.
+    // concrete effort, which is what makes `authored_effort IS NULL` the authored-effort arm of the comparison in docs/performance/inference-capture-workflow.md.
     public string? DispatchedTier { get; init; }
 
     public string? AuthoredEffort { get; init; }

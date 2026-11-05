@@ -24,8 +24,7 @@ XE_Local_AI_Engine.Client.Services.Mcp.Server.NodeAdminMcpTools.TryMapGeneration
 XE_Local_AI_Engine.Client.Services.Mcp.Server.NodeAdminMcpTools.TryParseVariant(variant)  # blank variant: true, no pin
 XE_Local_AI_Engine.Client.Services.Mcp.Server.NodeAgentMcpTools.TryParseOptionalWorkspaceId(workspaceId)  # blank id: true, no workspace
 XE_Local_AI_Engine.Client.Services.Training.Datasets.SampleValidationPipeline.TryValidateArguments(reason)  # error out, null when valid
-XE_Local_AI_Engine.Providers.HuggingFace.Implementation.GgufHeaderReader.TryReadValue(value)  # array or skipped scalar: consumed, not kept
-XE_Local_AI_Engine.Providers.HuggingFace.Implementation.GgufStrictHeaderParser.TryReadValue(value)  # array or skipped scalar: consumed, not kept
+XE_Local_AI_Engine.Providers.HuggingFace.Implementation.GgufSpanReader.TryReadValue(value)  # array or skipped scalar: consumed, not kept
 XE_Local_AI_Engine.Providers.LlamaServer.Contracts.IProcessLaunchAdmissionRegistry.TryBeginLaunch(admission)  # direct launch: true with no capacity admission
 XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(kvTypeK)  # no -ctk: llama.cpp default
 XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(kvTypeV)  # no -ctv: llama.cpp default

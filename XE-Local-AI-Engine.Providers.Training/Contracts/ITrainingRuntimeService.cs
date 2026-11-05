@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Training.Contracts;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
+
 /// <summary>
 ///     Phases of one runtime install (or removal). Ordered as they occur; <see cref="Ready" />,
 ///     <see cref="Failed" /> and <see cref="Idle" /> are the resting states.
@@ -29,7 +31,7 @@ public sealed class TrainingRuntimeInstallResult
 {
     public required TrainingRuntimeInstallOutcome Outcome { get; init; }
 
-    public TrainingRuntimePrerequisiteReport? Prerequisites { get; init; }
+    public SourceBuildPrerequisiteReport? Prerequisites { get; init; }
 }
 
 /// <summary>What <c>probe.py</c> reported from inside the provisioned venv.</summary>

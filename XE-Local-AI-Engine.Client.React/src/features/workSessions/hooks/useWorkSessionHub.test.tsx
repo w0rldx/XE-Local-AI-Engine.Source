@@ -216,7 +216,7 @@ describe("useWorkSessionHub", () => {
 		expect(result.current.resumeNonce).toBe(0);
 	});
 
-	it("re-arms the attach on status pushes and on stale-seq step/status pushes without moving the watermark (F-30, F-31)", async () => {
+	it("re-arms the attach on status pushes and on stale-seq step/status pushes without moving the watermark", async () => {
 		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 10 }));
 		const { wrapper } = harness();
 		const { result } = renderHook(() => useWorkSessionHub(sessionId, conversationId), { wrapper });

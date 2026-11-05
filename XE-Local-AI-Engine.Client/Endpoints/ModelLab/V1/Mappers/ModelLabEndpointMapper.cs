@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelLab.V1.Mappers;
 
-using System.Text;
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ModelLab;
@@ -42,20 +40,8 @@ internal static class ModelLabEndpointMapper
             Prompt = record.Prompt,
             ErrorMessage = record.ErrorMessage,
             TraceByteCount = record.Kind == ModelLabExperimentKind.Trace ? record.TraceByteCount : null,
-            Result = includeResult && record.ResultJson is { } json ? ReadResult(json) : null,
+            Result = includeResult && record.ResultJson is { } json ? ModelLabTraceSpec.ReadResultOrNull(json) : null,
             CreatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
             UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(record.UpdatedAtUtc)
         };
-
-    private static ModelLabTraceResult? ReadResult(ReadOnlyMemory<byte> json)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<ModelLabTraceResult>(Encoding.UTF8.GetString(json.Span), ModelLabTraceSpec.ResultJson);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 }

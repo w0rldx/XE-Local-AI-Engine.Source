@@ -103,7 +103,7 @@ public sealed class SupervisorLaunchFallbackTests
             time.AdvanceWallClockOnly(TimeSpan.FromHours(-2));
             time.AdvanceTimestamp(TimeSpan.FromMilliseconds(875));
 #pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
-            return new FakeProcessHandle(pid: 4242);
+            return new FakeProcessTreeHandle(pid: 4242);
 #pragma warning restore CA2000
         });
         await using var supervisor = SupervisorFactory.Create(launcher,
@@ -126,7 +126,7 @@ public sealed class SupervisorLaunchFallbackTests
         var launcher = new FakeProcessLauncher(spec =>
         {
 #pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
-            var handle = new FakeProcessHandle(Interlocked.Increment(ref launches));
+            var handle = new FakeProcessTreeHandle(Interlocked.Increment(ref launches));
 #pragma warning restore CA2000
             if (launches == 1)
             {
@@ -160,7 +160,7 @@ public sealed class SupervisorLaunchFallbackTests
         var launcher = new FakeProcessLauncher(_ =>
         {
 #pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
-            var handle = new FakeProcessHandle(Interlocked.Increment(ref launches));
+            var handle = new FakeProcessTreeHandle(Interlocked.Increment(ref launches));
 #pragma warning restore CA2000
             if (launches == 1)
             {

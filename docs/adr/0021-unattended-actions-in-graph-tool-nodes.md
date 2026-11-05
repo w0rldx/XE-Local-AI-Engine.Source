@@ -6,8 +6,7 @@
   tools may do so, how a definition opts in, what is audited and when, how retries are prevented, how an operator-
   authored HTTP tool may reach one named host on the private network, and how a run records who or what started it.
   It changes nothing for chat, agents, inbound MCP, `web_fetch`, Dev Workflows or any existing graph.
-- **Authority:** Operator decisions of 2026-10-15, recorded in `Plans/voice-to-action-assessment-2026-10-15/` (the
-  plan directory is git-ignored; it is the record of the decisions, not a published document): the work is excluded
+- **Authority:** Operator decisions of 2026-10-15: the work is excluded
   from the 2026-10-06 feature freeze; LAN egress is a per-tool exact-host allow-list on an acknowledged custom tool;
   side effects widen the existing Tool node rather than adding a node kind; both custom-tool kinds are covered,
   because the target product is a desktop assistant that both calls a home-automation API and launches programs.

@@ -5,8 +5,8 @@
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 > Updated 2026-09-17: the backend sections below state the **C# baseline** — conventional constructors,
 > `sealed class` DTOs, contextual `ConfigureAwait`, `*Store`-only data access, comment budgets. The baseline
-> is the rule for code you write or touch **now**; the migration of existing code runs as a slice series, and
-> each rule names the slice that carries it. **Existing code that still shows the old shape is migration debt,
+> is the rule for code you write or touch **now**; the migration of existing code proceeds incrementally.
+> **Existing code that still shows the old shape is migration debt,
 > not a pattern to copy** — and equally, it is not to be "repaired" back to the old shape.
 
 **What this page covers.** Where a new type or file goes and which house patterns to follow, in the .NET backend and
@@ -52,8 +52,7 @@ they drift, so a reviewer (human or agent) has to know them.
 ### Endpoints: FastEndpoints, one per file — **not** MediatR/CQRS
 
 The API layer is **FastEndpoints**. The shape is **one endpoint class per `*Endpoint.cs` file**
-under `Endpoints/{Area}/V1/`, and the file is named after the class. The plural `*Endpoints.cs` groupings that
-predated the rule were split in S7f-1, so `EndpointConventionTests` now enforces it with an empty allowlist: a
+under `Endpoints/{Area}/V1/`, and the file is named after the class. `EndpointConventionTests` enforces it with an empty allowlist: a
 new plural file fails the gate. There is **no MediatR / `ISender` / CQRS vertical-slice layer** anywhere; an
 endpoint injects and calls `Client.Application` services directly and stays **orchestration-only**
 (no business logic, no persistence). It returns a **DTO, never an EF entity** — and a DTO is a `sealed class`
@@ -84,8 +83,8 @@ same rule with a source scan: a host class may not pull a forbidden type out of 
 scan could see. A host type that genuinely cannot move down — the model proxy's forwarder owns an `HttpContext` — takes what it
 needs through an application-layer service instead, which is what `LlamaCppRuntimeOrchestrationService` is. The test once carried a shrink-only allowlist keyed by
 fully-qualified endpoint-and-parameter pairs,
-frozen at the persistence-store and concrete-provider injections that existed when the rule was written; slices
-S6a–S6m migrated those sites area by area until it was empty and then deleted it. Nothing may be added back: a
+frozen at the persistence-store and concrete-provider injections that existed when the rule was written; those
+sites migrated area by area until it was empty and then deleted it. Nothing may be added back: a
 violation is fixed by moving the dependency into a `Client.Application` service the endpoint injects instead. Such
 a service is a concrete `sealed class` with no interface, registered as itself; add an interface only when a
 specific test must substitute it, and move the displaced behavioural assertions to a service-level test when you
@@ -244,7 +243,7 @@ member the host or application layer needs is public in the provider's `Contract
 type that depends on either context, on an `IDbContextFactory<>` of one, or on the raw ADO reached through one,
 unless `Architecture/DbContextUserAllowlist.txt` lists it. That file is the authoritative list of holders — read
 it rather than trusting this page — and it has two sections: `permanent` for the legitimate set above, `migrate`
-for what a later sub-slice still has to move, grouped by feature area. Each entry states its reason. It is
+for what still has to move, grouped by feature area. Each entry states its reason. It is
 shrink-only in both directions: an unlisted holder fails, and a listed type that no longer holds a context fails
 as stale, so a migration deletes its line in the same commit.
 
@@ -256,9 +255,8 @@ class, a static method parameter and a generic argument all count; the guard ass
 those shapes, naming a live holder per shape. Compiler-generated nested types fold onto the type that declares
 them, so an entry names something a reader can go and edit.
 
-*Migration status:* slice **S7a** installed the fence and migrated the image rows, the conversation-upload rows
-and the identity queries; **S7c** migrated the tutorial state and ruled the chat path permanent; **S7d** ruled
-knowledge permanent, which leaves the `migrate` section empty. A store that an
+*Migration status:* the image rows, the conversation-upload rows, the identity queries and the tutorial state have
+migrated; the chat path and knowledge are ruled permanent, which leaves the `migrate` section empty. A store that an
 endpoint injects directly cannot simply be relocated into
 `Client.Persistence` — `EndpointDependencyTests` forbids a `Persistence.*` constructor parameter anywhere in the
 host — so such a store stays in `Client.Application` and the rows move behind a narrow `*RowStore` beneath it.
@@ -543,6 +541,9 @@ pointer.
 to `docs/adr/`; architecture goes to `docs/wiki/`. A historically-worded invariant is **rewritten** as the
 present-tense rule it actually states, not deleted.
 
+**No delivery labels.** A comment carries no delivery label or id (phase, round, slice, finding id): keep the fact and
+drop the label, because `scripts/docs-inventory-check.py` cannot catch a bare id and this rule is the only guard.
+
 **A remaining TODO states what, why, and a reference.** A bare `TODO`/`FIXME`/`HACK` fails the Release build
 (S1135); the fix is to describe the present limitation directly, or to link the ADR/issue that owns it — not to
 reword the marker.
@@ -608,7 +609,7 @@ Two sanctioned exceptions:
 
 - **`export const Foo = memo(function Foo(props: FooProps) { … })`** for a component that needs render-skip
   memoization — keep the inner function named so stack traces and Devtools still say `Foo`. Reference:
-  `features/chat/components/MessageParts.tsx`, `core/ui/components/CodeBlock/CodeBlock.tsx`.
+  `core/chat/components/MessageParts.tsx`, `core/ui/components/CodeBlock/CodeBlock.tsx`.
 - **A Zustand store hook stays `export const useFooStore = create<T>()(…)`** — it is a factory invocation,
   not a declaration; do not "fix" one back to `function`. Every other hook is `export function useFoo()`.
 

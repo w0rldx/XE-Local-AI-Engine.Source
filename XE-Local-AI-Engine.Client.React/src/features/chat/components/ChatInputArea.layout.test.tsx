@@ -5,9 +5,9 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentOption } from "@/core/agents/models/AgentOption";
+import classes from "@/core/chat/components/ChatComposerToolbar.module.css";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
-import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
 import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 import { renderWithProviders } from "@/test/RenderWithProviders";

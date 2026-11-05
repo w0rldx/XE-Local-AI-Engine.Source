@@ -38,7 +38,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class CodexToolCallingWireTests
 {
     private const string ToolName = "get_weather";
-    private const string CallId = "call_spike_1";
+    private const string CallId = "call_1";
     private const string EncryptedReasoning = "gAAAAAB-encrypted-reasoning-blob";
     private const string ReasoningSummary = "I should look up the weather.";
 

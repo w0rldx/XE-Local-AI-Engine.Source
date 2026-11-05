@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     R12's architecture fence: a transcription session records what was said, never what was heard. No entity in the
+///     Architecture fence: a transcription session records what was said, never what was heard. No entity in the
 ///     family may grow a member that carries audio.
 ///     <para>
 ///         The property-type check is an allow-list rather than a "not <c>byte[]</c>" check on purpose. Audio does not
@@ -57,13 +57,13 @@ public sealed class TranscriptionNoAudioPersistenceTests
                 foreach (var fragment in AudioBearingFragments)
                 {
                     AssertEx.False(property.Name.Contains(fragment, StringComparison.OrdinalIgnoreCase),
-                        $"{entityType.Name}.{property.Name} names audio. A transcription session persists the transcript, never the recording (R12).");
+                        $"{entityType.Name}.{property.Name} names audio. A transcription session persists the transcript, never the recording.");
                 }
 
                 AssertEx.True(IsAllowedShape(property),
                     $"{entityType.Name}.{property.Name} is a {property.PropertyType} — a shape this entity family does not allow. "
                     + "Scalars, strings, enums, Guids, the five encrypted text columns and the Segments navigation are the whole permitted set; "
-                    + "anything else is how audio gets onto disk (R12).");
+                    + "anything else is how audio gets onto disk.");
             }
         }
     }

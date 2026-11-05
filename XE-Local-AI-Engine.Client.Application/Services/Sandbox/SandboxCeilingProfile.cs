@@ -26,7 +26,7 @@ public enum SandboxCeilingProfile
     ///     Mode, all of which run real compilers, test hosts and package restores.
     /// </summary>
     /// <remarks>
-    ///     Separate from <see cref="ComputeTool" /> by operator ruling, on the measurement recorded at
+    ///     Separate from <see cref="ComputeTool" /> on the measurement recorded at
     ///     <see cref="SandboxToolchainLimits" />: sharing one set killed <c>dotnet build</c> outright. A build is a fundamentally different
     ///     workload from a calculation, and one number cannot be right for both.
     /// </remarks>

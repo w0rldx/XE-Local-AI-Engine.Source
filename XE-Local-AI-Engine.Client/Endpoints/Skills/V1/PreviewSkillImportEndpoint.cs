@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Phase 1 of the third-party skill import: parse, guard and report, writing nothing. The operator reviews the
+///     The preview step of the third-party skill import: parse, guard and report, writing nothing. The operator reviews the
 ///     returned report and only then calls <see cref="CommitSkillImportEndpoint" /> with its token.
 /// </summary>
 /// <remarks>

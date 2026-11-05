@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
-using System.Buffers.Binary;
 using System.Globalization;
 using System.Net.Http.Headers;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -22,7 +20,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// </remarks>
 internal sealed class GgufHeaderReader
 {
-    private const uint GgufMagic = 0x4655_4747; // "GGUF" little-endian (0x47 0x47 0x55 0x46).
+    internal const uint GgufMagic = 0x4655_4747; // "GGUF" little-endian (0x47 0x47 0x55 0x46).
 
     // One advisor run reads more than 256 file headers across the catalog, and early and complete reads are separate keys.
     private const int HeaderCacheMaxEntries = 1024;
@@ -302,7 +300,7 @@ internal sealed class GgufHeaderReader
     /// </summary>
     private static ParsedHeader TryParse(byte[] bytes)
     {
-        var reader = new SpanReader(bytes);
+        var reader = new GgufSpanReader(bytes);
 
         if (!reader.TryReadUInt32(out var magic) || magic != GgufMagic)
         {
@@ -320,7 +318,7 @@ internal sealed class GgufHeaderReader
         var reachedTokenizer = false;
         for (ulong i = 0; i < kvCount; i++)
         {
-            if (!reader.TryReadGgufString(out var key))
+            if (!reader.TryReadString(out var key))
             {
                 return new ParsedHeader(Build(values), Truncated: true, reachedTokenizer);
             }
@@ -332,9 +330,9 @@ internal sealed class GgufHeaderReader
                 return new ParsedHeader(Build(values), Truncated: true, reachedTokenizer);
             }
 
-            if (!TryReadValue(ref reader, valueType, out var value, out var ranOut))
+            if (!reader.TryReadValue(valueType, out var value))
             {
-                return new ParsedHeader(Build(values), ranOut, reachedTokenizer);
+                return new ParsedHeader(Build(values), Truncated: true, reachedTokenizer);
             }
 
             if (value is not null)
@@ -459,288 +457,5 @@ internal sealed class GgufHeaderReader
             double d => (long)d,
             _ => null
         };
-    }
-
-    /// <summary>
-    ///     Reads one GGUF value of <paramref name="valueType" />. Arrays and unwanted scalar types are consumed (to keep
-    ///     the cursor aligned) but yield a <see langword="null" /> value. <paramref name="ranOut" /> signals the buffer
-    ///     ended mid-value.
-    /// </summary>
-    private static bool TryReadValue(ref SpanReader reader, uint valueType, out object? value, out bool ranOut)
-    {
-        value = null;
-        ranOut = false;
-
-        switch (valueType)
-        {
-            case 0: // UINT8
-            case 1: // INT8
-            case 7: // BOOL
-                if (!reader.TryReadByte(out var b))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = (long)b;
-                return true;
-            case 2: // UINT16
-                if (!reader.TryReadUInt16(out var u16))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = (long)u16;
-                return true;
-            case 3: // INT16
-                if (!reader.TryReadInt16(out var i16))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = (long)i16;
-                return true;
-            case 4: // UINT32
-                if (!reader.TryReadUInt32(out var u32))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = (long)u32;
-                return true;
-            case 5: // INT32
-                if (!reader.TryReadInt32(out var i32))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = (long)i32;
-                return true;
-            case 6: // FLOAT32
-                if (!reader.TryReadFloat32(out var f32))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = (double)f32;
-                return true;
-            case 8: // STRING
-                if (!reader.TryReadGgufString(out var s))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = s;
-                return true;
-            case 10: // UINT64
-                if (!reader.TryReadUInt64(out var u64))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = u64;
-                return true;
-            case 11: // INT64
-                if (!reader.TryReadInt64(out var i64))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = i64;
-                return true;
-            case 12: // FLOAT64
-                if (!reader.TryReadFloat64(out var f64))
-                {
-                    ranOut = true;
-                    return false;
-                }
-
-                value = f64;
-                return true;
-            case 9: // ARRAY — consume to stay aligned; we don't surface array-valued metadata here.
-                return TrySkipArray(ref reader, out ranOut);
-            default:
-                // Unknown value type — we can't know its width, so we cannot safely continue.
-                ranOut = true;
-                return false;
-        }
-    }
-
-    private static bool TrySkipArray(ref SpanReader reader, out bool ranOut)
-    {
-        ranOut = false;
-        if (!reader.TryReadUInt32(out var elementType) || !reader.TryReadUInt64(out var length))
-        {
-            ranOut = true;
-            return false;
-        }
-
-        for (ulong i = 0; i < length; i++)
-        {
-            if (!TryReadValue(ref reader, elementType, out _, out ranOut))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>Forward-only little-endian span reader over the fetched header bytes.</summary>
-    private ref struct SpanReader
-    {
-        private readonly ReadOnlySpan<byte> _span;
-        private int _position;
-
-        public SpanReader(ReadOnlySpan<byte> span)
-        {
-            _span = span;
-        }
-
-        private bool TryTake(int count, out ReadOnlySpan<byte> slice)
-        {
-            if (count < 0 || _position + count > _span.Length)
-            {
-                slice = default;
-                return false;
-            }
-
-            slice = _span.Slice(_position, count);
-            _position += count;
-            return true;
-        }
-
-        public bool TryReadByte(out byte value)
-        {
-            if (TryTake(count: 1, out var s))
-            {
-                value = s[0];
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadUInt16(out ushort value)
-        {
-            if (TryTake(count: 2, out var s))
-            {
-                value = BinaryPrimitives.ReadUInt16LittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadInt16(out short value)
-        {
-            if (TryTake(count: 2, out var s))
-            {
-                value = BinaryPrimitives.ReadInt16LittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadUInt32(out uint value)
-        {
-            if (TryTake(count: 4, out var s))
-            {
-                value = BinaryPrimitives.ReadUInt32LittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadInt32(out int value)
-        {
-            if (TryTake(count: 4, out var s))
-            {
-                value = BinaryPrimitives.ReadInt32LittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadUInt64(out ulong value)
-        {
-            if (TryTake(count: 8, out var s))
-            {
-                value = BinaryPrimitives.ReadUInt64LittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadInt64(out long value)
-        {
-            if (TryTake(count: 8, out var s))
-            {
-                value = BinaryPrimitives.ReadInt64LittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadFloat32(out float value)
-        {
-            if (TryTake(count: 4, out var s))
-            {
-                value = BinaryPrimitives.ReadSingleLittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadFloat64(out double value)
-        {
-            if (TryTake(count: 8, out var s))
-            {
-                value = BinaryPrimitives.ReadDoubleLittleEndian(s);
-                return true;
-            }
-
-            value = 0;
-            return false;
-        }
-
-        public bool TryReadGgufString(out string value)
-        {
-            value = string.Empty;
-            if (!TryReadUInt64(out var length))
-            {
-                return false;
-            }
-
-            if (length > int.MaxValue || !TryTake((int)length, out var bytes))
-            {
-                return false;
-            }
-
-            value = Encoding.UTF8.GetString(bytes);
-            return true;
-        }
     }
 }

@@ -23,7 +23,7 @@ public sealed class FilePlacementConventionTests
         RepositoryPaths.Combine("XE-Local-AI-Engine.Tests", "Architecture", "FilePlacementAllowlist.txt");
 
     /// <summary>Today's entry count. Only ever lowered, in the commit that shrinks the list.</summary>
-    private const int MaxEntries = 251;
+    private const int MaxEntries = 206;
 
     /// <summary>
     ///     A floor a little under today's file count, which the cleanup batches do not lower.

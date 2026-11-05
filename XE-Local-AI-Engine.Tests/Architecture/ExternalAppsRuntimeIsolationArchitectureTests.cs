@@ -32,7 +32,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ExternalAppsRuntimeIsolationArchitectureTests
 {
     /// <summary>
-    ///     Development Mode's container surface, exactly as ruled. Do not widen and do not narrow: each name is either
+    ///     Development Mode's container surface. Do not widen and do not narrow: each name is either
     ///     a member that silently does the wrong thing for an application container, or a record whose meaning belongs
     ///     to the sandbox hardening contract.
     /// </summary>
@@ -139,7 +139,7 @@ public sealed class ExternalAppsRuntimeIsolationArchitectureTests
                                              await runtime.ProbeWritablePathAsync(id, "/data", cancellationToken);
                                              var summaries = await runtime.ListContainersDetailedAsync(labels, cancellationToken);
                                          """),
-            "The runtime layer's own vocabulary must not trip the guard, or the slice that uses it cannot be written.");
+            "The runtime layer's own vocabulary must not trip the guard, or code that uses it cannot be written.");
     }
 
     /// <summary>

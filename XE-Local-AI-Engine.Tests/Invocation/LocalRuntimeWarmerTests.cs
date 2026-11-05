@@ -277,7 +277,7 @@ public sealed class LocalRuntimeWarmerTests
             LocalRuntimeWarmer.BuildGenerationAdmissionRejectionMessage(InvocationGenerationAdmissionReasonCodes.EffectiveContextInsufficient, context));
     }
 
-    /// <summary>U6: the loading phase says why the model loads and how long it took last time.</summary>
+    /// <summary>The loading phase says why the model loads and how long it took last time.</summary>
     [Test]
     [Arguments(null, InvocationRuntimePhaseReasons.FirstLoad, null)]
     [Arguments(LlamaServerUnloadReason.IdleTimeout, InvocationRuntimePhaseReasons.IdleUnloaded, 9_000d)]

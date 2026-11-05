@@ -43,7 +43,7 @@ public sealed class NodeChatPartAccumulator
 
     /// <summary>
     ///     Appends a reasoning delta. Extends the trailing reasoning segment, or opens a new one when the turn has no
-    ///     trailing reasoning segment yet (start of turn, or the previous part is a tool — the Option A boundary).
+    ///     trailing reasoning segment yet (start of turn, or the previous part is a tool, so reasoning and tools interleave in stream order).
     /// </summary>
     public void AppendReasoning(string? delta, long sequence)
     {

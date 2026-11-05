@@ -120,7 +120,7 @@ public sealed class DevWorkflowDevTaskTests
                                          """;
 
     /// <summary>
-    ///     The Slice B6 gate: "Plan → Implement → Validate → Human review", with the implementation node driving a real
+    ///     End to end: "Plan → Implement → Validate → Human review", with the implementation node driving a real
     ///     development task and the validation node's report in the run's own artifacts.
     /// </summary>
     [Test]
@@ -654,9 +654,9 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     The interaction the two L8 fixes could have broken between them: a transient same-node failure landing in the
-    ///     MIDDLE of a genuine fix loop. The routed verdict's own evidence has to survive it — keeping the routed node's
-    ///     name while overwriting its counts with this node's count-less output would hand the L4 gate a rejection it
+    ///     A transient same-node failure landing in the MIDDLE of a genuine fix loop. The routed verdict's own evidence
+    ///     has to survive it — keeping the routed node's
+    ///     name while overwriting its counts with this node's count-less output would hand the downstream gate a rejection it
     ///     could no longer evidence, and stand a genuinely rejected implementation down as unactionable.
     /// </summary>
     [Test]

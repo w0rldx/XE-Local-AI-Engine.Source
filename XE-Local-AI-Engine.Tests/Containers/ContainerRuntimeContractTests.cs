@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>Which <see cref="IContainerRuntime" /> a contract case runs against.</summary>
 public enum ContainerRuntimeUnderTest
 {
-    /// <summary>The lying fake every later slice's tests stand on.</summary>
+    /// <summary>The lying fake the container tests stand on.</summary>
     Fake,
 
     /// <summary>The production Docker client, built against an endpoint that does not exist.</summary>

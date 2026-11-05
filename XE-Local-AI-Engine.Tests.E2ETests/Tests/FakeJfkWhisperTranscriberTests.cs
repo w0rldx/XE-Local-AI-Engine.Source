@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     Calibrates the E2E double's provenance check without a browser, which is what makes the browser test's verdict
 ///     readable: it fixes what the correlation is for audio that IS the fixture, for audio that is merely loud, and
 ///     for silence. A browser adds auto gain, a 48 kHz to 16 kHz resample and frame boundaries on top of this, so the
-///     live numbers are lower — the live run logs its own and the slice report quotes both.
+///     live numbers are lower — the live run logs its own.
 /// </summary>
 public sealed class FakeJfkWhisperTranscriberTests
 {

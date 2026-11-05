@@ -56,9 +56,8 @@ public sealed class IntegrationExternalAccessTests
     [Test]
     public async Task ResolveExecution_WhenTwoKeysShareAPrincipal_TheNarrowOneStillCannotSeeTheOtherTrigger()
     {
-        // The exact scenario the round-5 review described: issuing a narrow ingest key alongside a broad admin key for
-        // the same integrator is the use case principals were added for, and principal-only masking let the narrow one
-        // read and cancel everything.
+        // Issuing a narrow ingest key alongside a broad admin key for the same integrator is the use case principals
+        // exist for, and principal-only masking would let the narrow one read and cancel everything.
         var fixture = new Fixture();
         var executionId = fixture.SeedExecution(fixture.TriggerB, fixture.PrincipalId);
 

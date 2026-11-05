@@ -204,7 +204,7 @@ public sealed class IntegrationTerminalDetailShapeTests
         var actual = document.RootElement.EnumerateObject().Select(static property => property.Name).OrderBy(static name => name, StringComparer.Ordinal).ToArray();
         AssertEx.Equal(string.Join(",", expected.OrderBy(static name => name, StringComparer.Ordinal)),
             string.Join(",", actual),
-            $"'{eventType}' must persist the brief's envelope, whichever path terminalized the row.");
+            $"'{eventType}' must persist the envelope, whichever path terminalized the row.");
     }
 
     private static IntegrationExecutionEventSnapshot Terminal(FakeIntegrationExecutionStore executions, Guid executionId, string eventType) =>

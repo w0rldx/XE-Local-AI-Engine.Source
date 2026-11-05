@@ -4,12 +4,13 @@ import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
+import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
-import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatConversationModel, ChatDisplayShellProps, ChatMessagePart } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 // A streaming tool-call card can fire the resolve-approval TanStack mutation, so the tree needs a

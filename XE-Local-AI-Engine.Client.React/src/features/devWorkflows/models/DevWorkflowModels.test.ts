@@ -34,7 +34,7 @@ import {
 import { devWorkflowArtifact } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 
 describe("dev-workflow wire unions", () => {
-	it("carries X4's nine node-run statuses verbatim", () => {
+	it("carries the nine node-run statuses verbatim", () => {
 		expect([...devWorkflowNodeStatuses]).toEqual([
 			"Pending",
 			"Queued",
@@ -48,7 +48,7 @@ describe("dev-workflow wire unions", () => {
 		]);
 	});
 
-	it("carries X4's nine run statuses and deliberately no Interrupted", () => {
+	it("carries the nine run statuses and deliberately no Interrupted", () => {
 		expect([...devWorkflowRunStatuses]).toEqual([
 			"Pending",
 			"Running",
@@ -63,15 +63,15 @@ describe("dev-workflow wire unions", () => {
 		expect(devWorkflowRunStatuses).not.toContain("Interrupted");
 	});
 
-	it("carries Y6's SEVEN node types with Start and End implicit", () => {
+	it("carries the SEVEN node types with Start and End implicit", () => {
 		expect([...devWorkflowNodeTypes]).toEqual(["Agent", "Tool", "DevTask", "HumanGate", "Gate", "Parallel", "Join"]);
 	});
 
-	it("carries X3's six decision kinds, gates and interventions on one enum", () => {
+	it("carries the six decision kinds, gates and interventions on one enum", () => {
 		expect([...devWorkflowDecisionKinds]).toEqual(["Approve", "Reject", "RequestChanges", "Retry", "Skip", "Abandon"]);
 	});
 
-	it("carries P1's ten artifact kinds, not the work-session set", () => {
+	it("carries the ten artifact kinds, not the work-session set", () => {
 		expect([...devWorkflowArtifactKinds]).toEqual([
 			"Research",
 			"Decision",
@@ -86,7 +86,7 @@ describe("dev-workflow wire unions", () => {
 		]);
 	});
 
-	it("carries Y4's five work-item statuses", () => {
+	it("carries the five work-item statuses", () => {
 		expect([...devWorkflowWorkItemStatuses]).toEqual(["Draft", "Active", "Blocked", "Completed", "Cancelled"]);
 	});
 });
@@ -158,7 +158,7 @@ describe("dev-workflow status predicates", () => {
 		expect(isActiveDevWorkflowRunStatus("Completed")).toBe(false);
 	});
 
-	it("treats Blocked as needs-intervention alongside a gate (Y20), not as a passive wait", () => {
+	it("treats Blocked as needs-intervention alongside a gate, not as a passive wait", () => {
 		expect(devWorkflowNodeAwaitsHuman("Blocked")).toBe(true);
 		expect(devWorkflowNodeAwaitsHuman("WaitingForApproval")).toBe(true);
 		expect(devWorkflowNodeAwaitsHuman("Pending")).toBe(false);
@@ -203,7 +203,7 @@ describe("devWorkflowArtifactLineages", () => {
 		expect(lineages[0]?.versions.map((row) => row.id)).toEqual(["a3", "a2", "a1"]);
 	});
 
-	it("reads `isLatest` off the wire rather than deriving it from the highest version (Y17/C39)", () => {
+	it("reads `isLatest` off the wire rather than deriving it from the highest version", () => {
 		// A deliberately inconsistent feed: the server marked v2 latest. Deriving would have answered v3.
 		const lineages = devWorkflowArtifactLineages([artifact("a3", "lineage-a", 3, false), artifact("a2", "lineage-a", 2, true)]);
 

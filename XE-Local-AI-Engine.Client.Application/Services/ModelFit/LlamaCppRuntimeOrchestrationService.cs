@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -73,7 +74,7 @@ public sealed class LlamaCppRuntimeOrchestrationService
     public GpuVariant? OverrideVariant => _overrideOptions.IsActive ? _overrideOptions.Variant : null;
 
     /// <summary>The source-build toolchain checklist for one backend, so a refusal can name which prerequisite is missing.</summary>
-    public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeSourceBuildPrerequisitesAsync(LlamaCppSourceBackend backend, CancellationToken ct)
+    public Task<SourceBuildPrerequisiteReport> ProbeSourceBuildPrerequisitesAsync(LlamaCppSourceBackend backend, CancellationToken ct)
     {
         return _sourceBuildPrerequisiteProbe.ProbeAsync(backend, ct);
     }

@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 ///     probe, fixed selector and binary manager, and a recording GPU admission.
 /// </summary>
 /// <remarks>
-///     Nothing here is copied out of the stable-diffusion.cpp doubles file — that file is read-only for this slice.
 ///     The deterministic clock is the repo's own <see cref="ManualTimeProvider" />,
 ///     which is the only double in this repository that also overrides timer creation; the supervisor's reaper loop is
 ///     a delay over its injected provider, so a now-only fake would leave it waiting in wall-clock time and turn the
@@ -39,7 +38,7 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
 
     public ConcurrentQueue<WhisperServerLaunchSpec> Launches { get; } = new();
 
-    public ConcurrentBag<FakeWhisperProcessHandle> Handles { get; } = new();
+    public ConcurrentBag<FakeProcessTreeHandle> Handles { get; } = new();
 
     public int LaunchCount => Launches.Count;
 
@@ -47,70 +46,10 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
     {
         Launches.Enqueue(spec);
 #pragma warning disable CA2000 // Ownership transfers to the supervisor under test, which disposes it on teardown.
-        var handle = new FakeWhisperProcessHandle(_processId ?? Interlocked.Increment(ref _nextPid));
+        var handle = new FakeProcessTreeHandle(_processId ?? Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
         Handles.Add(handle);
         return handle;
-    }
-}
-
-/// <summary>An in-memory handle whose exit and tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
-{
-    private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private int _exited;
-    private int _killed;
-
-    public FakeWhisperProcessHandle(int pid)
-    {
-        ProcessId = pid;
-    }
-
-    public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
-
-    public bool WasDisposed { get; private set; }
-
-    public int ProcessId { get; }
-
-    public bool HasExited => Volatile.Read(ref _exited) != 0;
-
-    public int? ExitCode { get; private set; }
-
-    public string? StderrTail { get; private set; }
-
-    // The supervisor waits on the registered daemon's exit to tick residency; completes on a kill or a simulated exit.
-    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
-    {
-        try
-        {
-            await _exitSignal.Task.WaitAsync(timeout, ct);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-    }
-
-    public void TreeKill()
-    {
-        Interlocked.Exchange(ref _killed, value: 1);
-        Interlocked.Exchange(ref _exited, value: 1);
-        _exitSignal.TrySetResult();
-    }
-
-    public void Dispose()
-    {
-        WasDisposed = true;
-    }
-
-    /// <summary>Simulates a crash or exit, so the next ensure sees a dead process.</summary>
-    public void SimulateExit(int? exitCode = null, string? stderrTail = null)
-    {
-        ExitCode = exitCode;
-        StderrTail = stderrTail;
-        Interlocked.Exchange(ref _exited, value: 1);
-        _exitSignal.TrySetResult();
     }
 }
 

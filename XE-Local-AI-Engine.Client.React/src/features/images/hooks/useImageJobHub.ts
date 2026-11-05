@@ -6,11 +6,11 @@ import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
 	IMAGE_JOB_STATUS_CHANGED,
 	type ImageJobProgressView,
-	type ImageJobStatus,
 	imageJobStatusPushSchema,
 	keepLatestImageJobProgress,
 	toImageJobProgressView,
-} from "@/features/images/models/ImageModels";
+} from "@/features/images/models/ImageJobProgressModels";
+import type { ImageJobStatus } from "@/features/images/models/ImageModels";
 
 // Realtime push for image-job status. Connects to the image SignalR hub for the lifetime of the mounting component
 // and, for every active (non-terminal) job the page passes in, joins that job's per-job group via the hub's

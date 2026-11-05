@@ -1,4 +1,5 @@
 import type { XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse as TaskItemResponse } from "@/core/api/generated";
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import type { BenchmarkVerifierConfig } from "@/features/benchmarks/models/BenchmarkVerifier";
 
 // A benchmark project holds 1..N task items. One item is the degenerate case and means exactly what a project meant
@@ -53,7 +54,7 @@ export interface BenchmarkTaskItem {
 }
 
 const configObject = (value: unknown): BenchmarkVerifierConfig | null =>
-	typeof value === "object" && value !== null && !Array.isArray(value) ? (value as BenchmarkVerifierConfig) : null;
+	isPlainRecord(value) ? (value as BenchmarkVerifierConfig) : null;
 
 /** The per-criterion override map, dropping any entry that is not itself an object the verifier editor can open. */
 function verifierOverrides(value: unknown): Record<string, BenchmarkVerifierConfig> | null {
@@ -264,7 +265,7 @@ export interface BenchmarkTaskItemDraft {
 }
 
 /**
- * A NIAH case is off the ranked mean by default (§15): recall at 32k is a different measurement from answer quality,
+ * A NIAH case is off the ranked mean by default (wiki page 20 §5.5): recall at 32k is a different measurement from answer quality,
  * and averaging the two produces a number that is neither.
  */
 export const emptyBenchmarkTaskItemDraft = (kind: BenchmarkTaskItemKind = "prompt"): BenchmarkTaskItemDraft => ({

@@ -389,7 +389,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     {
         // A row whose field set changed must never be emitted under the old version, or a reader cannot tell a v3 row
         // that predates the token columns from one that carries them. Asserted against the constant rather than the
-        // literal 4, so a later slice's own bump does not break this test.
+        // literal 4, so a later bump does not break this test.
         await using var provider = await BuildProviderAsync("envelope-schema-version.sqlite");
         var persistence = CreateService(provider);
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest

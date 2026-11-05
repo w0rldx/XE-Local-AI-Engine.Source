@@ -312,7 +312,7 @@ public sealed class RateLimitPolicyTests
         {
             AssertEx.Contains(route.Metadata.OfType<EnableRateLimitingAttribute>().Select(static attribute => attribute.PolicyName),
                 NodeAuthRateLimits.IntegrationApiPolicy,
-                $"{route.RoutePattern.RawText} must keep its rate-limiting policy: R2-11 forbids removing it from a stream route.");
+                $"{route.RoutePattern.RawText} must keep its rate-limiting policy: removing it from a stream route is forbidden.");
         }
 
         // The REGISTERED policy, not a limiter this test built: building one here would assert the BCL, and swapping

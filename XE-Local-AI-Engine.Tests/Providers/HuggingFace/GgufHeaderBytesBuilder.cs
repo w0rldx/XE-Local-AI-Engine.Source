@@ -47,14 +47,33 @@ internal sealed class GgufHeaderBytesBuilder
 
     public GgufHeaderBytesBuilder WithUint32(string key, uint value)
     {
-        _kv.Add((key, TypeUint32, value));
-        return this;
+        var bytes = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
+        return WithRawValue(key, TypeUint32, bytes);
     }
 
     public GgufHeaderBytesBuilder WithUint64(string key, ulong value)
     {
         _kv.Add((key, TypeUint64, value));
         return this;
+    }
+
+    /// <summary>Writes <paramref name="value" /> verbatim after the key and <paramref name="type" />, for values the typed writers cannot express.</summary>
+    public GgufHeaderBytesBuilder WithRawValue(string key, uint type, byte[] value)
+    {
+        _kv.Add((key, type, value));
+        return this;
+    }
+
+    /// <summary>Writes an array whose element type is array, holding one empty UINT32 array.</summary>
+    public GgufHeaderBytesBuilder WithNestedArray(string key)
+    {
+        using var stream = new MemoryStream();
+        WriteUint32(stream, TypeArray);
+        WriteUint64(stream, value: 1);
+        WriteUint32(stream, TypeUint32);
+        WriteUint64(stream, value: 0);
+        return WithRawValue(key, TypeArray, stream.ToArray());
     }
 
     public byte[] Build()
@@ -69,13 +88,16 @@ internal sealed class GgufHeaderBytesBuilder
         {
             WriteGgufString(stream, key);
             WriteUint32(stream, type);
+            if (value is byte[] raw)
+            {
+                stream.Write(raw);
+                continue;
+            }
+
             switch (type)
             {
                 case TypeString:
                     WriteGgufString(stream, (string)value);
-                    break;
-                case TypeUint32:
-                    WriteUint32(stream, (uint)value);
                     break;
                 case TypeUint64:
                     WriteUint64(stream, (ulong)value);

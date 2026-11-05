@@ -65,7 +65,7 @@ public sealed class ImageRuntimeOrchestrationService
     }
 
     /// <summary>The toolchain checklist for one backend, so a refusal can name which prerequisite is missing.</summary>
-    public Task<StableDiffusionCppSourceBuildPrerequisiteReport> ProbeAsync(SdGpuBackend backend, CancellationToken ct)
+    public Task<SourceBuildPrerequisiteReport> ProbeAsync(SdGpuBackend backend, CancellationToken ct)
     {
         return _prerequisiteProbe.ProbeAsync(backend, ct);
     }

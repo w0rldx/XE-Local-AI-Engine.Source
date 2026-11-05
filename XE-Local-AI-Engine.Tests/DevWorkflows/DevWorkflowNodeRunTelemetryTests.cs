@@ -57,7 +57,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     T1: the run behaves identically with the collector registered and with one that answers nothing. Compared on
+    ///     The run behaves identically with the collector registered and with one that answers nothing. Compared on
     ///     the event trail, on every node run's verdict, and on the work item the run drives — the whole record of what
     ///     the runtime decided.
     ///     <para>
@@ -77,7 +77,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     /// <summary>
-    ///     T7: a real <c>Succeeded</c> settle on a node WITH out-edges names at least one satisfied successor. This is
+    ///     A real <c>Succeeded</c> settle on a node WITH out-edges names at least one satisfied successor. This is
     ///     the test that fails if the decorator asks its route question of the pre-write row, which still reads
     ///     <c>Running</c> and would make every route document empty. Paired: a <c>Blocked</c> row gets columns and a
     ///     null route, because a node that has not finished has routed nowhere yet.
@@ -118,7 +118,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     /// <summary>
-    ///     T3: a collector that throws, and one that hangs past the decorator's deadline, both leave the settle exactly
+    ///     A collector that throws, and one that hangs past the decorator's deadline, both leave the settle exactly
     ///     as it would have been — same terminal status, same failure class, and all twelve columns null. The
     ///     enrichment runs before the store call and never inside its transaction, so losing it loses a measurement and
     ///     nothing else.
@@ -152,7 +152,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     /// <summary>
-    ///     T6: the coverage guard. Every status an attempt can stop on — <c>Succeeded</c>, <c>Failed</c>,
+    ///     The coverage guard. Every status an attempt can stop on — <c>Succeeded</c>, <c>Failed</c>,
     ///     <c>Skipped</c>, <c>Cancelled</c>, <c>Blocked</c>, <c>WaitingForApproval</c> — is driven through the REAL
     ///     executors, including the retry policy's own block and fail paths, and every row that reached one of them
     ///     carries telemetry wherever a work session existed. Because the write is in the decorator, a call site added
@@ -209,7 +209,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     }
 
     /// <summary>
-    ///     T9, the durability guard. The cap scope a step collects its tool names under is disposed when the step ends,
+    ///     The durability guard. The cap scope a step collects its tool names under is disposed when the step ends,
     ///     and the node run settles later, in another scope. So the names must already be PERSISTED by then — this test
     ///     pins that by asserting the disposed scope answers nothing first, and only then that the settled node run
     ///     names both tools.
@@ -724,7 +724,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
             CreatedAtUtc = 0
         };
 
-    /// <summary>Every observable the two arms of T1 compare: the events, the rows and the work item.</summary>
+    /// <summary>Every observable the two arms of the identity test compare: the events, the rows and the work item.</summary>
     private static async Task<string> DriveBothGraphsAsync(StubDevWorkflowNodeTelemetrySource? stub)
     {
         var lines = new List<string>();
@@ -754,8 +754,8 @@ public sealed class DevWorkflowNodeRunTelemetryTests
 
     private static async Task RecordAsync(DevWorkflowHarness harness, Guid runId, List<string> lines)
     {
-        // The event Outcome is compared here rather than in the shared trail helper: it belongs to THIS tuple (plan
-        // section 5) and it is the field a later enrichment would reach for, but the rest of the namespace asserts on
+        // The event Outcome is compared here rather than in the shared trail helper: it belongs to THIS tuple and it
+        // is the field a later enrichment would reach for, but the rest of the namespace asserts on
         // the trail as a list of types.
         foreach (var entry in await harness.ReadEventsAsync(runId))
         {

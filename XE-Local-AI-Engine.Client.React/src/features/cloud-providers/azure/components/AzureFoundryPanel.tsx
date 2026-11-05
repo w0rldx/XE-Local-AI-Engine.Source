@@ -17,7 +17,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { AzureCloudSettingsEditor } from "@/features/cloud-providers/azure/components/AzureCloudSettingsEditor";
 import {
 	createFormRowIds,
-	errorMessage,
+	cloudSettingsErrorMessage,
 	formReducer,
 	initialFormState,
 	settingsToFormValues,
@@ -111,7 +111,7 @@ export function AzureFoundryPanel() {
 			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
 			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(cloudSettingsErrorMessage(error)),
 	});
 
 	const clearMutation = useMutation({
@@ -124,7 +124,7 @@ export function AzureFoundryPanel() {
 			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
 			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(cloudSettingsErrorMessage(error)),
 	});
 
 	const handleClear = async (): Promise<void> => {
@@ -202,7 +202,7 @@ export function AzureFoundryPanel() {
 				</Group>
 			) : null}
 
-			{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
+			{settingsError ? <InlineErrorAlert message={cloudSettingsErrorMessage(settingsError)} /> : null}
 
 			<AzureCloudSettingsEditor
 				formValues={formValues}

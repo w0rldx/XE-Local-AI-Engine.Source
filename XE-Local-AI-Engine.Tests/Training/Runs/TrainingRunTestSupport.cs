@@ -45,14 +45,17 @@ internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
     private readonly TaskCompletionSource _exitWaitEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly int _exitCode;
     private readonly bool _exitsOnStreamClose;
+    private readonly bool _ignoresStop;
 
     public FakeTrainingProcessHandle(TrainingLaunchReceipt receipt,
         IReadOnlyList<string> lines,
         int exitCode,
-        bool exitsOnStreamClose = true)
+        bool exitsOnStreamClose = true,
+        bool ignoresStop = false)
     {
         _exitCode = exitCode;
         _exitsOnStreamClose = exitsOnStreamClose;
+        _ignoresStop = ignoresStop;
         _output = CreateChannel(lines);
         Receipt = receipt;
     }
@@ -93,7 +96,10 @@ internal sealed class FakeTrainingProcessHandle : ITrainingProcessHandle
     public void RequestStop()
     {
         StopRequested = true;
-        Complete();
+        if (!_ignoresStop)
+        {
+            Complete();
+        }
     }
 
     public void KillGroup()

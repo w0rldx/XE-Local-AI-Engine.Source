@@ -3,9 +3,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AgentOption } from "@/core/agents/models/AgentOption";
+import { AgentSelectorCard } from "@/core/chat/components/AgentSelectorCard";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { type WorkSessionKind, workSessionKinds } from "@/features/workSessions/models/WorkSessionModels";
 
 export interface CreateWorkSessionDialogProps {

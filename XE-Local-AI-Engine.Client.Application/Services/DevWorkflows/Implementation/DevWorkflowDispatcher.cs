@@ -957,13 +957,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             if (node.ToolMode == DevWorkflowToolMode.Apply && !AValidationSucceededOnThePathTaken(graph, node, byKey))
             {
-                // GRAPH-C4-3's runtime half, BEFORE the consumption record below: a blocked apply must not first record that it consumed inputs it never read. Policy rather than
+                // GRAPH-3's runtime half, BEFORE the consumption record below: a blocked apply must not first record that it consumed inputs it never read. Policy rather than
                 // a failure — nothing broke, and the answer is a person's.
                 return await BlockAsync(store,
                     run,
                     nodeRun,
                     $"Node '{node.NodeKey}' applies approved patches, and no validation node succeeded on the path this run took. "
-                    + "Nothing has judged what is about to be applied (invariant GRAPH-C4-3).",
+                    + "Nothing has judged what is about to be applied (invariant GRAPH-3).",
                     DevWorkflowFailureClasses.Policy,
                     cancellationToken);
             }
@@ -1124,7 +1124,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private static readonly DevWorkflowEdgeState[] ProvenanceEdgeStates = [DevWorkflowEdgeState.Satisfied, DevWorkflowEdgeState.Waived];
 
     /// <summary>
-    ///     <c>GRAPH-C4-3</c>, asked of the rows a run actually landed on rather than of every structural ancestor:
+    ///     <c>GRAPH-3</c>, asked of the rows a run actually landed on rather than of every structural ancestor:
     ///     does the apply node's provenance contain a <c>Tool</c>/<c>Validate</c> node whose row succeeded?
     /// </summary>
     /// <remarks>

@@ -142,7 +142,7 @@ public sealed class RetrievalEvalLiveTests : IDisposable
         AssertEx.True(settings.Rerankers.Count == 0 || run.Controls.Count == 2, "both negative controls must run when a reranker is configured.");
         var failed = run.Controls.Where(static control => !control.Passed).ToList();
         AssertEx.Empty(failed,
-            "a negative control failed, so this round cannot tell a bad reranker from a good one: "
+            "a negative control failed, so this run cannot tell a bad reranker from a good one: "
             + string.Join("; ", failed.Select(static control => $"{control.Name}: {control.Detail}")) + $" (report: {reportDirectory})");
     }
 

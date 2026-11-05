@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 ///     Declared at each tool's own definition site, mirroring <c>RequiresApproval</c>, and carried on the offer
 ///     descriptors into <c>AllowedToolDto.Category</c>. It groups tools by what a call can DO: a stdio MCP tool is
 ///     <see cref="WriteExecute" />, an HTTP one <see cref="Network" />, and the four work-session state tools carry
-///     <see cref="WriteExecute" /> — which is what <c>GRAPH-C4-2</c>'s runtime half judges an Agent node on. See
+///     <see cref="WriteExecute" /> — which is what <c>GRAPH-2</c>'s runtime half judges an Agent node on. See
 ///     docs/wiki/04-agent-mode.md ("The risk taxonomy (`ToolCategory`)").
 /// </remarks>
 public enum ToolCategory

@@ -87,6 +87,20 @@ public sealed class TrainingRunExecutorTests : IDisposable
     }
 
     [Test]
+    public async Task Execute_IgnoresAnArtifactInASiblingWhoseNameStartsWithTheStagedDirectorys()
+    {
+        await using var harness = await Harness.CreateAsync(this,
+        [
+            """{"event":"artifact","kind":"HfAdapterDir","path":"__STAGED__-other/adapter"}""",
+            """{"event":"done","cancelled":false}"""
+        ]);
+
+        await harness.ExecuteAsync();
+
+        _ = await harness.Store.DidNotReceiveWithAnyArgs().CreateArtifactAsync(default!, default);
+    }
+
+    [Test]
     public async Task Watchdog_NoHeartbeat_TerminatesRun()
     {
         // A trainer that emits nothing at all: exactly what a wedged CUDA call looks like from the outside, and the
@@ -197,6 +211,34 @@ public sealed class TrainingRunExecutorTests : IDisposable
 
         AssertEx.True(harness.Handle.StopRequested, "An operator cancel is SIGTERM to the group, so the trainer can save and exit cleanly.");
         AssertEx.False(harness.Handle.Killed, "Escalating to SIGKILL on an operator cancel would lose the adapter.");
+        _ = await harness.Store.Received(1).CompleteRunAsync(harness.RunId, TrainingWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Cancel_ThatOutlivesTheExitGrace_IsNeverEscalatedToAKill()
+    {
+        // A trainer saving its adapter can take longer than the exit grace. Only the other two bounds may end it.
+        await using var harness = await Harness.CreateAsync(this,
+            lines: [],
+            exitCode: TrainingRunExecutor.CancelledExitCode,
+            inactivityTimeout: TimeSpan.FromMinutes(10),
+            exitGracePeriod: TimeSpan.FromSeconds(1),
+            ignoresStop: true);
+
+        var execution = harness.ExecuteAsync();
+        await harness.WaitForSpawnAsync();
+        await harness.WaitForWatchdogPollAsync();
+        AssertEx.True(harness.Cancellations.Cancel(harness.RunId));
+
+        // The first advance can end with the watchdog judging an instant inside it. The poll armed after it is judged past the grace.
+        harness.Clock.Advance(TimeSpan.FromSeconds(2));
+        await harness.WaitForWatchdogPollAsync();
+        harness.Clock.Advance(TimeSpan.FromSeconds(2));
+        await harness.WaitForWatchdogPollAsync();
+
+        AssertEx.False(harness.Handle.Killed, "A stop past the exit grace stays cooperative, or the adapter is lost.");
+        harness.Handle.Dispose();
+        await execution;
         _ = await harness.Store.Received(1).CompleteRunAsync(harness.RunId, TrainingWorkStatus.Cancelled, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -317,7 +359,8 @@ public sealed class TrainingRunExecutorTests : IDisposable
             TimeSpan? inactivityTimeout = null,
             TimeSpan? maxRunDuration = null,
             bool exitsOnStreamClose = true,
-            TimeSpan? exitGracePeriod = null)
+            TimeSpan? exitGracePeriod = null,
+            bool ignoresStop = false)
         {
             var clock = new ManualTimeProvider();
             var runId = Guid.NewGuid();
@@ -337,7 +380,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
                 StartTicks = 42,
                 RunToken = "token"
             };
-            var handle = new FakeTrainingProcessHandle(receipt, scripted, exitCode, exitsOnStreamClose);
+            var handle = new FakeTrainingProcessHandle(receipt, scripted, exitCode, exitsOnStreamClose, ignoresStop);
             var spawner = new FakeTrainingProcessSpawner(handle);
 
             var store = Substitute.For<ITrainingRunStore>();
@@ -542,6 +585,12 @@ public sealed class TrainingRunExecutorTests : IDisposable
 
         public Task WaitForSpawnAsync() =>
             _spawned.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        /// <summary>Returns once the watchdog has judged the clock and armed its next poll, or has killed the run instead.</summary>
+        public Task WaitForWatchdogPollAsync() =>
+            AssertEx.EventuallyAsync(() => Handle.Killed || Clock.ArmedTimerCount > 0,
+                TestBudgets.Contended,
+                "The watchdog must arm its next poll or end the run.");
 
         public async ValueTask DisposeAsync()
         {

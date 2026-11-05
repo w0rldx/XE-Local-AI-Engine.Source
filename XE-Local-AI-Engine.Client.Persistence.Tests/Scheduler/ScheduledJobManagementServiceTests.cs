@@ -1205,9 +1205,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     [Test]
     public async Task CreateJobAsync_ForRunAgentWithTheRemovedTemplateDefault_TreatsItAsUnsetAndDerivesTheCeiling()
     {
-        // Every run-agent schedule created before the template default was removed stored exactly 600 s from the form
-        // pre-fill, which is indistinguishable from an operator typing 600. Honoring it would leave precisely the
-        // schedules this fix exists for still capped below the node timeout, so 600 on THIS template reads as unset.
+        // Stored run-agent schedules carry exactly 600 s from a form pre-fill, which is indistinguishable from an
+        // operator typing 600. Honoring it would leave those schedules capped below the node timeout, so 600 on THIS
+        // template reads as unset.
         var dbPath = GetDatabasePath("create-runagent-legacy-maxruntime.sqlite");
         await MigrateAsync(dbPath);
 

@@ -762,9 +762,9 @@ public sealed class LayerDependencyTests
     [Test]
     public void WhisperCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        // 70: the source-command runner lives in Providers.ProcessSupervision, and the activity gate, runtime store and
+        // 65: the source-command runner lives in Providers.ProcessSupervision, and the activity gate, runtime store and
         // source-build signal in Providers.Abstractions.
-        AssertTypesScanned(WhisperCppAssembly, WhisperCppNamespace, 70);
+        AssertTypesScanned(WhisperCppAssembly, WhisperCppNamespace, 65);
 
         AssertNoDependency(WhisperCppAssembly,
             WhisperCppNamespace,

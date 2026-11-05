@@ -49,7 +49,6 @@ describe("SystemAudioCaptureSource", () => {
 		});
 	});
 
-	// Plan §4.2: WhenTheDisplayStreamHasNoAudioTrack_ThrowsNoAudioTrackAndStopsEveryTrack.
 	// `systemAudio: "include"` is a hint the OS may ignore, so this is the branch that fires whenever the platform
 	// (Linux Chrome, at time of writing) cannot deliver system audio. Leaving a track running here would keep the
 	// screen-share indicator lit over a session that never started.

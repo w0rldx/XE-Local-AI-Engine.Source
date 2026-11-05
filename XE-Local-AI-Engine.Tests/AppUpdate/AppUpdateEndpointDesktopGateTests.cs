@@ -81,8 +81,8 @@ public sealed class AppUpdateEndpointDesktopGateTests
             using var response = await client.SendAsync(request);
 
             // The GET route is unmapped, so the SPA fallback is selected and then detached on the API prefix, leaving
-            // the pipeline's bare 404 rather than a JSON endpoint response — and rather than the SPA shell it used to
-            // serve. The decisive check stays: the body is NOT a JSON app-update payload.
+            // the pipeline's bare 404 rather than a JSON endpoint response — and rather than the SPA shell. The
+            // decisive check stays: the body is NOT a JSON app-update payload.
             var contentType = response.Content.Headers.ContentType?.MediaType;
             AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
             AssertEx.False(string.Equals(contentType, "application/json", StringComparison.OrdinalIgnoreCase),

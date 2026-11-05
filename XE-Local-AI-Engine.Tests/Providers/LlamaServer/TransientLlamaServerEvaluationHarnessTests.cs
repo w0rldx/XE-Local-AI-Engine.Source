@@ -176,7 +176,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         try
         {
 #pragma warning disable CA2000 // Ownership transfers to the fake launcher, then to the evaluation harness under test.
-            var handle = new FakeProcessHandle(pid: 4242, exitOnTreeKill: false);
+            var handle = new FakeProcessTreeHandle(pid: 4242, exitOnTreeKill: false);
 #pragma warning restore CA2000
             var launcher = new FakeProcessLauncher(_ => handle);
             var admission = new TrackingGpuModelLoadAdmission();
@@ -217,7 +217,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         try
         {
 #pragma warning disable CA2000 // Ownership transfers to the fake launcher, then to the evaluation harness under test.
-            var handle = new FakeProcessHandle(pid: 4242, exitOnTreeKill: false);
+            var handle = new FakeProcessTreeHandle(pid: 4242, exitOnTreeKill: false);
 #pragma warning restore CA2000
             var launcher = new FakeProcessLauncher(_ => handle);
             var admission = new TrackingGpuModelLoadAdmission();

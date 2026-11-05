@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelStableDiffusionCppSourceBuildMutation,
-	ejectImageRuntimeMutation,
 	getImageRuntimeStatusOptions,
 	getStableDiffusionCppSourceBuildPrerequisitesOptions,
 	getStableDiffusionCppSourceBuildStatusOptions,
@@ -94,16 +93,5 @@ export function useRemoveImageRuntimeSourceBuild() {
 				invalidate(queryClient, imageRuntimeQueryIds.sourceBuildStatus),
 				invalidate(queryClient, imageRuntimeQueryIds.runtime),
 			]),
-	});
-}
-
-export function useEjectImageRuntime() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: async () => {
-			const options = ejectImageRuntimeMutation();
-			return await options.mutationFn?.({ body: {} }, undefined as never);
-		},
-		onSuccess: () => invalidate(queryClient, imageRuntimeQueryIds.runtime),
 	});
 }

@@ -609,7 +609,7 @@ public sealed class OrchestrationAgentFactoryTests
             : fake;
 
         // Production path: the participant carries the OFFER (a name-only placeholder); the approval-wrapped
-        // executable lives in the ClientLocal registry and the factory swaps the placeholder for it (Option B). This
+        // executable lives in the ClientLocal registry and the factory swaps the placeholder for it. This
         // exercises the exact resolution + approval-wrapping that the single-agent factory uses.
         var clientLocalRegistry = new FakeClientLocalToolRegistry(lookupTool);
         var factory = CreateFactory(chatClient, clientLocalToolRegistry: clientLocalRegistry);

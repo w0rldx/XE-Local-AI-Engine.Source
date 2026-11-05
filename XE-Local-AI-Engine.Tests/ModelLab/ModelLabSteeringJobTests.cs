@@ -666,7 +666,7 @@ public sealed class ModelLabSteeringJobTests
         };
 
     private static ModelLabTraceResult ReadResult(ReadOnlyMemory<byte>? json) =>
-        JsonSerializer.Deserialize<ModelLabTraceResult>(json!.Value.Span, ModelLabTraceSpec.ResultJson)!;
+        ModelLabTraceSpec.ReadResultOrNull(json!.Value)!;
 
     private static ITrainingEvaluationInstalledModelLease Lease()
     {

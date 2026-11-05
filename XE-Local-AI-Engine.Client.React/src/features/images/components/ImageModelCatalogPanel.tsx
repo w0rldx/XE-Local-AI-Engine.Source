@@ -9,7 +9,7 @@ import {
 	catalogEntryRepoCount,
 	type ImageModelCatalogEntryView,
 	type ImageModelFitVerdict,
-} from "@/features/images/models/ImageModels";
+} from "@/features/images/models/ImageModelInstallModels";
 
 interface ImageModelCatalogPanelProps {
 	entries: readonly ImageModelCatalogEntryView[];

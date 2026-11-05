@@ -75,8 +75,8 @@ public sealed class DetachedInvocationReaper : BackgroundService
     {
         var graceSeconds = await _runtimeSettings.GetDetachedGraceSecondsAsync(cancellationToken);
 
-        // 0 disables reaping entirely (today's behavior: a detached run is bounded only by the whole-invocation
-        // watchdog). Checked per tick, so flipping it back to a positive value takes effect on the next tick too.
+        // 0 disables reaping entirely: a detached run is bounded only by the whole-invocation
+        // watchdog. Checked per tick, so flipping it back to a positive value takes effect on the next tick too.
         if (graceSeconds <= 0)
         {
             return;

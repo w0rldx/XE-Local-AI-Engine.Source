@@ -370,6 +370,30 @@ public sealed class TrainingRuntimeServiceTests
         AssertEx.False(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot));
     }
 
+    /// <summary>
+    ///     Only a venv whose interpreter home lies strictly beneath the shared store proves the legacy toolchain unused:
+    ///     the store's own directory, a directory sharing its name as a prefix, and a home no parser accepts prove nothing.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [Arguments("")]
+    [Arguments("/")]
+    [Arguments("-other/cpython/bin")]
+    [Arguments("/\0invalid")]
+    public void Startup_WhenTheVenvHomeIsNotBeneathTheSharedStore_LeavesTheLegacyToolchainAlone(string suffix)
+    {
+        using var harness = new Harness(SucceedingRunner());
+        SeedLegacyToolchain(harness.CacheRoot);
+        var active = TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot);
+        WriteVenv(active, pythonInstallDirectory: null);
+        File.WriteAllText(Path.Combine(active, ".venv", "pyvenv.cfg"), $"home = {harness.Toolchain.PythonInstallDirectory}{suffix}\n");
+
+        using var restarted = harness.Restart();
+
+        AssertEx.True(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot), "nothing proved the legacy toolchain unused");
+        AssertEx.True(File.Exists(Path.Combine(harness.CacheRoot, "pythons", "nested", "marker")));
+    }
+
     [Test]
     [RunOn(OS.Linux)]
     public void Startup_WithAnUnresolvedBackup_LeavesTheLegacyToolchainAlone()

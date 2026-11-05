@@ -354,7 +354,6 @@ public sealed class WhisperCppSourceBuildServiceTests
                 Store,
                 new ManagedSourceBuildSignal<WhisperBackend>(),
                 ActivityGate,
-                new NullWhisperCppSourceBuildEventPublisher(),
                 NullLogger<WhisperCppSourceBuildService>.Instance,
                 cacheRoot,
                 Runner,
@@ -486,14 +485,14 @@ public sealed class WhisperCppSourceBuildServiceTests
 
     private sealed class AlwaysSatisfiedProbe : IWhisperCppSourceBuildPrerequisiteProbe
     {
-        public Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
         {
-            return Task.FromResult(new WhisperCppSourceBuildPrerequisiteReport
+            return Task.FromResult(new SourceBuildPrerequisiteReport
             {
                 CanBuild = true,
                 Items =
                 [
-                    new WhisperCppSourceBuildPrerequisiteItem
+                    new SourceBuildPrerequisiteRow
                     {
                         Key = "os-is-linux",
                         Satisfied = true,

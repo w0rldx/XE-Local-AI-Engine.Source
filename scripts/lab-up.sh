@@ -2,7 +2,7 @@
 # lab-up.sh — bring this checkout's lab node to a declared state and hand it over before any LLM turn.
 #
 # Why this exists
-#   Every live round re-paid the same deterministic setup by hand: a scratch data dir, a fresh node, a throwaway
+#   Every live round needs the same deterministic setup: a scratch data dir, a fresh node, a throwaway
 #   admin, the settings a round needs, the model installed and resident. This script does that part, skips every
 #   phase that is already satisfied, and stops at a handoff point. Everything that involves model output is judged by
 #   whoever reads the manifest, never by this script.

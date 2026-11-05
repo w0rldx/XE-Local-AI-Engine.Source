@@ -364,7 +364,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     [Test]
     public async Task ResetStale_WithAPin_InstallingASecondEmbedderLeavesTheCorpusFresh()
     {
-        // W4a-1: without a pin, the second embedder sorts first and the whole corpus turns stale and re-embeds with it.
+        // Without a pin, the second embedder sorts first and the whole corpus turns stale and re-embeds with it.
         var databasePath = GetDatabasePath("catalog-pin-second-embedder.sqlite");
         var indexedId = Guid.NewGuid();
 

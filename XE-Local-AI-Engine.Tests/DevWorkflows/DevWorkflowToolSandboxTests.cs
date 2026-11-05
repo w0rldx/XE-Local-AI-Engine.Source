@@ -12,7 +12,7 @@ using DevelopmentArtifactKind = XE_Local_AI_Engine.Client.Persistence.Entities.D
 using DevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     The Slice B1 gate, against a REAL sandbox: a tool node prepares a workspace for a node run that has no Dev Mode
+///     Against a REAL sandbox: a tool node prepares a workspace for a node run that has no Dev Mode
 ///     task behind it, runs a real <c>dotnet restore</c> and <c>dotnet build</c> in it, and produces a sanitized report.
 ///     <para>
 ///         Slow and environment-bound by construction — it clones a repository and builds a solution, so it needs Git
@@ -176,8 +176,8 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
 
     /// <summary>
     ///     A real pass that runs out of time keeps what it had gathered. The commands it never reached are the reason
-    ///     the report says no, and the report exists at all — which is the whole difference from the answer this used to
-    ///     give, where a timed-out node run left an operator one sentence and no evidence.
+    ///     the report says no, and the report exists at all, so a timed-out node run leaves an operator evidence rather than
+    ///     one sentence.
     ///     <para>
     ///         Deliberately no assertion that a particular command finished inside the budget: how many of them do is a
     ///         property of the machine, and the claim under test is that whatever DID finish is written down.

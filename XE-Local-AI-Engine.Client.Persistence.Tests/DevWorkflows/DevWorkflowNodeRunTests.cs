@@ -750,8 +750,8 @@ public sealed class DevWorkflowNodeRunTests
     ///     <c>AwaitingApply</c>, and a re-attempt leaves the previous attempt's task where it is — that task keeps its
     ///     own evidence, and only the next attempt's own write replaces the pointer.
     ///     <para>
-    ///         The executor that creates the task from the node, and drives that chain rather than a test doing it, is
-    ///         B6's; nothing above this line exists to run it yet.
+    ///         A test drives that chain here; the executor that creates the task from the node is covered by
+    ///         <c>DevWorkflowDevTaskTests</c>.
     ///     </para>
     /// </summary>
     [Test]
@@ -776,7 +776,7 @@ public sealed class DevWorkflowNodeRunTests
             developmentProjectId: firstTask.ProjectId);
 
         var workItem = await store.GetWorkItemAsync(seed.WorkItemId);
-        AssertEx.Equal(firstTask.ProjectId, workItem.DevelopmentProjectId, "O12: the Dev Mode project is the work item's, and the node run inherits it.");
+        AssertEx.Equal(firstTask.ProjectId, workItem.DevelopmentProjectId, "the Dev Mode project is the work item's, and the node run inherits it.");
 
         var started = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand
         {

@@ -2,11 +2,11 @@
 // operator reviews the graph the model proposed. Pure data and pure functions; the turn call lives in the queries file
 // and the review state in `useGraphWorkflowEditor`.
 
+import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
 import {
 	type GraphWorkflowCanvasEdge,
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowGraphSettings,
-	graphToCanvas,
 	graphWorkflowChatDefaults,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type {

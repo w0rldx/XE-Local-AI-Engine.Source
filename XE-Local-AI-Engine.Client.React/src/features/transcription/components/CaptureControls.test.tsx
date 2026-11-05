@@ -205,7 +205,7 @@ describe("CaptureControls", () => {
 		expect(screen.getByTestId("transcription-replay-stalled").textContent).toContain("may be incomplete");
 	});
 
-	// M1/m5: the hub subscription is what makes a capture possible. Offering Start before it is up acquires the
+	// The hub subscription is what makes a capture possible. Offering Start before it is up acquires the
 	// devices and then fails on the first frame a quarter of a second later, reported as a send failure.
 	it("offers no start until the hub subscription is up, and says why", () => {
 		renderControls({ connected: false });

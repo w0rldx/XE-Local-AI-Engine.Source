@@ -25,6 +25,44 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
 
         AssertEx.True(report.CanBuild);
         AssertEx.False(report.Items.Any(static item => item.Key is "nvcc" or "nvidia-gpu" or "glslc" or "vulkaninfo"));
+        AssertEx.Equal("cmake 1.0", report.Items.Single(static item => item.Key == "cmake").Detail, "A satisfied tool row shows the tool's own first line.");
+        AssertEx.Equal("make 1.0", report.Items.Single(static item => item.Key == "make-or-ninja").Detail);
+        AssertEx.Equal("Sufficient free disk space detected.", report.Items.Single(static item => item.Key == "free-disk").Detail);
+    }
+
+    /// <summary>
+    ///     An unwritable cache root cannot hold the probe's isolated home, and it must surface as unsatisfied rows, never
+    ///     as an exception out of the checklist: the same state must keep the build gated, not fail the whole request.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Probe_UnwritableCacheRoot_ReportsUnsatisfiedRowsInsteadOfThrowing()
+    {
+        if (Environment.IsPrivilegedProcess)
+        {
+            Skip.Test("File modes do not stop a privileged process, so the cache root cannot be made unwritable.");
+        }
+
+        using var temp = new TempDirectory();
+        WriteCommonTools(temp.Path);
+        using var path = new PathScope(temp.Path);
+        var readOnlyRoot = Path.Combine(temp.Path, "read-only");
+        Directory.CreateDirectory(readOnlyRoot);
+        File.SetUnixFileMode(readOnlyRoot, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var probe = new LlamaCppSourceBuildPrerequisiteProbe(new VendorProbe(), readOnlyRoot, requiredFreeDiskBytes: 0);
+
+            var report = await probe.ProbeAsync(LlamaCppSourceBackend.Cpu, CancellationToken.None);
+
+            AssertEx.False(report.CanBuild);
+            AssertEx.False(report.Items.Single(static item => item.Key == "cmake").Satisfied);
+        }
+        finally
+        {
+            File.SetUnixFileMode(readOnlyRoot, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Test]

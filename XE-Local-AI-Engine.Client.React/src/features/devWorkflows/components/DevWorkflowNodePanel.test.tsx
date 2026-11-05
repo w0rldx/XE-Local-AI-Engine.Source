@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ChatScope } from "@/core/models/ChatScope";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
-import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
 import type {
 	DevWorkflowNodeRunDetailResponse,

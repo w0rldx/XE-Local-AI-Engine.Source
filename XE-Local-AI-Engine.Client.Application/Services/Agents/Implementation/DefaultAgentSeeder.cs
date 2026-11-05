@@ -97,7 +97,7 @@ public sealed class DefaultAgentSeeder : IHostedService
 
     /// <summary>
     ///     Reads the embedded chat prompt from <see cref="LocalChatAgentOptions.InstructionsResource" /> — the SAME
-    ///     resource the default send path loads — so the seeded instructions never drift from today's prompt.
+    ///     resource the default send path loads — so the seeded instructions never drift from the send path's prompt.
     /// </summary>
     private async Task<string> LoadEmbeddedInstructionsAsync(CancellationToken cancellationToken)
     {

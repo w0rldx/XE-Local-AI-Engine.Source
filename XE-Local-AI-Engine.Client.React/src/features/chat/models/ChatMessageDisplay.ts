@@ -1,12 +1,8 @@
 import type { TFunction } from "i18next";
 
 import { formatTime } from "@/core/formatting/TimeFormatting";
-import type {
-	ChatFeedbackRating,
-	ChatMessageModel,
-	ChatMessagePart,
-	ChatMessageRevisionNav,
-} from "@/features/chat/models/ChatModels";
+import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
+import type { ChatFeedbackRating, ChatMessageModel, ChatMessageRevisionNav } from "@/features/chat/models/ChatModels";
 
 // The data-row name the node seeds its default persona with (AgentDefaults.DefaultAgentName); never localized server-side.
 const seededDefaultAgentName = "Default Assistant";

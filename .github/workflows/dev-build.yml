@@ -443,7 +443,7 @@ jobs:
           # Never send a token here: this step proves the release is readable anonymously. Anonymous calls from a
           # shared runner address can still be refused transiently (run 37260446189: HTTP 403 for a release that
           # was published correctly), so every non-2xx answer is retried with a bounded back-off, and the final
-          # failure prints the status, the rate-limit headers and the body, which --fail used to hide.
+          # failure prints the status, the rate-limit headers and the body, which --fail would hide.
           anonymous_get() {
             local url="$1" out="$2" status="" attempt
             for attempt in 1 2 3 4 5; do

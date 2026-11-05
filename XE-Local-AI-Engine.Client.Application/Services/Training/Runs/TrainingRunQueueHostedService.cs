@@ -148,7 +148,7 @@ public sealed class TrainingRunQueueHostedService : BackgroundService
 
     /// <summary>
     ///     A queued run behind a warm model waits on the eject-first rule silently otherwise: no status change, no
-    ///     reason, no log line — found live. Logged once per transition (waiting → admitted), never per poll.
+    ///     reason, no log line. Logged once per transition (waiting → admitted), never per poll.
     /// </summary>
     private void LogLeaseWait(bool waiting)
     {

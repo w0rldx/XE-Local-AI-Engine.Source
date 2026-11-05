@@ -105,7 +105,7 @@ public sealed class InvocationRunnerContextBudgetTests
         AssertEx.True(fitted.RankedTokenBudget < fitted.TokenCosts.Values.Sum(), "not every tool fits, or the offer would not need narrowing");
     }
 
-    /// <summary>Model-matrix V4: at a 4,096 window the real Default Assistant offer runs a turn with ranked tools.</summary>
+    /// <summary>At a 4,096 window the real Default Assistant offer runs a turn with ranked tools.</summary>
     /// <remarks>
     ///     The count-based fit refused even its minimum there, so every agent turn failed with the tool message. The
     ///     provider-round budgeter must accept exactly what the relevance hop then sends.
@@ -137,7 +137,7 @@ public sealed class InvocationRunnerContextBudgetTests
         await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Guid.Empty, string.Empty, FailureCategory.Unexpected);
         var fitted = AssertEx.NotNull(fittedOffer, "the full offer does not fit 4,096, so the turn runs on a fitted one");
 
-        // Live C2: the round after one Calculate call and its result overflowed the window the first round filled. Checked for
+        // Measured live: the round after one Calculate call and its result overflowed the window the first round filled. Checked for
         // the costliest selection the hop could make inside the budget, measured as the fit measured it.
         var rankable = fitted.TokenCosts.Keys.ToList();
         var costliest = Enumerable.Range(0, 1 << rankable.Count)

@@ -8,7 +8,8 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowToolConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowToolConfigForm";
-import { defaultNodeData, type GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
+import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowToolResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";

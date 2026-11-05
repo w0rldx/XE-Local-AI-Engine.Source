@@ -36,7 +36,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
-    // The v1 surface path segment appended to the connection endpoint (Locked v1 surface contract: no api-version
+    // The v1 surface path segment appended to the connection endpoint (v1 surface contract: no api-version
     // query param, trailing slash so the OpenAI SDK's own relative-path joining lands on .../openai/v1/chat/completions).
     private const string OpenAiV1PathSegment = "/openai/v1/";
 

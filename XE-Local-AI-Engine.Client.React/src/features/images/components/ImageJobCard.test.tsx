@@ -6,7 +6,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobCard } from "@/features/images/components/ImageJobCard";
-import type { ImageEditSource, ImageJobProgressView, ImageJobView } from "@/features/images/models/ImageModels";
+import type { ImageJobProgressView } from "@/features/images/models/ImageJobProgressModels";
+import type { ImageEditSource, ImageJobView } from "@/features/images/models/ImageModels";
 import en from "@/locales/en.json";
 import { testMantineTheme } from "@/test/MantineTestRender";
 

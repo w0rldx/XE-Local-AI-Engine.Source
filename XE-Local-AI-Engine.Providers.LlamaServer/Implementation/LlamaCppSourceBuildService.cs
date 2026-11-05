@@ -6,17 +6,17 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Default <see cref="ILlamaCppSourceBuildService" />: orchestrates a single-flight, cancellable, background source
 ///     <c>llama-server</c> build and adopts the result as a managed runtime.
 /// </summary>
 /// <remarks>
-///     Every subprocess runs under a scrubbed, allowlisted environment (<c>[secHIGH-2]</c>) in an owner-only (0700)
-///     work directory inside the cache root, never <c>/tmp</c> (<c>[secHIGH-3]</c>). The clone source URL and tag are
-///     constants, and the checked-out commit is verified equal to the pinned SHA before any cmake runs
-///     (<c>[secHIGH-1]</c>). On any failure the partial tree is deleted and nothing is recorded, so there is no silent
-///     CPU fallback.
+///     Every subprocess runs under a scrubbed, allowlisted environment in an owner-only (0700)
+///     work directory inside the cache root, never <c>/tmp</c>. The clone source URL and tag are
+///     constants, and the checked-out commit is verified equal to the pinned SHA before any cmake runs. On any failure the partial tree is
+///     deleted and nothing is recorded, so there is no silent CPU fallback.
 /// </remarks>
 public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
 {
@@ -472,7 +472,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         var workDir = WorkDirectory;
         var cloneDir = Path.Combine(workDir, "llama.cpp");
         var buildDir = Path.Combine(cloneDir, "build");
-        var tag = LlamaCppReleasePins.PinnedTag;
         var finalTagDir = Path.Combine(sourceCudaRoot, "active");
         // Sibling staging + backup dirs (same filesystem as finalTagDir → moves are atomic). The new build is validated in
         // staging and the previous runtime is parked in backup, so a FAILED rebuild never loses a working runtime.
@@ -481,165 +480,34 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
         try
         {
-            // Owner-only (0700) work directory inside the cache root — never /tmp. [secHIGH-3]
+            // Owner-only (0700) work directory inside the cache root — never /tmp.
             BestEffortFile.TryDeleteDirectory(workDir);
             BestEffortFile.TryDeleteDirectory(stagingTagDir);
             BestEffortFile.TryDeleteDirectory(backupTagDir);
-            CreateOwnerOnlyDirectory(sourceCudaRoot);
-            CreateOwnerOnlyDirectory(workDir);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(sourceCudaRoot);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(workDir);
             await File.WriteAllTextAsync(MarkerPath, _timeProvider.GetUtcNow().ToString("O"), ct).ConfigureAwait(false);
 
             var isolatedHome = Path.Combine(workDir, ".home");
             var isolatedTmp = Path.Combine(workDir, ".tmp");
-            CreateOwnerOnlyDirectory(isolatedHome);
-            CreateOwnerOnlyDirectory(isolatedTmp);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(isolatedHome);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(isolatedTmp);
             var environment = BuildScrubbedEnvironment(isolatedHome, isolatedTmp);
 
-            // 1. Clone the pinned source at the pinned tag (NO submodules; URL+tag are constants).
-            SetPhase(LlamaCppSourceBuildPhase.Cloning);
-            var cloneExit = await CloneSourceAsync(descriptor, cloneDir, environment, workDir, ct).ConfigureAwait(false);
-            if (cloneExit != 0)
-            {
-                throw new LlamaRuntimeException("Cloning the llama.cpp source failed.");
-            }
+            descriptor = await CloneAndVerifyAsync(descriptor, cloneDir, environment, workDir, ct).ConfigureAwait(false);
+            await CompileAsync(descriptor.Variant, cloneDir, buildDir, environment, workDir, ct).ConfigureAwait(false);
 
-            // 2. Verify the checked-out commit == the pinned SHA BEFORE any cmake runs. [secHIGH-1]
-            SetPhase(LlamaCppSourceBuildPhase.Verifying);
-            var (revExit, revOutput) = await ProcessCaptureRunner.RunAsync("git",
-                ["-C", cloneDir, "rev-parse", "HEAD"],
-                environment,
-                workDir,
-                SourceBuildPolicy.ShortCommandTimeout,
-                ct).ConfigureAwait(false);
-            var checkedOut = revOutput.Trim();
-            var expectedCommit = descriptor.RevisionMode switch
-            {
-                LlamaCppSourceRevisionMode.EnginePinned => LlamaCppReleasePins.PinnedSourceCommitSha,
-                LlamaCppSourceRevisionMode.ExplicitCommit => descriptor.RequestedCommit,
-                _ => null
-            };
-            if (revExit != 0 || !FullCommitRegex().IsMatch(checkedOut)
-                             || expectedCommit is not null && !string.Equals(checkedOut, expectedCommit, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new LlamaRuntimeException("The cloned source did not match the pinned commit; the build was aborted before configuring.");
-            }
-
-            AppendLog($"Verified source commit {checkedOut}.");
-            descriptor = descriptor with
-            {
-                ResolvedCommit = Convert.ToHexStringLower(Convert.FromHexString(checkedOut))
-            };
-            lock (_stateLock)
-            {
-                _currentBuild = descriptor;
-            }
-
-            // 3. Detect + validate the compute architecture. [secMED-1]
-            var architectures = descriptor.Variant == GpuVariant.Cuda
-                ? await ResolveCudaArchitecturesAsync(environment, workDir, ct).ConfigureAwait(false)
-                : null;
-
-            // 4. cmake configure.
-            SetPhase(LlamaCppSourceBuildPhase.Configuring);
-            var configureExit = await RunStreamingStepAsync("cmake",
-                BuildConfigureArguments(buildDir, cloneDir, descriptor.Variant, architectures),
-                environment,
-                cloneDir,
-                SourceBuildPolicy.ConfigureTimeout,
-                ct).ConfigureAwait(false);
-            if (configureExit != 0)
-            {
-                throw new LlamaRuntimeException("Configuring the llama.cpp source build failed.");
-            }
-
-            // 5. cmake build (jobs capped). [secMED-5]
-            SetPhase(LlamaCppSourceBuildPhase.Building);
-            var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, SourceBuildPolicy.MaxBuildJobs));
-            var buildExit = await RunStreamingStepAsync("cmake",
-                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedQuantizeFileName, ManagedPerplexityFileName, "-j", jobs.ToString()],
-                environment,
-                cloneDir,
-                SourceBuildPolicy.BuildTimeout,
-                ct).ConfigureAwait(false);
-            if (buildExit != 0)
-            {
-                throw new LlamaRuntimeException("Compiling the source-built llama.cpp runtime failed.");
-            }
-
-            // 6. Stage the built tree, harden it, then swap it into place — the previous runtime is only removed AFTER the
-            //    new build validates + adopts, so a failed rebuild leaves the working managed runtime untouched.
+            // The previous runtime is only removed AFTER the new build validates + adopts, so a failed rebuild leaves the
+            // working managed runtime untouched.
             SetPhase(LlamaCppSourceBuildPhase.Adopting);
-            var builtBin = Path.Combine(buildDir, "bin");
-            if (!File.Exists(Path.Combine(builtBin, ManagedServerFileName)))
-            {
-                throw new LlamaRuntimeException("The build did not produce the expected server executable.");
-            }
+            EnsureBuiltTools(Path.Combine(buildDir, "bin"));
+            await StageTreeAsync(descriptor, buildDir, sourceCudaRoot, stagingTagDir, ct).ConfigureAwait(false);
 
-            if (!File.Exists(Path.Combine(builtBin, ManagedFitParamsFileName)))
-            {
-                throw new LlamaRuntimeException("The build did not produce the expected fit-params helper.");
-            }
-
-            // Recorded, never enforced: the quantizer is off the inference path — only a training export needs it — so a build that produced everything else is still a
-            // perfectly good serving runtime, and failing adoption here would trade a working runtime for a capability the operator may never use.
-            if (LlamaCppToolBinaries.FindQuantizer(builtBin) is null)
-            {
-                AppendLog("The build produced no llama-quantize helper; training exports will not be able to quantize with this runtime.");
-                _logger.LogWarning("The source build produced no {Quantizer} helper.", ManagedQuantizeFileName);
-            }
-
-            // Same posture for the perplexity tool: only a benchmark fidelity measurement needs it.
-            if (LlamaCppToolBinaries.FindPerplexity(builtBin) is null)
-            {
-                AppendLog("The build produced no llama-perplexity helper; benchmark fidelity cannot be measured with this runtime.");
-                _logger.LogWarning("The source build produced no {Perplexity} helper.", ManagedPerplexityFileName);
-            }
-
-            // Stage the placed tree at a sibling dir (same filesystem → atomic moves) and harden it there.
-            var stagingBuildDir = Path.Combine(stagingTagDir, "build");
-            CreateOwnerOnlyDirectory(stagingTagDir);
-            Directory.Move(buildDir, stagingBuildDir);
-            ValidateTreeLinks(stagingTagDir);
-            HardenTree(sourceCudaRoot, stagingTagDir);
-            await WriteManifestAsync(stagingTagDir, descriptor, tag, ct).ConfigureAwait(false);
-            HardenTree(sourceCudaRoot, stagingTagDir);
-
-            // Swap into place last: park any previous runtime in the backup, move the staged tree in, then validate + adopt
-            // the FINAL binary. On any failure, roll the previous runtime back so the working runtime is never lost.
+            // Held across the swap, the backup delete and the terminal status, so nothing can take the runtime between
+            // the adoption and the Completed status.
             await using var mutationLease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(ct).ConfigureAwait(false)
                                             ?? throw new LlamaRuntimeException("A llama-server process started while the build was running; stop it before adopting the new runtime.");
-            var hadPrevious = Directory.Exists(finalTagDir);
-            try
-            {
-                if (hadPrevious)
-                {
-                    Directory.Move(finalTagDir, backupTagDir);
-                }
-
-                Directory.Move(stagingTagDir, finalTagDir);
-                var finalBin = Path.Combine(finalTagDir, "build", "bin");
-                await _binaryManager.AdoptSourceBuildAsync(finalBin,
-                    tag,
-                    descriptor.Variant,
-                    descriptor.Repository,
-                    descriptor.ResolvedCommit,
-                    descriptor.RevisionMode,
-                    descriptor.RequestedCommit,
-                    descriptor.Source,
-                    ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Discard the failed build and restore the previous working runtime in place.
-                BestEffortFile.TryDeleteDirectory(stagingTagDir);
-                BestEffortFile.TryDeleteDirectory(finalTagDir);
-                if (hadPrevious)
-                {
-                    Directory.Move(backupTagDir, finalTagDir);
-                }
-
-                throw;
-            }
+            await SwapIntoPlaceAsync(descriptor, stagingTagDir, finalTagDir, backupTagDir, ct).ConfigureAwait(false);
 
             // Success: drop the backup + work dir (the placed tree is the only artifact kept).
             BestEffortFile.TryDeleteDirectory(backupTagDir);
@@ -677,6 +545,185 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         finally
         {
             _buildActivity.TryRelease(descriptor.BuildId);
+        }
+    }
+
+    // Returns the descriptor carrying the verified commit, which also becomes the current build.
+    [SupportedOSPlatform("linux")]
+    private async Task<LlamaCppSourceBuildDescriptor> CloneAndVerifyAsync(LlamaCppSourceBuildDescriptor descriptor,
+        string cloneDir,
+        IReadOnlyDictionary<string, string> environment,
+        string workDir,
+        CancellationToken ct)
+    {
+        // Clone the pinned source at the pinned tag (NO submodules; URL+tag are constants).
+        SetPhase(LlamaCppSourceBuildPhase.Cloning);
+        var cloneExit = await CloneSourceAsync(descriptor, cloneDir, environment, workDir, ct).ConfigureAwait(false);
+        if (cloneExit != 0)
+        {
+            throw new LlamaRuntimeException("Cloning the llama.cpp source failed.");
+        }
+
+        // Verify the checked-out commit == the pinned SHA BEFORE any cmake runs.
+        SetPhase(LlamaCppSourceBuildPhase.Verifying);
+        var (revExit, revOutput) = await ProcessCaptureRunner.RunAsync("git",
+            ["-C", cloneDir, "rev-parse", "HEAD"],
+            environment,
+            workDir,
+            SourceBuildPolicy.ShortCommandTimeout,
+            ct).ConfigureAwait(false);
+        var checkedOut = revOutput.Trim();
+        var expectedCommit = descriptor.RevisionMode switch
+        {
+            LlamaCppSourceRevisionMode.EnginePinned => LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.ExplicitCommit => descriptor.RequestedCommit,
+            _ => null
+        };
+        if (revExit != 0 || !FullCommitRegex().IsMatch(checkedOut)
+                         || expectedCommit is not null && !string.Equals(checkedOut, expectedCommit, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new LlamaRuntimeException("The cloned source did not match the pinned commit; the build was aborted before configuring.");
+        }
+
+        AppendLog($"Verified source commit {checkedOut}.");
+        var verified = descriptor with
+        {
+            ResolvedCommit = Convert.ToHexStringLower(Convert.FromHexString(checkedOut))
+        };
+        lock (_stateLock)
+        {
+            _currentBuild = verified;
+        }
+
+        return verified;
+    }
+
+    [SupportedOSPlatform("linux")]
+    private async Task CompileAsync(GpuVariant variant,
+        string cloneDir,
+        string buildDir,
+        IReadOnlyDictionary<string, string> environment,
+        string workDir,
+        CancellationToken ct)
+    {
+        // Detect + validate the compute architecture.
+        var architectures = variant == GpuVariant.Cuda
+            ? await ResolveCudaArchitecturesAsync(environment, workDir, ct).ConfigureAwait(false)
+            : null;
+
+        SetPhase(LlamaCppSourceBuildPhase.Configuring);
+        var configureExit = await RunStreamingStepAsync("cmake",
+            BuildConfigureArguments(buildDir, cloneDir, variant, architectures),
+            environment,
+            cloneDir,
+            SourceBuildPolicy.ConfigureTimeout,
+            ct).ConfigureAwait(false);
+        if (configureExit != 0)
+        {
+            throw new LlamaRuntimeException("Configuring the llama.cpp source build failed.");
+        }
+
+        // cmake build (jobs capped).
+        SetPhase(LlamaCppSourceBuildPhase.Building);
+        var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, SourceBuildPolicy.MaxBuildJobs));
+        var buildExit = await RunStreamingStepAsync("cmake",
+            ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedQuantizeFileName, ManagedPerplexityFileName, "-j", jobs.ToString()],
+            environment,
+            cloneDir,
+            SourceBuildPolicy.BuildTimeout,
+            ct).ConfigureAwait(false);
+        if (buildExit != 0)
+        {
+            throw new LlamaRuntimeException("Compiling the source-built llama.cpp runtime failed.");
+        }
+    }
+
+    [SupportedOSPlatform("linux")]
+    private void EnsureBuiltTools(string builtBin)
+    {
+        if (!File.Exists(Path.Combine(builtBin, ManagedServerFileName)))
+        {
+            throw new LlamaRuntimeException("The build did not produce the expected server executable.");
+        }
+
+        if (!File.Exists(Path.Combine(builtBin, ManagedFitParamsFileName)))
+        {
+            throw new LlamaRuntimeException("The build did not produce the expected fit-params helper.");
+        }
+
+        // Recorded, never enforced: the quantizer is off the inference path — only a training export needs it — so a build that produced everything else is still a
+        // perfectly good serving runtime, and failing adoption here would trade a working runtime for a capability the operator may never use.
+        if (LlamaCppToolBinaries.FindQuantizer(builtBin) is null)
+        {
+            AppendLog("The build produced no llama-quantize helper; training exports will not be able to quantize with this runtime.");
+            _logger.LogWarning("The source build produced no {Quantizer} helper.", ManagedQuantizeFileName);
+        }
+
+        // Same posture for the perplexity tool: only a benchmark fidelity measurement needs it.
+        if (LlamaCppToolBinaries.FindPerplexity(builtBin) is null)
+        {
+            AppendLog("The build produced no llama-perplexity helper; benchmark fidelity cannot be measured with this runtime.");
+            _logger.LogWarning("The source build produced no {Perplexity} helper.", ManagedPerplexityFileName);
+        }
+    }
+
+    // Stages the placed tree at a sibling dir (same filesystem → atomic moves) and hardens it there.
+    [SupportedOSPlatform("linux")]
+    private static async Task StageTreeAsync(LlamaCppSourceBuildDescriptor descriptor,
+        string buildDir,
+        string sourceCudaRoot,
+        string stagingTagDir,
+        CancellationToken ct)
+    {
+        var stagingBuildDir = Path.Combine(stagingTagDir, "build");
+        SourceProcessHardening.CreateOwnerOnlyDirectory(stagingTagDir);
+        Directory.Move(buildDir, stagingBuildDir);
+        ValidateTreeLinks(stagingTagDir, "built runtime");
+        HardenTree(sourceCudaRoot, stagingTagDir);
+        await WriteManifestAsync(stagingTagDir, descriptor, LlamaCppReleasePins.PinnedTag, ct).ConfigureAwait(false);
+        HardenTree(sourceCudaRoot, stagingTagDir);
+    }
+
+    // Parks any previous runtime in the backup, moves the staged tree in, then validates + adopts the FINAL binary. On any
+    // failure the previous runtime is rolled back, so the working runtime is never lost. The caller holds the mutation lease.
+    [SupportedOSPlatform("linux")]
+    private async Task SwapIntoPlaceAsync(LlamaCppSourceBuildDescriptor descriptor,
+        string stagingTagDir,
+        string finalTagDir,
+        string backupTagDir,
+        CancellationToken ct)
+    {
+        var hadPrevious = Directory.Exists(finalTagDir);
+        try
+        {
+            if (hadPrevious)
+            {
+                Directory.Move(finalTagDir, backupTagDir);
+            }
+
+            Directory.Move(stagingTagDir, finalTagDir);
+            var finalBin = Path.Combine(finalTagDir, "build", "bin");
+            await _binaryManager.AdoptSourceBuildAsync(finalBin,
+                LlamaCppReleasePins.PinnedTag,
+                descriptor.Variant,
+                descriptor.Repository,
+                descriptor.ResolvedCommit!,
+                descriptor.RevisionMode,
+                descriptor.RequestedCommit,
+                descriptor.Source,
+                ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Discard the failed build and restore the previous working runtime in place.
+            BestEffortFile.TryDeleteDirectory(stagingTagDir);
+            BestEffortFile.TryDeleteDirectory(finalTagDir);
+            if (hadPrevious)
+            {
+                Directory.Move(backupTagDir, finalTagDir);
+            }
+
+            throw;
         }
     }
 
@@ -785,7 +832,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         };
     }
 
-    // nvidia-smi compute_cap → whitelisted CUDA architecture list, else the conservative default set. [secMED-1]
+    // nvidia-smi compute_cap → whitelisted CUDA architecture list, else the conservative default set.
     private async Task<string> ResolveCudaArchitecturesAsync(IReadOnlyDictionary<string, string> environment, string workDir, CancellationToken ct)
     {
         try
@@ -826,7 +873,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     }
 
     // Scrubbed, allowlisted build environment: ONLY these keys pass through, everything else — LD_PRELOAD, LD_LIBRARY_PATH, CC, CXX, CUDAHOSTCXX, CMAKE_*_LAUNCHER,
-    // GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_EXTERNAL_DIFF, app secrets — being dropped by construction. [secHIGH-2]
+    // GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_EXTERNAL_DIFF, app secrets — being dropped by construction.
     private static Dictionary<string, string> BuildScrubbedEnvironment(string isolatedHome, string isolatedTmp)
     {
         string[] allowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
@@ -915,7 +962,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         await publish.ConfigureAwait(false);
     }
 
-    // The streaming log sink: redact the cache-root/HOME prefix [secLOW-1], retain a bounded ring buffer for the status
+    // The streaming log sink: redact the cache-root/HOME prefix, retain a bounded ring buffer for the status
     // GET, and push the line live to the hub. Thread-safe (both pipes call this concurrently).
     internal void AppendLog(string line)
     {
@@ -991,15 +1038,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
     }
 
-    private static void CreateOwnerOnlyDirectory(string path)
-    {
-        Directory.CreateDirectory(path);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-    }
-
     // Hardens every directory + file in the placed build tree (from the source-cuda root down) so the managed path-chain
     // validator passes: owner-only directories, owner read/exec files (binary keeps its exec bit). Never world-writable.
     private static void HardenTree(string sourceCudaRoot, string finalTagDir)
@@ -1025,7 +1063,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
     }
 
-    internal static void ValidateTreeLinks(string rootPath)
+    /// <summary>Refuses a tree holding a linked directory, or a file link that dangles, cycles or leaves the tree.</summary>
+    /// <param name="rootPath">The tree to walk.</param>
+    /// <param name="subject">What the refusal calls the tree, shown to the operator.</param>
+    internal static void ValidateTreeLinks(string rootPath, string subject)
     {
         var root = Path.GetFullPath(rootPath);
         var rootPrefix = root + Path.DirectorySeparatorChar;
@@ -1035,7 +1076,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             if (new DirectoryInfo(directory).LinkTarget is not null)
             {
-                throw new LlamaRuntimeException("The built runtime contains a linked directory.");
+                throw new LlamaRuntimeException($"The {subject} contains a linked directory.");
             }
 
             foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
@@ -1052,7 +1093,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 {
                     if (!visited.Add(current))
                     {
-                        throw new LlamaRuntimeException("The built runtime contains a cyclic library link.");
+                        throw new LlamaRuntimeException($"The {subject} contains a cyclic library link.");
                     }
 
                     var info = new FileInfo(current);
@@ -1060,7 +1101,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                     {
                         if (!info.Exists)
                         {
-                            throw new LlamaRuntimeException("The built runtime contains a dangling library link.");
+                            throw new LlamaRuntimeException($"The {subject} contains a dangling library link.");
                         }
 
                         break;
@@ -1068,13 +1109,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
                     if (Path.IsPathRooted(target))
                     {
-                        throw new LlamaRuntimeException("The built runtime contains an absolute library link.");
+                        throw new LlamaRuntimeException($"The {subject} contains an absolute library link.");
                     }
 
                     current = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(current)!, target));
                     if (!current.StartsWith(rootPrefix, StringComparison.Ordinal) || Directory.Exists(current) || hop == 31)
                     {
-                        throw new LlamaRuntimeException("The built runtime contains an unsafe library link.");
+                        throw new LlamaRuntimeException($"The {subject} contains an unsafe library link.");
                     }
                 }
             }

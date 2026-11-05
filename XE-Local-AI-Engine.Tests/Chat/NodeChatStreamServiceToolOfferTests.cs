@@ -319,7 +319,7 @@ public sealed class NodeChatStreamServiceToolOfferTests
         });
 
         AssertEx.Contains(refusal.Message, WriteDeclarationToolName, StringComparison.Ordinal);
-        AssertEx.Contains(refusal.Message, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Contains(refusal.Message, "GRAPH-2", StringComparison.Ordinal);
         AssertEx.Empty(runner.LastAllowedTools, "The refused turn never reached the runner, so no offer was ever handed to a model.");
     }
 

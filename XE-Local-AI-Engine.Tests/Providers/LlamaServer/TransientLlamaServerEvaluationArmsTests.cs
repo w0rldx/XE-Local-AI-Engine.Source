@@ -233,7 +233,7 @@ public sealed class TransientLlamaServerEvaluationArmsTests
                 File.WriteAllBytes(vector, bytes);
             }
 
-            return new FakeProcessHandle(++pid);
+            return new FakeProcessTreeHandle(++pid);
         });
         var (harness, supervisor, _) = CreateHarness(launcher: launcher);
         await using (supervisor)
@@ -267,7 +267,7 @@ public sealed class TransientLlamaServerEvaluationArmsTests
             TeardownTimeout = TimeSpan.FromMilliseconds(20)
         };
         var pid = 7000;
-        var launcher = new FakeProcessLauncher(_ => new FakeProcessHandle(++pid, exitOnTreeKill: false));
+        var launcher = new FakeProcessLauncher(_ => new FakeProcessTreeHandle(++pid, exitOnTreeKill: false));
         var (harness, supervisor, _) = CreateHarness(launcher: launcher);
         await using (supervisor)
         {
@@ -288,7 +288,7 @@ public sealed class TransientLlamaServerEvaluationArmsTests
     {
         using var files = new ControlVectorFiles();
         var pid = 7100;
-        var (harness, supervisor, _) = CreateHarness(launcher: new FakeProcessLauncher(_ => new FakeProcessHandle(++pid, exitOnTreeKill: false)));
+        var (harness, supervisor, _) = CreateHarness(launcher: new FakeProcessLauncher(_ => new FakeProcessTreeHandle(++pid, exitOnTreeKill: false)));
         await using (supervisor)
         {
             var results = await harness.RunArmsAsync([Request(files.Model(EmbeddingSize, BlockCount)) with
@@ -610,7 +610,7 @@ public sealed class TransientLlamaServerEvaluationArmsTests
             bytes[^1] ^= 0xFF;
             File.WriteAllBytes(modelPath, bytes);
             File.SetLastWriteTimeUtc(modelPath, stamp);
-            return new FakeProcessHandle(++pid);
+            return new FakeProcessTreeHandle(++pid);
         });
     }
 

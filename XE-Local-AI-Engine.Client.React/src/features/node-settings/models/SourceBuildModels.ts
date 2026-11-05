@@ -120,25 +120,13 @@ export function mergeSourceBuildLogs(...sources: readonly (readonly SourceBuildL
 	return merged.slice(Math.max(0, merged.length - maxSourceBuildLogEntries));
 }
 
-const diagnosticToolKeys = new Set(["cmake", "gcc", "g++", "git", "nvcc", "nvidia-smi", "glslc", "vulkaninfo"]);
+// The rows whose Detail is the tool's own first output line. Every other row's Detail is English availability prose, which
+// the checklist's localized Available / Missing replaces, and `vulkaninfo --summary` opens with a rule of `=` signs.
+const toolOutputKeys = new Set(["cmake", "gcc", "g++", "make-or-ninja", "git", "readelf", "nvcc", "nvidia-smi", "glslc"]);
 
-/** Keeps command/version diagnostics without rendering the backend's English availability prose. */
+/** A satisfied tool row's version line, shown beside its localized availability. */
 export function sourceBuildPrerequisiteDiagnostic(item: LlamaCppSourceBuildPrerequisiteItem): string | null {
-	if (item.key === "free-disk") {
-		const sizes = item.detail.match(/\d+(?:[.,]\d+)? GB/g);
-		return sizes && sizes.length >= 2 ? `${sizes[0]} / ${sizes[1]}` : null;
-	}
-	if (!item.satisfied) {
-		return null;
-	}
-	if (item.key === "make-or-ninja") {
-		return item.detail.startsWith("make ") ? "make" : item.detail.startsWith("ninja ") ? "ninja" : null;
-	}
-	if (!diagnosticToolKeys.has(item.key)) {
-		return null;
-	}
-	const separator = item.detail.indexOf(": ");
-	return separator >= 0 ? item.detail.slice(separator + 2).trim() || null : null;
+	return item.satisfied && toolOutputKeys.has(item.key) ? item.detail : null;
 }
 
 // Generic in the backend so a lane with a narrower one — whisper.cpp builds CPU and CUDA only — gets a request whose

@@ -21,7 +21,7 @@ const titleLineStyle = {
 // control — the layout guard sends anyone with an unanswered mode straight back here, so a way out that did not save
 // would only produce a loop.
 //
-// "Simple" is preselected and carries the recommendation badge (operator decision after the build-113 round): most
+// "Simple" is preselected and carries the recommendation badge: most
 // operators take it, and Continue still saves an explicit value, so the layout guard never asks twice.
 export function UiModeSetup() {
 	const { t } = useTranslation();

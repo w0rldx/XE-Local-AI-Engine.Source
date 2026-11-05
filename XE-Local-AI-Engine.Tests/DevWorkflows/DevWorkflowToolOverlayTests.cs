@@ -351,7 +351,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
 
     /// <summary>
     ///     Two implementations feeding one validation OUTSIDE a clone group is the same ambiguity the clone group
-    ///     refuses, and merging a fan-out into one workspace is the v1 ceiling it was ruled to be. It refuses, naming
+    ///     refuses, and merging a fan-out into one workspace is a deliberate v1 ceiling. It refuses, naming
     ///     both, rather than picking one.
     /// </summary>
     [Test]

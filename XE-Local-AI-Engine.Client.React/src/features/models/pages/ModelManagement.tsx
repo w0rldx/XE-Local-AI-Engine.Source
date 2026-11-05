@@ -37,7 +37,7 @@ import { isInstalledLocalModel, toLocalModelViewModel } from "@/features/models/
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
-function errorMessage(error: unknown, t: TFunction): string {
+function localModelErrorMessage(error: unknown, t: TFunction): string {
 	return apiErrorMessage(error, t("pages.models.local.errors.unexpected", "Unexpected local model error"));
 }
 
@@ -92,7 +92,7 @@ export function ModelManagement() {
 			toast.success(t("pages.models.local.setDefaultSuccess", { name: selection.selectedModelName ?? "" }));
 			await invalidateListAndDetails();
 		},
-		onError: (error) => toast.error(errorMessage(error, t)),
+		onError: (error) => toast.error(localModelErrorMessage(error, t)),
 	});
 
 	const deleteMutation = useMutation({
@@ -102,7 +102,7 @@ export function ModelManagement() {
 			detailsDialog.clear();
 			await invalidateListAndDetails();
 		},
-		onError: (error) => toast.error(errorMessage(error, t)),
+		onError: (error) => toast.error(localModelErrorMessage(error, t)),
 	});
 
 	const setKindMutation = useMutation({
@@ -111,7 +111,7 @@ export function ModelManagement() {
 		onSuccess: async () => {
 			await invalidateList();
 		},
-		onError: (error) => toast.error(errorMessage(error, t)),
+		onError: (error) => toast.error(localModelErrorMessage(error, t)),
 	});
 
 	const resetKindMutation = useMutation({
@@ -119,7 +119,7 @@ export function ModelManagement() {
 		onSuccess: async () => {
 			await invalidateList();
 		},
-		onError: (error) => toast.error(errorMessage(error, t)),
+		onError: (error) => toast.error(localModelErrorMessage(error, t)),
 	});
 
 	// Action errors surface via each mutation's onError toast above (no inline banner).
@@ -180,7 +180,7 @@ export function ModelManagement() {
 				</Group>
 			) : null}
 
-			{modelsError ? <InlineErrorAlert message={errorMessage(modelsError, t)} /> : null}
+			{modelsError ? <InlineErrorAlert message={localModelErrorMessage(modelsError, t)} /> : null}
 
 			{/* A failed first read says nothing about what is installed, so it must not render as the empty list. */}
 			{modelsError && !modelsResponse ? null : (

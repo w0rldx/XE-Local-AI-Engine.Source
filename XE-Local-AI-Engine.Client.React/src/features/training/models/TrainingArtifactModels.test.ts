@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { TrainingArtifactView, TrainingRunEvent } from "@/features/training/models/TrainingModels";
+import type { RunStreamEvent } from "@/core/api/signalr/useRunStreamSubscription";
+import { runStreamEventSchema } from "@/core/api/signalr/useRunStreamSubscription";
+import type { TrainingArtifactView } from "@/features/training/models/TrainingModels";
 import {
 	applyRunEvent,
 	canPromote,
@@ -11,7 +13,6 @@ import {
 	shortDigest,
 	toTrainingArtifactView,
 	trainingExportQuantizations,
-	trainingRunEventSchema,
 } from "@/features/training/models/TrainingModels";
 
 function artifact(overrides: Partial<TrainingArtifactView> = {}): TrainingArtifactView {
@@ -101,7 +102,7 @@ describe("export phase tracking", () => {
 	});
 
 	it("parses the Export event kind and folds its phase like any other", () => {
-		const parsed = trainingRunEventSchema.safeParse({
+		const parsed = runStreamEventSchema.safeParse({
 			runId: "run-1",
 			sequence: 1,
 			kind: "Export",
@@ -109,7 +110,7 @@ describe("export phase tracking", () => {
 		});
 
 		expect(parsed.success).toBe(true);
-		const folded = applyRunEvent(emptyTrainingRunProgress, parsed.data as TrainingRunEvent);
+		const folded = applyRunEvent(emptyTrainingRunProgress, parsed.data as RunStreamEvent);
 		expect(folded.phase).toBe("quantizing");
 	});
 });

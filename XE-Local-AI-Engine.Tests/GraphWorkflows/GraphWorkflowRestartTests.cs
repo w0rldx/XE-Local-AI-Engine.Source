@@ -135,7 +135,7 @@ public sealed class GraphWorkflowRestartTests
     }
 
     /// <summary>
-    ///     And the other half of that ruling: the interrupted verdict is re-attempted by the dispatcher's retry stage
+    ///     And the other half: the interrupted verdict is re-attempted by the dispatcher's retry stage
     ///     rather than by a second mechanism inside recovery. A work node gets three attempts by default, so the first
     ///     tick after the restart spends the second one.
     /// </summary>

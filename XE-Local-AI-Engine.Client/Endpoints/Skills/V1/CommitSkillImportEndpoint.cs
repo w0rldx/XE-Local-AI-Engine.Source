@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Phase 2 of the third-party skill import: persists the skills the operator selected from a preview they
+///     The commit step of the third-party skill import: persists the skills the operator selected from a preview they
 ///     acknowledged.
 /// </summary>
 /// <remarks>

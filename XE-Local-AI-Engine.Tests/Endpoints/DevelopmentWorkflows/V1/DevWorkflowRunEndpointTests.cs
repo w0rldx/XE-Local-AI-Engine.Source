@@ -38,7 +38,7 @@ public sealed class DevWorkflowRunEndpointTests
     private const string RecordedPolicy =
         """[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","name":"House rules","contentSha256":"content-hash","body":"Never touch production."}]""";
 
-    /// <summary>The seeded Slice-A shape: one agent into one TERMINAL gate — no out-edge takes a rejection.</summary>
+    /// <summary>A minimal graph: one agent into one TERMINAL gate — no out-edge takes a rejection.</summary>
     private const string SampleGraph = """
                                        {"schemaVersion":1,
                                         "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
@@ -650,7 +650,7 @@ public sealed class DevWorkflowRunEndpointTests
     }
 
     /// <summary>
-    ///     A node run written before this slice — which is every row already in an operator's database — answers null
+    ///     A node run with no telemetry, such as a row written before these columns existed, answers null
     ///     for all fifteen rather than zero. Zero would say the attempt cost nothing.
     /// </summary>
     [Test]

@@ -192,11 +192,10 @@ jobs:
         run: scripts/openapi-live-check.sh
 
       # No `docker pull` steps and no daemon. The three real-daemon suites are opt-in behind
-      # XE_REQUIRE_DOCKER_TESTS=1 and skip here with a reason; what used to be their only-testable half — the
-      # Engine API wire shape and the response mapping — now runs against XE-Local-AI-Engine.Testing.FakeDocker
-      # over a loopback socket, with no daemon and no registry involved. That removes Docker Hub reachability as
-      # a hard dependency of this gate, which used to turn a registry blip or a rate limit into a red pull
-      # request. The daemon half is proven before an RC by scripts/run-docker-smoke-local.sh.
+      # XE_REQUIRE_DOCKER_TESTS=1 and skip here with a reason; their testable half — the Engine API wire shape
+      # and the response mapping — runs against XE-Local-AI-Engine.Testing.FakeDocker over a loopback socket,
+      # with no daemon and no registry involved. That keeps Docker Hub reachability from being a hard dependency
+      # of this gate, where a registry blip or a rate limit would turn into a red pull request. The daemon half is proven before an RC by scripts/run-docker-smoke-local.sh.
 
       # Auto-enrolling backend test run, through the SAME script as the local gate
       # (scripts/run-backend-tests.sh): the project list is read from the solution file, so a new test
@@ -425,7 +424,7 @@ jobs:
           if-no-files-found: warn
           overwrite: true
 
-  # ADVISORY Windows test job (formerly its own windows-tests.yml). Every other CI test job runs on Linux, so the tests
+  # ADVISORY Windows test job. Every other CI test job runs on Linux, so the tests
   # that only mean something on Windows (Job Object tree-kill, WASAPI process loopback, named pipes, the Windows
   # launcher, the Desktop shell, Windows path and disk probes) report skipped there. This job runs them, plus all of
   # Client.Persistence.Tests, on a real Windows runner. It is NOT in the `build-and-test` aggregate's `needs`, so the

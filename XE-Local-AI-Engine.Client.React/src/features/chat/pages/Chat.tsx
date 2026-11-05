@@ -1,67 +1,50 @@
-import { Alert, Anchor, Button, Center, Loader, Progress, Stack, Text, VisuallyHidden } from "@mantine/core";
+import { Alert, Button, Center, Loader, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { buildChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useCommands } from "@/core/commands/queries/useCommands";
+import type { ChatScope } from "@/core/models/ChatScope";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { type ChatSetupDownload, chatNotice } from "@/features/chat/components/ChatNotice";
 import { useChatAgentSelection } from "@/features/chat/hooks/useChatAgentSelection";
+import { useChatConversationActions } from "@/features/chat/hooks/useChatConversationActions";
+import { emptyConversationList, useChatConversationCache } from "@/features/chat/hooks/useChatConversationCache";
 import { useChatConversationSelection } from "@/features/chat/hooks/useChatConversationSelection";
+import { useChatMessageActions } from "@/features/chat/hooks/useChatMessageActions";
 import { useChatModelSelection } from "@/features/chat/hooks/useChatModelSelection";
 import { useChatRevisionSelection } from "@/features/chat/hooks/useChatRevisionSelection";
 import { useChatStreamController } from "@/features/chat/hooks/useChatStreamController";
-import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import {
-	inFlightAssistantMessageId,
-	mergeSelectedConversation,
-	titleFromContent,
-} from "@/features/chat/models/ChatConversationDerivations";
-import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
-import type {
-	ChatConversationListModel,
-	ChatConversationModel,
-	ChatFeedbackRating,
-	ChatScope,
-} from "@/features/chat/models/ChatModels";
+import { inFlightAssistantMessageId } from "@/features/chat/models/ChatConversationDerivations";
+import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
+import type { ChatConversationListModel } from "@/features/chat/models/ChatModels";
+import { effectiveAgent } from "@/features/chat/models/ChatTurnResolution";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
-import { adoptWebContentAutoAcceptDraft, forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
+import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/hooks/useVoicePlayback";
 import { useVoiceRuntime } from "@/features/voice/hooks/VoiceRuntimeContext";
 
-/* eslint-disable react-doctor/no-giant-component -- This page is the chat orchestrator: conversation CRUD plus the prop assembly ChatDisplayShell needs in one place. The race-coupled send/regenerate/resume/cancel loops live in useChatStreamController; transport, model, agent and revision-selection lifecycles live in their own modules. */
-
-// Fallback for the cache updaters below when they run before the list query has landed: an empty list with no known
-// message-size limit (which simply means the composer runs no size pre-check until the real fetch arrives).
-const emptyConversationList: ChatConversationListModel = { conversations: [] };
+/* eslint-disable react-doctor/no-giant-component -- This page is the chat orchestrator: hook wiring whose order is load-bearing, plus the prop assembly ChatDisplayShell needs in one place. The race-coupled send/regenerate/resume/cancel loops live in useChatStreamController; the cache writers, conversation and message actions, notice, and transport, model, agent and revision-selection lifecycles live in their own modules. */
 
 const orphanedLiveTurnPollIntervalMs = 3_000;
-
-/** The first-run model download the route feeds in; the download feed itself belongs to the models feature. */
-export interface ChatSetupDownload {
-	readonly modelName: string;
-	readonly pct: number | undefined;
-}
 
 export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownload?: ChatSetupDownload } = {}) {
 	const { t } = useTranslation();
 	// Owner-embedded mode (a work session pinning its own conversation). `/chat` passes no scope and every branch
-	// below falls back to the exact behavior it had before the prop existed.
+	// below takes its unpinned path.
 	const isScoped = scope !== undefined;
-	const { confirm } = useConfirm();
 	const queryClient = useQueryClient();
 	const commandsQuery = useCommands();
 	const commandOptions = useMemo(() => (commandsQuery.data ?? []).map(toChatCommandOption), [commandsQuery.data]);
@@ -187,11 +170,9 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		selectedConversationData?.id === selectedConversationId && selectedConversationData?.isPlain === true;
 	const sendAgentModeEnabled = agentModeEnabled && !selectedConversationPlain;
 	// The agent the next request resolves, by the send path's rule: agent mode on and the agent still listed.
-	const contextAgentLabel = sendAgentModeEnabled ? agentOptions.find((agent) => agent.id === selectedAgentId)?.name : undefined;
+	const contextAgentLabel = effectiveAgent(sendAgentModeEnabled, selectedAgentId, agentOptions)?.name;
 	const [streamError, setStreamError] = useState<string | undefined>();
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
-	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
-	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
@@ -229,65 +210,14 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		}
 	}, [isCreatingConversation, createConversationMutate]);
 
-	// Write only the selected-conversation detail cache. Used for per-frame streaming commits: the sidebar has
-	// nothing to show for an in-flight turn, so folding the growing conversation into the whole list every frame
-	// (mergeSelectedConversation is O(list)) is wasted work. The list is refreshed on terminal events instead.
-	const cacheConversationDetail = useCallback(
-		(conversation: ChatConversationModel): void => {
-			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
-		},
-		[queryClient],
-	);
-
-	const cacheConversation = useCallback(
-		(conversation: ChatConversationModel): void => {
-			cacheConversationDetail(conversation);
-			queryClient.setQueryData<ChatConversationListModel>(conversationListQueryKey, (current = emptyConversationList) => ({
-				...current,
-				conversations: mergeSelectedConversation(current.conversations, conversation),
-			}));
-		},
-		[cacheConversationDetail, queryClient, conversationListQueryKey],
-	);
-
-	const resolveSendConversation = useCallback(
-		async (content: string): Promise<ChatConversationModel> => {
-			// Only trust the cached selected-conversation payload when it actually belongs to the CURRENT
-			// selection AND is not a keepPreviousData placeholder from the thread we just switched away from.
-			// A fast switch to an uncached conversation followed by Enter would otherwise resolve
-			// the PREVIOUS conversation's payload here and send the turn to the wrong id. When it's stale/
-			// placeholder, fall through to the load-by-id path, which fetches the currently-selected thread.
-			if (
-				selectedConversationData &&
-				selectedConversationData.id === selectedConversationId &&
-				!selectedConversationIsPlaceholderData
-			) {
-				return selectedConversationData;
-			}
-
-			const summaryConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
-			if (summaryConversation) {
-				const loaded = await nodeChatAdapter.getConversation(summaryConversation.id);
-				cacheConversation(loaded);
-				return loaded;
-			}
-
-			const created = await nodeChatAdapter.createConversation({ title: titleFromContent(content) });
-			// The draft's web content choice belongs to the conversation it just became.
-			adoptWebContentAutoAcceptDraft(created.id);
-			cacheConversation(created);
-			setRequestedConversationId(created.id);
-			return created;
-		},
-		[
-			cacheConversation,
-			displayConversations,
-			selectedConversationId,
-			selectedConversationData,
-			selectedConversationIsPlaceholderData,
-			setRequestedConversationId,
-		],
-	);
+	const { cacheConversationDetail, cacheConversation, resolveSendConversation, refreshConversation } = useChatConversationCache({
+		conversationListQueryKey,
+		selectedConversationId,
+		selectedConversationData,
+		selectedConversationIsPlaceholderData,
+		displayConversations,
+		setRequestedConversationId,
+	});
 
 	// Resolve the conversation a file should attach to. When a conversation is already on screen — including a
 	// freshly-created empty one from "New chat" — attach to IT directly. Going through the create-or-load
@@ -302,7 +232,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 			const conversation = await resolveSendConversation("");
 			return conversation.id;
 		} catch (error) {
-			setStreamError(errorMessage(error));
+			setStreamError(chatErrorMessage(error));
 			return "";
 		}
 	}, [selectedConversationId, resolveSendConversation]);
@@ -314,27 +244,6 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		uploadFiles: handleUploadAttachments,
 		removeAttachment: handleRemoveAttachment,
 	} = useConversationAttachments({ conversationId: selectedConversationId, ensureConversationId, maxUploadFileSizeMb });
-
-	const refreshConversation = useCallback(
-		async (conversationId: string): Promise<void> => {
-			// Scoped tightly — this runs after EVERY turn. `exact` keeps the conversation's `files` child out (a turn
-			// never changes the attachment list; upload/delete invalidate their own key), and `conversationLists`
-			// refreshes the sidebar without the broad `conversations()` prefix that would re-invalidate this same
-			// detail mid-refetch (the observed duplicate round per turn) plus every other cached conversation.
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId), exact: true }),
-				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() }),
-				// The local runtime only fills EffectiveContextTokens once the model is WARM, but the
-				// model-details query fires pre-warm — so the context-usage meter would stay pinned to the model's
-				// train ceiling (e.g. 262k) even though the server launched with a far smaller `-c` (e.g. 16k). Once
-				// a turn reaches a terminal state the model is warm, so invalidate the details query to re-read the
-				// real window. Partial-object match on the hey-api single-element key so it invalidates every model
-				// path (never `.slice()` a hey-api key).
-				queryClient.invalidateQueries({ queryKey: [{ _id: "getLocalModelDetails" }] }),
-			]);
-		},
-		[queryClient],
-	);
 
 	// The conversation whose FULL payload has loaded — id-matched, so never a keepPreviousData placeholder from the
 	// thread we just switched away from. The re-attach waits for it because the resumed events are folded onto the
@@ -425,284 +334,40 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		plain: selectedConversationPlain,
 	});
 
-	const runConversationMutation = useCallback(
-		async (conversationId: string, mutate: () => Promise<ChatConversationModel>): Promise<void> => {
-			setStreamError(undefined);
-			setMutatingConversationId(conversationId);
-			try {
-				const updated = await mutate();
-				cacheConversation(updated);
-				await refreshConversation(conversationId);
-			} catch (error) {
-				// Remote-origin conversations are view-only; the node rejects writes with a 409. Surface a clear
-				// notice and refresh so the UI re-reflects authoritative (unchanged) server state.
-				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(
-						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
-					);
-					await refreshConversation(conversationId);
-					return;
-				}
-				setStreamError(errorMessage(error));
-			} finally {
-				setMutatingConversationId(undefined);
-			}
-		},
-		[cacheConversation, refreshConversation, t],
-	);
-
-	const handleRenameConversation = useCallback(
-		(conversationId: string, title: string): void => {
-			markConversationTitled(conversationId);
-			runConversationMutation(conversationId, () => nodeChatAdapter.renameConversation(conversationId, title)).catch(
-				(error: unknown) => setStreamError(errorMessage(error)),
-			);
-		},
-		[markConversationTitled, runConversationMutation],
-	);
-
-	const handleToggleConversationPinned = useCallback(
-		(conversationId: string, isPinned: boolean): void => {
-			runConversationMutation(conversationId, () => nodeChatAdapter.setConversationPinned(conversationId, isPinned)).catch(
-				(error: unknown) => setStreamError(errorMessage(error)),
-			);
-		},
-		[runConversationMutation],
-	);
-
-	const handleToggleConversationArchived = useCallback(
-		(conversationId: string, archived: boolean): void => {
-			runConversationMutation(conversationId, () => nodeChatAdapter.setConversationArchived(conversationId, archived)).catch(
-				(error: unknown) => setStreamError(errorMessage(error)),
-			);
-		},
-		[runConversationMutation],
-	);
-
-	// Toggle a conversation "temporary" (memory-excluded). A temporary conversation still USES existing memory; it
-	// just won't teach the agent new memory from this thread. PATCHes the conversation via the same mutation path as
-	// pin/archive so the cache + selected-conversation query refresh from authoritative server state.
-	const handleToggleConversationMemoryExcluded = useCallback(
-		(conversationId: string, memoryExcluded: boolean): void => {
-			runConversationMutation(conversationId, () =>
-				nodeChatAdapter.setConversationMemoryExcluded(conversationId, memoryExcluded),
-			).catch((error: unknown) => setStreamError(errorMessage(error)));
-		},
-		[runConversationMutation],
-	);
-
-	// Set a conversation's plain mode and custom system prompt; later turns only. Same mutation path as pin/archive.
-	const handleSetConversationPlain = useCallback(
-		(conversationId: string, isPlain: boolean, plainSystemPrompt: string | undefined): void => {
-			runConversationMutation(conversationId, () =>
-				nodeChatAdapter.setConversationPlain(conversationId, isPlain, plainSystemPrompt),
-			)
-				// The estimate's key does not carry the mode or the prompt, so a cached one is now wrong.
-				.then(() => queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.contextEstimates(conversationId) }))
-				.catch((error: unknown) => setStreamError(errorMessage(error)));
-		},
-		[queryClient, runConversationMutation],
-	);
-
-	const deleteConversationMutation = useMutation({
-		mutationFn: (conversationId: string) => nodeChatAdapter.deleteConversation(conversationId),
-		onSuccess: async (_result, conversationId) => {
-			// Drop the deleted thread from caches and, when it was the open one, clear the selection so the
-			// list falls back to the newest remaining conversation.
-			queryClient.removeQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId) });
-			if (requestedConversationId === conversationId) {
-				setRequestedConversationId("");
-			}
-			forgetConversationTitle(conversationId);
-			forgetWebContentAutoAccept(conversationId);
-			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
-		},
+	const {
+		mutatingConversationId,
+		handleRenameConversation,
+		handleToggleConversationPinned,
+		handleToggleConversationArchived,
+		handleToggleConversationMemoryExcluded,
+		handleSetConversationPlain,
+		handleDeleteConversation,
+	} = useChatConversationActions({
+		cacheConversation,
+		refreshConversation,
+		setStreamError,
+		requestedConversationId,
+		setRequestedConversationId,
+		markConversationTitled,
+		forgetConversationTitle,
+		markConversationDeleted,
+		unmarkConversationDeleted,
 	});
 
-	const deleteConversation = useCallback(
-		async (conversationId: string, skipConfirm: boolean): Promise<void> => {
-			// Shift-click skips the confirm and deletes immediately, mirroring the platform client.
-			if (!skipConfirm) {
-				const confirmed = await confirm({
-					title: t("pages.chat.conversationList.delete", "Delete"),
-					description: t("pages.chat.conversationList.deleteConfirm", "Delete this conversation? This cannot be undone."),
-					confirmationText: t("pages.chat.conversationList.delete", "Delete"),
-					cancellationText: t("common.cancel", "Cancel"),
-				});
-				if (!confirmed) {
-					return;
-				}
-			}
-
-			markConversationDeleted(conversationId);
-
-			setStreamError(undefined);
-			setMutatingConversationId(conversationId);
-			try {
-				await deleteConversationMutation.mutateAsync(conversationId);
-			} catch (error) {
-				// The delete failed, so the conversation still exists and stays visible/selectable. Roll back the
-				// pre-emptive "deleted" marker set above — otherwise the streaming loop's has(id) guard
-				// treats the surviving thread as removed and silently refuses to stream to it: a permanently
-				// un-chattable zombie until reload.
-				unmarkConversationDeleted(conversationId);
-				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(
-						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
-					);
-					await refreshConversation(conversationId);
-					return;
-				}
-				setStreamError(errorMessage(error));
-			} finally {
-				setMutatingConversationId(undefined);
-			}
-		},
-		[confirm, deleteConversationMutation, markConversationDeleted, refreshConversation, t, unmarkConversationDeleted],
-	);
-
-	const handleDeleteConversation = useCallback(
-		(conversationId: string, skipConfirm: boolean): void => {
-			deleteConversation(conversationId, skipConfirm).catch((error: unknown) => setStreamError(errorMessage(error)));
-		},
-		[deleteConversation],
-	);
-
-	const handleSelectRevision = useCallback(
-		(variantGroupId: string, messageId: string): void => {
-			const nextSelection = selectRevision(variantGroupId, messageId);
-			// Persist the navigated selection so a reload restores it even without sending a message. Fire-and-forget,
-			// consistent with other adapter calls; a failure surfaces in the error banner but never blocks the UI.
-			if (selectedConversationId) {
-				nodeChatAdapter
-					.persistSelectedPath(selectedConversationId, nextSelection)
-					.catch((error: unknown) => setStreamError(errorMessage(error)));
-			}
-		},
-		[selectRevision, selectedConversationId],
-	);
-
-	const branchConversation = useCallback(
-		async (messageId: string): Promise<void> => {
-			setStreamError(undefined);
-			try {
-				// Send the visible active-revision selection so the branched thread copies the revisions the user was
-				// viewing upstream, not always the newest sibling. Empty ⇒ server keeps its newest-per-group default.
-				const selectedRevisions = Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined;
-				const result = await nodeChatAdapter.branchConversation(selectedConversationId, messageId, selectedRevisions);
-				// Surface the branched Origin=Local conversation: refresh history and open it.
-				await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
-				setRequestedConversationId(result.branchedConversationId ?? "");
-			} catch (error) {
-				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(
-						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
-					);
-					return;
-				}
-				setStreamError(errorMessage(error));
-			}
-		},
-		[activeRevisionByGroup, queryClient, selectedConversationId, setRequestedConversationId, t],
-	);
-
-	const handleBranch = useCallback(
-		(messageId: string): void => {
-			if (!selectedConversationId) {
-				return;
-			}
-
-			branchConversation(messageId).catch((error: unknown) => setStreamError(errorMessage(error)));
-		},
-		[branchConversation, selectedConversationId],
-	);
-
-	const submitFeedback = useCallback(
-		async (messageId: string, rating: ChatFeedbackRating, comment: string | undefined): Promise<void> => {
-			setStreamError(undefined);
-			setPendingFeedbackMessageId(messageId);
-			try {
-				await nodeChatAdapter.setMessageFeedback(selectedConversationId, messageId, rating, comment);
-				// Feedback is read from the conversation's messages now (not a per-message GET); refetch the
-				// conversation so the just-saved rating/comment re-renders.
-				await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(selectedConversationId) });
-			} catch (error) {
-				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(
-						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
-					);
-					return;
-				}
-				setStreamError(errorMessage(error));
-			} finally {
-				setPendingFeedbackMessageId(undefined);
-			}
-		},
-		[queryClient, selectedConversationId, t],
-	);
-
-	const handleSubmitFeedback = useCallback(
-		(messageId: string, rating: ChatFeedbackRating, comment: string | undefined): void => {
-			if (!selectedConversationId) {
-				return;
-			}
-
-			submitFeedback(messageId, rating, comment).catch((error: unknown) => setStreamError(errorMessage(error)));
-		},
-		[selectedConversationId, submitFeedback],
-	);
+	const { handleSelectRevision, handleBranch, handleSubmitFeedback, pendingFeedbackMessageId } = useChatMessageActions({
+		selectedConversationId,
+		activeRevisionByGroup,
+		selectRevision,
+		setRequestedConversationId,
+		setStreamError,
+	});
 
 	// Only an actual error / remote-view-only condition surfaces a notice; the always-on informational banner
 	// was dropped. When undefined, ChatDisplayShell renders no alert.
-	const notice = streamError ? (
-		<Stack gap={2}>
-			<Text fw={700}>{t("pages.chat.streamFailedTitle", "Local chat stream failed.")}</Text>
-			<Text size="sm">{streamError}</Text>
-		</Stack>
-	) : conversationsIsError ? (
-		<Stack gap={2}>
-			<Text fw={700}>{t("pages.chat.historyLoadFailedTitle", "Unable to load local chat history.")}</Text>
-			<Text size="sm">{errorMessage(conversationsError)}</Text>
-		</Stack>
-	) : isRemoteConversation ? (
-		<Stack gap={2}>
-			<Text fw={700}>{t("pages.chat.remoteViewOnlyTitle", "Remote conversation")}</Text>
-			<Text size="sm">
-				{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}
-			</Text>
-		</Stack>
-	) : showNoModelGuidance && setupDownload !== undefined ? (
-		// First-run provisioning is downloading the default model: say so instead of "install one".
-		<Stack gap={4} data-testid="chat-first-model-setup">
-			<Text fw={700}>{t("pages.chat.noModelGuidance.setupTitle", "Setting up your first model…")}</Text>
-			<Text size="sm" data-testid="chat-first-model-setup-model">
-				{setupDownload.pct === undefined
-					? setupDownload.modelName
-					: t("pages.chat.noModelGuidance.setupProgress", "{{model}} · {{pct}}%", {
-							model: setupDownload.modelName,
-							pct: setupDownload.pct,
-						})}
-			</Text>
-			<Progress
-				value={setupDownload.pct ?? 100}
-				animated={setupDownload.pct === undefined}
-				aria-label={t("pages.chat.noModelGuidance.setupTitle", "Setting up your first model…")}
-			/>
-			<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
-				{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
-			</Anchor>
-		</Stack>
-	) : showNoModelGuidance ? (
-		// Advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's
-		// cloud sections, and a send attempted anyway still falls through to ChatMessage's ModelNotInstalled Alert.
-		<Stack gap={2}>
-			<Text fw={700}>{t("pages.chat.noModelGuidance.title", "No chat model installed yet")}</Text>
-			<Text size="sm">{t("pages.chat.noModelGuidance.body", "Install a GGUF model to start chatting locally.")}</Text>
-			<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
-				{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
-			</Anchor>
-		</Stack>
-	) : undefined;
+	const notice = chatNotice(
+		{ streamError, conversationsIsError, conversationsError, isRemoteConversation, showNoModelGuidance, setupDownload },
+		t,
+	);
 
 	// Module-readiness gate (platform parity): block the chat behind a connecting/error state until the
 	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.
@@ -742,7 +407,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 				</Alert>
 			) : null}
 			{createConversationMutation.isError ? (
-				<InlineErrorAlert variant="light" mb="md" message={errorMessage(createConversationMutation.error)} />
+				<InlineErrorAlert variant="light" mb="md" message={chatErrorMessage(createConversationMutation.error)} />
 			) : null}
 			<ChatDisplayShell
 				conversations={displayConversations}
@@ -773,7 +438,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 				disabledNotice={notice}
 				isLoadingMessages={isLoadingSelectedConversation}
 				messagesLoadFailed={selectedConversationLoadFailed}
-				messagesLoadErrorText={selectedConversationLoadFailed ? errorMessage(selectedConversationError) : undefined}
+				messagesLoadErrorText={selectedConversationLoadFailed ? chatErrorMessage(selectedConversationError) : undefined}
 				onRetryLoadMessages={handleRetryLoadMessages}
 				inputStatus={{
 					isSending,
@@ -822,7 +487,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 						return workflow.send(content);
 					}
 					const normalSend = (): void => {
-						handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
+						handleSend(content, effort, model).catch((error: unknown) => setStreamError(chatErrorMessage(error)));
 					};
 					// Not yet known whether this conversation is bound to a workflow: the send waits for that answer.
 					if (workflow.bindingUnresolved) {
@@ -836,7 +501,7 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 						scope.onStopOverride();
 						return;
 					}
-					handleCancel().catch((error: unknown) => setStreamError(errorMessage(error)));
+					handleCancel().catch((error: unknown) => setStreamError(chatErrorMessage(error)));
 				}}
 				onRegenerate={isScoped || isRemoteConversation ? undefined : handleRegenerate}
 				onConversationSearchChange={setConversationSearchQuery}

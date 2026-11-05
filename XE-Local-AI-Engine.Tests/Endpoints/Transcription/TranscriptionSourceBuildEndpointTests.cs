@@ -107,12 +107,12 @@ public sealed class TranscriptionSourceBuildEndpointTests
             StartResult = new WhisperCppSourceBuildStartResult
             {
                 Outcome = WhisperCppSourceBuildStartOutcome.MissingPrerequisites,
-                Prerequisites = new WhisperCppSourceBuildPrerequisiteReport
+                Prerequisites = new SourceBuildPrerequisiteReport
                 {
                     CanBuild = false,
                     Items =
                     [
-                        new WhisperCppSourceBuildPrerequisiteItem
+                        new SourceBuildPrerequisiteRow
                         {
                             Key = "nvcc",
                             Satisfied = false,
@@ -223,18 +223,18 @@ public sealed class TranscriptionSourceBuildEndpointTests
         var build = new StubSourceBuildService();
         var probe = new StubPrerequisiteProbe
         {
-            Report = new WhisperCppSourceBuildPrerequisiteReport
+            Report = new SourceBuildPrerequisiteReport
             {
                 CanBuild = false,
                 Items =
                 [
-                    new WhisperCppSourceBuildPrerequisiteItem
+                    new SourceBuildPrerequisiteRow
                     {
                         Key = "os-is-linux",
                         Satisfied = true,
                         Detail = "Linux host detected."
                     },
-                    new WhisperCppSourceBuildPrerequisiteItem
+                    new SourceBuildPrerequisiteRow
                     {
                         Key = "nvcc",
                         Satisfied = false,
@@ -544,13 +544,13 @@ public sealed class TranscriptionSourceBuildEndpointTests
     {
         public WhisperBackend? RequestedBackend { get; private set; }
 
-        public WhisperCppSourceBuildPrerequisiteReport Report { get; init; } =
+        public SourceBuildPrerequisiteReport Report { get; init; } =
             new()
             {
                 CanBuild = true,
                 Items =
                 [
-                    new WhisperCppSourceBuildPrerequisiteItem
+                    new SourceBuildPrerequisiteRow
                     {
                         Key = "os-is-linux",
                         Satisfied = true,
@@ -559,7 +559,7 @@ public sealed class TranscriptionSourceBuildEndpointTests
                 ]
             };
 
-        public Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
         {
             RequestedBackend = backend;
             return Task.FromResult(Report);

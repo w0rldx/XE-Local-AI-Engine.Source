@@ -435,15 +435,15 @@ public sealed class TrainingExportService : ITrainingExportService
     /// </remarks>
     private bool DeleteStagedBytes(TrainingArtifactRecord artifact)
     {
-        var staged = Path.GetFullPath(_workspace.StagedDirectory(artifact.RunId));
-        var path = Path.GetFullPath(artifact.Path);
-        if (!path.StartsWith(staged.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!PathContainment.IsUnderRoot(artifact.Path, _workspace.StagedDirectory(artifact.RunId)))
         {
             _logger.LogWarning("Artifact {ArtifactId} of run {RunId} was deleted, but its path is not inside the run's staged directory, so the bytes were left in place.",
                 artifact.Id, artifact.RunId);
             return false;
         }
 
+        // The normalized spelling the gate judged: the OS walks a raw ".." physically, through any link before it.
+        var path = Path.GetFullPath(artifact.Path);
         try
         {
             if (Directory.Exists(path))

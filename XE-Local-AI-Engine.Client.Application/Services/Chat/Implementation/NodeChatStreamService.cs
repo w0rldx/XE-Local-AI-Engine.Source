@@ -339,7 +339,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         };
     }
 
-    // GRAPH-C4-2 is asked of the OFFER this turn really hands the model, resolved once here and reused verbatim by
+    // GRAPH-2 is asked of the OFFER this turn really hands the model, resolved once here and reused verbatim by
     // PrepareTurnOfferAsync; only an armed turn resolves early, so a refusal leaves no stranded assistant row.
     private async Task<ChatToolOffer?> ResolveDeclaredWriteOfferAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
@@ -749,51 +749,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         Guid requestId,
         CancellationToken cancellationToken)
     {
-        // A bound agent that no longer exists falls back to the default assistant; say so instead of answering silently.
-        if (resolution.AgentUnavailableNotice(requestId) is { } agentUnavailableNotice)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(agentUnavailableNotice);
-        }
-
-        // An Orchestrator agent whose orchestration did not compile runs as a lone single agent, so emit ONE notice
-        // naming the typed reason. NotOrchestrated (a Single-kind or unbound agent) has none, so the common path is silent.
-        if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-            {
-                InvocationId = requestId,
-                Kind = TurnNoticeKind.OrchestrationDegraded,
-                Message = orchestrationDegradedMessage,
-                Detail = resolution.OrchestrationOutcome.Reason.ToString()
-            });
-        }
-
-        if (resolution.PlaybookWithheldNotice(requestId) is { } playbookWithheldNotice)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(playbookWithheldNotice);
-        }
-
-        if (toolOffer.WithheldForCapability)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
-        }
-
-        if (toolOffer.TrimmedByAllowList)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsNotAllowListedNotice(requestId));
-        }
-
-        if (resolution.ComputeWithheldNotice(requestId) is { } computeWithheldNotice)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(computeWithheldNotice);
-        }
-
-        // A compiled orchestration's participants carry their own tools whatever the client asked.
-        if ((toolOffer.OfferTools || resolution.Orchestration is not null)
-            && await resolution.CloudToolsWithheldNoticeAsync(requestId, _localToolOfferProvider, cancellationToken) is { } cloudToolsWithheldNotice)
-        {
-            await _eventDispatcher.ReportTurnNoticeAsync(cloudToolsWithheldNotice);
-        }
+        await ChatPreRunNotices.ReportCommonAsync(_eventDispatcher, resolution, toolOffer, _localToolOfferProvider, requestId, cancellationToken);
 
         if (attachmentsAllowed)
         {

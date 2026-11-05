@@ -5,8 +5,7 @@
 - **Scope:** How the product transcribes audio on the node: which runtime, where audio is captured, how speakers are
   attributed, how a Linux CUDA binary is obtained, the order the feature is built in, and the one rule that outranks
   all of them — audio is never written to the database. It changes nothing about the chat, image or training runtimes.
-- **Authority:** Operator decisions D1–D4, taken 2026-09-11 on the assessment of the "Local Audio Transcription and
-  Voice Input" brief, plus the reconciliation rounds that closed it.
+- **Authority:** Operator decisions D1–D4, taken 2026-09-11.
 - **Amends:** nothing.
 
 ## Context
@@ -50,8 +49,8 @@ answer is to not store it at all.
 
 2. **D1 — Capture is browser-first hybrid.** V1 captures the microphone (`getUserMedia`) and system audio
    (`getDisplayMedia({audio})`) in the SPA on both operating systems, plus file upload, transported as raw 16 kHz mono
-   PCM frames. Windows per-application capture (NAudio 3.1.0 process loopback) is a later slice and the only thing
-   native capture is adopted for; Linux per-application capture is deferred beyond this plan. No `MediaRecorder`, no
+   PCM frames. Windows per-application capture (NAudio 3.1.0 process loopback) is later work and the only thing
+   native capture is adopted for; Linux per-application capture is deferred beyond that. No `MediaRecorder`, no
    compressed audio in the browser path.
 
 3. **D2 — Speakers are attributed by channel, never clustered.** When a session captures two sources, each channel is
@@ -64,9 +63,9 @@ answer is to not store it at all.
    that fails closed on drift. The pinned CPU prebuilt is the floor and `XE_WHISPERCPP_SERVER_PATH` is the
    bring-your-own override.
 
-5. **D4 — The build order is runtime → batch upload → live → later slices.** Runtime and catalogue first; then the
+5. **D4 — The build order is runtime → batch upload → live → later work.** Runtime and catalogue first; then the
    session entity, the batch file path and the SPA area; then the live segmenter and its hub; then the live capture
-   UI; then Windows per-process capture; dictation into the agent chat last. The live path gets its own slice because
+   UI; then Windows per-process capture; dictation into the agent chat last. The live path is built on its own because
    a fixed-window loop against the stateless inference route hallucinated on a mid-word cut and duplicated words at
    every overlap boundary — cut points must come from voice activity detection and a commit/stitch layer, which is a
    design problem, not a knob.
@@ -98,9 +97,9 @@ answer is to not store it at all.
   `-tdrz` is an English-only experimental marker with a separate model. Neither is speaker clustering.
 - **Licences:** whisper.cpp MIT (`LICENSE` in the cloned repository), Whisper weights MIT upstream with the ggml
   conversion inheriting it, Silero VAD MIT, NAudio MIT. Registered in `NOTICE` §3 and §5.
-- **Delivered and gated.** The runtime slice landed as `f3ee1689d` with the supervisor, catalogue, managed CUDA lane
-  and its own live rounds (raw logs were not retained). The session slice's persistence
-  and service commits are covered by `AddTranscriptionSessionsMigrationTests`, `TranscriptionSessionStoreTests`,
+- **Delivered and gated.** The runtime landed as `f3ee1689d` with the supervisor, catalogue, managed CUDA lane
+  and its own live rounds (raw logs were not retained). The session persistence
+  and service code is covered by `AddTranscriptionSessionsMigrationTests`, `TranscriptionSessionStoreTests`,
   `TranscriptionNoAudioPersistenceTests` (the no-audio fence), `TranscriptionServiceTests`,
   `TranscriptionUploadSlotTests`, `AudioContainerSnifferTests` and `FfmpegAudioTranscoderTests`. The upload-slot
   guarantee was verified by negative control: stubbing the delete loop out of `TranscriptionUploadSlot.DisposeAsync`
@@ -115,7 +114,7 @@ Stated honestly, including the ones that are costs.
   not. That is a UX cost accepted in exchange for one capture path on two operating systems and no new native
   dependency.
 - **Per-application capture is a Windows-only promise.** Linux users get microphone and whole-system audio and nothing
-  finer, for as long as no maintained .NET PipeWire binding exists. As built (D1's native-capture slice), it costs
+  finer, for as long as no maintained .NET PipeWire binding exists. As built (D1's native capture), it costs
   **no new project and no Windows target framework**: the leaf `NAudio.Wasapi` package sits on `Client.Application`
   and is kept honest by `[SupportedOSPlatform]` attributes plus an `OperatingSystem.IsWindows()` branch at the single
   DI call site, never a CA1416 suppression. A `Providers.*` project was rejected because such a project may reference

@@ -2,7 +2,7 @@
 
 **Audience:** an operator deploying a build OLDER than the one currently installed, when the two compute benchmark
 launch identities under different schemes.
-**Feature:** P-C5/S2 — `LlamaServerLaunchProjection.IdentitySchemeVersion`, migration `AddAiTrendsWave`.
+**Feature:** `LlamaServerLaunchProjection.IdentitySchemeVersion`, migration `AddAiTrendsWave`.
 
 ---
 
@@ -88,5 +88,5 @@ Rows that already executed keep both of their hashes under one scheme and compar
   straddling row before it can lease a model or spawn a process.
 - **Runs that already completed are untouched** in either direction. Their two hashes were computed under one scheme.
 - **No receipt has to be rewritten.** The effective side is versioned by `LlamaServerLaunchReceipt.ReceiptVersion`,
-  which moved to `2` in the same change as the scheme, so a pre-slice and a post-slice identity are distinguishable
+  which moved to `2` in the same change as the scheme, so identities from either side of that change are distinguishable
   rather than merely unequal.

@@ -92,7 +92,7 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
         AssertEx.False(columns.Contains(AdmittedColumn), "Rolling back one migration should drop the admitted-VRAM column.");
 
         // SQLite rebuilds a table to drop a column, so a rollback rebuilds from the PRECEDING migration's model — which
-        // is exactly how a sibling slice's columns get silently lost. Pin the neighbors this migration sits beside.
+        // is exactly how a sibling migration's columns get silently lost. Pin the neighbors this migration sits beside.
         AssertEx.True(columns.Contains("model_readiness_ms"), "Rolling back the VRAM migration must not disturb the column that immediately preceded it.");
         AssertEx.True(columns.Contains("agent_turn_ms"), "Rolling back the VRAM migration must not disturb the cost columns that preceded it.");
         AssertEx.True(columns.Contains("work_session_steps"), "Rolling back the VRAM migration must not disturb the cost columns that preceded it.");

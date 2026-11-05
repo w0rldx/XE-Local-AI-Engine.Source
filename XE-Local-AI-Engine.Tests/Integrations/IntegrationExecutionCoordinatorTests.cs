@@ -388,7 +388,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         harness.HoldLease();
         var executionId = harness.SeedAccepted(receivedAtUtc: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 
-        // The round-4 shape checked the age once and then awaited with no deadline at all, so this call never returned
+        // Checking the age once and then awaiting with no deadline at all would not return
         // until the lease came free. The deadline is what makes the advertised maximum queue age observable.
         await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
 
@@ -644,7 +644,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     [Test]
     public async Task Run_WhenTheRunIsCancelled_CancelsTheInvocationByIdAsWellAsSignallingTheToken()
     {
-        // B5 asks for both. The linked token stops the generation, but only Cancel() reaches the run's pending tool
+        // Both are needed. The linked token stops the generation, but only Cancel() reaches the run's pending tool
         // calls and attributes the turn to the user rather than to a bare abort.
         using var harness = new Harness();
         var executionId = harness.SeedAccepted();

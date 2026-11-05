@@ -9,7 +9,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import {
 	type ExternalProviderFormAction,
 	type ExternalProviderProbeState,
-	errorMessage,
+	externalProviderErrorMessage,
 	nextExternalRowId,
 	probeInputFingerprint,
 	toProbeRequestBody,
@@ -47,7 +47,7 @@ export function ExternalProviderProbePanel({
 			{ body: toProbeRequestBody(values, isStored, hasStoredApiKey) },
 			{
 				onSuccess: (result) => dispatch({ type: "probeSucceeded", fingerprint, result }),
-				onError: (error) => dispatch({ type: "probeFailed", fingerprint, failure: errorMessage(error) }),
+				onError: (error) => dispatch({ type: "probeFailed", fingerprint, failure: externalProviderErrorMessage(error) }),
 			},
 		);
 	};

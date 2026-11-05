@@ -3,16 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
-/// <summary>An installed GGUF that stands in for a base checkpoint: the model an adapter is served against and the base side of a comparison.</summary>
-public sealed class InstalledBaseModelLink
-{
-    public required string ModelName { get; init; }
-
-    public required string RepoId { get; init; }
-
-    public required string? ContentFingerprint { get; init; }
-}
-
 /// <summary>Resolves the installed GGUF counterpart of a base checkpoint repo.</summary>
 /// <remarks>
 ///     Without it an adapter export can never be smoke-tested or promoted and a comparison has no base side. The

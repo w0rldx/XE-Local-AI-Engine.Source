@@ -144,9 +144,8 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     [Test]
     public void Sanitize_OnHostOutputUnderTheProcessProvider_KeepsTheFileAndLineToo()
     {
-        // The same criterion on the currently shipping path. It did NOT hold before this change: the targeted pass
-        // replaced the engine root and the generic pattern then ate the remainder, because the marker's closing bracket
-        // is not in its excluded lookbehind class. Both providers now produce a legible diagnostic.
+        // The same criterion on the currently shipping path: the targeted pass replaces the engine root, the generic
+        // pattern must not eat the remainder, and both providers produce a legible diagnostic.
         var hostReport = ContainerBuildReport
                          .Replace("/workspace", HostWorkspace, StringComparison.Ordinal)
                          .Replace("/xe-runtime", HostRuntime, StringComparison.Ordinal);

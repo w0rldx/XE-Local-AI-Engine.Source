@@ -26,7 +26,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     public required WorkSessionServiceHostFixture Host { get; init; }
 
     /// <summary>
-    ///     The Phase 0 gate: a <c>Workflow</c> session is admitted at create — it is a deny-list on <c>Development</c>,
+    ///     A <c>Workflow</c> session is admitted at create — it is a deny-list on <c>Development</c>,
     ///     not an allow-list — and runs its scripted steps to <c>Completed</c> through the owner surface.
     /// </summary>
     [Test]

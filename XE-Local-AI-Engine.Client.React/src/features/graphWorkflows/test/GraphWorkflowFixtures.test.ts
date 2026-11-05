@@ -39,7 +39,7 @@ import {
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
 describe("eightNodeGraph", () => {
-	it("is the brief's eight-node graph with unique, well-formed keys in one namespace", () => {
+	it("is the eight-node graph with unique, well-formed keys in one namespace", () => {
 		const nodeKeys = (eightNodeGraph.nodes ?? []).map((node) => node.key ?? "");
 		const edgeKeys = (eightNodeGraph.edges ?? []).map((edge) => edge.key ?? "");
 

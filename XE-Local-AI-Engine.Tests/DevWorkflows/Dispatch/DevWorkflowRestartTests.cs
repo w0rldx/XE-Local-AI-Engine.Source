@@ -12,8 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     Killing the engine at each interesting point of a run, one test per row of the runtime plan's restart
-///     walkthrough.
+///     Killing the engine at each interesting point of a run, one test per point.
 ///     <para>
 ///         This is the feature, not a corner of it: a workflow run legitimately spans days, so surviving a restart
 ///         without an operator having to restart anything is the whole reason the runtime keeps its truth in rows. Each
@@ -54,7 +53,7 @@ public sealed class DevWorkflowRestartTests
                                       }
                                       """;
 
-    /// <summary>Row #1 — killed before the graph snapshot was ever materialized. There is nothing to reconcile.</summary>
+    /// <summary>Killed before the graph snapshot was ever materialized. There is nothing to reconcile.</summary>
     [Test]
     public async Task ARunKilledBeforeItMaterialized_MaterializesOnTheFirstTickAfterTheRestart()
     {
@@ -71,7 +70,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #2 — killed with the start already written. The keyed upserts re-drive it to completion rather than
+    ///     Killed with the start already written. The keyed upserts re-drive it to completion rather than
     ///     re-doing it, so a second dispatcher adds no second set of rows.
     /// </summary>
     [Test]
@@ -93,7 +92,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #3 — killed mid agent step. The session reconciles to <c>Interrupted</c> one level down, the node run
+    ///     Killed mid agent step. The session reconciles to <c>Interrupted</c> one level down, the node run
     ///     goes back to <c>Pending</c> without spending an attempt, and the dispatcher resumes THAT session: the step
     ///     loop rebuilds its state from the database, so at most one step was lost.
     /// </summary>
@@ -121,7 +120,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #4 — killed while the session had already parked on its own step budget. Nothing terminalizes it, and
+    ///     Killed while the session had already parked on its own step budget. Nothing terminalizes it, and
     ///     the node run resumes from the checkpoint the session wrote itself.
     /// </summary>
     [Test]
@@ -143,7 +142,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #3's other half — the session landed in the window between finishing and the poll writing what it said.
+    ///     A mid-step kill can land after the session finished, before the poll wrote what it said.
     ///     Nothing needs re-running: the row settles off the session's own answer, which is what that tick would have
     ///     written had it got there.
     /// </summary>
@@ -220,8 +219,8 @@ public sealed class DevWorkflowRestartTests
 
     /// <summary>
     ///     A sandbox node run is different: its process is gone and its workspace may be half-prepared, so the re-run is
-    ///     a real second attempt and has to count. Driven straight to <c>Running</c> because no sandbox lane exists yet
-    ///     to put it there — the reconciler's rule is what is under test, not how the row got that way.
+    ///     a real second attempt and has to count. Driven straight to <c>Running</c> because the reconciler's rule is what is
+    ///     under test, not how the row got that way.
     /// </summary>
     [Test]
     public async Task AToolNodeKilledMidCommand_CountsItsReRunAsASecondAttempt()
@@ -481,7 +480,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     T4: startup recovery is the one node-run write path deliberately OUTSIDE the telemetry choke point —
+    ///     Startup recovery is the one node-run write path deliberately OUTSIDE the telemetry choke point —
     ///     <c>ReconcileNonTerminalNodeRunsAsync</c> is forwarded straight to the inner store — so a row it settles keeps
     ///     its verdict and carries no cost at all.
     ///     <para>
@@ -515,7 +514,7 @@ public sealed class DevWorkflowRestartTests
             "The reconciler bypasses the publishing decorator, so it writes no telemetry — not even for a row that had cost to report.");
     }
 
-    /// <summary>Row #7 — the two human waits are durable states. A restart does not touch them at all.</summary>
+    /// <summary>The two human waits are durable states. A restart does not touch them at all.</summary>
     [Test]
     [Arguments(DevWorkflowNodeRunStatus.WaitingForApproval)]
     [Arguments(DevWorkflowNodeRunStatus.Blocked)]
@@ -540,7 +539,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #8 — killed between the human's answer and the dispatcher acting on it. The decision is a durable row, so
+    ///     Killed between the human's answer and the dispatcher acting on it. The decision is a durable row, so
     ///     the next tick reads it and acts; nothing is lost, only deferred.
     /// </summary>
     [Test]
@@ -559,7 +558,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #10 — killed mid run-terminalization. The answer is re-derived from node-run states that did not change,
+    ///     Killed mid run-terminalization. The answer is re-derived from node-run states that did not change,
     ///     so the run lands where it was always going to land.
     /// </summary>
     [Test]
@@ -581,7 +580,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #12 — killed while a drain was still settling. The intent is on the run row, the reconciler settles the
+    ///     Killed while a drain was still settling. The intent is on the run row, the reconciler settles the
     ///     node runs, and the next tick finishes the transition the operator asked for.
     /// </summary>
     [Test]
@@ -602,7 +601,7 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     Row #13 — a decision taken while the run was paused, across a restart. Neither the pause nor the crash can
+    ///     A decision taken while the run was paused, across a restart. Neither the pause nor the crash can
     ///     lose it: it is a row, and the first tick after the resume settles it.
     /// </summary>
     [Test]

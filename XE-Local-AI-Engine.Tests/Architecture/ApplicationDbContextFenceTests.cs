@@ -65,7 +65,7 @@ public sealed class ApplicationDbContextFenceTests
         var offenders = Holders.Value.Where(holder => !allowed.Contains(holder)).Order(StringComparer.Ordinal).ToList();
 
         AssertEx.Empty(offenders,
-            "An application-layer type must not depend on a node DbContext (operator decision D5): move the query "
+            "An application-layer type must not depend on a node DbContext: move the query "
             + "behind a *Store in XE-Local-AI-Engine.Client.Persistence. If the type is composition, migration "
             + "bootstrap or a documented maintenance job, add it to Architecture/DbContextUserAllowlist.txt with its "
             + "reason. Holders:"
@@ -129,8 +129,8 @@ public sealed class ApplicationDbContextFenceTests
     /// <remarks>
     ///     A constructor parameter, an async body resolution (IL in a state machine), a lambda parameter (IL in a
     ///     display class), a static method parameter and a generic argument, each anchored on a type that really
-    ///     holds a context. Four shapes have no live holder and are proved by scaffolding in the slice's
-    ///     break-proof log instead: a factory generic, a bare field, an implemented interface, and a derived type
+    ///     holds a context. Four shapes have no live holder and are not anchored here: a factory generic, a bare field, an
+    ///     implemented interface, and a derived type
     ///     that names nothing — that last one caught only because <see cref="Scan" /> walks the base chain.
     /// </remarks>
     [Test]

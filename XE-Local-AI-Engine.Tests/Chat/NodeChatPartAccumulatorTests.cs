@@ -272,7 +272,7 @@ public sealed class NodeChatPartAccumulatorTests
         acc.AppendToolRequested("call-1", "run_python", "{}", requiresApproval: true, sequence: 0);
         acc.CompleteToolCall("call-1", "run_python", "Tool call invocation was rejected.", isError: false, sequence: 1, isDenied: true);
 
-        AssertEx.Equal(NodeChatToolPartStates.Denied, acc.Snapshot().Single().State, "N-90: the stored part must not read as a completed run");
+        AssertEx.Equal(NodeChatToolPartStates.Denied, acc.Snapshot().Single().State, "the stored part must not read as a completed run");
     }
 
     [Test]

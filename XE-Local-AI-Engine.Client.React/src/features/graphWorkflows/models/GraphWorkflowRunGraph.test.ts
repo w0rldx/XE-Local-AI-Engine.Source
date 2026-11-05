@@ -2,7 +2,7 @@
 // run PINNED whenever the response carries one, a definition edited since is said and not drawn, a status tick never
 // re-frames the viewport, and past the cap nothing is drawn at all rather than a canvas that takes a minute to lay out.
 //
-// The `canvasFor` helper deliberately passes NO `runGraph`, so the blocks below exercise the pre-F5-1 fallback; the
+// The `canvasFor` helper deliberately passes NO `runGraph`, so the blocks below exercise the no-graph fallback; the
 // pinned-graph path has its own block at the end.
 
 import { describe, expect, it } from "vitest";
@@ -259,7 +259,7 @@ describe("toGraphWorkflowRunCanvas with the run's pinned graph", () => {
 		expect(canvas.graphNotice).toBe("definitionChanged");
 	});
 
-	it("falls back to the pre-F5-1 behaviour for a response that carries no graph", () => {
+	it("falls back to a nodes-only canvas for a response that carries no graph", () => {
 		const canvas = toGraphWorkflowRunCanvas({
 			run: run.run,
 			nodeRuns,

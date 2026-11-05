@@ -9,20 +9,21 @@ import {
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
+import { type NodeSettingsFieldBounds, toDisplayBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import {
 	type ChatCacheRamMode,
-	KV_CACHE_TYPE_DEFAULT,
-	kvCacheTypeSelectValues,
 	nodeSettingsDisplayScale,
-	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
 	type NodeSettingsModelOption,
+} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import {
+	KV_CACHE_TYPE_DEFAULT,
+	kvCacheTypeSelectValues,
 	requiresExternalDraftModel,
 	SPECULATIVE_DISABLED_MODE,
 	speculativeModeSelectValues,
-	toDisplayBounds,
 	usesDraftTokensPerStep,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+} from "@/features/node-settings/models/NodeSettingsRuntimeModes";
 
 interface Props {
 	readonly form: NodeSettingsFieldsForm;

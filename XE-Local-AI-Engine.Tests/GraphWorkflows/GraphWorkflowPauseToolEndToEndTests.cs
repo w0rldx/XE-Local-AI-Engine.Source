@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The slice's gate: one whole run of <c>Start → Pause → Tool → End</c> over the WIRED host, driven through the
+///     One whole run of <c>Start → Pause → Tool → End</c> over the WIRED host, driven through the
 ///     REST routes an operator's browser actually calls.
 ///     <para>
 ///         Nothing is faked. No model and no fake gateway, because the graph has no <c>Agent</c> node; no scripted
@@ -189,7 +189,7 @@ public sealed class GraphWorkflowPauseToolEndToEndTests
     {
         using var created = await SendAsync("POST",
             $"{Root}/definitions",
-            $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The slice gate.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""");
+            $$"""{"name":"Pause then tool {{Guid.NewGuid():N}}","description":"The pause and tool run.","graph":{{GraphWorkflowGraphs.PauseThenToolEndToEnd}}}""");
         var createdBody = await created.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.Created, created.StatusCode, createdBody);
         using var definition = JsonDocument.Parse(createdBody);

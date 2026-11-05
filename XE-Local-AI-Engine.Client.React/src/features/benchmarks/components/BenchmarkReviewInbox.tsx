@@ -1,6 +1,6 @@
 import { Button, Group, Loader, Pagination, SegmentedControl, Select, Stack, Table, Text, UnstyledButton } from "@mantine/core";
 import { IconRefresh } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -39,13 +39,11 @@ export function BenchmarkReviewInbox({ projects }: { projects: readonly Benchmar
 	const totalPages = Math.max(1, Math.ceil((reviews.data?.totalCount ?? 0) / benchmarkReviewPageSize.default));
 	const names = new Map(projects.map((project) => [project.id, project.name]));
 	// Reviewing the last row of the last page shrinks the total under the current page; step back rather than strand
-	// the reviewer on an empty page whose pager has vanished.
-	const lastPage = reviews.data === undefined ? null : totalPages;
-	useEffect(() => {
-		if (lastPage !== null && page > lastPage) {
-			setPage(lastPage);
-		}
-	}, [lastPage, page]);
+	// the reviewer on an empty page whose pager has vanished. State rather than a derived page: the query needs the
+	// clamped page, and the total that clamps it comes from that query.
+	if (reviews.data !== undefined && page > totalPages) {
+		setPage(totalPages);
+	}
 
 	return (
 		<SectionCard

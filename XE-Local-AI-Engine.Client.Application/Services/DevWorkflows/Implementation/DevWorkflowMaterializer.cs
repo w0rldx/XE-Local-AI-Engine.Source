@@ -73,7 +73,7 @@ internal sealed class DevWorkflowMaterializer
             }
 
             // The commit marker, asked for by id rather than counted off the rows: it is the ONE answer covering both a run that grew children and one whose decomposition legitimately
-            // produced no work, and it survives the fix loop re-running this node — a second expansion is v2, and the first one's children are still the run's.
+            // produced no work, and it survives the fix loop re-running this node — a node expands once, and the first expansion's children are still the run's.
             var operationId = DevWorkflowOperationId.For(run.Id, producer.NodeKey, MaterializationAttempt, "materialize");
             if (await store.FindOperationEventTypeAsync(run.Id, operationId, cancellationToken) is not null)
             {
@@ -536,9 +536,9 @@ internal sealed class DevWorkflowMaterializer
     /// <remarks>
     ///     The graph is left as it is — the join keeps its edge from this node and fires on it — and what is written is
     ///     the commit marker plus ONE already-succeeded row per validation node in the template subtree. Without them
-    ///     <c>GRAPH-C4-3</c> blocks a downstream apply, because an unmaterialized template key has no row and "nothing
+    ///     <c>GRAPH-3</c> blocks a downstream apply, because an unmaterialized template key has no row and "nothing
     ///     to validate" would read as "nothing validated it". Such a row never makes a run look finished, because
-    ///     <c>GRAPH-C4-1</c>'s fourth step keeps a template-subtree node non-terminal. A subtree with none writes a bare marker.
+    ///     <c>GRAPH-1</c>'s fourth step keeps a template-subtree node non-terminal. A subtree with none writes a bare marker.
     /// </remarks>
     private static async Task<int> NothingToDoAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,

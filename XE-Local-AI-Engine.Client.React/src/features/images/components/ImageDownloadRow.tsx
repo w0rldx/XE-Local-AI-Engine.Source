@@ -3,7 +3,7 @@ import { IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { formatDownloadEta, humanizeBytes } from "@/core/model-downloads/models/DownloadRateEstimate";
-import type { ImageModelDownloadView } from "@/features/images/models/ImageModels";
+import type { ImageModelDownloadView } from "@/features/images/models/ImageModelInstallModels";
 
 export interface DownloadRowProps {
 	modelName: string;

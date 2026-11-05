@@ -292,7 +292,7 @@ public sealed class LiveSessionEndToEndTests
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions");
         request.Content = JsonContent.Create(new
         {
-            title = "live round",
+            title = "live session",
             sourceKind = nameof(TranscriptionSourceKind.Microphone),
             modelId = "tiny",
             maxWindowSeconds = (int)(WindowMs / 1_000)
@@ -337,7 +337,7 @@ public sealed class LiveSessionEndToEndTests
             ConfigureAdditionalTestServices = services =>
             {
                 // The only default substitutions: this host cannot run a whisper daemon, so its transcriber and the
-                // supervisor the start warms are fakes. Everything the slice added stays real.
+                // supervisor the start warms are fakes. Everything else stays real.
                 services.RemoveAll<IWhisperTranscriber>();
                 services.AddSingleton(transcriber);
                 services.RemoveAll<IWhisperServerSupervisor>();

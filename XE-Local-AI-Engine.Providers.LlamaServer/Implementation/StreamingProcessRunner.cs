@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Run-to-completion streaming process runner for the in-app CUDA build, a different shape from the supervised
-///     <see cref="LlamaServerProcessLauncher" />, which is a long-lived-handle launcher. <c>[archMED-3]</c>
+///     <see cref="LlamaServerProcessLauncher" />, which is a long-lived-handle launcher.
 /// </summary>
 /// <remarks>
 ///     It spawns a tool by argv, with no shell, under <c>setsid -w</c> so the child runs in a NEW session and process
@@ -58,7 +58,7 @@ internal static class StreamingProcessRunner
             startInfo.ArgumentList.Add(arg);
         }
 
-        // Scrubbed env: replace the inherited environment entirely with the caller's allowlist. [secHIGH-2]
+        // Scrubbed env: replace the inherited environment entirely with the caller's allowlist.
         startInfo.Environment.Clear();
         foreach (var entry in environment)
         {

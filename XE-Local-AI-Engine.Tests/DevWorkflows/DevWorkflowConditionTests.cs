@@ -191,7 +191,7 @@ public sealed class DevWorkflowConditionTests
     [Arguments("""{"path":"","op":"eq","value":1}""", "non-empty 'path'")]
     [Arguments("""{"path":"a..b","op":"eq","value":1}""", "not a dot path")]
 
-    // Dot paths only, per the brief: no wildcards, no indexes, no functions. Any of them saved is a property name
+    // Dot paths only: no wildcards, no indexes, no functions. Any of them saved is a property name
     // literally spelled that way, which no output document carries — a dead edge instead of a refusal.
     [Arguments("""{"path":"items[0].name","op":"eq","value":1}""", "not a dot path")]
     [Arguments("""{"path":"*.value","op":"eq","value":1}""", "not a dot path")]

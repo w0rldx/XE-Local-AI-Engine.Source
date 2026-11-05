@@ -1,9 +1,9 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { DevelopmentRepository } from "@/core/development/queries/useDevelopmentRepositories";
 import {
 	type DevelopmentProfileDetection,
-	type DevelopmentRepository,
 	developmentProfileIdForBuildTarget,
 	isDevelopmentWhitespaceOnlyProfile,
 } from "@/features/development/models/DevelopmentModels";

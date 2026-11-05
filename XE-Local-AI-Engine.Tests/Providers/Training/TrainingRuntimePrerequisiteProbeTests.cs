@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
@@ -40,7 +41,7 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     {
         var report = await ProbeAsync(Path.Combine(_root, "no-scripts"), DriverPresent());
 
-        AssertEx.False(report.CanInstall);
+        AssertEx.False(report.CanBuild);
         var item = AssertEx.NotNull(report.Items.FirstOrDefault(static item => item.Key == TrainingRuntimePrerequisiteKeys.Lockfile),
             "The lockfile item must always be reported.");
         AssertEx.False(item.Satisfied);
@@ -57,7 +58,7 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
 
         var report = await ProbeAsync(WithScripts(), runner);
 
-        AssertEx.False(report.CanInstall);
+        AssertEx.False(report.CanBuild);
         var item = AssertEx.NotNull(report.Items.FirstOrDefault(static item => item.Key == TrainingRuntimePrerequisiteKeys.NvidiaDriver),
             "The driver item must always be reported.");
         AssertEx.False(item.Satisfied);
@@ -98,7 +99,7 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
             "The probe script ships beside the lockfile.");
     }
 
-    private Task<TrainingRuntimePrerequisiteReport> ProbeAsync(string scriptsDirectory, IPythonToolRunner runner)
+    private Task<SourceBuildPrerequisiteReport> ProbeAsync(string scriptsDirectory, IPythonToolRunner runner)
     {
         return new TrainingRuntimePrerequisiteProbe(runner, Path.Combine(_root, "cache"), scriptsDirectory)
             .ProbeAsync(CancellationToken.None);

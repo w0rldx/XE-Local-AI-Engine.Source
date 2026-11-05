@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 
 import { type AgentOption, toAgentOptions } from "@/core/agents/models/AgentOption";
 import { useAgentDefinitions } from "@/core/agents/queries/useAgentDefinitions";
-import type { ChatScope } from "@/features/chat/models/ChatModels";
+import type { ChatScope } from "@/core/models/ChatScope";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 interface ChatAgentSelection {

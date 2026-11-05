@@ -1016,7 +1016,7 @@ public sealed class ExternalAppCatalogValidatorTests
     /// <summary>
     ///     Restores <c>manifestSha256</c> after a mutation so every rule test asserts its own rule rather than also
     ///     tripping the fingerprint rule. The value comes from the production fingerprint over the mutated manifest,
-    ///     so the helper cannot mask a canonicalization defect — the two dedicated A21 tests bypass it.
+    ///     so the helper cannot mask a canonicalization defect — the two dedicated fingerprint tests bypass it.
     /// </summary>
     private static void Refingerprint(JsonObject document)
     {

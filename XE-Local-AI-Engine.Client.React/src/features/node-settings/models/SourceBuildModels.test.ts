@@ -149,17 +149,38 @@ describe("source build models", () => {
 		expect(sourceBuildIdentity(base)).not.toBe(sourceBuildIdentity({ ...base, buildId: "22222222-2222-4222-8222-222222222222" }));
 	});
 
-	it("retains technical diagnostics without exposing backend availability prose", () => {
-		expect(
-			sourceBuildPrerequisiteDiagnostic({
-				key: "cmake",
-				satisfied: true,
-				detail: "CMake detected: cmake version 4.0.0",
-			}),
-		).toBe("cmake version 4.0.0");
-		expect(sourceBuildPrerequisiteDiagnostic({ key: "os-is-linux", satisfied: true, detail: "Linux host detected." })).toBeNull();
-		expect(
-			sourceBuildPrerequisiteDiagnostic({ key: "free-disk", satisfied: false, detail: "Only 4.2 GB free; 20 GB required." }),
-		).toBe("4.2 GB / 20 GB");
+	it("shows a satisfied tool row's own output line", () => {
+		const rows = [
+			{ key: "cmake", detail: "cmake version 4.0.0" },
+			{ key: "gcc", detail: "gcc (Ubuntu 13.2.0-23ubuntu4) 13.2.0" },
+			{ key: "g++", detail: "g++ (Ubuntu 13.2.0-23ubuntu4) 13.2.0" },
+			{ key: "make-or-ninja", detail: "GNU Make 4.3" },
+			{ key: "make-or-ninja", detail: "1.12.1" },
+			{ key: "git", detail: "git version 2.43.0" },
+			{ key: "readelf", detail: "GNU readelf (GNU Binutils) 2.42" },
+			{ key: "nvcc", detail: "nvcc: NVIDIA (R) Cuda compiler driver" },
+			{ key: "nvidia-smi", detail: "NVIDIA GeForce RTX 4090" },
+			{ key: "glslc", detail: "shaderc v2023.8" },
+		];
+
+		for (const row of rows) {
+			expect(sourceBuildPrerequisiteDiagnostic({ ...row, satisfied: true })).toBe(row.detail);
+		}
+	});
+
+	it("leaves the backend's availability prose to the localized label", () => {
+		const rows = [
+			{ key: "os-is-linux", satisfied: true, detail: "Linux host detected." },
+			{ key: "nvidia-gpu", satisfied: true, detail: "NVIDIA GPU/driver detected." },
+			{ key: "free-disk", satisfied: true, detail: "Sufficient free disk space detected." },
+			{ key: "free-disk", satisfied: false, detail: "At least 15 GiB of free disk space is required." },
+			{ key: "cmake", satisfied: false, detail: "CMake is not available." },
+			{ key: "make-or-ninja", satisfied: false, detail: "Neither Ninja nor Make is available." },
+			{ key: "vulkaninfo", satisfied: true, detail: "==========" },
+		];
+
+		for (const row of rows) {
+			expect(sourceBuildPrerequisiteDiagnostic(row)).toBeNull();
+		}
 	});
 });

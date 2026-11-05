@@ -1,31 +1,19 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Default <see cref="ILlamaCppSourceBuildPrerequisiteProbe" />: reports — never installs — the toolchain an in-app
-///     CUDA <c>llama-server</c> build needs.
+///     <c>llama-server</c> build needs.
 /// </summary>
 /// <remarks>
-///     Each tool item spawns the tool with a version or probe argument, bounded, tree-killed and degrading rather than
-///     throwing, modeled on <see cref="ProcessGpuVendorProbe" />; the NVIDIA-GPU item reuses
-///     <see cref="IGpuVendorProbe" />; the free-disk item checks the build cache root's drive; non-Linux short-circuits
-///     to one unsatisfied OS item. The probe touches no command with host-derived data and surfaces only sanitized
-///     detail strings — a trimmed first version line or a fixed reason — never an absolute path, URL or secret.
+///     The shared probe runs the tool rows and the free-disk row; this runtime adds only its accelerator rows, right
+///     after the OS gate. The NVIDIA-GPU row reuses <see cref="IGpuVendorProbe" />.
 /// </remarks>
-public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildPrerequisiteProbe
+public sealed class LlamaCppSourceBuildPrerequisiteProbe : SourceBuildPrerequisiteProbe, ILlamaCppSourceBuildPrerequisiteProbe
 {
-    // Hard cap per probed tool, mirroring ProcessGpuVendorProbe: a hung tool can never block the checklist past this.
-    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
-
-    // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
-    private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
-
-    private readonly string _buildCacheRoot;
-    private readonly long _requiredFreeDiskBytes;
     private readonly IGpuVendorProbe _vendorProbe;
 
     /// <summary>Creates the probe over the supplied vendor probe, defaulting the disk check to the shared app cache root.</summary>
@@ -36,76 +24,39 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
 
     /// <summary>Test seam: pins the cache root whose drive the free-disk item inspects, and the required-free-disk floor.</summary>
     internal LlamaCppSourceBuildPrerequisiteProbe(IGpuVendorProbe vendorProbe, string buildCacheRoot, long requiredFreeDiskBytes = SourceBuildPolicy.RequiredFreeDiskBytes)
+        : base(buildCacheRoot, requiredFreeDiskBytes, "llama.cpp", requiresReadelf: false)
     {
         _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
-        ArgumentException.ThrowIfNullOrWhiteSpace(buildCacheRoot);
-        _buildCacheRoot = buildCacheRoot;
-        _requiredFreeDiskBytes = requiredFreeDiskBytes;
     }
 
     /// <inheritdoc />
-    public async Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
+    public Task<SourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
     {
-        // Non-Linux is a hard gate: the in-app build targets Linux only. Report a single unsatisfied OS item and stop —
-        // probing toolchain versions on Windows/macOS would be misleading (the build never runs there).
-        if (!OperatingSystem.IsLinux())
-        {
-            var osOnly = new[]
-            {
-                new LlamaCppSourceBuildPrerequisiteItem
-                {
-                    Key = "os-is-linux",
-                    Satisfied = false,
-                    Detail = "In-app source builds are available on Linux only."
-                }
-            };
-            return new LlamaCppSourceBuildPrerequisiteReport
-            {
-                CanBuild = false,
-                Items = osOnly
-            };
-        }
+        return ProbeReportAsync(token => ProbeBackendToolsAsync(backend, token), ct);
+    }
 
-        var items = new List<LlamaCppSourceBuildPrerequisiteItem>
+    private async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeBackendToolsAsync(LlamaCppSourceBackend backend, CancellationToken ct)
+    {
+        return backend switch
         {
-            new()
-            {
-                Key = "os-is-linux",
-                Satisfied = true,
-                Detail = "Linux host detected."
-            },
-            await ProbeToolAsync("cmake", ["--version"], "CMake", ct).ConfigureAwait(false),
-            await ProbeToolAsync("gcc", ["--version"], "C compiler (gcc)", ct).ConfigureAwait(false),
-            await ProbeToolAsync("g++", ["--version"], "C++ compiler (g++)", ct).ConfigureAwait(false),
-            await ProbeBuildToolAsync(ct).ConfigureAwait(false),
-            await ProbeToolAsync("git", ["--version"], "git", ct).ConfigureAwait(false),
-            ProbeFreeDisk()
+            LlamaCppSourceBackend.Cuda =>
+            [
+                await ProbeNvidiaGpuAsync(ct).ConfigureAwait(false),
+                .. await ProbeCudaToolsAsync(ct).ConfigureAwait(false)
+            ],
+            LlamaCppSourceBackend.Vulkan => await ProbeVulkanToolsAsync(ct).ConfigureAwait(false),
+            _ => []
         };
+    }
 
-        if (backend == LlamaCppSourceBackend.Cuda)
+    private async Task<SourceBuildPrerequisiteRow> ProbeNvidiaGpuAsync(CancellationToken ct)
+    {
+        var nvidiaPresent = await DetectNvidiaAsync(ct).ConfigureAwait(false);
+        return new SourceBuildPrerequisiteRow
         {
-            var nvidiaPresent = await DetectNvidiaAsync(ct).ConfigureAwait(false);
-            items.Insert(1, new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = "nvidia-gpu",
-                Satisfied = nvidiaPresent,
-                Detail = nvidiaPresent ? "NVIDIA GPU/driver detected." : "No NVIDIA GPU or driver detected."
-            });
-            items.Insert(2,
-                await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ct, CudaToolkitLocator.FindNvccOutsidePath()).ConfigureAwait(false));
-            items.Insert(3, await ProbeToolAsync("nvidia-smi", ["--query-gpu=compute_cap", "--format=csv,noheader"], "NVIDIA driver probe", ct).ConfigureAwait(false));
-        }
-        else if (backend == LlamaCppSourceBackend.Vulkan)
-        {
-            items.Insert(1, await ProbeToolAsync("glslc", ["--version"], "Vulkan shader compiler (glslc)", ct).ConfigureAwait(false));
-            items.Insert(2, await ProbeToolAsync("vulkaninfo", ["--summary"], "Vulkan runtime probe", ct).ConfigureAwait(false));
-        }
-
-        var canBuild = items.TrueForAll(static item => item.Satisfied);
-        return new LlamaCppSourceBuildPrerequisiteReport
-        {
-            CanBuild = canBuild,
-            Items = items
+            Key = "nvidia-gpu",
+            Satisfied = nvidiaPresent,
+            Detail = nvidiaPresent ? "NVIDIA GPU/driver detected." : "No NVIDIA GPU or driver detected."
         };
     }
 
@@ -125,168 +76,5 @@ public sealed class LlamaCppSourceBuildPrerequisiteProbe : ILlamaCppSourceBuildP
             // A vendor-probe failure must not fail the whole checklist; treat as "not detected".
             return false;
         }
-    }
-
-    // make OR ninja satisfies the build-generator requirement; report which (if any) was found.
-    private static async Task<LlamaCppSourceBuildPrerequisiteItem> ProbeBuildToolAsync(CancellationToken ct)
-    {
-        var make = await ProbeOrNullAsync("make", ["--version"], ct).ConfigureAwait(false);
-        if (make is { Length: > 0 })
-        {
-            return new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = "make-or-ninja",
-                Satisfied = true,
-                Detail = "make detected."
-            };
-        }
-
-        var ninja = await ProbeOrNullAsync("ninja", ["--version"], ct).ConfigureAwait(false);
-        if (ninja is { Length: > 0 })
-        {
-            return new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = "make-or-ninja",
-                Satisfied = true,
-                Detail = "ninja detected."
-            };
-        }
-
-        return new LlamaCppSourceBuildPrerequisiteItem
-        {
-            Key = "make-or-ninja",
-            Satisfied = false,
-            Detail = "Neither make nor ninja was found."
-        };
-    }
-
-    // `executablePath`, when given, is the absolute program to spawn instead of resolving `fileName` on PATH — the
-    // checklist key and the operator-facing detail stay the bare tool name, so no absolute path is ever surfaced.
-    private static async Task<LlamaCppSourceBuildPrerequisiteItem> ProbeToolAsync(string fileName,
-        IReadOnlyList<string> args,
-        string displayName,
-        CancellationToken ct,
-        string? executablePath = null)
-    {
-        var banner = await ProbeOrNullAsync(executablePath ?? fileName, args, ct).ConfigureAwait(false);
-        return banner is { Length: > 0 }
-            ? new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = fileName,
-                Satisfied = true,
-                Detail = $"{displayName} detected: {banner}"
-            }
-            : new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = fileName,
-                Satisfied = false,
-                Detail = $"{displayName} was not found on PATH."
-            };
-    }
-
-    // Spawns `<fileName> <args>` (no shell, argv only), bounded + tree-killed, and returns the trimmed first stdout/stderr
-    // line on a clean exit, or null on any failure (missing tool, non-zero, timeout). Mirrors ProcessGpuVendorProbe.
-    private static async Task<string?> ProbeOrNullAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct)
-    {
-        var startInfo = new ProcessStartInfo(fileName)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo
-        };
-        try
-        {
-            if (!process.Start())
-            {
-                return null;
-            }
-
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(ProbeTimeout);
-            try
-            {
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
-                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-                var stdout = await stdoutTask.ConfigureAwait(false);
-                var stderr = await stderrTask.ConfigureAwait(false);
-
-                if (process.ExitCode != 0)
-                {
-                    return null;
-                }
-
-                var combined = string.IsNullOrWhiteSpace(stdout) ? stderr : stdout;
-                return FirstLine(combined);
-            }
-            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
-            {
-                return null;
-            }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            // Tool missing / not on PATH / permission denied — treat as "not present", never fatal.
-            return null;
-        }
-        finally
-        {
-            ProcessTreeKill.TryKill(process);
-        }
-    }
-
-    private LlamaCppSourceBuildPrerequisiteItem ProbeFreeDisk()
-    {
-        try
-        {
-            var freeBytes = FreeSpace.GetAvailableFreeBytes(_buildCacheRoot);
-            var satisfied = freeBytes >= _requiredFreeDiskBytes;
-            var freeGb = freeBytes / (1024.0 * 1024 * 1024);
-            var requiredGb = _requiredFreeDiskBytes / (1024.0 * 1024 * 1024);
-            return new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = "free-disk",
-                Satisfied = satisfied,
-                Detail = satisfied
-                    ? $"{freeGb:F1} GB free (need {requiredGb:F0} GB)."
-                    : $"Only {freeGb:F1} GB free; {requiredGb:F0} GB required."
-            };
-        }
-        catch (Exception)
-        {
-            // A disk query failure must not throw out of the probe; report it as unsatisfied so the build stays gated.
-            return new LlamaCppSourceBuildPrerequisiteItem
-            {
-                Key = "free-disk",
-                Satisfied = false,
-                Detail = "Free disk space could not be determined."
-            };
-        }
-    }
-
-    private static string FirstLine(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return string.Empty;
-        }
-
-        var newline = text.IndexOfAny(['\r', '\n']);
-        var line = newline < 0 ? text : text[..newline];
-        return line.Trim();
     }
 }

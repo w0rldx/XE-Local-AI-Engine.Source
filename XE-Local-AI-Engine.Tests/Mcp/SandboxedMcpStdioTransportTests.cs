@@ -705,7 +705,7 @@ public sealed class SandboxedMcpStdioTransportTests
         }
     }
 
-    // Sensitive-host-root denylist (threat model AB3).
+    // Sensitive-host-root denylist.
     [Test]
     [Arguments("")]
     [Arguments(".ssh")]
@@ -858,7 +858,7 @@ public sealed class SandboxedMcpStdioTransportTests
     [Arguments("/usr", false)]
     public void IsVolumeRoot_IsTrueOnlyForTheRootOfADrive(string canonical, bool expected)
     {
-        // Round 6 read a whole data drive through a D:\ working directory: no denied root lay on D:, so nothing matched.
+        // A D:\ working directory exposes a whole data drive: no denied root lies on D:, so nothing matches.
         AssertEx.Equal(expected, SandboxedMcpStdioTransport.IsVolumeRoot(canonical), $"'{canonical}'");
     }
 

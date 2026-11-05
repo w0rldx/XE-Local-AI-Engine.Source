@@ -15,7 +15,14 @@ const hubMock = vi.hoisted(() => {
 		off: vi.fn((event: string) => handlers.delete(event)),
 		invoke: vi.fn(async (): Promise<unknown> => undefined),
 	};
-	const handle = { connection, whenStarted: Promise.resolve(), onReconnected: vi.fn(), release: vi.fn() };
+	const handle = {
+		connection,
+		whenStarted: Promise.resolve(),
+		onReconnecting: vi.fn(),
+		onReconnected: vi.fn(),
+		onClosed: vi.fn(),
+		release: vi.fn(),
+	};
 	return { acquire: vi.fn(() => handle), connection, handlers };
 });
 
@@ -91,6 +98,17 @@ describe("useTrainingRunHub", () => {
 		expect(result.current.totalSteps).toBe(0);
 		expect(result.current.phase).toBeNull();
 		expect(resync).not.toHaveBeenCalled();
+	});
+
+	it("resyncs on a gap instead of folding the frame past it", async () => {
+		const resync = vi.fn();
+		const { result } = renderHook(() => useTrainingRunHub(runId, resync));
+		await waitFor(() => expect(hubMock.connection.invoke).toHaveBeenCalledWith("Subscribe", runId, 0));
+
+		emit(progressFrame.replace('"sequence":1', '"sequence":5'));
+
+		expect(resync).toHaveBeenCalledTimes(1);
+		expect(result.current.step).toBe(0);
 	});
 
 	// EvaluationState and EvaluationProgress were missing from the client's kind list, so these frames failed the parse

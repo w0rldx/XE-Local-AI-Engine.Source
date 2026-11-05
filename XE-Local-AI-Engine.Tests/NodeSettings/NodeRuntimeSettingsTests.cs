@@ -909,8 +909,8 @@ public sealed class NodeRuntimeSettingsTests
     [Test]
     public async Task BackgroundModels_InheritTheStoredDefaultModel_WhenNothingNamesThem()
     {
-        // The gap this closes: the old composition seed read appsettings only, so a default model chosen in Node Settings
-        // never reached the analysis, eval and extraction agents.
+        // A composition seed reading appsettings only would keep a default model chosen in Node Settings from reaching
+        // the analysis, eval and extraction agents.
         var sut = CreateSut(new StoredNodeSettings
             {
                 DefaultModelName = "stored-default:7b"

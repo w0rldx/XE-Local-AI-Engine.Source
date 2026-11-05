@@ -102,67 +102,9 @@ usage() { sed -n '2,/^set -uo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d';
 
 trap 'echo; log "Interrupted."; exit 130' INT
 
-# Step ledger — the anti-vacuous-pass mechanism, same shape as run-gpu-smoke-local.sh.
-#
-# Every step declares itself expected BEFORE it runs and records a verdict when it finishes. The
-# final gate asserts that every expected step recorded PASS and that at least one step ran. A step
-# that dies, is skipped, or silently returns early therefore FAILS the run instead of leaving a
-# green summary behind — the same rule run-e2e-local.sh applies to a zero-test run.
-LEDGER_EXPECTED=()
-LEDGER_PASSED=()
-LEDGER_FAILED=()
-FAILURES=()
-
-ledger_expect() { LEDGER_EXPECTED+=("$1"); }
-ledger_pass()   { LEDGER_PASSED+=("$1"); log "PASS  $1"; }
-
-step_fail() {
-  local step="$1"; shift
-  LEDGER_FAILED+=("${step}")
-  FAILURES+=("${step}: $*")
-  echo "[grammar-smoke] FAIL  ${step}: $*" >&2
-  return 1
-}
-
-ledger_contains() {
-  local needle="$1"; shift
-  local item
-  for item in "$@"; do
-    [[ "${item}" == "${needle}" ]] && return 0
-  done
-  return 1
-}
-
-ledger_finalize() {
-  local status=0 step
-  echo
-  log "=== Summary ==="
-  if [[ "${#LEDGER_EXPECTED[@]}" -eq 0 ]]; then
-    echo "[grammar-smoke] FAIL: no steps were expected — nothing ran. This is not a pass." >&2
-    return 1
-  fi
-  for step in "${LEDGER_EXPECTED[@]}"; do
-    if ledger_contains "${step}" ${LEDGER_PASSED[@]+"${LEDGER_PASSED[@]}"}; then
-      echo "  PASS       ${step}"
-    elif ledger_contains "${step}" ${LEDGER_FAILED[@]+"${LEDGER_FAILED[@]}"}; then
-      echo "  FAILED     ${step}" >&2
-      status=1
-    else
-      # Nothing recorded a verdict: the step died or returned early without saying so. That is a
-      # different failure from an assertion failing, and is exactly the vacuous-pass hole this
-      # ledger exists to close.
-      echo "  NO VERDICT ${step}  <- the step produced no result at all; treating as failure" >&2
-      status=1
-    fi
-  done
-  if [[ "${#FAILURES[@]}" -gt 0 ]]; then
-    echo >&2
-    echo "[grammar-smoke] ${#FAILURES[@]} failure(s):" >&2
-    for step in "${FAILURES[@]}"; do echo "  - ${step}" >&2; done
-    status=1
-  fi
-  return "${status}"
-}
+# Step ledger — the anti-vacuous-pass mechanism.
+# shellcheck source=scripts/lib/smoke-ledger.sh
+source "${PROJECT_ROOT}/scripts/lib/smoke-ledger.sh" "grammar-smoke"
 
 # The build lock cannot be inherited through an exported variable (see with-build-lock.sh), so it
 # is taken by re-executing this whole script under it. This MUST happen before the option loop
@@ -193,26 +135,8 @@ command -v python3 >/dev/null 2>&1 || prereq_fail "python3 is required to read t
 # Step 1 — prerequisites: a llama-server binary and a chat GGUF.
 ledger_expect "1-prerequisites"
 
-discover_server() {
-  local candidate
-  # The source build is preferred: on a CUDA box it is the binary that actually runs the GPU, and
-  # its layout is fixed (LlamaCppSourceBuildService: {root}/llama.cpp/source-build/active/build/bin).
-  candidate="${DATA_ROOT}/llama.cpp/source-build/active/build/bin/llama-server"
-  if [[ -x "${candidate}" ]]; then
-    printf '%s\n' "${candidate}"
-    return 0
-  fi
-  # Otherwise any acquired variant under {root}/llama.cpp (cuda / vulkan / cpu), newest first.
-  if [[ -d "${DATA_ROOT}/llama.cpp" ]]; then
-    candidate="$(find "${DATA_ROOT}/llama.cpp" -type f -name llama-server -perm -u+x -printf '%T@\t%p\n' 2>/dev/null \
-                 | sort -rn | head -1 | cut -f2-)"
-    if [[ -n "${candidate}" ]]; then
-      printf '%s\n' "${candidate}"
-      return 0
-    fi
-  fi
-  return 1
-}
+# shellcheck source=scripts/lib/discover-llama-server.sh
+source "${PROJECT_ROOT}/scripts/lib/discover-llama-server.sh"
 
 # Auto-pick the smallest CHAT GGUF. Embedding and reranker GGUFs are excluded on purpose: they ship
 # no chat template, so llama-server would never compile a tool grammar and the whole run would be
@@ -238,7 +162,7 @@ discover_model() {
 }
 
 if [[ -z "${SERVER_PATH}" ]]; then
-  SERVER_PATH="$(discover_server || true)"
+  SERVER_PATH="$(discover_server "${DATA_ROOT}" || true)"
 fi
 if [[ -z "${SERVER_PATH}" || ! -x "${SERVER_PATH}" ]]; then
   prereq_fail "no llama-server executable found.

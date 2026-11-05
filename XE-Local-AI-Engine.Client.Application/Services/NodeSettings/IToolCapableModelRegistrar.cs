@@ -25,8 +25,8 @@ public interface IToolCapableModelRegistrar
     ///     added.
     /// </summary>
     /// <remarks>
-    ///     Runs once at startup so models installed BEFORE this behavior existed are corrected too; without it the fix
-    ///     would only ever apply to future downloads, leaving every already-installed model still silently tool-less.
+    ///     Runs once at startup so models already installed are corrected too; without it only future downloads
+    ///     would be, leaving every already-installed model still silently tool-less.
     /// </remarks>
     Task<int> BackfillInstalledAsync(CancellationToken cancellationToken = default);
 }

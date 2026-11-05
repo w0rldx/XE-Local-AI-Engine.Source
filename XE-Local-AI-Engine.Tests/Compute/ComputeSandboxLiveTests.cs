@@ -597,7 +597,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
 
     /// <summary>
     ///     Opts the node in. <c>ComputeOptions.Enabled</c> defaults to false — the production fail-closed default — and
-    ///     the kill-switch now lives in the gateway, so a live suite that did not set it would exercise the refusal
+    ///     the kill-switch lives in the gateway, so a live suite that did not set it would exercise the refusal
     ///     rather than the sandbox.
     /// </summary>
     private static ComputeOptions Enabled(ComputeOptions? options)

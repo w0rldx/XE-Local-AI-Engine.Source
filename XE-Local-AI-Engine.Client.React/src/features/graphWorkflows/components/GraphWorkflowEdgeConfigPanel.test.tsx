@@ -9,11 +9,11 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowEdgeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowEdgeConfigPanel";
-import {
-	defaultNodeData,
-	type GraphWorkflowCanvasEdge,
-	type GraphWorkflowCanvasEdgeCondition,
-	type GraphWorkflowCanvasNodeData,
+import { defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
+import type {
+	GraphWorkflowCanvasEdge,
+	GraphWorkflowCanvasEdgeCondition,
+	GraphWorkflowCanvasNodeData,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 

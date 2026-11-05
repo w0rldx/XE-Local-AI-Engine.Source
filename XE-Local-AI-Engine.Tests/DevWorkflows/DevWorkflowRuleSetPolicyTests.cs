@@ -245,7 +245,7 @@ public sealed class DevWorkflowRuleSetPolicyTests
         var nodeRun = await harness.ReadNodeRunAsync(runId, "research");
         var recorded = DevWorkflowRulePolicyResolver.Read(nodeRun.PolicyResolutionJson);
 
-        AssertEx.Equal(expected: 1, recorded.Count, "P3.7: the node run keeps the ids it recorded, whatever became of the documents.");
+        AssertEx.Equal(expected: 1, recorded.Count, "the node run keeps the ids it recorded, whatever became of the documents.");
         AssertEx.Equal(ruleSet.ContentSha256, recorded[0].ContentSha256, "the resolution was recorded at materialization and the delete cannot reach back into it.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, nodeRun.Status, "and the node dispatched rather than failing over a rule set that is gone.");
         AssertEx.Contains(harness.Agent.Objectives.Single(),

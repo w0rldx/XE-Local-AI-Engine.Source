@@ -708,7 +708,7 @@ public sealed class BinaryManagerInstallTagTests
     [Test]
     public async Task EnsureBinary_CrossVariantNonPinnedResolve_DoesNotOverwriteRecordAssetOrSha()
     {
-        // MED-1 record integrity: an ensure for a DIFFERENT variant that resolves a non-pinned tier-2 tag (the recorded
+        // Record integrity: an ensure for a DIFFERENT variant that resolves a non-pinned tier-2 tag (the recorded
         // higher tag) must NOT write the pin's asset/sha (which belong to a different variant + the pinned floor) over
         // the authoritative record. The pin is resolved by OS/arch/variant, so its asset/digest never match an arbitrary
         // non-pinned tag — recording them would corrupt Tag↔Asset↔Sha256 consistency.

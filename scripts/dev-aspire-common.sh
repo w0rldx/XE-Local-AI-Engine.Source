@@ -68,7 +68,7 @@ raise SystemExit(10)
 }
 
 # A first mint on a checkout that already has encrypted dev data means that data was written under a
-# different secret — for this repo, the shared default that used to sit in the AppHost's tracked
+# different secret — for this repo, typically the shared default an older AppHost carried in its tracked
 # appsettings.Development.json. Nothing can recover it, and the node crashes on the first read rather
 # than degrading, so name the files that have to go.
 dev_warn_orphaned_dev_data() {

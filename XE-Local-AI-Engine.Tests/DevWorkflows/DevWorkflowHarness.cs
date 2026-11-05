@@ -624,7 +624,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         return [.. runs.Select(static run => run.Id)];
     }
 
-    /// <summary>Moves one node run directly, to stand it in a state only a lane this build lacks would produce.</summary>
+    /// <summary>Moves one node run directly, to stand it in a state no lane in this test would produce.</summary>
     public async Task TransitionNodeRunAsync(Guid runId, string nodeKey, DevWorkflowNodeRunStatus target)
     {
         var nodeRun = await ReadNodeRunAsync(runId, nodeKey);
@@ -693,7 +693,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     /// <summary>
     ///     Stops the node run's session the way the write-declaration gate stops one: the step row that names the gate
-    ///     and carries the refusal sentence, then the Failed terminal (<c>GRAPH-C4-2</c>).
+    ///     and carries the refusal sentence, then the Failed terminal (<c>GRAPH-2</c>).
     ///     <para>
     ///         Both halves matter. The row is the durable cause the owning run reads back; a session settled without it
     ///         is one that failed for a reason no reader can recover, and a poll re-inspecting the agent definition as

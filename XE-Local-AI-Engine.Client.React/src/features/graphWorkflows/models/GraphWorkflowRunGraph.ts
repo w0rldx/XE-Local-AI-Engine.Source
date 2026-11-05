@@ -9,13 +9,13 @@
 // `run.graphHash === definition.graphHash`, and NODES ONLY, laid out from the rows, when the two disagree
 // (`graphNotice: "nodesOnly"`) — drawing today's edges over an older run would be a lie about routing.
 
+import { defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
+import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
 import {
-	defaultNodeData,
 	type GraphWorkflowCanvas,
 	type GraphWorkflowCanvasEdge,
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowCanvasRunState,
-	graphToCanvas,
 	graphWorkflowNodeTypeByKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";

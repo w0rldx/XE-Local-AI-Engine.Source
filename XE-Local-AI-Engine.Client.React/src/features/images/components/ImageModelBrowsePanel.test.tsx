@@ -6,7 +6,7 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
-import type { ImageRepositoryFileView, ImageRepositoryView } from "@/features/images/models/ImageModels";
+import type { ImageRepositoryFileView, ImageRepositoryView } from "@/features/images/models/ImageModelInstallModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 let repositories: ImageRepositoryView[] = [];

@@ -16,7 +16,7 @@ import {
 	createFormRowIds,
 	type ExternalProviderConnectionsDto,
 	type ExternalProviderFormState,
-	errorMessage,
+	externalProviderErrorMessage,
 	formReducer,
 	initialFormState,
 	parseConnectionsConflict,
@@ -142,7 +142,7 @@ export function ExternalProviderPanel({ target, initialValues, template, onConfl
 				return;
 			}
 			// A 400 carries the store's own message about what is not storable; apiErrorMessage surfaces it verbatim.
-			toast.error(errorMessage(error));
+			toast.error(externalProviderErrorMessage(error));
 		},
 	});
 
@@ -156,7 +156,7 @@ export function ExternalProviderPanel({ target, initialValues, template, onConfl
 				applyConflict(conflict, t("pages.externalProviders.deleteConflict"));
 				return;
 			}
-			toast.error(errorMessage(error));
+			toast.error(externalProviderErrorMessage(error));
 		},
 	});
 

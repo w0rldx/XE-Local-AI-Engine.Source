@@ -32,7 +32,7 @@ internal static class WhisperCppSourceBuildMapper
         };
     }
 
-    public static WhisperCppSourceBuildPrerequisitesResponse ToResponse(this WhisperCppSourceBuildPrerequisiteReport report,
+    public static WhisperCppSourceBuildPrerequisitesResponse ToResponse(this SourceBuildPrerequisiteReport report,
         WhisperBackend backend)
     {
         ArgumentNullException.ThrowIfNull(report);

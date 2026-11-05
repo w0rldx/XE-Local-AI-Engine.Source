@@ -67,11 +67,11 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
             "error_message"
         }), "transcription_sessions should expose exactly the mapped columns.");
 
-        // No audio column, and none may ever be added: R12 keeps the bytes off disk entirely.
+        // No audio column, and none may ever be added: the bytes stay off disk entirely.
         AssertEx.Equal("BLOB", await ColumnTypeAsync(probe, "transcription_sessions", "config_json"),
             "config_json holds AES-GCM output — nonce ‖ ciphertext ‖ tag — and a TEXT column would mangle it.");
         AssertEx.Equal("BLOB", await ColumnTypeAsync(probe, "transcription_sessions", "error_code"),
-            "The error code is encrypted with the message as a pair (R11), so it is a blob and not SQL-queryable.");
+            "The error code is encrypted with the message as a pair, so it is a blob and not SQL-queryable.");
         AssertEx.Equal("TEXT", await ColumnTypeAsync(probe, "transcription_sessions", "model_id"));
         AssertEx.Equal("INTEGER", await ColumnTypeAsync(probe, "transcription_sessions", "status"),
             "Status is persisted as its enum ordinal, which is why the ordinals are append-only.");

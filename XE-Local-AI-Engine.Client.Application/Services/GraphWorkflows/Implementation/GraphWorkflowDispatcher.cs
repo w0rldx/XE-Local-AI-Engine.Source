@@ -493,7 +493,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
             if (!graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node))
             {
                 // The run's pinned graph no longer declares this node. Nothing can route it, and nothing should guess.
-                // There is no Blocked state in v1, so it is a node failure and the recomputation turns it into a run one.
+                // There is no Blocked state, so it is a node failure and the recomputation turns it into a run one.
                 written += await FailNodeAsync(store,
                     graph,
                     run,

@@ -5,9 +5,9 @@
 - **Scope:** How the engine acquires uv, where uv, its managed CPython installs and its cache live on disk, how a
   uv-managed feature environment is identified, and which project owns that machinery. It changes nothing about what
   Training or the compute tool (`run_python`) do, and nothing about the sandbox or any execution backend.
-- **Authority:** Operator decisions D1–D6 of the 2026-09-27 managed-Python plan (post-1.0; uv is not bundled; a new
+- **Authority:** Operator decisions of 2026-09-27 (post-1.0; uv is not bundled; a new
   `Providers.Python` project; a Windows toolchain layer after the project split; the Node settings status card), plus
-  the routine calls recorded there (feature environment roots stay put, one CPython minor, no automatic pruning,
+  these routine calls (feature environment roots stay put, one CPython minor, no automatic pruning,
   `UV_PYTHON_INSTALL_REGISTRY=0` everywhere, the inherited `%LOCALAPPDATA%` ACL on Windows).
 - **Amends:** [ADR 0005](0005-training-runtime-python-exclusivity-and-project-placement.md) Decision §3 only — see
   [What this amends, and what it deliberately does not](#what-this-amends-and-what-it-deliberately-does-not).

@@ -46,7 +46,7 @@ const liveTerminalStatuses: ReadonlySet<string> = new Set(["Completed", "Cancell
  *
  * Deliberately an allow-list rather than "everything but File": `ApplicationProcess` is live even though the browser
  * builds no capture request for it (the node records the application itself), and `Dictation` is not creatable from
- * any surface yet, so it stays off this list until the slice that ships it puts it there on purpose.
+ * any surface yet, so it stays off this list until a surface that creates it puts it there on purpose.
  */
 function isLiveSourceKind(sourceKind: TranscriptionSourceKind): boolean {
 	return (

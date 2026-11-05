@@ -171,7 +171,7 @@ internal sealed class DevWorkflowAgentExecutor
         }
         catch (DevWorkflowPolicyException exception)
         {
-            // GRAPH-C4-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more than the definition admits to, and only a person can say
+            // GRAPH-2's runtime half. NOT Configuration: nothing is misconfigured — the node's agent may do more than the definition admits to, and only a person can say
             // whether that is meant. Policy blocks for a human rather than failing the run, and a retry would produce the same answer.
             return written + await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.Policy, exception.Message, cancellationToken);
         }
@@ -256,7 +256,7 @@ internal sealed class DevWorkflowAgentExecutor
 
             case AgentWorkSessionStatus.Failed:
 
-                // GRAPH-C4-2 read BACK from the refusal's own row, never recomputed: asking the guard again answers about the definition as it stands now, losing the class.
+                // GRAPH-2 read BACK from the refusal's own row, never recomputed: asking the guard again answers about the definition as it stands now, losing the class.
                 // That row carries the class and sentence rather than a generic failure. The declaration is checked first off the PINNED graph, so a plain provider failure costs a miss.
                 if (DeclarationRequired(graph, graph.Nodes.GetValueOrDefault(nodeRun.NodeKey))
                     && await ReadWriteGateRefusalAsync(sessionId, cancellationToken) is { } refusal)
@@ -433,7 +433,7 @@ internal sealed class DevWorkflowAgentExecutor
     /// <remarks>
     ///     A node run whose key is not in the run's graph — nothing produces one, but the lookup is a dictionary miss
     ///     away — reads as "no override" rather than failing a resume over a label. Re-supplied on every start and
-    ///     resume, which makes the refusal flag the right place for <c>GRAPH-C4-2</c>'s per-turn half: it is read off
+    ///     resume, which makes the refusal flag the right place for <c>GRAPH-2</c>'s per-turn half: it is read off
     ///     the run's PINNED graph each time, so nothing edited mid-run can widen what a running session is offered.
     /// </remarks>
     private static WorkSessionRuntimeOverride? RuntimeOf(DevWorkflowGraph graph,
@@ -492,7 +492,7 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>'s runtime half where the session is CREATED: an Agent node whose bound agent will really
+    ///     <c>GRAPH-2</c>'s runtime half where the session is CREATED: an Agent node whose bound agent will really
     ///     be offered a tool that writes or runs commands has to have SAID so, or its template waived the rule.
     /// </summary>
     /// <remarks>

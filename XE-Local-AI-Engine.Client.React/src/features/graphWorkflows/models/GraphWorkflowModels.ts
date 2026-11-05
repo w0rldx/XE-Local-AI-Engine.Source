@@ -46,6 +46,7 @@ import type {
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowDefinitionRequest as UpdateGraphWorkflowDefinitionRequest,
 	XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionResponse as ValidateGraphWorkflowDefinitionResponse,
 } from "@/core/api/generated/types.gen";
+import { isPlainRecord } from "@/core/models/JsonRecord";
 
 export type {
 	CreateGraphWorkflowDefinitionRequest,
@@ -270,6 +271,16 @@ export interface GraphWorkflowSelection {
 	readonly runId?: string;
 	readonly nodeKey?: string;
 	readonly tab?: GraphWorkflowTab;
+}
+
+/** The wire's `config` as a bag. Anything that is not a plain object reads as empty, so a malformed node still renders. */
+export function configRecord(config: unknown): Record<string, unknown> {
+	return isPlainRecord(config) ? config : {};
+}
+
+/** A wire member that should be text; anything else reads as empty. */
+export function stringOrEmpty(value: unknown): string {
+	return typeof value === "string" ? value : "";
 }
 
 function narrow<T extends string>(values: readonly T[], value: string | undefined | null, fallback: T): T {

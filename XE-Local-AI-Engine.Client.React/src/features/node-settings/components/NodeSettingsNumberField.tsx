@@ -6,11 +6,8 @@ import {
 	nodeSettingsFieldError,
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
-import {
-	type NodeSettingsFieldsForm,
-	type NumericBounds,
-	nodeSettingsScaleOf,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import type { NumericBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
+import { type NodeSettingsFieldsForm, nodeSettingsScaleOf } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 type NumericFormField = {
 	[K in keyof NodeSettingsFieldsForm]: NodeSettingsFieldsForm[K] extends number | string ? K : never;

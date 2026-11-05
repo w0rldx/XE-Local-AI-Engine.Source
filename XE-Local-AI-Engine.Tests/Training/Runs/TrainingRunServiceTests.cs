@@ -127,7 +127,7 @@ public sealed class TrainingRunServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     An unknown run and a finished one used to share one <c>false</c>; they are now a 404 and a 409 apart, and the
+    ///     An unknown run and a finished one are a 404 and a 409 apart, and the
     ///     first cancel of a queued run still terminalizes it.
     /// </summary>
     [Test]

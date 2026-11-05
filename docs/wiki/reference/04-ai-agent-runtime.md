@@ -81,7 +81,7 @@ boundary. A hidden tool is one the model was not shown; if the model names it an
 exactly today's rules — same wrapper, same policy — and an unresolvable name simply yields a not-found
 result and the loop continues. Hiding never widens the authorised set and never waives an approval.
 
-**Fitting the offer to the window (model-matrix F5).** When a single-agent turn's first round does not fit the launched
+**Fitting the offer to the window.** When a single-agent turn's first round does not fit the launched
 window and would fit without the tool offer, `InvocationRunner.FitFirstRoundToWindow` narrows the offer through this hop
 even with the node setting off: it opens a nested `ToolRelevanceScope` with a `FittedToolOffer`, the estimated tokens
 the ranked tools may use beside the pinned `list_tools` (and `ask_user`), and each other tool's cost measured from its own
@@ -116,7 +116,7 @@ per cell, calibrated and not, 2026-10-05): a turn with one tool call and a turn 
 on all three; `list_tools` followed by a discovered tool completes on Granite and ends with the context-window error
 on both Qwen models, whose round after the tool list is 41 to 65 estimated tokens over the room. The estimate ran
 about 370 tokens above the real prompt there. A rule that kept half the free room for tool rounds was tried and reverted: the two pinned tools alone
-exceeded that half, so nearly every agent turn was refused at the fit (model-matrix round, 2026-10-04). From 8,192
+exceeded that half, so nearly every agent turn was refused at the fit (2026-10-04). From 8,192
 the full Default Assistant offer is sent and multi-round turns run. Tool discovery needs a window of 8,192 or more.
 
 Rules the hop holds:
@@ -181,7 +181,7 @@ blank or nothing but function words ("what about it, then?"), the whole array is
 never touched: every score would be zero and the "ranking" would just be the input order, a worse answer than
 offering everything.
 
-Two corrections to the raw overlap shape are forced by a live round where *"Convert 100 euros to dollars,
+Two corrections to the raw overlap shape are forced by a live run where *"Convert 100 euros to dollars,
 then give me a stock quote"* hid the one tool that could answer and offered four that could not. Function
 words are dropped from **both** sides, so a description cannot win a slot for containing "a", "to" or "then";
 and the overlap is divided by the **square root** of the candidate's token count, so a long description cannot
@@ -368,7 +368,7 @@ list MAF hands the raw `IChatClient` after appending inner tool results. Its pol
    messages, and the very last message — the pending tool result the model must see next. The user's current
    message (the last user message with text) is kept too: after a few tool rounds it falls out of the recent
    window, and a request without it is rejected by the chat template (llama-server: "No user query found in
-   messages", model-matrix D2). When the set is over the window without dropping it, the round fails with the
+   messages"). When the set is over the window without dropping it, the round fails with the
    context-window error.
 2. Over the window, first **excerpt** oversized tool results anywhere, oldest first, including a recent
    or pending one: excerpting is the primary size backstop and it keeps the pending tool result
@@ -551,7 +551,7 @@ is deliberately coarse: it groups tools by what a call can **do**, not by which 
 | `Network` | Tools reaching an external or out-of-process surface, including every **HTTP** MCP tool |
 | `Unknown` | The fail-closed default for a tool that declared no category, so a new uncategorized tool is treated as approval-requiring rather than silently auto-executing |
 
-The four work-session state tools carry `WriteExecute` in the categorized offer, which is what `GRAPH-C4-2`'s
+The four work-session state tools carry `WriteExecute` in the categorized offer, which is what `GRAPH-2`'s
 runtime half judges a workflow Agent node on — it excludes those four by name, because every agent node is
 offered them. The one write/execute gateway that is **not** in the taxonomy, `run_in_agent_home`, sits on the
 ClientLocal registry seam rather than the offer and is floored by that registry's `ApprovalRequiredAIFunction`
@@ -746,7 +746,7 @@ entirely so the model's chat-template-baked reasoning runs, and only `none` or u
 of the **default effort** setting, shipped `low` (model-matrix 2026-10-04, operator decision 3: the earlier flat
 `medium` let a 0.8B spend minutes reasoning over a five-word greeting). Only the budget follows that setting: the
 turn still sends no effort, so `think` stays `true` and an external model keeps its registered default.
-Uncapped, a hard prompt reasoned until `finish_reason: length` with no answer (tester round 6). Anything else —
+Uncapped, a hard prompt reasoned until `finish_reason: length` with no answer. Anything else —
 `none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an unrecognized
 value — sends no budget at all. The marker is inert off the llama.cpp path. `minimal` and `xhigh` are mapped
 rather than left null so a definition that pins a Codex-only level onto a local model does not silently get
@@ -767,7 +767,7 @@ deliberating in content after the budget closed the block and then writes a lite
 that tag moved into the reasoning at the end of the turn (`InvocationRunner.ReclassifyLeakedThinkTextAsync`,
 `IWorkerEventDispatcher.ReportInvocationTextReclassifiedAsync`); the live stream showed it as answer until the
 terminal event replaces it. For a thinking-capable model the check runs on every final round, also with thinking off
-(LFM2.5 at effort none closes its in-content deliberation with `</think>`, model-matrix W3), and a whole
+(LFM2.5 at effort none closes its in-content deliberation with `</think>`), and a whole
 `<think>…</think>` block that opens the answer, leading whitespace aside (Qwen3.5 0.8B reopening the block after the
 budget, V2), moves to the reasoning too, leaving the text after it as the answer. Only residue at the start counts: a
 block that follows answer text (`Use <think>analysis</think> before the answer`, or a template in a code fence) is
@@ -779,9 +779,9 @@ that deliberation as the answer. A model that is not thinking-capable is left al
 its round reasoned, and even then a close tag preceded by its own open tag stays as quoted markup. The residual
 false positives are a thinking-capable model whose answer opens with a quoted block, and any answer whose first
 `</think>` has no open tag before it: the text before that tag moves to the reasoning, because a stray close tag after
-deliberation (W3) looks the same.
+deliberation looks the same.
 
-**A tool call written inside the reasoning** (model-matrix F4: Qwen3.5 0.8B and 9B with thinking on write the next
+**A tool call written inside the reasoning** (Qwen3.5 0.8B and 9B with thinking on write the next
 `<tool_call>` block before `</think>`, and llama-server keeps it as reasoning) is re-prompted once: when a tool-offering
 single-agent turn's final round produced nothing and its reasoning contains `<tool_call>`, the runner replays the
 segment's executed calls and results without reasoning, adds one user message asking for the call outside the

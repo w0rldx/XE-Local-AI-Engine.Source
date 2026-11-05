@@ -1,3 +1,4 @@
+import type { PendingUserQuestion, UserQuestion, UserQuestionOption } from "@/core/models/ChatMessageParts";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 /**
@@ -5,37 +6,6 @@ import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStre
  * shape the model emits. Nothing else in the client reads those field names — a backend rename is a one-line fix
  * here, not a sweep. The answers are posted through the generated `resolveUserQuestionMutation`.
  */
-
-/** One selectable option. `recommended` is advisory only — the card badges it but never pre-selects it. */
-export interface UserQuestionOption {
-	label: string;
-	description?: string;
-	recommended?: boolean;
-}
-
-/** One question of the 1–4 the model may ask in a single `ask_user` call. */
-export interface UserQuestion {
-	header?: string;
-	question: string;
-	multiSelect?: boolean;
-	options: UserQuestionOption[];
-}
-
-/**
- * A live, unanswered `ask_user` prompt riding the matching tool part. Transient (live-only): cleared once the tool
- * call completes/fails, and never present on a reloaded/persisted turn — exactly like `pendingApprovalRequestId`.
- */
-export interface PendingUserQuestion {
-	requestId: string;
-	questions: UserQuestion[];
-}
-
-/** One answered question. `other` carries the free-text row the client always offers (never model-declared). */
-export interface UserQuestionAnswer {
-	question: string;
-	selected: string[];
-	other?: string;
-}
 
 function toOption(value: unknown): UserQuestionOption | undefined {
 	if (typeof value !== "object" || value === null) {

@@ -207,7 +207,7 @@ internal sealed partial class LlamaCppSourceBuildReconciler
 
         try
         {
-            LlamaCppSourceBuildService.ValidateTreeLinks(tree);
+            LlamaCppSourceBuildService.ValidateTreeLinks(tree, "built runtime");
         }
         catch (LlamaRuntimeException)
         {
@@ -278,7 +278,7 @@ internal sealed partial class LlamaCppSourceBuildReconciler
 
         try
         {
-            LlamaCppSourceBuildService.ValidateTreeLinks(state.SourceBuildPath!);
+            LlamaCppSourceBuildService.ValidateTreeLinks(state.SourceBuildPath!, "built runtime");
         }
         catch (LlamaRuntimeException)
         {

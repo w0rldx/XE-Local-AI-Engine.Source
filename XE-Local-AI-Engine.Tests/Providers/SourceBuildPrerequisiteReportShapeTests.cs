@@ -1,5 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers;
 
+using NSubstitute;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -8,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     The rendered source-build checklist of both native runtimes: the SPA keys on each row and shows the rows in the
+///     The rendered source-build checklist of the native runtimes: the SPA keys on each row and shows the rows in the
 ///     order they arrive, so the key order and every detail text that does not come from a tool's own banner are pinned.
 /// </summary>
 /// <remarks>
@@ -74,6 +78,31 @@ public sealed class SourceBuildPrerequisiteReportShapeTests
             requiredFreeDiskBytes);
     }
 
+    [Test]
+    [Arguments(LlamaCppSourceBackend.Cpu, 0L)]
+    [Arguments(LlamaCppSourceBackend.Cuda, long.MaxValue)]
+    [Arguments(LlamaCppSourceBackend.Vulkan, 0L)]
+    public async Task LlamaCpp_RendersTheChecklistInItsFixedOrder(LlamaCppSourceBackend backend, long requiredFreeDiskBytes)
+    {
+        using var temp = new TempDirectory();
+        var vendorProbe = Substitute.For<IGpuVendorProbe>();
+        vendorProbe.DetectVendorAsync(Arg.Any<CancellationToken>()).Returns(DetectedGpuVendor.Nvidia);
+        var probe = new LlamaCppSourceBuildPrerequisiteProbe(vendorProbe, temp.Path, requiredFreeDiskBytes);
+
+        var report = await probe.ProbeAsync(backend, CancellationToken.None);
+
+        string[] backendKeys = backend switch
+        {
+            LlamaCppSourceBackend.Cuda => ["nvidia-gpu", "nvcc", "nvidia-smi"],
+            LlamaCppSourceBackend.Vulkan => ["glslc", "vulkaninfo"],
+            _ => []
+        };
+        AssertChecklist([.. report.Items.Select(static item => Render(item.Key, item.Satisfied, item.Detail))],
+            report.CanBuild,
+            ["os-is-linux", .. backendKeys, "cmake", "gcc", "g++", "make-or-ninja", "git", "free-disk"],
+            requiredFreeDiskBytes);
+    }
+
     private static string Render(string key, bool satisfied, string detail)
     {
         return $"{key}|{(satisfied ? "ok" : "missing")}|{detail}";
@@ -95,6 +124,9 @@ public sealed class SourceBuildPrerequisiteReportShapeTests
             {
                 case "os-is-linux":
                     AssertEx.Equal("os-is-linux|ok|Linux host detected.", row);
+                    break;
+                case "nvidia-gpu":
+                    AssertEx.Equal("nvidia-gpu|ok|NVIDIA GPU/driver detected.", row);
                     break;
                 case "free-disk":
                     AssertEx.Equal(requiredFreeDiskBytes == 0

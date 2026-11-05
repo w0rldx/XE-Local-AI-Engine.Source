@@ -30,7 +30,7 @@ public sealed class DevelopmentAttemptFailureReportingTests
         AssertEx.Equal(300L, DevelopmentAttemptOutputBudget.Cumulative(maxOutputTokens: 100, providerCalls: 3));
 
         // The shape of the live failure: five rounds of a tool loop, each within its own per-call budget, whose sum
-        // is not. The old rule failed this; the corrected one accepts it.
+        // is not. The budget rule accepts it.
         var (input, output) = DevelopmentAttemptOutputBudget.Accept(reportedInputTokens: 27_038,
             reportedOutputTokens: 260,
             reportedTotalTokens: null,

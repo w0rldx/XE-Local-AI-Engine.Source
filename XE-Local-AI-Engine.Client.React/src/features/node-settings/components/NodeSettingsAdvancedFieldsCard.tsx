@@ -9,12 +9,8 @@ import {
 	nodeSettingsFieldLabel,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
-import {
-	type NodeSettingsFieldBounds,
-	type NodeSettingsFieldsForm,
-	nodeSettingsDisplayScale,
-	toDisplayBounds,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { type NodeSettingsFieldBounds, toDisplayBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
+import { type NodeSettingsFieldsForm, nodeSettingsDisplayScale } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 // The developer-only fields, as two cards: the agent-run limits (Chat & agents) and the AgentHome workspace limits
 // (Agent workspaces). The page mounts either only while developer mode is on, so an off-mode save never touches them.

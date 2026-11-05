@@ -149,7 +149,7 @@ public sealed class SupervisorCrashAndSurfaceTests
         var launcher = new FakeProcessLauncher(_ =>
         {
 #pragma warning disable CA2000 // Ownership transfers to the supervisor (via the launcher fake), which disposes it on teardown.
-            var handle = new FakeProcessHandle(3000);
+            var handle = new FakeProcessTreeHandle(3000);
 #pragma warning restore CA2000
             handle.SimulateExit(); // died during load, before readiness.
             return handle;

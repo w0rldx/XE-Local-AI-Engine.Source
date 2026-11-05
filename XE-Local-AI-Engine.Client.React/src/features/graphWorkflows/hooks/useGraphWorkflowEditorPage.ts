@@ -16,7 +16,7 @@ import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraph
 import {
 	graphWorkflowsEqual,
 	graphWorkflowsEqualIgnoringPositions,
-} from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+} from "@/features/graphWorkflows/models/GraphWorkflowEquality";
 import {
 	GRAPH_WORKFLOW_IMPORT_MAX_BYTES,
 	GRAPH_WORKFLOW_IMPORT_READ_LIMIT_BYTES,
@@ -32,16 +32,18 @@ import {
 	serverWarningsToIssues,
 } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 import {
-	useCreateGraphWorkflowDefinition,
-	useDeleteGraphWorkflowDefinition,
-	useExportGraphWorkflowDefinition,
 	useGraphWorkflowAgentOptions,
 	useGraphWorkflowDecisionModelOptions,
-	useGraphWorkflowDefinition,
-	useGraphWorkflowDefinitions,
 	useGraphWorkflowLlmModelOptions,
 	useGraphWorkflowModelOptions,
 	useGraphWorkflowTools,
+} from "@/features/graphWorkflows/queries/useGraphWorkflowPickerOptions";
+import {
+	useCreateGraphWorkflowDefinition,
+	useDeleteGraphWorkflowDefinition,
+	useExportGraphWorkflowDefinition,
+	useGraphWorkflowDefinition,
+	useGraphWorkflowDefinitions,
 	useImportGraphWorkflowDefinition,
 	useUpdateGraphWorkflowDefinition,
 	useValidateGraphWorkflowDefinition,

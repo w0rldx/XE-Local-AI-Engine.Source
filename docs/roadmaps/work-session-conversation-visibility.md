@@ -3,19 +3,19 @@
 - **Decision:** none filed — recorded here in place of a standalone issue (operator ruling, External Integrations, 2026-09-03)
 - **Status authority:** this living page
 - **Last verified against the tree:** 2026-10-13
-- **Overall state:** Chat-list leak closed by the S0 `NodeConversation.Kind` discriminator. No other leak surface found; two open questions remain below.
+- **Overall state:** Chat-list leak closed by the `NodeConversation.Kind` discriminator. No other leak surface found; two open questions remain below.
 
-This page carries the External Integrations S0 "R2 — live check and ticket" item (2026-09-03), which was written to
+This page carries a live-check item from the External Integrations work (2026-09-03), which was written to
 be filed as a standalone issue and instead is tracked here by operator decision. Its text, verbatim except that the
 `file:line` references are reduced to symbols per `AGENTS.md`:
 
 > **Work-session owned conversations appear in the chat list.** `WorkSessionService.CreateAsync` creates the
 > session's transcript as an ordinary `NodeConversation`, and the chat list filters only `purged`/`archived`
 > (`NodeChatReadModel`), so every work session adds an untitled chat the operator did not start and cannot explain.
-> Confirmed live on develop @d883a70b (see below). The external-integrations S0 slice adds a
+> Confirmed live on develop @d883a70b (see below). The external-integrations work adds a
 > `NodeConversation.Kind` discriminator that backfills existing work-session conversations and filters them out of
 > the list, which closes the leak for the chat list specifically. This ticket tracks the rest: whether any other
-> surface (platform sync, export, search) still exposes them, and whether a pre-S0 database needs an
+> surface (platform sync, export, search) still exposes them, and whether an older database needs an
 > operator-visible note that some chats will disappear from the list after upgrading.
 
 ## The leak
@@ -28,7 +28,7 @@ rendered it as an ordinary empty chat.
 
 ## What closed it
 
-The External Integrations S0 slice (merged develop `@2f951c65`) adds a `NodeConversationKind` discriminator
+The External Integrations work (merged develop `@2f951c65`) adds a `NodeConversationKind` discriminator
 (`XE-Local-AI-Engine.Client.Persistence/Entities/NodeConversationKind.cs`: `Chat`, `WorkSession`, `Integration`),
 persisted as the `kind` column added by the `AddIntegrationFoundation` migration
 (`XE-Local-AI-Engine.Client.Persistence/Migrations/20260903104044_AddIntegrationFoundation.cs`). `WorkSessionService.

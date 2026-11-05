@@ -30,18 +30,22 @@ Slugs follow GitHub: lowercase, inline markers dropped, every character that is 
 hyphen or underscore removed, spaces become hyphens without collapsing, and duplicates get `-1`, `-2`, ...
 Moved or renamed pages are the failure it catches; external URLs are not fetched.
 
-Four hygiene checks scan tracked files for rules AGENTS.md states: `file-line-citations` (no `file.cs:123` citation
+Five hygiene checks scan tracked files for rules AGENTS.md states: `file-line-citations` (no `file.cs:123` citation
 outside fences in the instruction and wiki docs), `tracked-secrets` (no node.key, SQLite file, .env, dp-keys/ or
 *.enc tracked), `tool-names` (no per-user agent or editor tool config named in product, gate, test or instruction
-files) and `host-phrasing` (no home path, uid, subuid range or "this box" in docs; no RAM/CPU inventory unless the
-line is dated). Their git calls drop the repository-selection variables (GIT_DIR, GIT_INDEX_FILE, ...), so an
-exported private index cannot answer for the work tree. Their scope is narrowed by path, never by word:
+files), `host-phrasing` (no home path, uid, subuid range or "this box" in docs; no RAM/CPU inventory unless the
+line is dated) and `plan-references` (no citation of the git-ignored plan folder and no numbered delivery phase in
+tracked docs, instructions, code, scripts or workflows). Their git calls drop the repository-selection variables
+(GIT_DIR, GIT_INDEX_FILE, ...), so an exported private index cannot answer for the work tree. Their scope is
+narrowed by path, never by word:
 - tool-names denylists config and marker forms (`.claude/`, `CLAUDE.md`, `.codex/`, `ponytail`, ...), not the product
   name of a third-party MCP client, which the inbound MCP surface legitimately names. The installers and their tests
   are exempt: they place the shipped skill into the user's agent skill directories.
 - host-phrasing allows the bare word `subuid` (rootless-Docker product vocabulary) and bans a concrete
   `user:start:count` range entry. `docs/user-guide/` (end-user system requirements) and `docs/audits/` (dated
   reports) are exempt, and a quoted "this box" is the rule being stated, not used.
+- plan-references exempts CHANGELOG.md, the vendored agent templates and the benchmark corpus, and `docs/audits/`
+  (dated reports) may number phases. The lifecycle word `phase` passes: only `phase <digit>` matches.
 
 Exit codes: 0 clean, 1 something is missing from a page or over a cap, 2 a check could not run at all.
 """
@@ -238,6 +242,29 @@ HOST_PHRASING_PATTERNS = (
 )
 # A date excuses only the hardware inventory above; a home path, uid, subuid range or "this box" is never metadata.
 ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+# `plan-references`: the plan folder is git-ignored, so a citation of it dangles for every other reader, and a
+# numbered delivery phase means nothing outside the plan that numbered it.
+PLAN_REFERENCE_PATHSPECS = (*TOOL_NAME_PATHSPECS, "*.md", "*.txt", "*.json", "*.css", "*.mts", "*.cmd")
+PLAN_REFERENCE_EXEMPT_PATHS = frozenset(
+    {"CHANGELOG.md", "scripts/docs-inventory-check.py", "scripts/tests/test_docs_inventory_check.py"}
+)
+# The agent templates and the benchmark corpus carry third-party text.
+PLAN_REFERENCE_EXEMPT_PREFIXES = (*MARKDOWN_LINK_EXCLUDED_PREFIXES, "tools/benchmark/corpus/")
+PLAN_CITATION_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(?<![\w.-])Plans/",
+        r"\b(?:PLAN|KICKOFF|REPORT|ASSESSMENT)(?:-[\w.-]+)?\.md\b|\bOPERATOR-QUEUE\b",
+    )
+)
+DELIVERY_PHASE_PATTERNS = (re.compile(r"\b[Pp]hase [0-9]"),)
+# Dated reports keep the phase numbers of the work they record.
+DELIVERY_PHASE_EXEMPT_PREFIXES = ("docs/audits/",)
+PLAN_REFERENCE_ADVICE = (
+    "tracked text must not cite the git-ignored plan folder or number delivery phases; "
+    "state the decision or evidence inline"
+)
 
 # Variables that make git select another repository, work tree, index or object store than `cwd` (the same list as
 # scripts/lib/git-env.sh). An agent's exported private GIT_INDEX_FILE would otherwise answer `git ls-files` from a
@@ -617,10 +644,12 @@ def scan_lines(
     lines_of: Callable[[str], Iterable[str]] = str.splitlines,
     line_exempt: re.Pattern[str] | None = None,
     exempt_patterns: frozenset[re.Pattern[str]] = frozenset(),
+    advice: str = "",
 ) -> CheckResult:
     """Report every match of `patterns` in the given tracked files, one row per file line and pattern.
 
     A line matching `line_exempt` skips only the patterns in `exempt_patterns`; every other pattern still applies.
+    `advice`, when set, ends every match row.
     """
     inventory = require_non_empty(check, "tracked files in scope", names)
     missing: list[Missing] = []
@@ -639,7 +668,7 @@ def scan_lines(
                     continue
                 for hit in pattern.finditer(line):
                     excerpt = line[max(0, hit.start() - 80) : hit.end() + 80].strip()
-                    problem = f"line {number}: {hit.group(0)!r} in: {excerpt}"
+                    problem = f"line {number}: {hit.group(0)!r} in: {excerpt}" + (f" ({advice})" if advice else "")
                     missing.append(Missing(check, hit.group(0), Path(name), problem, label))
     return CheckResult(check=check, doc=Path("."), inventory=inventory, missing=tuple(missing))
 
@@ -689,6 +718,21 @@ def check_host_phrasing(root: Path) -> CheckResult:
     )
 
 
+def check_plan_references(root: Path) -> CheckResult:
+    """Tracked text states decisions inline: no citation of the git-ignored plan folder, no numbered delivery phase."""
+    check = "plan-references"
+    names = [
+        name
+        for name in git_ls_files(root, check, *PLAN_REFERENCE_PATHSPECS)
+        if name not in PLAN_REFERENCE_EXEMPT_PATHS and not name.startswith(PLAN_REFERENCE_EXEMPT_PREFIXES)
+    ]
+    phase_names = [name for name in names if not name.startswith(DELIVERY_PHASE_EXEMPT_PREFIXES)]
+    label = "PLAN-REF"
+    citations = scan_lines(root, check, names, PLAN_CITATION_PATTERNS, label, advice=PLAN_REFERENCE_ADVICE)
+    phases = scan_lines(root, check, phase_names, DELIVERY_PHASE_PATTERNS, label, advice=PLAN_REFERENCE_ADVICE)
+    return CheckResult(check, Path("."), citations.inventory, citations.missing + phases.missing)
+
+
 CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_signalr_hubs,
     check_local_api_route_families,
@@ -703,6 +747,7 @@ CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_tracked_secrets,
     check_tool_names,
     check_host_phrasing,
+    check_plan_references,
 )
 
 

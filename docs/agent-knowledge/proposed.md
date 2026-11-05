@@ -147,13 +147,13 @@ is the host cache save (2026-10-19). **Authority:** the `--cache-ram` entry in
 
 ### Restart-gated node settings are read once; an eject does not apply them
 
-**Rule:** after changing `llamaChatCacheRamMiB` or any field in `restartGatedNodeSettingsFields` (including
-`llamaMaxLoadedProcesses`), restart the node and confirm the live process argument (for example `--cache-ram` in
+**Rule:** after changing a field in `NodeSettingsRestartGate.Fields` (`llamaChatCacheRamMiB` and
+`llamaMaxLoadedProcesses` among them), restart the node and confirm the live process argument (for example `--cache-ram` in
 `pgrep -af llama-server`) before measuring. **Prevents:** a PUT plus eject that respawns llama-server with the old value,
 because `AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions` reads the setting once into the
-singleton `LlamaServerSupervisorOptions`; the settings UI warns, the API response does not (2026-10-19, a void lab
+singleton `LlamaServerSupervisorOptions`; the settings UI warns, the API response only lists the fields in `restartRequiredFields` (2026-10-19, a void lab
 arm). **Authority:** `AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`;
-`restartGatedNodeSettingsFields` in `NodeSettingsFieldsModel.ts`.
+`NodeSettingsRestartGate.Fields`; `touchesRestartGatedField` in `NodeSettingsSaveRequest.ts`.
 
 ### llama-server's host prompt cache never restores a tool-using turn
 

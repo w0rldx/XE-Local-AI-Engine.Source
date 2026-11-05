@@ -27,7 +27,8 @@ stale-beliefs tables. Architecture: start at `docs/wiki/Home.md`.
   per-user agent or editor tooling in product code, gates, tests or instructions: state what it would enforce as a
   repo rule (`.gitignore` excepted; shipped installers and MCP client runbooks are product, not tooling).
   Cite code as file + symbol, never `file:line`. Describe the environment generically, never the host machine.
-  `scripts/docs-inventory-check.py` rejects `file:line` citations, tracked secrets, tool names and host-specific phrasing.
+  `scripts/docs-inventory-check.py` rejects `file:line` citations, tracked secrets, tool names, host-specific phrasing
+  and plan references.
 - Never hand-edit generated output: the hey-api client under `src/core/api/generated/`, `routeTree.gen.ts`,
   EF migration designer files. Regenerate and commit the result.
 - Propose a new trap in `docs/agent-knowledge/proposed.md` (format: its index, "Maintenance"); promotion needs

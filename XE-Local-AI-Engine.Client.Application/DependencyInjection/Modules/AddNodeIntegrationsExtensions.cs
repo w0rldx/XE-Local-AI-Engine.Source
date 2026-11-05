@@ -67,8 +67,8 @@ internal static class AddNodeIntegrationsExtensions
             serviceProvider.GetRequiredService<ILogger<IntegrationSessionService>>()));
         builder.Services.AddScoped<IIntegrationInvocationService, IntegrationInvocationService>();
 
-        // Two concrete classes with no interface, registered and injected as themselves: a one-implementation interface no ruling
-        // asked for is scaffolding. Both take an INTERNAL collaborator, so they are constructed here, not by the container's activator.
+        // Two concrete classes with no interface, registered and injected as themselves: a one-implementation interface
+        // is scaffolding. Both take an INTERNAL collaborator, so they are constructed here, not by the container's activator.
         builder.Services.AddScoped(static serviceProvider => new IntegrationExecutionQueryService(serviceProvider.GetRequiredService<IIntegrationExecutionStore>(),
             serviceProvider.GetRequiredService<IIntegrationTriggerStore>(),
             serviceProvider.GetRequiredService<IIntegrationExecutionEventBuffer>(),

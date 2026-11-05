@@ -1,7 +1,7 @@
 # ADR 0019: Preview sandbox mechanisms are operator-enabled, and on Windows the AppContainer boundary satisfies the filesystem floor
 
-- **Status:** Accepted (2026-10-07) — drafted with the S2b slice, completed with the MXC integration slice (S3). Windows live
-  evidence: tester rounds 5, 6 and 7 of 2026-10-12/13 (see "Evidence (2026-10-13)") and the `run_python` round of 2026-10-14 (see
+- **Status:** Accepted (2026-10-07). Windows live
+  evidence: tester runs of 2026-10-12/13 (see "Evidence (2026-10-13)") and the `run_python` run of 2026-10-14 (see
   "Evidence (2026-10-14)").
   Amended 2026-10-11: Win32k is allowed inside the boundary (see "Amendment (2026-10-11)").
 - **Date:** 2026-10-07
@@ -9,10 +9,8 @@
   `SandboxIsolationMode.Filesystem` floor means on Windows when the Microsoft MXC SDK (`Microsoft.Mxc.Sdk` 1.0.0) serves it
   through an AppContainer boundary inside the `process` provider. It changes nothing on Linux: the bubblewrap chain keeps
   serving the floor there, at `Stable` maturity, with the same paths and the same refusals.
-- **Authority:** Operator decisions of 2026-10-07 (Q1 stored node setting with a confirmation dialog, Q3 timeout-only
-  execution accepted, Q5 AppContainer boundary satisfies the floor, D4 Preview never reported as `Isolated`), recorded in
-  `Plans/execution-runtime-2026-09-26/KICKOFF-r3-2026-10-07.md` (the plan directory is git-ignored; it is the record of
-  the decisions, not a published document).
+- **Authority:** Operator decisions of 2026-10-07: a stored node setting with a confirmation dialog, timeout-only
+  execution accepted, the AppContainer boundary satisfies the floor, and a Preview is never reported as `Isolated`.
 - **Amends:** [ADR 0007](0007-sandbox-execution-substrate-and-backend-selection.md) only in what the
   `SupportsHostFilesystemBoundary` property may be made of on Windows. The selector, the backend ranking and the
   per-workload allowed-backend table are unchanged.
@@ -46,7 +44,7 @@ does not do.
 3. **`SupportsAppContainerBoundary` is its own capability flag** (`1 << 13`) with this contract: no access to the user
    profile, `INodeDataDirectory.Root`, `AppContext.BaseDirectory` or any path not granted; engine-granted read-only trees
    plus one writable jail; OS system trees readable; host path names visible.
-4. **On Windows, while eligible, that boundary satisfies the `Filesystem` floor (Q5).** The `process` provider then
+4. **On Windows, while eligible, that boundary satisfies the `Filesystem` floor.** The `process` provider then
    advertises `SupportsAppContainerBoundary | SupportsFilesystemIsolation | SupportsHostFilesystemBoundary` together, and
    `SandboxLifecycleRegistry` accepts an isolated create, recording the serving boundary on the sandbox's launch policy.
    The bubblewrap reserved-mount-point rule does not apply to it.
@@ -99,7 +97,7 @@ does not do.
 
 ## Accepted residual risk
 
-- **Timeout-only execution on Windows (Q3).** Under the AppContainer boundary, `run_python` and sandboxed MCP servers run
+- **Timeout-only execution on Windows.** Under the AppContainer boundary, `run_python` and sandboxed MCP servers run
   with no CPU, memory or process-count ceiling. The per-command timeout is the only bound; the setting description and
   the confirmation dialog say so. Both roles send no ceiling on Windows and are served, but a create request that carries
   explicit ceilings is refused rather than run with them silently dropped.
@@ -129,12 +127,12 @@ does not do.
 ## Still owed
 
 Nothing for `run_python` on Windows: the live round ran on 2026-10-14 (see "Evidence (2026-10-14)"). No CPU, memory or
-process ceiling applies there (Q3); the timeout is the only bound.
+process ceiling applies there; the timeout is the only bound.
 
 ## Evidence (2026-10-13)
 
-The live round this ADR owed ran as the project's Windows tester rounds 5, 6 and 7 (2026-10-12/13) on Windows 11 25H2 build
-26200.9457 (UBR recorded on every round and, since round 7, in the probe line), host preparation applied, tier
+The live round this ADR owed ran as Windows tester runs on 2026-10-12/13 on Windows 11 25H2 build
+26200.9457 (UBR recorded on every run and in the probe line), host preparation applied, tier
 `BaseContainer`; the operator accepted that evidence in place of a round on the operator's own machine. Proven for a Sandboxed
 MCP server under the boundary: the home canary and the profile unreadable, a profile write refused, HTTPS, loopback and LAN
 egress refused, the jail writable, the granted trees read-only including a relative write from the working directory; a
@@ -146,8 +144,7 @@ the consent text is the one in Decision 7. A forced kill of the engine tree with
 and no AppContainer ACE on the system or a data drive, and the next start logged exactly one residue sweep
 (`MxcAclResidueSweepService`); a clean stop, a self-exit and a tray quit removed their jails. `Kill()` ends a native child
 blocked on stdin. Node, CPython, PowerShell 7, Windows PowerShell 5.1, .NET 10 and .NET Framework servers start and connect,
-in parallel, under the amended policy (round-5 evidence above). Reports: the plan folder's `REPORT-5.md`, `REPORT-6.md`,
-`REPORT-7.md` (git-ignored, the record of the rounds).
+in parallel, under the amended policy (see the evidence of 2026-10-12 in the Win32k amendment).
 
 ## Evidence (2026-10-14): `run_python` under the boundary
 
@@ -166,8 +163,7 @@ those three variables for every AppContainer or BaseContainer child to `<LOCALAP
 identity>\AC[\Temp]`, and uv's venv launcher printed `warning: Failed to set cwd to temp dir` on every result. The fix: on
 Windows the engine launches the store interpreter, at the resolved target of the `pyvenv.cfg` `home=` directory (a linked alias fails CPython's realpath inside the boundary), with `__PYVENV_LAUNCHER__` (what the venv launcher did itself) and a
 Windows-only `-c` bootstrap creates those folders before running the script read from stdin. Tracebacks still say `<stdin>`;
-`sys.argv[0]` is `-c` on Windows, and `-I -` stays on Linux. On the AppContainer-plus-DACL tier (the CI runner, not the BaseContainer tier) CPython's start-up realpath of its own executable is denied whatever launched it, so `ComputeToolGateway.StripRealpathWarning` drops exactly that one stderr line, and the Windows CI class asserts the stderr is empty afterwards. Report: `REPORT-110.md` in the git-ignored plan folder
-`Plans/run-python-windows-2026-10-14/`.
+`sys.argv[0]` is `-c` on Windows, and `-I -` stays on Linux. On the AppContainer-plus-DACL tier (the CI runner, not the BaseContainer tier) CPython's start-up realpath of its own executable is denied whatever launched it, so `ComputeToolGateway.StripRealpathWarning` drops exactly that one stderr line, and the Windows CI class asserts the stderr is empty afterwards.
 
 ## Amendment (2026-10-11): Win32k is allowed inside the boundary
 
@@ -178,7 +174,7 @@ IME off, egress, ingress and host loopback stay denied, no capabilities are gran
 and grant clearing are as in Decision 8 and 9. `MxcPolicyGuard` no longer requires `Ui.Disable`; it still refuses a
 missing `Ui`, any clipboard access and input injection. Either `Disable` value passes the guard; `true` is the stricter.
 
-**Why.** The Windows tester round on build 104 ran real MCP servers under the boundary with `Ui.Disable = true`. The
+**Why.** A Windows tester run on build 104 ran real MCP servers under the boundary with `Ui.Disable = true`. The
 embeddable CPython and native console programs started and completed the MCP handshake. node.js 24 died in the loader
 with `0xC0000142`, a .NET 10 app with `0x80008089` and a .NET Framework app with `0xC06D007E`, because `node.exe` and
 `coreclr.dll` import user32 and its initialisation fails under the mitigation. Windows PowerShell and PowerShell 7 fail
@@ -211,7 +207,7 @@ probes each UI risk above from a sandboxed server:
 - whether a low-level keyboard hook or `GetAsyncKeyState` sees host keystrokes;
 - whether a window or message box the child creates is visible on the desktop.
 
-**Round-5 evidence (2026-10-12, Windows 11 25H2 26200.9457, BaseContainer).** All seven runtimes started inside the
+**Evidence (2026-10-12, Windows 11 25H2 26200.9457, BaseContainer).** All seven runtimes started inside the
 boundary: node.js, CPython, PowerShell 7, Windows PowerShell 5.1, .NET 10, .NET Framework and native console programs.
 Clipboard access in both directions, input injection, foreign window handles (`EnumWindows`, `FindWindow`,
 `PostMessage`), desktop switching, the global object namespace and low-level key observation were all blocked. The

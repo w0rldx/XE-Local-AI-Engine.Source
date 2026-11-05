@@ -4,8 +4,8 @@ using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 
 /// <summary>
-///     Vector-space helpers shared by the ingestion writer, the legacy-vector normalization backfill, and the managed
-///     cosine search.
+///     Vector-space helpers shared by the ingestion writer, the legacy-vector normalization backfill, the managed
+///     cosine search, and the embedding rankers and deduplicator that compare raw vectors.
 /// </summary>
 /// <remarks>
 ///     The central operation is L2 normalization in place: cosine similarity is scale-invariant
@@ -16,6 +16,23 @@ using System.Runtime.InteropServices;
 /// </remarks>
 internal static class KnowledgeVectorMath
 {
+    /// <summary>Cosine similarity of two raw embeddings, or 0 when they cannot be compared.</summary>
+    /// <remarks>
+    ///     Mismatched-dimension or empty vectors carry no comparable signal, so they score as no overlap: a ranker's
+    ///     deterministic tiebreak orders them and a deduplicator never drops a candidate on a non-comparison.
+    ///     <c>CosineSimilarity</c> returns <c>NaN</c> for a zero-magnitude vector, which scores 0 as well.
+    /// </remarks>
+    public static float CosineScore(ReadOnlyMemory<float> left, ReadOnlyMemory<float> right)
+    {
+        if (left.IsEmpty || right.IsEmpty || left.Length != right.Length)
+        {
+            return 0f;
+        }
+
+        var score = TensorPrimitives.CosineSimilarity(left.Span, right.Span);
+        return float.IsNaN(score) ? 0f : score;
+    }
+
     /// <summary>
     ///     Rescales <paramref name="vector" /> to unit L2 length in place and returns <see langword="true" />.
     /// </summary>

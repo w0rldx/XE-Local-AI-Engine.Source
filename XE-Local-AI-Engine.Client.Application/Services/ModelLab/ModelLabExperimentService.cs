@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -33,14 +32,11 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
     private const string TraceFileName = "trace.jsonl";
     private const string ResultFileName = "result.json";
-    private const string JobFileName = "job.json";
     private const string VectorFileName = "steer.gguf";
     private const string RandomVectorFileName = "random.gguf";
 
     /// <summary>A trace outlives no reason to be larger than its cap, and a vector for any model that fits a card is smaller still.</summary>
     private const int MaxBlobBytes = ModelLabTraceSpec.TraceByteCap;
-
-    private static readonly JsonSerializerOptions TraceJson = new();
 
     private readonly ModelLabArmRunner _arms;
     private readonly ManagedEncryptedBlobStore _blobs;
@@ -53,7 +49,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private readonly ModelLabCheckpointPreflightService _preflight;
     private readonly ITrainingRuntimeService _runtime;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ITrainingProcessSpawner _spawner;
+    private readonly ModelLabScriptRunner _scripts;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly TimeProvider _timeProvider;
     private ActiveJob? _active;
@@ -95,12 +91,12 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         _preflight = preflight;
         _runtime = runtime;
         _scopeFactory = scopeFactory;
-        _spawner = spawner;
+        _scripts = new ModelLabScriptRunner(spawner, events, _options, timeProvider);
         _supervisor = supervisor;
         _timeProvider = timeProvider;
     }
 
-    /// <summary>D2: the job is Linux only for now. A test swaps this to see the other platforms' answer.</summary>
+    /// <summary>The job is Linux only. A test swaps this to see the other platforms' answer.</summary>
     internal Func<bool> PlatformProbe { get; set; } = OperatingSystem.IsLinux;
 
     public bool IsPlatformSupported => PlatformProbe();
@@ -350,7 +346,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
         var read = await _blobs.ReadAsync(id, blobId, hash, bytes, ct);
         return read.Status == ManagedBlobReadStatus.Found
-            ? ParseTrace(read.Content)
+            ? ModelLabTraceSpec.ParseTrace(read.Content)
             : new ModelLabTrace { Status = ModelLabTraceReadStatus.Unavailable };
     }
 
@@ -387,38 +383,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         {
             await inFlight.WaitAsync(cancellationToken);
         }
-    }
-
-    internal static ModelLabTrace ParseTrace(ReadOnlyMemory<byte> content)
-    {
-        var records = new List<ModelLabTraceRecord>();
-        ModelLabTraceFooter? footer = null;
-        foreach (var line in Encoding.UTF8.GetString(content.Span).Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            try
-            {
-                if (line.StartsWith("{\"footer\"", StringComparison.Ordinal))
-                {
-                    footer = JsonSerializer.Deserialize<ModelLabTraceFooter>(line, TraceJson);
-                }
-                else if (JsonSerializer.Deserialize<ModelLabTraceRecord>(line, TraceJson) is { } record)
-                {
-                    records.Add(record);
-                }
-            }
-            catch (JsonException)
-            {
-                // The blob's hash was verified, so this is a script bug, not tampering; the trace is shown as unreadable.
-                return new ModelLabTrace { Status = ModelLabTraceReadStatus.Unavailable };
-            }
-        }
-
-        return new ModelLabTrace
-        {
-            Status = ModelLabTraceReadStatus.Found,
-            Records = records,
-            Footer = footer
-        };
     }
 
     private async Task<ModelLabStart> AdmitAndStartAsync(ModelLabExperimentRequest request,
@@ -491,7 +455,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             }
 
             var checkpoint = BaseArtifactManifest.ResolveDirectory(_dataDirectory, artifact.Id);
-            var script = new ScriptCommand
+            var script = new ModelLabScriptRunner.ScriptCommand
             {
                 Interpreter = interpreter,
                 ScriptPath = scriptPath
@@ -679,7 +643,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
     }
 
-    private async Task<ModelLabExperimentCompletion> ExecuteTraceAsync(ActiveJob active, ModelLabTraceJobV1 job, ScriptCommand script)
+    private async Task<ModelLabExperimentCompletion> ExecuteTraceAsync(ActiveJob active, ModelLabTraceJobV1 job, ModelLabScriptRunner.ScriptCommand script)
     {
         if (active.Cancellation.IsCancellationRequested)
         {
@@ -687,14 +651,14 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
 
         var run = await RunScriptAsync(active, JsonSerializer.SerializeToUtf8Bytes(job, TrainingJson.Options), script);
-        return ScriptFailureOrNull(run.State, run.ExitCode, active.Cancellation.IsCancellationRequested) ?? await FinishTraceAsync(active.ExperimentId, job);
+        return run.FailureOrNull(active.Cancellation.IsCancellationRequested) ?? await FinishTraceAsync(active.ExperimentId, job);
     }
 
     private async Task<ModelLabExperimentCompletion> ExecuteSteeringAsync(ActiveJob active,
         ModelLabExperimentRequest request,
         string checkpoint,
         int layer,
-        ScriptCommand script,
+        ModelLabScriptRunner.ScriptCommand script,
         ILlamaServerRuntimeMutationLease lease,
         TrainingCapacityReservation reservation)
     {
@@ -754,7 +718,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private async Task<ModelLabExperimentCompletion> DeriveAndRunArmsAsync(ActiveJob active,
         ModelLabExperimentRequest request,
         ModelLabSteeringJobV1 job,
-        ScriptCommand script,
+        ModelLabScriptRunner.ScriptCommand script,
         string modelFilePath,
         ILlamaServerRuntimeMutationLease lease,
         TrainingCapacityReservation reservation)
@@ -766,7 +730,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         // The script is gone: its receipt must not name a recycled process, and its memory is back for the arms' own load tickets.
         await SetReceiptAsync(id, receipt: null);
         reservation.Dispose();
-        if (ScriptFailureOrNull(run.State, run.ExitCode, active.Cancellation.IsCancellationRequested) is { } failed)
+        if (run.FailureOrNull(active.Cancellation.IsCancellationRequested) is { } failed)
         {
             return failed;
         }
@@ -803,7 +767,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             return null;
         }
 
-        var read = JsonSerializer.Deserialize<ModelLabTraceResult>(await File.ReadAllBytesAsync(job.ResultPath, CancellationToken.None), ModelLabTraceSpec.ResultJson);
+        var read = JsonSerializer.Deserialize<ModelLabTraceResult>(await File.ReadAllBytesAsync(job.ResultPath, CancellationToken.None), JsonSerializerOptions.Web);
         var vectorFile = await FileSha256.ComputeWithLengthAsync(job.VectorPath, CancellationToken.None);
         var randomFile = await FileSha256.ComputeWithLengthAsync(job.RandomVectorPath, CancellationToken.None);
         return read?.Steering is null
@@ -863,7 +827,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
     private async Task SetProgressAsync(ActiveJob active, ModelLabTraceResult result, ModelLabBlobReference? blob)
     {
-        ReadOnlyMemory<byte> json = JsonSerializer.SerializeToUtf8Bytes(result, ModelLabTraceSpec.ResultJson);
+        ReadOnlyMemory<byte> json = JsonSerializer.SerializeToUtf8Bytes(result, JsonSerializerOptions.Web);
         active.LatestResultJson = json;
         active.LatestBlob = blob ?? active.LatestBlob;
         try
@@ -879,191 +843,13 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         }
     }
 
-    private async Task<ScriptRun> RunScriptAsync(ActiveJob active, byte[] jobJson, ScriptCommand script)
-    {
-        var id = active.ExperimentId;
-        var workDirectory = WorkDirectory(id);
-        TrainingRunWorkspace.CreateOwnerOnlyDirectory(Path.GetDirectoryName(workDirectory)!);
-        TrainingRunWorkspace.CreateOwnerOnlyDirectory(workDirectory);
-        var jobPath = Path.Combine(workDirectory, JobFileName);
-        // Owner-only by itself: the directory's own mode is best-effort, and this file holds the plaintext prompt.
-        await SecureFilePermissions.WriteAllBytesAtomicAsync(jobPath, jobJson, CancellationToken.None);
-
-        using var handle = _spawner.Spawn(new TrainingSpawnRequest
-        {
-            ExecutablePath = script.Interpreter,
-            Arguments = [script.ScriptPath, "--config", jobPath],
-            WorkingDirectory = workDirectory,
-            RunToken = Guid.NewGuid().ToString("N")
-        });
-
-        // Durable before the first line is read: a host that dies now must still be able to prove which process is this job's.
-        await SetReceiptAsync(id, JsonSerializer.SerializeToUtf8Bytes(TrainingProcessReaper.ToPersisted(handle.Receipt), TrainingJson.Options));
-
-        var state = new StreamState(_timeProvider.GetUtcNow());
-        var stop = active.Cancellation.Token.Register(() =>
-        {
-            state.MarkStopRequested(_timeProvider.GetUtcNow());
-            handle.RequestStop();
-        });
-        using var watchdogStop = new CancellationTokenSource();
-        var watchdog = WatchdogAsync(handle.KillGroup, state, watchdogStop.Token);
-        try
-        {
-            await foreach (var line in handle.ReadOutputAsync(CancellationToken.None))
-            {
-                if (TrainingRunStdioParser.ParseOrNull(line) is { } parsed)
-                {
-                    state.MarkEvent(_timeProvider.GetUtcNow());
-                    Apply(id, state, parsed, handle.KillGroup);
-                }
-                else
-                {
-                    state.KeepOutput(line);
-                }
-            }
-        }
-        finally
-        {
-            await watchdogStop.CancelAsync();
-            await watchdog;
-            await stop.DisposeAsync();
-        }
-
-        return new ScriptRun
-        {
-            State = state,
-            ExitCode = await WaitForExitOrEscalateAsync(handle, state)
-        };
-    }
-
-    private void Apply(Guid id, StreamState state, TrainingStdioEvent parsed, Action killGroup)
-    {
-        switch (parsed.Kind)
-        {
-            case TrainingStdioEventKind.Handshake:
-                state.HandshakeSeen = true;
-                if (parsed.ContractVersion != ModelLabTraceSpec.ContractVersion)
-                {
-                    state.FailureReason = "The Model Lab script's protocol version does not match this build.";
-                    killGroup();
-                }
-
-                break;
-            case TrainingStdioEventKind.Phase:
-                _ = _events.Append(id, TrainingRunEventKind.Phase, new TrainingRunPayload
-                {
-                    Phase = parsed.Phase
-                });
-                break;
-            case TrainingStdioEventKind.Progress:
-                _ = _events.Append(id, TrainingRunEventKind.Progress, new TrainingRunPayload
-                {
-                    Step = parsed.Step,
-                    TotalSteps = parsed.TotalSteps,
-                    VramBytes = parsed.VramBytes
-                });
-                break;
-            case TrainingStdioEventKind.Done:
-                state.Done = true;
-                state.ScriptCancelled |= parsed.Cancelled;
-                break;
-            case TrainingStdioEventKind.Error:
-                state.ErrorMessage = parsed.Message ?? parsed.Category;
-                break;
-            case TrainingStdioEventKind.Heartbeat:
-            case TrainingStdioEventKind.Artifact:
-            default:
-                break;
-        }
-    }
-
-    private async Task WatchdogAsync(Action killGroup, StreamState state, CancellationToken ct)
-    {
-        // Scaled down with the bounds, so a short one is not rounded up to the poll interval.
-        var shortest = _options.ExitGracePeriod < _options.InactivityTimeout ? _options.ExitGracePeriod : _options.InactivityTimeout;
-        var interval = shortest < TimeSpan.FromSeconds(4) ? shortest / 4 : TimeSpan.FromSeconds(1);
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(interval, _timeProvider, ct);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            var now = _timeProvider.GetUtcNow();
-            if (state.StopRequestedAt() is { } stopAt)
-            {
-                // A cooperative stop is what a wedged CUDA call cannot do. The outcome is still the Cancelled the operator asked for.
-                if (now - stopAt > _options.ExitGracePeriod)
-                {
-                    killGroup();
-                    return;
-                }
-
-                continue;
-            }
-
-            if (now - state.LastEventAt() > _options.InactivityTimeout)
-            {
-                state.FailureReason ??= "The Model Lab script stopped reporting and was terminated.";
-            }
-            else if (now - state.StartedAt > _options.MaxDuration)
-            {
-                state.FailureReason ??= "The Model Lab script exceeded its maximum duration and was terminated.";
-            }
-
-            if (state.FailureReason is not null)
-            {
-                killGroup();
-                return;
-            }
-        }
-    }
-
-    /// <summary>A script that closed its output and then wedged would otherwise hold the GPU forever.</summary>
-    private async Task<int> WaitForExitOrEscalateAsync(ITrainingProcessHandle handle, StreamState state)
-    {
-        using var grace = new CancellationTokenSource(_options.ExitGracePeriod, _timeProvider);
-        try
-        {
-            return await handle.WaitForExitAsync(grace.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            handle.KillGroup();
-            state.FailureReason ??= "The Model Lab script stopped responding after closing its output and was terminated.";
-            return -1;
-        }
-    }
-
-    private static ModelLabExperimentCompletion? ScriptFailureOrNull(StreamState state, int exitCode, bool cancelRequested)
-    {
-        if (cancelRequested || state.ScriptCancelled || exitCode == TrainingRunExecutor.CancelledExitCode)
-        {
-            return Cancelled();
-        }
-
-        if (state.FailureReason is { } reason)
-        {
-            return Finished(ModelLabExperimentStatus.Failed, reason);
-        }
-
-        if (state.ErrorMessage is { Length: > 0 } error)
-        {
-            return Finished(ModelLabExperimentStatus.Failed, state.WithLastOutput(error));
-        }
-
-        if (!state.HandshakeSeen || !state.Done || exitCode != 0)
-        {
-            return Finished(ModelLabExperimentStatus.Failed, state.WithLastOutput($"The Model Lab script exited with status {exitCode}."));
-        }
-
-        return null;
-    }
+    private Task<ModelLabScriptRunner.ScriptRun> RunScriptAsync(ActiveJob active, byte[] jobJson, ModelLabScriptRunner.ScriptCommand script) =>
+        _scripts.RunAsync(active.ExperimentId,
+            WorkDirectory(active.ExperimentId),
+            jobJson,
+            script,
+            receipt => SetReceiptAsync(active.ExperimentId, receipt),
+            active.Cancellation.Token);
 
     private async Task<ModelLabExperimentCompletion> FinishTraceAsync(Guid id, ModelLabTraceJobV1 job)
     {
@@ -1101,10 +887,10 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private string WorkDirectory(Guid id) =>
         Path.Combine(WorkRoot(_dataDirectory), id.ToString("N"));
 
-    private static ModelLabExperimentCompletion Cancelled() =>
+    internal static ModelLabExperimentCompletion Cancelled() =>
         Finished(ModelLabExperimentStatus.Cancelled, "The experiment was cancelled.");
 
-    private static ModelLabExperimentCompletion Finished(ModelLabExperimentStatus status, string message) =>
+    internal static ModelLabExperimentCompletion Finished(ModelLabExperimentStatus status, string message) =>
         new()
         {
             Status = status,
@@ -1117,20 +903,6 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             Refusal = refusal,
             RefusalMessage = message
         };
-
-    private sealed class ScriptCommand
-    {
-        public required string Interpreter { get; init; }
-
-        public required string ScriptPath { get; init; }
-    }
-
-    private sealed class ScriptRun
-    {
-        public required StreamState State { get; init; }
-
-        public required int ExitCode { get; init; }
-    }
 
     private sealed class ActiveJob
     {
@@ -1151,59 +923,5 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
         /// <summary>Set when that save threw, so the failure is reported as the store's and not as the arm's or its server's.</summary>
         public bool SaveFailed { get; set; }
-    }
-
-    /// <summary>The instants are written by the output loop and a cancel, and read by the watchdog, so they are one word each.</summary>
-    private sealed class StreamState
-    {
-        private const int OutputLinesKept = 12;
-        private const int OutputLineLength = 300;
-
-        // A native tool's own explanation reaches only stderr: a failed compile says why here and nowhere else.
-        private readonly Queue<string> _lastOutput = new();
-        private long _lastEventAtMs;
-        private long _stopRequestedAtMs;
-
-        public StreamState(DateTimeOffset startedAt)
-        {
-            StartedAt = startedAt;
-            _lastEventAtMs = startedAt.ToUnixTimeMilliseconds();
-        }
-
-        public DateTimeOffset StartedAt { get; }
-
-        public bool HandshakeSeen { get; set; }
-
-        public bool Done { get; set; }
-
-        public bool ScriptCancelled { get; set; }
-
-        public string? ErrorMessage { get; set; }
-
-        public string? FailureReason { get; set; }
-
-        public void KeepOutput(string line)
-        {
-            _lastOutput.Enqueue(line.Length > OutputLineLength ? line[..OutputLineLength] : line);
-            if (_lastOutput.Count > OutputLinesKept)
-            {
-                _ = _lastOutput.Dequeue();
-            }
-        }
-
-        public string WithLastOutput(string message) =>
-            _lastOutput.Count == 0 ? message : $"{message}\n\nLast output:\n{string.Join('\n', _lastOutput)}";
-
-        public DateTimeOffset LastEventAt() =>
-            DateTimeOffset.FromUnixTimeMilliseconds(Volatile.Read(ref _lastEventAtMs));
-
-        public void MarkEvent(DateTimeOffset at) =>
-            Volatile.Write(ref _lastEventAtMs, at.ToUnixTimeMilliseconds());
-
-        public DateTimeOffset? StopRequestedAt() =>
-            Volatile.Read(ref _stopRequestedAtMs) is var value and not 0 ? DateTimeOffset.FromUnixTimeMilliseconds(value) : null;
-
-        public void MarkStopRequested(DateTimeOffset at) =>
-            Volatile.Write(ref _stopRequestedAtMs, at.ToUnixTimeMilliseconds());
     }
 }

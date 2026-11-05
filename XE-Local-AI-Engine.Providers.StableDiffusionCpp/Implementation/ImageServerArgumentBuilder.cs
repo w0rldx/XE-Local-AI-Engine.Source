@@ -51,8 +51,8 @@ internal static class ImageServerArgumentBuilder
 
         AppendModelArgs(args, parts);
 
-        // Acceleration backend via sd-server component-to-device syntax (no separate gpu-index flag, per spike section 4A). A GPU build keeps the text encoder and VAE on CPU by default (model-fit
-        // charges only the diffusion part, section 4.3); TextEncoderOnGpu moves the text encoder to the GPU for measurement rounds. The CPU floor passes the bare cpu device and ignores the knob.
+        // Acceleration backend via sd-server component-to-device syntax (no separate gpu-index flag). A GPU build keeps the text encoder and VAE on CPU by default (model-fit
+        // charges only the diffusion part); TextEncoderOnGpu moves the text encoder to the GPU for measurement rounds. The CPU floor passes the bare cpu device and ignores the knob.
         args.Add("--backend");
         args.Add(BuildBackendSpec(backend, options.TextEncoderOnGpu));
 

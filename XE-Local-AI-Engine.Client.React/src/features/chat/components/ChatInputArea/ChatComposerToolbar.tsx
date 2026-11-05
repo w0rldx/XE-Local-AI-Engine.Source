@@ -14,10 +14,11 @@ import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AgentOption } from "@/core/agents/models/AgentOption";
+import { AgentSelectorCard } from "@/core/chat/components/AgentSelectorCard";
+import classes from "@/core/chat/components/ChatComposerToolbar.module.css";
 import type { ModelOption } from "@/core/models/ModelOption";
 import { toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
 import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
-import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { AnswerNowButton } from "@/features/chat/components/ChatInputArea/AnswerNowButton";
 import { WebContentAutoAcceptToggle } from "@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle";
 import { CompactButton } from "@/features/chat/components/CompactButton";
@@ -25,9 +26,8 @@ import { ContextStateButton } from "@/features/chat/components/ContextStatePanel
 import { ContextUsagePopover } from "@/features/chat/components/ContextUsagePopover/ContextUsagePopover";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { effectiveAgent } from "@/features/chat/models/ChatTurnResolution";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
-
-import classes from "./ChatComposerToolbar.module.css";
 
 interface ChatComposerToolbarProps {
 	toolbarRef: RefObject<HTMLDivElement | null>;
@@ -140,6 +140,14 @@ export function ChatComposerToolbar({
 }: ChatComposerToolbarProps) {
 	const { t } = useTranslation();
 	const reasoningLabel = t("pages.chat.reasoningEffortLabel", "Reasoning effort");
+	const localToolsStateLabel = toolsEnabled
+		? t("pages.chat.localToolsEnabled", "Local tools enabled")
+		: t("pages.chat.localToolsDisabled", "Local tools disabled");
+	const knowledgeBaseStateLabel = !knowledgeBaseHasDocuments
+		? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
+		: knowledgeBaseEnabled
+			? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
+			: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled");
 	const reasoningItems = (
 		<>
 			<Menu.Label>{reasoningLabel}</Menu.Label>
@@ -226,9 +234,7 @@ export function ChatComposerToolbar({
 						onClick={onToggleTools}
 						data-testid="chat-local-tools-toggle"
 					>
-						{toolsEnabled
-							? t("pages.chat.localToolsEnabled", "Local tools enabled")
-							: t("pages.chat.localToolsDisabled", "Local tools disabled")}
+						{localToolsStateLabel}
 					</Menu.Item>
 				) : null}
 				{showKnowledgeBaseControls ? (
@@ -239,11 +245,7 @@ export function ChatComposerToolbar({
 						onClick={onToggleKnowledgeBase}
 						data-testid="chat-knowledge-base-toggle"
 					>
-						{!knowledgeBaseHasDocuments
-							? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
-							: knowledgeBaseEnabled
-								? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
-								: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")}
+						{knowledgeBaseStateLabel}
 					</Menu.Item>
 				) : null}
 				{showSamplingOptions ? (
@@ -299,13 +301,7 @@ export function ChatComposerToolbar({
 					</Menu>
 				)}
 				{showLocalToolControls && !compact ? (
-					<Tooltip
-						label={
-							toolsEnabled
-								? t("pages.chat.localToolsEnabled", "Local tools enabled")
-								: t("pages.chat.localToolsDisabled", "Local tools disabled")
-						}
-					>
+					<Tooltip label={localToolsStateLabel}>
 						<ActionIcon
 							size={36}
 							variant={toolsEnabled ? "light" : "subtle"}
@@ -332,13 +328,7 @@ export function ChatComposerToolbar({
 					<DisabledReasonTooltip
 						// Only the empty-corpus reason earns a keyboard stop; while sending the control is simply busy.
 						controlDisabled={!knowledgeBaseHasDocuments}
-						label={
-							!knowledgeBaseHasDocuments
-								? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
-								: knowledgeBaseEnabled
-									? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
-									: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")
-						}
+						label={knowledgeBaseStateLabel}
 					>
 						<ActionIcon
 							size={36}
@@ -418,9 +408,7 @@ export function ChatComposerToolbar({
 							// The send path's model rule: the local-default sentinel travels as no model, which the node resolves itself.
 							modelName={toNodeChatRequestModel(selectedModel) ?? ""}
 							// The send path's rule: an agent applies only in agent mode and while it is still listed.
-							agentId={
-								agentModeEnabled && agentOptions.some((agent) => agent.id === selectedAgentId) ? selectedAgentId : undefined
-							}
+							agentId={effectiveAgent(agentModeEnabled, selectedAgentId, agentOptions)?.id}
 							// The send path sends the toggle as is, so the estimate counts local tools only when it is on.
 							useLocalTools={toolsEnabled}
 						/>

@@ -94,8 +94,8 @@ run_case() {
   grep -Fq 'fail=0' <<<"$output"
 }
 
-# Every namespace runs at width 1 unless PAR says otherwise — DevWorkflows included, since the
-# width-2 exception it used to carry was removed (measured: no wall-clock gain, 50% more peak RSS).
+# Every namespace runs at width 1 unless PAR says otherwise — DevWorkflows included, because a
+# width-2 exception for it was measured: no wall-clock gain, 50% more peak RSS.
 write_namespaces XE_Local_AI_Engine.Tests.DevWorkflows
 run_case dev-default env
 grep -Fqx 'max=1 html=1 filter=/*/XE_Local_AI_Engine.Tests.DevWorkflows/*/*' "$TMP/dev-default.log"

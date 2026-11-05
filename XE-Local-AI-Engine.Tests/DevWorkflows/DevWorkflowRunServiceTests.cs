@@ -396,7 +396,7 @@ public sealed class DevWorkflowRunServiceTests
     /// <summary>
     ///     A gate takes its three answers, and the interventions belong to a blocked node run. Skipping an OPEN
     ///     gate would be an operator walking past an approval instead of giving one — the one thing a gate exists to
-    ///     make impossible, and the property every later slice that puts an apply behind one depends on.
+    ///     make impossible, and the property anything that puts an apply behind one depends on.
     /// </summary>
     [Test]
     public async Task SkippingAnOpenGate_IsRefused()

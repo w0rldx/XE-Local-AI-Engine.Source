@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     The adaptive-effort dispatch half of <c>AddAiTrendsWave</c>: both columns land on <c>agent_execution_logs</c>
-///     on upgrade and fresh migrate, older rows read null, rollback drops the wave's columns here only, no drift.
+///     on upgrade and fresh migrate, older rows read null, rollback drops the migration's columns here only, no drift.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposable
@@ -18,14 +18,14 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
 
     private static readonly string[] DispatchColumns = ["dispatched_tier", "authored_effort"];
 
-    // The AI-trends wave landed as ONE cumulative migration, so rolling it back drops every slice's columns from this
-    // table, not only the two this class is named for.
-    private static readonly string[] WaveLogColumns =
+    // AddAiTrendsWave is ONE cumulative migration, so rolling it back drops all of its columns from this table, not
+    // only the two this class is named for.
+    private static readonly string[] MigrationLogColumns =
         ["dispatched_tier", "authored_effort", "tool_schema_tokens", "max_tool_schema_tokens"];
 
-    // Columns from BEFORE the wave. EF's SQLite DropColumn is a table rebuild from the target migration's model, so a
+    // Columns from BEFORE the migration. EF's SQLite DropColumn is a table rebuild from the target migration's model, so a
     // rollback that regenerated the table from a stale model would silently take these with it.
-    private static readonly string[] PreWaveLogColumns = ["record_kind", "schema_version", "config_hash"];
+    private static readonly string[] PreMigrationLogColumns = ["record_kind", "schema_version", "config_hash"];
 
     private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -127,23 +127,23 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
 
         await using var connection = await OpenConnectionAsync(databasePath);
         var columns = await GetColumnNamesAsync(connection, "agent_execution_logs");
-        foreach (var column in WaveLogColumns)
+        foreach (var column in MigrationLogColumns)
         {
-            AssertEx.False(columns.Contains(column), $"Rolling back the wave should drop the {column} column.");
+            AssertEx.False(columns.Contains(column), $"Rolling back the migration should drop the {column} column.");
         }
 
-        foreach (var column in PreWaveLogColumns)
+        foreach (var column in PreMigrationLogColumns)
         {
             AssertEx.True(columns.Contains(column),
-                $"The rollback's table rebuild must keep the pre-wave {column} column.");
+                $"The rollback's table rebuild must keep the pre-migration {column} column.");
         }
 
-        // And it stops at the wave. The integration foundation is the migration underneath it, so its table and its
+        // And it stops at this migration. The integration foundation is the migration underneath it, so its table and its
         // conversations column are what a rollback that overshot would take next.
         AssertEx.True((await GetColumnNamesAsync(connection, "integration_executions")).Count > 0,
-            "Rolling back the wave must leave the integration foundation's tables in place.");
+            "Rolling back the migration must leave the integration foundation's tables in place.");
         AssertEx.True((await GetColumnNamesAsync(connection, "conversations")).Contains("kind"),
-            "Rolling back the wave must leave the integration foundation's conversation kind in place.");
+            "Rolling back the migration must leave the integration foundation's conversation kind in place.");
     }
 
     [Test]

@@ -1,7 +1,7 @@
 import { Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import { ThoughtsSection } from "@/features/chat/components/ThoughtsSection";
+import { ThoughtsSection } from "@/core/chat/components/ThoughtsSection";
 import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 
 const modelLoadingPhases: ReadonlySet<string> = new Set(["preparing_runtime", "loading_model"]);

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
-using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -222,7 +221,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
                 continue;
             }
 
-            if (CosineScore(candidateVector, existingVectors[index]) >= threshold)
+            if (KnowledgeVectorMath.CosineScore(candidateVector, existingVectors[index]) >= threshold)
             {
                 return true;
             }
@@ -245,26 +244,13 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
                 continue;
             }
 
-            if (CosineScore(candidateVector, candidateVectors[acceptedIndex]) >= threshold)
+            if (KnowledgeVectorMath.CosineScore(candidateVector, candidateVectors[acceptedIndex]) >= threshold)
             {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private static float CosineScore(ReadOnlyMemory<float> left, ReadOnlyMemory<float> right)
-    {
-        // Mismatched-dimension or empty vectors carry no comparable signal; treat as no overlap so the candidate is kept
-        // (never dropped on a non-comparison). CosineSimilarity returns NaN for a zero-magnitude vector — guard that too.
-        if (left.IsEmpty || right.IsEmpty || left.Length != right.Length)
-        {
-            return 0f;
-        }
-
-        var score = TensorPrimitives.CosineSimilarity(left.Span, right.Span);
-        return float.IsNaN(score) ? 0f : score;
     }
 
     private readonly record struct EmbeddingCacheKey(Guid MemoryId, int Version, string Model);

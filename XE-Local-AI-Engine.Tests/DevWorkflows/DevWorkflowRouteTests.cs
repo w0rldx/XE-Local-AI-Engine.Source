@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     T2: the route a settled node run records is the state machine's own verdict per edge, never a second copy of the
+///     The route a settled node run records is the state machine's own verdict per edge, never a second copy of the
 ///     rule. The only equality the runtime guarantees is agreement with <c>EdgeState</c>; agreement with
 ///     <c>Admission</c> is false by construction, because admission is a question about a TARGET's inbound edges.
 /// </summary>

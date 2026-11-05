@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 ///     GGUF quant bytes, because nothing here is a GGUF.
 /// </summary>
 /// <remarks>
-///     Per the pinned-stack research: the 4-bit frozen base dominates at ≈0.6 bytes/param (packed 4 bits plus NF4 scale
+///     The 4-bit frozen base dominates at ≈0.6 bytes/param (packed 4 bits plus NF4 scale
 ///     overhead); the bf16 LoRA weights and their two 8-bit Adam moment buffers cost ≈4 bytes per TRAINABLE param; activations
 ///     are budgeted as a headroom term with the batch/sequence lever kept linear, because gradient checkpointing keeps them
 ///     proportional to a few layers. Fail-safes: a headroom fraction on the fixed cost, and a floor at the frozen 4-bit weights

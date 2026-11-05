@@ -1,6 +1,6 @@
 # ADR 0020: The sandbox security profile is a stored, Operator-only node setting that promotes declared preferences to preconditions
 
-- **Status:** Accepted (2026-10-08). Windows live evidence: tester rounds 6 and 8 of 2026-10-13 proved the `high` refusal
+- **Status:** Accepted (2026-10-08). Windows live evidence: tester runs of 2026-10-13 proved the `high` refusal
   and the first-run chooser's recommendation (see "Evidence (2026-10-13)").
 - **Date:** 2026-10-08
 - **Scope:** A node-wide choice between two sandbox security profiles, `low` and `high`. It decides whether a containment
@@ -12,13 +12,11 @@
   2026-10-27: the host-toolchain Development declaration now prefers the filesystem boundary, so `high` refuses
   Development Mode on a host without the bubblewrap chain; the container declaration still asks for none. Decision 2's
   "Development Mode never asks" reads as the container form only. The warm restore still runs outside the chain under
-  both profiles, because it needs egress. Operator decision "Warn and run" for `low`,
-  `Plans/dev-mode-hardening-2026-10-27/PLAN.md`.)
-- **Authority:** Operator decisions of 2026-10-08 (full proposal chosen over parking it or shipping switches only, with
-  the pre-1.0 feature freeze lifted for this round; O1 `high` promotes only declared preferences; O2 the chooser sits
-  after external access and before the interface mode; O3 the execution-previews switch moves into the new Sandbox &
-  isolation section), recorded in `Plans/sandbox-security-profiles-2026-10-08/PLAN.md` (the plan directory is
-  git-ignored; it is the record of the decisions, not a published document).
+  both profiles, because it needs egress. Operator decision of 2026-10-27: "Warn and run" for `low`.)
+- **Authority:** Operator decisions of 2026-10-08: the full proposal is chosen over parking it or shipping switches
+  only, with the pre-1.0 feature freeze lifted for this work; `high` promotes only declared preferences; the chooser
+  sits after external access and before the interface mode; the execution-previews switch moves into the new
+  Sandbox & isolation section.
 - **Amends:** the configuration-only ruling on tightening sandbox switches, recorded in the
   `SandboxOptions.RequireEgressDenial` documentation and in the residual-risk note of
   [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md), for the profile only. It also amends that
@@ -114,7 +112,7 @@ asked a question it already answered. The external-access preset is the template
 - **`high` refuses every executing workload on Linux without a systemd user scope.** All workloads declare ceilings and
   the ceilings are served by that mechanism.
 - **Under the MXC Preview boundary, `high` refuses `run_python` and Sandboxed MCP for the missing ceilings** (the
-  timeout-only execution accepted in ADR 0019, Q3). Turning previews on does not make `high` satisfiable there.
+  timeout-only execution accepted in ADR 0019). Turning previews on does not make `high` satisfiable there.
 - **Raising the profile does not reach an already-connected Sandboxed MCP server**; it applies at that server's next
   connect or at the next node restart.
 
@@ -136,13 +134,13 @@ asked a question it already answered. The external-access preset is the template
 
 ## Evidence (2026-10-13)
 
-Windows tester round 6 (2026-10-13, Windows 11 25H2 build 26200.9457, MXC Preview boundary enabled): choosing `high` on the
+Windows tester run (2026-10-13, Windows 11 25H2 build 26200.9457, MXC Preview boundary enabled): choosing `high` on the
 Sandbox & isolation section saved without confirmation, the isolation panel listed Filesystem, Network and Resource limits
 as required with only Filesystem and Network served, a Sandboxed MCP server start was refused with the
 `SandboxRefusedByProfile` text naming the profile and the missing ceilings, already-connected servers kept running, and
-lowering `high` to `low` asked for confirmation with the documented text. Round 8 (same host, fresh data directory): the
+lowering `high` to `low` asked for confirmation with the documented text. A second run (same host, fresh data directory): the
 first-run chain asked the sandbox-profile question after external access and before the interface mode, offered both cards with
 neither preselected and no skip, placed the "Recommended for this host" badge on `low`, listed AgentHome, Development mode and work
 sessions as the workloads `high` would refuse (the same three the capability endpoint returned in `HighProfileRefusals`), and stored
-`low` on Continue. Reports: the plan folder's `REPORT-6.md` and `REPORT-8.md`.
+`low` on Continue.
 - A `custom` literal, if and when a second knob exists that the single rule cannot express.

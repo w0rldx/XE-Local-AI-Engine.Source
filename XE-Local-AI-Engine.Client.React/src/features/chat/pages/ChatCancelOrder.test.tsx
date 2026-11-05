@@ -395,4 +395,97 @@ describe("Chat cancel ordering", () => {
 			queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"))?.messages[0]?.status,
 		).toBe("cancelled");
 	});
+
+	it("regenerate stamps the original's group on the variant, refreshes once after the stream, and releases the stream", async () => {
+		const original: ChatConversationModel = {
+			...conversation(),
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: "conversation-1",
+					requestId: "request-1",
+					role: "assistant",
+					content: "first answer",
+					status: "completed",
+					variantGroupId: "group-1",
+					createdAt: "2026-05-24T00:00:00.000Z",
+					sortOrder: 1,
+				},
+			],
+		};
+		const variantEvents: NodeChatStreamEventDto[] = [
+			{ ...deltaEvent(), messageId: "variant-1", requestId: "request-2" },
+			{
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				conversationId: "conversation-1",
+				messageId: "variant-1",
+				requestId: "request-2",
+				status: "completed",
+				sequence: 2,
+				occurredAtUtc: 1_700_000_000_001,
+				content: "second answer",
+			},
+		];
+		adapter.regenerateMessage.mockImplementation(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				yield* variantEvents;
+			},
+		}));
+		adapter.sendMessage.mockImplementation(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				// A following send only has to start: the loop owning `activeStream` would return before reaching the adapter.
+			},
+		}));
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+		queryClient.setQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"), original);
+		const readVariant = () =>
+			queryClient
+				.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"))
+				?.messages.find((message) => message.id === "variant-1");
+		const variantStatusAtRefresh: (string | undefined)[] = [];
+		const refreshConversation = vi.fn(async () => {
+			variantStatusAtRefresh.push(readVariant()?.status);
+		});
+		const writeConversation = (updated: ChatConversationModel) =>
+			queryClient.setQueryData(nodeChatQueryKeys.conversation(updated.id), updated);
+		const { wrapper } = createProvidersWrapper({ queryClient });
+		const { result } = renderHook(
+			() =>
+				useChatStreamController({
+					setStreamError: vi.fn(),
+					cacheConversation: writeConversation,
+					cacheConversationDetail: writeConversation,
+					refreshConversation,
+					resolveSendConversation: vi.fn(async () => original),
+					selectedConversationId: "conversation-1",
+					displayConversations: [],
+					modelOptions: [],
+					cloudModelOptions: [],
+					agentModeEnabled: false,
+					selectedAgentId: "",
+					agentOptions: [],
+					activeRevisionByGroup: {},
+					attachmentFileIds: [],
+					toolsEnabled: false,
+					knowledgeBaseEnabled: false,
+					reasoningEffort: "medium",
+					onVoiceTurnStart: vi.fn(),
+					onVoiceAnswerProgress: vi.fn(),
+					loadedSelectedConversationId: "",
+				}),
+			{ wrapper },
+		);
+
+		act(() => result.current.handleRegenerate("assistant-1"));
+
+		await waitFor(() => expect(refreshConversation).toHaveBeenCalledTimes(1));
+		expect(refreshConversation).toHaveBeenCalledWith("conversation-1");
+		expect(variantStatusAtRefresh).toEqual(["completed"]);
+		expect(readVariant()?.variantGroupId).toBe("group-1");
+
+		await act(() => result.current.handleSend("next question", "medium", ""));
+
+		expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
+		expect(refreshConversation).toHaveBeenCalledTimes(2);
+	});
 });

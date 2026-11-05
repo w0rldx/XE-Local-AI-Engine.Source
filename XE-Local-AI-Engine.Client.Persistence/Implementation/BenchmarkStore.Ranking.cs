@@ -138,18 +138,49 @@ public sealed partial class BenchmarkStore
     /// </remarks>
     private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
     {
+        var inputs = await ReadRankingInputsAsync(projectId, cancellationToken);
+        var rankings = RankRuns(inputs);
+
+        // Warm-ups are dropped BEFORE grouping: one sits at repeat index 0, so it forms a cell of its own that could only ever be complete if every leaf item also
+        // got a warm-up run, and would then sit in the denominator forever. Not a contender at cell granularity, for the reason it is not one at run granularity.
+        var cells = new Dictionary<string, CellRanking>(StringComparer.Ordinal);
+        foreach (var cell in inputs.Scored.Where(static run => !run.IsWarmup).GroupBy(static run => run.CellKey, StringComparer.Ordinal))
+        {
+            cells[cell.Key] = RankCell(cell.ToArray(), inputs.ScorableItemIds, rankings, inputs.Gates);
+        }
+
+        ApplyCellRanks(inputs.Scored, cells, rankings.Runs);
+
+        return new BenchmarkProjectRanking
+        {
+            Runs = rankings.Runs,
+            Cohort = new BenchmarkRankCohort
+            {
+                PolicyRevision = inputs.Current?.Revision,
+                ExecutionKey = inputs.Current?.ReferenceExecutionKey,
+                CohortGeneration = inputs.Current?.CohortGeneration,
+                RankedCount = cells.Values.Count(static entry => entry.Quality is not null),
+                TotalScored = cells.Values.Count(static entry => entry.Countable)
+            },
+            Cells = cells,
+            ScorableItemCount = inputs.ScorableItemIds.Count
+        };
+    }
+
+    private async Task<RankingInputs> ReadRankingInputsAsync(Guid projectId, CancellationToken cancellationToken)
+    {
         var scored = await _dbContext.BenchmarkRuns.AsNoTracking()
                                      .Where(entity => entity.ProjectId == projectId)
-                                     .Select(entity => new
+                                     .Select(entity => new RankingRunRow
                                      {
-                                         entity.Id,
-                                         entity.UserScore,
-                                         entity.PrimaryStopReason,
-                                         entity.IsWarmup,
-                                         entity.TaskItemId,
-                                         entity.CellKey,
-                                         entity.TaskInputHash,
-                                         entity.TaskItemSetHash
+                                         Id = entity.Id,
+                                         UserScore = entity.UserScore,
+                                         PrimaryStopReason = entity.PrimaryStopReason,
+                                         IsWarmup = entity.IsWarmup,
+                                         TaskItemId = entity.TaskItemId,
+                                         CellKey = entity.CellKey,
+                                         TaskInputHash = entity.TaskInputHash,
+                                         TaskItemSetHash = entity.TaskItemSetHash
                                      })
                                      .ToArrayAsync(cancellationToken);
 
@@ -178,32 +209,47 @@ public sealed partial class BenchmarkStore
         var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken);
         var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken);
 
-        var runs = new Dictionary<Guid, BenchmarkRunRanking>(scored.Length);
-        var rankable = new Dictionary<Guid, bool>(scored.Length);
-        var anyScore = new Dictionary<Guid, bool>(scored.Length);
+        return new RankingInputs
+        {
+            Scored = scored,
+            CurrentInputHashes = currentInputHashes,
+            ScorableItemIds = scorableItemIds,
+            CurrentSetHash = currentSetHash,
+            Views = views,
+            Gates = gates,
+            Current = current,
+            Pairwise = pairwise
+        };
+    }
+
+    private static RunRankings RankRuns(RankingInputs inputs)
+    {
+        var runs = new Dictionary<Guid, BenchmarkRunRanking>(inputs.Scored.Length);
+        var rankable = new Dictionary<Guid, bool>(inputs.Scored.Length);
+        var anyScore = new Dictionary<Guid, bool>(inputs.Scored.Length);
         var setRevised = new HashSet<Guid>();
-        foreach (var run in scored)
+        foreach (var run in inputs.Scored)
         {
             var identity = new BenchmarkRunIdentity
             {
                 TaskInputHash = run.TaskInputHash,
-                CurrentInputHash = run.TaskItemId is { } itemId && currentInputHashes.TryGetValue(itemId, out var hash) ? hash : null,
+                CurrentInputHash = run.TaskItemId is { } itemId && inputs.CurrentInputHashes.TryGetValue(itemId, out var hash) ? hash : null,
                 TaskItemSetHash = run.TaskItemSetHash,
-                CurrentItemSetHash = currentSetHash
+                CurrentItemSetHash = inputs.CurrentSetHash
             };
-            var (judge, qualityScore, source, runRankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+            var (judge, qualityScore, source, runRankable) = ApplyRunExclusions(JudgeViewFor(inputs.Views, run.Id, run.UserScore),
                 run.UserScore,
                 run.IsWarmup,
                 run.PrimaryStopReason,
                 identity,
-                gates.GetValueOrDefault(run.Id),
-                ToPairwiseRunView(pairwise, run.Id));
+                inputs.Gates.GetValueOrDefault(run.Id),
+                ToPairwiseRunView(inputs.Pairwise, run.Id));
 
             rankable[run.Id] = runRankable;
 
             // A gated run can only ever rank on its review, so a judge score must not make its cell look scored.
-            anyScore[run.Id] = gates.GetValueOrDefault(run.Id) == ReviewGate.NotApplicable
-                ? run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null
+            anyScore[run.Id] = inputs.Gates.GetValueOrDefault(run.Id) == ReviewGate.NotApplicable
+                ? run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(inputs.Pairwise, run.Id)?.Score is not null
                 : run.UserScore is not null;
             if (identity.SetRevised)
             {
@@ -220,90 +266,97 @@ public sealed partial class BenchmarkStore
             };
         }
 
-        // An open review closes the gap, including on a truncated answer: an approval's user score outranks truncation. A stale identity stamp it cannot close.
-        bool IsReviewGap(Guid runId) =>
-            gates.GetValueOrDefault(runId) is ReviewGate.Pending or ReviewGate.Stale
-            && runs[runId].Judge.RankExclusionReason is BenchmarkRunJudgeStates.ReasonReviewPending
-                or BenchmarkRunJudgeStates.ReasonReviewStale
-                or BenchmarkRunJudgeStates.ReasonTruncated
-                or BenchmarkRunJudgeStates.ReasonIncomplete;
-
-        // Warm-ups are dropped BEFORE grouping: one sits at repeat index 0, so it forms a cell of its own that could only ever be complete if every leaf item also
-        // got a warm-up run, and would then sit in the denominator forever. Not a contender at cell granularity, for the reason it is not one at run granularity.
-        var cells = new Dictionary<string, CellRanking>(StringComparer.Ordinal);
-        foreach (var cell in scored.Where(static run => !run.IsWarmup).GroupBy(static run => run.CellKey, StringComparer.Ordinal))
+        return new RunRankings
         {
-            var members = cell.ToArray();
+            Runs = runs,
+            Rankable = rankable,
+            AnyScore = anyScore,
+            SetRevised = setRevised
+        };
+    }
 
-            // The set check comes FIRST: "does this cell hold every current item" is only a meaningful question once
-            // both sides agree on what the set is. Asking it of a cell frozen under a different set is the bug.
-            if (Array.Exists(members, member => setRevised.Contains(member.Id)))
+    /// <summary>One cell's standing. The order of the checks is the behavior: each one assumes every check above it did not apply.</summary>
+    private static CellRanking RankCell(RankingRunRow[] members,
+        HashSet<Guid> scorableItemIds,
+        RunRankings rankings,
+        IReadOnlyDictionary<Guid, ReviewGate> gates)
+    {
+        // The set check comes FIRST: "does this cell hold every current item" is only a meaningful question once
+        // both sides agree on what the set is. Asking it of a cell frozen under a different set is the bug.
+        if (Array.Exists(members, member => rankings.SetRevised.Contains(member.Id)))
+        {
+            return new CellRanking
             {
-                cells[cell.Key] = new CellRanking
-                {
-                    Quality = null,
-                    Reason = BenchmarkRunJudgeStates.ReasonItemSetRevised,
-                    Countable = false
-                };
-                continue;
-            }
-
-            // A cell whose runs name no item at all was frozen before task suites: it is a singleton, it is ranked on
-            // its own run's score, and materializing item 0 for the project later must not retroactively unrank it.
-            var contributing = members.Where(member => member.TaskItemId is { } id && scorableItemIds.Contains(id)).ToArray();
-            if (contributing.Length == 0 && Array.TrueForAll(members, static member => member.TaskItemId is null))
-            {
-                var only = members[0];
-                cells[cell.Key] = new CellRanking
-                {
-                    Quality = runs[only.Id].QualityScore,
-                    Reason = runs[only.Id].QualityScore is null ? runs[only.Id].Judge.RankExclusionReason : null,
-                    Countable = rankable[only.Id] && anyScore[only.Id]
-                };
-                continue;
-            }
-
-            // A project whose every leaf is excluded from the mean — a pure long-context probe, where recall is reported on its own axis — has nothing to rank, which
-            // is not a cell missing an item: "incomplete" would send the operator hunting a question never asked. The runs keep their own scores for the recall axis.
-            if (scorableItemIds.Count == 0)
-            {
-                cells[cell.Key] = new CellRanking
-                {
-                    Quality = null,
-                    Reason = BenchmarkRunJudgeStates.ReasonNoScore,
-                    Countable = false
-                };
-                continue;
-            }
-
-            var covered = contributing.Select(static member => member.TaskItemId!.Value).ToHashSet();
-            var complete = scorableItemIds.All(covered.Contains)
-                           && Array.TrueForAll(contributing, member => rankable[member.Id]);
-            if (!complete)
-            {
-                // Every item answered and every gap a review the operator still owes: the inbox closes it, a re-run would not. A missing item stays incomplete.
-                var reviewGapsOnly = scorableItemIds.All(covered.Contains)
-                                     && Array.TrueForAll(contributing, member => (rankable[member.Id] && runs[member.Id].QualityScore is not null) || IsReviewGap(member.Id));
-                cells[cell.Key] = new CellRanking
-                {
-                    Quality = null,
-                    Reason = reviewGapsOnly ? BenchmarkRunJudgeStates.ReasonReviewPending : BenchmarkRunJudgeStates.ReasonItemIncomplete,
-                    Countable = false
-                };
-                continue;
-            }
-
-            var quality = Array.TrueForAll(contributing, member => runs[member.Id].QualityScore is not null)
-                ? CellMean(contributing.Select(member => runs[member.Id].QualityScore!.Value))
-                : (int?)null;
-            cells[cell.Key] = new CellRanking
-            {
-                Quality = quality,
-                Reason = quality is null ? BenchmarkRunJudgeStates.ReasonItemIncomplete : null,
-                Countable = Array.TrueForAll(contributing, member => anyScore[member.Id])
+                Quality = null,
+                Reason = BenchmarkRunJudgeStates.ReasonItemSetRevised,
+                Countable = false
             };
         }
 
+        // A cell whose runs name no item at all was frozen before task suites: it is a singleton, it is ranked on
+        // its own run's score, and materializing item 0 for the project later must not retroactively unrank it.
+        var contributing = members.Where(member => member.TaskItemId is { } id && scorableItemIds.Contains(id)).ToArray();
+        if (contributing.Length == 0 && Array.TrueForAll(members, static member => member.TaskItemId is null))
+        {
+            var only = rankings.Runs[members[0].Id];
+            return new CellRanking
+            {
+                Quality = only.QualityScore,
+                Reason = only.QualityScore is null ? only.Judge.RankExclusionReason : null,
+                Countable = rankings.Rankable[members[0].Id] && rankings.AnyScore[members[0].Id]
+            };
+        }
+
+        // A project whose every leaf is excluded from the mean — a pure long-context probe, where recall is reported on its own axis — has nothing to rank, which
+        // is not a cell missing an item: "incomplete" would send the operator hunting a question never asked. The runs keep their own scores for the recall axis.
+        if (scorableItemIds.Count == 0)
+        {
+            return new CellRanking
+            {
+                Quality = null,
+                Reason = BenchmarkRunJudgeStates.ReasonNoScore,
+                Countable = false
+            };
+        }
+
+        var covered = contributing.Select(static member => member.TaskItemId!.Value).ToHashSet();
+        var complete = scorableItemIds.All(covered.Contains)
+                       && Array.TrueForAll(contributing, member => rankings.Rankable[member.Id]);
+        if (!complete)
+        {
+            // Every item answered and every gap a review the operator still owes: the inbox closes it, a re-run would not. A missing item stays incomplete.
+            var reviewGapsOnly = scorableItemIds.All(covered.Contains)
+                                 && Array.TrueForAll(contributing,
+                                     member => (rankings.Rankable[member.Id] && rankings.Runs[member.Id].QualityScore is not null) || IsReviewGap(member.Id, rankings, gates));
+            return new CellRanking
+            {
+                Quality = null,
+                Reason = reviewGapsOnly ? BenchmarkRunJudgeStates.ReasonReviewPending : BenchmarkRunJudgeStates.ReasonItemIncomplete,
+                Countable = false
+            };
+        }
+
+        var quality = Array.TrueForAll(contributing, member => rankings.Runs[member.Id].QualityScore is not null)
+            ? CellMean(contributing.Select(member => rankings.Runs[member.Id].QualityScore!.Value))
+            : (int?)null;
+        return new CellRanking
+        {
+            Quality = quality,
+            Reason = quality is null ? BenchmarkRunJudgeStates.ReasonItemIncomplete : null,
+            Countable = Array.TrueForAll(contributing, member => rankings.AnyScore[member.Id])
+        };
+    }
+
+    // An open review closes the gap, including on a truncated answer: an approval's user score outranks truncation. A stale identity stamp it cannot close.
+    private static bool IsReviewGap(Guid runId, RunRankings rankings, IReadOnlyDictionary<Guid, ReviewGate> gates) =>
+        gates.GetValueOrDefault(runId) is ReviewGate.Pending or ReviewGate.Stale
+        && rankings.Runs[runId].Judge.RankExclusionReason is BenchmarkRunJudgeStates.ReasonReviewPending
+            or BenchmarkRunJudgeStates.ReasonReviewStale
+            or BenchmarkRunJudgeStates.ReasonTruncated
+            or BenchmarkRunJudgeStates.ReasonIncomplete;
+
+    private static void ApplyCellRanks(RankingRunRow[] scored, Dictionary<string, CellRanking> cells, Dictionary<Guid, BenchmarkRunRanking> runs)
+    {
         // Dense rank over CELLS: equal scores share a position and the next distinct score is the next integer, so "rank 2" is always "the second-best score in this
         // project", however many cells tie above it. Every run of a cell reports its cell's rank and its cell's mean; its own quality score stays its own.
         var ordered = cells.Values.Where(static entry => entry.Quality is not null)
@@ -334,21 +387,6 @@ public sealed partial class BenchmarkStore
                     : entry.Judge
             };
         }
-
-        return new BenchmarkProjectRanking
-        {
-            Runs = runs,
-            Cohort = new BenchmarkRankCohort
-            {
-                PolicyRevision = current?.Revision,
-                ExecutionKey = current?.ReferenceExecutionKey,
-                CohortGeneration = current?.CohortGeneration,
-                RankedCount = cells.Values.Count(static entry => entry.Quality is not null),
-                TotalScored = cells.Values.Count(static entry => entry.Countable)
-            },
-            Cells = cells,
-            ScorableItemCount = scorableItemIds.Count
-        };
     }
 
     private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>
@@ -479,6 +517,57 @@ public sealed partial class BenchmarkStore
         ///     carrying some score. A cell nothing the operator does could ever rank must not sit in it.
         /// </summary>
         public required bool Countable { get; init; }
+    }
+
+    /// <summary>The flat run columns the ranking is computed from.</summary>
+    private sealed record RankingRunRow
+    {
+        public required Guid Id { get; init; }
+
+        public required int? UserScore { get; init; }
+
+        public required string? PrimaryStopReason { get; init; }
+
+        public required bool IsWarmup { get; init; }
+
+        public required Guid? TaskItemId { get; init; }
+
+        public required string CellKey { get; init; }
+
+        public required string TaskInputHash { get; init; }
+
+        public required string TaskItemSetHash { get; init; }
+    }
+
+    private sealed record RankingInputs
+    {
+        public required RankingRunRow[] Scored { get; init; }
+
+        public required Dictionary<Guid, string> CurrentInputHashes { get; init; }
+
+        public required HashSet<Guid> ScorableItemIds { get; init; }
+
+        public required string? CurrentSetHash { get; init; }
+
+        public required IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> Views { get; init; }
+
+        public required IReadOnlyDictionary<Guid, ReviewGate> Gates { get; init; }
+
+        public required BenchmarkJudgePolicyRevisionRecord? Current { get; init; }
+
+        public required PairwiseRanking? Pairwise { get; init; }
+    }
+
+    /// <summary>Each run's own standing, before its cell is known.</summary>
+    private sealed record RunRankings
+    {
+        public required Dictionary<Guid, BenchmarkRunRanking> Runs { get; init; }
+
+        public required Dictionary<Guid, bool> Rankable { get; init; }
+
+        public required Dictionary<Guid, bool> AnyScore { get; init; }
+
+        public required HashSet<Guid> SetRevised { get; init; }
     }
 
     private sealed record BenchmarkProjectRanking

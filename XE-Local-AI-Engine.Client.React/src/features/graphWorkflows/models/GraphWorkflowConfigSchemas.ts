@@ -1,17 +1,19 @@
 // The per-form Zod schemas the graph editor's config drawers run at field level. They only produce a field message;
 // the structural save gate is GraphWorkflowValidation. Messages are full i18n keys: the form renders `t(issue.message)`.
 
-import { z } from "zod";
+import { type ZodType, z } from "zod";
 
+import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import {
 	GRAPH_WORKFLOW_KEY_PATTERN,
+	type GraphWorkflowNodeKind,
 	graphWorkflowConditionOperators,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { labelsAreValid } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
 
 /**
  * `GraphWorkflowTokens.IsDotPath` verbatim: dot-separated segments, each NON-EMPTY and free of whitespace and the
- * bracket, star and parenthesis characters that would make it a wildcard, an index or a function call (brief §3.1).
+ * bracket, star and parenthesis characters that would make it a wildcard, an index or a function call.
  * Deliberately not narrower than the server's — a JSON property may be hyphenated, and refusing one the server accepts
  * blocks a save. The dot is excluded from the segment itself, or `a..b`, `.a` and `a.` all match a rule the server
  * refuses and the field is green on a path the save then 400s.
@@ -137,7 +139,7 @@ export const agentConfigSchema = z.object({
 	includeUpstreamOutputs: z.boolean(),
 });
 
-export const llmCallConfigSchema = z.object({
+const llmCallConfigSchema = z.object({
 	prompt: z
 		.string()
 		.trim()
@@ -318,3 +320,46 @@ export const edgeConditionSchema = z
 		message: messageKey("condition", "valueRequired"),
 		path: ["value"],
 	});
+
+/** The per-field Zod schema for a kind, on top of `nodeCommonSchema`. `Parallel` and `Join` configure nothing. */
+function configSchemaFor(kind: GraphWorkflowNodeKind): ZodType | undefined {
+	switch (kind) {
+		case "Start":
+			return startConfigSchema;
+		case "Agent":
+			return agentConfigSchema;
+		case "LlmCall":
+			return llmCallConfigSchema;
+		case "Tool":
+			return toolConfigSchema;
+		case "Condition":
+			return conditionConfigSchema;
+		case "Pause":
+			return pauseConfigSchema;
+		case "End":
+			return endConfigSchema;
+		case "ChatInput":
+			return chatInputConfigSchema;
+		case "DecisionModel":
+			return decisionModelConfigSchema;
+		default:
+			return undefined;
+	}
+}
+
+/** Zod issues as `field → message`, where the message is already a full i18n key. */
+export function graphWorkflowNodeFieldMessages(node: GraphWorkflowCanvasNodeData): Readonly<Record<string, string>> {
+	const messages: Record<string, string> = {};
+	const schemas: readonly (ZodType | undefined)[] = [nodeCommonSchema, configSchemaFor(node.kind)];
+	for (const schema of schemas) {
+		const result = schema?.safeParse(node);
+		if (result === undefined || result.success) {
+			continue;
+		}
+		for (const issue of result.error.issues) {
+			const field = String(issue.path[0] ?? "");
+			messages[field] ??= issue.message;
+		}
+	}
+	return messages;
+}

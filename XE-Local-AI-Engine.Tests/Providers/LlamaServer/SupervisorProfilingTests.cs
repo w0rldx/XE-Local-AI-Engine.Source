@@ -836,12 +836,12 @@ public sealed class SupervisorProfilingTests
         using var releaseFirstKill = new ManualResetEventSlim(initialState: false);
         var launches = 0;
         var launcher = new FakeProcessLauncher(_ => Interlocked.Increment(ref launches) == 1
-            ? new FakeProcessHandle(pid: 5000, exitOnTreeKill: true, () =>
+            ? new FakeProcessTreeHandle(pid: 5000, exitOnTreeKill: true, () =>
             {
                 firstKillReached.Set();
                 releaseFirstKill.Wait(TimeSpan.FromSeconds(10));
             })
-            : new FakeProcessHandle(pid: 5000 + launches));
+            : new FakeProcessTreeHandle(pid: 5000 + launches));
         await using var supervisor = SupervisorFactory.Create(launcher);
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Embedding, CancellationToken.None);

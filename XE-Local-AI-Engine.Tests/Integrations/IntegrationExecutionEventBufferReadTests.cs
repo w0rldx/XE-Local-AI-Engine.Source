@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class IntegrationExecutionEventBufferReadTests
 {
-    /// <summary>Test 1.</summary>
     [Test]
     public async Task ReadAsync_OnAFinishedExecution_ReplaysEverythingAndCompletesOnTheTerminal()
     {
@@ -31,7 +30,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.Equal(IntegrationStreamEventTypes.ExecutionCompleted, events[^1].Type, "The enumerator ends on the terminal event and nothing else.");
     }
 
-    /// <summary>Test 2.</summary>
     [Test]
     public async Task ReadAsync_MidFlight_YieldsTheBacklogThenLiveAppendsThenCompletes()
     {
@@ -51,7 +49,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.True(reader.Snapshot().Select(static streamEvent => streamEvent.Sequence).SequenceEqual([1L, 2L, 3L, 4L]));
     }
 
-    /// <summary>Test 3.</summary>
     [Test]
     public async Task ReadAsync_WithASinceSequence_StartsStrictlyAfterIt()
     {
@@ -71,7 +68,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
             "sinceSequence is exclusive: a caller resuming at 3 must not be handed 3 again.");
     }
 
-    /// <summary>Test 4.</summary>
     [Test]
     public async Task ReadAsync_BelowTheRetainedFloor_ThrowsAndTheWindowEdgeDoesNot()
     {
@@ -93,7 +89,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
             "A caller sitting exactly at Floor - 1 is served losslessly from Floor and must not be refused.");
     }
 
-    /// <summary>Test 5.</summary>
     [Test]
     public async Task ReadAsync_AboveTheHead_ThrowsRatherThanParkingForever()
     {
@@ -106,7 +101,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
             "A stale id from another execution would otherwise hold an open 200 that never produces a frame.");
     }
 
-    /// <summary>Test 6.</summary>
     [Test]
     public async Task ReadAsync_ForAnUntrackedExecution_ThrowsAndTheSentinelsReadZero()
     {
@@ -131,7 +125,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
         }
     }
 
-    /// <summary>Test 7 — the lost-wakeup stress that guards capturing the wakeup source inside the snapshot's lock.</summary>
+    /// <summary>The lost-wakeup stress that guards capturing the wakeup source inside the snapshot's lock.</summary>
     [Test]
     public async Task ReadAsync_WhenAppendsRaceTheReadersPark_NeverMissesTheTerminal()
     {
@@ -160,7 +154,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         }
     }
 
-    /// <summary>Test 7a.</summary>
     [Test]
     public async Task ReadAsync_OverAnAbandonedHole_ReplaysEveryPublishedEventAndCompletes()
     {
@@ -183,7 +176,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.Equal(expected: 4L, abandoned);
     }
 
-    /// <summary>Test 7b.</summary>
     [Test]
     public async Task ReadAsync_ResumingAtOrBelowAHole_YieldsEverythingAboveItWithoutRaising()
     {
@@ -204,7 +196,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.True(belowTheHole.Select(static streamEvent => streamEvent.Sequence).SequenceEqual([3L, 4L]));
     }
 
-    /// <summary>Test 7c.</summary>
     [Test]
     public async Task ReadAsync_WithAReservationAboveTheTerminal_StillCompletesOnTheTerminal()
     {
@@ -224,7 +215,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
             "Completion is decided by the type yielded; a cursor == LastSequence implementation would hang here.");
     }
 
-    /// <summary>Test 7d — the review's N / N+1 scenario. This is the test a barrier-less reader fails.</summary>
+    /// <summary>The N / N+1 scenario. This is the test a barrier-less reader fails.</summary>
     [Test]
     public async Task ReadAsync_WhenALowerSequenceIsStillPending_DeliversItBeforeTheHigherOne()
     {
@@ -258,7 +249,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
             "A late publish is delivered in ascending order, so the wire's id: values never go backwards.");
     }
 
-    /// <summary>Test 7e.</summary>
     [Test]
     public async Task ReadAsync_WhenAPendingReservationIsAbandoned_ResumesOnThatWakeupAloneWithNoClock()
     {
@@ -285,7 +275,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
             "Abandon resolves the barrier and completes the same source an append does; the hole stays and the reader proceeds.");
     }
 
-    /// <summary>Test 7f.</summary>
     [Test]
     public async Task ReadAsync_DoesNotCompleteOnATerminalWhileALowerSequenceIsPending()
     {
@@ -308,7 +297,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.True(reader.Snapshot().Select(static streamEvent => streamEvent.Sequence).SequenceEqual([1L, reserved, terminal]));
     }
 
-    /// <summary>Test 7f, the abandon arm: the terminal alone.</summary>
+    /// <summary>The abandon arm: the terminal alone.</summary>
     [Test]
     public async Task ReadAsync_WhenTheLowerReservationIsAbandoned_YieldsTheTerminalAlone()
     {
@@ -329,7 +318,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.True(reader.Snapshot().Select(static streamEvent => streamEvent.Sequence).SequenceEqual([1L, terminal]));
     }
 
-    /// <summary>Test 7g.</summary>
     [Test]
     public async Task ReadAsync_AtOrBelowAPendingReservation_ParksInsteadOfRaisingAGap()
     {
@@ -348,7 +336,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         AssertEx.False(at.Completion.IsCompleted);
     }
 
-    /// <summary>Test 7h.</summary>
     [Test]
     public async Task ReadAsync_UnderConcurrentReservationsAndAppends_AlwaysReturnsAnAscendingRun()
     {
@@ -394,7 +381,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
         }
     }
 
-    /// <summary>Test 8 — the writer's clean-close input.</summary>
+    /// <summary>The writer's clean-close input.</summary>
     [Test]
     public async Task ReadAsync_WhenTheEntryIsEvictedMidStream_RaisesTheGapOutOfTheEnumerator()
     {
@@ -413,7 +400,7 @@ public sealed class IntegrationExecutionEventBufferReadTests
     }
 
     /// <summary>
-    ///     Test 8a — host shutdown. A parked reader waits on its entry's source and nothing else, so disposal has to
+    ///     Host shutdown. A parked reader waits on its entry's source and nothing else, so disposal has to
     ///     complete those sources: otherwise every open stream waits out its own request token instead of ending here.
     /// </summary>
     [Test]
@@ -444,7 +431,6 @@ public sealed class IntegrationExecutionEventBufferReadTests
         }
     }
 
-    /// <summary>Test 9.</summary>
     [Test]
     public async Task ReadAsync_WhileFourThreadsAppend_YieldsEveryMintedSequenceInOrder()
     {

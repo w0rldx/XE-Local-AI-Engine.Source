@@ -13,7 +13,7 @@ public sealed class ProcessReadinessRaceTests
     [Arguments(false, ProcessReadinessOutcome.TimedOut)]
     public async Task RunAsync_LiveChild_ReportsTheProbeVerdict(bool ready, ProcessReadinessOutcome expected)
     {
-        using var handle = new FakeProcessHandle(pid: 4242);
+        using var handle = new FakeProcessTreeHandle(pid: 4242);
 
         var outcome = await ProcessReadinessRace.RunAsync(handle, _ => Task.FromResult(ready), new AdvanceableTimeProvider(), CancellationToken.None);
 
@@ -23,7 +23,7 @@ public sealed class ProcessReadinessRaceTests
     [Test]
     public async Task RunAsync_ChildExitedBeforeReady_ReportsExitedAndCancelsTheProbe()
     {
-        using var handle = new FakeProcessHandle(pid: 4242);
+        using var handle = new FakeProcessTreeHandle(pid: 4242);
         handle.SimulateExit(exitCode: 1);
         var probeCancelled = false;
 
@@ -51,7 +51,7 @@ public sealed class ProcessReadinessRaceTests
     [Test]
     public async Task RunAsync_CallerCancelled_Propagates()
     {
-        using var handle = new FakeProcessHandle(pid: 4242);
+        using var handle = new FakeProcessTreeHandle(pid: 4242);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 

@@ -228,7 +228,7 @@ public sealed class ContainerRuntimeRealDaemonTests
     {
         // The mount nobody asked for. An image's own VOLUME puts application data outside the instance directory,
         // where a backup of that directory does not include it — so the EFFECTIVE set, not the requested set, is what
-        // a later slice compares its plan against.
+        // a deployment plan is compared against.
         await using var box = await NewBoxAsync();
 
         // Built here rather than pulled: the assertion is about what the daemon does with a VOLUME instruction,
@@ -618,7 +618,7 @@ public sealed class ContainerRuntimeRealDaemonTests
     ///     can be confused with — or clean up — anything else on a shared developer daemon.
     ///     <para>
     ///         Disposal is best effort by design: a test that already failed must not have its verdict replaced by a
-    ///         cleanup error. The teardown ORDER, which a later slice has to follow, is asserted explicitly by
+    ///         cleanup error. The teardown ORDER, which callers have to follow, is asserted explicitly by
     ///         <c>RealDaemon_RemoveNetwork_WhileAttached_Fails_ThenSucceedsAfterRemoval_AndAMissingNetworkIsNotAnError</c>.
     ///     </para>
     /// </summary>

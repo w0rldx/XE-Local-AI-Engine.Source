@@ -35,7 +35,7 @@ export type ExternalProviderProbeDto = XeLocalAiEngineClientEndpointsExternalPro
 type SaveConnectionBody = XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest;
 type ProbeBody = XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest;
 
-export function errorMessage(error: unknown): string {
+export function externalProviderErrorMessage(error: unknown): string {
 	return apiErrorMessage(error, t("pages.externalProviders.unexpectedError", "Unexpected external provider error"));
 }
 

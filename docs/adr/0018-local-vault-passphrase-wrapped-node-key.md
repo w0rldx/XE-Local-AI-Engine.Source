@@ -8,9 +8,7 @@
   recovered. It changes nothing about the three HKDF derivations, the Data Protection key ring, any existing
   ciphertext, or the operator-supplied secret sources used by development, CI, tests and containers.
 - **Authority:** Operator decisions of 2026-10-01 (mandatory vault with a one-time legacy auto-wrap, recovery code,
-  BCL PBKDF2, whole-host wait, one password for two stores, persisted `node.key` only), recorded in
-  `Plans/vault-key-custody-2026-10-01/PLAN.md` §0 (the plan directory is git-ignored; it is the record of the
-  decisions, not a published document).
+  BCL PBKDF2, whole-host wait, one password for two stores, persisted `node.key` only).
 - **Amended:** 2026-10-09, a recovery reset rotates the recovery code (see the amendment at the end).
 - **Amends:** nothing. It narrows one statement in [Security & Privacy](../wiki/12-security-and-privacy.md) §2.1: a
   persisted desktop `node.key` is no longer the raw secret (Linux: guarded by `0600` alone; Windows: DPAPI).
@@ -132,7 +130,7 @@ reads a protected value while locked, and would leave a half-alive node that ans
 
 ## Amendment 2026-10-09: a recovery reset rotates the recovery code
 
-Operator decision of 2026-10-09 (Windows tester round). The original design kept the recovery code after a reset: it
+Operator decision of 2026-10-09. The original design kept the recovery code after a reset: it
 was "shown once" in the sense of printed once, not single-use, so a code that had been typed into a terminal or a
 browser stayed valid forever.
 

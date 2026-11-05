@@ -835,7 +835,7 @@ internal static class GraphWorkflowGraphs
                                      """;
 
     /// <summary>
-    ///     The slice's whole shape in one graph: a <c>Pause</c> a person answers, and on the approving branch alone a
+    ///     The whole pause-and-tool shape in one graph: a <c>Pause</c> a person answers, and on the approving branch alone a
     ///     <c>Tool</c> node that really invokes a built-in. Both of the pause's allowed decisions route somewhere, which
     ///     is what the definition-time pre-flight requires, and the two branches reconverge on an <c>Any</c> End.
     /// </summary>

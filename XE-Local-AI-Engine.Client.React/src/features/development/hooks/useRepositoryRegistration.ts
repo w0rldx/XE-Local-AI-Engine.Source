@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import type { DevelopmentRepository } from "@/features/development/models/DevelopmentModels";
+import type { DevelopmentRepository } from "@/core/development/queries/useDevelopmentRepositories";
 import type { RegisterDevelopmentRepositoryValues } from "@/features/development/models/DevelopmentProjectFormModels";
 
 interface UseRepositoryRegistrationOptions {

@@ -353,7 +353,7 @@ public sealed class NodeAgentMcpTools
             return McpToolResults.Failure(McpExecutionFailureCodes.TaskTooLarge, McpAgentRunText.TaskTooLargeMessage(_runOptions.MaxTaskUtf8Bytes));
         }
 
-        // The same instructions bound start_agent_run applies, so the two run tools reject the same inputs (live re-run J7b).
+        // The same instructions bound start_agent_run applies, so the two run tools reject the same inputs.
         if (Encoding.UTF8.GetByteCount(instructions ?? string.Empty) > _runOptions.MaxInstructionsUtf8Bytes)
         {
             return McpToolResults.Failure(McpExecutionFailureCodes.TaskTooLarge,

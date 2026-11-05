@@ -228,8 +228,8 @@ public static class BenchmarkBradleyTerry
         {
             RunId = run,
             Score = score,
-            CiLow = Percentile(ordered, 0.025),
-            CiHigh = Percentile(ordered, 0.975),
+            CiLow = BenchmarkStatistics.NearestRank(ordered, 0.025),
+            CiHigh = BenchmarkStatistics.NearestRank(ordered, 0.975),
             Comparisons = counts[index],
             BootstrapAppearances = ordered.Length,
             Reason = null
@@ -483,13 +483,6 @@ public static class BenchmarkBradleyTerry
         }
 
         return samples;
-    }
-
-    /// <summary>Nearest-rank percentile over the replicate scores a run actually appeared in.</summary>
-    private static int Percentile(IReadOnlyList<int> ordered, double quantile)
-    {
-        var rank = (int)Math.Ceiling(quantile * ordered.Count) - 1;
-        return ordered[Math.Clamp(rank, 0, ordered.Count - 1)];
     }
 
     [StructLayout(LayoutKind.Auto)]

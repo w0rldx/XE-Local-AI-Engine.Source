@@ -32,7 +32,7 @@ public sealed class EndpointAuthorizationPolicyTests
 {
     /// <summary>
     ///     Non-vacuity floor for the FastEndpoints route set. The real count is four hundred and forty-seven
-    ///     (four hundred and forty-six plus this slice's canary); the floor sits under it because it exists to
+    ///     (counting the canary); the floor sits under it because it exists to
     ///     catch an empty or half-built route table, not to notice a retired endpoint.
     /// </summary>
     private const int EndpointFloor = 400;

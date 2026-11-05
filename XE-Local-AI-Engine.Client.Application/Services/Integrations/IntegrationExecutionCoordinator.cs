@@ -415,8 +415,6 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         CancellationToken cancelToken,
         CancellationToken stoppingToken)
     {
-        var executionId = execution.Id;
-
         // 1. Everything the run needs. A missing conversation or seed is the ONE shape ADR 0008's forward-running failure leaves behind — the execution row
         //    commits before they are written — and it is failed, never repaired: the seed text is not recoverable, and a run against an empty seed is worse.
         var sessions = services.GetRequiredService<IIntegrationSessionStore>();
@@ -441,192 +439,13 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        var agentDefinitionId = trigger.TargetAgentDefinitionId.GetValueOrDefault();
-        context.Describe(trigger.Name, agentDefinitionId);
-
-        var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, runToken);
-        if (definition is null)
-        {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");
-            return;
-        }
-
-        // V1 runs a saved SINGLE agent: this package carries no OrchestrationSpec, so an orchestrator would report Completed having run no participant, no
-        // routing and no handoff. Checked here as well as at save — a Kind can change. Refused, not emulated: ADR 0008 ("Invariants the coordinator enforces").
-        if (definition.Kind != AgentDefinitionKind.Single)
-        {
-            await TerminalizeBeforeRunAsync(context,
-                IntegrationFailureCategories.TriggerUnavailable,
-                "The trigger's target agent is an orchestrator, which external integrations do not run.");
-            return;
-        }
-
-        var persistence = services.GetRequiredService<INodeChatPersistenceService>();
-
-        // 2. A cancel that landed before this row was picked up. A row that already READS Cancelled was terminalized by
-        //    the cancel path, which owns both artifacts; this one appends nothing.
-        if (execution.Status == IntegrationExecutionStatus.Cancelled)
+        var plan = await ResolveAgentRunAsync(services, context, execution, session, trigger, runToken);
+        if (plan is null)
         {
             return;
         }
 
-        if (execution.StopRequestedAtUtc is not null)
-        {
-            await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
-            return;
-        }
-
-        // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and before the capacity decision, unless
-        //    the operator lets cloud models run unattended. The capacity decision itself is step 7b2, after the lease.
-        var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(runToken);
-        var localDefaultModel = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
-                                              .ResolveAsync(nodeSettings.DefaultModelName, runToken);
-        var pinnedModel = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
-        var effectiveModel = pinnedModel ?? localDefaultModel;
-        if (string.IsNullOrWhiteSpace(effectiveModel))
-        {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "No local chat model is available to run the trigger's agent.");
-            return;
-        }
-
-        var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken);
-        var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
-        var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
-        if (await CloudUnattendedGate.WithholdsAsync(effectiveModelIsCloud, capabilities.CloudGrants, runtimeSettings, runToken))
-        {
-            await TerminalizeBeforeRunAsync(context,
-                IntegrationFailureCategories.CloudModelRejected,
-                "The trigger's effective model is cloud-hosted, and unattended runs are node-local only. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
-            return;
-        }
-
-        // 3a. The capability gate. Every integration run requires tool calling whatever the agent lists: its output arrives through emit_output
-        //     (unioned into the offer at step 5), so a model without tools could only end with no output. trigger-unavailable carries it (ADR 0008).
-        if (!supportsTools)
-        {
-            await TerminalizeBeforeRunAsync(context,
-                IntegrationFailureCategories.TriggerUnavailable,
-                "The trigger's agent runs on a model that is not known to support tool calling, which every integration run needs; pick a tool-capable model.");
-            return;
-        }
-
-        // 3b. The compaction bound, BEFORE the conversation read so the read sees the folded transcript; every no-op outcome is non-fatal by design. The keep
-        //     window and the excerpt cap come from the CHAT options, and the projection counts replayed tool exchanges: ADR 0008 ("Invariants the coordinator enforces").
-        var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
-        //     Replayed tool results are node-local data, so a cloud model gets them only while AllowCloudModelAccess is on; the trigger payload and the
-        //     prior outputs still go. The same flag drives the projection below and the context build in step 4, so both see the same transcript.
-        var replayToolCalls = replaysToolHistory && !await CloudLocalDataGate.WithholdsAsync(effectiveModelIsCloud, capabilities.CloudGrants, runtimeSettings, runToken);
-        if (replaysToolHistory && !replayToolCalls)
-        {
-            _logger.LogInformation("Integration execution {ExecutionId} omits the replayed tool history: its model is cloud-hosted and AllowCloudModelAccess is off.", executionId);
-        }
-
-        var toolResultExcerptChars = services.GetRequiredService<IOptions<ConversationContextBudgetOptions>>().Value.HistoricalToolResultExcerptChars;
-        await services.GetRequiredService<ConversationStepContextBound>()
-                      .ApplyAsync(session.ConversationId,
-                          _options.ContextBudgetTokens,
-                          effectiveModel,
-                          runToken,
-                          await runtimeSettings.GetCompactionRecentMessagesVerbatimAsync(runToken),
-                          replayToolCalls,
-                          toolResultExcerptChars);
-
-        // 3c. The turn read. A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live in the same
-        //     metadata_json blob the capped read omits for non-user rows, so under a compacted session its replay would silently be empty.
-        var conversation = replaysToolHistory
-            ? await persistence.GetConversationAsync(session.ConversationId, runToken)
-            : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken);
-        var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
-        if (conversation is null || seed is null)
-        {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's owned conversation or seed turn is missing.");
-            return;
-        }
-
-        // 4. The agent's COMPLETE resolved runtime — never the raw definition instructions.
-        var resolved = await services.GetRequiredService<IAgentDefinitionResolver>()
-                                     .ResolveAsync(definition.Id,
-                                         effectiveModel,
-                                         seed.Content,
-                                         supportsTools,
-                                         honorModelProfile: true,
-                                         effectiveModelIsCloud,
-                                         runToken);
-        if (resolved is null)
-        {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");
-            return;
-        }
-
-        // The SECOND read of the definition's Kind, and the one this package is actually built from: the resolver re-reads the definition through its own
-        // fresh query, so a switch to an orchestrator between the step-1 guard and this resolve is judged here rather than trusted from the earlier read.
-        if (resolved.Kind != AgentDefinitionKind.Single)
-        {
-            await TerminalizeBeforeRunAsync(context,
-                IntegrationFailureCategories.TriggerUnavailable,
-                "The trigger's target agent is an orchestrator, which external integrations do not run.");
-            return;
-        }
-
-        // 4c. The turn's context, from the SAME builder the chat send path uses. The seed is LIFTED OUT of the history it is already in — the accept path
-        //     persisted it before this coordinator ran — or the caller's input goes twice. selectedPath is null: integration conversations never regenerate.
-        var history = conversation with
-        {
-            Messages = [.. conversation.Messages.Where(message => message.MessageId != executionId)]
-        };
-        //     A CALLER-MANAGED continuation adds one framed document of the session's committed external.output payloads, in the builder's existing
-        //     attachmentContext slot: it lands at slot 0, ahead of the synopsis and the verbatim turns, because it is reference material, not a turn.
-        var priorOutputs = replaysToolHistory
-            ? await BuildPriorOutputsAsync(services, session, executionId, runToken)
-            : null;
-
-        //     And the session's own tool history: a caller-managed continuation replays each completed call and its result as real function content, so the
-        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (ADR 0008).
-        var conversationContext = ConversationContextBuilder.Build(history,
-            seed,
-            selectedPath: null,
-            priorOutputs,
-            imageContext: null,
-            knowledgeContext: null,
-            replayToolCalls,
-            toolResultExcerptChars);
-
-        // 5. The headless package, and emit_output unioned in AFTER the definition's offer ∩ AllowedToolNames and BEFORE the agent is constructed — the seam
-        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (ADR 0008).
-        var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
-        var offerProvider = services.GetRequiredService<ILocalToolOfferProvider>();
-        AllowedToolDto[] offeredTools =
-        [
-            .. resolved.AllowedTools,
-            .. offerProvider.GetIntegrationOutputOffer()
-                            .Select(tool => tool with
-                            {
-                                RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-                            })
-        ];
-
-        var messageId = Guid.NewGuid();
-        var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>()
-                              .Build(new LocalChatRuntimePackageRequest
-                              {
-                                  InvocationId = Guid.NewGuid(),
-                                  ConversationId = session.ConversationId,
-                                  ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
-                                  ConversationContext = conversationContext,
-                                  ModelProfile = effectiveModel,
-                                  AgentDefinitionVersion = resolved.AgentDefinitionVersion,
-                                  ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
-                                  AllowedTools = offeredTools,
-                                  Timeouts = new TimeoutSettings
-                                  {
-                                      InvocationTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
-                                  },
-                                  ReasoningEffort = resolved.ReasoningEffort,
-                                  SupportsThinking = supportsThinking,
-                                  ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable,
-                                  Skills = resolved.Skills,
-                                  IsUnattended = true
-                              });
+        var package = plan.Package;
 
         // 6. Subscribe BEFORE the lease, and keep ONE subscription lifetime for the whole run: it cannot miss a terminal report, and it closes after the
         //    drain and after the terminal append, so no event raised during the drain is dropped.
@@ -690,14 +509,10 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             await RunLeasedAsync(services,
                 context,
-                package,
-                session,
-                messageId,
-                effectiveModel,
+                plan,
                 terminalState,
                 dispatcher,
                 mapper,
-                persistence,
                 parts,
                 runToken,
                 cancelToken,
@@ -712,21 +527,230 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         }
     }
 
+    /// <summary>
+    ///     Runs every guard between the loaded trigger and the subscription, and builds the headless package.
+    /// </summary>
+    /// <returns>The plan to run, or <see langword="null" /> when the row is already terminal and there is nothing to run.</returns>
+    private async Task<AgentRunPlan?> ResolveAgentRunAsync(IServiceProvider services,
+        ExecutionRunContext context,
+        IntegrationExecutionSnapshot execution,
+        IntegrationSessionSnapshot session,
+        IntegrationTriggerSnapshot trigger,
+        CancellationToken runToken)
+    {
+        var executionId = execution.Id;
+
+        var agentDefinitionId = trigger.TargetAgentDefinitionId.GetValueOrDefault();
+        context.Describe(trigger.Name, agentDefinitionId);
+
+        var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, runToken);
+        if (definition is null)
+        {
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");
+            return null;
+        }
+
+        // V1 runs a saved SINGLE agent: this package carries no OrchestrationSpec, so an orchestrator would report Completed having run no participant, no
+        // routing and no handoff. Checked here as well as at save — a Kind can change. Refused, not emulated: ADR 0008 ("Invariants the coordinator enforces").
+        if (definition.Kind != AgentDefinitionKind.Single)
+        {
+            await TerminalizeBeforeRunAsync(context,
+                IntegrationFailureCategories.TriggerUnavailable,
+                "The trigger's target agent is an orchestrator, which external integrations do not run.");
+            return null;
+        }
+
+        var persistence = services.GetRequiredService<INodeChatPersistenceService>();
+
+        // 2. A cancel that landed before this row was picked up. A row that already READS Cancelled was terminalized by
+        //    the cancel path, which owns both artifacts; this one appends nothing.
+        if (execution.Status == IntegrationExecutionStatus.Cancelled)
+        {
+            return null;
+        }
+
+        if (execution.StopRequestedAtUtc is not null)
+        {
+            await TerminalizeAsync(context, BeforeRunStatuses, IntegrationExecutionStatus.Cancelled, failureCategory: null, failureSummary: null);
+            return null;
+        }
+
+        // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and before the capacity decision, unless
+        //    the operator lets cloud models run unattended. The capacity decision itself is step 7b2, after the lease.
+        var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(runToken);
+        var localDefaultModel = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
+                                              .ResolveAsync(nodeSettings.DefaultModelName, runToken);
+        var pinnedModel = string.IsNullOrWhiteSpace(definition.ModelProfile) ? null : definition.ModelProfile;
+        var effectiveModel = pinnedModel ?? localDefaultModel;
+        if (string.IsNullOrWhiteSpace(effectiveModel))
+        {
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "No local chat model is available to run the trigger's agent.");
+            return null;
+        }
+
+        var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken);
+        var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
+        var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
+        if (await CloudUnattendedGate.WithholdsAsync(effectiveModelIsCloud, capabilities.CloudGrants, runtimeSettings, runToken))
+        {
+            await TerminalizeBeforeRunAsync(context,
+                IntegrationFailureCategories.CloudModelRejected,
+                "The trigger's effective model is cloud-hosted, and unattended runs are node-local only. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
+            return null;
+        }
+
+        // 3a. The capability gate. Every integration run requires tool calling whatever the agent lists: its output arrives through emit_output
+        //     (unioned into the offer at step 5), so a model without tools could only end with no output. trigger-unavailable carries it (ADR 0008).
+        if (!supportsTools)
+        {
+            await TerminalizeBeforeRunAsync(context,
+                IntegrationFailureCategories.TriggerUnavailable,
+                "The trigger's agent runs on a model that is not known to support tool calling, which every integration run needs; pick a tool-capable model.");
+            return null;
+        }
+
+        // 3b. The compaction bound, BEFORE the conversation read so the read sees the folded transcript; every no-op outcome is non-fatal by design. The keep
+        //     window and the excerpt cap come from the CHAT options, and the projection counts replayed tool exchanges: ADR 0008 ("Invariants the coordinator enforces").
+        var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
+        //     Replayed tool results are node-local data, so a cloud model gets them only while AllowCloudModelAccess is on; the trigger payload and the
+        //     prior outputs still go. The same flag drives the projection below and the context build in step 4, so both see the same transcript.
+        var replayToolCalls = replaysToolHistory && !await CloudLocalDataGate.WithholdsAsync(effectiveModelIsCloud, capabilities.CloudGrants, runtimeSettings, runToken);
+        if (replaysToolHistory && !replayToolCalls)
+        {
+            _logger.LogInformation("Integration execution {ExecutionId} omits the replayed tool history: its model is cloud-hosted and AllowCloudModelAccess is off.", executionId);
+        }
+
+        var toolResultExcerptChars = services.GetRequiredService<IOptions<ConversationContextBudgetOptions>>().Value.HistoricalToolResultExcerptChars;
+        await services.GetRequiredService<ConversationStepContextBound>()
+                      .ApplyAsync(session.ConversationId,
+                          _options.ContextBudgetTokens,
+                          effectiveModel,
+                          runToken,
+                          await runtimeSettings.GetCompactionRecentMessagesVerbatimAsync(runToken),
+                          replayToolCalls,
+                          toolResultExcerptChars);
+
+        // 3c. The turn read. A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live in the same
+        //     metadata_json blob the capped read omits for non-user rows, so under a compacted session its replay would silently be empty.
+        var conversation = replaysToolHistory
+            ? await persistence.GetConversationAsync(session.ConversationId, runToken)
+            : await persistence.GetConversationForTurnAsync(session.ConversationId, runToken);
+        var seed = conversation?.Messages.FirstOrDefault(message => message.MessageId == executionId);
+        if (conversation is null || seed is null)
+        {
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.InternalFailure, "The execution's owned conversation or seed turn is missing.");
+            return null;
+        }
+
+        // 4. The agent's COMPLETE resolved runtime — never the raw definition instructions.
+        var resolved = await services.GetRequiredService<IAgentDefinitionResolver>()
+                                     .ResolveAsync(definition.Id,
+                                         effectiveModel,
+                                         seed.Content,
+                                         supportsTools,
+                                         honorModelProfile: true,
+                                         effectiveModelIsCloud,
+                                         runToken);
+        if (resolved is null)
+        {
+            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");
+            return null;
+        }
+
+        // The SECOND read of the definition's Kind, and the one this package is actually built from: the resolver re-reads the definition through its own
+        // fresh query, so a switch to an orchestrator between the step-1 guard and this resolve is judged here rather than trusted from the earlier read.
+        if (resolved.Kind != AgentDefinitionKind.Single)
+        {
+            await TerminalizeBeforeRunAsync(context,
+                IntegrationFailureCategories.TriggerUnavailable,
+                "The trigger's target agent is an orchestrator, which external integrations do not run.");
+            return null;
+        }
+
+        // 4c. The turn's context, from the SAME builder the chat send path uses. The seed is LIFTED OUT of the history it is already in — the accept path
+        //     persisted it before this coordinator ran — or the caller's input goes twice. selectedPath is null: integration conversations never regenerate.
+        var history = conversation with
+        {
+            Messages = [.. conversation.Messages.Where(message => message.MessageId != executionId)]
+        };
+        //     A CALLER-MANAGED continuation adds one framed document of the session's committed external.output payloads, in the builder's existing
+        //     attachmentContext slot: it lands at slot 0, ahead of the synopsis and the verbatim turns, because it is reference material, not a turn.
+        var priorOutputs = replaysToolHistory
+            ? await BuildPriorOutputsAsync(services, session, executionId, runToken)
+            : null;
+
+        //     And the session's own tool history: a caller-managed continuation replays each completed call and its result as real function content, so the
+        //     model can tell an action it PERFORMED from prose describing one. Only this policy asks for it; chat is unchanged (ADR 0008).
+        var conversationContext = ConversationContextBuilder.Build(history,
+            seed,
+            selectedPath: null,
+            priorOutputs,
+            imageContext: null,
+            knowledgeContext: null,
+            replayToolCalls,
+            toolResultExcerptChars);
+
+        // 5. The headless package, and emit_output unioned in AFTER the definition's offer ∩ AllowedToolNames and BEFORE the agent is constructed — the seam
+        //    ask_user uses. Approval-required tools are NOT stripped, and the approval flag is recomposed through the node policy here (ADR 0008).
+        var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
+        var offerProvider = services.GetRequiredService<ILocalToolOfferProvider>();
+        AllowedToolDto[] offeredTools =
+        [
+            .. resolved.AllowedTools,
+            .. offerProvider.GetIntegrationOutputOffer()
+                            .Select(tool => tool with
+                            {
+                                RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                            })
+        ];
+
+        var messageId = Guid.NewGuid();
+        var package = services.GetRequiredService<ILocalChatRuntimePackageBuilder>()
+                              .Build(new LocalChatRuntimePackageRequest
+                              {
+                                  InvocationId = Guid.NewGuid(),
+                                  ConversationId = session.ConversationId,
+                                  ResolvedSystemPrompt = resolved.ResolvedSystemPrompt,
+                                  ConversationContext = conversationContext,
+                                  ModelProfile = effectiveModel,
+                                  AgentDefinitionVersion = resolved.AgentDefinitionVersion,
+                                  ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+                                  AllowedTools = offeredTools,
+                                  Timeouts = new TimeoutSettings
+                                  {
+                                      InvocationTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
+                                  },
+                                  ReasoningEffort = resolved.ReasoningEffort,
+                                  SupportsThinking = supportsThinking,
+                                  ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable,
+                                  Skills = resolved.Skills,
+                                  IsUnattended = true
+                              });
+
+        return new AgentRunPlan
+        {
+            Package = package,
+            Session = session,
+            MessageId = messageId,
+            EffectiveModel = effectiveModel
+        };
+    }
+
     private async Task RunLeasedAsync(IServiceProvider services,
         ExecutionRunContext context,
-        RuntimePackage package,
-        IntegrationSessionSnapshot session,
-        Guid messageId,
-        string effectiveModel,
+        AgentRunPlan plan,
         StrongBox<InvocationState?> terminalState,
         IWorkerEventDispatcher dispatcher,
         IntegrationStreamEventMapper mapper,
-        INodeChatPersistenceService persistence,
         NodeChatPartAccumulator parts,
         CancellationToken runToken,
         CancellationToken cancelToken,
         CancellationToken stoppingToken)
     {
+        var package = plan.Package;
+        var session = plan.Session;
+        var messageId = plan.MessageId;
+        var effectiveModel = plan.EffectiveModel;
         var store = context.Store;
         var executionId = context.ExecutionId;
 
@@ -763,16 +787,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 // A false means a concurrent cancel already CASed the row on the same version, so the row is terminal
                 // and no execution.queued may follow it.
                 context.Version++;
-                var queued = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionQueued, contentType: null, payload: null);
-                await store.AppendEventAsync(new IntegrationEventAppend
-                {
-                    EventId = Guid.NewGuid(),
-                    ExecutionId = executionId,
-                    Sequence = queued.Sequence,
-                    EventType = queued.Type,
-                    DetailJson = null,
-                    OccurredAtUtc = queued.OccurredAtUtc
-                }, runToken);
+                await AppendLifecycleEventAsync(context, IntegrationStreamEventTypes.ExecutionQueued, runToken);
             }
         }
         catch
@@ -906,16 +921,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
             // 7e. execution.started, then the assistant placeholder: terminalization correlates on (ConversationId, MessageId, RequestId) against an EXISTING
             //     placeholder row, so creating it after the run would leave the assistant turn unpersisted.
-            var started = _buffer.Append(executionId, session.Id, IntegrationStreamEventTypes.ExecutionStarted, contentType: null, payload: null);
-            await store.AppendEventAsync(new IntegrationEventAppend
-            {
-                EventId = Guid.NewGuid(),
-                ExecutionId = executionId,
-                Sequence = started.Sequence,
-                EventType = started.Type,
-                DetailJson = null,
-                OccurredAtUtc = started.OccurredAtUtc
-            }, runToken);
+            await AppendLifecycleEventAsync(context, IntegrationStreamEventTypes.ExecutionStarted, runToken);
 
             var correlation = new NodeChatMessageCorrelation
             {
@@ -923,18 +929,19 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 MessageId = messageId,
                 RequestId = executionId
             };
-            _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
-                {
-                    ConversationId = session.ConversationId,
-                    MessageId = messageId,
-                    RequestId = executionId,
-                    CreatedAtUtc = startedAtUtc,
-                    Model = effectiveModel,
-                    MetadataJson = null,
-                    Origin = NodeChatOriginValues.Local,
-                    AgentDefinitionId = session.AgentDefinitionId
-                },
-                runToken);
+            _ = await services.GetRequiredService<INodeChatPersistenceService>()
+                              .CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+                                  {
+                                      ConversationId = session.ConversationId,
+                                      MessageId = messageId,
+                                      RequestId = executionId,
+                                      CreatedAtUtc = startedAtUtc,
+                                      Model = effectiveModel,
+                                      MetadataJson = null,
+                                      Origin = NodeChatOriginValues.Local,
+                                      AgentDefinitionId = session.AgentDefinitionId
+                                  },
+                                  runToken);
 
             // 8. Run.
             string? failureCategory = null;
@@ -973,6 +980,11 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             }
         }
     }
+
+    private Task AppendLifecycleEventAsync(ExecutionRunContext context, string eventType, CancellationToken cancellationToken) =>
+        AppendDurableAsync(context,
+            _buffer.Append(context.ExecutionId, context.SessionId, eventType, contentType: null, payload: null),
+            cancellationToken);
 
     private async Task FinishAsync(IServiceProvider services,
         ExecutionRunContext context,
@@ -1246,6 +1258,18 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
     private long NowUnixMilliseconds() =>
         _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+    /// <summary>What <see cref="ResolveAgentRunAsync" /> hands to the subscription and the leased run.</summary>
+    private sealed class AgentRunPlan
+    {
+        public required RuntimePackage Package { get; init; }
+
+        public required IntegrationSessionSnapshot Session { get; init; }
+
+        public required Guid MessageId { get; init; }
+
+        public required string EffectiveModel { get; init; }
+    }
 
     /// <summary>
     ///     Everything a terminal write needs, in one place, so the fixed terminal shape is a call rather than eleven

@@ -1,6 +1,7 @@
 // The file a definition is shared as: the export route's body, and what the import route takes back. The server is the
 // authority on the graph; this shape check only refuses a file that is not an export at all, before a dialog opens.
 
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 export const GRAPH_WORKFLOW_EXPORT_FORMAT = "xe-graph-workflow";
@@ -43,10 +44,6 @@ export type GraphWorkflowExportParse =
 	| { readonly ok: true; readonly envelope: GraphWorkflowExportEnvelope }
 	| { readonly ok: false; readonly reason: GraphWorkflowImportFailure };
 
-function isObject(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
 export function parseGraphWorkflowExportFile(text: string): GraphWorkflowExportParse {
 	let value: unknown;
 	try {
@@ -54,14 +51,14 @@ export function parseGraphWorkflowExportFile(text: string): GraphWorkflowExportP
 	} catch {
 		return { ok: false, reason: "notJson" };
 	}
-	if (!isObject(value) || value["format"] !== GRAPH_WORKFLOW_EXPORT_FORMAT) {
+	if (!isPlainRecord(value) || value["format"] !== GRAPH_WORKFLOW_EXPORT_FORMAT) {
 		return { ok: false, reason: "wrongFormat" };
 	}
 	if (value["formatVersion"] !== GRAPH_WORKFLOW_EXPORT_FORMAT_VERSION) {
 		return { ok: false, reason: "unsupportedVersion" };
 	}
 	const graph = value["graph"];
-	if (!isObject(graph)) {
+	if (!isPlainRecord(graph)) {
 		return { ok: false, reason: "graphNotObject" };
 	}
 	// Only the two lists the dialog walks are checked; what is inside them is the server's to judge.
@@ -106,7 +103,10 @@ export function graphWorkflowAllowedUrls(graph: GraphWorkflowGraph): readonly st
 	// preview must disclose its prefixes too.
 	const urls = nodes.flatMap((node) => {
 		const allowed =
-			isObject(node) && typeof node["kind"] === "string" && node["kind"].toLowerCase() === "tool" && isObject(node["config"])
+			isPlainRecord(node) &&
+			typeof node["kind"] === "string" &&
+			node["kind"].toLowerCase() === "tool" &&
+			isPlainRecord(node["config"])
 				? node["config"]["allowedUrls"]
 				: undefined;
 		return Array.isArray(allowed) ? allowed.filter((entry): entry is string => typeof entry === "string") : [];

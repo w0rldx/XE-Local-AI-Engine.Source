@@ -110,7 +110,7 @@ public sealed class TransientLlamaServerSpawnReceiptTests : IDisposable
     }
 
     private static FakeProcessLauncher OwnPidLauncher() =>
-        new(_ => new FakeProcessHandle(Environment.ProcessId));
+        new(_ => new FakeProcessTreeHandle(Environment.ProcessId));
 
     private TransientLlamaServerLauncher CreateLauncher(FakeProcessLauncher launcher, FakeBinaryManager? binaryManager = null) =>
         new(binaryManager ?? new FakeBinaryManager(serverExecutablePath: Environment.ProcessPath!),

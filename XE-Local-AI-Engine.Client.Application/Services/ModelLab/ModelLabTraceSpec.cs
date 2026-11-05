@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
+using System.Text;
 using System.Text.Json;
 
 /// <summary>What every job runs. Fixed here so no request can widen what a job measures or stores.</summary>
@@ -34,13 +35,10 @@ public static class ModelLabTraceSpec
     /// <summary>The context each arm's server gets: room for a test prompt at its character limit and the output.</summary>
     public const int ArmContextTokens = 8192;
 
-    /// <summary>How deep a default steering layer sits. The spike's measured vector sat at about this depth on the 0.8B.</summary>
+    /// <summary>How deep a default steering layer sits. A measured vector sat at about this depth on the 0.8B.</summary>
     private const double DefaultSteeringDepth = 0.6;
 
     private const string LinearAttention = "linear_attention";
-
-    /// <summary>A saved result's shape, read by the endpoint and written by the job.</summary>
-    public static JsonSerializerOptions ResultJson { get; } = new(JsonSerializerDefaults.Web);
 
     /// <summary>Three layers spread across the stack. Quarter points, so block 0, which cannot be steered, is not one of them.</summary>
     public static IReadOnlyList<int> LayersFor(int blockCount)
@@ -49,7 +47,7 @@ public static class ModelLabTraceSpec
         return new[] { blockCount / 4, blockCount / 2, blockCount * 3 / 4 }.Distinct().ToArray();
     }
 
-    /// <summary>The full-attention block nearest to about 0.6 depth, as the spike steered; any block near there when the config names no kinds.</summary>
+    /// <summary>The full-attention block nearest to about 0.6 depth, the measured steering depth; any block near there when the config names no kinds.</summary>
     /// <param name="steerableBlocks">Blocks a vector can reach; block 0 is not among the candidates, because a vector cannot target it.</param>
     /// <param name="layerTypes">The checkpoint's <c>layer_types</c>, or null.</param>
     public static int DefaultSteeringLayer(int steerableBlocks, IReadOnlyList<string>? layerTypes)
@@ -61,5 +59,50 @@ public static class ModelLabTraceSpec
             ? []
             : candidates.Where(layer => layer < layerTypes.Count && !string.Equals(layerTypes[layer], LinearAttention, StringComparison.Ordinal)).ToArray();
         return (full.Length > 0 ? full : candidates).MinBy(layer => Math.Abs(layer - target));
+    }
+
+    /// <summary>A saved result, or <see langword="null" /> when the row's bytes do not read as one.</summary>
+    public static ModelLabTraceResult? ReadResultOrNull(ReadOnlyMemory<byte> json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ModelLabTraceResult>(json.Span, JsonSerializerOptions.Web);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    internal static ModelLabTrace ParseTrace(ReadOnlyMemory<byte> content)
+    {
+        var records = new List<ModelLabTraceRecord>();
+        ModelLabTraceFooter? footer = null;
+        foreach (var line in Encoding.UTF8.GetString(content.Span).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                if (line.StartsWith("{\"footer\"", StringComparison.Ordinal))
+                {
+                    footer = JsonSerializer.Deserialize<ModelLabTraceFooter>(line, JsonSerializerOptions.Default);
+                }
+                else if (JsonSerializer.Deserialize<ModelLabTraceRecord>(line, JsonSerializerOptions.Default) is { } record)
+                {
+                    records.Add(record);
+                }
+            }
+            catch (JsonException)
+            {
+                // The blob's hash was verified, so this is a script bug, not tampering; the trace is shown as unreadable.
+                return new ModelLabTrace { Status = ModelLabTraceReadStatus.Unavailable };
+            }
+        }
+
+        return new ModelLabTrace
+        {
+            Status = ModelLabTraceReadStatus.Found,
+            Records = records,
+            Footer = footer
+        };
     }
 }

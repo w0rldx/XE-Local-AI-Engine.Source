@@ -15,8 +15,16 @@ import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { titleFromContent } from "@/features/chat/models/ChatConversationDerivations";
-import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
+import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type { ChatConversationModel, ChatWorkflowSlots } from "@/features/chat/models/ChatModels";
+import { useChatWorkflowStore } from "@/features/chat/workflow/ChatWorkflowStore";
+import { useGraphWorkflowNodeActivity } from "@/features/chat/workflow/useGraphWorkflowNodeActivity";
+import { WorkflowNodeLiveDetail } from "@/features/chat/workflow/WorkflowNodeLiveDetail";
+import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
+import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
+import { WorkflowActivityBlock } from "@/features/graphWorkflows/components/WorkflowActivityBlock";
+import { WorkflowRunStatusCard } from "@/features/graphWorkflows/components/WorkflowRunStatusCard";
+import { useGraphWorkflowRunHub } from "@/features/graphWorkflows/hooks/useGraphWorkflowRunHub";
 import {
 	activeWorkflowNode,
 	graphAcceptsAttachments,
@@ -28,15 +36,7 @@ import {
 	workflowNodeFailureReason,
 	workflowNodeLabel,
 	workflowNodeWithStatus,
-} from "@/features/chat/workflow/ChatWorkflowModels";
-import { useChatWorkflowStore } from "@/features/chat/workflow/ChatWorkflowStore";
-import { useGraphWorkflowNodeActivity } from "@/features/chat/workflow/useGraphWorkflowNodeActivity";
-import { WorkflowActivityBlock } from "@/features/chat/workflow/WorkflowActivityBlock";
-import { WorkflowNodeLiveDetail } from "@/features/chat/workflow/WorkflowNodeLiveDetail";
-import { WorkflowRunStatusCard } from "@/features/chat/workflow/WorkflowRunStatusCard";
-import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
-import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
-import { useGraphWorkflowRunHub } from "@/features/graphWorkflows/hooks/useGraphWorkflowRunHub";
+} from "@/features/graphWorkflows/models/ChatWorkflowModels";
 import {
 	type GraphWorkflowConversationRunResponse,
 	narrowGraphWorkflowRunStatus,
@@ -270,7 +270,7 @@ export function useChatWorkflow({
 		try {
 			conversation = await resolveSendConversation(content);
 		} catch (error) {
-			setNotice({ kind: "error", message: errorMessage(error) });
+			setNotice({ kind: "error", message: chatErrorMessage(error) });
 			throw error;
 		}
 		if (conversationId.length === 0) {
@@ -337,7 +337,7 @@ export function useChatWorkflow({
 			} else if (conflictType === graphWorkflowConflictTypes.attachmentsNotAccepted) {
 				setNotice({ kind: "attachments" });
 			} else if (conflictType !== graphWorkflowConflictTypes.rerunConfirmationRequired) {
-				setNotice({ kind: "error", message: errorMessage(error) });
+				setNotice({ kind: "error", message: chatErrorMessage(error) });
 			}
 			throw error;
 		}
@@ -396,7 +396,7 @@ export function useChatWorkflow({
 		cancelMutation
 			.mutateAsync({ path: { runId: liveRun.run.id } })
 			.then(() => refreshConversation(conversationId))
-			.catch((error: unknown) => setNotice({ kind: "error", message: errorMessage(error) }));
+			.catch((error: unknown) => setNotice({ kind: "error", message: chatErrorMessage(error) }));
 	}, [cancelMutation, conversationId, liveRun, refreshConversation]);
 
 	// One operation id per submit: a resend of the same text is a second steer, which the cap bounds. The run is the one
@@ -417,7 +417,7 @@ export function useChatWorkflow({
 						? t("pages.chat.workflow.steer.capReached", "This node has been steered the maximum number of times.")
 						: conflictType
 							? t("pages.chat.workflow.steer.finished", "The node finished before your steering arrived.")
-							: errorMessage(error),
+							: chatErrorMessage(error),
 				);
 			}
 		},

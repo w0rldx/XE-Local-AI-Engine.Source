@@ -18,8 +18,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         row, the enumeration of which tasks this run implemented, the sequencing, the failure classes and the report.
 ///         What is scripted is the host mutation — <see cref="FakeDevelopmentTaskChain.ApplyAsync" /> runs the store's
 ///         own apply ledger commands and skips the evidence verification and the git apply, both of which need a real
-///         repository and two real model attempts. The evidence chain itself is asserted where it is real and was left
-///         untouched by this phase: <c>DevelopmentValidationReviewAndApplyTests</c> and
+///         repository and two real model attempts. The evidence chain itself is asserted where it is real:
+///         <c>DevelopmentValidationReviewAndApplyTests</c> and
 ///         <c>TrustedDevelopmentHostApplyPortHardeningTests</c> in the Development suite.
 ///     </para>
 ///     <para>
@@ -433,7 +433,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         AssertEx.True(graph.Nodes["implement"].NodeTimeoutSeconds > 0, "every DevTask node in a shipped template declares its own bound.");
         AssertEx.Equal("implement", graph.Nodes["validate"].RetryTarget);
 
-        // FU-6. The per-slice loop fires BEFORE anything downstream of it exists, so its supersessions never have a
+        // The per-slice loop fires BEFORE anything downstream of it exists, so its supersessions never have a
         // recorded consumer to flag and the template reported zero staleness on every run. This second target is what
         // makes the link reachable: by the time the integrated result is judged, the gate has been handed the
         // verification as its evidence and the apply node has consumed it too.
@@ -513,7 +513,7 @@ public sealed class DevWorkflowIntegrationApplyTests
 
     /// <summary>
     ///     Two mutually exclusive branches that each carry their OWN validation, converging on an <c>Any</c> join ahead
-    ///     of the gate and the apply — the shape <c>GRAPH-C4-3</c>'s structural half demands of an <c>Any</c>
+    ///     of the gate and the apply — the shape <c>GRAPH-3</c>'s structural half demands of an <c>Any</c>
     ///     convergence, since only one branch may have run.
     ///     <para>
     ///         Driven down one branch, the other branch's validation lands <c>Skipped</c>, and the apply must run
@@ -541,7 +541,7 @@ public sealed class DevWorkflowIntegrationApplyTests
             "the branch the gate did not take is skipped, which is what makes this the case that matters.");
         var integrate = await harness.ReadNodeRunAsync(runId, "integrate");
         AssertEx.NotEqual(DevWorkflowNodeRunStatus.Pending, integrate.Status, "the apply was dispatched at all, or this asserts nothing about the pre-check.");
-        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-C4-3", StringComparison.Ordinal),
+        AssertEx.False((integrate.TerminalReason ?? string.Empty).Contains("GRAPH-3", StringComparison.Ordinal),
             $"the branch that ran carried its own validation, and that is the only one the apply is judged on: {integrate.FailureClass} — {integrate.TerminalReason}");
     }
 

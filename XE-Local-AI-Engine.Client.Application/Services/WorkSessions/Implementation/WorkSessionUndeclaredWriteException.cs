@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
 /// <summary>
 ///     A turn refused before it was sent because its own tool offer carried a write/execute tool the development-workflow
-///     node driving it never declared (<c>GRAPH-C4-2</c>).
+///     node driving it never declared (<c>GRAPH-2</c>).
 /// </summary>
 /// <remarks>
 ///     Thrown out of the send path rather than streamed as a terminal, so it cannot be mistaken for a provider

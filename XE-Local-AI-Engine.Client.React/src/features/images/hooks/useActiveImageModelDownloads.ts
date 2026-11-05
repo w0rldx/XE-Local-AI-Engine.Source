@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ImageModelDownloadView } from "@/features/images/models/ImageModels";
+import type { ImageModelDownloadView } from "@/features/images/models/ImageModelInstallModels";
 import { useImageModelDownloads } from "@/features/images/queries/useImageQueries";
 
 /** What {@link useActiveImageModelDownloads} hands back to the model manager. */

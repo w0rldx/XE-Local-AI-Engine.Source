@@ -9,7 +9,8 @@ import {
 	NodeSettingsAgentLimitsCard,
 	NodeSettingsAgentWorkspacesCard,
 } from "@/features/node-settings/components/NodeSettingsAdvancedFieldsCard";
-import { toNodeSettingsFieldBounds, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { toNodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
+import { toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({

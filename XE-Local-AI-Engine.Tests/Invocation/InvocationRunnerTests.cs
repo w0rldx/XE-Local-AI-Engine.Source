@@ -1199,7 +1199,7 @@ public sealed class InvocationRunnerTests
     }
 
     /// <summary>
-    ///     Model-matrix follow-up: orchestration participants ran uncapped. Each is capped against the window ITS model was
+    ///     Each orchestration participant is capped against the window ITS model was
     ///     launched with (participants can run different models); notice-only and off do not cap.
     /// </summary>
     [Test]
@@ -1274,7 +1274,7 @@ public sealed class InvocationRunnerTests
     }
 
     /// <summary>
-    ///     Model-matrix follow-up: an orchestration whose answer stopped at the length limit said nothing, unlike a single-agent turn.
+    ///     An orchestration whose answer stopped at the length limit says so, like a single-agent turn.
     ///     A handoff round with no text after it must not hide the cut-off.
     /// </summary>
     [Test]

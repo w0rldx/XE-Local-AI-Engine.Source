@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Training;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Python.Contracts;
 using XE_Local_AI_Engine.Providers.Python.Implementation;
@@ -179,26 +180,26 @@ internal static class TrainingRuntimeTestInfrastructure
     /// <summary>A probe with a fixed verdict, so runtime tests do not depend on the host's real disk or GPU.</summary>
     internal sealed class StubPrerequisiteProbe : ITrainingRuntimePrerequisiteProbe
     {
-        private readonly TrainingRuntimePrerequisiteReport _report;
+        private readonly SourceBuildPrerequisiteReport _report;
 
-        public StubPrerequisiteProbe(TrainingRuntimePrerequisiteReport report)
+        public StubPrerequisiteProbe(SourceBuildPrerequisiteReport report)
         {
             _report = report;
         }
 
-        public Task<TrainingRuntimePrerequisiteReport> ProbeAsync(CancellationToken ct)
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(CancellationToken ct)
         {
             return Task.FromResult(_report);
         }
 
         public static StubPrerequisiteProbe Satisfied()
         {
-            return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport
+            return new StubPrerequisiteProbe(new SourceBuildPrerequisiteReport
             {
-                CanInstall = true,
+                CanBuild = true,
                 Items =
                 [
-                    new TrainingRuntimePrerequisiteItem
+                    new SourceBuildPrerequisiteRow
                     {
                         Key = TrainingRuntimePrerequisiteKeys.Platform,
                         Satisfied = true,
@@ -210,12 +211,12 @@ internal static class TrainingRuntimeTestInfrastructure
 
         public static StubPrerequisiteProbe Unsatisfied(string key)
         {
-            return new StubPrerequisiteProbe(new TrainingRuntimePrerequisiteReport
+            return new StubPrerequisiteProbe(new SourceBuildPrerequisiteReport
             {
-                CanInstall = false,
+                CanBuild = false,
                 Items =
                 [
-                    new TrainingRuntimePrerequisiteItem
+                    new SourceBuildPrerequisiteRow
                     {
                         Key = key,
                         Satisfied = false,

@@ -123,7 +123,7 @@ internal static class SandboxProviderSelector
 
     /// <summary>Resolves the work-session sandbox for <see cref="SandboxWorkloads.WorkSession" />.</summary>
     /// <remarks>
-    ///     There is no <c>WorkSessions:Sandbox:Provider</c> key — nothing in v1 executes inside this jail, and a setting for a role with no
+    ///     There is no <c>WorkSessions:Sandbox:Provider</c> key — nothing executes inside this jail, and a setting for a role with no
     ///     consumer is one more thing an operator can get wrong for no effect — so the AgentHome key constrains it, which is the backend a
     ///     session tool would land on. Give it its own key when a session tool needs one.
     /// </remarks>

@@ -361,7 +361,8 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 | File | Role |
 |------|------|
 | `Services/Compute/ComputeToolDefinition.cs` | Tool name, description, parameter schema (20K char code ceiling) |
-| `Services/Compute/ComputeRunToolRequest.cs` | Typed request DTO + validator (non-empty, length check) |
+| `Services/Compute/ComputeRunToolRequest.cs` | Typed request DTO |
+| `Services/Compute/ComputeRunToolRequestValidator.cs` | Request validator (non-empty, length check) |
 | `Services/Compute/ComputeOptions.cs` | Configuration section (Enabled, timeouts, resource limits, thread limit) with `ValidateOnStart` |
 | `Services/Compute/IComputeToolGateway.cs` | Sandbox executor contract |
 | `Services/Compute/Implementation/RunPythonToolHandler.cs` | `IClientLocalToolHandler` bridge; reads kill-switch, deserializes, validates, delegates to gateway |

@@ -1,4 +1,5 @@
-import type { ChatMessageModel, ChatMessagePart, ChatToolCall } from "@/features/chat/models/ChatModels";
+import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
+import type { ChatMessageModel, ChatToolCall } from "@/features/chat/models/ChatModels";
 import {
 	buildMessageParts,
 	type NoticeEntryInput,
@@ -118,7 +119,7 @@ function maxPartSequence(
  * Folds a reasoning delta into the ordered segments: when the most recent part is the trailing reasoning run the
  * delta extends it; when the most recent part is a tool, text, or notice (or there is no segment yet) a NEW
  * reasoning segment opens at this event's `sequence` — this is what produces the second Thoughts block after a
- * tool (Option A interleave).
+ * tool, so reasoning and tools interleave in stream order.
  */
 function appendReasoningDelta(
 	reasoningSegments: ReasoningSegmentInput[],

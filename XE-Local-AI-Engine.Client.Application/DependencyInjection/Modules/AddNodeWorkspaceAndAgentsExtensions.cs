@@ -171,7 +171,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // AddMemoryCache is idempotent (TryAdd), so registering it here keeps this module self-contained whatever the module order.
         builder.Services.AddMemoryCache();
         // Third-party skill import: its named client disables redirects, so the github.com → codeload hop is re-validated against the
-        // host allowlist by hand, and the cache holds the single-use preview payload phase 2 persists verbatim, never re-fetching it.
+        // host allowlist by hand, and the cache holds the single-use preview payload the commit persists verbatim, never re-fetching it.
         builder.Services.AddHttpClient(GitHubSkillArchiveDownloader.HttpClientName)
                .ConfigurePrimaryHttpMessageHandler(static () => new HttpClientHandler
                {

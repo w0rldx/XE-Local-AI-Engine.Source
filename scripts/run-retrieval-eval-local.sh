@@ -188,19 +188,8 @@ find_model() {
   return 1
 }
 
-discover_server() {
-  local candidate="${DATA_ROOT}/llama.cpp/source-build/active/build/bin/llama-server"
-  if [[ -x "${candidate}" ]]; then
-    printf '%s\n' "${candidate}"
-    return 0
-  fi
-  if [[ -d "${DATA_ROOT}/llama.cpp" ]]; then
-    candidate="$(find "${DATA_ROOT}/llama.cpp" -type f -name llama-server -perm -u+x -printf '%T@\t%p\n' 2>/dev/null \
-                 | sort -rn | head -1 | cut -f2-)"
-    [[ -n "${candidate}" ]] && { printf '%s\n' "${candidate}"; return 0; }
-  fi
-  return 1
-}
+# shellcheck source=scripts/lib/discover-llama-server.sh
+source "${PROJECT_ROOT}/scripts/lib/discover-llama-server.sh"
 
 # Candidate rerankers: id, HF repo, pinned HF commit, file, reranker glob, supported languages (empty =
 # all). The revision is pinned so a re-upload under the same name cannot silently change what a round measured.
@@ -235,7 +224,7 @@ download_candidate() {
 }
 
 if [[ -z "${SERVER_PATH}" ]]; then
-  SERVER_PATH="$(discover_server || true)"
+  SERVER_PATH="$(discover_server "${DATA_ROOT}" || true)"
 fi
 [[ -n "${SERVER_PATH}" && -x "${SERVER_PATH}" ]] || prereq_fail "no llama-server executable found.
   Pass --server <path>, export XE_LLAMACPP_SERVER_PATH, or point --data-root at a node data root

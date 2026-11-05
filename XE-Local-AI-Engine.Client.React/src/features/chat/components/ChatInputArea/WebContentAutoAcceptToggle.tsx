@@ -13,7 +13,7 @@ import {
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useSetWebContentAutoAccept, useWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 
-// The per-user acknowledgement of the auto-accept risk notice (ADR 0017, D8). The wire key is what the server stores,
+// The per-user acknowledgement of the auto-accept risk notice (ADR 0017). The wire key is what the server stores,
 // so renaming it re-shows the notice to everyone.
 const autoAcceptNoticeKey = "web-content-auto-accept-notice";
 

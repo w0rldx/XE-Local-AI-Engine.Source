@@ -1,5 +1,5 @@
-import { Box, Grid, Group, Loader, NumberInput, Stack, Text } from "@mantine/core";
-import { IconMessage, IconSettings } from "@tabler/icons-react";
+import { Box, Grid, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,16 +11,9 @@ import type {
 	SaveNodeSettingsResponse,
 } from "@/core/api/generated";
 import {
-	getDefaultAssistantToolOfferQueryKey,
 	getDevelopmentCapabilityOptions,
-	getDevelopmentCapabilityQueryKey,
-	getDevWorkflowCapabilityQueryKey,
-	getGraphWorkflowCapabilityQueryKey,
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
-	getToolCatalogQueryKey,
-	getTranscriptionRuntimeStatusQueryKey,
-	getWorkSessionCapabilityQueryKey,
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
@@ -30,12 +23,10 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
-import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/core/model-downloads/components/DownloadProgressPanel/DownloadProgressPanel";
-import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { ManagedPythonCard } from "@/features/node-settings/components/ManagedPythonCard";
@@ -46,7 +37,10 @@ import {
 	NodeSettingsIntegrationPanels,
 } from "@/features/node-settings/components/NodeSettingsAuxiliaryPanels";
 import { NodeSettingsBrowserOnlyBadge } from "@/features/node-settings/components/NodeSettingsBrowserOnlyBadge";
+import { NodeSettingsChatTimeoutCard } from "@/features/node-settings/components/NodeSettingsChatTimeoutCard";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import { NodeSettingsHfTokenCard } from "@/features/node-settings/components/NodeSettingsHfTokenCard";
+import { confirmRiskySave } from "@/features/node-settings/components/NodeSettingsRiskySaveConfirm";
 import { NodeSettingsSandboxProfileCard } from "@/features/node-settings/components/NodeSettingsSandboxProfileCard";
 import { NodeSettingsSaveBar } from "@/features/node-settings/components/NodeSettingsSaveBar";
 import { NodeSettingsSectionNav } from "@/features/node-settings/components/NodeSettingsSectionNav";
@@ -54,20 +48,19 @@ import { SourceBuildCard } from "@/features/node-settings/components/SourceBuild
 import { WhisperRuntimeSourceBuildCard } from "@/features/node-settings/components/WhisperRuntimeSourceBuildCard";
 import { useNodeSettingsModelOptions } from "@/features/node-settings/hooks/useNodeSettingsModelOptions";
 import { useRecommendedModelDownloads } from "@/features/node-settings/hooks/useRecommendedModelDownloads";
+import { toNodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import {
 	applyExternalAccessPreset,
-	buildNodeSettingsRequest,
 	type ExternalAccessPreset,
-	featureSwitchFields,
 	isExternalAccessBooleanField,
-	lowersSandboxSecurityProfile,
 	type NodeSettingsFieldsForm,
-	summarizePendingChanges,
-	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
-	touchesRestartGatedField,
-	turnsOnExecutionPreviews,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import {
+	buildNodeSettingsRequest,
+	summarizePendingChanges,
+	touchesRestartGatedField,
+} from "@/features/node-settings/models/NodeSettingsSaveRequest";
 import {
 	type NodeSettingsTimeoutInput,
 	nodeSettingsDefaults,
@@ -81,9 +74,8 @@ import {
 	nodeSettingsSectionOf,
 } from "@/features/node-settings/models/NodeSettingsSections";
 import { RestartRequiredFieldsContext } from "@/features/node-settings/models/RestartRequiredFieldsContext";
+import { invalidateAfterNodeSettingsSave } from "@/features/node-settings/queries/NodeSettingsInvalidation";
 import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
-import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
-import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
 interface NodeSettingsProps {
@@ -101,7 +93,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const { confirm } = useConfirm();
-	const errorMessage = (error: unknown): string =>
+	const nodeSettingsErrorMessage = (error: unknown): string =>
 		apiErrorMessage(error, t("pages.nodeSettings.unexpectedError", "Unexpected node settings error"));
 	const {
 		data: settings,
@@ -254,31 +246,9 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			// Seeding the shared query is also what re-renders the navigation rail after a uiMode change, and what the
 			// voice runtime reads its gate from.
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
-			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
-			// The Default Assistant's tool offer and the tool catalog are computed from the live switches (web access,
-			// tools, custom tools); a cached pre-save answer would show the old offer until it went stale. Every model
-			// variant of the offer is matched by its operation id.
-			await Promise.all(
-				[getDefaultAssistantToolOfferQueryKey(), getToolCatalogQueryKey()].map(([{ _id }]) =>
-					queryClient.invalidateQueries({ queryKey: [{ _id }] }),
-				),
-			);
-			// The capability probes the nav and the gated pages read answer from the live switches; a cached answer from
-			// before the save would keep a re-enabled feature hidden (or a disabled one offered) until it went stale. The
-			// sandbox profile decides the capability's required and satisfied columns, so a profile change refreshes it too.
-			if (featureSwitchFields.some((field) => field in variables.body) || "sandboxSecurityProfile" in variables.body) {
-				await Promise.all(
-					[
-						getDevelopmentCapabilityQueryKey(),
-						getDevWorkflowCapabilityQueryKey(),
-						getGraphWorkflowCapabilityQueryKey(),
-						getWorkSessionCapabilityQueryKey(),
-						getTranscriptionRuntimeStatusQueryKey(),
-					].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-				);
-			}
+			await invalidateAfterNodeSettingsSave(queryClient, variables.body);
 		},
-		onError: (error) => toast.error(errorMessage(error)),
+		onError: (error) => toast.error(nodeSettingsErrorMessage(error)),
 	});
 
 	// A validation failure can sit in a section the operator is not looking at; take them to the first one.
@@ -306,36 +276,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			showErrors(draftRequest.errors);
 			return;
 		}
-		// Turning execution previews on widens what a sandboxed workload may run under, so the operator confirms it knowing the
-		// residual risk; declining keeps the whole draft so nothing else they edited is lost.
-		if (
-			turnsOnExecutionPreviews(draftRequest.body) &&
-			!(await confirm({
-				title: t("pages.nodeSettings.executionPreviewsConfirm.title", "Turn on execution previews?"),
-				description: t(
-					"pages.nodeSettings.executionPreviewsConfirm.description",
-					"Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary. The code cannot read the engine's data or your files unless a folder allows all app packages. It can show windows, use the Windows UI kernel interface and read what is on your screen, but not the clipboard or simulated input. It runs with no CPU, memory or process-count limit, only the time limit, and it can see host path names. Turn this on only if you accept that.",
-				),
-				confirmationText: t("pages.nodeSettings.executionPreviewsConfirm.confirm", "Turn on"),
-				cancellationText: t("pages.nodeSettings.executionPreviewsConfirm.cancel", "Cancel"),
-			}))
-		) {
-			return;
-		}
-		// Lowering the profile turns every declared boundary back into a preference, so a workload this host cannot isolate
-		// runs with less instead of refusing. Raising it narrows nothing and is never asked about.
-		if (
-			lowersSandboxSecurityProfile(draftRequest.body) &&
-			!(await confirm({
-				title: t("pages.nodeSettings.sandboxProfileLowerConfirm.title", "Lower the sandbox security profile?"),
-				description: t(
-					"pages.nodeSettings.sandboxProfileLowerConfirm.description",
-					"With the Low profile, a workload that asks for a boundary this host cannot provide runs without it instead of refusing to start. The safety floors every profile keeps still apply. Lower it only if you accept that.",
-				),
-				confirmationText: t("pages.nodeSettings.sandboxProfileLowerConfirm.confirm", "Lower to Low"),
-				cancellationText: t("pages.nodeSettings.sandboxProfileLowerConfirm.cancel", "Cancel"),
-			}))
-		) {
+		if (!(await confirmRiskySave(draftRequest.body, confirm, t))) {
 			return;
 		}
 		setFieldErrors({});
@@ -351,37 +292,6 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			seedDraft(reloaded.data);
 			setFieldErrors({});
 		}
-	};
-
-	// HF token: the draft lives in a store so it survives a remount; the token itself is write-only (never read back
-	// into the draft). It saves on its own endpoint, outside the save bar.
-	const tokenDraft = useHfTokenStore((state) => state.tokenDraft);
-	const setTokenDraft = useHfTokenStore((state) => state.actions.setTokenDraft);
-	const clearTokenDraft = useHfTokenStore((state) => state.actions.clearTokenDraft);
-
-	const hfTokenQuery = useHfTokenStatus();
-	const setHfToken = useSetHfToken();
-
-	const handleSaveToken = (): void => {
-		setHfToken.mutate(tokenDraft.trim(), {
-			onSuccess: () => {
-				clearTokenDraft();
-				toast.success(t("pages.nodeSettings.hfToken.saved", "Token saved."));
-			},
-			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.nodeSettings.hfToken.saveError", "Could not save the token."))),
-		});
-	};
-
-	const handleClearToken = (): void => {
-		setHfToken.mutate(undefined, {
-			onSuccess: () => {
-				clearTokenDraft();
-				toast.success(t("pages.nodeSettings.hfToken.cleared", "Token cleared."));
-			},
-			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.nodeSettings.hfToken.clearError", "Could not clear the token."))),
-		});
 	};
 
 	// Simple UI mode lists the everyday sections; the advanced ones sit behind a toggle but stay reachable by URL, so a
@@ -432,43 +342,13 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			case "chat":
 				return (
 					<>
-						<SectionCard
-							title={t("pages.nodeSettings.localChatRuntime.title", "Local chat runtime")}
-							icon={<IconMessage size={22} />}
-						>
-							<Text c="dimmed">
-								{t(
-									"pages.nodeSettings.localChatRuntime.description",
-									"The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
-								)}
-							</Text>
-							<NumberInput
-								label={t("pages.nodeSettings.localChatRuntime.timeoutLabel", "Maximum message request timeout")}
-								description={`${t("pages.nodeSettings.localChatRuntime.timeoutRange", "Allowed range: {{min}}–{{max}} seconds.", {
-									min: minTimeout,
-									max: maxTimeout,
-								})} ${t(
-									"pages.nodeSettings.localChatRuntime.outputCapHint",
-									"On slow hardware a long answer can reach this timeout before the answer length limit (Longest answer) stops it. Raise this timeout, or lower Longest answer.",
-								)}`}
-								suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
-								min={minTimeout}
-								max={maxTimeout}
-								clampBehavior="none"
-								step={5}
-								allowDecimal={false}
-								value={timeoutSeconds}
-								onChange={handleTimeoutChange}
-								error={
-									timeoutToSave === undefined
-										? t("pages.nodeSettings.localChatRuntime.timeoutError", "Enter a whole number from {{min}} to {{max}}.", {
-												min: minTimeout,
-												max: maxTimeout,
-											})
-										: undefined
-								}
-							/>
-						</SectionCard>
+						<NodeSettingsChatTimeoutCard
+							value={timeoutSeconds}
+							min={minTimeout}
+							max={maxTimeout}
+							invalid={timeoutToSave === undefined}
+							onChange={handleTimeoutChange}
+						/>
 						{fields}
 					</>
 				);
@@ -487,15 +367,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 				return (
 					<>
 						{fields}
-						<HfTokenPanel
-							hasToken={hfTokenQuery.data ?? false}
-							isLoading={hfTokenQuery.isLoading}
-							tokenDraft={tokenDraft}
-							onTokenDraftChange={setTokenDraft}
-							onSave={handleSaveToken}
-							onClear={handleClearToken}
-							isSaving={setHfToken.isPending}
-						/>
+						<NodeSettingsHfTokenCard />
 					</>
 				);
 			case "knowledge":
@@ -559,7 +431,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 					</Group>
 				) : null}
 
-				{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
+				{settingsError ? <InlineErrorAlert message={nodeSettingsErrorMessage(settingsError)} /> : null}
 
 				<Grid gap="lg">
 					{/* xl, not md, for the narrow column: from lg the desktop sidebar takes 220px, so md's quarter left the

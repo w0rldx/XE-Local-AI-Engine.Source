@@ -9,8 +9,8 @@ using System.Collections.Frozen;
 /// <remarks>
 ///     Both rank free text against short candidate texts with no model and no external state, so they must tokenise
 ///     and score identically: uppercase-normalize (CA1308-safe), split on non-alphanumeric runs, drop function words,
-///     compare ordinally, and divide the overlap by the square root of the candidate's length. Two copies of this
-///     drifted once already; one copy is the fix. See docs/wiki/04-agent-mode.md ("The lexical ranker and the
+///     compare ordinally, and divide the overlap by the square root of the candidate's length. One copy, because two
+///     drift. See docs/wiki/04-agent-mode.md ("The lexical ranker and the
 ///     `list_tools` escape hatch").
 /// </remarks>
 internal static class LexicalOverlapScoring

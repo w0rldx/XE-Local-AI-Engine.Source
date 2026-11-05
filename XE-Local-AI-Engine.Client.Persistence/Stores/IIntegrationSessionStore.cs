@@ -53,7 +53,7 @@ public sealed record IntegrationSessionCreate
 ///     Persistence boundary for integration sessions.
 /// </summary>
 /// <remarks>
-///     <b>There is no <c>CreateAsync</c> and no <c>TouchAsync</c>, by ruling, not by omission.</b>
+///     <b>There is no <c>CreateAsync</c> and no <c>TouchAsync</c>, by design.</b>
 ///     <c>IIntegrationExecutionStore.AcceptAsync</c> is the only path that inserts a session or bumps its counters,
 ///     because a second insert path would be a second admission gate. The session watermark already has writers:
 ///     <c>AppendEventAsync</c> moves it on every persisted event, and <c>TryTerminalizeAsync</c> on the terminal one.

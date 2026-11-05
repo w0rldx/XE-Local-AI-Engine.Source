@@ -201,7 +201,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
             AssertEx.False(keyFiles.Length == 0, "Data Protection should have persisted at least one key file.");
             var keyXml = await File.ReadAllTextAsync(keyFiles[0]);
             AssertEx.True(keyXml.Contains(nameof(NodeDataProtectionKeyRingDecryptor), StringComparison.Ordinal),
-                "The persisted key must record the BE-02 decryptor, proving it was wrapped at rest.");
+                "The persisted key must record the key-ring decryptor, proving it was wrapped at rest.");
             AssertEx.False(keyXml.Contains("<masterKey", StringComparison.Ordinal),
                 "The plaintext masterKey element must not be present once the key-ring is encrypted at rest.");
 

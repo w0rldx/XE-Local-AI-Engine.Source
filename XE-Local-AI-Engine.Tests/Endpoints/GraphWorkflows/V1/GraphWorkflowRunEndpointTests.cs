@@ -208,7 +208,7 @@ public sealed class GraphWorkflowRunEndpointTests
         var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
         var runId = await StartRunAsync(definitionId);
 
-        // Driven terminal through the store: there is no dispatcher in this slice to finish a run on its own.
+        // Driven terminal through the store: no dispatcher runs here to finish a run on its own.
         await using (var scope = Host.Factory.Services.CreateAsyncScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();

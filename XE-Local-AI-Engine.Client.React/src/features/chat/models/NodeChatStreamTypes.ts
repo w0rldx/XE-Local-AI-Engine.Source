@@ -1,6 +1,7 @@
 // SignalR-stream-only DTOs for the node chat streaming path. These have NO OpenAPI/generated equivalent
 // (the stream rides the SignalR hub, not the REST surface), so they remain hand-authored beside the chat feature.
 
+import type { NodeChatWebReviewPreviewDto } from "@/core/models/ChatMessageParts";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 
 export interface NodeChatStreamRequestDto {
@@ -49,30 +50,6 @@ export interface NodeChatStreamRequestDto {
 	// The conversation's web result review mode: true lets retrieved web content reach the model
 	// without a review card. Absent/false = review. Hand-typed SignalR stream DTO field (not generated).
 	autoAcceptWebContent?: boolean;
-}
-
-export interface NodeChatWebSearchResultDto {
-	title: string;
-	url: string;
-	snippet: string;
-}
-
-// Two stages share this shape. `request` is the pre-send consent: `url` (web_fetch) or `query` (web_search) is exactly what
-// will be sent, nothing has left the node yet. `result` is the review of what came back: `web_fetch` fills the page
-// fields, `web_search` fills `backend` and `results`. A missing `stage` (an older node's replay) is a result review.
-// All but `toolName`, `stage`, `url` and `query` are server-controlled text.
-export interface NodeChatWebReviewPreviewDto {
-	toolName: string;
-	stage?: "request" | "result" | null;
-	url?: string | null;
-	query?: string | null;
-	finalUrl?: string | null;
-	title?: string | null;
-	contentType?: string | null;
-	truncated?: boolean | null;
-	text?: string | null;
-	backend?: string | null;
-	results?: NodeChatWebSearchResultDto[] | null;
 }
 
 // How fast an assistant turn arrived (mirrors the backend `NodeChatThroughputDto`, camelCase). Numbers only; each

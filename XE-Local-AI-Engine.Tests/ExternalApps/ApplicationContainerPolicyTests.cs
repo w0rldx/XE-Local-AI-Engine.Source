@@ -623,7 +623,7 @@ public sealed class ApplicationContainerPolicyTests
 
 /// <summary>
 ///     The capability vocabulary is stated twice — once by the catalog validator that admits a manifest's
-///     <c>requires[]</c>, once by the runtime that evaluates it. This slice is the first that can see both, and a
+///     <c>requires[]</c>, once by the runtime that evaluates it. This test sees both, and a
 ///     drift between them would mean a valid manifest answered "incompatible" by a runtime that offers the thing.
 /// </summary>
 [Category(TestCategories.Unit)]

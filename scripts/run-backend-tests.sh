@@ -11,14 +11,13 @@
 #                 | contracts via run-release-contract-tests.sh when scripts/, publish/ or workflows changed
 #   history row   one line appended to <main checkout>/.tmp/gate-history.log, then the exit code
 #
-# What it replaces
-#   The documented gate used to be a solution-wide `dotnet test XE-Local-AI-Engine.slnx
-#   --max-parallel-test-modules 1`, which serialized the three test modules because MTP's default
-#   module width is Environment.ProcessorCount and XE-Local-AI-Engine.Client.Persistence.Tests at
-#   TUnit's default in-process width (4 x CPU cores) peaked at 11.6 GB RSS. Serializing three modules to
-#   survive one unpinned module is the wrong trade: this script pins a per-project width instead and then runs
-#   the modules CONCURRENTLY — the shape .github/workflows/build-and-test.yml already used for its
-#   `siblings` leg, which now calls this script rather than carrying a second copy of it.
+# Why not a solution-wide dotnet test
+#   `dotnet test XE-Local-AI-Engine.slnx --max-parallel-test-modules 1` serializes the three test modules,
+#   needed because MTP's default module width is Environment.ProcessorCount and
+#   XE-Local-AI-Engine.Client.Persistence.Tests at TUnit's default in-process width (4 x CPU cores) peaks at
+#   11.6 GB RSS. Serializing three modules to survive one unpinned module is the wrong trade: this script pins a
+#   per-project width instead and then runs the modules CONCURRENTLY. The `siblings` leg of
+#   .github/workflows/build-and-test.yml calls this script rather than carrying a second copy of it.
 #
 # The two lanes
 #   * XE-Local-AI-Engine.Tests goes through scripts/run-tests-memory-safe.sh (namespace batches,
@@ -27,15 +26,15 @@
 #   * Every OTHER test project enrolled from XE-Local-AI-Engine.slnx runs as a plain `dotnet test`
 #     --no-build at its pinned width, each with its OWN --results-directory (MTP resolves
 #     --coverage-output relative to it, so projects sharing one directory overwrite each other's
-#     Cobertura report — that collision was the only reason the projects were ever serial).
+#     Cobertura report).
 #   Both lanes run at the same time; every PID is waited on individually.
 #   * A third lane, release-contract-tests, runs scripts/run-release-contract-tests.sh when the branch
 #     touches scripts/, publish/ or .github/workflows/ — see "Release contract tests" below.
 #
 # Release contract tests
 #   The scripts under scripts/, publish/ and .github/workflows/ are pinned by fake-host contract tests
-#   that only CI's release-contracts job used to run, so a script change could pass this gate and still
-#   turn develop red. The gate therefore runs them as one more lane whenever anything under those three
+#   that CI's release-contracts job runs, and a script change must not pass this gate and still turn
+#   develop red. The gate therefore runs them as one more lane whenever anything under those three
 #   directories differs from the merge-base of HEAD with develop (origin/develop when there is no local
 #   develop): committed, staged, unstaged, deleted and untracked files all count, and a detached HEAD is
 #   just HEAD. When that comparison cannot be made — no develop ref, a shallow clone without the

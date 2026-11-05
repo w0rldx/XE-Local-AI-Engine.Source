@@ -1,4 +1,5 @@
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import type { BenchmarkEvidenceObject, BenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 
 // Launch evidence is rendered and compared field-by-field without the frontend knowing the field set: the node records
@@ -23,9 +24,6 @@ export interface BenchmarkEvidenceDiffRow {
 	differs: boolean;
 }
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** Depth-first leaf list. Arrays flatten by index; an empty object/array stays as one absent-valued leaf. */
 export function flattenEvidence(value: unknown, prefix: string): BenchmarkEvidenceEntry[] {
 	if (Array.isArray(value)) {
@@ -33,7 +31,7 @@ export function flattenEvidence(value: unknown, prefix: string): BenchmarkEviden
 			? value.flatMap((item, index) => flattenEvidence(item, `${prefix}.${index}`))
 			: [{ key: prefix, value: null }];
 	}
-	if (isPlainObject(value)) {
+	if (isPlainRecord(value)) {
 		const members = Object.entries(value);
 		return members.length > 0
 			? members.flatMap(([key, member]) => flattenEvidence(member, `${prefix}.${key}`))

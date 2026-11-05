@@ -34,7 +34,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     private static readonly Guid SelectedFolderId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     /// <summary>
-    ///     L1 on the reviewer side: the round is budgeted against the window the model is REALLY serving, and reserves a
+    ///     On the reviewer side: the round is budgeted against the window the model is REALLY serving, and reserves a
     ///     quarter of it rather than the whole configured output maximum. Same defect, same fix, separately proven —
     ///     the two roles open their own budget scopes and drifted apart once before.
     /// </summary>
@@ -997,7 +997,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // do. A full attempt against the synthetic solution — coder, then the whole validation gate — completed green
         // while every agent-facing sandbox it created carried the posture this backend can actually serve, and the
         // only sandbox that had egress by design was the short-lived warm restore. The agent-facing posture is
-        // capability-gated (Option B), so it is computed from the same backend the fixture wired rather than assumed.
+        // capability-gated, so it is computed from the same backend the fixture wired rather than assumed.
         AssertEx.NotEmpty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"));
         AssertEx.Empty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"
                                                                && request.NetworkPolicy != SandboxNetworkPolicy.Unrestricted));
@@ -1010,7 +1010,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var agentFacing = _sandboxCreates.Where(static request => request.RuntimeProfile == "development-local").ToArray();
         AssertEx.NotEmpty(agentFacing);
         AssertEx.Empty(agentFacing.Where(request => request.NetworkPolicy != expectedAgentFacingPolicy),
-            "the backend's advertised SupportsNetworkPolicy decides the posture: None where it can deny egress, Unrestricted where it cannot (Option B).");
+            "the backend's advertised SupportsNetworkPolicy decides the posture: None where it can deny egress, Unrestricted where it cannot.");
         AssertEx.Equal(expected: 0, outcome.Failed);
 
         // Only the test command carries a result. A build or a whitespace check has none, and must not be given an

@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
 {
     /// <summary>
-    ///     The brief's bound on an event's detail, in UTF-8 bytes.
+    ///     The bound on an event's detail, in UTF-8 bytes.
     /// </summary>
     /// <remarks>
     ///     There is no exempt kind here: unlike the integration family's <c>external.output</c>, no event on this feed

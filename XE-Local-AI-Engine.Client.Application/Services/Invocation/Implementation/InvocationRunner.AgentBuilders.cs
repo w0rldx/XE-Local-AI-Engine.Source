@@ -371,7 +371,7 @@ public sealed partial class InvocationRunner
             var irreducible = BudgetMessages(BuildChatMessages(withoutAttachment), withoutAttachment, definitions, resolvedModel, turnPolicy).EstimatedTokensAfter;
             var room = BudgetMessages(BuildChatMessages(withoutAttachment), withoutAttachment, pinned, resolvedModel, turnPolicy).EffectiveBudgetTokens - irreducible;
 
-            // Less one tool call and its result, measured by the same budgeter: filled to the edge, the 4B's second round overflowed (live C2).
+            // Less one tool call and its result, measured by the same budgeter: filled to the edge, the 4B's second round overflowed.
             List<ChatMessage> roundTrip =
             [
                 new(ChatRole.Assistant,

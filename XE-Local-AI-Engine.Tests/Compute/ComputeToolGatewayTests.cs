@@ -210,7 +210,7 @@ public sealed class ComputeToolGatewayTests
                 Home = "/work/home",
                 Temp = "/tmp"
             }, SandboxIsolatedPaths.Posix,
-            "the Linux view is unchanged by this round");
+            "the Linux view keeps the POSIX paths");
     }
 
     [Test]
@@ -386,7 +386,7 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Contains(rendered, "isolate");
         AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.GetCodeOrNull(rendered), "a refusal must be logged as a failed call, not a success");
         AssertEx.True(rendered.EndsWith(ToolFailureText.NotRunNotice, StringComparison.Ordinal),
-            $"N-88: a refusal must tell the model nothing ran, so a small model does not invent a result (got: {rendered})");
+            $"a refusal must tell the model nothing ran, so a small model does not invent a result (got: {rendered})");
         AssertEx.False(environment.Requested, "a host without the boundary must not provision an interpreter it can never run");
         AssertEx.False(identity.Requested, "nothing about the node's identity is needed to refuse");
         AssertEx.Null(provider.CreateRequest, "a host that cannot isolate the filesystem must not get as far as creating a jail");

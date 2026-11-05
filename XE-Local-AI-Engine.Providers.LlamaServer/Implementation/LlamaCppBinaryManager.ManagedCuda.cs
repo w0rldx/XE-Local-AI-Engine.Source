@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     The built binary carries no publisher SHA256, so adoption records the SHA256 of the on-disk binary and every
 ///     serve recomputes and recompares it alongside a FULL path-chain perms and ownership walk (every ancestor from the
 ///     cache root down non-world-writable and owner-trusted), closing the deep-tree binary-swap and the
-///     adopt-restart-serve TOCTOU windows. <c>[secHIGH-3]</c> <c>[secMED-2]</c> No-silent-CPU invariant: a recorded build
+///     adopt-restart-serve TOCTOU windows. No-silent-CPU invariant: a recorded build
 ///     missing or failing validation clears the record and cached signal and falls through to the normal acquisition path.
 /// </remarks>
 public sealed partial class LlamaCppBinaryManager
@@ -55,7 +55,7 @@ public sealed partial class LlamaCppBinaryManager
             }
 
             // Full path-chain perms/ownership (every ancestor under cacheRoot) — throws on a world-writable/untrusted hop.
-            ValidateManagedTreeLinks(buildBinDir);
+            LlamaCppSourceBuildService.ValidateTreeLinks(buildBinDir, "managed source runtime");
             EnsureManagedPathChainSecure(serverPath);
 
             // Recorded-SHA256 recompare: a swapped binary (same path, different bytes) is rejected.
@@ -173,7 +173,7 @@ public sealed partial class LlamaCppBinaryManager
 
             // Adoption validation: full path-chain perms/ownership + --version smoke + --list-devices GPU presence. A binary
             // that cannot self-check, or that exposes no GPU device, is never adopted (it would otherwise silently run CPU).
-            ValidateManagedTreeLinks(fullBinDir);
+            LlamaCppSourceBuildService.ValidateTreeLinks(fullBinDir, "managed source runtime");
             EnsureManagedPathChainSecure(serverPath);
 
             if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
@@ -371,7 +371,7 @@ public sealed partial class LlamaCppBinaryManager
     /// <remarks>
     ///     The binary must be a regular, executable, non-world-writable, owner-trusted file and a normalized child of
     ///     the cache root, and EVERY ancestor directory from the cache root down must be a non-world-writable,
-    ///     owner-trusted directory. A no-op on Windows, the managed build being Linux-only. <c>[secHIGH-3]</c>
+    ///     owner-trusted directory. A no-op on Windows, the managed build being Linux-only.
     /// </remarks>
     private void EnsureManagedPathChainSecure(string serverPath)
     {
@@ -410,75 +410,6 @@ public sealed partial class LlamaCppBinaryManager
             }
 
             directory = Path.GetDirectoryName(directory);
-        }
-    }
-
-    private static void ValidateManagedTreeLinks(string rootPath)
-    {
-        var root = Path.GetFullPath(rootPath);
-        var rootPrefix = root + Path.DirectorySeparatorChar;
-        var pending = new Stack<string>();
-        pending.Push(root);
-        while (pending.TryPop(out var directory))
-        {
-            var directoryInfo = new DirectoryInfo(directory);
-            if (directoryInfo.LinkTarget is not null)
-            {
-                throw new LlamaRuntimeException("The managed source runtime contains a linked directory.");
-            }
-
-            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
-            {
-                if (Directory.Exists(entry))
-                {
-                    pending.Push(entry);
-                    continue;
-                }
-
-                var file = new FileInfo(entry);
-                if (file.LinkTarget is null)
-                {
-                    continue;
-                }
-
-                var visited = new HashSet<string>(StringComparer.Ordinal);
-                var current = entry;
-                for (var hop = 0; hop < 32; hop++)
-                {
-                    if (!visited.Add(current))
-                    {
-                        throw new LlamaRuntimeException("The managed source runtime contains a cyclic library link.");
-                    }
-
-                    var currentInfo = new FileInfo(current);
-                    var target = currentInfo.LinkTarget;
-                    if (target is null)
-                    {
-                        if (!currentInfo.Exists)
-                        {
-                            throw new LlamaRuntimeException("The managed source runtime contains a dangling library link.");
-                        }
-
-                        break;
-                    }
-
-                    if (Path.IsPathRooted(target))
-                    {
-                        throw new LlamaRuntimeException("The managed source runtime contains an absolute library link.");
-                    }
-
-                    current = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(current)!, target));
-                    if (!current.StartsWith(rootPrefix, StringComparison.Ordinal) || Directory.Exists(current))
-                    {
-                        throw new LlamaRuntimeException("The managed source runtime contains an escaping or directory library link.");
-                    }
-
-                    if (hop == 31)
-                    {
-                        throw new LlamaRuntimeException("The managed source runtime contains an excessively deep library link chain.");
-                    }
-                }
-            }
         }
     }
 

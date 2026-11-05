@@ -17,7 +17,7 @@ import {
 // view; this alias keeps the onSuccess handlers readable.
 type CloudSettings = SaveCloudSettingsResponse;
 
-export function errorMessage(error: unknown): string {
+export function cloudSettingsErrorMessage(error: unknown): string {
 	return apiErrorMessage(error, t("pages.cloudSettings.unexpectedError", "Unexpected cloud settings error"));
 }
 

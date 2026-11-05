@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { ChatMessagePart } from "@/core/models/ChatMessageParts";
 import { AssistantMessageBubble } from "@/features/chat/components/ChatMessage/AssistantMessageBubble";
 import { UserMessageBubble } from "@/features/chat/components/ChatMessage/UserMessageBubble";
 import { ChatMessageActions } from "@/features/chat/components/ChatMessageActions";
@@ -10,7 +11,6 @@ import type {
 	ChatMessageActionCapabilities,
 	ChatMessageFeedback,
 	ChatMessageModel,
-	ChatMessagePart,
 	ChatMessageRevisionNav,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";

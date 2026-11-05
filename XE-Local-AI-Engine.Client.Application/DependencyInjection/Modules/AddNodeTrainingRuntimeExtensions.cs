@@ -31,7 +31,6 @@ internal static class AddNodeTrainingRuntimeExtensions
 
         builder.Services.AddScoped<ITrainingBaseArtifactStore, TrainingBaseArtifactStore>();
         builder.Services.AddScoped<ITrainingRunStore, TrainingRunStore>();
-        builder.Services.AddScoped<IModelLabExperimentStore, ModelLabExperimentStore>();
         builder.Services.AddScoped<ITrainingEvaluationStore, TrainingEvaluationStore>();
         builder.Services.AddSingleton<BaseArtifactDownloadCoordinator>();
         builder.Services.AddScoped<IBaseArtifactService, BaseArtifactService>();

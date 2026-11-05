@@ -112,7 +112,7 @@ public enum ExternalAppFailureCategory
 }
 
 /// <summary>
-///     What one <c>external_app_instance_events</c> row records. The list is the brief's, verbatim: a request kind for
+///     What one <c>external_app_instance_events</c> row records: a request kind for
 ///     each user-initiated operation and a completion kind for each outcome, so the feed reads as a history rather than
 ///     as a status log.
 /// </summary>

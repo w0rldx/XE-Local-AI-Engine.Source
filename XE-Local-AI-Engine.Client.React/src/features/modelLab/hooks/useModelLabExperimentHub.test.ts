@@ -90,6 +90,54 @@ describe("useModelLabExperimentHub", () => {
 		expect(result.current.step).toBeNull();
 	});
 
+	it("folds a frame past a gap and reads the row, because the row holds what the gap carried", async () => {
+		const onResync = vi.fn();
+		const { result } = renderHook(() => useModelLabExperimentHub(experimentId, onResync));
+		await waitFor(() => expect(result.current.isLive).toBe(true));
+
+		act(() =>
+			hub.handlers.get("trainingRun.event")?.({
+				runId: experimentId,
+				sequence: 5,
+				kind: "Progress",
+				payload: { step: 3, totalSteps: 7 },
+			}),
+		);
+
+		expect(result.current.step).toBe(3);
+		expect(onResync).toHaveBeenCalledTimes(1);
+	});
+
+	it("drops a frame whose kind the server's enum does not declare", async () => {
+		const onResync = vi.fn();
+		const { result } = renderHook(() => useModelLabExperimentHub(experimentId, onResync));
+		await waitFor(() => expect(result.current.isLive).toBe(true));
+
+		act(() => hub.handlers.get("trainingRun.event")?.({ runId: experimentId, sequence: 1, kind: 2, payload: { step: 3 } }));
+
+		expect(result.current.step).toBeNull();
+		expect(onResync).not.toHaveBeenCalled();
+	});
+
+	it("takes a replay reset's sequence as the cursor and reads the row", async () => {
+		const onResync = vi.fn();
+		const { result } = renderHook(() => useModelLabExperimentHub(experimentId, onResync));
+		await waitFor(() => expect(result.current.isLive).toBe(true));
+
+		act(() => hub.handlers.get("trainingRun.replayReset")?.({ runId: experimentId, latestSequence: 9, runVersion: 1 }));
+		expect(onResync).toHaveBeenCalledTimes(1);
+
+		act(() =>
+			hub.handlers.get("trainingRun.event")?.({
+				runId: experimentId,
+				sequence: 9,
+				kind: "Progress",
+				payload: { step: 3 },
+			}),
+		);
+		expect(result.current.step).toBeNull();
+	});
+
 	it("is live only once the hub accepted the subscription, and not while it reconnects", async () => {
 		const { result } = renderHook(() => useModelLabExperimentHub(experimentId, vi.fn()));
 

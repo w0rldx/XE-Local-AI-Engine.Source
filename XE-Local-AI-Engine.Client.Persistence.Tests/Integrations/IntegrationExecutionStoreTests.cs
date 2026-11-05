@@ -523,7 +523,7 @@ public sealed class IntegrationExecutionStoreTests
             FailureSummary = "boom"
         }));
 
-        // One SaveChanges is one transaction, so the status went back with the event. The round-4 split write
+        // One SaveChanges is one transaction, so the status went back with the event. A split write
         // (UpdateStatusAsync then AppendEventAsync) fails this outright.
         await using var freshContext = fixture.CreateContext();
         var row = AssertEx.NotNull(await new IntegrationExecutionStore(freshContext).GetByIdAsync(accept.ExecutionId));
@@ -1197,7 +1197,7 @@ public sealed class IntegrationExecutionStoreTests
     [Test]
     public async Task TryTerminalizeAsync_WhenTheWatermarkUpdateFailsAfterTheSave_RollsBackAndLeavesNoStaleTrackedTerminal()
     {
-        // The regression the round-1 transaction introduced: SaveChanges succeeds and EF marks the terminal entity as
+        // SaveChanges succeeds and EF marks the terminal entity as
         // committed, then a statement LATER in the same transaction throws and the database rolls back. With the
         // tracker-clear scoped to the save alone, the identity map kept the terminal entity at its bumped version, so
         // the fault handler's retry on the same scoped store compare-and-swapped against a version the database never

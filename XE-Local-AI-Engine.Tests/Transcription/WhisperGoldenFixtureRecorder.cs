@@ -49,7 +49,7 @@ public sealed class WhisperGoldenFixtureRecorder
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
             Skip.Test($"Set {ServerVariable} to a running whisper-server base URL to re-record the golden fixture "
-                      + "(start it on the pinned VAD file, see the slice plan's re-record recipe).");
+                      + "(start it on the pinned VAD file).");
             return;
         }
 

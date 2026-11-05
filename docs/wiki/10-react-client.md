@@ -393,11 +393,11 @@ for the same reason, that `ChatDisplayShell.tsx` records.
 ### The centre pane IS `Chat`, via one optional `scope` prop
 
 A work session owns a conversation, and its **supervisor is the single writer of invocations on it**. Everything that
-makes a conversation work — the `LocalChatHub` readiness gate, the rAF-batched stream commit, the tool timeline, and
-decisively the cold-load `resumeActiveTurn` re-attach — lives in `Chat.tsx`. A wrapper would have to re-implement all
-of it or ship a session view that cannot stream, so `Chat` instead takes one optional `ChatScope`
-(`features/chat/models/ChatModels.ts`). `/chat` passes nothing and behaves exactly as before; `Chat.scope.test.tsx` is
-the regression guard for that.
+makes a conversation work lives behind `Chat`: the `LocalChatHub` readiness gate in `Chat.tsx`, and the rAF-batched
+stream commit, the tool timeline and, decisively, the cold-load `resumeActiveTurn` re-attach in its
+`useChatStreamController`. A wrapper would have to re-implement all of it or ship a session view that cannot stream,
+so `Chat` instead takes one optional `ChatScope` (`core/models/ChatScope.ts`). `/chat` passes nothing and behaves
+exactly as before; `Chat.scope.test.tsx` is the regression guard for that.
 
 Under a scope, `Chat`:
 
@@ -449,10 +449,9 @@ reconnect). Four things differ and must not be copied from that hook:
 
 - **`config/dependency-baseline.json` carries `workSessions` → `chat` `no-cross-feature` fingerprints.** The "keep
   cross-feature reuse in `core/`" rule below is real, and this feature is the recorded exception: the centre pane *is*
-  the chat page, so `workSessions/*` importing `chat/pages/Chat.tsx`, `chat/models/ChatModels.ts` (for `ChatScope`) and
-  `chat/components/AgentSelectorCard.tsx` is the design, not drift. Hoisting `Chat` into `core/` to satisfy the rule
-  would be a far worse trade. The query keys and the agent options it once took from `chat` now come from `core/chat`
-  and `core/agents`.
+  the chat page, so `workSessions/*` importing `chat/pages/Chat.tsx` is the design, not drift. Hoisting `Chat` into
+  `core/` to satisfy the rule would be a far worse trade. Everything else it needs from chat comes from `core`: the
+  `ChatScope` prop type (`core/models`), the query keys and the agent options (`core/chat`, `core/agents`).
 - **`config/bundle-budget.json` `applicationJavaScriptBytes` rose 4 192 000 → 4 252 000.** Measured: 4 145 967 bytes
   without the feature, 4 204 890 with it. The old budget had ~46 kB of headroom and this feature consumed all of it.
   The two routes are separately code-split (6.2 kB list, 25.0 kB detail) and Monaco stays in its own lazy chunk, so
@@ -468,18 +467,15 @@ cost more than it saves,; the baseline may only shrink.
 | Importer → imported | Why it stays |
 |---|---|
 | `about` → `app-update` | The About dialog hosts the update card; moving the card in would pull app-update internals across instead. |
-| `benchmarks` → `chat` | The run pane renders chat `MessageParts`, and the benchmark models map onto the chat part union. |
 | `chat` → `voice` | Chat embeds the voice composer controls, the per-message play button and the playback runtime. |
 | `chat` → `knowledge` | The sources strip opens the knowledge document drawer and reads the knowledge documents it cites. |
-| `chat` → `graphWorkflows` | `chat/workflow/` is the chat-embedded graph-workflow runner (models, queries, run hub, status badge); hoisting the shared pieces into `core/` would pay it down. |
+| `chat` → `graphWorkflows` | One seam, one way: `chat/workflow/useChatWorkflow.tsx` drives the chat adapter and the chat stream fold and also reads the workflow queries, run hub and run view, so it stays in `chat`; moving it would make the dependency two-way. `graphWorkflows` imports nothing from `chat`. |
 | `devWorkflows` → `chat`, `workSessions` | The agent node panel embeds `Chat` under a `ChatScope` and drives the node's work session through `useWorkSessionHub`. |
 | `development` → `devWorkflows` | The page controller reads the dev-workflow run-status helpers, whose models have too many importers to move cheaply. |
-| `knowledge` → `development` | Repository import lists the development repositories. |
-| `model-fit` → `scheduler` | The recommendation refresh reads scheduled jobs and runs. |
-| `models` → `model-fit` | The model page hosts the model-fit panel. |
+| `model-fit` → `scheduler` | The recommendation refresh reads scheduled jobs and runs through the scheduler's queries and mappers; the models they read stay at the path `scripts/CheckSignalrProxySync.mjs` pins. |
+| `models` → `model-fit` | The model details dialog hosts `model-fit`'s `ModelFitPanel`. |
 | `node-settings` → `voice` | Node settings hosts the voice settings card; moving it in would pull voice internals across. |
-| `runtime-resources` → `node-settings`, `transcription` | The shell's aggregator widget calls the owners' eject mutations, which invalidate the owners' query ids. |
-| `training` → `chat`, `benchmarks` | Dataset review renders chat `MessageParts`; the comparison dialog picks benchmark projects and runs. |
+| `training` → `benchmarks` | The comparison dialog picks benchmark projects and runs; the hooks read benchmark mappers and models, and moving the dialog in would pull five training imports across. |
 | `workSessions` → `chat` | The ruled exception above: the centre pane is `Chat`. |
 
 ### E2E: the seeder has to be put back

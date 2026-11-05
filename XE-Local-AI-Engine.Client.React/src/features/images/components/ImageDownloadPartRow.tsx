@@ -2,7 +2,7 @@ import { ActionIcon, Card, Group, Select, Stack, TextInput, Tooltip } from "@man
 import { IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { type ImageModelPartRole, imageModelPartRoles, type PartDraft } from "@/features/images/models/ImageModels";
+import { type ImageModelPartRole, imageModelPartRoles, type PartDraft } from "@/features/images/models/ImageModelInstallModels";
 
 const partRoles = imageModelPartRoles;
 

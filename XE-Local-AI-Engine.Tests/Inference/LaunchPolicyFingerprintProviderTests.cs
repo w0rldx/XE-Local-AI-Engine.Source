@@ -575,7 +575,7 @@ public sealed class LaunchPolicyFingerprintProviderTests : IDisposable
     public async Task Fingerprint_WithTheDefaultKvCacheType_IsByteIdenticalToTheUnseededOptions()
     {
         // Byte-identical default. The knob is FOLDED at q8_0, so a node that never touched it hashes exactly the bytes
-        // it has always hashed and shipping this slice invalidates no stored profile. If the seed default and the
+        // it has always hashed and the knob invalidates no stored profile. If the seed default and the
         // provider default ever drift apart, this fails loudly instead of silently staling every profile on every node.
         var path = await CreateModelFileAsync();
         var binaryPath = await CreateBinaryFileAsync();

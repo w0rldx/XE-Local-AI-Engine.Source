@@ -31,7 +31,7 @@ internal static class PartialFlushPolicy
             return false;
         }
 
-        // Never faster than the cadence this policy replaced, whatever the growth.
+        // Never faster than the floor, whatever the growth.
         if (elapsed < TimeSpan.FromMilliseconds(options.PartialFlushMinIntervalMs))
         {
             return false;

@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 
 import {
 	cancelWhisperCppSourceBuildMutation,
-	ejectTranscriptionRuntimeMutation,
 	getTranscriptionRuntimeStatusOptions,
 	getWhisperCppSourceBuildPrerequisitesOptions,
 	getWhisperCppSourceBuildStatusOptions,
@@ -53,11 +52,10 @@ export function useWhisperSourceBuildPrerequisites(backend: WhisperSourceBackend
 }
 
 /**
- * The build's only progress channel. Unlike llama.cpp and stable-diffusion.cpp, whisper.cpp registers no hub — the
- * provider's `IWhisperCppSourceBuildEventPublisher` has only the no-op floor implementation and the host substitutes
- * nothing — so this poll IS the live view, and its terminal transition is what the other two lanes get from their
- * hub's `terminal` event: the moment to re-read the runtime status that now carries (or no longer carries) the
- * adopted managed build.
+ * The build's only progress channel. Unlike llama.cpp and stable-diffusion.cpp, whisper.cpp registers no hub and
+ * `WhisperCppSourceBuildService.PublishStatusAsync` publishes nothing, so this poll IS the live view, and its terminal
+ * transition is what the other two lanes get from their hub's `terminal` event: the moment to re-read the runtime
+ * status that now carries (or no longer carries) the adopted managed build.
  */
 export function useWhisperSourceBuildStatus(enabled = true) {
 	const queryClient = useQueryClient();
@@ -123,21 +121,5 @@ export function useRemoveWhisperSourceBuild() {
 				invalidate(queryClient, whisperRuntimeQueryIds.sourceBuildStatus),
 				invalidate(queryClient, whisperRuntimeQueryIds.runtime),
 			]),
-	});
-}
-
-/**
- * Unloads the resident whisper daemon. A build and a remove both need the mutation reservation, which
- * `WhisperRuntimeActivityGate` refuses while ANY process is resident, so this is the in-card recovery from the
- * `runtime-busy` refusal rather than a convenience.
- */
-export function useEjectWhisperRuntime() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: async () => {
-			const options = ejectTranscriptionRuntimeMutation();
-			return await options.mutationFn?.({ body: { accepted: true } }, undefined as never);
-		},
-		onSuccess: () => invalidate(queryClient, whisperRuntimeQueryIds.runtime),
 	});
 }

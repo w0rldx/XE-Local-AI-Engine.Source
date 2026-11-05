@@ -148,7 +148,7 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 								<Table.Td>
 									<Stack gap={2} align="flex-start">
 										{/* The row's onClick is the pointer affordance; THIS is the control a keyboard and a
-										    screen reader can reach, and this table is A0's only execution view. A click here
+										    screen reader can reach, and this table is the keyboard path through the run. A click here
 										    also bubbles to the row and selects the same id, so the second call is a no-op. */}
 										<Anchor
 											component="button"

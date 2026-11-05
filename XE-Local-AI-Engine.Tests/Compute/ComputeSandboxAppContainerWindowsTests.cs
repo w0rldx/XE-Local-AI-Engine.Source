@@ -71,7 +71,7 @@ public sealed class ComputeSandboxAppContainerWindowsTests
                 "the provisioned venv must read as running on the shared store, or a failed rebuild cannot keep it in service");
             var venvRoot = Path.GetDirectoryName(Path.GetDirectoryName(runtime.InterpreterPath)!)!;
             var prefixProbe = Path.Combine(venvRoot, "xe-write-probe.txt");
-            AssertEx.NotNull(runtime.BaseInterpreterPath, "on Windows the gateway must run the store interpreter, not uv's trampoline (N-60)");
+            AssertEx.NotNull(runtime.BaseInterpreterPath, "on Windows the gateway must run the store interpreter, not uv's trampoline");
 
             var rendered = await CreateGateway(provider, environment).ExecuteAsync(new ComputeRunToolRequest
             {
@@ -79,7 +79,7 @@ public sealed class ComputeSandboxAppContainerWindowsTests
             });
 
             AssertEx.True(rendered.StartsWith("exit_code: 0\nstdout:\n", StringComparison.Ordinal), rendered);
-            AssertEx.True(rendered.EndsWith("\nstderr:\n", StringComparison.Ordinal), $"the call must leave stderr empty (N-60): {rendered}");
+            AssertEx.True(rendered.EndsWith("\nstderr:\n", StringComparison.Ordinal), $"the call must leave stderr empty: {rendered}");
             AssertEx.Contains(rendered, "PREFIX-IS-VENV True");
             AssertEx.Contains(rendered, "EXE-IS-LAUNCHER True");
             AssertEx.Contains(rendered, "EXISTS TEMP True");

@@ -488,7 +488,7 @@ public sealed class TranscriptionSessionEndpointTests
     }
 
     /// <summary>
-    ///     Every route the slice adds, as request factories — a <see cref="HttpRequestMessage" /> cannot be sent twice,
+    ///     Every transcription-session route, as request factories — a <see cref="HttpRequestMessage" /> cannot be sent twice,
     ///     and the authorization tests send each route under two different principals.
     /// </summary>
     private static IReadOnlyList<(string Description, Func<HttpRequestMessage> Create)> Routes()

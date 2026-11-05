@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Collections.Concurrent;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -269,12 +271,12 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenDiskInsufficient_ReturnsProbeDetailsWithoutRuntimeAdmission()
     {
-        var report = new LlamaCppSourceBuildPrerequisiteReport
+        var report = new SourceBuildPrerequisiteReport
         {
             CanBuild = false,
             Items =
             [
-                new LlamaCppSourceBuildPrerequisiteItem
+                new SourceBuildPrerequisiteRow
                 {
                     Key = "free-disk",
                     Satisfied = false,
@@ -313,12 +315,12 @@ public sealed class LlamaCppSourceBuildServiceTests
     [UnsupportedOSPlatform("windows")]
     public async Task Start_WhenToolMissing_ReturnsProbeDetailsWithoutRuntimeAdmission()
     {
-        var report = new LlamaCppSourceBuildPrerequisiteReport
+        var report = new SourceBuildPrerequisiteReport
         {
             CanBuild = false,
             Items =
             [
-                new LlamaCppSourceBuildPrerequisiteItem
+                new SourceBuildPrerequisiteRow
                 {
                     Key = "cmake",
                     Satisfied = false,
@@ -529,6 +531,50 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.True(publisher.Events.Count > 0);
         AssertEx.True(publisher.Events[^1].Terminal);
         AssertEx.True(publisher.Events.All(statusEvent => statusEvent.CurrentBuild?.BuildId == service.GetStatus().CurrentBuild?.BuildId));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task SuccessfulBuild_HoldsTheAdoptionMutationLeaseUntilTheTerminalStatus()
+    {
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
+        WriteScript(Path.Combine(stubs, "cmake"),
+            "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params llama-quantize llama-perplexity; do printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");
+        using var path = new PathScope(stubs);
+
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        var supervisor = new LeaseOnlySupervisor();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            new CapturingBinaryManager(store, signal),
+            store,
+            signal,
+            supervisor,
+            new LlamaCppSourceBuildActivity(),
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
+            temp.Path);
+        var terminalAtLeaseDispose = new ConcurrentQueue<bool>();
+        supervisor.OnLeaseDisposed = () => terminalAtLeaseDispose.Enqueue(service.GetStatus().Terminal);
+
+        var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        }, CancellationToken.None);
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, outcome.Outcome);
+
+        await AssertEx.EventuallyAsync(() => terminalAtLeaseDispose.Count == 2, TimeSpan.FromSeconds(10));
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
+        AssertEx.False(terminalAtLeaseDispose.First(), "The start transaction's lease is released before the build runs.");
+        AssertEx.True(terminalAtLeaseDispose.Last(),
+            "The adoption lease must still be held when the Completed status is set, or a process can start between them.");
     }
 
     [Test]
@@ -760,8 +806,8 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class AlwaysReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
-        public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
-            Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
+            Task.FromResult(new SourceBuildPrerequisiteReport
             {
                 CanBuild = true,
                 Items = []
@@ -773,10 +819,10 @@ public sealed class LlamaCppSourceBuildServiceTests
         private int _callCount;
         public int CallCount => Volatile.Read(ref _callCount);
 
-        public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
         {
             Interlocked.Increment(ref _callCount);
-            return Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport
+            return Task.FromResult(new SourceBuildPrerequisiteReport
             {
                 CanBuild = true,
                 Items = []
@@ -786,14 +832,14 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class FixedReportProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
-        private readonly LlamaCppSourceBuildPrerequisiteReport _report;
+        private readonly SourceBuildPrerequisiteReport _report;
 
-        public FixedReportProbe(LlamaCppSourceBuildPrerequisiteReport report)
+        public FixedReportProbe(SourceBuildPrerequisiteReport report)
         {
             _report = report;
         }
 
-        public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
             Task.FromResult(_report);
     }
 
@@ -804,12 +850,12 @@ public sealed class LlamaCppSourceBuildServiceTests
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
+        public async Task<SourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
         {
             Interlocked.Increment(ref _callCount);
             Entered.TrySetResult();
             await Release.Task.WaitAsync(ct);
-            return new LlamaCppSourceBuildPrerequisiteReport
+            return new SourceBuildPrerequisiteReport
             {
                 CanBuild = true,
                 Items = []
@@ -893,8 +939,10 @@ public sealed class LlamaCppSourceBuildServiceTests
 
     private sealed class LeaseOnlySupervisor : ILlamaServerProcessSupervisor
     {
+        public Action? OnLeaseDisposed { get; set; }
+
         public Task<ILlamaServerRuntimeMutationLease?> AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken ct) =>
-            Task.FromResult<ILlamaServerRuntimeMutationLease?>(new Lease());
+            Task.FromResult<ILlamaServerRuntimeMutationLease?>(new Lease(this));
 
         public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) =>
             throw new NotSupportedException();
@@ -924,8 +972,18 @@ public sealed class LlamaCppSourceBuildServiceTests
 
         private sealed class Lease : ILlamaServerRuntimeMutationLease
         {
-            public ValueTask DisposeAsync() =>
-                ValueTask.CompletedTask;
+            private readonly LeaseOnlySupervisor _owner;
+
+            public Lease(LeaseOnlySupervisor owner)
+            {
+                _owner = owner;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _owner.OnLeaseDisposed?.Invoke();
+                return ValueTask.CompletedTask;
+            }
         }
     }
 

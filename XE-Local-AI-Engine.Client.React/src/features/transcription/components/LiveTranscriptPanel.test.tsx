@@ -35,7 +35,6 @@ describe("LiveTranscriptPanel", () => {
 		cleanup();
 	});
 
-	// Plan §4.2: RendersCommittedSegmentsAndOneProvisionalLinePerChannel
 	// Provisional text is replaced wholesale on every update and can disagree with what is finally committed, so it
 	// lives outside the committed list — a reader who cannot tell the two apart quotes text the transcript never kept.
 	it("renders the committed segments and one provisional line per channel", () => {

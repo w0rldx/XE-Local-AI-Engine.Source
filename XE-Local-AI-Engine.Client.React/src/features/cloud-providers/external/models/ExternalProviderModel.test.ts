@@ -121,7 +121,7 @@ describe("baseUrlOrigin", () => {
 	});
 });
 
-describe("shouldWarnLocalDeclaration (D1)", () => {
+describe("shouldWarnLocalDeclaration", () => {
 	it("warns when Local is declared for a host that is neither loopback nor private", () => {
 		expect(shouldWarnLocalDeclaration(values({ locality: "Local", baseUrl: "https://api.example.com/v1" }))).toBe(true);
 	});

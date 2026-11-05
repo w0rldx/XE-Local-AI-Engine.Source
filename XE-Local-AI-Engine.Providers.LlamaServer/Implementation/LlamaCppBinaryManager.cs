@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -32,32 +31,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 {
     private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(15);
 
-    /// <summary>
-    ///     How long a runtime download may go without receiving a single byte before it is abandoned as stalled.
-    /// </summary>
-    /// <remarks>
-    ///     Any byte resets the window, so a slow link is never cut off; only a connection that delivers NOTHING for a full
-    ///     minute is. Without it a half-open connection holds the acquisition (and the banner) at a fixed percentage forever.
-    /// </remarks>
-    private static readonly TimeSpan DownloadStallTimeout = TimeSpan.FromSeconds(60);
-
-    /// <summary>The user-safe reason a stalled download surfaces with; also the marker that keeps it through the retry wrapper.</summary>
-    private const string DownloadStalledMessage =
-        "The llama.cpp runtime download stalled: no data arrived for 60 seconds. Check the network connection and try again.";
-
-    /// <summary>
-    ///     Absolute hard ceiling on a single runtime download: a disk-exhaustion guard against a hostile or buggy server
-    ///     streaming an unbounded body.
-    /// </summary>
-    /// <remarks>
-    ///     A prebuilt llama.cpp asset is well under this. Enforced on every download path; the size-aware
-    ///     <see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" /> path tightens it further with the catalog-reported size.
-    /// </remarks>
-    private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;
-
-    /// <summary>Slack added to the catalog-reported size before aborting an oversized stream (still capped at the ceiling).</summary>
-    private const long DownloadSizeSlackBytes = 1L * 1024 * 1024;
-
     /// <summary>Refusal for a prebuilt install while a source build owns the record — checked before AND after the download.</summary>
     private const string SourceBuildInstalledMessage =
         "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.";
@@ -66,9 +39,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly ILlamaCppImplicitAcquisitionPolicy? _implicitAcquisitionPolicy;
     private readonly string _activeTag;
     private readonly Architecture _arch;
+    private readonly LlamaCppArchiveDownloader _archiveDownloader;
     private readonly string _cacheRoot;
     private readonly ILlamaCppReleaseCatalog? _catalog;
-    private readonly HttpClient _httpClient;
     private readonly IInstalledRuntimeStore? _installedRuntimeStore;
     private readonly ILogger<LlamaCppBinaryManager> _logger;
     private readonly ICudaManagedBuildSignal? _managedCudaSignal;
@@ -147,7 +120,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _implicitAcquisitionPolicy = implicitAcquisitionPolicy;
         _logger = logger ?? NullLogger<LlamaCppBinaryManager>.Instance;
         _pinResolver = pinResolver ?? LlamaCppReleasePins.ResolveForAcquisition;
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeTag);
         _cacheRoot = cacheRoot;
@@ -155,6 +128,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _os = os;
         _arch = arch;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _archiveDownloader = new LlamaCppArchiveDownloader(httpClient, _timeProvider);
         _catalog = catalog;
         _installedRuntimeStore = installedRuntimeStore;
         _overrideOptions = overrideOptions;
@@ -375,7 +349,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             _logger.LogInformation("Acquiring llama.cpp {Tag} ({Variant}) from release asset {AssetName}.", resolvedTag, variant, pin.AssetName);
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
-            var stagingDir = await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir,
+            var stagingDir = await _archiveDownloader.DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir,
                     reporter,
                     stepIndex: 1,
                     ct)
@@ -764,7 +738,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
 
         // Disk-exhaustion guard: a catalog-reported size beyond the absolute ceiling is rejected before any download.
-        if (expectedSize > MaxDownloadBytes)
+        if (expectedSize > LlamaCppArchiveDownloader.MaxDownloadBytes)
         {
             throw new LlamaRuntimeException("The requested llama.cpp runtime is larger than the maximum allowed download size.");
         }
@@ -783,7 +757,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             // Reuse the shared download→verify→atomic-extract pipeline, verifying against the live publisher digest. On any
             // failure the previously-installed binary (a sibling versioned dir) is untouched — versioned dirs isolate tiers.
-            var stagingDir = await DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
+            var stagingDir = await _archiveDownloader.DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
 
             // Pair the CUDA runtime libraries (live companion, name derived from the main asset) in staging, BEFORE publish and the smoke test, so nothing ever sees a
             // half-CUDA dir; a cudart failure discards the staging dir and throws, never installs blind.
@@ -1140,8 +1114,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return;
         }
 
-        throw new LlamaRuntimeException(IsDownloadStall(secondError)
-                ? DownloadStalledMessage
+        throw new LlamaRuntimeException(LlamaCppArchiveDownloader.IsDownloadStall(secondError)
+                ? LlamaCppArchiveDownloader.DownloadStalledMessage
                 : "The llama.cpp CUDA runtime archive could not be downloaded or failed integrity verification after a retry.",
             secondError);
     }
@@ -1155,7 +1129,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             // Announced before the request so the UI narrates the wait for the response headers too, not just the body.
             reporter?.Report(RuntimeAcquisitionPhase.Downloading, CudartStepIndex);
-            await DownloadToFileAsync(url, tempArchive, expectedSize, reporter, CudartStepIndex, ct).ConfigureAwait(false);
+            await _archiveDownloader.DownloadToFileAsync(url, tempArchive, expectedSize, reporter, CudartStepIndex, ct).ConfigureAwait(false);
 
             if (expectedSize > 0 && new FileInfo(tempArchive).Length != expectedSize)
             {
@@ -1174,7 +1148,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             Directory.CreateDirectory(stagingDir);
             if (assetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
             {
-                await ExtractTarGzAsync(tempArchive, stagingDir, ct).ConfigureAwait(false);
+                await LlamaCppArchiveDownloader.ExtractTarGzAsync(tempArchive, stagingDir, ct).ConfigureAwait(false);
             }
             else
             {
@@ -1332,191 +1306,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Shared download, SHA256-verify and extract pipeline; a transient failure or a hash mismatch is discarded and
-    ///     retried exactly once. Returns the UNPUBLISHED staging dir (a sibling of <paramref name="variantDir" />).
-    /// </summary>
-    /// <remarks>
-    ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />) or the
-    ///     live publisher digest (<see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />) — so both acquisition paths run identical
-    ///     verification logic. The caller completes the staged tree (the CUDA cudart pairing), publishes it with
-    ///     <see cref="StagedDirectoryPublish.PublishAsync" /> and deletes the staging dir on failure; nothing is visible at
-    ///     <paramref name="variantDir" /> until then.
-    /// </remarks>
-    private async Task<string> DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
-        CancellationToken ct)
-    {
-        var (firstStaging, _) = await DownloadVerifyExtractAttemptAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
-        if (firstStaging is not null)
-        {
-            return firstStaging;
-        }
-
-        var (secondStaging, secondError) = await DownloadVerifyExtractAttemptAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
-        if (secondStaging is not null)
-        {
-            return secondStaging;
-        }
-
-        var error = secondError ?? throw new InvalidOperationException("A download attempt without a staging dir must carry its error.");
-        throw new LlamaRuntimeException(IsDownloadStall(error)
-                ? DownloadStalledMessage
-                : "The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. Check the network connection and try again.",
-            error);
-    }
-
-    /// <summary>True for the stall failure <see cref="DownloadToFileAsync" /> raises, so the retry wrapper keeps its reason instead of a generic one.</summary>
-    private static bool IsDownloadStall(Exception error)
-    {
-        return error is LlamaRuntimeException { Message: DownloadStalledMessage };
-    }
-
-    /// <summary>
-    ///     Runs one download → SHA256 verify → extract pass. Returns the staging dir on success, or the non-fatal
-    ///     failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
-    /// </summary>
-    private async Task<DownloadAttempt> DownloadVerifyExtractAttemptAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir,
-        AcquisitionReporter? reporter, int stepIndex,
-        CancellationToken ct)
-    {
-        // Defense-in-depth: even though assetName is allow-list-validated upstream, strip any directory component before
-        // it composes a temp path so a future caller can never traverse out of the temp dir.
-        var tempArchive = Path.Combine(Path.GetTempPath(), $"llamacpp-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
-        try
-        {
-            // Announced before the request so the UI narrates the wait for the response headers too, not just the body.
-            reporter?.Report(RuntimeAcquisitionPhase.Downloading, stepIndex);
-            await DownloadToFileAsync(url, tempArchive, expectedSize, reporter, stepIndex, ct).ConfigureAwait(false);
-
-            // When the catalog reported a size, the on-disk length must match it exactly before we trust+hash the file.
-            if (expectedSize > 0 && new FileInfo(tempArchive).Length != expectedSize)
-            {
-                return new DownloadAttempt(null, new LlamaRuntimeException("The llama.cpp runtime download did not match its expected size."));
-            }
-
-            // Verification and extraction of a few-hundred-MB archive are not instant; without their own phases the UI
-            // would sit at 100 % of the byte counter with nothing to explain the remaining wait.
-            reporter?.Report(RuntimeAcquisitionPhase.Verifying, stepIndex);
-            if (!await FileSha256.MatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
-            {
-                return new DownloadAttempt(null, new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification."));
-            }
-
-            reporter?.Report(RuntimeAcquisitionPhase.Extracting, stepIndex);
-            return new DownloadAttempt(await ExtractArchiveAsync(tempArchive, assetName, variantDir, ct).ConfigureAwait(false), null);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            return new DownloadAttempt(null, exception);
-        }
-        finally
-        {
-            BestEffortFile.TryDeleteFile(tempArchive);
-        }
-    }
-
-    /// <summary>One download pass: the staging dir on success, otherwise the failure cause.</summary>
-    private readonly record struct DownloadAttempt(string? StagingDir, Exception? Error);
-
-    private async Task DownloadToFileAsync(Uri url, string destination, long expectedSize, AcquisitionReporter? reporter, int stepIndex, CancellationToken ct)
-    {
-        // Inactivity watchdog: re-armed on every chunk, so it fires only after DownloadStallTimeout with no bytes at all (headers included).
-        using var stallCts = new CancellationTokenSource(DownloadStallTimeout, _timeProvider);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stallCts.Token);
-        try
-        {
-            await DownloadToFileCoreAsync(url, destination, expectedSize, reporter, stepIndex, stallCts, linkedCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException exception) when (stallCts.IsCancellationRequested && !ct.IsCancellationRequested)
-        {
-            // A stall is a FAILURE with a reason, never a silent cancel: the caller did not ask to stop.
-            throw new LlamaRuntimeException(DownloadStalledMessage, exception);
-        }
-    }
-
-    private async Task DownloadToFileCoreAsync(Uri url, string destination, long expectedSize, AcquisitionReporter? reporter, int stepIndex, CancellationTokenSource stallCts,
-        CancellationToken ct)
-    {
-        using var response = await _httpClient
-                                   .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
-                                   .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        // Bound the write: when a size is known, allow it plus a small slack; otherwise fall back to the absolute
-        // ceiling. A stream that exceeds the bound (a hostile/buggy server) is aborted and the partial file discarded.
-        var limit = expectedSize > 0
-            ? Math.Min(expectedSize + DownloadSizeSlackBytes, MaxDownloadBytes)
-            : MaxDownloadBytes;
-
-        // The determinate total comes from the response headers; the pinned path has no catalog-reported size, so it is
-        // simply absent (null) until — and unless — a Content-Length lands, and the UI stays indeterminate meanwhile.
-        var totalBytes = response.Content.Headers.ContentLength;
-
-        await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-
-        try
-        {
-            await using var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
-
-            var buffer = new byte[81920];
-            long written = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-            {
-                stallCts.CancelAfter(DownloadStallTimeout);
-                written += read;
-                if (written > limit)
-                {
-                    throw new LlamaRuntimeException("The llama.cpp runtime download exceeded the maximum allowed size.");
-                }
-
-                await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-
-                // Reported unconditionally per ~80 KB chunk: the registry owns the push throttle, and duplicating it here
-                // would only make the hydrate snapshot lag the bytes actually on disk.
-                reporter?.Report(RuntimeAcquisitionPhase.Downloading, stepIndex, written, totalBytes);
-            }
-        }
-        catch
-        {
-            BestEffortFile.TryDeleteFile(destination);
-            throw;
-        }
-    }
-
-    // Extracts into a temp sibling of variantDir (same volume, so the later publish is an atomic move) and returns it; a partial extract is deleted here.
-    private static async Task<string> ExtractArchiveAsync(string archivePath, string assetName, string variantDir, CancellationToken ct)
-    {
-        var stagingDir = $"{variantDir}.{Guid.NewGuid():N}.tmp";
-        Directory.CreateDirectory(stagingDir);
-        try
-        {
-            if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-            {
-                await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
-            }
-            else if (assetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
-            {
-                await ExtractTarGzAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
-            }
-            else
-            {
-                throw new LlamaRuntimeException("The llama.cpp runtime archive format is not supported.");
-            }
-
-            return stagingDir;
-        }
-        catch
-        {
-            BestEffortFile.TryDeleteDirectory(stagingDir);
-            throw;
-        }
-    }
-
-    /// <summary>
     ///     Deletes <c>{cacheRoot}/llama.cpp/{tag}/{variant}.{guid}.tmp</c> extraction staging directories last written before
     ///     <paramref name="olderThanUtc" />, and returns how many it removed.
     /// </summary>
@@ -1548,13 +1337,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
 
         return swept;
-    }
-
-    private static async Task ExtractTarGzAsync(string archivePath, string destination, CancellationToken ct)
-    {
-        await using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        await using var gzip = new GZipStream(fileStream, CompressionMode.Decompress);
-        await TarFile.ExtractToDirectoryAsync(gzip, destination, overwriteFiles: true, ct).ConfigureAwait(false);
     }
 
     /// <summary>Validates a release tag against the upstream <c>b&lt;N&gt;</c> scheme before it is composed into a URL.</summary>

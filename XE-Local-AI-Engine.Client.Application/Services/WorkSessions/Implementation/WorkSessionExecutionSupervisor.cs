@@ -418,7 +418,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // Every step of every session, whatever the caller pinned: this turn is autonomous, so the send path must
             // never let the adaptive-effort dispatcher serve it on a model nobody chose.
             IsWorkSessionTurn: true,
-            // GRAPH-C4-2's runtime half: the declaration rides on the override, re-supplied on every start and resume
+            // GRAPH-2's runtime half: the declaration rides on the override, re-supplied on every start and resume
             // off the run's PINNED graph, so no mid-run edit widens it. The send decides — only it sees the real offer.
             RefuseUndeclaredWrites: run.Runtime?.RefuseUndeclaredWrites == true,
             // No operator is attached to a workflow-owned session, and its embedded chat is read-only, so an ask_user
@@ -458,7 +458,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
         catch (WorkSessionUndeclaredWriteException refusal)
         {
-            // The send saw an undeclared write/execute tool in the offer and stopped (GRAPH-C4-2); nothing ran, so this
+            // The send saw an undeclared write/execute tool in the offer and stopped (GRAPH-2); nothing ran, so this
             // is the gate's own row. Failed, not Paused — the owning run would resume a pause until its budget died.
             return await SettleWriteGateAsync(sessionId, step, attempt, refusal.Message);
         }
@@ -904,7 +904,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// </summary>
     /// <remarks>
     ///     The sentence is the step row's DETAIL, not only the session's terminal reason: the owning workflow run must
-    ///     answer with <c>GRAPH-C4-2</c>'s own failure class, and the record written when it happened is the only honest
+    ///     answer with <c>GRAPH-2</c>'s own failure class, and the record written when it happened is the only honest
     ///     source for a historical cause. Re-derived from the definition's CURRENT state it goes quiet the moment an
     ///     operator restores or narrows it, and the node run falls through as a retryable provider failure.
     /// </remarks>

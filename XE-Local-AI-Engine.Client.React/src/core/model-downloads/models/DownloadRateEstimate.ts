@@ -73,9 +73,9 @@ export function estimateDownloadRate(
 	return { bytesPerSecond, etaSeconds: remainingBytes / bytesPerSecond };
 }
 
-// The byte formatter moved to core once a fourth feature needed it: a feature importing another feature's helper is
-// exactly the cross-feature edge the dependency baseline refuses to grow. Re-exported here so the download surfaces
-// that already import it from this module keep one import line.
+// The byte formatter lives in core: a feature importing another feature's helper is exactly the cross-feature edge the
+// dependency baseline refuses to grow. Re-exported here so the download surfaces that import it from this module keep
+// one import line.
 export { humanizeBytes } from "@/core/formatting/BytesFormatting";
 
 /**

@@ -59,10 +59,9 @@ class AspireVersionTupleContractTests(unittest.TestCase):
         )
 
     def test_community_toolkit_sqlite_pin_is_deliberate(self) -> None:
-        """CommunityToolkit now follows the Aspire release line, so only the exact pin is asserted.
+        """CommunityToolkit follows the Aspire release line, so only the exact pin is asserted.
 
-        This used to also assert the version differed from the Aspire release version. That guard
-        stopped meaning anything once the two started moving together, so it is gone deliberately.
+        Nothing asserts the version differs from the Aspire release version: the two move together.
         """
         sqlite_version = self.packages["CommunityToolkit.Aspire.Hosting.Sqlite"]
 

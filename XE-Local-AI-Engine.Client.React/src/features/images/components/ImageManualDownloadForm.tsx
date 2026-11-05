@@ -8,7 +8,7 @@ import {
 	type ImageModelFamily,
 	imageModelFamilies,
 	type PartDraft,
-} from "@/features/images/models/ImageModels";
+} from "@/features/images/models/ImageModelInstallModels";
 
 const families = imageModelFamilies;
 

@@ -23,7 +23,7 @@ public sealed class SchedulerFeatureGateTests
     [Test]
     public async Task SchedulerRoutes_WhenDisabled_TheNodeStartsAndAnswersNotFound()
     {
-        // N-12b: the family is gated like every other switched feature, so a disabled node answers 404, not a 400 plus a warning stack.
+        // The family is gated like every other switched feature, so a disabled node answers 404, not a 400 plus a warning stack.
         await using var factory = new TestServerWebAppFactory
         {
             AdditionalConfiguration = new Dictionary<string, string?>

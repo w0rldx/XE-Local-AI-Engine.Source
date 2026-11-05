@@ -32,7 +32,7 @@ public sealed class DevWorkflowEndpointTests
     private static readonly Guid RunId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid RuleSetId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
-    /// <summary>The graph the seeded Slice-A template has: one agent into one terminal gate.</summary>
+    /// <summary>A minimal graph: one agent into one terminal gate.</summary>
     private const string SampleGraph = """
                                        {"schemaVersion":1,
                                         "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","maxAttempts":3},
@@ -467,7 +467,7 @@ public sealed class DevWorkflowEndpointTests
     ///     the store was handed, and what the caller reads back. Sent in lower case on purpose: the stored value is
     ///     canonical whatever an author writes, so nothing reading the blob later has to parse case-insensitively.
     ///     <para>
-    ///         The <c>validate</c> node is not decoration: <c>GRAPH-C4-3</c> refuses an apply a run can reach without a
+    ///         The <c>validate</c> node is not decoration: <c>GRAPH-3</c> refuses an apply a run can reach without a
     ///         validation, and the seeded template this graph models has always had one between the work and the gate.
     ///     </para>
     /// </summary>

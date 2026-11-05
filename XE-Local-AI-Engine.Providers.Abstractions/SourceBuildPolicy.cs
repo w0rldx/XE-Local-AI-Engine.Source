@@ -13,10 +13,10 @@ public static partial class SourceBuildPolicy
     /// </remarks>
     public const long RequiredFreeDiskBytes = 15L * 1024 * 1024 * 1024;
 
-    // Fallback CUDA compute-architecture set when nvidia-smi's compute_cap cannot be read or validated. [secMED-1]
+    // Fallback CUDA compute-architecture set when nvidia-smi's compute_cap cannot be read or validated.
     public const string DefaultCudaArchitectures = "75;86;89;120";
 
-    // -j cap: parallel build jobs are min(nproc, this) to bound peak memory/CPU during the build. [secMED-5]
+    // -j cap: parallel build jobs are min(nproc, this) to bound peak memory/CPU during the build.
     public const int MaxBuildJobs = 8;
 
     public static readonly TimeSpan BuildTimeout = TimeSpan.FromHours(2);

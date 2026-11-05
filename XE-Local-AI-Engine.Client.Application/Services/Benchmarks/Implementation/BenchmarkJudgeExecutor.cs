@@ -163,30 +163,8 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             // A verifier that cannot run throws and fails the attempt; it never contributes a 0, which is a score an answer can genuinely earn.
             var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(output.Span),
                 Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
-            var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
-            var answerText = verifiable.Length == 0 ? string.Empty : BenchmarkJudgeVerifiers.AnswerText(graded);
-            List<BenchmarkJudgeVerifierResultV1> verified = [];
-            List<BenchmarkPythonTestsOutcome> executed = [];
-            foreach (var criterion in verifiable)
-            {
-                // Two paths, because only one of them can be unscorable: a pure verifier is a function of the answer text, while
-                // pythonTests runs the answer's code in the compute sandbox and refuses fail-closed — run left unranked — on a host that cannot be trusted to run it.
-                if (BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind))
-                {
-                    var outcome = await _pythonTests.VerifyAsync(criterion, answerText, token);
-                    executed.Add(outcome);
-                    verified.Add(outcome.Result);
-                }
-                else
-                {
-                    verified.Add(BenchmarkJudgeVerifiers.Verify(criterion, answerText));
-                }
-            }
-
-            await RecordPythonTestsArtifactsAsync(work.RunId, attemptId, executed, token);
-
-            IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verified;
-            if (verifiable.Length == policy.Rubric.Criteria.Count)
+            var verifierResults = await VerifyCriteriaAsync(work.RunId, attemptId, policy, graded, token);
+            if (verifierResults.Count == policy.Rubric.Criteria.Count)
             {
                 await CompleteVerifiedAsync(work, policy, verifierResults, token);
                 return;
@@ -211,31 +189,9 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             // The host facts this judging ran on, captured before anything is reserved or spawned. Non-throwing.
             environment = await _environmentFacts.CaptureAsync(runtime.Runtime.Variant, token);
 
-            // Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒ f16), not the project's request. No launch admission (see BenchmarkRunExecutor).
-            // The judge spawns its own process from frozen arguments; a rejection is waited out on ONE BenchmarkWaitBudget shared with the exclusive-spawn wait after it (see BenchmarkAdmissionRetry).
+            // A rejection is waited out on ONE BenchmarkWaitBudget shared with the exclusive-spawn wait after it (see BenchmarkAdmissionRetry).
             var waitBudget = new BenchmarkWaitBudget(_admissionRetry);
-            var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
-                new CapacityRequest
-                {
-                    ModelName = runtime.Model.ModelName,
-                    Role = ModelRole.Chat,
-                    RequiredContextTokens = runtime.Runtime.ContextTokens,
-                    PublishLaunchAdmission = false,
-                    KvCacheType = runtime.Runtime.KvTypeK
-                },
-                new BenchmarkAdmissionContext
-                {
-                    RunId = work.RunId,
-                    Phase = "judge",
-                    RequestedContextTokens = runtime.RequestedContextTokens,
-                    KvCacheType = runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                    RejectedMessage = CapacityRejectedMessage
-                },
-                waitBudget,
-                _logger,
-                token);
-
-            using var reservation = decision.Reservation;
+            using var reservation = await AdmitJudgeAsync(work, runtime, waitBudget, token);
             // Truncation and the silent-incomplete beside it are read through the shared predicates, not local copies. The judging still runs — a truncated answer is a real answer that scored badly —
             // but both the payload and the system prompt say which it is, and ranking must exclude exactly the runs the judge was told about.
             var package = BuildJudgePackage(snapshot, judgedPolicy, runtime, graded,
@@ -299,29 +255,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             var parsed = Merge(BenchmarkJudgeResultParser.Parse(terminal.StreamedContent, judgedPolicy.Rubric, runtime.Model.ModelContentFingerprint),
                 policy.Rubric,
                 verifierResults);
-            var terminalEvent = _events.Reserve(work.RunId,
-                BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-                new BenchmarkRunStreamPayload
-                {
-                    State = BenchmarkRunJudgeStates.Succeeded,
-                    RunVersion = work.Run.Version + 1
-                });
-            var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
-            {
-                RunId = work.RunId,
-                ExpectedWorkVersion = work.Version,
-                JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(parsed),
-                LastStreamSequence = terminalEvent.Sequence,
-                Score = parsed.Score
-            }, CancellationToken.None);
-            _events.PublishReserved(terminalEvent with
-            {
-                Payload = terminalEvent.Payload with
-                {
-                    RunVersion = persisted.Version
-                }
-            });
-            _events.EvictPlaintext(work.RunId);
+            await PersistSucceededAsync(work, parsed, verifiedExecutionKey: null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -343,6 +277,101 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                     : InvocationFailedMessage,
                 environment);
         }
+    }
+
+    /// <summary>Decides every verifiable criterion against the graded answer and records the evidence of the ones that executed code.</summary>
+    private async Task<IReadOnlyList<BenchmarkJudgeVerifierResultV1>> VerifyCriteriaAsync(Guid runId,
+        Guid attemptId,
+        BenchmarkJudgePolicyV1 policy,
+        IReadOnlyList<BenchmarkOutputPart> graded,
+        CancellationToken token)
+    {
+        var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
+        var answerText = verifiable.Length == 0 ? string.Empty : BenchmarkJudgeVerifiers.AnswerText(graded);
+        List<BenchmarkJudgeVerifierResultV1> verified = [];
+        List<BenchmarkPythonTestsOutcome> executed = [];
+        foreach (var criterion in verifiable)
+        {
+            // Two paths, because only one of them can be unscorable: a pure verifier is a function of the answer text, while
+            // pythonTests runs the answer's code in the compute sandbox and refuses fail-closed — run left unranked — on a host that cannot be trusted to run it.
+            if (BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind))
+            {
+                var outcome = await _pythonTests.VerifyAsync(criterion, answerText, token);
+                executed.Add(outcome);
+                verified.Add(outcome.Result);
+            }
+            else
+            {
+                verified.Add(BenchmarkJudgeVerifiers.Verify(criterion, answerText));
+            }
+        }
+
+        await RecordPythonTestsArtifactsAsync(runId, attemptId, executed, token);
+        return verified;
+    }
+
+    /// <summary>Reserves capacity for the judge process; the caller owns the returned reservation across the spawn.</summary>
+    /// <remarks>
+    ///     Admission sizes against the frozen judge runtime's own context and its own frozen KV-cache type (null ⇒ f16), not
+    ///     the project's request. No launch admission (see BenchmarkRunExecutor): the judge spawns its own process from
+    ///     frozen arguments.
+    /// </remarks>
+    private async Task<IDisposable?> AdmitJudgeAsync(BenchmarkClaimedWork work,
+        BenchmarkJudgeRuntimeV1 runtime,
+        BenchmarkWaitBudget waitBudget,
+        CancellationToken token)
+    {
+        var decision = await BenchmarkCapacityAdmission.AdmitAsync(_capacity,
+            new CapacityRequest
+            {
+                ModelName = runtime.Model.ModelName,
+                Role = ModelRole.Chat,
+                RequiredContextTokens = runtime.Runtime.ContextTokens,
+                PublishLaunchAdmission = false,
+                KvCacheType = runtime.Runtime.KvTypeK
+            },
+            new BenchmarkAdmissionContext
+            {
+                RunId = work.RunId,
+                Phase = "judge",
+                RequestedContextTokens = runtime.RequestedContextTokens,
+                KvCacheType = runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                RejectedMessage = CapacityRejectedMessage
+            },
+            waitBudget,
+            _logger,
+            token);
+        return decision.Reservation;
+    }
+
+    /// <summary>Stores a judge verdict: reserves the terminal event, writes the result under it, publishes it and evicts the plaintext.</summary>
+    /// <param name="verifiedExecutionKey">The rank-cohort key of a judging that ran no model; null when the launch checkpoint wrote the key.</param>
+    private async Task PersistSucceededAsync(BenchmarkClaimedWork work, BenchmarkJudgeResultV2 result, string? verifiedExecutionKey)
+    {
+        var terminalEvent = _events.Reserve(work.RunId,
+            BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
+            new BenchmarkRunStreamPayload
+            {
+                State = BenchmarkRunJudgeStates.Succeeded,
+                RunVersion = work.Run.Version + 1
+            });
+        var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
+        {
+            RunId = work.RunId,
+            ExpectedWorkVersion = work.Version,
+            JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(result),
+            LastStreamSequence = terminalEvent.Sequence,
+            Score = result.Score,
+            VerifiedExecutionKey = verifiedExecutionKey
+        }, CancellationToken.None);
+        _events.PublishReserved(terminalEvent with
+        {
+            Payload = terminalEvent.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
+        _events.EvictPlaintext(work.RunId);
     }
 
     /// <summary>Stores each pythonTests run's raw streams, blob first and row second, before any judging step can fail.</summary>
@@ -574,30 +603,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
                 policy.Model.ModelContentFingerprint),
             policy.Rubric,
             verifiers);
-        var terminalEvent = _events.Reserve(work.RunId,
-            BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
-            new BenchmarkRunStreamPayload
-            {
-                State = BenchmarkRunJudgeStates.Succeeded,
-                RunVersion = work.Run.Version + 1
-            });
-        var persisted = await _store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand
-        {
-            RunId = work.RunId,
-            ExpectedWorkVersion = work.Version,
-            JudgeResultJson = BenchmarkJudgeSerialization.SerializeResult(result),
-            LastStreamSequence = terminalEvent.Sequence,
-            Score = result.Score,
-            VerifiedExecutionKey = BenchmarkJudgeExecutionKey.VerifiedSentinel
-        }, CancellationToken.None);
-        _events.PublishReserved(terminalEvent with
-        {
-            Payload = terminalEvent.Payload with
-            {
-                RunVersion = persisted.Version
-            }
-        });
-        _events.EvictPlaintext(work.RunId);
+        await PersistSucceededAsync(work, result, BenchmarkJudgeExecutionKey.VerifiedSentinel);
     }
 
     /// <summary>

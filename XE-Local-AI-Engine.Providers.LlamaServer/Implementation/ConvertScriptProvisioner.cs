@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 
 /// <summary>
 ///     Default <see cref="IConvertScriptProvisioner" />. Fetches the llama.cpp tree at the engine-pinned commit into an
@@ -128,9 +129,9 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
         {
             BestEffortFile.TryDeleteDirectory(workDirectory);
             BestEffortFile.TryDeleteDirectory(stagingDirectory);
-            CreateOwnerOnlyDirectory(ScriptsRoot);
-            CreateOwnerOnlyDirectory(workDirectory);
-            CreateOwnerOnlyDirectory(fetchDirectory);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(ScriptsRoot);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(workDirectory);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(fetchDirectory);
 
             var fetched = await _fetcher.FetchAsync(fetchDirectory, commit, ct).ConfigureAwait(false);
             if (!string.Equals(fetched, commit, StringComparison.OrdinalIgnoreCase))
@@ -138,7 +139,7 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
                 throw new LlamaRuntimeException("The fetched llama.cpp conversion scripts did not match the pinned commit.");
             }
 
-            CreateOwnerOnlyDirectory(stagingDirectory);
+            SourceProcessHardening.CreateOwnerOnlyDirectory(stagingDirectory);
             CopyRequiredFile(fetchDirectory, stagingDirectory, HfToGgufScriptName);
             CopyRequiredFile(fetchDirectory, stagingDirectory, LoraToGgufScriptName);
             CopyRequiredDirectory(Path.Combine(fetchDirectory, GgufPyDirectoryName),
@@ -187,24 +188,15 @@ public sealed class ConvertScriptProvisioner : IConvertScriptProvisioner, IDispo
             throw new LlamaRuntimeException($"The fetched llama.cpp source does not contain {Path.GetFileName(source)}.");
         }
 
-        CreateOwnerOnlyDirectory(destination);
+        SourceProcessHardening.CreateOwnerOnlyDirectory(destination);
         foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
         {
-            CreateOwnerOnlyDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+            SourceProcessHardening.CreateOwnerOnlyDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
         }
 
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             File.Copy(file, Path.Combine(destination, Path.GetRelativePath(source, file)), overwrite: true);
-        }
-    }
-
-    private static void CreateOwnerOnlyDirectory(string path)
-    {
-        _ = Directory.CreateDirectory(path);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
 }

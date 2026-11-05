@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 /// <summary>Reads an Agent node's <c>outputSchema</c>: the small, flat JSON-Schema subset its session must answer in.</summary>
 /// <remarks>
 ///     A flat object of <c>string | number | integer | boolean</c> members, with <c>enum</c>, <c>unmetOn</c> and <c>maxLength</c> on
-///     strings and nothing else. Small on purpose: conditions read scalars by dot path, a flat enum is what makes <c>GRAPH-C4-5</c>
+///     strings and nothing else. Small on purpose: conditions read scalars by dot path, a flat enum is what makes <c>GRAPH-5</c>
 ///     decidable at save, and anything outside the subset is refused rather than ignored. See docs/wiki/25-dev-workflows.md.
 /// </remarks>
 internal static class DevWorkflowOutputSchema
@@ -148,7 +148,7 @@ internal static class DevWorkflowOutputSchema
 
         var values = ParseEnum(schema, type, member);
         var maxLength = ParseMaxLength(schema, type, member);
-        // A value longer than the bound is an answer Violation refuses every time, and GRAPH-C4-5 would still demand an edge for it.
+        // A value longer than the bound is an answer Violation refuses every time, and GRAPH-5 would still demand an edge for it.
         if (values?.Find(value => value.Length > maxLength) is { } tooLong)
         {
             throw new DevWorkflowValidationException($"{member} lists \"{tooLong}\" in its 'enum', which is longer than its 'maxLength' of {maxLength}, "

@@ -13,9 +13,9 @@ import { useTranslation } from "react-i18next";
 
 import { nodeSettingsFieldLabel } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
+import type { NodeSettingsFieldBounds } from "@/features/node-settings/models/NodeSettingsFieldBounds";
 import {
 	containerRuntimeSelectValues,
-	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
 	type NodeSettingsModelOption,
 	shippedDefaults,

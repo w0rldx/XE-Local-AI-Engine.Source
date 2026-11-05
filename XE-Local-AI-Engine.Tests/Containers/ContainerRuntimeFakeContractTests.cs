@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The lying fake as the subject, because it is the seam every later slice's tests stand on.
+///     The lying fake as the subject, because it is the seam the container tests stand on.
 ///     <para>
 ///         What is asserted here is what only the fake can be asked: that each hook actually produces the lie it
 ///         advertises — a daemon cannot be asked to report a capability nobody requested, an anonymous volume, or a

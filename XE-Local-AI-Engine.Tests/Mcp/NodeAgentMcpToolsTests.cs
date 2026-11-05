@@ -927,7 +927,7 @@ public sealed class NodeAgentMcpToolsTests
     [Test]
     public async Task RunAgentAsync_WhenInstructionsExceedBound_RejectsTaskTooLargeWithoutSpawning()
     {
-        // Live re-run J7b: start_agent_run bounded instructions at 16 KiB while run_agent let them through to the context check.
+        // start_agent_run bounds instructions at 16 KiB, so run_agent must too rather than leaving them to the context check.
         var harness = new Harness();
 
         var result = await harness.Tools.RunAgentAsync("say hi", harness.Progress, CancellationToken.None, model: Model, instructions: new string('x', 16 * 1024 + 1));

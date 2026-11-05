@@ -33,7 +33,7 @@ public sealed class AgentUnitFailureClassTests
         AssertEx.Empty(unmapped, $"These failure classes have no cross-unit group: {string.Join(", ", unmapped)}.");
     }
 
-    /// <summary>The table itself, row by row, exactly as the plan's section 4.5 states it.</summary>
+    /// <summary>The table itself, row by row.</summary>
     [Test]
     [Arguments(DevWorkflowFailureClasses.Cancelled, AgentUnitFailureClass.Cancelled)]
     [Arguments(DevWorkflowFailureClasses.Timeout, AgentUnitFailureClass.Timeout)]

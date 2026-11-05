@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
-
+import { type DevelopmentRepository, useDevelopmentRepositories } from "@/core/development/queries/useDevelopmentRepositories";
 import type {
 	CreateDevelopmentRepositoryFromTemplateValues,
 	CreatedDevelopmentRepositoryFromTemplate,
@@ -11,13 +11,8 @@ import type {
 	RegisterDevelopmentTemplateValues,
 } from "@/features/development/components/DevelopmentProjectForm";
 import { useDevelopmentAttemptHub } from "@/features/development/hooks/useDevelopmentAttemptHub";
-import {
-	type DevelopmentRepository,
-	type DevelopmentTemplate,
-	isActiveAttempt,
-} from "@/features/development/models/DevelopmentModels";
+import { type DevelopmentTemplate, isActiveAttempt } from "@/features/development/models/DevelopmentModels";
 import { nextActionLabel, operationId } from "@/features/development/models/DevelopmentStatusModel";
-import { isTerminalDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,
@@ -29,7 +24,6 @@ import {
 	useDevelopmentProject,
 	useDevelopmentProjects,
 	useDevelopmentTaskWorkflowRun,
-	useDevelopmentRepositories,
 	useDevelopmentTemplates,
 	usePreviewDevelopmentPatch,
 	useReconnectDevelopmentRepository,
@@ -38,6 +32,7 @@ import {
 	useRemoveDevelopmentTemplate,
 	useStartDevelopmentNextAction,
 } from "@/features/development/queries/useDevelopment";
+import { isTerminalDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface DevelopmentPageControllerOptions {
 	/** From the route's optional `?project=` / `?task=`. Both seed the INITIAL selection and nothing else. */
@@ -79,11 +74,11 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const repositories = useMemo(() => repositoriesQuery.data ?? [], [repositoriesQuery.data]);
 	const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data]);
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
-	useEffect(() => {
-		if (!selectedProjectId && projects[0]?.id) {
-			setSelectedProjectId(projects[0].id);
-		}
-	}, [projects, selectedProjectId]);
+	// Latched into state rather than derived: the list is ordered by latest update, so a derived first row would switch the
+	// open project whenever another one changed.
+	if (!selectedProjectId && projects[0]?.id) {
+		setSelectedProjectId(projects[0].id);
+	}
 
 	const detail = projectQuery.data;
 	// A project carries MANY tasks: a workflow can decompose one request into a task per child, and the ordinary

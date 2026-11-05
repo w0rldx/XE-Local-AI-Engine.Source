@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { useEjectImageRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
@@ -24,7 +25,6 @@ import {
 } from "@/features/node-settings/models/SourceBuildModels";
 import {
 	useCancelImageRuntimeSourceBuild,
-	useEjectImageRuntime,
 	useImageRuntimeSourceBuildPrerequisites,
 	useImageRuntimeSourceBuildStatus,
 	useImageRuntimeStatus,

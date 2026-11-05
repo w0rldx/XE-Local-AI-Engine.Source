@@ -940,7 +940,7 @@ public sealed class AppUpdateServiceTests
     [Test]
     public async Task GetStatus_WhenTheChannelChangedWithoutACheck_DropsTheOtherChannelsOffer()
     {
-        // Node settings expose UpdateChannel for MCP and the settings surfaces (R7), and that path runs no check.
+        // Node settings expose UpdateChannel for MCP and the settings surfaces, and that path runs no check.
         // Leaving the offer visible would hand a Stable operator an apply button for a Development build.
         var store = StoreWith(AppUpdateChannelNames.Development);
         var factory = DevelopmentFactory(UpToDate(), Offering("1.0.0-rc.2.dev.20260922.1"));

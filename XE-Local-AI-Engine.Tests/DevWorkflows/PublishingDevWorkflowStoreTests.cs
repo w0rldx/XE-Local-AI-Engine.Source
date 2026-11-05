@@ -412,7 +412,7 @@ public sealed class PublishingDevWorkflowStoreTests
         elapsed.Stop();
 
         // A generous bound on purpose: nothing but the test opens that gate, so ANY bounded completion is the claim.
-        // Before this change the settle waited on the collector forever and only the test framework's own timeout ended it.
+        // Without the bound the settle waits on the collector forever and only the test framework's own timeout ends it.
         AssertEx.True(elapsed.Elapsed < Hang,
             $"A collector that ignores cancellation held the settle for {elapsed.ElapsedMilliseconds} ms against a {budget.TotalMilliseconds} ms budget.");
         _ = await harness.Inner.Received(1)

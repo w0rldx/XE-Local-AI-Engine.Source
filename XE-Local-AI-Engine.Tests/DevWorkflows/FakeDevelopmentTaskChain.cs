@@ -588,7 +588,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     ///     apply itself, both of which need a real repository, a real coder attempt and a real reviewer attempt.
     ///     <para>
     ///         The evidence chain those two would enforce is asserted where it is real, by the Development suite's own
-    ///         apply tests, which this phase left untouched.
+    ///         apply tests.
     ///     </para>
     /// </summary>
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,

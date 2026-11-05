@@ -409,7 +409,7 @@ describe("DevWorkflowDetailPage", () => {
 		expect((await screen.findByTestId("dev-workflow-tab-graph")).getAttribute("aria-selected")).toBe("true");
 		expect(screen.getByTestId("dev-workflow-tab-nodes").getAttribute("aria-selected")).toBe("false");
 		// Mantine keeps an inactive panel mounted, which is the point: the table is still the keyboard path through the
-		// run, and every A0 test that finds a row without naming a tab still finds one.
+		// run, and every test that finds a row without naming a tab still finds one.
 		expect(await screen.findByTestId(`dev-workflow-node-row-${nodeRunId}`)).toBeDefined();
 	});
 

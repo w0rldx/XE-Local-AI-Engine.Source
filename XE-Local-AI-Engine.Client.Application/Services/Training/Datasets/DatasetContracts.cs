@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -188,19 +187,6 @@ public sealed record TeacherSampleRecordV1
                || trimmed.Equals("n/a", StringComparison.OrdinalIgnoreCase)
                || trimmed.StartsWith("none ", StringComparison.OrdinalIgnoreCase)
                || trimmed.StartsWith("no tool", StringComparison.OrdinalIgnoreCase);
-    }
-}
-
-/// <summary>Shared serializer settings for every training JSON payload. Web defaults + string enums, matching the wire DTOs.</summary>
-public static class TrainingJson
-{
-    public static JsonSerializerOptions Options { get; } = Create();
-
-    private static JsonSerializerOptions Create()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        options.Converters.Add(new JsonStringEnumConverter());
-        return options;
     }
 }
 

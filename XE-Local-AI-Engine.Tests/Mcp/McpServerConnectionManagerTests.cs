@@ -188,7 +188,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task RefreshAsync_ServerThrowingHttpRequestException_IsIsolated()
     {
-        // MED-1: an HTTP transport failure (HttpRequestException) must be caught per-server, not escape and abort the
+        // An HTTP transport failure (HttpRequestException) must be caught per-server, not escape and abort the
         // whole refresh, so the healthy server still loads and the snapshot stays consistent.
         await using var healthy = await InProcMcpServer.StartAsync("healthy",
             AIFunctionFactory.Create(GetForecast, "get_forecast"));
@@ -645,7 +645,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task SessionEnds_DisposesTheDeadPrimary_SoItsTransportReleasesTheJail()
     {
-        // N-44a: an exited primary stayed attached until a reconnect or disable, so its transport never removed its sandbox jail.
+        // An exited primary must not stay attached until a reconnect or disable, or its transport never removes its sandbox jail.
         await using var server = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var client = new GatedDisposeClient(server.Client, Task.CompletedTask);
         var record = StdioRecord("Weather");
@@ -667,7 +667,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task SessionEnds_ThenTheReconnectedPrimaryEndsBeforeTheCall_FailsTyped()
     {
-        // Review of N-44a: the completion watch detaches a primary that ends right after its handshake, so the call path must fail typed
+        // The completion watch detaches a primary that ends right after its handshake, so the call path must fail typed
         // instead of dereferencing a primary that is already gone.
         await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
@@ -692,7 +692,7 @@ public sealed class McpServerConnectionManagerTests
     [Test]
     public async Task SessionEnds_WhileAReconnectDetachesIt_IsDisposedOnce()
     {
-        // Review of N-44a: a reconnect that detaches the dead primary between the watch's two locks has already disposed it. A client whose
+        // A reconnect that detaches the dead primary between the watch's two locks has already disposed it. A client whose
         // completion is already done runs the watch synchronously inside RefreshAsync, and its warning is where the reconnect cuts in.
         await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));

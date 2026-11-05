@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class IntegrationStreamEventMapperTests
 {
-    /// <summary>Test 10 — the non-terminal content row.</summary>
+    /// <summary>The non-terminal content row.</summary>
     [Test]
     public void Delta_SlicesTheSnapshotAtTheCallersCursor()
     {
@@ -32,7 +32,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal(" world", Text(draft));
     }
 
-    /// <summary>Test 10 — the two tool rows.</summary>
+    /// <summary>The two tool rows.</summary>
     [Test]
     [Arguments(false, true)]
     [Arguments(true, false)]
@@ -110,7 +110,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.False(completed.Payload!.Value.GetProperty("ok").GetBoolean());
     }
 
-    /// <summary>Test 11 — a failed or cancelled run yields no terminal draft at all.</summary>
+    /// <summary>A failed or cancelled run yields no terminal draft at all.</summary>
     [Test]
     [Arguments(InvocationStatus.Failed)]
     [Arguments(InvocationStatus.Cancelled)]
@@ -125,7 +125,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal(" and its tail", Text((await context.EventsAsync())[^1]));
     }
 
-    /// <summary>Test 12 — the stale-snapshot guard.</summary>
+    /// <summary>The stale-snapshot guard.</summary>
     [Test]
     public void Delta_WhenTheSnapshotIsShorterThanTheCursor_YieldsNothingRatherThanThrowing()
     {
@@ -135,7 +135,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Null(IntegrationStreamEventMapper.Delta("exact", contentOffset: 5), "A snapshot with no growth is not an empty delta, it is no delta.");
     }
 
-    /// <summary>Test 13 — the truncation is rune-aware against a BYTE budget.</summary>
+    /// <summary>The truncation is rune-aware against a BYTE budget.</summary>
     [Test]
     [Arguments("漢", 3)]
     [Arguments("😀", 4)]
@@ -153,7 +153,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.False(cut.Contains('\uFFFD', StringComparison.Ordinal), "A surrogate-only guard would leave a replacement character behind for the 3-byte glyph.");
     }
 
-    /// <summary>Test 13 — and the whole glyph survives when the budget reaches it.</summary>
+    /// <summary>And the whole glyph survives when the budget reaches it.</summary>
     [Test]
     public void Completed_KeepsTheGlyphWhenTheBudgetCoversIt()
     {
@@ -162,7 +162,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal("aaa😀", cut);
     }
 
-    /// <summary>Test 14 — coalescing.</summary>
+    /// <summary>Coalescing.</summary>
     [Test]
     public async Task Deltas_RaisedInsideOneWindow_CoalesceIntoASingleContiguousSlice()
     {
@@ -186,7 +186,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal(text.ToString()[1..], Text((await context.EventsAsync())[^1]), "Each snapshot carries the FULL accumulated content, so the coalesced delta is one contiguous slice.");
     }
 
-    /// <summary>Test 15 — the !hasEmitted arm.</summary>
+    /// <summary>The !hasEmitted arm.</summary>
     [Test]
     public async Task FirstDelta_IsEmittedWithoutWaitingForTheWindow()
     {
@@ -200,7 +200,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal("first token", Text((await context.EventsAsync())[0]));
     }
 
-    /// <summary>Test 16 — the residual tail flushes before the completion backstop.</summary>
+    /// <summary>The residual tail flushes before the completion backstop.</summary>
     [Test]
     public async Task Terminal_InsideTheDebounceWindow_FlushesThePendingDeltaBeforeAssistantCompleted()
     {
@@ -217,7 +217,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal("one two three", Text((await context.EventsAsync())[2]));
     }
 
-    /// <summary>Test 17 — the closed latch, terminal arm.</summary>
+    /// <summary>The closed latch, terminal arm.</summary>
     [Test]
     public async Task AfterATerminal_ALaterSnapshotAppendsNothing()
     {
@@ -234,7 +234,7 @@ public sealed class IntegrationStreamEventMapperTests
             "The mapper appends no execution.* event on any path.");
     }
 
-    /// <summary>Test 17a — the closed latch, drain arm.</summary>
+    /// <summary>The closed latch, drain arm.</summary>
     [Test]
     public async Task AfterTheDrain_ALaterSnapshotAppendsNothingAndPersistsNothing()
     {
@@ -251,7 +251,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Empty(context.Store.Events, "Nothing may be persisted after the drain returned, or the terminal is no longer the last row.");
     }
 
-    /// <summary>Test 18 — invocation filtering.</summary>
+    /// <summary>Invocation filtering.</summary>
     [Test]
     public async Task EventsForAnotherInvocation_AppendNothing()
     {
@@ -276,7 +276,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Empty(await context.EventsAsync(), "The dispatcher is node-wide; a run that filtered nothing would stream another turn's tokens to an external caller.");
     }
 
-    /// <summary>Test 20 — the durable subset, and that the drain awaits it.</summary>
+    /// <summary>The durable subset, and that the drain awaits it.</summary>
     [Test]
     public async Task Drain_PersistsToolEventsOnlyAtTheSequencesTheBufferMinted()
     {
@@ -298,7 +298,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal("""{"name":"read_file"}""", persisted[0].DetailJson);
     }
 
-    /// <summary>Test 21 — persistence never runs on the thread that raised the event.</summary>
+    /// <summary>Persistence never runs on the thread that raised the event.</summary>
     [Test]
     public async Task Persistence_RunsOffTheRaisingThread()
     {
@@ -322,7 +322,7 @@ public sealed class IntegrationStreamEventMapperTests
         AssertEx.Equal(expected: 1, context.Store.Events.Count);
     }
 
-    /// <summary>Test 22 — a drain failure is a run failure, not a swallowed one.</summary>
+    /// <summary>A drain failure is a run failure, not a swallowed one.</summary>
     [Test]
     public async Task Drain_WhenTheStoreThrows_Rethrows()
     {
@@ -335,7 +335,7 @@ public sealed class IntegrationStreamEventMapperTests
     }
 
     /// <summary>
-    ///     Test 43 — neither handler may throw. Both dispatcher raise sites are a bare <c>?.Invoke</c> on the runner's
+    ///     Neither handler may throw. Both dispatcher raise sites are a bare <c>?.Invoke</c> on the runner's
     ///     own thread, so an escaping throw would take out the run's streaming loop and skip every later subscriber.
     /// </summary>
     [Test]

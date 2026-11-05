@@ -53,8 +53,8 @@
 #   The fix here is to close the lock fd in the child (`"$@" 9>&-`): the wrapper shell holds the
 #   lock, nothing it spawns can, and the lock is released the moment the wrapper exits — even on a
 #   crash, because the kernel closes the fd. Node reuse and shared compilation stay ENABLED, so
-#   there is no build-speed cost (the previously used workaround was
-#   `dotnet build-server shutdown` + `/nodeReuse:false -p:UseSharedCompilation=false`, which is slow).
+#   there is no build-speed cost, unlike
+#   `dotnet build-server shutdown` + `/nodeReuse:false -p:UseSharedCompilation=false`, which is slow.
 #
 # Usage:
 #   scripts/with-build-lock.sh [options] [--] <command> [args...]

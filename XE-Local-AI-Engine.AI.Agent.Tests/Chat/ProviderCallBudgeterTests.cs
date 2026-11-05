@@ -121,7 +121,7 @@ public sealed class ProviderCallBudgeterTests
     public void Budget_KeepsToolCallAndResult_WhenResultIsProtected_NeverOrphans()
     {
         // The tool CALL is in the droppable range but its RESULT sits in the protected recent-keep window. Dropping the
-        // call alone (as the old index-wise trim did) would leave an orphaned FunctionResultContent — an OpenAI/Azure 400.
+        // call alone (an index-wise trim) would leave an orphaned FunctionResultContent — an OpenAI/Azure 400.
         // The pair must be treated as one unit: because the result is pinned, the whole unit is kept and the plain filler
         // message is dropped instead.
         var messages = new List<ChatMessage>

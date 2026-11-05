@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class ResourceNotFoundExceptionHandlerTests
 {
-    /// <summary>Every domain not-found type that used to have its own handler, plus the NodeChat ones moved onto the base.</summary>
+    /// <summary>Every domain not-found type, including the NodeChat ones.</summary>
     public static IEnumerable<Func<ResourceNotFoundException>> DomainNotFoundExceptions()
     {
         yield return () => new WorkSessionNotFoundException("gone");

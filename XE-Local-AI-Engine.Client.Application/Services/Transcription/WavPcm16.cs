@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 ///     payload of an uploaded WAV, and converts byte counts to audio time.
 /// </summary>
 /// <remarks>
-///     Written by hand rather than taken from a library: the brief rules out NAudio on this path, nothing in the repository
+///     Written by hand rather than taken from a library: nothing in the repository
 ///     writes a RIFF header today, and the whole format is four little-endian integers around a fixed preamble — a dependency
 ///     for forty-four bytes would cost more to license-check than to write. <see cref="BytesPerMillisecond" /> is the single
 ///     conversion constant between a byte count and audio time for the live path, and every millisecond the segmenter reasons

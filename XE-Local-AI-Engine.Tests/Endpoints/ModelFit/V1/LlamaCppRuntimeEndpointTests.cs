@@ -569,8 +569,8 @@ public sealed class LlamaCppRuntimeEndpointTests
                 // Hermetic installed-runtime state. The production IInstalledRuntimeStore reads a MACHINE-GLOBAL file
                 // (LocalApplicationData/XE-Local-AI-Engine/installed-runtime.json) that the test host's per-test
                 // NodeData override does NOT isolate — so on a dev box that has done an in-app source build the real
-                // record (sourceBuildPath set) leaks in and the mapper suppresses updateAvailable ([archMED-2/4]:
-                // source builds are off the prebuilt channel). Inject a fake store so the snapshot alone drives the
+                // record (sourceBuildPath set) leaks in and the mapper suppresses updateAvailable (source builds
+                // are off the prebuilt channel). Inject a fake store so the snapshot alone drives the
                 // asserted updateAvailable/upstream fields. Default: no installed runtime (not a source build).
                 var installedStore = Substitute.For<IInstalledRuntimeStore>();
                 installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns(installedRuntime);

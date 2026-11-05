@@ -76,7 +76,7 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
 
         var vendor = await _vendorProbe.DetectVendorAsync(ct).ConfigureAwait(false);
 
-        // A source build or an operator pin was answered above from the cached signal (no per-call store read). [archHIGH-2]
+        // A source build or an operator pin was answered above from the cached signal (no per-call store read).
         return SelectForVendor(vendor, _os, _arch);
     }
 

@@ -89,7 +89,7 @@ describe("AgentRunsPage", () => {
 		expect(screen.getByText("3 file(s)")).toBeTruthy();
 	});
 
-	it("floors the outcome badge at its full label so the table cannot ellipsize it (R1)", async () => {
+	it("floors the outcome badge at its full label so the table cannot ellipsize it", async () => {
 		server.use(...listRoutes({ items: [runDto()], totalCount: 1 }));
 
 		renderWithProviders(<AgentRunsPage />);
@@ -98,7 +98,7 @@ describe("AgentRunsPage", () => {
 		expect((label.closest(".mantine-Badge-root") as HTMLElement).style.minWidth).toBe("max-content");
 	});
 
-	it("renders each run as a card with its actions in reach on a phone (T1)", async () => {
+	it("renders each run as a card with its actions in reach on a phone", async () => {
 		const originalWidth = window.innerWidth;
 		Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 390 });
 		try {

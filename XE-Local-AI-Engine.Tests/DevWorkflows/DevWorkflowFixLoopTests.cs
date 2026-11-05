@@ -287,7 +287,7 @@ public sealed class DevWorkflowFixLoopTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-4</c>: a fix loop the definition bounded stops when its own cap is spent, not when the run-wide
+    ///     <c>GRAPH-4</c>: a fix loop the definition bounded stops when its own cap is spent, not when the run-wide
     ///     budget runs out. The first failure routes; the second is refused, and the target is left where it was.
     /// </summary>
     [Test]

@@ -5,8 +5,7 @@
 - **Scope:** How an external caller invokes a saved agent on this node, and where that surface lives. It changes no
   existing execution path: chat, the platform hub, benchmarks, the scheduler and inbound MCP keep the runners, the
   lease and the approval rules they have today.
-- **Authority:** Decided by the maintainer on 2026-09-03, from the external-integrations assessment and its five
-  read-only research lanes. The rulings that assessment produced are reproduced in full under **Ruling record**
+- **Authority:** Decided by the maintainer on 2026-09-03. The rulings are reproduced in full under **Ruling record**
   below, so this record stands on its own.
 
 ## Context
@@ -16,13 +15,12 @@ Three facts about this repository shape every decision below. Each was re-opened
 **The process is loopback-only by a bind guard.** `LoopbackBindGuard` kills the process on a routable bind unless
 `Security:AllowNonLoopbackBind` is set, and `LocalApiSecurityMiddleware` guards `/api/local/v1` by peer, `Host` and
 `Origin`. So "expose it on the LAN later" is an explicit opt-out of the node's security posture, not a scope knob that
-a future slice turns. Inbound MCP and the local model proxy are hand-mapped **inside** `/api/local/v1` precisely so
+a later change turns. Inbound MCP and the local model proxy are hand-mapped **inside** `/api/local/v1` precisely so
 they inherit that gate.
 
 **Every `IInvocationRunner` caller already shares one slot.** Chat, the platform hub, benchmarks and the scheduler all
 serialise through a single `SemaphoreSlim(1,1)` lease: `RunSavedAgentHandler` calls
-`ReportInvocationAssignedAsync`, which is the acquisition (`WorkerEventDispatcher.Local`, `ReportInvocationAssignedAsync`). Lane 01
-originally reported the scheduler as bypassing it; `REPORT.md` §0.1 records the correction. Integration executions
+`ReportInvocationAssignedAsync`, which is the acquisition (`WorkerEventDispatcher.Local`, `ReportInvocationAssignedAsync`). Integration executions
 therefore do not need a new admission primitive — they need to queue behind the one that exists, and to reject rather
 than accumulate when that queue is full.
 

@@ -3,6 +3,7 @@ import { IconDownload, IconPlugConnected, IconPlugConnectedX, IconSquare, IconTr
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MessageParts } from "@/core/chat/components/MessageParts";
 import { humanizeBytes } from "@/core/formatting/BytesFormatting";
 import { formatDurationSeconds } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -39,7 +40,6 @@ import {
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { answerText } from "@/features/benchmarks/models/BenchmarkSceneSpec";
 import { formatLatencyMs, formatTokensPerSecond, hasThroughputBreakdown } from "@/features/benchmarks/models/BenchmarkThroughput";
-import { MessageParts } from "@/features/chat/components/MessageParts";
 
 // `three` is its own chunk, fetched only when a run of a `sceneSpec` rubric is opened.
 const BenchmarkSceneViewer = lazy(() => import("@/features/benchmarks/components/BenchmarkSceneViewer"));

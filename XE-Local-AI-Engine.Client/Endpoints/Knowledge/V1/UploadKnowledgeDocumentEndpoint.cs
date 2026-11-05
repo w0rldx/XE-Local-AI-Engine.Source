@@ -43,7 +43,8 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
         ArgumentNullException.ThrowIfNull(extractor);
         _extractor = extractor;
         _embeddingModel = (knowledgeBaseOptions ?? throw new ArgumentNullException(nameof(knowledgeBaseOptions))).Value.EmbeddingModelName;
-        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+        ArgumentNullException.ThrowIfNull(securityOptions);
+        _maxUploadBytes = MultipartUploadLimits.MaxUploadBytes(securityOptions.Value);
     }
 
     public override void Configure()

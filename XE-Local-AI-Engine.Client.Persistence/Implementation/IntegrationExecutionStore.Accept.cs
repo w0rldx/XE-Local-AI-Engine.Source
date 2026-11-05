@@ -197,8 +197,7 @@ public sealed partial class IntegrationExecutionStore
     }
 
     /// <summary>
-    ///     The folded count, and deliberately NOT named <c>CountActiveAsync</c>: that store method was retired when the
-    ///     count moved inside this transaction, and a reviewer grepping for the retired name must not find a hit.
+    ///     The folded count, read inside the admission's transaction.
     /// </summary>
     private static async Task<long> CountActiveExecutionsAsync(SqliteConnection connection,
         SqliteTransaction transaction,

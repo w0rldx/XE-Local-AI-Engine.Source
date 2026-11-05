@@ -3,12 +3,12 @@
 - **Status:** Accepted
 - **Date:** 2026-07-26
 - **Scope:** The six plans implemented in the 2026-07-26 batch
-- **Authority:** Human operator responses in the implementation handoff
+- **Authority:** Human operator responses given before implementation
 
 ## Context
 
 Three scope choices and one embedding-shape choice blocked implementation of the 2026-07-26 plan set. The operator
-answered the structured handoff before implementation:
+answered before implementation:
 
 | Prompt | Operator response |
 |---|---|
@@ -18,7 +18,7 @@ answered the structured handoff before implementation:
 | Nomic Matryoshka output dimension | `512` |
 
 The durable plan text that records these choices was committed after some implementation commits. Commit order therefore
-does not establish when the authority was given; this ADR records the operator's earlier handoff answers so the branch
+does not establish when the authority was given; this ADR records the operator's earlier answers so the branch
 does not rely on implementer-authored status text as its only audit trail.
 
 ## Decision

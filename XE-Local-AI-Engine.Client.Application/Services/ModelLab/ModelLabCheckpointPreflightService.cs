@@ -165,7 +165,7 @@ public sealed class ModelLabCheckpointPreflightService
         }
 
         var config = await readConfig(ct);
-        var steerableBlocks = gguf.BlockCount - (gguf.NextnPredictLayers ?? 0);
+        var steerableBlocks = gguf.SteerableBlockCount;
         result = result with
         {
             CheckpointHiddenSize = config?.HiddenSize,

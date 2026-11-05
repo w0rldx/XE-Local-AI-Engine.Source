@@ -4,7 +4,7 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Schema and backfill coverage for <c>AddIntegrationFoundation</c>: five tables, four columns the brief omits
+///     Schema and backfill coverage for <c>AddIntegrationFoundation</c>: five tables, four notable columns
 ///     (<c>stop_requested_at_utc</c>, <c>output_bytes</c>, <c>principal_id</c> on three tables) and the
 ///     conversation-kind backfill hiding work-session chats.
 /// </summary>
@@ -97,7 +97,7 @@ public sealed class AddIntegrationFoundationMigrationTests
                                                                 AND (SELECT name FROM pragma_index_info(l.name)) = 'request_id';
                                                               """);
         AssertEx.Equal(expected: 0L, Convert.ToInt64(globalUniqueOnRequestId, CultureInfo.InvariantCulture),
-            "Ruling R4-6 REPLACED the global unique index on request_id; two principals may each hold the same request id.");
+            "Request ids are unique per principal, not globally: two principals may each hold the same request id.");
     }
 
     [Test]

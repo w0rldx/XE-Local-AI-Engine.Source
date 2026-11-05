@@ -49,7 +49,6 @@ public static class LlamaCppReleasePins
 
     /// <summary>
     ///     The exact upstream commit SHA <see cref="PinnedTag" /> resolves to on <c>ggml-org/llama.cpp</c>.
-    ///     <c>[secHIGH-1]</c>
     /// </summary>
     /// <remarks>
     ///     The in-app CUDA source build verifies the freshly-cloned tree's checked-out <c>HEAD</c> equals this and

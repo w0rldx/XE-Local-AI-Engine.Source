@@ -189,7 +189,7 @@ class DependabotGroupContractTests(unittest.TestCase):
             {"dependency-name": "typescript", "versions": [">=7"]},
             ignores["typescript"],
         )
-        # @types/node follows the CI Node major (26) and is no longer held back.
+        # @types/node follows the CI Node major (26).
         self.assertNotIn("@types/node", ignores)
 
     def test_groups_are_deliberate_and_non_overlapping_for_current_dependencies(self) -> None:

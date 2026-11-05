@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
 import {
 	agentConfigSchema,
 	chatInputConfigSchema,
@@ -10,6 +11,7 @@ import {
 	decisionModelConfigSchema,
 	edgeConditionSchema,
 	endConfigSchema,
+	graphWorkflowNodeFieldMessages,
 	nodeCommonSchema,
 	pauseConfigSchema,
 	startConfigSchema,
@@ -262,5 +264,27 @@ describe("toolConfigSchema — web_fetch allow-list (mirrors the server save gat
 	it("accepts http and https links, and asks nothing of another tool", () => {
 		expect(issue("web_fetch", ["https://docs.example.com/guide", "http://status.example.com"])).toBeUndefined();
 		expect(issue("read_file", [])).toBeUndefined();
+	});
+});
+
+describe("graphWorkflowNodeFieldMessages", () => {
+	it("reports the kind's own field under its message key", () => {
+		expect(graphWorkflowNodeFieldMessages(defaultNodeData("Agent", "a-1"))).toEqual({
+			instructions: "pages.graphWorkflows.form.instructions.required",
+		});
+	});
+
+	it("reports a field every node carries, alongside the kind's", () => {
+		expect(graphWorkflowNodeFieldMessages(defaultNodeData("Tool", "bad key"))).toEqual({
+			key: "pages.graphWorkflows.form.key.invalid",
+			toolName: "pages.graphWorkflows.form.toolName.required",
+		});
+	});
+
+	it("runs only the common schema for a kind that configures nothing", () => {
+		expect(graphWorkflowNodeFieldMessages(defaultNodeData("Parallel", "p-1"))).toEqual({});
+		expect(graphWorkflowNodeFieldMessages(defaultNodeData("Join", "bad key"))).toEqual({
+			key: "pages.graphWorkflows.form.key.invalid",
+		});
 	});
 });

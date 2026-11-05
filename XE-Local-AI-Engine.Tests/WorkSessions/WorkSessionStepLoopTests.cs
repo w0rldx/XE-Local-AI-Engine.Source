@@ -1016,7 +1016,7 @@ public sealed class WorkSessionStepLoopTests
     ///     session's model is either on it or it is not.
     /// </summary>
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>'s runtime half, at the seam that makes it a rule rather than a snapshot. The development
+    ///     <c>GRAPH-2</c>'s runtime half, at the seam that makes it a rule rather than a snapshot. The development
     ///     workflow checks a node's effective tool projection before it creates the session — but every step re-resolves
     ///     the agent definition by id, and that definition is mutable. Edit it between two steps to add a write/execute
     ///     tool and the next turn would carry it, unchecked, on a node that declared nothing.
@@ -1074,7 +1074,7 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Contains(events,
             entry => entry.EventType == "SessionStatusChanged"
                      && entry.Outcome == nameof(AgentWorkSessionStatus.Failed)
-                     && entry.DetailJson?.Contains("GRAPH-C4-2", StringComparison.Ordinal) == true
+                     && entry.DetailJson?.Contains("GRAPH-2", StringComparison.Ordinal) == true
                      && entry.DetailJson.Contains(WriteToolName, StringComparison.Ordinal),
             "The reason names the tool and the invariant, which is what the owning run then blocks its node run with.");
     }
@@ -1127,7 +1127,7 @@ public sealed class WorkSessionStepLoopTests
             entry => entry.EventType == "SessionStatusChanged"
                      && entry.Outcome == nameof(AgentWorkSessionStatus.Failed)
                      && entry.DetailJson?.Contains("no longer exists", StringComparison.Ordinal) == true
-                     && entry.DetailJson.Contains("GRAPH-C4-2", StringComparison.Ordinal));
+                     && entry.DetailJson.Contains("GRAPH-2", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -1448,7 +1448,7 @@ public sealed class WorkSessionStepLoopTests
     }
 
     /// <summary>
-    ///     FU-5: the pins the caller admitted the session with are what every one of its turns is sent with, and the
+    ///     The pins the caller admitted the session with are what every one of its turns is sent with, and the
     ///     effort travels flagged as a pin — without that flag a bound agent's own pinned effort would win over it.
     /// </summary>
     [Test]

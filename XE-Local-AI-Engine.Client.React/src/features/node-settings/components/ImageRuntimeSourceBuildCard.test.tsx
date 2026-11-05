@@ -103,6 +103,9 @@ vi.mock("@/features/node-settings/queries/useImageRuntime", () => ({
 	useStartImageRuntimeSourceBuild: () => ({ mutate: state.start, isPending: false }),
 	useCancelImageRuntimeSourceBuild: () => ({ mutate: state.cancel, isPending: false }),
 	useRemoveImageRuntimeSourceBuild: () => ({ mutate: state.remove, isPending: false }),
+}));
+
+vi.mock("@/core/loaded-models/queries/useEjectRuntimes", () => ({
 	useEjectImageRuntime: () => ({ mutate: state.eject, isPending: false }),
 }));
 

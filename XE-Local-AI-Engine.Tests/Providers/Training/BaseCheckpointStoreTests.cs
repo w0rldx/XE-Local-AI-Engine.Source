@@ -107,8 +107,8 @@ public sealed class BaseCheckpointStoreTests : IDisposable
             ["model.safetensors"] = Encoding.UTF8.GetBytes("weights")
         };
 
-        // The quant repo carries a different license tag and no safetensors at all — exactly the confusion locked
-        // decision 8 exists to prevent.
+        // The quant repo carries a different license tag and no safetensors at all — exactly the confusion the
+        // store must prevent.
         var quantPayloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             ["config.json"] = Encoding.UTF8.GetBytes("{}"),

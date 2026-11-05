@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
-using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
@@ -24,22 +23,9 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : SourceBuildPrerequi
     }
 
     /// <inheritdoc />
-    public async Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
+    public Task<SourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
     {
-        var rows = await ProbeRowsAsync(token => ProbeBackendToolsAsync(backend, token), ct).ConfigureAwait(false);
-        return new WhisperCppSourceBuildPrerequisiteReport
-        {
-            CanBuild = rows.All(static row => row.Satisfied),
-            Items =
-            [
-                .. rows.Select(static row => new WhisperCppSourceBuildPrerequisiteItem
-                {
-                    Key = row.Key,
-                    Satisfied = row.Satisfied,
-                    Detail = row.Detail
-                })
-            ]
-        };
+        return ProbeReportAsync(token => ProbeBackendToolsAsync(backend, token), ct);
     }
 
     // CUDA is the only accelerated backend whisper has here, so there is no Vulkan branch to mirror the image

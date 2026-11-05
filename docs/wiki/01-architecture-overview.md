@@ -243,7 +243,7 @@ lease). Today it covers core options, auth/connection, invocation, workspace/age
 memory, drafting, eval, golden harvest, scheduling stores, model fit, benchmarks, training datasets,
 capacity, MCP agent runs, playbook retrieval/monitoring, worker infrastructure, model capabilities/MCP,
 AgentHome, Coder, graph workflows, document ingestion, knowledge base, chat, chat stream budget,
-development, the container sandbox, model runtime, images, the training runtime, and training runs.
+development, the container sandbox, model runtime, images, the training runtime, Model Lab, and training runs.
 
 ```
                          ┌──────────────────────────────────────────────────────┐

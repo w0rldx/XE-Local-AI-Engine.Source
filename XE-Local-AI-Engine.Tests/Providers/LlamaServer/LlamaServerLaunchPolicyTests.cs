@@ -226,7 +226,7 @@ public sealed class LlamaServerLaunchPolicyTests
             CancellationToken.None);
 
         AssertEx.False(resident.CpuMoe, "a GPU-resident placement must never emit --cpu-moe.");
-        AssertEx.Null(resident.CpuMoeLayers, "this slice never derives a partial layer count.");
+        AssertEx.Null(resident.CpuMoeLayers, "the policy never derives a partial layer count.");
     }
 
     [Test]

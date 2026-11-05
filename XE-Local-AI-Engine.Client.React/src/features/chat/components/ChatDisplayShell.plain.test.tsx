@@ -6,9 +6,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
-import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 

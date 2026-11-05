@@ -196,7 +196,7 @@ public sealed class OpenApiDocumentTests
             AssertEx.True(paths.TryGetProperty(path, out _), $"Expected source-build path '{path}'.");
         }
 
-        // The superseded CUDA-only twin of this family was removed; nothing may re-publish it.
+        // The CUDA-only twin of this family stays off the document; nothing may publish it.
         AssertEx.False(paths.TryGetProperty("/api/local/v1/model-fit/llamacpp/cuda-build", out _),
             "The legacy cuda-build route family must stay off the local OpenAPI document.");
 

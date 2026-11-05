@@ -53,7 +53,7 @@ describe("CreateWorkSessionDialog", () => {
 		await waitFor(() => expect(submit.disabled).toBe(false));
 	});
 
-	it("lets a keyboard-only user pick the agent inside the modal and returns focus to the trigger (F-28)", async () => {
+	it("lets a keyboard-only user pick the agent inside the modal and returns focus to the trigger", async () => {
 		const onClose = vi.fn();
 		renderWithProviders(
 			<CreateWorkSessionDialog

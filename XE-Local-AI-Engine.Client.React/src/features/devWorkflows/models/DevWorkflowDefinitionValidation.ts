@@ -7,7 +7,7 @@
 // mirrored: a check over a field the form cannot change could only ever fail on a graph the server already accepted.
 // There is no linearity validator either — that is Preview's invariant, not this one's.
 //
-// The four `GRAPH-C4-*` invariant rules ARE mirrored, because the form now authors both fields they read: `requiredCapabilities`
+// The four `GRAPH-*` invariant rules ARE mirrored, because the form now authors both fields they read: `requiredCapabilities`
 // on an Agent node and the graph's own `allowUngatedWrites`. Editing an edge condition or deleting a node breaks the
 // other two. Each is the same question `DevWorkflowGraph` asks, phrased over the wire graph — including the shared
 // `assured` fixpoint, which is keyed on `joinPolicy` and never on node type: keying it on `Join` rejects the shipped
@@ -205,7 +205,7 @@ function augmentedEdges(
 
 /**
  * "Has EVERY run that reaches this node already passed a node with this property?" — the mirror of
- * `DevWorkflowGraph.Assured`, and the one dataflow both `GRAPH-C4-2` and `GRAPH-C4-3` ask.
+ * `DevWorkflowGraph.Assured`, and the one dataflow both `GRAPH-2` and `GRAPH-3` ask.
  *
  * `Assured(v) = P(v) || Combine(inbound of v)` with `Combine(∅) = false`, so an entry node evaluates to `P(entry)` and
  * is NOT initialized false — a definition whose entry IS the gate, or IS the validation, is a valid shape. `Combine` is
@@ -484,7 +484,7 @@ export function validateDevWorkflowGraph(graph: DevWorkflowGraph | undefined): r
 }
 
 /**
- * The four `GRAPH-C4-*` invariants, over the same augmented edge set the server uses. Skipped wholesale on a cyclic graph: the
+ * The four `GRAPH-*` invariants, over the same augmented edge set the server uses. Skipped wholesale on a cyclic graph: the
  * fixpoint below assumes a topological order, and the `cycle` issue already refuses the save.
  */
 function capabilityInvariants(
@@ -500,7 +500,7 @@ function capabilityInvariants(
 	const issues: DevWorkflowGraphIssue[] = [];
 	const augmented = augmentedEdges(nodes, edges);
 
-	// GRAPH-C4-1, in the server's own order: the gates that own a dead edge are named first, because a chain of gates
+	// GRAPH-1, in the server's own order: the gates that own a dead edge are named first, because a chain of gates
 	// strands every gate above the broken one and naming those sends the operator to fix the wrong line.
 	const dead = deadGateEdges(nodes, graph.edges ?? []);
 	if (dead.length > 0) {
@@ -537,7 +537,7 @@ function capabilityInvariants(
 		}
 	}
 
-	// GRAPH-C4-1, step four, narrowed exactly as the server narrows it: a Tool node in Validate mode inside a
+	// GRAPH-1, step four, narrowed exactly as the server narrows it: a Tool node in Validate mode inside a
 	// materialization template with no out-edge would count as an end of the run, and a decomposition that finds no
 	// work writes a succeeded verdict row under that very key — so the run would read as finished though its real tail
 	// never ran. Only validation nodes, because they are the only template keys that row is ever written for: an
@@ -563,7 +563,7 @@ function capabilityInvariants(
 		}
 	}
 
-	// GRAPH-C4-3, the structural half: every path into an apply node passes a Tool node in Validate mode.
+	// GRAPH-3, the structural half: every path into an apply node passes a Tool node in Validate mode.
 	const applies = nodes.filter((node) => isDevWorkflowApplyToolMode(node.toolMode));
 	if (applies.length > 0) {
 		const validated = assured(

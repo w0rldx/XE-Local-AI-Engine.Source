@@ -461,7 +461,7 @@ public sealed class InvocationRunnerApprovalTests
 
         AssertEx.Equal(expected: 2, approvals.Count, "script execution is outside the memo allow-list and must be approved every single time");
 
-        // The other half of the audit fix: a provider-injected tool that is not in the package offer must still audit
+        // A provider-injected tool that is not in the package offer must still audit
         // under its real risk category rather than the fail-closed Unknown.
         await auditRecorder.Received(2)
                            .RecordAsync(Arg.Any<Guid?>(),

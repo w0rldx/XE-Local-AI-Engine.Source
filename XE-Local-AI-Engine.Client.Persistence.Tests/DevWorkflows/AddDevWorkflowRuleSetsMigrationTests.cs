@@ -43,7 +43,7 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
             "The resolver reads every ENABLED rule set, so that is the one indexed column — and it is deliberately not unique.");
     }
 
-    /// <summary>T-10: the migrated schema and the one EnsureCreated builds must agree, or a fresh box and an upgraded one diverge.</summary>
+    /// <summary>The migrated schema and the one EnsureCreated builds must agree, or a fresh box and an upgraded one diverge.</summary>
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {

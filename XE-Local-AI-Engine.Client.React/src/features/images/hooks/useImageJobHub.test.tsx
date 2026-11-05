@@ -6,8 +6,8 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
-import { IMAGE_JOB_STATUS_CHANGED } from "@/features/images/models/ImageModels";
 import { imageJobProgressKey, useImageJobHub } from "@/features/images/hooks/useImageJobHub";
+import { IMAGE_JOB_STATUS_CHANGED } from "@/features/images/models/ImageJobProgressModels";
 
 // Captured event handlers registered via connection.on, so a test can drive a server push by name.
 const registeredHandlers = new Map<string, (payload: unknown) => void>();

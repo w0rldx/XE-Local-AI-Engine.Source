@@ -7,13 +7,13 @@ import type {
 	XeLocalAiEngineClientServicesChatNodeChatMessagePart,
 	XeLocalAiEngineClientServicesChatNodeChatMessageSource,
 } from "@/core/api/generated";
+import type { ChatMessagePart, ToolCallState } from "@/core/models/ChatMessageParts";
 import { persistableReasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
 	ChatMessageModel,
-	ChatMessagePart,
 	ChatMessageRevisions,
 	ChatMessageSource,
 	ChatOrigin,
@@ -21,7 +21,6 @@ import type {
 	ChatToolCall,
 	MessageStatus,
 	ReasoningEffort,
-	ToolCallState,
 } from "@/features/chat/models/ChatModels";
 import { type NodeChatStreamEventDto, nodeChatToolStreamEventTypes } from "@/features/chat/models/NodeChatStreamTypes";
 

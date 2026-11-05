@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -617,9 +618,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             return null;
         }
 
-        var ordered = values.OrderBy(static value => value).ToArray();
-        var index = Math.Clamp((int)Math.Ceiling(percentile * ordered.Length) - 1, 0, ordered.Length - 1);
-        return ordered[index];
+        return BenchmarkStatistics.NearestRank(values.OrderBy(static value => value).ToArray(), percentile);
     }
 
     private static double? MedianNullable(IEnumerable<double?> values)

@@ -1,17 +1,14 @@
 // Server state for the Graph Workflows surface. Every call goes through the generated hey-api `*Options()` /
 // `*Mutation()` adapters, exactly as `useDevWorkflows.ts` does — no hand-wired axios and no hand-written request
-// types. The paged event feed uses the generated `*InfiniteOptions` with its own cursor rules.
+// types. The paged event feed and the picker option lists sit beside this file.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
 // matches them by PARTIAL DEEP equality. So `[{ _id, path: { runId } }]` invalidates every cached variant of one
 // endpoint for one run while leaving the other runs' caches alone.
 
-import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-	exportGraphWorkflowDefinition,
-	type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse,
-} from "@/core/api/generated";
+import { exportGraphWorkflowDefinition } from "@/core/api/generated";
 import {
 	cancelGraphWorkflowRunMutation,
 	createGraphWorkflowDefinitionMutation,
@@ -23,13 +20,9 @@ import {
 	getGraphWorkflowNodeRunOptions,
 	getGraphWorkflowRunOptions,
 	importGraphWorkflowDefinitionMutation,
-	listAgentDefinitionsOptions,
 	listGraphWorkflowConversationRunsOptions,
 	listGraphWorkflowDefinitionsOptions,
-	listGraphWorkflowRunEventsInfiniteOptions,
 	listGraphWorkflowRunsOptions,
-	listGraphWorkflowToolsOptions,
-	listLocalModelsOptions,
 	runGraphWorkflowDesignerTurnMutation,
 	sendGraphWorkflowChatMessageMutation,
 	startGraphWorkflowRunMutation,
@@ -37,12 +30,7 @@ import {
 	updateGraphWorkflowDefinitionMutation,
 	validateGraphWorkflowDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { EXTERNAL_PROVIDER, LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
-import type {
-	GraphWorkflowRunEventResponse,
-	ListGraphWorkflowRunEventsResponse,
-} from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const graphWorkflowQueryIds = {
@@ -80,13 +68,13 @@ export const GRAPH_WORKFLOW_RUN_PAGE_SIZE = 200;
 /** The chat reads a conversation's newest bound runs only; the endpoint's own default page. Older runs show no activity. */
 export const GRAPH_WORKFLOW_CONVERSATION_RUN_PAGE_SIZE = 20;
 
-interface FeedOptions {
+export interface FeedOptions {
 	/** Polling cadence while the hub is unavailable. `undefined` (the live case) means no polling at all. */
 	readonly pollIntervalMs?: number;
 	readonly enabled?: boolean;
 }
 
-function feedQuerySettings(id: string | undefined, options: FeedOptions) {
+export function feedQuerySettings(id: string | undefined, options: FeedOptions) {
 	return {
 		enabled: (options.enabled ?? true) && Boolean(id),
 		refetchInterval: options.pollIntervalMs ?? false,
@@ -173,166 +161,6 @@ export function useSettledGraphWorkflowNodeRuns(
 						: [],
 				),
 			),
-	});
-}
-
-/** One ascending, deduplicated trail plus the first page's truncation flag. See {@link useGraphWorkflowRunEvents}. */
-export interface GraphWorkflowEventFeed {
-	readonly events: readonly GraphWorkflowRunEventResponse[];
-	readonly replayTruncated: boolean;
-}
-
-/**
- * The event log — the one feed that grows without bound, so the one that is cursor-paged. `afterSeq` is an EXCLUSIVE
- * lower bound, the rows come back ascending, and the server caps a page at `EventReplayLimit` (200) reporting
- * `replayTruncated` when it read one row past that cap. There is no `limit` parameter to grow instead.
- *
- * Paging runs FORWARD from sequence 0: the trail is the run's audit history and a run's first event is the one that
- * explains the rest. `lastSeq` is the highest sequence the page actually carried — the server's own resume rule, and
- * exactly what the hub snapshot hands back — so the next cursor is that number. Requiring it to ADVANCE is what stops
- * a "load more" loop if a page ever reports truncation without carrying a higher sequence.
- *
- * Built on the generated `listGraphWorkflowRunEventsInfiniteOptions` (`afterSeq` is a configured pagination keyword):
- * a numeric page param becomes `query.afterSeq`. Its key still carries `_id` and `path`, so
- * `graphWorkflowInvalidationKey(events, { runId })` matches it by partial deep equality and the hub's pings land.
- *
- * A ping invalidates this query and TanStack then refetches every loaded page in order, recomputing each cursor from
- * the page before it. Events are append-only and never re-stamped, so the cursors are stable.
- */
-export function useGraphWorkflowRunEvents(runId: string | undefined, options: FeedOptions = {}) {
-	// The first page's request, which is what this cache entry IS: the whole feed, from the start of the log.
-	const { queryKey, queryFn } = listGraphWorkflowRunEventsInfiniteOptions({
-		path: { runId: runId ?? "" },
-		query: { afterSeq: 0 },
-	});
-	return useInfiniteQuery({
-		queryKey,
-		queryFn,
-		initialPageParam: 0,
-		// Every page param this feed mints is a number; the generated type also admits a `{ query }` object.
-		getNextPageParam: (lastPage: ListGraphWorkflowRunEventsResponse, _pages, lastPageParam) =>
-			lastPage.replayTruncated === true && typeof lastPageParam === "number" && (lastPage.lastSeq ?? 0) > lastPageParam
-				? lastPage.lastSeq
-				: undefined,
-		// One ascending list, deduplicated on the sequence: an overlap at a page boundary — a refetch racing a
-		// `fetchNextPage` — must not render a row twice under a repeated React key. Sequences are strictly increasing
-		// but NOT contiguous (the counter is shared with the node runs), so this sorts on the number itself.
-		//
-		// `replayTruncated` comes from the FIRST page: it is the answer to "is this list the whole run", which is what
-		// the events tab says out loud rather than presenting a silently short trail as the full history.
-		select: (data): GraphWorkflowEventFeed => ({
-			events: [
-				...new Map(data.pages.flatMap((page) => page.events ?? []).map((event) => [event.seq ?? 0, event])).values(),
-			].toSorted((left, right) => (left.seq ?? 0) - (right.seq ?? 0)),
-			replayTruncated: data.pages[0]?.replayTruncated === true,
-		}),
-		...feedQuerySettings(runId, options),
-	});
-}
-
-/**
- * The tools a Tool node may name. Already filtered server-side to the runnable envelope (`ReadLocal` and no composed
- * approval), so the picker offers exactly the runnable set and must NEVER re-derive eligibility here.
- */
-export function useGraphWorkflowTools(options: FeedOptions = {}) {
-	return useQuery({
-		...listGraphWorkflowToolsOptions(),
-		enabled: options.enabled ?? true,
-	});
-}
-
-/**
- * Agent definitions, for an Agent node's optional `agentDefinitionId`. Read straight off the generated client rather
- * than through `features/agents`' own hook: this needs the ids and names and nothing else, and reaching into another
- * feature for a two-field projection is architecture debt the dependency baseline would have to carry forever.
- */
-export function useGraphWorkflowAgentOptions(options: FeedOptions = {}) {
-	return useQuery({
-		...listAgentDefinitionsOptions(),
-		enabled: options.enabled ?? true,
-		select: (data) =>
-			(data.items ?? []).map((agent) => ({
-				value: agent.id,
-				label: agent.name,
-				requiresTools: agent.allowedToolNames.length > 0 || agent.kind === "Orchestrator",
-			})),
-	});
-}
-
-// The catalog's cloud provider tags (backend `LocalModelProviders`). Duplicated from the chat feature's picker on
-// purpose: a feature never imports another feature, and two string constants do not earn a core module.
-const CODEX_PROVIDER = "CodexOAuth";
-const AZURE_FOUNDRY_PROVIDER = "AzureFoundry";
-
-/**
- * Where a catalog entry leaves the node, for the picker label; undefined for a node-local model. An external entry
- * is cloud unless it positively declares `local`, the same fail-closed reading the backend's trust resolver takes.
- */
-function cloudProviderOf(model: LocalModelResponse): string | undefined {
-	if (model.provider === CODEX_PROVIDER) {
-		return "Codex";
-	}
-	if (model.provider === AZURE_FOUNDRY_PROVIDER) {
-		return "Azure AI Foundry";
-	}
-	if (model.provider === EXTERNAL_PROVIDER && model.declaredLocality !== "local") {
-		return model.externalConnectionName ?? model.externalConnectionId ?? EXTERNAL_PROVIDER;
-	}
-	return undefined;
-}
-
-function toGraphWorkflowModelOption(model: LocalModelResponse) {
-	const cloudProvider = cloudProviderOf(model);
-	return {
-		value: model.modelName ?? "",
-		label: model.displayLabel ?? model.modelName ?? "",
-		isToolCapable: model.isToolCapable,
-		...(cloudProvider === undefined ? {} : { cloudProvider }),
-	};
-}
-
-/**
- * Chat models on this node, for an Agent node's `model` override. Same filter the chat picker applies (`kind` is
- * `Chat`), because a graph node that names a non-chat model is a run that fails at dispatch. Cloud and external
- * entries are listed too; whether a cloud one may run unattended is the server's call at run start.
- */
-export function useGraphWorkflowModelOptions(options: FeedOptions = {}) {
-	return useQuery({
-		...listLocalModelsOptions(),
-		enabled: options.enabled ?? true,
-		select: (data) => (data.items ?? []).filter((model) => model.kind === "Chat").map(toGraphWorkflowModelOption),
-	});
-}
-
-/**
- * An LLM Call (and the DecisionModel lane lowered onto it) dispatches through an installed node-managed GGUF chat
- * model, or through a cloud one. An external endpoint declared `local` is neither, so the run would refuse it.
- */
-export function useGraphWorkflowLlmModelOptions(options: FeedOptions = {}) {
-	return useQuery({
-		...listLocalModelsOptions(),
-		enabled: options.enabled ?? true,
-		select: (data) =>
-			(data.items ?? [])
-				.filter(
-					(model) => model.kind === "Chat" && (model.provider === LLAMACPP_PROVIDER || cloudProviderOf(model) !== undefined),
-				)
-				.map(toGraphWorkflowModelOption),
-	});
-}
-
-/**
- * A `systemone` DecisionModel node runs a native decision model through llama-server, so only installed
- * node-managed GGUFs classified `Decision` qualify. Same list query as above, so no extra request.
- */
-export function useGraphWorkflowDecisionModelOptions(options: FeedOptions = {}) {
-	return useQuery({
-		...listLocalModelsOptions(),
-		enabled: options.enabled ?? true,
-		select: (data) =>
-			(data.items ?? [])
-				.filter((model) => model.kind === "Decision" && model.provider === LLAMACPP_PROVIDER)
-				.map(toGraphWorkflowModelOption),
 	});
 }
 
@@ -438,11 +266,6 @@ export function useStartGraphWorkflowRun() {
 }
 
 /**
- * The runs bound to one chat conversation, newest first, each with what the chat page renders it from (definition
- * name, trigger message, a parked ChatInput's prompt). This is what puts a reloaded conversation back into workflow
- * mode. A node with Graph Workflows switched off answers 404, which the chat reads as "no bound runs".
- */
-/**
  * Whether this node serves graph workflows at all — the ONE route that still answers when the operator switched the
  * feature off (`GraphWorkflows:Enabled=false`), every other one being 404ed with a bodyless response the client cannot
  * tell from a broken route. The route gate, the nav entry and chat workflow mode read it, so a disabled node hides the
@@ -456,6 +279,11 @@ export function useGraphWorkflowCapability(options: { readonly enabled?: boolean
 	});
 }
 
+/**
+ * The runs bound to one chat conversation, newest first, each with what the chat page renders it from (definition
+ * name, trigger message, a parked ChatInput's prompt). This is what puts a reloaded conversation back into workflow
+ * mode. A node with Graph Workflows switched off answers 404, which the chat reads as "no bound runs".
+ */
 export function useGraphWorkflowConversationRuns(conversationId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
 		...listGraphWorkflowConversationRunsOptions({
@@ -560,7 +388,7 @@ export function useDecideGraphWorkflowNodeRun() {
 }
 
 /**
- * Steering a running Agent / LLM Call (§3.6). 202 means the intent is committed; the dispatcher applies it on its next
+ * Steering a running Agent / LLM Call (wiki page 21 §3.7). 202 means the intent is committed; the dispatcher applies it on its next
  * tick, so this re-reads the run, its trail, the node and the bound-run list rather than predicting the reset.
  */
 export function useSteerGraphWorkflowNodeRun() {

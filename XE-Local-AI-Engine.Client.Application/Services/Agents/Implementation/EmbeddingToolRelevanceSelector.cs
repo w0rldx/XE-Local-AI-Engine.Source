@@ -1,12 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
@@ -106,19 +106,6 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         return $"{candidate.Name} {candidate.Description}";
     }
 
-    private static float CosineScore(ReadOnlyMemory<float> query, ReadOnlyMemory<float> candidate)
-    {
-        // Mismatched-dimension or empty vectors carry no comparable signal; treat as no overlap so the deterministic
-        // index tiebreak orders them. CosineSimilarity returns NaN for a zero-magnitude vector — guard that to 0 too.
-        if (query.IsEmpty || candidate.IsEmpty || query.Length != candidate.Length)
-        {
-            return 0f;
-        }
-
-        var score = TensorPrimitives.CosineSimilarity(query.Span, candidate.Span);
-        return float.IsNaN(score) ? 0f : score;
-    }
-
     // The single lexical-fallback site: one text-free Warning, then the deterministic lexical selection, which offers
     // what an unconfigured node would have. A null exception is the non-exceptional degrade, such as a short response.
     private Task<ToolRelevanceSelection> FallBackToLexicalAsync(string? query,
@@ -198,7 +185,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
                        .Select((candidateIndex, position) => new
                        {
                            Index = candidateIndex,
-                           Score = CosineScore(queryVector, candidateVectors[position])
+                           Score = KnowledgeVectorMath.CosineScore(queryVector, candidateVectors[position])
                        })
                        .OrderByDescending(static scored => scored.Score)
                        .ThenBy(static scored => scored.Index)

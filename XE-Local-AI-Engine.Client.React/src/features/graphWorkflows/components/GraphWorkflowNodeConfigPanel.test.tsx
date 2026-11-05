@@ -26,10 +26,10 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { GraphWorkflowNodeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowNodeConfigPanel";
-import {
-	defaultNodeData,
-	type GraphWorkflowCanvasNodeData,
-	type GraphWorkflowGraphSettings,
+import { defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
+import type {
+	GraphWorkflowCanvasNodeData,
+	GraphWorkflowGraphSettings,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { type GraphWorkflowNodeKind, graphWorkflowNodeKinds } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { graphWorkflowTools } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";

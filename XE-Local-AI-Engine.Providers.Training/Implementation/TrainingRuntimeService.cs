@@ -157,7 +157,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             // must not delete the winning install's work tree or repeat the probe.
             Recover();
             var report = await _prerequisiteProbe.ProbeAsync(ct).ConfigureAwait(false);
-            if (!report.CanInstall)
+            if (!report.CanBuild)
             {
                 var outcome = report.Items.Any(static item =>
                     string.Equals(item.Key, TrainingRuntimePrerequisiteKeys.FreeDisk, StringComparison.Ordinal) && !item.Satisfied)
@@ -565,7 +565,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             }
 
             var home = ReadVenvHome(TrainingRuntimeLayout.ActiveVenv(_cacheRoot));
-            if (home is null || !IsUnder(home, _toolchain.PythonInstallDirectory))
+            if (home is null || !PathContainment.IsUnderRoot(home, _toolchain.PythonInstallDirectory))
             {
                 return;
             }
@@ -604,12 +604,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
 
         return null;
-    }
-
-    private static bool IsUnder(string path, string directory)
-    {
-        return Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar,
-            StringComparison.Ordinal);
     }
 
     private InstalledTrainingRuntimeState? ReadInstalledState()

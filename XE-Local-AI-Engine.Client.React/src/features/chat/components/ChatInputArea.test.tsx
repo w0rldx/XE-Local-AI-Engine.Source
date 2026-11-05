@@ -5,9 +5,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { type ChatUiCapabilities, defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
-import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatUiCapabilities, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The web review switch reads node settings and tutorial state through TanStack Query; its own behavior is covered in

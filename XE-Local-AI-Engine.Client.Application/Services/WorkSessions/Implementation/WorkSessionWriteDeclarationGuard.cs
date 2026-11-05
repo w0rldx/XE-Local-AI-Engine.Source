@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 
 /// <summary>
 ///     Whether the agent a work session is bound to would really be offered a tool that writes files or runs commands:
-///     <c>GRAPH-C4-2</c>'s runtime half, asked in ONE place so the two callers cannot answer differently.
+///     <c>GRAPH-2</c>'s runtime half, asked in ONE place so the two callers cannot answer differently.
 /// </summary>
 /// <remarks>
 ///     Its only armed caller is the development-workflow lane, so the refusal speaks that lane's vocabulary — the
@@ -85,7 +85,7 @@ internal sealed class WorkSessionWriteDeclarationGuard
     ///     The refusal a turn's OWN tool offer earns, or <see langword="null" /> when it carries no undeclared write.
     /// </summary>
     /// <remarks>
-    ///     The enforcing half of <c>GRAPH-C4-2</c>, which is why it takes the offer rather than an id: the send path
+    ///     The enforcing half of <c>GRAPH-2</c>, which is why it takes the offer rather than an id: the send path
     ///     calls it with the very list it is about to put in the runtime package, leaving nothing between the decision
     ///     and the send for an operator to edit. A turn offered no tools at all carries no write and is not refused.
     /// </remarks>
@@ -104,9 +104,9 @@ internal sealed class WorkSessionWriteDeclarationGuard
         return bindingResolved
             ? $"This node is bound to an agent that will be offered '{write.Name}', which can write files or run commands outside this node's sandbox, and the node "
               + "declares no 'WriteExecute' capability. Declare it on the node — which then needs a human gate on every path into it — or set 'allowUngatedWrites' on "
-              + "this template and say why (invariant GRAPH-C4-2)."
+              + "this template and say why (invariant GRAPH-2)."
             : $"This node is bound to an agent definition that no longer exists, so its turn falls back to the default assistant — which is offered '{write.Name}', a "
               + "tool that can write files or run commands outside this node's sandbox — while the node declares no 'WriteExecute' capability. Restore the agent, bind "
-              + "another, or set 'allowUngatedWrites' on this template and say why (invariant GRAPH-C4-2).";
+              + "another, or set 'allowUngatedWrites' on this template and say why (invariant GRAPH-2).";
     }
 }

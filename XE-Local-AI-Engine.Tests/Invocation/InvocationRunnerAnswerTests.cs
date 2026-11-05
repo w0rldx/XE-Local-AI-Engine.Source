@@ -236,7 +236,7 @@ public sealed class InvocationRunnerAnswerTests
         await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
     }
 
-    /// <summary>Model-matrix V2: the 0.8B reopened the think block in content after the budget. The block is reasoning.</summary>
+    /// <summary>On the model matrix the 0.8B reopened the think block in content after the budget. The block is reasoning.</summary>
     [Test]
     public async Task RunAsync_WhenAThinkingModelsAnswerCarriesAWholeThinkBlock_ReclassifiesTheBlockAsReasoning()
     {

@@ -146,7 +146,7 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
-    ///     The Slice B1 shape without the sandbox: a passing tool node succeeds, keeps its report as a run artifact, and
+    ///     Without the sandbox, a passing tool node succeeds, keeps its report as a run artifact, and
     ///     writes the output document a conditional edge routes on.
     /// </summary>
     [Test]
@@ -289,8 +289,8 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
-    ///     The B3 gate on the sandbox lane: a retryable verdict is tried again, and the second attempt passes. It also
-    ///     pins the entry condition that made a Tool retry unsafe until now — the second attempt prepares a workspace of
+    ///     On the sandbox lane, a retryable verdict is tried again, and the second attempt passes. It also
+    ///     pins the entry condition a safe Tool retry needs — the second attempt prepares a workspace of
     ///     its OWN, because the provider reuses a preserved worktree and the base commit recorded in its manifest, so an
     ///     identity constant across attempts would re-validate attempt one's commit in attempt one's tree.
     /// </summary>

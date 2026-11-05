@@ -213,6 +213,62 @@ public sealed class TrainingExportServiceTests : IDisposable
         AssertEx.Contains(harness.LogText, "not inside the run's staged directory", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     The gate stands in front of a recursive delete. The staged directory is not its own descendant in either
+    ///     spelling, and a directory that merely shares its name as a prefix is not inside it.
+    /// </summary>
+    [Test]
+    [Arguments("")]
+    [Arguments("/")]
+    [Arguments("-other/sibling.gguf")]
+    public async Task DeleteArtifact_WithTheStagedRootOrAPrefixSibling_LeavesTheBytes(string suffix)
+    {
+        using var harness = Harness.Create(this);
+        var kept = harness.StageArtifact("merged-Q4_K_M.gguf");
+        var staged = Path.GetDirectoryName(kept.Path)!;
+        var sibling = harness.StageArtifact(staged + "-other/sibling.gguf", absolute: true).Path;
+        var artifact = harness.PointArtifactAt(kept, staged + suffix);
+
+        await harness.DeleteArtifactAsync(artifact.Id, artifact.Version);
+
+        await harness.Store.Received(1).DeleteArtifactAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>());
+        AssertEx.True(File.Exists(kept.Path), "The staged directory's contents survive a path that names the directory itself.");
+        AssertEx.True(File.Exists(sibling), "A sibling sharing the staged directory's name as a prefix is outside it.");
+        AssertEx.Contains(harness.LogText, "not inside the run's staged directory", StringComparison.Ordinal);
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("\0invalid")]
+    public async Task DeleteArtifact_WithAMalformedPath_RemovesTheRowAndLogsTheLeakInsteadOfThrowing(string path)
+    {
+        using var harness = Harness.Create(this);
+        var artifact = harness.PointArtifactAt(harness.StageArtifact("merged-Q4_K_M.gguf"), path);
+
+        await harness.DeleteArtifactAsync(artifact.Id, artifact.Version);
+
+        await harness.Store.Received(1).DeleteArtifactAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>());
+        AssertEx.Contains(harness.LogText, "not inside the run's staged directory", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task DiscardQuality_WithAMalformedPath_ReturnsTheTombstoneWithCleanupStillPending()
+    {
+        using var harness = Harness.Create(this);
+        var artifact = harness.PointArtifactAt(harness.StageArtifact("merged-Q4_K_M.gguf") with
+        {
+            Version = 3,
+            DiscardedAtUtc = 123,
+            DiscardReason = "original reason",
+            DiscardCleanupPending = true
+        }, "\0invalid");
+
+        var result = await harness.DiscardQualityAsync(artifact.Id, artifact.Version, "retry");
+
+        AssertEx.True(result.DiscardCleanupPending, "The bytes were not removed, so the tombstone keeps saying so.");
+        _ = await harness.Store.DidNotReceive().CompleteArtifactDiscardCleanupAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task DiscardQuality_AtomicallyTombstonesBeforeRemovingStagedBytes()
     {
@@ -526,6 +582,14 @@ public sealed class TrainingExportServiceTests : IDisposable
             // Registered after the blanket Arg.Any setup, so this id resolves to THIS record.
             _ = Store.GetArtifactAsync(artifact.Id, Arg.Any<CancellationToken>()).Returns(artifact);
             return artifact;
+        }
+
+        /// <summary>The same row recording <paramref name="path" />, a value no file has to back.</summary>
+        public TrainingArtifactRecord PointArtifactAt(TrainingArtifactRecord artifact, string path)
+        {
+            var pointed = artifact with { Path = path };
+            _ = Store.GetArtifactAsync(pointed.Id, Arg.Any<CancellationToken>()).Returns(pointed);
+            return pointed;
         }
 
         /// <summary>

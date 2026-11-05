@@ -127,7 +127,7 @@ public sealed class SecretValueRedactorTests
     [Test]
     public async Task ForCommand_AWindowsPathWithADriveColon_IsNotReadAsAHeader()
     {
-        // Round-3 trap: "C:\tools\..." must not register the text after the drive colon as a header value.
+        // "C:\tools\..." must not register the text after the drive colon as a header value.
         var values = SecretValueRedactor.ForCommand([], [@"C:\tools\server.js", "/c", @"srv C:\tools\other.js"], minLength: 8).ToList();
 
         AssertEx.False(values.Contains(@"\tools\server.js"), "the part after a drive colon is not a header value");

@@ -42,7 +42,7 @@ internal sealed partial class SubAgentSpawnService
         if (resolved is null)
         {
             // The resolver seam is nullable for every caller, so guard it here too: reject with the sanitized
-            // unresolved reason rather than degrade to raw instructions (the very bypass this fix closes).
+            // unresolved reason rather than degrade to raw instructions, which would bypass the definition.
             return null;
         }
 

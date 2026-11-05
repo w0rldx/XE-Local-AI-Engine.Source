@@ -450,7 +450,7 @@ public sealed class DevWorkflowDefinitionSeederTests
 
     /// <summary>
     ///     Both verification nodes hand in a verdict whose <c>refused</c> blocks the run and the refused task ids beside it; the
-    ///     template parsing at all is <c>GRAPH-C4-5</c> accepting that contract on the unconditional edge into the integration gate.
+    ///     template parsing at all is <c>GRAPH-5</c> accepting that contract on the unconditional edge into the integration gate.
     /// </summary>
     [Test]
     [Arguments(DevWorkflowDefinitionSeeder.FeatureDevelopmentSlug)]
@@ -469,7 +469,7 @@ public sealed class DevWorkflowDefinitionSeederTests
 
     /// <summary>
     ///     The intake template ships valid, its classifier declares the triage contract, and every answer that contract
-    ///     allows has its own edge — the save-time rule (<c>GRAPH-C4-5</c>) would refuse one left out, so this pins which
+    ///     allows has its own edge — the save-time rule (<c>GRAPH-5</c>) would refuse one left out, so this pins which
     ///     node each class reaches.
     /// </summary>
     [Test]

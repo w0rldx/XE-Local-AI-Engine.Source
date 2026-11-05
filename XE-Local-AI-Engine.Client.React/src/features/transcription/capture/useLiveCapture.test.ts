@@ -239,7 +239,6 @@ describe("useLiveCapture", () => {
 		vi.clearAllMocks();
 	});
 
-	// Plan §4.2: WhenSystemAudioHasNoAudioTrack_TheSessionIsNeverStarted
 	// A shared surface that came back silent is a failure, not a session that quietly records nothing. The picker
 	// is opened from the click (so `live/start` has already been sent by the time the stream is inspected), which is
 	// why "never started" is proved as: no frame ever reached the node, and the opened session was canceled again.
@@ -258,7 +257,6 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual(["cancel"]);
 	});
 
-	// Plan §4.2: WhenTheDisplayPickerIsCancelledOnBoth_TheMicrophoneIsStopped
 	it("stops the microphone when the display picker is cancelled on a both-sources session", async () => {
 		liveStartOk();
 		const { factory, sources } = harness({ systemAudio: new CaptureError("permission-denied", "picker cancelled") });
@@ -271,7 +269,6 @@ describe("useLiveCapture", () => {
 		expect(sources.get("microphone")?.stopped).toBe(true);
 	});
 
-	// Plan §4.2: BothSources_MapMicrophoneToYouAndSystemToOthers
 	// The two lanes are attributed, never mixed. A swap here relabels every segment in the transcript.
 	it("maps the microphone to you and the system audio to others", async () => {
 		liveStartOk();
@@ -307,7 +304,6 @@ describe("useLiveCapture", () => {
 		expect(sources.get("systemAudio")?.channel).toBe("others");
 	});
 
-	// Plan §4.2: Stop_WithAPendingPush_StopsEverySourceWithoutAwaitingIt
 	// The operator pressing stop must not wait behind a frame parked inside a 30 s inference.
 	it("stops every source without awaiting a pending push", async () => {
 		liveStartOk();
@@ -361,8 +357,8 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual([]);
 	});
 
-	// The tester's four-minute spinner: the node ended the session because no frame ever arrived, and the page kept
-	// "capturing". Any terminal push leaves the capture phases and releases the sources; the node already ended the
+	// The node can end the session because no frame ever arrived, and a page still "capturing" then only spins. Any
+	// terminal push leaves the capture phases and releases the sources; the node already ended the
 	// session, so nothing is ended or canceled again.
 	it.each([
 		{ status: "Abandoned", errorCode: "live-never-attached", error: "live-never-attached" },
@@ -648,7 +644,6 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual([]);
 	});
 
-	// Plan §4.2: SystemAudio_InvokesGetDisplayMediaBeforeAnyAwait
 	it("opens the display picker before any await on a system-audio session", async () => {
 		const gate = liveStartGate();
 		const { factory, order } = harness();
@@ -665,7 +660,6 @@ describe("useLiveCapture", () => {
 		expect(orderAtEntry).toEqual(["systemAudio"]);
 	});
 
-	// Plan §4.2: Both_InvokesGetDisplayMediaBeforeAnyAwait
 	it("opens the display picker before any await on a both-sources session", async () => {
 		const gate = liveStartGate();
 		const { factory, order } = harness();
@@ -684,7 +678,6 @@ describe("useLiveCapture", () => {
 		expect(order).toEqual(["systemAudio", "microphone"]);
 	});
 
-	// Plan §4.2: DisplayPaths_ForwardNoFrameUntilLiveStartResolves
 	// The picker may be open for a minute. What it captured before the node accepted the session is not this
 	// session's audio, and is dropped rather than sent.
 	it("forwards no frame on a display path until live/start resolves", async () => {
@@ -707,7 +700,6 @@ describe("useLiveCapture", () => {
 		expect(hub.pushFrame).toHaveBeenCalledTimes(1);
 	});
 
-	// Plan §4.2: WhenLiveStartFails_StopsEveryTrackOfTheDisplayStream
 	it("stops the display stream when live/start fails", async () => {
 		server.use(http.post(livePath, () => HttpResponse.json({ sessionId, status: "Cancelled", lastSeq: 3 }, { status: 409 })));
 		const { factory, sources } = harness();
@@ -721,7 +713,6 @@ describe("useLiveCapture", () => {
 		expect(hub.endSession).not.toHaveBeenCalled();
 	});
 
-	// Plan §4.2: Both_WhenTheMicrophoneFails_StopsEveryTrackOfTheDisplayStream
 	it("stops the display stream when the microphone fails on a both-sources session", async () => {
 		liveStartOk();
 		const { factory, sources } = harness({ microphone: new CaptureError("permission-denied", "microphone refused") });
@@ -736,7 +727,7 @@ describe("useLiveCapture", () => {
 		expect(abortCancels).toEqual([]);
 	});
 
-	// Plan §4.2: the mirror case — the display fails and the microphone must not be left hot.
+	// The mirror case: the display fails and the microphone must not be left hot.
 	it("stops the microphone when the display source fails on a both-sources session", async () => {
 		liveStartOk();
 		const { factory, sources } = harness({ systemAudio: new CaptureError("no-audio-track", "no audio track") });
@@ -797,7 +788,7 @@ describe("useLiveCapture", () => {
 		});
 
 		expect(sources.get("systemAudio")?.stopped).toBe(true);
-		// A3 acquires the microphone before `live/start`; the unmount must still leave it stopped, not hot.
+		// The microphone is acquired before `live/start`; the unmount must still leave it stopped, not hot.
 		expect(sources.get("microphone")?.stopped).toBe(true);
 		sources.get("systemAudio")?.emit(new Int16Array([1]));
 		sources.get("microphone")?.emit(new Int16Array([1]));
@@ -1121,7 +1112,7 @@ describe("useLiveCapture", () => {
 		expect(hub.pushFrame).toHaveBeenCalledTimes(1);
 	});
 
-	// Item 7: the capture timer counts forwarded audio, silence included, because silence commits no segment.
+	// The capture timer counts forwarded audio, silence included, because silence commits no segment.
 	describe("capturedMs", () => {
 		/** 4 000 samples at 16 kHz: one 250 ms worklet frame. */
 		const quarterSecond = () => new Int16Array(4000);

@@ -104,7 +104,7 @@ describe("ScheduledJobList", () => {
 	});
 
 	// A one-line clamp cut a cron expression to "0 0 3 1 1…", which cannot be read at all: the cell wraps instead.
-	it("wraps the schedule instead of ellipsizing it (P-6)", () => {
+	it("wraps the schedule instead of ellipsizing it", () => {
 		renderList();
 
 		const schedule = screen.getByTestId("scheduler-job-schedule-job-1");
@@ -118,7 +118,7 @@ describe("ScheduledJobList", () => {
 		expect(screen.getByTestId("scheduler-job-has-parameters-job-1")).toBeTruthy();
 	});
 
-	it("floors the kind badge at its full label width so a squeezed column cannot clip it (R5-08)", () => {
+	it("floors the kind badge at its full label width so a squeezed column cannot clip it", () => {
 		renderList();
 
 		expect(screen.getByTestId("scheduler-job-kind-job-1").style.minWidth).toBe("max-content");
@@ -154,14 +154,14 @@ describe("ScheduledJobList", () => {
 		expect(handlers.onEdit).toHaveBeenCalledWith("job-1");
 	});
 
-	it("keeps the row actions on one line so delete never wraps under the others (R6)", () => {
+	it("keeps the row actions on one line so delete never wraps under the others", () => {
 		renderList();
 
 		const group = screen.getByTestId("scheduler-job-delete-job-1").parentElement as HTMLElement;
 		expect(group.style.getPropertyValue("--group-wrap")).toBe("nowrap");
 	});
 
-	it("renders a card per job on a phone with the switch and every action in reach (T4)", () => {
+	it("renders a card per job on a phone with the switch and every action in reach", () => {
 		const originalWidth = window.innerWidth;
 		Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 390 });
 		try {

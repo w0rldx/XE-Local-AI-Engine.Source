@@ -2,18 +2,17 @@
 # run-docker-smoke-local.sh — OPT-IN real-daemon smoke for the container runtime and the sandbox.
 #
 # Why this exists
-#   The real-daemon suites used to run automatically whenever a Docker socket happened to be
-#   present, and CI forced them on with XE_REQUIRE_DOCKER_TESTS=1 plus three `docker pull` steps.
-#   That made Docker Hub reachability a hard dependency of every pull request: a registry blip or a
-#   rate limit turned a perfectly good branch red for reasons that had nothing to do with it.
+#   Running the real-daemon suites whenever a Docker socket happens to be present, or forcing them
+#   on in CI with XE_REQUIRE_DOCKER_TESTS=1 plus `docker pull` steps, makes Docker Hub reachability a
+#   hard dependency of every pull request: a registry blip or a rate limit turns a perfectly good
+#   branch red for reasons that have nothing to do with it.
 #
-#   The wire shape those suites used to be the only proof of is now covered in CI without a daemon,
-#   by the production client talking to XE-Local-AI-Engine.Testing.FakeDocker over a loopback
+#   The wire shape is covered in CI without a daemon, by the production client talking to XE-Local-AI-Engine.Testing.FakeDocker over a loopback
 #   socket. What a fake can never prove is what is left: that a real daemon HONOURS a flag — that
 #   the capability set really is dropped, that a read-only rootfs really refuses a write, that a
 #   uid really maps, that a healthcheck really reaches a verdict, that egress really is denied.
 #
-#   So the daemon suites became opt-in and this script is how they are run. Nothing invokes it
+#   So the daemon suites are opt-in and this script is how they are run. Nothing invokes it
 #   automatically. Run it by hand before cutting a tester RC, or after touching the container
 #   runtime, the sandbox provider or the External Apps install path.
 #
@@ -100,59 +99,9 @@ usage() { sed -n '2,/^set -uo/p' "${SELF}" | sed 's/^# \{0,1\}//; $d'; }
 
 trap 'echo; log "Interrupted."; exit 130' INT
 
-# Step ledger — the anti-vacuous-pass mechanism, same shape as run-tool-grammar-smoke-local.sh.
-LEDGER_EXPECTED=()
-LEDGER_PASSED=()
-LEDGER_FAILED=()
-FAILURES=()
-
-ledger_expect() { LEDGER_EXPECTED+=("$1"); }
-ledger_pass()   { LEDGER_PASSED+=("$1"); log "PASS  $1"; }
-
-step_fail() {
-  local step="$1"; shift
-  LEDGER_FAILED+=("${step}")
-  FAILURES+=("${step}: $*")
-  echo "[docker-smoke] FAIL  ${step}: $*" >&2
-  return 1
-}
-
-ledger_contains() {
-  local needle="$1"; shift
-  local item
-  for item in "$@"; do
-    [[ "${item}" == "${needle}" ]] && return 0
-  done
-  return 1
-}
-
-ledger_finalize() {
-  local status=0 step
-  echo
-  log "=== Summary ==="
-  if [[ "${#LEDGER_EXPECTED[@]}" -eq 0 ]]; then
-    echo "[docker-smoke] FAIL: no steps were expected — nothing ran. This is not a pass." >&2
-    return 1
-  fi
-  for step in "${LEDGER_EXPECTED[@]}"; do
-    if ledger_contains "${step}" ${LEDGER_PASSED[@]+"${LEDGER_PASSED[@]}"}; then
-      echo "  PASS       ${step}"
-    elif ledger_contains "${step}" ${LEDGER_FAILED[@]+"${LEDGER_FAILED[@]}"}; then
-      echo "  FAILED     ${step}" >&2
-      status=1
-    else
-      echo "  NO VERDICT ${step}  <- the step produced no result at all; treating as failure" >&2
-      status=1
-    fi
-  done
-  if [[ "${#FAILURES[@]}" -gt 0 ]]; then
-    echo >&2
-    echo "[docker-smoke] ${#FAILURES[@]} failure(s):" >&2
-    for step in "${FAILURES[@]}"; do echo "  - ${step}" >&2; done
-    status=1
-  fi
-  return "${status}"
-}
+# Step ledger — the anti-vacuous-pass mechanism.
+# shellcheck source=scripts/lib/smoke-ledger.sh
+source "${PROJECT_ROOT}/scripts/lib/smoke-ledger.sh" "docker-smoke"
 
 # The build lock cannot be inherited through an exported variable (see with-build-lock.sh), so it
 # is taken by re-executing this whole script under it. This MUST happen before the option loop
@@ -183,8 +132,8 @@ export NUGET_PACKAGES="${NUGET_PACKAGES:-${HOME}/.nuget/packages}"
 
 # Step 1 — prerequisites. Only the toolchain: the DAEMON is not probed here.
 #
-# It used to run `docker info`, which asks whichever daemon the CLI's current context points at. The suites do
-# not use the CLI: DockerDaemonEndpointResolver ignores CLI contexts entirely, and the test gates additionally
+# `docker info` would ask whichever daemon the CLI's current context points at, and the suites do not use the
+# CLI: DockerDaemonEndpointResolver ignores CLI contexts entirely, and the test gates additionally
 # fall back to the rootless user socket that production deliberately refuses. So a CLI probe could abort on a box
 # the suites would have run on, or wave through a daemon they never touch — and reimplementing the resolver's
 # rule in bash would put a second copy of that logic exactly where it can drift.
@@ -260,7 +209,7 @@ ledger_pass "3-discovery"
 #     applies to any daemon and the inapplicable half names its counterpart.
 #   * A LONE assertion with no counterpart at all — the inverted-identity refusal, which is only reachable on a
 #     rootless daemon. On a box where it does not apply the assertion is simply never made, and nothing else
-#     makes it. (The volume-declaring fixture used to belong here too. It no longer skips: it falls back to the
+#     makes it. (The volume-declaring fixture is not one of these. It does not skip: it falls back to the
 #     bare image id, which the runtime's guard accepts, so the assertion is makeable on every image store.)
 #
 # Refusing either would fail this runner on a perfectly good box; accepting any skip at all would reopen the
@@ -314,9 +263,9 @@ fi
 
 # Was EVERY failure an infrastructure one, or only some of them?
 #
-# One marker anywhere used to mean exit 5 for the whole run, so a box where one suite could not reach its
-# prerequisite AND another suite failed a real assertion reported "infrastructure" and the product failure went
-# unmentioned. So the failures are classified one at a time: MTP prints a `failed <name>` line per failed test
+# One marker anywhere must not mean exit 5 for the whole run: a box where one suite could not reach its
+# prerequisite AND another suite failed a real assertion would report "infrastructure" and leave the product
+# failure unmentioned. So the failures are classified one at a time: MTP prints a `failed <name>` line per failed test
 # and then that test's message, so a failure counts as infrastructure only when ITS OWN block carries the marker.
 #
 # Exit 5 needs unanimity AND agreement: every failure marked, and the per-test count equal to the summary's own

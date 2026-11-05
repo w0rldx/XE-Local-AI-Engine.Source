@@ -180,13 +180,13 @@ its id in the exception it throws, so an operator who greps an id out of a refus
 
 | Id | The rule it denotes | Explained under |
 | --- | --- | --- |
-| `GRAPH-C4-1` | Every path reaches an end of the run. | Edges, joins and the pinned graph |
-| `GRAPH-C4-2` | A node that writes outside its sandbox is reached through a human gate. | Edges, joins and the pinned graph |
-| `GRAPH-C4-3` | An apply follows a validation. | Edges, joins and the pinned graph; The provenance walk in front of an apply |
-| `GRAPH-C4-4` | A fix loop's per-node cap is declared only where there is a loop to bound. | The cross-node fix loop |
-| `GRAPH-C4-5` | An edge routing on a node's `output.*` names what its outputSchema declares, and a classifier routes every answer. | Edges, joins and the pinned graph |
+| `GRAPH-1` | Every path reaches an end of the run. | Edges, joins and the pinned graph |
+| `GRAPH-2` | A node that writes outside its sandbox is reached through a human gate. | Edges, joins and the pinned graph |
+| `GRAPH-3` | An apply follows a validation. | Edges, joins and the pinned graph; The provenance walk in front of an apply |
+| `GRAPH-4` | A fix loop's per-node cap is declared only where there is a loop to bound. | The cross-node fix loop |
+| `GRAPH-5` | An edge routing on a node's `output.*` names what its outputSchema declares, and a classifier routes every answer. | Edges, joins and the pinned graph |
 
-Read literally, **`GRAPH-C4-1`** is implied by acyclicity, a node with no out-edge being an end. The non-vacuous version is
+Read literally, **`GRAPH-1`** is implied by acyclicity, a node with no out-edge being an end. The non-vacuous version is
 over the edges a run can *take*: an out-edge of a human gate that is false for all three answers can never fire, so
 the branch behind it is written but unreachable — `{"path":"decision","op":"eq","value":"Approved"}`, the past
 participle, validates today and silently kills the branch at run time. It is checked in three steps, and the order
@@ -199,13 +199,13 @@ produced, so no definition-time reading of its conditions says which will fire. 
 that every gate answer has somewhere to go — every seeded gate carries an `Approve` edge and nothing else, and a
 rejection ending the run is the design.
 
-**`GRAPH-C4-2`** is the structural half of the write rule. The apply rule below is strictly stronger for an apply node, so
+**`GRAPH-2`** is the structural half of the write rule. The apply rule below is strictly stronger for an apply node, so
 this never weakens it; approval policy is tighten-only. What it adds is the **declared** case: an Agent node whose
 author wrote `WriteExecute` into `requiredCapabilities` is taken at their word, and a run must not reach it without
 an operator having been asked. The waiver is the graph's own `allowUngatedWrites` — a template saying so once and
 in writing, rather than each node quietly opting itself out.
 
-**`GRAPH-C4-3`**'s structural half is that every path into a `toolMode: Apply` node passes a `Validate` Tool node.
+**`GRAPH-3`**'s structural half is that every path into a `toolMode: Apply` node passes a `Validate` Tool node.
 It is deliberately optimistic in one place: admission drops inbound edges whose source is a template key, so the
 `validate(template) → join` edge that carries the property in the definition graph is not a run-time dependency.
 The gap is closed operationally rather than structurally — the materialized graph carries the clones' real validate
@@ -234,7 +234,7 @@ template root could reach its materializing node is through that join — and a 
 or one of its ancestors is refused. Without that second rule the virtual edge closes a loop the authored-edge
 acyclicity check is silent about, and the topological order would not be one.
 
-**`GRAPH-C4-5`** is `GRAPH-C4-1`'s question asked of a classifier, and it is decidable for the same reason: an
+**`GRAPH-5`** is `GRAPH-1`'s question asked of a classifier, and it is decidable for the same reason: an
 `outputSchema` says at save time which answers a node can give, so an edge that can never fire is visible before a
 run takes it. Three clauses, each about an out-edge whose path starts `output.`. The member it names must be
 declared, because a condition on an absent member fails closed and the branch behind it is written but dead — a
@@ -294,14 +294,14 @@ is the point of it. `feature-development-v1` is research and a plan a human appr
 into one implementation-and-validation subtree per task, and an integration stage that applies nothing until a
 second human gate says so. Both its gates route on the approve decision and have **no other branch**, which is what
 makes a refusal end the run rather than continue past it — for the integration gate that is the rule that an apply
-node is reached from a human gate and from nothing else (`GRAPH-C4-2`'s stronger sibling, §2.2). Its implementation node declares a timeout of its
+node is reached from a human gate and from nothing else (`GRAPH-2`'s stronger sibling, §2.2). Its implementation node declares a timeout of its
 own because nothing else bounds it: Development Mode bounds each attempt and each review round, but not attempts
 back to back.
 
 `dev-intake-v1` starts from one classifier and branches into a tree. `classify` binds the Repository Research persona
 and declares the triage contract (§2.1): `kind` (`feature`, `bug`, `question`, `unclear`, required), `area`,
 `severity`, `environment`, `evidenceQuality` and a bounded `rationale`. A change request is a `feature`. One
-`output.kind` edge per class leaves it, which `GRAPH-C4-5` holds exhaustive. A `question` goes to `answer`, which
+`output.kind` edge per class leaves it, which `GRAPH-5` holds exhaustive. A `question` goes to `answer`, which
 writes `answer.md` and changes nothing; an `unclear` request goes to `needsinfo`, which writes `questions.md`, the
 numbered questions the requester has to answer. **There is no clarification loop yet:** the run ends there, and the
 operator puts the answers into the work item's request and starts a new run. A gate that sends an answer back to
@@ -318,7 +318,7 @@ fix loop, the integration gate before `integrate`, and `fullvalidate`'s retry to
 the part `planapproval → verify` plays in the feature template, carrying whichever plan was approved. The two shapes
 that look simpler both fail. Putting `decompose` on `Any` with an evidence edge from each gate into `verify` parses,
 but `verify` is under `All` and the gate not taken leaves its edge `Dead`, so `verify` skips and the run cancels on
-every path. Putting `verify` on `Any` instead is refused by `GRAPH-C4-3`: the fixpoint ANDs an `Any` node's inbound
+every path. Putting `verify` on `Any` instead is refused by `GRAPH-3`: the fixpoint ANDs an `Any` node's inbound
 edges, and the gate edge carries no validation. Because the not-taken path is skipped, its steps reach the
 `decompose` and `verify` objectives as skipped-step lines (§5.5); both nodes' instructions say that is the branch not
 taken rather than missing work.
@@ -571,7 +571,7 @@ exists to prevent. Only an in-flight cancel supersedes it.
 
 ### 3.6 The provenance walk in front of an apply
 
-This is the runtime half of **`GRAPH-C4-3`**, whose structural half the parser enforces (§2.2).
+This is the runtime half of **`GRAPH-3`**, whose structural half the parser enforces (§2.2).
 
 An apply node's structural requirement (the apply-follows-a-validation rule, [API & Hubs](09-api-and-hubs.md)) is re-asked at
 runtime, of the rows a run actually landed rather than of every structural ancestor: does the apply node's
@@ -1292,7 +1292,7 @@ gate and leaving the fix loop unable to fire on a real implementation failure.
 The bytes are the approved patch artifact's, read through the same immutable hash-and-byte-count verification the
 trusted host apply port reads them through and bound to the task's own approved-subject hash; the apply is
 `git apply --index` under the hardened argument vector, inside the **sandbox** workspace only. A `DevTask`'s write
-is sandbox-scoped by ruling **D8** — its patch reaches a real repository only through an apply node. The operator's
+is sandbox-scoped by operator ruling — its patch reaches a real repository only through an apply node. The operator's
 registered repository is never written to, no trust decision is re-asserted, and a patch that does not verify or
 does not apply **refuses** the node rather than silently validating the base underneath it. Every anomaly on this
 path refuses rather than falling back to the base: a validation node runs only after its implementation succeeded,
@@ -1430,8 +1430,8 @@ failing node's key rides in the operation-id phase, so two checks that both rout
 and get one ask each. A payload written before the attempt was part of the key keeps the id it was written
 under, because changing the key of a route already in flight would ask for its round a second time.
 
-A node's own fix loop is bounded by what the definition said — **`GRAPH-C4-4`** — and absent means **no cap**
-(ruling D9): a parse-time default would silently tighten routing on every already-stored definition at run start. The row's `Attempt` is
+A node's own fix loop is bounded by what the definition said — **`GRAPH-4`** — and absent means **no cap**
+(operator ruling): a parse-time default would silently tighten routing on every already-stored definition at run start. The row's `Attempt` is
 the right base and needs no column of its own — a node with a retry target never takes the same-node path, and
 each route re-attempts the whole descendant set including this node. An operator `Retry` raises the same counter
 and is bounded only by the run-wide budget, so it is subtracted. The count over-attributes when two nodes route
@@ -1641,10 +1641,10 @@ than hanging, and the shipped templates all join with `All`. The upgrade path, i
 to relax the two-edge rule for a join a materialization names, since its real width is only known once the
 package is read.
 
-**A decomposition that legitimately produces no tasks** (ruling D12) leaves the graph exactly as it is — the join keeps its
+**A decomposition that legitimately produces no tasks** (operator ruling) leaves the graph exactly as it is — the join keeps its
 edge from this node and fires on it — and writes the commit marker plus **one already-succeeded row per
 validation node in the template subtree**. Without those rows an apply downstream would be blocked by the
-runtime half of `GRAPH-C4-3` (§3.6): it asks whether a `Tool`/`Validate` node succeeded on the path this run
+runtime half of `GRAPH-3` (§3.6): it asks whether a `Tool`/`Validate` node succeeded on the path this run
 took, an unmaterialized template key has no row at all, and "there was nothing to validate" would read as
 "nothing validated it". One row per such node rather than an arbitrary pick, so a template carrying two checks
 shows both as not-applicable rather than one as missing. A subtree with **no** validation node writes no row at
@@ -1652,7 +1652,7 @@ all — there is nothing to stand for, and the apply's proof is carried by anoth
 real row.
 
 Such a row can never make a run look finished, because **a template's validation node must have an out-edge** —
-`GRAPH-C4-1`'s fourth step — and the parser refuses one that has not. `TerminalNodeKeys` is every node with no out-edge, template keys included,
+`GRAPH-1`'s fourth step — and the parser refuses one that has not. `TerminalNodeKeys` is every node with no out-edge, template keys included,
 which is normally moot since a template never gets a node run; the zero-task row is the exception that falsifies
 that premise, a template leaf taking a `Succeeded` row at a key the completion predicate reads, so the run would
 report `Completed` though its real tail never ran. Refusing the shape at save is cheaper than teaching two runtime

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
-///     The one test in this slice that spawns a real <c>whisper-server</c> and transcribes real audio. Opt-in and
+///     The test that spawns a real <c>whisper-server</c> and transcribes real audio. Opt-in and
 ///     skipped visibly by default: nothing in the ordinary gate may depend on a native binary or a downloaded model
 ///     being present.
 /// </summary>
@@ -26,8 +26,7 @@ using OS = TUnit.Core.Enums.OS;
 ///     </para>
 ///     <para>
 ///         With <c>XE_WHISPER_RECORD=true</c> the raw verbose-JSON payload is written beside the fixture directory.
-///         That dump is the input a later slice's golden test replays, which is why this test exists in this slice at
-///         all rather than only where the golden test lives.
+///         That dump is the input the golden test replays.
 ///     </para>
 /// </remarks>
 [RunOn(OS.Linux)]
@@ -53,7 +52,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
     public void Fixture_IsTheCommittedSixteenKilohertzMonoClip()
     {
         // Runs in the ORDINARY gate, unlike the live case below. It is what stops the fixture being replaced,
-        // resampled or re-encoded without anyone noticing — every later slice's golden data is derived from these
+        // resampled or re-encoded without anyone noticing — the golden data is derived from these
         // exact bytes.
         var path = FixturePath();
 
@@ -120,7 +119,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
         var readinessProbe = new WhisperServerReadinessProbe(httpClient, options, TimeProvider.System);
         var backendSelector = new StaticBackendSelector(overrideOptions.Backend);
 
-        // The real supervisor over the real launcher: this is the only place in the slice where a whisper-server child
+        // The real supervisor over the real launcher: this is where a whisper-server child
         // process actually starts, and DisposeAsync is what tree-kills it.
         await using var supervisor = new WhisperServerProcessSupervisor(backendSelector,
             binaryManager,
@@ -163,7 +162,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
         }
     }
 
-    /// <summary>The whole recorded result, so a later slice's fake transcriber can replay a real payload.</summary>
+    /// <summary>The whole recorded result, so a fake transcriber can replay a real payload.</summary>
     private static async Task RecordAsync(WhisperTranscriptionResult result)
     {
         var destination = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Transcription", "live-smoke-result.json");

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { formatTime } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import type { DevWorkflowRunEventResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
-import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflows";
+import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflowRunEvents";
 
 export interface DevWorkflowEventsTabProps {
 	readonly events: readonly DevWorkflowRunEventResponse[];

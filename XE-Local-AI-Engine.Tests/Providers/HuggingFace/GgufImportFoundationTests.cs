@@ -762,7 +762,7 @@ public sealed class GgufImportFoundationTests
     }
 
     // The header's general.file_type is llama_ftype, whose ids differ from ggml_type's: a file named without a quant token
-    // used to be labelled through the wrong table.
+    // must not be labelled through the wrong table.
     [Test]
     [Arguments(7u, "Q8_0")]
     [Arguments(8u, "Q5_0")]

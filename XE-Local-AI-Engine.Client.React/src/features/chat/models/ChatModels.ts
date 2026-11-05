@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { AgentOption } from "@/core/agents/models/AgentOption";
 import type { XeLocalAiEngineClientServicesKnowledgeKnowledgeScoreKind } from "@/core/api/generated";
+import type { ChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import type { ModelOption } from "@/core/models/ModelOption";
 // Re-exported so chat's own call sites keep importing from here; the type itself lives in core because `agents` also
 // depends on it (see ReasoningEffort.ts for the effort-level doc comment).
@@ -10,105 +11,16 @@ import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModel
 
 export type { ReasoningEffort };
 
-// Type-only import (erased at runtime, so no models→api cycle): the `ask_user` wire shape is owned by the wire
-// module so a backend field rename stays a one-line fix.
-import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
+import type { ChatMessagePart, ToolCallState } from "@/core/models/ChatMessageParts";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
-import type { ChatTurnThroughput, NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
+import type { ChatTurnThroughput } from "@/features/chat/models/NodeChatStreamTypes";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
 export type MessageStatus = "pending" | "queued" | "streaming" | "completed" | "cancelled" | "failed" | "interrupted";
 
 export type ChatOrigin = "local" | "remote";
-
-export type ToolCallState = "requesting" | "waiting" | "received" | "failed" | "denied";
-
-export type ChatMessagePartKind = "reasoning" | "tool" | "text" | "notice";
-
-/** A folded "Thoughts" run. Each reasoning segment renders as its own block (Option A interleave). */
-export interface ChatReasoningPart {
-	kind: "reasoning";
-	// Stable per segment (`${messageId}:${sequence}` live, `${messageId}:${sequence}` on reload).
-	id: string;
-	// Wire ordering key (the monotonic stream `sequence` at which this segment opened).
-	sequence: number;
-	text: string;
-}
-
-/** A single tool call, collapsed requested→completed by tool-call id, rendered as one state-driven card. */
-export interface ChatToolPart {
-	kind: "tool";
-	// Tool-call id (stable across requested/completed so the card never duplicates).
-	id: string;
-	sequence: number;
-	name: string;
-	state: ToolCallState;
-	args?: string;
-	result?: string;
-	requiresApproval?: boolean;
-	// When set, the tool is paused awaiting the operator's decision; this is the approval request id the
-	// Approve/Deny controls post to the loopback resolve endpoint. Transient, live-only: cleared once the tool
-	// completes (approved) or is rejected, and never present on a reloaded/persisted turn.
-	pendingApprovalRequestId?: string;
-	// The backend's per-request answer to whether an "approve for this session" decision can be remembered for this
-	// exact call. Preferred over the tool catalog's tool-identity flag; undefined when the backend did not resolve it
-	// (a reconnect replay), in which case the card falls back to the catalog.
-	pendingApprovalSessionScopeEligible?: boolean;
-	// When set, the pending approval is a web content review (`web_fetch`/`web_search`): what was retrieved, shown to
-	// the operator before the model reads it. Cleared on exactly the same terms as `pendingApprovalRequestId`.
-	pendingWebReview?: NodeChatWebReviewPreviewDto;
-	// When set, this is an `ask_user` call parked on the operator's answer: the question payload the inline answer
-	// card renders. Transient and live-only on exactly the same terms as `pendingApprovalRequestId` — cleared when
-	// the tool call completes/fails or the turn terminalizes, and never present on a reloaded/persisted turn.
-	pendingQuestion?: PendingUserQuestion;
-	// Images the tool returned (an MCP image block), persisted as `image` parts keyed to this call. Present only on a
-	// reloaded turn: the live stream carries the result text, which names each image by a placeholder.
-	images?: ChatToolImage[];
-	// Live only: the global streamed-content offset at which this call was requested. The text before it is interim
-	// narration the reducer splits into a `text` part; never present on a reloaded turn.
-	contentOffset?: number;
-}
-
-/** One image a tool call returned. `src` is always a `data:image/` URI. */
-export interface ChatToolImage {
-	mediaType: string;
-	src: string;
-}
-
-/**
- * Interim narration the model streamed before a tool call ("Let me search for …"), closed at that call and ordered
- * just before its card. Rendered muted; the trailing answer still renders from `message.content`, which holds only
- * the text after the last tool call.
- */
-export interface ChatTextPart {
-	kind: "text";
-	id: string;
-	sequence: number;
-	text: string;
-}
-
-/**
- * A non-fatal "turn notice" (model substitution, tool disabled, history truncated) surfaced by the backend as its
- * own stream event / persisted part kind. Rendered as a small muted system-style row — distinct from an error and
- * from the plain answer text — never a fatal state for the turn.
- */
-export interface ChatNoticePart {
-	kind: "notice";
-	id: string;
-	sequence: number;
-	// One of "ModelSubstituted" | "ToolDisabled" | "HistoryTruncated" (server enum name, used to pick an icon).
-	noticeKind: string;
-	// Sanitized, user-facing sentence from the backend — displayed verbatim, never re-translated.
-	text: string;
-	// Optional structured detail beside the sentence: a stable machine code or short identifier naming why the notice
-	// fired (e.g. the kebab-case adaptive-effort dispatch reason). Displayed verbatim, never re-translated; undefined
-	// on notices that carry none.
-	detail?: string;
-}
-
-export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart | ChatNoticePart;
 
 /**
  * One knowledge-base excerpt that grounded a plain-chat assistant turn. Rendered in the collapsible
@@ -337,31 +249,6 @@ export interface ChatInputStatus {
 	agentSelectorDisabled?: boolean;
 }
 
-/**
- * Embeds the chat page inside a feature that OWNS a conversation (today: a work session). Everything the chat page
- * does — the readiness gate, the streaming fold, the tool timeline, the cold-load re-attach — stays in `Chat`; this
- * prop only pins the view and redirects the composer. `/chat` passes nothing and behaves exactly as before.
- */
-export interface ChatScope {
-	/** Pin the view to exactly this conversation: no sidebar, no selection writes to the global preference store. */
-	readonly conversationId: string;
-	/** Owner-pinned agent. Forces agent mode on and renders the agent + model selectors read-only. */
-	readonly pinnedAgentId?: string;
-	/** Bumped by the owner when a NEW server-side turn starts on the same conversation; re-arms the re-attach. */
-	readonly resumeNonce?: number;
-	/**
-	 * Composer target. When set, the composer posts here instead of starting a chat invocation — the owner's
-	 * supervisor stays the single writer of invocations on this conversation. A REJECTED promise keeps the draft.
-	 */
-	readonly onSendOverride?: (content: string) => Promise<void>;
-	/** Stop-button target (a work session maps it to pause). */
-	readonly onStopOverride?: () => void;
-	/** Disables the composer (a terminal session takes no further input). */
-	readonly composerDisabled?: boolean;
-	/** The parent owns the full-height frame, so `Chat` renders bare. */
-	readonly embedded?: boolean;
-}
-
 // The conversation-list fetch, envelope and all: the list itself plus the node-level chat facts the endpoint reports
 // beside it. It is the chat page's unconditional first GET, which is why the composer's message-size limit rides it
 // (see ComposerSizeLimit). `maxMessageSizeKb` is absent when the node reports none; the composer then runs no
@@ -386,23 +273,6 @@ export interface ChatCompactionResult {
 	// cloud/unknown selection was downgraded to a node-local model). Drives the "summarized on-device" notice.
 	modelUsed?: string;
 	usedFallbackModel: boolean;
-}
-
-export interface ChatUiCapabilities {
-	readonly showLocalToolControls: boolean;
-	readonly showToolApprovalControls: boolean;
-	readonly showConversationFeedbackControls: boolean;
-	readonly showFileAttachmentControls: boolean;
-	readonly showImageAttachmentControls: boolean;
-	// When true the chat composer renders the agent-mode toggle + agent picker. Derived from the node's
-	// agentManagement surface capability (see ChatCapabilityGates.buildChatUiCapabilities).
-	readonly showAgentControls: boolean;
-	// When true the chat composer renders the voice controls (toggle, profile, rate) + per-message Play. Derived
-	// from the node `voice` surface flag AND the operator-owned manifest.Enabled (see buildChatUiCapabilities).
-	readonly showVoiceControls: boolean;
-	// When true the chat composer renders the "Use Knowledge Base" toggle (opt-in plain-chat grounding). Derived
-	// from the node's knowledgeBase surface capability (see ChatCapabilityGates.buildChatUiCapabilities).
-	readonly showKnowledgeBaseControls: boolean;
 }
 
 export interface ChatDisplayShellProps {

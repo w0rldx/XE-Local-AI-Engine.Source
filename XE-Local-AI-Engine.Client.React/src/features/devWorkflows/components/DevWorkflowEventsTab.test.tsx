@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { formatTime } from "@/core/formatting/TimeFormatting";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
-import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflows";
+import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/useDevWorkflowRunEvents";
 import { devWorkflowRunEvent } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { testMantineTheme } from "@/test/MantineTestRender";

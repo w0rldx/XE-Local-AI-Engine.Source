@@ -120,7 +120,7 @@ public sealed class SupervisorSpawnReceiptTests : IDisposable
     }
 
     private static FakeProcessLauncher OwnPidLauncher() =>
-        new(_ => new FakeProcessHandle(Environment.ProcessId));
+        new(_ => new FakeProcessTreeHandle(Environment.ProcessId));
 
     internal static long ReadOwnStartTicks()
     {

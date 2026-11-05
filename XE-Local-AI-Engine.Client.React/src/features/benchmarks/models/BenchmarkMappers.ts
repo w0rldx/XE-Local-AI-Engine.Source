@@ -11,6 +11,7 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse as RunDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse as RunSummaryResponse,
 } from "@/core/api/generated";
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import type {
 	BenchmarkComparisonList,
 	BenchmarkEligibleModel,
@@ -283,7 +284,7 @@ const kvSource = (value: unknown): BenchmarkKvCacheTypeSource | null => (value =
 const flashAttention = (value: unknown): BenchmarkFlashAttentionMode | null =>
 	value === "auto" || value === "on" ? value : null;
 const evidenceObject = (value: unknown): BenchmarkEvidenceObject | null =>
-	typeof value === "object" && value !== null && !Array.isArray(value) ? (value as BenchmarkEvidenceObject) : null;
+	isPlainRecord(value) ? (value as BenchmarkEvidenceObject) : null;
 
 // Every member is nullable by contract because legacy rows predate the receipt and stay null.
 function launchFacts(value: RunSummaryResponse): BenchmarkLaunchFacts {

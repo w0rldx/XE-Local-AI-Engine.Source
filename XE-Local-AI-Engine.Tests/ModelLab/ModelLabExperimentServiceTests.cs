@@ -282,6 +282,37 @@ public sealed class ModelLabExperimentServiceTests
     }
 
     [Test]
+    public async Task AScriptPastItsMaximumDuration_IsKilled_AndSaysSo()
+    {
+        using var process = new ScriptedProcess { IgnoresStop = true };
+        // The short grace is what shortens the poll, since a bound is never rounded up to it.
+        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions { MaxDuration = TimeSpan.FromMilliseconds(50), ExitGracePeriod = TimeSpan.FromMilliseconds(200) });
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.True(process.Killed);
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
+        AssertEx.True(record.ErrorMessage!.Contains("maximum duration", StringComparison.Ordinal), record.ErrorMessage);
+    }
+
+    [Test]
+    public async Task AScriptThatClosesItsOutputAndNeverExits_IsKilled_AndSaysSo()
+    {
+        using var process = new ScriptedProcess { IgnoresStop = true };
+        await using var host = await LabHost.StartAsync(process, new ModelLabJobOptions { ExitGracePeriod = TimeSpan.FromMilliseconds(50) });
+        var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        process.CloseOutput();
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        AssertEx.True(process.Killed);
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
+        AssertEx.True(record.ErrorMessage!.Contains("stopped responding", StringComparison.Ordinal), record.ErrorMessage);
+    }
+
+    [Test]
     public async Task ProgressAndTheEnd_ReachTheRunBuffer_UnderTheExperimentsId()
     {
         using var process = new ScriptedProcess();
@@ -891,9 +922,19 @@ public sealed class ModelLabExperimentServiceTests
     [Test]
     public void AnUnreadableTrace_IsUnavailable()
     {
-        var trace = ModelLabExperimentService.ParseTrace(Encoding.UTF8.GetBytes("{not json}\n"));
+        var trace = ModelLabTraceSpec.ParseTrace(Encoding.UTF8.GetBytes("{not json}\n"));
 
         AssertEx.Equal(ModelLabTraceReadStatus.Unavailable, trace.Status);
+    }
+
+    [Test]
+    public void AStoredResult_ReadsBackThroughOneReader_AndAnUnreadableOneIsNone()
+    {
+        var read = ModelLabTraceSpec.ReadResultOrNull("""{"promptTokens":3,"text":"hi"}"""u8.ToArray());
+
+        AssertEx.Equal(expected: 3, read!.PromptTokens);
+        AssertEx.Equal("hi", read.Text);
+        AssertEx.Null(ModelLabTraceSpec.ReadResultOrNull("{not json}"u8.ToArray()));
     }
 
     private static BaseCheckpointManifest Manifest(string repoId, long weightBytes) =>
@@ -1269,6 +1310,9 @@ public sealed class ModelLabExperimentServiceTests
 
         public void Say(string line) =>
             _output.Writer.TryWrite(line);
+
+        public void CloseOutput() =>
+            _output.Writer.TryComplete();
 
         /// <summary>Waits for the spawn, writes the result files as the script would, then says the lines and exits.</summary>
         public void Finish(IReadOnlyList<string> lines, int exitCode) =>

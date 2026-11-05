@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -22,7 +23,6 @@ import {
 } from "@/features/node-settings/models/WhisperRuntimeSourceBuildModels";
 import {
 	useCancelWhisperSourceBuild,
-	useEjectWhisperRuntime,
 	useRemoveWhisperSourceBuild,
 	useStartWhisperSourceBuild,
 	useWhisperRuntimeStatus,
@@ -54,7 +54,9 @@ export function WhisperRuntimeSourceBuildCard() {
 	const start = useStartWhisperSourceBuild();
 	const cancel = useCancelWhisperSourceBuild();
 	const remove = useRemoveWhisperSourceBuild();
-	const eject = useEjectWhisperRuntime();
+	// A build and a remove both need the mutation reservation, which `WhisperRuntimeActivityGate` refuses while ANY
+	// process is resident, so this eject is the in-card recovery from the `runtime-busy` refusal.
+	const eject = useEjectTranscriptionRuntime();
 
 	const managed = runtime.data?.managedRuntime;
 	// `installedAtUtc` moves only when a build actually installs a runtime, so seeding off it — rather than off the

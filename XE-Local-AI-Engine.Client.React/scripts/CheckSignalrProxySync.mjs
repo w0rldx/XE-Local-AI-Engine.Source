@@ -180,7 +180,7 @@ export const hubPayloadEnums = [
 	{
 		name: "TrainingRunEventKind",
 		csharpPath: "XE-Local-AI-Engine.Client.Application/Services/Training/Runs/TrainingRunEvents.cs",
-		clientPath: "src/features/training/models/TrainingRunModels.ts",
+		clientPath: "src/core/api/signalr/useRunStreamSubscription.ts",
 		anchor: "kind: z.enum([",
 		terminator: "]",
 	},

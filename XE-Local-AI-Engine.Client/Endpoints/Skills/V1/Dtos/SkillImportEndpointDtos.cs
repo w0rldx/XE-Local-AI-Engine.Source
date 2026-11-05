@@ -16,7 +16,7 @@ public enum SkillImportSourceKind
 }
 
 /// <summary>
-///     Phase 1 request.
+///     Preview request.
 /// </summary>
 /// <remarks>
 ///     The body is <c>multipart/form-data</c> for all three sources, not just the upload: one content type means one
@@ -45,7 +45,7 @@ public sealed class SkillImportPreviewRequest
 /// </summary>
 /// <remarks>
 ///     <see cref="Token" /> is the short-lived, single-use handle to the materialized payload behind this report:
-///     phase 2 persists that payload verbatim rather than re-parsing the upload or re-fetching the repository.
+///     the commit persists that payload verbatim rather than re-parsing the upload or re-fetching the repository.
 /// </remarks>
 public sealed class SkillImportPreviewResponse
 {
@@ -118,7 +118,7 @@ public sealed class GetSkillImportPreviewResourceRequest
     public string? ResourceName { get; init; }
 }
 
-/// <summary>Phase 2 request: which skills from the approved report to write, and the operator's explicit consent.</summary>
+/// <summary>Commit request: which skills from the approved report to write, and the operator's explicit consent.</summary>
 public sealed class SkillImportCommitEndpointRequest
 {
     public Guid Token { get; init; }

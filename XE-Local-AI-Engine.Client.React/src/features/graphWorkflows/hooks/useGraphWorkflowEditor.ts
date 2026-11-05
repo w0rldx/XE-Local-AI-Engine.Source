@@ -15,33 +15,34 @@ import {
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
-	canvasToGraph,
+	connectionPrefill,
 	defaultNodeData,
+	droppedDecisions,
+	edgeDecision,
+	mintEdgeKey,
+	mintNodeKey,
+	nextFreePosition,
+	renameNodeKey,
+} from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
+import { canvasToGraph, graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasConversion";
+import {
 	type GraphWorkflowCanvasEdge,
-	type GraphWorkflowCanvasEdgeCondition,
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowCanvasNodeData,
 	type GraphWorkflowEdgeData,
 	type GraphWorkflowGraphSettings,
-	graphToCanvas,
 	graphWorkflowNodeTypeByKind,
-	graphWorkflowsEqual,
-	mintEdgeKey,
-	mintNodeKey,
-	pauseContextEdges,
-	renameNodeKey,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { designerProposalCanvas } from "@/features/graphWorkflows/models/GraphWorkflowDesignerModels";
+import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowEquality";
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
 import {
-	asGraphWorkflowDecisionKind,
 	GRAPH_WORKFLOW_MAX_NODES,
-	type GraphWorkflowDecisionKind,
 	type GraphWorkflowDesignerChangeResponse,
 	type GraphWorkflowGraph,
 	type GraphWorkflowNodeKind,
-	toGraphWorkflowDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { pauseContextEdges } from "@/features/graphWorkflows/models/GraphWorkflowPauseContext";
 import {
 	type GraphWorkflowGraphIssue,
 	loadedGraphIssues,
@@ -152,70 +153,6 @@ export interface GraphWorkflowEditorState {
 	 */
 	readonly acceptProposal: () => boolean;
 	readonly undoAccept: () => void;
-}
-
-/**
- * What a new edge inherits from the handle it left. `sourceHandle` is authoring metadata the runtime ignores, so the
- * label and the condition are what actually route the branch — and prefilling them here is what stops an operator
- * having to know the Pause pre-flight rule exists.
- *
- * A Condition handle prefills NO path: the edge inherits its source node's `config.path`, and the client
- * cannot invent one.
- *
- * A condition `value` is canvas text, and that text is JSON (`conditionValueText`): the boolean branch is `true` bare,
- * the decision is `"Approve"` QUOTED. Writing the decision unquoted would save the same string but render differently
- * from the identical edge reopened later.
- */
-function connectionPrefill(
-	sourceKind: GraphWorkflowNodeKind | undefined,
-	handle: string | undefined,
-): { readonly label?: string; readonly condition?: GraphWorkflowCanvasEdgeCondition } {
-	if (handle === undefined || handle.length === 0) {
-		return {};
-	}
-	if (sourceKind === "Condition" && (handle === "true" || handle === "false")) {
-		return { label: handle, condition: { op: "Eq", value: handle } };
-	}
-	if (sourceKind === "Pause" && asGraphWorkflowDecisionKind(handle) !== undefined) {
-		return { label: handle, condition: { path: "output.decision", op: "Eq", value: JSON.stringify(handle) } };
-	}
-	return {};
-}
-
-/**
- * The decisions a Pause node stops offering under this patch. Empty for every other edit.
- *
- * `patch` is a partial of a UNION, so `allowedDecisions` is only reachable through the index signature the node base
- * carries; the narrowing back to real decision kinds is the model's.
- */
-function droppedDecisions(
-	previous: GraphWorkflowCanvasNodeData | undefined,
-	patch: Partial<GraphWorkflowCanvasNodeData>,
-): readonly GraphWorkflowDecisionKind[] {
-	const next = patch["allowedDecisions"];
-	if (previous?.kind !== "Pause" || !Array.isArray(next)) {
-		return [];
-	}
-	const kept = toGraphWorkflowDecisionKinds(next.filter((entry): entry is string => typeof entry === "string"));
-	return previous.allowedDecisions.filter((decision) => !kept.includes(decision));
-}
-
-/** Which decision an out-edge of a Pause routes: its handle, or the condition value when no handle was stored. */
-function edgeDecision(edge: GraphWorkflowCanvasEdge): string {
-	return edge.sourceHandle ?? edge.data?.condition?.value ?? "";
-}
-
-/**
- * Where a palette click drops a node when nothing said where: the first staggered slot no node already occupies.
- * Staggering by the node COUNT would reuse a slot the moment anything was deleted, dropping the new card on top of one.
- */
-function nextFreePosition(nodes: readonly GraphWorkflowCanvasNode[]): XYPosition {
-	for (let index = 0; ; index += 1) {
-		const candidate = { x: 320, y: 80 + index * 60 };
-		if (!nodes.some((node) => node.position.x === candidate.x && node.position.y === candidate.y)) {
-			return candidate;
-		}
-	}
 }
 
 export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined): GraphWorkflowEditorState {

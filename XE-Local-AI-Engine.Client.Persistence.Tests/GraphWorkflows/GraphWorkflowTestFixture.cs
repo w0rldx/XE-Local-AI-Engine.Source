@@ -13,16 +13,15 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     through a fresh context proves the encrypt/decrypt path rather than the change tracker's in-memory plaintext.
 /// </summary>
 /// <remarks>
-///     The run, node-run and event seeds go through the DbContext rather than a store: this slice ships the definition
-///     half of <see cref="IGraphWorkflowStore" /> only, and the encryption and purge suites still have to cover every
-///     column the migration creates. They move to the run store when it exists.
+///     The run, node-run and event seeds go through the DbContext rather than a store, because the encryption and purge
+///     suites have to cover every column the migration creates.
 /// </remarks>
 internal sealed class GraphWorkflowTestFixture : IDisposable
 {
     /// <summary>
     ///     Opaque to this assembly: the parser and its rules live in the Application layer. Kept a graph that layer
     ///     would actually ACCEPT anyway — an End node needs its <c>outcome</c>, and a fixture whose sample document
-    ///     the real parser refuses is one every later slice would have to work around.
+    ///     the real parser refuses is one every later test would have to work around.
     /// </summary>
     public const string SampleGraph =
         """{"schemaVersion":1,"nodes":[{"key":"start","kind":"Start"},{"key":"done","kind":"End","config":{"outcome":"completed"}}],"edges":[{"key":"e1","from":"start","to":"done"}]}""";

@@ -65,6 +65,12 @@ public sealed class GgufTensorInspection
     /// <summary>The MTP blocks counted in <see cref="BlockCount" /> (<c>{arch}.nextn_predict_layers</c>), or <see langword="null" /> when absent.</summary>
     public required long? NextnPredictLayers { get; init; }
 
+    /// <summary>
+    ///     The blocks a control vector can reach, or <see langword="null" /> when <see cref="BlockCount" /> is: llama.cpp sets up vector
+    ///     tensors only for the trunk, so an MTP block counts in <c>block_count</c> but a vector there is dropped with no error.
+    /// </summary>
+    public long? SteerableBlockCount => BlockCount - (NextnPredictLayers ?? 0);
+
     /// <summary>The data alignment the file declares (<c>general.alignment</c>), or <see langword="null" /> for the format's default.</summary>
     public required long? Alignment { get; init; }
 

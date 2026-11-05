@@ -260,8 +260,7 @@
 			},
 			"resultLabel": "Ergebnis",
 			"sending": "Wird gesendet",
-			"thinkingLive": "Denkt nach…",
-			"thoughtFor": "{{s}} s nachgedacht"
+			"thinkingLive": "Denkt nach…"
 		},
 		"webRequest": {
 			"allow": "Erlauben",
@@ -317,9 +316,6 @@
 		"pagination": {
 			"rowsPerPage": "Zeilen pro Seite",
 			"showingRange": "{{from}}–{{to}} von {{total}}"
-		},
-		"providers": {
-			"cloudflareAccess": "Cloudflare Access"
 		},
 		"refresh": "Aktualisieren",
 		"refreshing": "Wird aktualisiert...",
@@ -377,13 +373,7 @@
 			"preview": "Vorschau"
 		},
 		"mobileNavigation": {
-			"languageTitle": "Sprache",
-			"userAvatarMenu": {
-				"logout": "Abmelden",
-				"signedInAs": "Angemeldet als",
-				"title": "Benutzer",
-				"userSettings": "Benutzereinstellungen"
-			}
+			"languageTitle": "Sprache"
 		},
 		"sideNavigationBar": {
 			"ariaCollapse": "Seitenleiste einklappen",
@@ -1203,7 +1193,7 @@
 						"label": "Status"
 					},
 					"triggerCondition": {
-						"description": "Optionaler Hinweis, wann dies gilt (in dieser Phase nur zur Anzeige).",
+						"description": "Optionaler Hinweis, wann dies gilt. Der Abruf bewertet die Aktion danach.",
 						"label": "Auslösebedingung",
 						"placeholder": "Wenn der Nutzer nach… fragt",
 						"tooLong": "Auslösebedingung darf höchstens {{max}} Zeichen lang sein"
@@ -7905,54 +7895,6 @@
 			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut.",
 			"setupSubtitle": "Tools, Agenten und Server laufen in einer Sandbox, die sie vom übrigen System abschottet. Hier legen Sie fest, was passiert, wenn dieser Host einen solchen Sandbox-Prozess nicht so abschotten kann, wie er es verlangt. Sie können das später in den Node-Einstellungen ändern.",
 			"setupTitle": "Wie streng soll die Sandbox sein?"
-		},
-		"schedule": {
-			"adminPanel": {
-				"hide": "Benutzertermine ausblenden",
-				"loadError": "Benutzer konnten nicht geladen werden.",
-				"searchPlaceholder": "Benutzer suchen...",
-				"show": "Benutzertermine anzeigen",
-				"title": "Benutzertermine"
-			},
-			"appointmentCreated": "Termin erfolgreich erstellt",
-			"appointmentDeleted": "Termin erfolgreich gelöscht",
-			"appointmentUpdated": "Termin erfolgreich aktualisiert",
-			"createAppointment": "Termin erstellen",
-			"deleteAppointment": "Termin löschen",
-			"deleteConfirmText": "Möchten Sie diesen Termin wirklich löschen?",
-			"deleteConfirmTitle": "Termin löschen",
-			"editAppointment": "Termin bearbeiten",
-			"fields": {
-				"color": "Farbe",
-				"description": "Beschreibung",
-				"descriptionPlaceholder": "Beschreibung eingeben (optional)",
-				"end": "Ende",
-				"isShared": "Systemtermin (für alle Benutzer sichtbar)",
-				"start": "Beginn",
-				"title": "Titel",
-				"titlePlaceholder": "Titel eingeben",
-				"user": "Benutzer zuweisen"
-			},
-			"scheduler": {
-				"day": "Tag",
-				"month": "Monat",
-				"more": "Mehr",
-				"next": "Weiter",
-				"previous": "Zurück",
-				"today": "Heute",
-				"week": "Woche",
-				"year": "Jahr"
-			},
-			"systemBadge": "System",
-			"title": "Terminplaner",
-			"validation": {
-				"endAfterStart": "Endzeit muss nach der Startzeit liegen",
-				"titleMaxLength": "Titel darf maximal 200 Zeichen lang sein",
-				"titleRequired": "Titel ist erforderlich",
-				"titleTrimmed": "Titel darf nicht mit Leerzeichen beginnen oder enden."
-			},
-			"viewAppointment": "Termindetails",
-			"viewOnlyNotice": "Sie können Termine ansehen, aber nicht verwalten."
 		},
 		"scheduler": {
 			"createButton": "Aufgabe erstellen",

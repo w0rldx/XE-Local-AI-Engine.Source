@@ -32,7 +32,7 @@ export function useDevWorkflowDefinitionDraft(definition: DevWorkflowDefinitionR
 	const [edgeRows, setEdgeRows] = useState<readonly DraftRow<DevWorkflowGraphEdge>[]>([]);
 	// Not editable: read straight from the stored document, so it needs no seeding.
 	const schemaVersion = definition?.graph?.schemaVersion ?? 1;
-	// The graph-level waiver of GRAPH-C4-2, held as a boolean and sent back as `true` or not at all: a template that
+	// The graph-level waiver of GRAPH-2, held as a boolean and sent back as `true` or not at all: a template that
 	// never waived anything must not GAIN an explicit `false`, which would rewrite a stored document to say something
 	// it never said.
 	const [allowUngatedWrites, setAllowUngatedWrites] = useState(false);

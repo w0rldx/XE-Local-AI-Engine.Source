@@ -29,7 +29,7 @@ public sealed class ProviderMessageTokenEstimatorTests
     {
         var message = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 40))]);
 
-        // (40 * 4) / 4 + 4 = 44 (≈1 token/char), versus the old (40 * 2) / 4 + 4 = 24 undercount.
+        // (40 * 4) / 4 + 4 = 44 (≈1 token/char), not the (40 * 2) / 4 + 4 = 24 undercount.
         AssertEx.Equal(expected: ((40 * 4) / 4) + OverheadTokens, ProviderMessageTokenEstimator.EstimateTokens(message));
     }
 

@@ -40,10 +40,10 @@ public sealed class DevWorkflowDispatcherTests
     /// <summary>
     ///     A run's node runs are written with the run row, so the dispatcher never composes any of its own.
     ///     <para>
-    ///         It used to, for a run it found without them — and it had nothing to seed the entry rows WITH, because
-    ///         the caller's inputs live nowhere but those rows. A run interrupted between the two commits therefore
-    ///         came back as the same graph quietly running a different request. Now the two commits are one, and this
-    ///         is the proof of what the dispatcher does with the only shape that could still ask it to guess.
+    ///         It has nothing to seed the entry rows WITH, because the caller's inputs live nowhere but those rows:
+    ///         composing them would bring an interrupted run back as the same graph quietly running a different request.
+    ///         The two commits are one, and this is the proof of what the dispatcher does with the only shape that could
+    ///         still ask it to guess.
     ///     </para>
     /// </summary>
     [Test]
@@ -92,7 +92,7 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The Phase A2 gate. A human-gate-only definition runs to completion: the run materializes its entry node,
+    ///     A human-gate-only definition runs to completion: the run materializes its entry node,
     ///     stops on the human, and finishes on the answer — with the work item tracking it the whole way.
     /// </summary>
     [Test]
@@ -441,7 +441,7 @@ public sealed class DevWorkflowDispatcherTests
         {
             AssertEx.Equal(DevWorkflowRunStatus.Running,
                 (await harness.ReadRunAsync(runId)).Status,
-                "every live run was swept, including the oldest — which the newest-first page used to cut off.");
+                "every live run was swept, including the oldest — which a newest-first page would cut off.");
         }
     }
 

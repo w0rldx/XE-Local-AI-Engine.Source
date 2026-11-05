@@ -461,8 +461,8 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
-    ///     A Retry written by the build before this change carries the plain outcome, so it answers the old field and
-    ///     not the new one — the previous behavior, unchanged, for any task in flight across the upgrade. Graceful
+    ///     A stored Retry that carries the plain outcome answers the plain field and not the new one, so a task in
+    ///     flight across an upgrade keeps its behavior. Graceful
     ///     degradation by construction rather than by migration, which is why it is pinned rather than fixed.
     /// </summary>
     [Test]

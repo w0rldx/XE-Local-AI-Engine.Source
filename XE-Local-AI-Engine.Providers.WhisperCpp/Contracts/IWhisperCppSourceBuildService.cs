@@ -92,7 +92,7 @@ public sealed class WhisperCppSourceBuildStartResult
 {
     public required WhisperCppSourceBuildStartOutcome Outcome { get; init; }
 
-    public WhisperCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
+    public SourceBuildPrerequisiteReport? Prerequisites { get; init; }
 
     public RuntimeActivitySnapshot? Activity { get; init; }
 }

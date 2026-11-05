@@ -4,7 +4,7 @@ import { cleanup, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PartRow } from "@/features/images/components/ImageDownloadPartRow";
-import type { PartDraft } from "@/features/images/models/ImageModels";
+import type { PartDraft } from "@/features/images/models/ImageModelInstallModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The row is pure presentation; what is worth pinning is that it can break onto a second line. A role Select, a file

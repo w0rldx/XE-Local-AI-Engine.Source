@@ -14,9 +14,9 @@ import type {
 	ImageModelCatalogEntryView,
 	ImageModelFamily,
 	ImageModelPartRole,
-	ImageModelView,
 	PartDraft,
-} from "@/features/images/models/ImageModels";
+} from "@/features/images/models/ImageModelInstallModels";
+import type { ImageModelView } from "@/features/images/models/ImageModels";
 import {
 	useCancelImageModelDownload,
 	useDeleteImageModel,

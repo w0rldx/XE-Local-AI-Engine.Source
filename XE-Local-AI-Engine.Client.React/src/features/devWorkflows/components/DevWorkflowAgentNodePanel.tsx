@@ -5,8 +5,8 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import type { ChatScope } from "@/core/models/ChatScope";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
 import type { DevWorkflowNodeRunDetailResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionHub";

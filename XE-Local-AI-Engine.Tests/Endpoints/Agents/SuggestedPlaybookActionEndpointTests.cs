@@ -155,7 +155,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
 
         // The eval gate blocks a promote until the latest eval has passed. A freshly-authored suggestion
         // has no eval, so the gate returns 409 EvalRequired and the action stays Suggested (still inert). A successful
-        // 200/Enabled promote requires a passing eval (model-dependent — covered by the Wave-2 service unit tests).
+        // 200/Enabled promote requires a passing eval (model-dependent — covered by PlaybookEvalServiceTests).
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
         var payload = await response.Content.ReadAsStringAsync();

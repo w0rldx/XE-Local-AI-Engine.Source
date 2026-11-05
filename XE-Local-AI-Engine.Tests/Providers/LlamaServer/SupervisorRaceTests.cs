@@ -375,10 +375,10 @@ public sealed class SupervisorRaceTests
         // First launch yields a handle we crash; subsequent launches yield fresh healthy handles.
         var spawnCount = 0;
 #pragma warning disable CA2000 // Ownership transfers to the supervisor (via the launcher fake), which disposes it on teardown.
-        var crashHandle = new FakeProcessHandle(2000);
+        var crashHandle = new FakeProcessTreeHandle(2000);
 #pragma warning restore CA2000
         var launcher = new FakeProcessLauncher(_ =>
-            Interlocked.Increment(ref spawnCount) == 1 ? crashHandle : new FakeProcessHandle(4000));
+            Interlocked.Increment(ref spawnCount) == 1 ? crashHandle : new FakeProcessTreeHandle(4000));
         await using var supervisor = SupervisorFactory.Create(launcher);
 
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);

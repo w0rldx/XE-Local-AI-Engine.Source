@@ -92,18 +92,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         }
         finally
         {
-            try
-            {
-                handle.TreeKill();
-            }
-            catch (Exception exception)
-            {
-                // Best-effort: disposal below still releases the OS resources, and a teardown failure must not mask
-                // the outcome the caller came for.
-                _logger.LogWarning(exception, "The transient llama-server (pid {ProcessId}) could not be tree-killed.", handle.ProcessId);
-            }
-
-            handle.Dispose();
+            await TearDownAsync(handle, handle.ProcessId, exitWait: null).ConfigureAwait(false);
         }
     }
 
@@ -137,48 +126,12 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
 
         var model = pinnedModel?.Provenance
                     ?? await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false);
-        var resolved = ResolvedLaunchArguments.Replay(request.ContextTokens);
-        LlamaServerLaunchPlan? plan = variant == GpuVariant.Cpu ? launchPolicy.ResolveCpuReplayPlan(resolved) : null;
         var modelId = Path.GetFileName(request.ModelFilePath);
-        if (!manifest.SupportsOption("--alias"))
-        {
-            throw new LlamaRuntimeException("The selected llama.cpp runtime cannot prove transient endpoint ownership.");
-        }
-
-        var endpointModelAlias = $"xe-evaluation-{Guid.NewGuid():N}";
-        var key = new LlamaServerProcessSupervisor.ProcessKey(modelId, ModelRole.Chat);
-        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key,
-            binary.ServerExecutablePath,
-            request.ModelFilePath,
-            AllocatePort(),
-            variant,
-            resolved,
-            request.LaunchPolicy.ChatCacheReuse,
-            SpeculativeDecodingSettings.Disabled,
-            plan,
-            request.LaunchPolicy.ChatCacheRamMiB,
-            adapterFilePath: request.AdapterFilePath);
-        spec = spec with
-        {
-            Arguments = controlVector is null
-                ? [.. spec.Arguments, "--alias", endpointModelAlias]
-                :
-                [
-                    .. spec.Arguments, "--alias", endpointModelAlias,
-                    LlamaServerManagedFlags.ControlVectorScaled, TransientLlamaServerControlVectorCheck.FormatArgument(request.ControlVectorPath!, controlVector.Scale)
-                ]
-        };
-        var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, manifest, requireMetrics: false);
-        if (!capabilityDecision.IsCompatible)
-        {
-            throw new LlamaRuntimeException(capabilityDecision.SanitizedError ?? "The frozen evaluation launch is not supported by this runtime.");
-        }
-
-        spec = capabilityDecision.Spec;
+        var launch = ComposeEvaluationLaunch(request, binary, variant, manifest, launchPolicy, controlVector, modelId);
+        var spec = launch.Spec;
         var handle = _launcher.Launch(spec);
         var processId = handle.ProcessId;
-        var treeKillRequested = false;
-        var processExitObserved = false;
+        bool processExitObserved;
         T value;
         LlamaServerLaunchReceipt receipt;
         try
@@ -188,52 +141,14 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
                 spec.BaseAddress,
                 request.ReadinessTimeout,
                 ct,
-                endpointModelAlias).ConfigureAwait(false);
-            var modelIsStable = pinnedModel?.IsUnchanged()
-                                ?? await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false) == model;
-            if (!modelIsStable)
-            {
-                throw new LlamaRuntimeException("The evaluation model changed while the runtime was loading it.");
-            }
-
-            if (controlVector is not null
-                && !await TransientLlamaServerControlVectorCheck.IsUnchangedAsync(request.ControlVectorPath!, controlVector, ct).ConfigureAwait(false))
-            {
-                throw new LlamaRuntimeException("The control vector changed while the runtime was loading it.");
-            }
-
-            int? effectiveContext = null;
-            try
-            {
-                effectiveContext = await _healthProbe.ReadEffectiveContextTokensOrNullAsync(spec.BaseAddress, ct).ConfigureAwait(false);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                _logger.LogDebug(exception, "The transient evaluation runtime did not report an effective context window.");
-            }
-
-            receipt = await LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceiptAsync(variant,
-                manifest.Version ?? binary.Version,
-                manifest.ExecutableSha256,
-                LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments)
-                ?? LlamaServerLaunchProjection.From(variant,
-                    resolved,
-                    plan,
-                    ModelRole.Chat,
-                    request.LaunchPolicy.ChatCacheReuse,
-                    request.LaunchPolicy.ChatCacheRamMiB),
-                new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(request.AdapterFilePath), HasMmproj: false, HasDraft: false),
-                new LlamaServerLaunchPlacement(variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
-                    OffloadedLayers: null,
-                    TotalLayers: null),
-                effectiveContext,
-                request.LaunchPolicy,
-                processId,
-                capabilityDecision.OmittedOptions).ConfigureAwait(false);
+                launch.Alias).ConfigureAwait(false);
+            await EnsureInputsUnchangedAsync(request, model, pinnedModel, controlVector, ct).ConfigureAwait(false);
+            var effectiveContext = await ReadEffectiveContextOrNullAsync(spec.BaseAddress, ct).ConfigureAwait(false);
+            receipt = await BuildEvaluationReceiptAsync(request, binary, variant, manifest, launch, effectiveContext, processId).ConfigureAwait(false);
             var session = new TransientLlamaServerEvaluationSession
             {
                 BaseAddress = spec.BaseAddress,
-                ModelId = endpointModelAlias,
+                ModelId = launch.Alias,
                 Model = model,
                 Launch = receipt,
                 ControlVector = controlVector
@@ -243,24 +158,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         }
         finally
         {
-            try
-            {
-                treeKillRequested = true;
-                handle.TreeKill();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(exception, "The transient evaluation llama-server (pid {ProcessId}) could not be tree-killed.", processId);
-            }
-
-            try
-            {
-                processExitObserved = await handle.WaitForExitAsync(request.TeardownTimeout, CancellationToken.None).ConfigureAwait(false);
-            }
-            finally
-            {
-                handle.Dispose();
-            }
+            processExitObserved = await TearDownAsync(handle, processId, request.TeardownTimeout).ConfigureAwait(false);
         }
 
         return new TransientLlamaServerEvaluationResult<T>
@@ -271,7 +169,7 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             Teardown = new TransientLlamaServerTeardownEvidence
             {
                 ProcessId = processId,
-                TreeKillRequested = treeKillRequested,
+                TreeKillRequested = true,
                 ProcessExitObserved = processExitObserved,
                 ExitObservationTimedOut = !processExitObserved,
                 HandleDisposed = true
@@ -308,6 +206,155 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
             AdapterSizeBytes = adapter.SizeBytes,
             AdapterSha256 = adapter.Sha256
         };
+    }
+
+    /// <summary>
+    ///     Composes the frozen evaluation launch, throwing before anything starts when the runtime cannot honor it.
+    /// </summary>
+    private static EvaluationLaunch ComposeEvaluationLaunch(TransientLlamaServerEvaluationRequest request,
+        LlamaBinary binary,
+        GpuVariant variant,
+        LlamaServerCapabilityManifest manifest,
+        ILlamaServerLaunchPolicy launchPolicy,
+        TransientLlamaServerControlVector? controlVector,
+        string modelId)
+    {
+        var resolved = ResolvedLaunchArguments.Replay(request.ContextTokens);
+        LlamaServerLaunchPlan? plan = variant == GpuVariant.Cpu ? launchPolicy.ResolveCpuReplayPlan(resolved) : null;
+        if (!manifest.SupportsOption("--alias"))
+        {
+            throw new LlamaRuntimeException("The selected llama.cpp runtime cannot prove transient endpoint ownership.");
+        }
+
+        var endpointModelAlias = $"xe-evaluation-{Guid.NewGuid():N}";
+        var key = new LlamaServerProcessSupervisor.ProcessKey(modelId, ModelRole.Chat);
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key,
+            binary.ServerExecutablePath,
+            request.ModelFilePath,
+            AllocatePort(),
+            variant,
+            resolved,
+            request.LaunchPolicy.ChatCacheReuse,
+            SpeculativeDecodingSettings.Disabled,
+            plan,
+            request.LaunchPolicy.ChatCacheRamMiB,
+            adapterFilePath: request.AdapterFilePath);
+        spec = spec with
+        {
+            Arguments = controlVector is null
+                ? [.. spec.Arguments, "--alias", endpointModelAlias]
+                :
+                [
+                    .. spec.Arguments, "--alias", endpointModelAlias,
+                    LlamaServerManagedFlags.ControlVectorScaled, TransientLlamaServerControlVectorCheck.FormatArgument(request.ControlVectorPath!, controlVector.Scale)
+                ]
+        };
+        var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, manifest, requireMetrics: false);
+        if (!capabilityDecision.IsCompatible)
+        {
+            throw new LlamaRuntimeException(capabilityDecision.SanitizedError ?? "The frozen evaluation launch is not supported by this runtime.");
+        }
+
+        return new EvaluationLaunch
+        {
+            Spec = capabilityDecision.Spec,
+            Plan = plan,
+            Resolved = resolved,
+            Alias = endpointModelAlias,
+            OmittedOptions = capabilityDecision.OmittedOptions
+        };
+    }
+
+    /// <summary>
+    ///     Rechecks the evaluation inputs after the runtime loaded them, so a file swapped during the load cannot pass
+    ///     as the one the provenance names.
+    /// </summary>
+    private static async Task EnsureInputsUnchangedAsync(TransientLlamaServerEvaluationRequest request,
+        TransientLlamaServerModelProvenance model,
+        TransientLlamaServerPinnedModel? pinnedModel,
+        TransientLlamaServerControlVector? controlVector,
+        CancellationToken ct)
+    {
+        var modelIsStable = pinnedModel?.IsUnchanged()
+                            ?? await CaptureModelProvenanceAsync(request.ModelFilePath, request.AdapterFilePath, ct).ConfigureAwait(false) == model;
+        if (!modelIsStable)
+        {
+            throw new LlamaRuntimeException("The evaluation model changed while the runtime was loading it.");
+        }
+
+        if (controlVector is not null
+            && !await TransientLlamaServerControlVectorCheck.IsUnchangedAsync(request.ControlVectorPath!, controlVector, ct).ConfigureAwait(false))
+        {
+            throw new LlamaRuntimeException("The control vector changed while the runtime was loading it.");
+        }
+    }
+
+    private async Task<int?> ReadEffectiveContextOrNullAsync(Uri baseAddress, CancellationToken ct)
+    {
+        try
+        {
+            return await _healthProbe.ReadEffectiveContextTokensOrNullAsync(baseAddress, ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogDebug(exception, "The transient evaluation runtime did not report an effective context window.");
+            return null;
+        }
+    }
+
+    private static Task<LlamaServerLaunchReceipt> BuildEvaluationReceiptAsync(TransientLlamaServerEvaluationRequest request,
+        LlamaBinary binary,
+        GpuVariant variant,
+        LlamaServerCapabilityManifest manifest,
+        EvaluationLaunch launch,
+        int? effectiveContext,
+        int processId)
+    {
+        return LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceiptAsync(variant,
+            manifest.Version ?? binary.Version,
+            manifest.ExecutableSha256,
+            LlamaServerLaunchProjection.FromArgumentsOrNull(launch.Spec.Arguments)
+            ?? LlamaServerLaunchProjection.From(variant,
+                launch.Resolved,
+                launch.Plan,
+                ModelRole.Chat,
+                request.LaunchPolicy.ChatCacheReuse,
+                request.LaunchPolicy.ChatCacheRamMiB),
+            new LlamaServerLaunchAuxAssets(!string.IsNullOrWhiteSpace(request.AdapterFilePath), HasMmproj: false, HasDraft: false),
+            new LlamaServerLaunchPlacement(variant == GpuVariant.Cpu ? LlamaServerPlacementOutcome.Cpu : LlamaServerPlacementOutcome.Unknown,
+                OffloadedLayers: null,
+                TotalLayers: null),
+            effectiveContext,
+            request.LaunchPolicy,
+            processId,
+            launch.OmittedOptions);
+    }
+
+    /// <summary>
+    ///     Kills the process tree, waits for the exit when <paramref name="exitWait" /> is set, then disposes the handle.
+    /// </summary>
+    /// <returns>Whether the exit was observed; always <see langword="false" /> without a wait.</returns>
+    private async Task<bool> TearDownAsync(IProcessTreeHandle handle, int processId, TimeSpan? exitWait)
+    {
+        try
+        {
+            handle.TreeKill();
+        }
+        catch (Exception exception)
+        {
+            // Best-effort: disposal below still releases the OS resources, and a teardown failure must not mask
+            // the outcome the caller came for.
+            _logger.LogWarning(exception, "The transient llama-server (pid {ProcessId}) could not be tree-killed.", processId);
+        }
+
+        try
+        {
+            return exitWait is { } wait && await handle.WaitForExitAsync(wait, CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            handle.Dispose();
+        }
     }
 
     /// <summary>
@@ -352,5 +399,18 @@ internal sealed class TransientLlamaServerLauncher : ITransientLlamaServerLaunch
         {
             throw new LlamaRuntimeException("The model runtime did not become ready in time.");
         }
+    }
+
+    private sealed record EvaluationLaunch
+    {
+        public required LlamaServerLaunchSpec Spec { get; init; }
+
+        public required LlamaServerLaunchPlan? Plan { get; init; }
+
+        public required ResolvedLaunchArguments Resolved { get; init; }
+
+        public required string Alias { get; init; }
+
+        public required IReadOnlyList<string> OmittedOptions { get; init; }
     }
 }

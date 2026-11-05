@@ -127,7 +127,7 @@ export function PlaybookActionForm({
 					label={t("pages.agents.playbook.form.triggerCondition.label", "Trigger condition")}
 					description={t(
 						"pages.agents.playbook.form.triggerCondition.description",
-						"Optional advisory note describing when this applies (display-only in this phase).",
+						"Optional note describing when this applies. Retrieval ranks the action on it.",
 					)}
 					placeholder={t("pages.agents.playbook.form.triggerCondition.placeholder", "When the user asks for…")}
 					value={values.triggerCondition}

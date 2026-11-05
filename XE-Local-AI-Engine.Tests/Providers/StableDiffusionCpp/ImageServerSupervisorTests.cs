@@ -495,10 +495,7 @@ public sealed class ImageServerSupervisorTests
         }
     }
 
-    /// <summary>
-    ///     Hands the FIRST launch a handle whose tree-kill blocks on <c>firstKill</c>; the rest are
-    ///     ordinary. The shared <see cref="FakeImageProcessHandle" /> kills instantly and so cannot express a slow kill.
-    /// </summary>
+    /// <summary>Hands the FIRST launch a handle whose tree-kill blocks on <c>firstKill</c>; the rest are ordinary.</summary>
     private sealed class LatchingImageLauncher : IImageServerProcessLauncher
     {
         private readonly ImageKillLatch _firstKill;
@@ -510,68 +507,16 @@ public sealed class ImageServerSupervisorTests
         }
 
         /// <summary>The first launched daemon — the one this file's admission test evicts.</summary>
-        public LatchedImageProcessHandle? Victim { get; private set; }
+        public FakeProcessTreeHandle? Victim { get; private set; }
 
         public IProcessTreeHandle Launch(ImageServerLaunchSpec spec)
         {
             var pid = Interlocked.Increment(ref _nextPid);
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
-            var handle = new LatchedImageProcessHandle(pid, pid == 1 ? _firstKill : null);
+            var handle = new FakeProcessTreeHandle(pid, onTreeKill: pid == 1 ? _firstKill.Wait : null);
 #pragma warning restore CA2000
             Victim ??= handle;
             return handle;
-        }
-    }
-
-    private sealed class LatchedImageProcessHandle : IProcessTreeHandle
-    {
-        private readonly ImageKillLatch? _killLatch;
-        private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _exited;
-        private int _killed;
-
-        public LatchedImageProcessHandle(int pid, ImageKillLatch? killLatch)
-        {
-            _killLatch = killLatch;
-            ProcessId = pid;
-        }
-
-        public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
-
-        public int ProcessId { get; }
-
-        public bool HasExited => Volatile.Read(ref _exited) != 0;
-
-        // This double exists for the tree-kill latch only; it never stands in for a crashed child.
-        public int? ExitCode => null;
-
-        public string? StderrTail => null;
-
-        // The supervisor's residency exit watch waits here; it completes on the kill.
-        public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
-        {
-            try
-            {
-                await _exitSignal.Task.WaitAsync(timeout, ct);
-                return true;
-            }
-            catch (TimeoutException)
-            {
-                return false;
-            }
-        }
-
-        public void TreeKill()
-        {
-            _killLatch?.Wait();
-            Interlocked.Exchange(ref _killed, value: 1);
-            Interlocked.Exchange(ref _exited, value: 1);
-            _exitSignal.TrySetResult();
-        }
-
-        public void Dispose()
-        {
-            // No unmanaged resources in the double.
         }
     }
 }

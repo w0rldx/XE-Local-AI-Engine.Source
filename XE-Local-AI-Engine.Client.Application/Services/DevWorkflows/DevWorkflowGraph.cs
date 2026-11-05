@@ -442,13 +442,13 @@ internal sealed class DevWorkflowGraph
         }
         catch (DevWorkflowValidationException exception)
         {
-            throw new DevWorkflowValidationException($"{exception.Message.TrimEnd('.')} (invariant GRAPH-C4-4).", exception);
+            throw new DevWorkflowValidationException($"{exception.Message.TrimEnd('.')} (invariant GRAPH-4).", exception);
         }
 
         if (maxLoopIterations is not null && retryTarget is null)
         {
             throw new DevWorkflowValidationException($"Node '{nodeKey}' declares a 'maxLoopIterations' but no 'retryTarget', so it has no fix loop to bound. "
-                                                     + "The cap counts routes to a retry target, and this node routes none (invariant GRAPH-C4-4).");
+                                                     + "The cap counts routes to a retry target, and this node routes none (invariant GRAPH-4).");
         }
 
         return maxLoopIterations;
@@ -662,7 +662,7 @@ internal sealed class DevWorkflowGraph
         }
     }
 
-    /// <summary><c>GRAPH-C4-1</c> — every path reaches an end, over the edges a run can TAKE, not every authored one.</summary>
+    /// <summary><c>GRAPH-1</c> — every path reaches an end, over the edges a run can TAKE, not every authored one.</summary>
     /// <remarks>
     ///     An out-edge of a human gate that is false for all three answers can never fire, so the branch behind it is
     ///     written but unreachable. Three steps, in this order, because the order decides which complaint the operator
@@ -690,17 +690,17 @@ internal sealed class DevWorkflowGraph
         {
             throw new DevWorkflowValidationException(culprits.Contains(stranded.NodeKey)
                 ? $"Node '{stranded.NodeKey}' is a human gate with an out-edge that can never fire, and nothing it still reaches leads to an end of the run "
-                  + "(invariant GRAPH-C4-1)."
+                  + "(invariant GRAPH-1)."
                 : $"Node '{stranded.NodeKey}' cannot reach an end of the run, because every path out of it passes through a gate edge that can never fire "
-                  + "(invariant GRAPH-C4-1).");
+                  + "(invariant GRAPH-1).");
         }
 
         var orphaned = dead.OrderBy(static edge => edge.From, StringComparer.Ordinal).ThenBy(static edge => edge.To, StringComparer.Ordinal).First();
         throw new DevWorkflowValidationException($"The edge {orphaned} leaves a human gate and is false for all three answers, so nothing would ever take it. "
-                                                 + "Condition it on an answer the gate can give (invariant GRAPH-C4-1).");
+                                                 + "Condition it on an answer the gate can give (invariant GRAPH-1).");
     }
 
-    /// <summary><c>GRAPH-C4-2</c> — a node that writes outside its sandbox is reached through a human gate.</summary>
+    /// <summary><c>GRAPH-2</c> — a node that writes outside its sandbox is reached through a human gate.</summary>
     /// <remarks>
     ///     <see cref="EnsureAppliesAreGated" /> is strictly stronger for an apply node, so this never weakens it;
     ///     approval policy is tighten-only. What this adds is the DECLARED case: an Agent node whose author wrote
@@ -727,11 +727,11 @@ internal sealed class DevWorkflowGraph
         {
             throw new DevWorkflowValidationException($"Node '{ungated.NodeKey}' can write outside its sandbox and a run can reach it without an operator ever being "
                                                      + "asked. Put a human gate on every path into it, or set 'allowUngatedWrites' on this template and say why "
-                                                     + "(invariant GRAPH-C4-2).");
+                                                     + "(invariant GRAPH-2).");
         }
     }
 
-    /// <summary><c>GRAPH-C4-3</c> — an apply follows a validation: every path into an <c>Apply</c> node passes a <c>Validate</c> Tool.</summary>
+    /// <summary><c>GRAPH-3</c> — an apply follows a validation: every path into an <c>Apply</c> node passes a <c>Validate</c> Tool.</summary>
     /// <remarks>
     ///     Deliberately optimistic in one place rather than claiming an airtight proof: admission drops inbound edges
     ///     whose source is a template key, so the <c>validate(template) → join</c> edge is not a run-time dependency.
@@ -750,11 +750,11 @@ internal sealed class DevWorkflowGraph
         if (applies.FirstOrDefault(node => !validated.Contains(node.NodeKey)) is { } unvalidated)
         {
             throw new DevWorkflowValidationException($"Node '{unvalidated.NodeKey}' applies approved patches and a run can reach it without any validation node "
-                                                     + "having run. Put a Tool node in Validate mode on every path into it (invariant GRAPH-C4-3).");
+                                                     + "having run. Put a Tool node in Validate mode on every path into it (invariant GRAPH-3).");
         }
     }
 
-    /// <summary><c>GRAPH-C4-5</c> — an edge routing on a node's <c>output.*</c> names what its output schema declares, and a classifier routes every answer.</summary>
+    /// <summary><c>GRAPH-5</c> — an edge routing on a node's <c>output.*</c> names what its output schema declares, and a classifier routes every answer.</summary>
     /// <remarks>
     ///     A condition on an undeclared member, of another kind than its type, outside its enum, or eq an <c>unmetOn</c> value (which blocks
     ///     the node instead) is an edge that can never fire. When EVERY out-edge is an <c>eq</c> on one enum member, the node is a classifier,
@@ -784,7 +784,7 @@ internal sealed class DevWorkflowGraph
                 if (schema.Find(condition.Path[Prefix.Length..]) is not { } property)
                 {
                     throw new DevWorkflowValidationException($"The edge {edge} routes on '{condition.Path}', which the outputSchema of node '{node.NodeKey}' does not declare; "
-                                                             + $"it declares {string.Join(", ", schema.Properties.Select(static member => $"'{Prefix}{member.Name}'"))} (invariant GRAPH-C4-5).");
+                                                             + $"it declares {string.Join(", ", schema.Properties.Select(static member => $"'{Prefix}{member.Name}'"))} (invariant GRAPH-5).");
                 }
 
                 // DevWorkflowCondition compares only like kinds, eq and ne included, and a validated output never carries null, so a
@@ -792,7 +792,7 @@ internal sealed class DevWorkflowGraph
                 if (condition.Operator is not (DevWorkflowConditionOperator.Exists or DevWorkflowConditionOperator.NotExists) && !Comparable(property.Type, condition.Value.ValueKind))
                 {
                     throw new DevWorkflowValidationException($"The edge {edge} compares '{condition.Path}' with {condition.Value.GetRawText()}, but the outputSchema of node "
-                                                             + $"'{node.NodeKey}' declares it a {JsonNamingPolicy.CamelCase.ConvertName(property.Type.ToString())}, so it could never fire (invariant GRAPH-C4-5).");
+                                                             + $"'{node.NodeKey}' declares it a {JsonNamingPolicy.CamelCase.ConvertName(property.Type.ToString())}, so it could never fire (invariant GRAPH-5).");
                 }
 
                 if (property.Enum is not { } values || condition.Operator is not (DevWorkflowConditionOperator.Eq or DevWorkflowConditionOperator.Ne))
@@ -804,14 +804,14 @@ internal sealed class DevWorkflowGraph
                 if (condition.Value.ValueKind != JsonValueKind.String || !values.Contains(condition.Value.GetString(), StringComparer.Ordinal))
                 {
                     throw new DevWorkflowValidationException($"The edge {edge} compares '{condition.Path}' with {condition.Value.GetRawText()}, which is not one of "
-                                                             + $"{string.Join(", ", values.Select(static value => JsonSerializer.Serialize(value)))}, so it could never fire (invariant GRAPH-C4-5).");
+                                                             + $"{string.Join(", ", values.Select(static value => JsonSerializer.Serialize(value)))}, so it could never fire (invariant GRAPH-5).");
                 }
 
                 // An unmetOn answer blocks the node run before any edge is read, so an eq naming one is written but never taken.
                 if (condition.Operator == DevWorkflowConditionOperator.Eq && property.UnmetOn?.Contains(condition.Value.GetString(), StringComparer.Ordinal) == true)
                 {
                     throw new DevWorkflowValidationException($"The edge {edge} routes on '{condition.Path}' equal to {condition.Value.GetRawText()}, which the outputSchema of node "
-                                                             + $"'{node.NodeKey}' lists in 'unmetOn': that answer blocks the node for a person, so the edge could never fire (invariant GRAPH-C4-5).");
+                                                             + $"'{node.NodeKey}' lists in 'unmetOn': that answer blocks the node for a person, so the edge could never fire (invariant GRAPH-5).");
                 }
 
                 partition &= condition.Operator == DevWorkflowConditionOperator.Eq;
@@ -830,7 +830,7 @@ internal sealed class DevWorkflowGraph
             if (!classified.Required)
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' routes every out-edge on '{Prefix}{classified.Name}', which its outputSchema does not list "
-                                                         + "in 'required', so a run whose agent leaves it out would have nowhere to go. Make it required (invariant GRAPH-C4-5).");
+                                                         + "in 'required', so a run whose agent leaves it out would have nowhere to go. Make it required (invariant GRAPH-5).");
             }
 
             var unrouted = classified.Enum!.Where(value => !routed.Contains(value) && classified.UnmetOn?.Contains(value, StringComparer.Ordinal) != true).ToList();
@@ -838,7 +838,7 @@ internal sealed class DevWorkflowGraph
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' routes on '{Prefix}{classified.Name}' and has no edge for "
                                                          + $"{string.Join(", ", unrouted.Select(static value => JsonSerializer.Serialize(value)))}, so a run whose agent answers that "
-                                                         + "would have nowhere to go. Add an edge for every value the schema allows (invariant GRAPH-C4-5).");
+                                                         + "would have nowhere to go. Add an edge for every value the schema allows (invariant GRAPH-5).");
             }
         }
     }
@@ -968,7 +968,7 @@ internal sealed class DevWorkflowGraph
                 .Where(static edge => !string.Equals(edge.From, edge.To, StringComparison.Ordinal))
     ];
 
-    /// <summary><c>Y3</c> made structural: an apply node is reached from a human gate and from nothing else.</summary>
+    /// <summary>An apply node is reached from a human gate and from nothing else.</summary>
     /// <remarks>
     ///     No AI-authored patch reaches a real repository without an operator decision in the run's own audit trail.
     ///     Stated as "every inbound edge comes from a human gate" rather than "some gate lies on every path", which
@@ -1061,14 +1061,14 @@ internal sealed class DevWorkflowGraph
                                                          + "subtree is cloned once per task, so nothing outside it may depend on the copy that is never run.");
             }
 
-            // GRAPH-C4-1, step four: an edge-less template leaf would take the zero-task verdict row at a key the
+            // GRAPH-1, step four: an edge-less template leaf would take the zero-task verdict row at a key the
             // completion predicate reads. Scoped to Tool/Validate, the only nodes that row is written for.
             if (Nodes[key] is { NodeType: DevWorkflowNodeType.Tool, ToolMode: DevWorkflowToolMode.Validate } && OutboundEdges(key).Count == 0)
             {
                 throw new DevWorkflowValidationException($"Node '{key}' validates inside the materialization template of '{nodeKey}' and no edge leaves it, so it "
                                                          + "would count as an end of the run — and a decomposition that found no work records a succeeded verdict "
                                                          + $"under that key. Give it an edge to the join node '{materialization.JoinNodeKey}' (invariant "
-                                                         + "GRAPH-C4-1).");
+                                                         + "GRAPH-1).");
             }
         }
     }

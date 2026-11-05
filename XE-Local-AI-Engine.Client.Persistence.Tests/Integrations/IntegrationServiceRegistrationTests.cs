@@ -71,7 +71,7 @@ public sealed class IntegrationServiceRegistrationTests
     [Test]
     public void CompositionRoot_InvokesTheModuleAfterTheChatModule()
     {
-        // Hosted services start in registration order, so the coordinator this module gains in the next slice must
+        // Hosted services start in registration order, so the coordinator this module registers must
         // start after chat restart recovery has terminalized rows orphaned by a crash. The invariant is a property of
         // the composition root's call order, which is why it is read from the source rather than from a container.
         var source = File.ReadAllText(CompositionRootPath());

@@ -475,8 +475,8 @@ public sealed class SubAgentSpawnServiceTests
     {
         // Parity, shaped as one assertion: a resolved runtime with a divergent prompt, a graded reasoning effort, and a
         // skill must ALL reach the child — the same ResolvedAgentRuntime fields the direct chat path threads into its
-        // runtime package (resolved.ResolvedSystemPrompt / resolved.ReasoningEffort / resolved.Skills). Previously
-        // the spawn path consumed only resolved.AllowedTools, so a saved sub-agent diverged from a direct send.
+        // runtime package (resolved.ResolvedSystemPrompt / resolved.ReasoningEffort / resolved.Skills). A spawn path
+        // consuming only resolved.AllowedTools would make a saved sub-agent diverge from a direct send.
         using var harness = new Harness();
         harness.AllowLocal();
         harness.WithThinkingCapability(true);
@@ -1450,8 +1450,8 @@ public sealed class SubAgentSpawnServiceTests
     {
         // A saturated turn rejects BEFORE it pays for a binding resolution — a definition store read plus a full
         // projection — so the fan-out reason wins over the unresolved one and neither the store nor the resolver is
-        // asked. The DEFINITION STORE is the discriminating spy: the second spawn's key is a well-formed GUID, so on
-        // the old order ResolveDefinitionAsync would call GetByIdAsync once and only then return null. The resolver's
+        // asked. The DEFINITION STORE is the discriminating spy: the second spawn's key is a well-formed GUID, so in
+        // the opposite order ResolveDefinitionAsync would call GetByIdAsync once and only then return null. The resolver's
         // zero-calls assertion alone does not discriminate (the null definition short-circuits before the resolver is
         // reached either way); it is kept because it pins the second half of the saved work. The first spawn is a bare
         // model binding on purpose: that path short-circuits without touching either seam.

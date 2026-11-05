@@ -37,7 +37,7 @@ public sealed class DevelopmentExceptionHandlerTests
         var body = await response.Content.ReadAsStringAsync();
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        AssertEx.Equal(string.Empty, body, "the 404 the Development endpoints used to send carried no body, and the global handler must not add one.");
+        AssertEx.Equal(string.Empty, body, "the 404 of the Development endpoints carries no body, and the global handler must not add one.");
     }
 
     /// <summary>

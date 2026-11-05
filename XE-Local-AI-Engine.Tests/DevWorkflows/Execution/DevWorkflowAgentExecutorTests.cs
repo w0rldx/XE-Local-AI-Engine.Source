@@ -49,7 +49,7 @@ public sealed class DevWorkflowAgentExecutorTests
                                              }
                                              """;
 
-    /// <summary>An agent handing its work to a gate — the shape the whole slice ships, minus the middle step.</summary>
+    /// <summary>An agent handing its work to a gate — the seeded shape minus the middle step.</summary>
     private const string AgentThenGate = """
                                          {
                                            "schemaVersion": 1,
@@ -250,7 +250,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     The Phase A3 gate, first half: a scripted agent completes, and the node run settles on what its session did.
+    ///     A scripted agent completes, and the node run settles on what its session did.
     /// </summary>
     [Test]
     public async Task AnAgentNode_RunsItsWorkSessionAndSucceedsOnIt()
@@ -281,7 +281,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     FU-5: a node's authored model and effort reach the session, on the create AND on the start that follows it.
+    ///     A node's authored model and effort reach the session, on the create AND on the start that follows it.
     ///     <para>
     ///         Both, because neither alone would run the node on them: the create is what the tool gate judges, and the
     ///         start is what the step loop reads. A node that pins nothing hands null, which is what leaves the bound
@@ -355,7 +355,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     The Phase A3 gate, second half: a refused admission is queueing, not failure. The row says what it is waiting
+    ///     A refused admission is queueing, not failure. The row says what it is waiting
     ///     for, nothing records an error, and the next tick asks again.
     /// </summary>
     [Test]
@@ -532,7 +532,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     The B3 gate on the agent lane: a provider failure is retryable, so the node run tries again on a NEW work
+    ///     On the agent lane, a provider failure is retryable, so the node run tries again on a NEW work
     ///     session — resuming the one that just failed would resume the context that failed with it — and only a spent
     ///     attempt cap sends it to a human.
     /// </summary>
@@ -1937,7 +1937,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     <c>GRAPH-C4-2</c>'s runtime half: what a node may actually do is decided when its binding is resolved, so an
+    ///     <c>GRAPH-2</c>'s runtime half: what a node may actually do is decided when its binding is resolved, so an
     ///     Agent node whose agent will really be offered a write/execute tool has to have SAID so.
     ///     <para>
     ///         <c>Policy</c>, not <c>Configuration</c>: nothing is misconfigured — the definition is coherent and the
@@ -1958,7 +1958,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
-        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-2", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2128,7 +2128,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass, "a widened projection is a policy question for a person, not a provider failure to retry.");
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
-        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-2", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2155,7 +2155,7 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "no longer exists");
-        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-2", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2184,18 +2184,18 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, research.Status, "a refusal is not undone by narrowing the definition after it.");
         AssertEx.Equal(DevWorkflowFailureClasses.Policy, research.FailureClass, "the cause is read from the record of the refusal, not re-decided from current state.");
         AssertEx.Contains(AssertEx.NotNull(research.TerminalReason), "run_python");
-        AssertEx.Contains(research.TerminalReason!, "GRAPH-C4-2", StringComparison.Ordinal);
+        AssertEx.Contains(research.TerminalReason!, "GRAPH-2", StringComparison.Ordinal);
     }
 
     /// <summary>The sentence the send writes onto the refusal row when a bound definition gains a tool that writes.</summary>
     private const string WidenedRefusal =
         "This node is bound to an agent that will be offered 'run_python', which can write files or run commands outside this node's sandbox, and the node "
-        + "declares no 'WriteExecute' capability (invariant GRAPH-C4-2).";
+        + "declares no 'WriteExecute' capability (invariant GRAPH-2).";
 
     /// <summary>And the one it writes when the definition is gone and the turn would fall back to the default persona.</summary>
     private const string DeletedRefusal =
         "This node is bound to an agent definition that no longer exists, so its turn falls back to the default assistant — which is offered 'run_python', a "
-        + "tool that can write files or run commands outside this node's sandbox (invariant GRAPH-C4-2).";
+        + "tool that can write files or run commands outside this node's sandbox (invariant GRAPH-2).";
 
     /// <summary>
     ///     And a session that failed with its definition untouched keeps the path it has always taken: the retry policy
@@ -2248,7 +2248,7 @@ public sealed class DevWorkflowAgentExecutorTests
           }
           """;
 
-    /// <summary>The same node declaring the write, behind the human gate that declaration then requires (GRAPH-C4-2a).</summary>
+    /// <summary>The same node declaring the write, behind the human gate that declaration then requires (GRAPH-2a).</summary>
     private static string GatedBoundAgent(Guid agentDefinitionId) =>
         $$"""
           {

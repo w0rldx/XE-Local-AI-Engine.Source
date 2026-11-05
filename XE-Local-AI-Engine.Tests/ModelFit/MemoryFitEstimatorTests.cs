@@ -758,7 +758,7 @@ public sealed class MemoryFitEstimatorTests
     [Test]
     public void MlaBranch_UnclampedFigure_MatchesTheWorkedExample()
     {
-        // Two pins in one place, so Phase 2b (unclamp) is a one-line product change plus one expectation swap here.
+        // The unclamped figure the MLA branch would report, pinned beside the clamped one below.
         //   generic, per layer per token: 16 · (192 + 128) · 1 B (q8_0) = 5120 B  → · 27 · 8192 = 1_132_462_080 B
         //   MLA,     per layer per token:  1 ·  576        · 1 B (q8_0) =  576 B  → · 27 · 8192 =   127_401_984 B (8.9× lower)
         const long genericKvBytes = MlaKvHeads * (MlaKeyLength + MlaValueLength) * MlaBlockCount * MlaCtx;
@@ -778,7 +778,7 @@ public sealed class MemoryFitEstimatorTests
             ValueLengthMla = MlaLatentValueLength
         };
 
-        // What Phase 2 SHIPS: the clamped figure, i.e. the generic KV term, byte for byte.
+        // What the estimator reports: the clamped figure, i.e. the generic KV term, byte for byte.
         var weights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
         var expected = weights + genericKvBytes + (long)((weights + genericKvBytes) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes;
         AssertEx.Equal(expected, EstimateMla(estimator, profile, mla).EstimatedBytes);

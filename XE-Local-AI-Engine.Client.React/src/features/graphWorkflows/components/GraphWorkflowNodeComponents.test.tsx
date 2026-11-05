@@ -10,8 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowNodeCard } from "@/features/graphWorkflows/components/GraphWorkflowNodeComponents";
 import classes from "@/features/graphWorkflows/components/GraphWorkflowNodes.module.css";
+import { defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowAuthoring";
 import {
-	defaultNodeData,
 	type GraphWorkflowCanvasNodeData,
 	graphWorkflowNodeTypeByKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";

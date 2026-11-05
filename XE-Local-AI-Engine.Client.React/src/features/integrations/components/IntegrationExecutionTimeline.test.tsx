@@ -222,9 +222,9 @@ describe("IntegrationExecutionTimeline", () => {
 		);
 	});
 
-	// The detailJson below is copied verbatim from a real captured row (s4-live-evidence/failed-execution-events.json).
-	// Rows persisted before the writer unified on `{category, summary}` carry `{failureCategory, failureSummary}`, and
-	// the earlier fixture — this client's own brief shape — is exactly why the mismatch reached a live run unnoticed.
+	// The detailJson below is copied verbatim from a real captured row.
+	// Rows persisted before the writer unified on `{category, summary}` carry `{failureCategory, failureSummary}`, and a
+	// fixture in this client's own shape would hide that mismatch from every test.
 	it("renders a failure detail written in the pre-unification failureCategory/failureSummary shape", () => {
 		renderWithMantine(
 			<IntegrationExecutionTimeline

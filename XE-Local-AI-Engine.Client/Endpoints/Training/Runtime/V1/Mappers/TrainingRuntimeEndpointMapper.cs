@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Training.Runtime.V1.Mappers;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 internal static class TrainingRuntimeEndpointMapper
@@ -22,13 +23,13 @@ internal static class TrainingRuntimeEndpointMapper
         };
     }
 
-    public static TrainingRuntimePrerequisitesResponse ToResponse(this TrainingRuntimePrerequisiteReport report)
+    public static TrainingRuntimePrerequisitesResponse ToResponse(this SourceBuildPrerequisiteReport report)
     {
         ArgumentNullException.ThrowIfNull(report);
 
         return new TrainingRuntimePrerequisitesResponse
         {
-            CanInstall = report.CanInstall,
+            CanInstall = report.CanBuild,
             Items = report.Items
                           .Select(static item => new TrainingRuntimePrerequisiteItemResponse
                           {

@@ -84,7 +84,7 @@ public sealed class StableDiffusionCppSourceBuildService
                         : null,
                     BuildId = Guid.NewGuid()
                 };
-                return new StartPlan<StableDiffusionCppSourceBuildPrerequisiteReport>
+                return new StartPlan<SourceBuildPrerequisiteReport>
                 {
                     Prerequisites = prerequisites,
                     CanBuild = prerequisites.CanBuild,

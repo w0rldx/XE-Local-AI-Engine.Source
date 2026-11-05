@@ -6,7 +6,7 @@ the product backend is unsupported.
 
 | Target | Status on current host | Evidence that can be captured | Required follow-up |
 |---|---|---|---|
-| WSL2 + managed source-build CUDA | Supported for baseline/rebaseline and fit/replay; **not sufficient for the corrected Lane 4 memory gate** | Runtime/helper hashes, tag, device list, baseline/rebaseline, fit/replay vectors, global VRAM | Reject samples with WDDM paging or global/process divergence; use another host for Lane 4 because WSL exposes no PID-scoped CUDA residency rows |
+| WSL2 + managed source-build CUDA | Supported for baseline/rebaseline and fit/replay; **not sufficient for the corrected scheduling memory gate** | Runtime/helper hashes, tag, device list, baseline/rebaseline, fit/replay vectors, global VRAM | Reject samples with WDDM paging or global/process divergence; use another host for scheduling optimization because WSL exposes no PID-scoped CUDA residency rows |
 | WSL2 CPU-only spawn | Supported | Baseline/rebaseline and fit/helper availability without GPU placement claims | Keep CPU evidence separate from GPU claims |
 | Native Windows + NVIDIA/WDDM | Manual only | `capture_windows_vram.ps1` idle/game fixtures; operator fit/helper availability | Return both fixtures and exact binary hashes; no automated certification |
 | Linux NVIDIA Vulkan | Unsupported here | `--list-devices` records zero devices because no NVIDIA Vulkan ICD is installed | Capture on a machine with a working NVIDIA Vulkan ICD; do not infer from CUDA |
@@ -27,7 +27,7 @@ not certify Vulkan, native Linux OOM, native Windows contention, or 8 GB hardwar
 | Decision surface | Evaluator | Enforced evidence | Limits |
 |---|---|---|---|
 | Generic inference command aggregates | `capture_inference_evidence.py gate` | Strict verified artifact identity, complete command-name/argv equality, and ordered exact-rational `median` or `p95` percentage rules | Throughput-style trusted aggregates only; no generic RAM/VRAM certification |
-| Lane 4 scheduling optimization | `run_scheduling_grid.py` | Semantic/correctness/determinism checks, five-scenario throughput, process peak RSS, and PID-scoped CUDA residency | Authoritative compound gate; WSL/global GPU memory cannot substitute for PID residency |
+| Scheduling optimization | `run_scheduling_grid.py` | Semantic/correctness/determinism checks, five-scenario throughput, process peak RSS, and PID-scoped CUDA residency | Authoritative compound gate; WSL/global GPU memory cannot substitute for PID residency |
 
 Run the generic gate explicitly with two raw evidence artifacts and a policy:
 

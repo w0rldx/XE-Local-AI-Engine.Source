@@ -34,7 +34,7 @@ public sealed class IntegrationSseRoutesTests
 
     private TestServerWebAppFactory Factory => Host.Factory;
 
-    /// <summary>Test 30 — the two shapes of an accepted invoke, chosen by <c>Accept</c>.</summary>
+    /// <summary>The two shapes of an accepted invoke, chosen by <c>Accept</c>.</summary>
     [Test]
     public async Task Invoke_WithAJsonAccept_Answers202AndWithAStreamAcceptOpensTheStream()
     {
@@ -59,7 +59,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.Contains(first, "id: 1", message: "The accepted event is always sequence 1, so a caller can resume from the very first frame.");
     }
 
-    /// <summary>Test 31 — a rejection stays a JSON status even when the caller asked for a stream.</summary>
+    /// <summary>A rejection stays a JSON status even when the caller asked for a stream.</summary>
     [Test]
     public async Task Invoke_WhenTheQueueIsFull_Answers503EvenForAStreamAccept()
     {
@@ -91,7 +91,7 @@ public sealed class IntegrationSseRoutesTests
         }
     }
 
-    /// <summary>Test 32 — resume.</summary>
+    /// <summary>Resume.</summary>
     [Test]
     public async Task Events_WithALastEventId_StartsAtTheNextSequence()
     {
@@ -113,7 +113,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.True(Sequences(body).SequenceEqual([4L, 5L, 6L]), $"Expected the stream to resume at 4; got [{string.Join(", ", Sequences(body))}].");
     }
 
-    /// <summary>Test 33 — below the retained floor, and the body has to name the way out.</summary>
+    /// <summary>Below the retained floor, and the body has to name the way out.</summary>
     [Test]
     public async Task Events_BelowTheRetainedFloor_Answers410NamingBothFallbacks()
     {
@@ -133,7 +133,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.False(body.Contains("event:", StringComparison.Ordinal), "The refusal must not be a partially written stream.");
     }
 
-    /// <summary>Test 34 — above the head.</summary>
+    /// <summary>Above the head.</summary>
     [Test]
     public async Task Events_AboveTheHead_Answers410RatherThanAHangingStream()
     {
@@ -147,7 +147,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.Equal(HttpStatusCode.Gone, response.StatusCode);
     }
 
-    /// <summary>Test 35 — a row that exists on an execution the ring no longer tracks is 410, never 404.</summary>
+    /// <summary>A row that exists on an execution the ring no longer tracks is 410, never 404.</summary>
     [Test]
     public async Task Events_ForAnExecutionTheRingNoLongerTracks_Answers410NotFound()
     {
@@ -161,7 +161,7 @@ public sealed class IntegrationSseRoutesTests
             "The row exists and the caller owns it: 404 would say it does not, and IsTracked is what separates the two.");
     }
 
-    /// <summary>Test 36 — masking by principal, and by the CURRENT key's allowlist.</summary>
+    /// <summary>Masking by principal, and by the CURRENT key's allowlist.</summary>
     [Test]
     public async Task Events_ForAForeignPrincipalOrANarrowKey_Answers404ByteIdenticalToAnUnknownId()
     {
@@ -179,13 +179,13 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
         AssertEx.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
         AssertEx.Equal(HttpStatusCode.NotFound, narrow.StatusCode,
-            "A key scoped to one trigger must not read its own principal's executions under another; that is the bypass round 5 closed.");
+            "A key scoped to one trigger must not read its own principal's executions under another; that would bypass the trigger scope.");
         AssertEx.Equal(expected, await foreign.Content.ReadAsStringAsync());
         AssertEx.Equal(expected, await narrow.Content.ReadAsStringAsync());
         AssertEx.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode, "An unusable credential is 401 from the handler, never a 403 and never a 404.");
     }
 
-    /// <summary>Test 36a — a second credential of the SAME integrator is not masked out.</summary>
+    /// <summary>A second credential of the SAME integrator is not masked out.</summary>
     [Test]
     public async Task Events_ForASecondKeyOfTheSamePrincipal_ReturnsTheCallersOwnStream()
     {
@@ -201,7 +201,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.NotEmpty(Sequences(await response.Content.ReadAsStringAsync()));
     }
 
-    /// <summary>Test 36b — the persisted-rows shape, which is what a 410 sends a caller to.</summary>
+    /// <summary>The persisted-rows shape, which is what a 410 sends a caller to.</summary>
     [Test]
     public async Task Events_WithAJsonAccept_ReturnTheCommittedRowsEvenWhenTheRingHasDroppedTheRun()
     {
@@ -238,7 +238,7 @@ public sealed class IntegrationSseRoutesTests
         }
     }
 
-    /// <summary>Test 36c — the link that makes the recovery route discoverable without reading the docs.</summary>
+    /// <summary>The link that makes the recovery route discoverable without reading the docs.</summary>
     [Test]
     public async Task GetExecution_CarriesTheEventsLink()
     {
@@ -254,7 +254,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.Equal(IntegrationApiRoutes.Execution(executionId), body.Links.Self);
     }
 
-    /// <summary>Test 36d — a narrow key is masked out of all three external routes, and the key row is re-read per request.</summary>
+    /// <summary>A narrow key is masked out of all three external routes, and the key row is re-read per request.</summary>
     [Test]
     public async Task ExternalRoutes_MaskANarrowKeyOnEveryShapeAndRereadTheKeyPerRequest()
     {
@@ -284,7 +284,7 @@ public sealed class IntegrationSseRoutesTests
         AssertEx.Equal(HttpStatusCode.NotFound, afterNarrowing.StatusCode, "The key row is re-read per request, so a narrowed credential loses access at once.");
     }
 
-    /// <summary>Test 37 — the operator's timeline reads the table, not the ring.</summary>
+    /// <summary>The operator's timeline reads the table, not the ring.</summary>
     [Test]
     public async Task AdminEvents_ReturnThePersistedRowsWithDecryptedDetailAndNoAssistantNoise()
     {
@@ -315,7 +315,7 @@ public sealed class IntegrationSseRoutesTests
         }
     }
 
-    /// <summary>Test 38 — the loopback middleware passes a non-browser caller that sends no Origin.</summary>
+    /// <summary>The loopback middleware passes a non-browser caller that sends no Origin.</summary>
     [Test]
     public async Task Events_WithNoOriginHeader_IsNotRefusedByTheLoopbackMiddleware()
     {
@@ -335,7 +335,7 @@ public sealed class IntegrationSseRoutesTests
     }
 
     /// <summary>
-    ///     Test 45 — a duplicate whose ring entry is gone still gets the duplicate's own 202. The accept transaction has
+    ///     A duplicate whose ring entry is gone still gets the duplicate's own 202. The accept transaction has
     ///     already committed by the time the writer answers, so a 410 here would tell the caller the request was not
     ///     admitted when it was.
     /// </summary>
@@ -366,7 +366,7 @@ public sealed class IntegrationSseRoutesTests
     }
 
     /// <summary>
-    ///     Test 46 — <c>Accept</c> is parsed, not substring-matched: a <c>q=0</c> is a refusal and <c>*/*</c> is not a
+    ///     <c>Accept</c> is parsed, not substring-matched: a <c>q=0</c> is a refusal and <c>*/*</c> is not a
     ///     request for a stream.
     /// </summary>
     [Test]
@@ -698,7 +698,7 @@ public sealed class IntegrationOneStreamHostFixture : IAsyncInitializer, IAsyncD
         Factory.DisposeAsync();
 }
 
-/// <summary>Test 35a — the open-stream gate, as a status rather than as a queued connection.</summary>
+/// <summary>The open-stream gate, as a status rather than as a queued connection.</summary>
 [NotInParallel("IntegrationOneStreamHost")]
 [Category(TestCategories.Integration)]
 public sealed class IntegrationSseStreamCapTests
@@ -736,7 +736,7 @@ public sealed class IntegrationSseStreamCapTests
     }
 
     /// <summary>
-    ///     Test 47 — the same refusal on the INVOKE route is not the invoke's answer. The execution was admitted and is
+    ///     The same refusal on the INVOKE route is not the invoke's answer. The execution was admitted and is
     ///     holding the node's lease, so a 503 there would say the opposite of what happened; the accept body, which
     ///     names the execution and the events route, is what the caller gets instead.
     /// </summary>

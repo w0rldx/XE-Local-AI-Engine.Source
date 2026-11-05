@@ -17,17 +17,17 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// </summary>
 internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
 {
-    private readonly Func<LlamaServerLaunchSpec, FakeProcessHandle>? _onLaunch;
+    private readonly Func<LlamaServerLaunchSpec, FakeProcessTreeHandle>? _onLaunch;
     private int _nextPid = 1000;
 
-    public FakeProcessLauncher(Func<LlamaServerLaunchSpec, FakeProcessHandle>? onLaunch = null)
+    public FakeProcessLauncher(Func<LlamaServerLaunchSpec, FakeProcessTreeHandle>? onLaunch = null)
     {
         _onLaunch = onLaunch;
     }
 
     public ConcurrentQueue<LlamaServerLaunchSpec> Launches { get; } = new();
 
-    public ConcurrentBag<FakeProcessHandle> Handles { get; } = new();
+    public ConcurrentBag<FakeProcessTreeHandle> Handles { get; } = new();
 
     public int LaunchCount => Launches.Count;
 
@@ -53,78 +53,10 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
         }
 
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
-        var handle = _onLaunch?.Invoke(spec) ?? new FakeProcessHandle(Interlocked.Increment(ref _nextPid));
+        var handle = _onLaunch?.Invoke(spec) ?? new FakeProcessTreeHandle(Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
         Handles.Add(handle);
         return handle;
-    }
-}
-
-/// <summary>An in-memory process handle whose exit + tree-kill are directly controllable by the test.</summary>
-internal sealed class FakeProcessHandle : IProcessTreeHandle
-{
-    private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly bool _exitOnTreeKill;
-    private readonly Action? _onTreeKill;
-    private int _exited;
-    private int _killed;
-
-    public FakeProcessHandle(int pid, bool exitOnTreeKill = true, Action? onTreeKill = null)
-    {
-        _exitOnTreeKill = exitOnTreeKill;
-        _onTreeKill = onTreeKill;
-        ProcessId = pid;
-    }
-
-    public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
-
-    public bool WasDisposed { get; private set; }
-
-    public int ProcessId { get; }
-
-    public bool HasExited => Volatile.Read(ref _exited) != 0;
-
-    public int? ExitCode { get; private set; }
-
-    // llama-server's launcher keeps no stderr tail; the supervisor never reads one.
-    public string? StderrTail => null;
-
-    public void TreeKill()
-    {
-        // Runs BEFORE the exit is signaled, so a test can hold a teardown open and observe the supervisor's state
-        // mid-removal.
-        _onTreeKill?.Invoke();
-        Interlocked.Exchange(ref _killed, value: 1);
-        if (_exitOnTreeKill)
-        {
-            SimulateExit();
-        }
-    }
-
-    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
-    {
-        try
-        {
-            await _exitSignal.Task.WaitAsync(timeout, ct);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-    }
-
-    public void Dispose()
-    {
-        WasDisposed = true;
-    }
-
-    /// <summary>Simulates a process crash/exit so the next ensure-running sees a dead process.</summary>
-    public void SimulateExit(int? exitCode = null)
-    {
-        ExitCode = exitCode;
-        Interlocked.Exchange(ref _exited, value: 1);
-        _exitSignal.TrySetResult();
     }
 }
 

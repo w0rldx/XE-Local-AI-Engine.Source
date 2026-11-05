@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed partial class IntegrationExecutionStore : IIntegrationExecutionStore
 {
     /// <summary>
-    ///     The brief's bound on a non-output event's detail, in UTF-8 bytes. <c>external.output</c> is exempt because it
+    ///     The bound on a non-output event's detail, in UTF-8 bytes. <c>external.output</c> is exempt because it
     ///     carries the caller-facing payload and is bounded at <c>IntegrationOptions.MaxOutputBytes</c> by the append
     ///     path that writes it.
     /// </summary>

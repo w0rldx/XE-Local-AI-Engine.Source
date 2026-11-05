@@ -16,12 +16,10 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     The feasibility spike behind the sandbox node executors: can a development-workflow node-run get a prepared,
-///     command-running sandbox workspace
-///     without a <c>DevelopmentTask</c> row behind it?
+///     A development-workflow node-run gets a prepared, command-running sandbox workspace without a
+///     <c>DevelopmentTask</c> row behind it.
 ///     <para>
-///         It is a go/no-go for the Tool and DevTask node executors, so it is written as evidence rather than as a
-///         regression guard: one test proves the row-bound path fails without those rows, and one proves the whole
+///         One test proves the row-bound path fails without those rows, and one proves the whole
 ///         chain — prepare, then run a profile command — works from a bare <c>(projectId, nodeRunId)</c> pair.
 ///     </para>
 /// </summary>
@@ -31,7 +29,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
     private static readonly DevelopmentCommandProfile GenericProfile =
         DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dev-workflow-spike-" + Guid.NewGuid().ToString("N")[..12]);
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dev-workflow-sink-" + Guid.NewGuid().ToString("N")[..12]);
 
     public void Dispose()
     {
@@ -186,8 +184,8 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(repository);
         await DevelopmentMountBrokerTests.RunGitAsync(repository, "init", "--initial-branch=main", ".");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "dev-workflow-spike@example.invalid");
-        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Dev Workflow Spike");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.email", "dev-workflow-test@example.invalid");
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "config", "user.name", "Dev Workflow Test");
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n");
         await File.WriteAllTextAsync(Path.Combine(repository, ".env"), "AWS_SECRET_ACCESS_KEY=devworkflowsentinel\n");
         await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".");

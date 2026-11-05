@@ -140,7 +140,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     {
         var turn = await LoadRegenerationTurnAsync(conversationId, originalMessageId, requestedSelectedPath, cancellationToken);
         var conversation = turn.Conversation;
-        var selectedPath = turn.SelectedPath;
         var original = turn.Original;
 
         var newMessageId = Guid.NewGuid();
@@ -212,11 +211,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // singleton dispatcher; it is disposed only AFTER the drain, or a late terminal would read as interrupted.
         using var eventSubscription = new ChatStreamEventForwarder(_eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, _timeProvider);
 
-        // The effective agent and orchestration spec were computed up front by ResolveTurnAsync so the variant could be
-        // stamped with the resolved agent's attribution; they are reused here unchanged.
-        var resolved = resolution.Resolved;
-        var orchestration = resolution.Orchestration;
-
         // Both tasks are created back-to-back with no await between them, so they are either both set or both null; a
         // throw before the package build leaves both null and the finally has nothing to drain.
         Task? pumpTask = null;
@@ -226,111 +220,27 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         {
             // The send path's offer rule, through the same helper, so a rerun offers what the send offered.
             var offer = await ChatToolOfferResolver.ResolveAsync(useLocalTools, resolution, _runtimeSettings, _localToolOfferProvider, _toolApprovalPolicy, cancellationToken);
-            var offerTools = offer.OfferTools;
-            var allowedTools = offer.AllowedTools;
 
-            if (resolution.AgentUnavailableNotice(requestId) is { } agentUnavailableNotice)
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(agentUnavailableNotice);
-            }
-
-            // An Orchestrator whose orchestration did not compile reruns as a lone single agent, so emit ONE notice
-            // naming the typed reason; a Single-kind agent (NotOrchestrated) has none, so the common path is silent.
-            if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-                {
-                    InvocationId = requestId,
-                    Kind = TurnNoticeKind.OrchestrationDegraded,
-                    Message = orchestrationDegradedMessage,
-                    Detail = resolution.OrchestrationOutcome.Reason.ToString()
-                });
-            }
-
-            if (resolution.PlaybookWithheldNotice(requestId) is { } playbookWithheldNotice)
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(playbookWithheldNotice);
-            }
-
-            if (offer.WithheldForCapability)
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
-            }
-
-            if (offerTools && resolution.IsOfferTrimmedByAllowList(_localToolOfferProvider))
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsNotAllowListedNotice(requestId));
-            }
-
-            if (resolution.ComputeWithheldNotice(requestId) is { } computeWithheldNotice)
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(computeWithheldNotice);
-            }
-
-            // A compiled orchestration's participants carry their own tools whatever the client asked.
-            if ((offerTools || resolution.Orchestration is not null)
-                && await resolution.CloudToolsWithheldNoticeAsync(requestId, _localToolOfferProvider, cancellationToken) is { } cloudToolsWithheldNotice)
-            {
-                await _eventDispatcher.ReportTurnNoticeAsync(cloudToolsWithheldNotice);
-            }
-
+            await ChatPreRunNotices.ReportCommonAsync(_eventDispatcher, resolution, offer, _localToolOfferProvider, requestId, cancellationToken);
             await WorkSessionSlotHolderNotice.ReportIfQueuedBehindAsync(_eventDispatcher, _persistence, conversationId, requestId, cancellationToken);
             await GpuWorkHolderNotice.ReportIfQueuedBehindBenchmarkAsync(_gpuWorkGate, _eventDispatcher, _persistence, conversationId, requestId, cancellationToken);
 
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
             // rerun does not lose its sources strip. Agent mode grounds through the gated tool instead, never inline.
-            var knowledge = useKnowledgeBase && !offerTools && !resolution.IsPlain
+            var knowledge = useKnowledgeBase && !offer.OfferTools && !resolution.IsPlain
                 ? await GroundOnKnowledgeBaseAsync(conversation, original, resolution, requestId, runCancellation.Token, cancellationToken)
                 : null;
 
-            var package = _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest
-            {
-                InvocationId = requestId,
-                ConversationId = conversationId,
-                // Plain reruns exactly as a plain send: the custom prompt verbatim, or no system message.
-                ResolvedSystemPrompt = resolution.IsPlain
-                    ? conversation.PlainSystemPrompt ?? string.Empty
-                    : resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
-                OmitSystemPrompt = resolution.IsPlain && conversation.PlainSystemPrompt is null,
-                ConversationContext = BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
-                ModelProfile = resolution.EffectiveModel,
-                AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
-                ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
-                AllowedTools = allowedTools,
-                Timeouts = new TimeoutSettings
-                {
-                    InvocationTimeoutSeconds = runtimeNodeSettings.MaxMessageRequestTimeoutSeconds
-                },
-                ReasoningEffort = resolved?.ReasoningEffort ?? reasoningEffort,
-                OrchestrationSpec = orchestration?.Spec,
-                SupportsThinking = resolution.SupportsThinking,
-                // Per-turn sampling overrides, carried exactly as the send path carries them so a regenerated turn
-                // reruns under the same knobs the original send used. Null keeps the package byte-identical to today.
-                SamplingOptions = samplingOptions,
-                Skills = resolved?.Skills,
-                CustomTools = resolved?.CustomTools,
-                ReasoningBudgetEnforceable = resolution.ReasoningBudgetEnforceable,
-                // Carried exactly as the send path carries it, so a regenerated turn sees the same tool array.
-                DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
-                // Carried exactly as the send path carries it: false = pinned, so no dispatcher model swap.
-                AllowAutoModelSwap = resolution.AllowAutoModelSwap,
-                AutoAcceptWebContent = autoAcceptWebContent
-            });
-
-            // The post-run adaptive-memory hook fires once on a Completed or Failed terminal, and ONLY when the resolved
-            // agent has the playbook enabled AND opts into extraction, so a retrieval-only agent mines nothing new.
-            var memoryHook = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-                ? ChatMemoryExtractionHook.Build(_memoryExtractionDispatcher,
-                    memoryAgent,
-                    conversation.ConversationId,
-                    conversation.MemoryExcluded,
-                    package,
-                    resolution.EffectiveModel,
-                    () => CollectUserTurns(conversation, original, selectedPath))
-                : null;
-            var onTerminal = ChatCompactionTriggerHook.Compose(_logger,
-                memoryHook,
-                ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
+            var package = await BuildRegenerationPackageAsync(turn,
+                correlation,
+                resolution,
+                offer.AllowedTools,
+                knowledge?.Message,
+                runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
+                reasoningEffort,
+                samplingOptions,
+                autoAcceptWebContent);
+            var onTerminal = BuildTerminalHook(turn, resolution, package);
 
             // Seeded before both tasks start, so the run's search-tool hits reach the pump's terminal row as sources.
             using var knowledgeSourceScope = TurnKnowledgeSourceCollector.BeginScope();
@@ -381,6 +291,75 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 await DrainRunAsync(pumpTask, runTask, runCancellation, requestId);
             }
         }
+    }
+
+    private async Task<RuntimePackage> BuildRegenerationPackageAsync(RegenerationTurnLoad turn,
+        NodeChatMessageCorrelation correlation,
+        ChatTurnResolution resolution,
+        IReadOnlyList<AllowedToolDto>? allowedTools,
+        ConversationMessageDto? knowledgeContext,
+        int invocationTimeoutSeconds,
+        string? reasoningEffort,
+        SamplingOptions? samplingOptions,
+        bool autoAcceptWebContent)
+    {
+        var conversation = turn.Conversation;
+        var resolved = resolution.Resolved;
+
+        return _runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest
+        {
+            InvocationId = correlation.RequestId,
+            ConversationId = correlation.ConversationId,
+            // Plain reruns exactly as a plain send: the custom prompt verbatim, or no system message.
+            ResolvedSystemPrompt = resolution.IsPlain
+                ? conversation.PlainSystemPrompt ?? string.Empty
+                : resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
+            OmitSystemPrompt = resolution.IsPlain && conversation.PlainSystemPrompt is null,
+            ConversationContext = BuildRegenerationContext(conversation, turn.Original, turn.SelectedPath, knowledgeContext),
+            ModelProfile = resolution.EffectiveModel,
+            AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
+            ClientNodeId = LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools = allowedTools,
+            Timeouts = new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = invocationTimeoutSeconds
+            },
+            ReasoningEffort = resolved?.ReasoningEffort ?? reasoningEffort,
+            OrchestrationSpec = resolution.Orchestration?.Spec,
+            SupportsThinking = resolution.SupportsThinking,
+            // Per-turn sampling overrides, carried exactly as the send path carries them so a regenerated turn
+            // reruns under the same knobs the original send used. Null adds no override.
+            SamplingOptions = samplingOptions,
+            Skills = resolved?.Skills,
+            CustomTools = resolved?.CustomTools,
+            ReasoningBudgetEnforceable = resolution.ReasoningBudgetEnforceable,
+            // Carried exactly as the send path carries it, so a regenerated turn sees the same tool array.
+            DisableToolRelevanceFilter = resolved?.DisableToolRelevanceFilter ?? false,
+            // Carried exactly as the send path carries it: false = pinned, so no dispatcher model swap.
+            AllowAutoModelSwap = resolution.AllowAutoModelSwap,
+            AutoAcceptWebContent = autoAcceptWebContent
+        });
+    }
+
+    private Action<InvocationState, NodeChatPumpTerminalResult> BuildTerminalHook(RegenerationTurnLoad turn, ChatTurnResolution resolution, RuntimePackage package)
+    {
+        var conversation = turn.Conversation;
+
+        // The post-run adaptive-memory hook fires once on a Completed or Failed terminal, and ONLY when the resolved
+        // agent has the playbook enabled AND opts into extraction, so a retrieval-only agent mines nothing new.
+        var memoryHook = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
+            ? ChatMemoryExtractionHook.Build(_memoryExtractionDispatcher,
+                memoryAgent,
+                conversation.ConversationId,
+                conversation.MemoryExcluded,
+                package,
+                resolution.EffectiveModel,
+                () => CollectUserTurns(conversation, turn.Original, turn.SelectedPath))
+            : null;
+
+        return ChatCompactionTriggerHook.Compose(_logger,
+            memoryHook,
+            ChatCompactionTriggerHook.Build(_conversationMaintenanceDispatcher, conversation.ConversationId));
     }
 
     /// <summary>

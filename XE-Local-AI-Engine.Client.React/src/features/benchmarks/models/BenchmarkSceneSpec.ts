@@ -2,6 +2,7 @@
 // verifier's truth and owns the score; this copy only decides what the viewer draws, so a drift here can never change
 // a verdict. Same rules, caps and defaults on purpose, so the viewer refuses what the verifier refuses.
 
+import { isPlainRecord } from "@/core/models/JsonRecord";
 import type { BenchmarkOutputPart } from "@/features/benchmarks/models/BenchmarkRunModels";
 
 export const benchmarkScenePrimitives = ["box", "sphere", "cylinder", "cone", "plane"] as const;
@@ -42,9 +43,6 @@ export function extractFencedJson(text: string): string {
 	return (fence?.[1] ?? text).trim();
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
 function readVector(value: unknown, isInRange: (n: number) => boolean): Vector3 | null {
 	return Array.isArray(value) &&
 		value.length === 3 &&
@@ -54,7 +52,7 @@ function readVector(value: unknown, isInRange: (n: number) => boolean): Vector3 
 }
 
 function parseObject(value: unknown, label: string, seen: Set<string>): BenchmarkSceneObject | string {
-	if (!isRecord(value)) {
+	if (!isPlainRecord(value)) {
 		return `${label}: not an object`;
 	}
 	const unknown = Object.keys(value).find((key) => !objectMembers.includes(key));
@@ -106,7 +104,7 @@ export function parseSceneSpec(answer: string): { scene: BenchmarkScene } | { er
 	} catch {
 		return { error: "the answer holds no valid JSON" };
 	}
-	if (!isRecord(root)) {
+	if (!isPlainRecord(root)) {
 		return { error: "the scene must be a JSON object" };
 	}
 	const unknown = Object.keys(root).find((key) => !sceneMembers.includes(key));

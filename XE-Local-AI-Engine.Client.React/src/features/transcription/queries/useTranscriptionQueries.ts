@@ -6,7 +6,6 @@ import {
 	cancelTranscriptionSessionMutation,
 	createTranscriptionSessionMutation,
 	deleteTranscriptionSessionMutation,
-	ejectTranscriptionRuntimeMutation,
 	getTranscriptionRecommendationOptions,
 	getTranscriptionRuntimeStatusOptions,
 	getTranscriptionSessionOptions,
@@ -292,20 +291,5 @@ export function useSelectTranscriptionModel() {
 			await invalidate(queryClient, transcriptionQueryIds.models);
 			await invalidate(queryClient, transcriptionQueryIds.runtime);
 		},
-	});
-}
-
-// Unloads the whisper model from memory (never a disk delete). Refreshes the runtime status so the card reflects it.
-export function useEjectTranscriptionRuntime() {
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: async () => {
-			const options = ejectTranscriptionRuntimeMutation();
-			// `accepted` is the contract's transport placeholder for an otherwise body-less POST; the server neither
-			// requires nor interprets it.
-			return await options.mutationFn?.({ body: { accepted: true } }, undefined as never);
-		},
-		onSuccess: () => invalidate(queryClient, transcriptionQueryIds.runtime),
 	});
 }

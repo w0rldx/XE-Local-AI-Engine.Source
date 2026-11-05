@@ -43,8 +43,8 @@ public sealed class ContainerBridgeLayeringArchitectureTests
 
     /// <summary>
     ///     Constructs whose content only LOOKS like a comment, each followed on the same line by a real reference.
-    ///     These are the cases the old private regex stripper got wrong: it erased the rest of the line after the
-    ///     <c>//</c> in a URL, so the reference behind it passed a guard that never saw it.
+    ///     A regex stripper gets these wrong: it erases the rest of the line after the <c>//</c> in a URL, so the
+    ///     reference behind it passes a guard that never sees it.
     /// </summary>
     private static readonly (string Case, string Source, string Symbol)[] StringShapedReferences =
     [
@@ -116,7 +116,7 @@ public sealed class ContainerBridgeLayeringArchitectureTests
                                              context.Features.Set(new ContainerBridgeCaller(instanceId));
                                              builder.Services.AddSingleton<ContainerBridgeAddressWatcher>();
                                          """),
-            "The bridge's own vocabulary must not trip the guard, or the slice that uses it cannot be written.");
+            "The bridge's own vocabulary must not trip the guard, or code that uses it cannot be written.");
     }
 
     private static IReadOnlyList<string> FindBannedSymbols(string text)

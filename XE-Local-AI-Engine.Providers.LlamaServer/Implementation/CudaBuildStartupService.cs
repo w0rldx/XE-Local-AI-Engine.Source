@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Startup <see cref="IHostedService" /> for source builds: it reconciles stale work and swap directories left by a
-///     host crash or kill mid-build (<c>[archLOW-1]</c>), and seeds the cached active-source signal from the
+///     host crash or kill mid-build, and seeds the cached active-source signal from the
 ///     installed-runtime record.
 /// </summary>
 /// <remarks>

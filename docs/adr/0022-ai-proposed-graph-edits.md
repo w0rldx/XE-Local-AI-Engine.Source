@@ -7,8 +7,7 @@
 - **Scope:** How a model may help an operator author a Graph Workflow: what it may produce, what checks a proposal
   passes before the operator sees it, which models may be asked, and what is stored. It changes nothing for saved
   definitions, runs, chat, agents or Dev Workflows.
-- **Authority:** Operator decisions of 2026-10-28, recorded in `Plans/workflow-designer-2026-10-28/` (the plan
-  directory is git-ignored; it is the record of the decisions, not a published document): local and cloud models
+- **Authority:** Operator decisions of 2026-10-28: local and cloud models
   are both offered; there is no Manual/AI-Assisted authoring mode; the cloud gate is `CloudLocalDataGate`; this ADR
   is written because a documented invariant changes.
 - **Amends:** the "Operator-authored" invariant of [Graph Workflows](../wiki/21-graph-workflows.md) §1 ("Nothing
@@ -25,7 +24,7 @@ rule exists because a definition is executable. A saved graph runs unattended, a
 may perform real side effects, so authorship is a trust boundary. What the rule protects is that only the operator's
 save changes a definition, not that the operator types every node.
 
-A spike (`Plans/workflow-designer-2026-10-28/`) measured what a model can do against the real validator:
+A spike measured what a model can do against the real validator:
 
 - **Grammar key order.** llama.cpp emits required properties before optional ones, so a response schema with
   optional members ahead of required ones forces the wrong order. Every member must be required and nullable, in
@@ -88,7 +87,7 @@ A spike (`Plans/workflow-designer-2026-10-28/`) measured what a model can do aga
   (exclusive branches of one decision node only) to keep false positives rare.
 - A turn costs up to three model calls and the turn holds the draft slot, so chat and runs get 409 while it works, and
   the designer gets 409 while they work. The prompt carries the contract plus the graph (about 5 to 6k tokens for the
-  live round's small graphs), so prompt caching keeps repeats cheap and a 200-node graph is expensive.
+  live run's small graphs), so prompt caching keeps repeats cheap and a 200-node graph is expensive.
 - A cloud designer sends the workflow and the conversation off the node, which is why the gate applies; an operator
   who has granted neither switch can use local models only.
 - A reload or New chat loses the conversation by design. Persisted designer chats and run diagnosis are later work and

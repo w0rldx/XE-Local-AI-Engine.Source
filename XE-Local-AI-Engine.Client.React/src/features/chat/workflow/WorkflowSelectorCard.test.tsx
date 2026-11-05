@@ -3,7 +3,7 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import classes from "@/features/chat/components/ChatInputArea/ChatComposerToolbar.module.css";
+import classes from "@/core/chat/components/ChatComposerToolbar.module.css";
 import { WorkflowSelectorCard } from "@/features/chat/workflow/WorkflowSelectorCard";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 

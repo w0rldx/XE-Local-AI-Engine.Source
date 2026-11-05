@@ -4,6 +4,7 @@ import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AgentOption } from "@/core/agents/models/AgentOption";
+import { type ChatUiCapabilities, defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { DESKTOP_NAV_MIN_HEIGHT, isCompactViewport } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
@@ -16,13 +17,7 @@ import { SlashCommandAutocomplete } from "@/features/chat/components/SlashComman
 import { useComposerToolbarHeight } from "@/features/chat/hooks/useComposerToolbarHeight";
 import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
-import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type {
-	ChatUiCapabilities,
-	ChatWorkflowSlots,
-	ContextUsageModel,
-	ReasoningEffort,
-} from "@/features/chat/models/ChatModels";
+import type { ChatWorkflowSlots, ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
 import { fitComposerToolbar } from "@/features/chat/models/ComposerToolbarFit";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";

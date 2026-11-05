@@ -148,7 +148,7 @@ public sealed class DevWorkflowMaterializedIsolationTests
     /// <summary>
     ///     Starts a decomposing run over a real Development project and takes it to the point where its package is
     ///     written and its session done — the same shape <c>DevWorkflowMaterializationTests</c> uses, with the DevTask
-    ///     template this phase is about.
+    ///     template.
     /// </summary>
     private static async Task<(Guid RunId, Guid ProjectId, Guid OperatorTaskId)> DecomposeAsync(DevWorkflowHarness harness, string package)
     {

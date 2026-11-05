@@ -128,7 +128,7 @@ internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
     }
 
     // Verbatim, the whole text is the same JSON value spelled differently (a pretty-printed mirror), or the structured
-    // value is FastMCP's {"result": <text>} wrapper around a non-object return (live re-run: a 100k string went out twice).
+    // value is FastMCP's {"result": <text>} wrapper around a non-object return (measured: a 100k string went out twice).
     private static bool ContainsJson(string text, string json)
     {
         if (text.Contains(json, StringComparison.Ordinal))

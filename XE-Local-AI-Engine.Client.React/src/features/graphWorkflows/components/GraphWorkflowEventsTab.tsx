@@ -7,7 +7,7 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { asGraphWorkflowEventType, graphWorkflowEventTypeLabelKey } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { useGraphWorkflowRunEvents } from "@/features/graphWorkflows/queries/useGraphWorkflows";
+import { useGraphWorkflowRunEvents } from "@/features/graphWorkflows/queries/useGraphWorkflowRunEvents";
 
 export interface GraphWorkflowEventsTabProps {
 	readonly runId: string;
@@ -63,7 +63,7 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 		<Stack gap="xs" data-testid="graph-workflow-events-tab">
 			{/* Not a silently short list: a trail cut at the cap looks exactly like a run that has done little. The feed
 			    reads FORWARD from `afterSeq: 0`, so `replayTruncated` means the NEWEST events are missing, not the
-			    oldest — the plan's "starts mid-run" wording describes the hub snapshot and is the stale one here. */}
+			    oldest. */}
 			{query.data.replayTruncated ? (
 				<Alert color="blue" variant="light" data-testid="graph-workflow-events-truncated">
 					{t(

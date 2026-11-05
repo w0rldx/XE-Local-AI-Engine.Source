@@ -6,6 +6,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { defaultChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
 import { isCompactViewport, TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
@@ -14,7 +15,6 @@ import { ConversationList } from "@/features/chat/components/ConversationList";
 import { PlainConversationControls } from "@/features/chat/components/PlainConversationControls";
 import { usePaneFileDrop } from "@/features/chat/hooks/usePaneFileDrop";
 import { answerNowMessageId } from "@/features/chat/models/ChatAnswerNow";
-import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
 const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];

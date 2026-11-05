@@ -87,15 +87,9 @@ export function developmentFilesystemBoundaryServed(
 	return roles?.find((role) => role.role === "development")?.filesystemIsolation === true;
 }
 
-export interface DevelopmentRepository {
-	readonly id: string;
-	readonly alias: string;
-	readonly availability: string;
-}
-
 /**
  * A registered template repository a new project can be seeded from. Same narrowed shape as
- * {@link DevelopmentRepository}: the generated response has every field optional, and the UI only ever handles entries
+ * `DevelopmentRepository`: the generated response has every field optional, and the UI only ever handles entries
  * that carry an id and an alias.
  */
 export interface DevelopmentTemplate {

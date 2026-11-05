@@ -31,7 +31,7 @@ seed. Both are build output. A test asserts they are identical, so editing eithe
 
 1. **Copy the upstream compose verbatim** into `applications/<id>/compose.yml`, together with any config file the
    compose bind-mounts, and record the upstream repository, the exact commit and the fetch date in
-   `manifest.overrides.json` under `provenance`. Pin a commit, never a branch: the C4, C5 and C7 gates below only
+   `manifest.overrides.json` under `provenance`. Pin a commit, never a branch: the gates below only
    mean something against a fixed input.
 2. **Classify every environment name** the compose uses in `variables.json` (see the next section). The converter
    fails when a compose environment key belongs to no bucket, so an upstream bump that adds a setting turns the

@@ -195,7 +195,7 @@ public interface ILlamaCppBinaryManager
 
     /// <summary>
     ///     Removes the recorded managed source-built runtime, clearing the record and the cached signal. Idempotent: a
-    ///     no-op when no source build is recorded. <c>[secMED-3]</c>
+    ///     no-op when no source build is recorded.
     /// </summary>
     /// <remarks>
     ///     The on-disk build tree is deleted ONLY when the recorded

@@ -273,7 +273,7 @@ internal static class AddNodeModelRuntimeExtensions
     /// </summary>
     /// <remarks>
     ///     The config binding and <c>ModelsDirectory</c> defaulting mirror <c>AddHuggingFaceGgufStore</c>, so the
-    ///     non-migrated fields keep today's behavior and only the two migrated ones come from the accessor
+    ///     non-migrated fields bind as they do there and only the two migrated ones come from the accessor
     ///     (stored &gt; seed &gt; default). Resolved once at singleton construction, off every hot path.
     /// </remarks>
     internal static HuggingFaceOptions BuildSeededHuggingFaceOptions(IServiceProvider serviceProvider, IConfiguration configuration)

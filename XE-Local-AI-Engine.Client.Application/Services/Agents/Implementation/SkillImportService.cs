@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     The two-phase skill import pipeline. Phase 1 fetches, extracts, parses, validates and reports without writing;
-///     phase 2 persists the report's materialized payload.
+///     The two-phase skill import pipeline. Preview fetches, extracts, parses, validates and reports without writing;
+///     commit persists the report's materialized payload.
 /// </summary>
 /// <remarks>
 ///     Name and description are validated by <see cref="AgentSkillFrontmatter" />, the code MAF itself runs, so

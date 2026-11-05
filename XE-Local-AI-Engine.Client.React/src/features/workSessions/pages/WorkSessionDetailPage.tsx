@@ -5,18 +5,18 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import type { ChatScope } from "@/core/models/ChatScope";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { usePaneLayoutMode } from "@/core/ui/components/ResponsivePaneLayout/usePaneLayoutMode";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
 import { EditWorkSessionDialog } from "@/features/workSessions/components/EditWorkSessionDialog";
 import { WorkSessionDetailLayout } from "@/features/workSessions/components/WorkSessionDetailLayout";
 import { WorkSessionFollowUpNotice } from "@/features/workSessions/components/WorkSessionFollowUpNotice";
 import { WorkSessionPlanPanel } from "@/features/workSessions/components/WorkSessionPlanPanel";
-import { WorkSessionsDisabledAlert } from "@/features/workSessions/components/WorkSessionsDisabledAlert";
 import { WorkSessionSidePanel } from "@/features/workSessions/components/WorkSessionSidePanel";
+import { WorkSessionsDisabledAlert } from "@/features/workSessions/components/WorkSessionsDisabledAlert";
 import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionHub";
 import {
 	isObjectiveNotMet,

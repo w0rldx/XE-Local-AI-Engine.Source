@@ -38,7 +38,7 @@ public sealed class SkillImportArchiveGuardTests
         await AssertRefusedAsync(archive, "per-file limit");
     }
 
-    // M-6, in the direction that is actually reachable. ZipArchiveEntry.Length is an attacker-authored header field,
+    // The direction that is actually reachable. ZipArchiveEntry.Length is an attacker-authored header field,
     // and an implementation that sized a buffer from it (new byte[entry.Length]) or refused on it would be steered by
     // a number the archive simply asserts. Here the header claims ~4 GiB for a handful of bytes: sizing from it means
     // an out-of-memory abort on an archive that is entirely harmless. The reader never reads Length at all, so the

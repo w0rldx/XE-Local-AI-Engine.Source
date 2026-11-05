@@ -6,31 +6,23 @@ import type { AgentOption } from "@/core/agents/models/AgentOption";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import type { ModelOption } from "@/core/models/ModelOption";
-import { toNodeChatRequestModel } from "@/core/models/NodeChatModelSelection";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
+import { isNodeChatTurnParkedConflict } from "@/features/chat/api/NodeChatConflict";
+import { StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
 import {
-	isNodeChatReadOnlyConflict,
-	isNodeChatTurnParkedConflict,
-	isNodeChatWorkflowRunLiveConflict,
-} from "@/features/chat/api/NodeChatConflict";
-import {
-	clientWatchdogFailureCategory,
-	StreamWatchdogError,
-	streamWatchdogNotice,
-} from "@/features/chat/api/NodeChatStreamGuard";
-import {
+	type AppliedNodeChatStreamEvent,
 	accumulateToolTimelineEntry,
 	appendOptimisticNodeChatSend,
 	applyNodeChatStreamEvent,
 	markNodeChatStreamTerminated,
 } from "@/features/chat/api/NodeChatStreamState";
-import { useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
+import { type StreamCommitScheduler, useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
 import {
 	inFlightAssistantMessageId,
 	stampVariantGroup,
 	titleFromContent,
 } from "@/features/chat/models/ChatConversationDerivations";
-import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
+import { chatErrorMessage, chatWriteErrorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type {
 	ChatConversationModel,
 	ChatStreamingState,
@@ -39,6 +31,12 @@ import type {
 } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import type { ActiveChatStream, PendingStreamCommit } from "@/features/chat/models/ChatStreamState";
+import {
+	effectiveAgent,
+	needsFirstSendTitle,
+	resolveRequestModel,
+	sendFailureMessage,
+} from "@/features/chat/models/ChatTurnResolution";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import { isWebContentAutoAccepted } from "@/features/chat/stores/WebContentAutoAcceptStore";
 
@@ -66,16 +64,34 @@ function orphanedLiveTurn(
 	return messageId && requestId ? { conversationId, messageId, requestId } : undefined;
 }
 
+// Hand one folded event to the per-frame scheduler. Terminal state commits now instead of waiting for the next frame, so
+// completion/failure lands promptly and the list-cache refresh it asks for isn't left pending.
+function scheduleAppliedEvent(
+	scheduler: StreamCommitScheduler<PendingStreamCommit>,
+	conversation: ChatConversationModel,
+	applied: AppliedNodeChatStreamEvent,
+): void {
+	scheduler.schedule({
+		conversation,
+		writeConversationList: applied.isTerminal,
+		streamingMessage: applied.streamingMessage,
+		toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
+	});
+	if (applied.isTerminal) {
+		scheduler.flush();
+	}
+}
+
 export interface ChatStreamControllerInput {
-	/** The page's single error slot. Every loop writes the banner through it; the page also writes it from CRUD. */
+	/** The page's single error slot. Every loop writes the banner through it; the conversation and message actions write it too. */
 	setStreamError: (message: string | undefined) => void;
-	/** Detail + list cache write. Shared with the page's conversation mutations, so the page owns it. */
+	/** Detail + list cache write, from useChatConversationCache: the conversation mutations share it. */
 	cacheConversation: (conversation: ChatConversationModel) => void;
-	/** Detail-only cache write, used for per-frame streaming commits (see the page's own comment on it). */
+	/** Detail-only cache write for per-frame streaming commits, from useChatConversationCache. */
 	cacheConversationDetail: (conversation: ChatConversationModel) => void;
-	/** Post-turn reconciliation. Shared with the page's conversation mutations, so the page owns it. */
+	/** Post-turn reconciliation, from useChatConversationCache: the conversation mutations share it. */
 	refreshConversation: (conversationId: string) => Promise<void>;
-	/** Create-or-load the conversation a send targets. Shared with the attachment upload path, so the page owns it. */
+	/** Create-or-load the conversation a send targets, from useChatConversationCache: the attachment upload path shares it. */
 	resolveSendConversation: (content: string) => Promise<ChatConversationModel>;
 	selectedConversationId: string;
 	displayConversations: ChatConversationModel[];
@@ -232,18 +248,14 @@ export function useChatStreamController({
 			try {
 				conversation = await resolveSendConversation(content);
 			} catch (error) {
-				setStreamError(errorMessage(error));
+				setStreamError(chatErrorMessage(error));
 				return;
 			}
 
 			// Promote a placeholder-titled local conversation to a content-derived title on its first send,
 			// using the rename endpoint (no in-place client title hack). Best-effort and silent — a failure
 			// here must not block the send.
-			const hasPriorUserMessage = conversation.messages.some((message) => message.role === "user");
-			const hasPlaceholderTitle =
-				conversation.origin !== "remote" &&
-				(conversation.title.trim().length === 0 || conversation.title.trim() === "New conversation");
-			if (!hasPriorUserMessage && hasPlaceholderTitle && !titledConversations.current.has(conversation.id)) {
+			if (needsFirstSendTitle(conversation) && !titledConversations.current.has(conversation.id)) {
 				titledConversations.current.add(conversation.id);
 				try {
 					conversation = await nodeChatAdapter.renameConversation(conversation.id, titleFromContent(content));
@@ -258,33 +270,16 @@ export function useChatStreamController({
 				assistantMessageId: createId(),
 				requestId: createId(),
 			};
-			// Only honor a concrete model id that is still an available option. A stale persisted selection — e.g. an
-			// Ollama model id left in localStorage from before the node switched to the bundled llama.cpp runtime —
-			// must NOT be sent: it would route to a model that isn't installed and fail with "model is not installed".
-			// Falling back to undefined makes the node resolve its configured default (the provisioned GGUF). This
-			// guards the fast first-send case before the reconciliation effect (which resets the store) has run.
-			const requestedConcreteModel = toNodeChatRequestModel(model);
-			const requestModel =
-				requestedConcreteModel !== undefined &&
-				(modelOptions.some((option) => option.value === requestedConcreteModel) ||
-					cloudModelOptions.some((option) => option.value === requestedConcreteModel))
-					? requestedConcreteModel
-					: undefined;
+			const requestModel = resolveRequestModel(model, modelOptions, cloudModelOptions);
 			const startedAt = new Date().toISOString();
-			// Compute effective agentDefinitionId: only stamp when mode is on, an agent is selected, AND the
-			// selected agent still exists in the live list (stale/deleted ids fall back to Default Assistant).
-			const effectiveAgentId =
-				agentModeEnabled && selectedAgentId && agentOptions.some((a) => a.id === selectedAgentId) ? selectedAgentId : undefined;
-			const effectiveAgentName = effectiveAgentId
-				? (agentOptions.find((a) => a.id === effectiveAgentId)?.name ?? undefined)
-				: undefined;
+			const agent = effectiveAgent(agentModeEnabled, selectedAgentId, agentOptions);
 			const optimisticConversation = appendOptimisticNodeChatSend(
 				conversation,
 				ids,
 				content,
 				startedAt,
 				requestModel,
-				effectiveAgentName,
+				agent?.name,
 				effort,
 			);
 			const abortController = new AbortController();
@@ -326,7 +321,7 @@ export function useChatStreamController({
 						// Send the active conversation-tree path so the server assembles context from the selected
 						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
 						selectedPath: Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
-						agentDefinitionId: effectiveAgentId,
+						agentDefinitionId: agent?.id,
 						// Re-send the conversation's CURRENT (non-deleted) attachment ids on every turn so the server can
 						// ground plain chat (inline extracted text, capped) and stage the files into AgentHome for agent mode.
 						attachmentFileIds: attachmentFileIds.length > 0 ? attachmentFileIds : undefined,
@@ -352,17 +347,7 @@ export function useChatStreamController({
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming);
 					latestConversation = applied.conversation;
 					lastStreaming = applied.streamingMessage;
-					streamScheduler.schedule({
-						conversation: applied.conversation,
-						writeConversationList: applied.isTerminal,
-						streamingMessage: applied.streamingMessage,
-						toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
-					});
-					// Commit terminal state now instead of waiting for the next frame so completion/failure lands
-					// promptly and the list-cache refresh above isn't left pending.
-					if (applied.isTerminal) {
-						streamScheduler.flush();
-					}
+					scheduleAppliedEvent(streamScheduler, applied.conversation, applied);
 				}
 				// Flush any trailing batched delta (a stream that ended without an explicit terminal event).
 				streamScheduler.flush();
@@ -374,36 +359,7 @@ export function useChatStreamController({
 				// The turn errored: drop any batched delta and write the failed state synchronously below.
 				streamScheduler.cancel();
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
-					// A send against a remote-origin conversation is rejected by the server-side mutation guard; over
-					// SignalR that arrives as a HubException leading with the ReadOnlyConversation token, not a 409.
-					// The client watchdog is the ONE failure the browser itself raises, so it must say so: its raw
-					// message ("Local chat stream timed out (inter-chunk-stall).") reads like a node timeout and is what
-					// made a premature client-side give-up indistinguishable from the node's own ceiling. It gets a
-					// translated sentence plus its own reason code; every other error keeps the backend's text, which
-					// now names which node-side bound fired.
-					const watchdogNotice = error instanceof StreamWatchdogError ? streamWatchdogNotice(error.category) : undefined;
-					let message: string;
-					if (isNodeChatReadOnlyConflict(error)) {
-						message = t(
-							"pages.chat.remoteViewOnly",
-							"This conversation was started from a paired client and is view-only on this node.",
-						);
-					} else if (isNodeChatWorkflowRunLiveConflict(error)) {
-						message = t(
-							"pages.chat.workflowRunLive",
-							"This conversation is running a workflow; answer through it or stop it first.",
-						);
-					} else if (isNodeChatTurnParkedConflict(error)) {
-						message = t(
-							"pages.chat.turnParked",
-							"A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
-						);
-					} else if (watchdogNotice) {
-						message = t(watchdogNotice.key, watchdogNotice.fallback);
-					} else {
-						message = errorMessage(error);
-					}
-					const failureCategory = watchdogNotice ? clientWatchdogFailureCategory : undefined;
+					const { message, failureCategory } = sendFailureMessage(error, t);
 					// Prefer the running reduced state (which includes any delta whose frame we just canceled) over the
 					// query cache so a failed turn keeps every received partial token, not the last flushed frame.
 					const currentConversation =
@@ -534,15 +490,7 @@ export function useChatStreamController({
 							: applied.conversation;
 					latestConversation = grouped;
 					lastStreaming = applied.streamingMessage;
-					streamScheduler.schedule({
-						conversation: grouped,
-						writeConversationList: applied.isTerminal,
-						streamingMessage: applied.streamingMessage,
-						toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
-					});
-					if (applied.isTerminal) {
-						streamScheduler.flush();
-					}
+					scheduleAppliedEvent(streamScheduler, grouped, applied);
 				}
 				// Flush any trailing batched delta the loop left pending.
 				streamScheduler.flush();
@@ -556,11 +504,7 @@ export function useChatStreamController({
 				// The turn errored: drop any batched delta before surfacing the error.
 				streamScheduler.cancel();
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
-					if (isNodeChatReadOnlyConflict(error)) {
-						setStreamError(
-							t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
-						);
-					} else if (isNodeChatTurnParkedConflict(error)) {
+					if (isNodeChatTurnParkedConflict(error)) {
 						setStreamError(
 							t(
 								"pages.chat.turnParked",
@@ -568,7 +512,7 @@ export function useChatStreamController({
 							),
 						);
 					} else {
-						setStreamError(errorMessage(error));
+						setStreamError(chatWriteErrorMessage(error, t));
 					}
 				}
 			} finally {
@@ -601,7 +545,7 @@ export function useChatStreamController({
 
 	const handleRegenerate = useCallback(
 		(assistantMessageId: string): void => {
-			regenerate(assistantMessageId).catch((error: unknown) => setStreamError(errorMessage(error)));
+			regenerate(assistantMessageId).catch((error: unknown) => setStreamError(chatErrorMessage(error)));
 		},
 		[regenerate, setStreamError],
 	);
@@ -662,15 +606,7 @@ export function useChatStreamController({
 					);
 					latestConversation = applied.conversation;
 					lastStreaming = applied.streamingMessage;
-					streamScheduler.schedule({
-						conversation: applied.conversation,
-						writeConversationList: applied.isTerminal,
-						streamingMessage: applied.streamingMessage,
-						toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
-					});
-					if (applied.isTerminal) {
-						streamScheduler.flush();
-					}
+					scheduleAppliedEvent(streamScheduler, applied.conversation, applied);
 				}
 				// Flush any trailing batched delta. A no-op for the idle case, which schedules nothing at all.
 				streamScheduler.flush();
@@ -684,7 +620,7 @@ export function useChatStreamController({
 				if (attachedMessageId && !abortController.signal.aborted && !deletedConversationIds.current.has(conversationId)) {
 					// The browser's own watchdog says so in words, as on the send path, never as its raw category message.
 					const watchdogNotice = error instanceof StreamWatchdogError ? streamWatchdogNotice(error.category) : undefined;
-					setStreamError(watchdogNotice ? t(watchdogNotice.key, watchdogNotice.fallback) : errorMessage(error));
+					setStreamError(watchdogNotice ? t(watchdogNotice.key, watchdogNotice.fallback) : chatErrorMessage(error));
 				}
 			} finally {
 				// Only the attached path owns state to release; the idle path must leave everything untouched.
@@ -784,7 +720,7 @@ export function useChatStreamController({
 				requestId: target.requestId,
 			});
 		} catch (error) {
-			setStreamError(errorMessage(error));
+			setStreamError(chatErrorMessage(error));
 		} finally {
 			// Reconcile from the server's authoritative terminal state.
 			await refreshConversation(target.conversationId);

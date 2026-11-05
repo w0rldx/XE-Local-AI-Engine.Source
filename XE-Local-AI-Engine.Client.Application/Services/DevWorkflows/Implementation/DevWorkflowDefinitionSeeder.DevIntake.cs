@@ -11,7 +11,7 @@ public sealed partial class DevWorkflowDefinitionSeeder
     /// <remarks>
     ///     Both gates meet in <c>approved</c>, an <c>Any</c> join that alone feeds the tail. Per-gate evidence edges into
     ///     <c>verify</c> would skip it (the gate not taken leaves a Dead edge under <c>All</c>), and <c>verify</c> on
-    ///     <c>Any</c> is refused by <c>GRAPH-C4-3</c>. The tail is <c>feature-development-v1</c>'s, copied. See
+    ///     <c>Any</c> is refused by <c>GRAPH-3</c>. The tail is <c>feature-development-v1</c>'s, copied. See
     ///     docs/wiki/25-dev-workflows.md ("Seeded templates").
     /// </remarks>
     internal const string DevIntakeSlug = "dev-intake-v1";

@@ -5,9 +5,8 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddGraphWorkflows</c> is the only migration the whole Graph Workflow plan set ships: the run engine and the
-///     pause/tool slice add none. That is why the column lists below name the columns this slice never reads — they
-///     are the thing standing between a later slice and a second migration.
+///     <c>AddGraphWorkflows</c> carries what the run engine and the pause and tool nodes need. That is why the column
+///     lists below also name columns the definition surface never reads.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class AddGraphWorkflowsMigrationTests
@@ -58,8 +57,8 @@ public sealed class AddGraphWorkflowsMigrationTests
             AssertEx.True(definitionColumns.Contains(column), $"graph_workflow_definitions must carry '{column}'.");
         }
 
-        // graph_hash and version are two of the four inert columns: nothing in this slice reads either, and the run
-        // engine that will needs them to be here rather than in a migration of its own.
+        // graph_hash and version are two of the columns the run engine needs from this migration rather than from a
+        // migration of its own.
         var runColumns = await probe.ColumnsAsync("graph_workflow_runs");
         foreach (var column in new[]
                  {
@@ -84,8 +83,8 @@ public sealed class AddGraphWorkflowsMigrationTests
             AssertEx.True(runColumns.Contains(column), $"graph_workflow_runs must carry '{column}'.");
         }
 
-        // decision_operation_id and decided_by_subject are the other two inert columns — the decide endpoint's
-        // idempotency key and its decider, both of which belong to a later slice that ships no migration.
+        // decision_operation_id and decided_by_subject are the other two such columns — the decide endpoint's
+        // idempotency key and its decider.
         var nodeRunColumns = await probe.ColumnsAsync("graph_workflow_node_runs");
         foreach (var column in new[]
                  {
@@ -159,7 +158,7 @@ public sealed class AddGraphWorkflowsMigrationTests
     ///         column name alone. A column the migration declares TEXT and the model declares BLOB carries the same
     ///         name on both boxes and stores a different thing on each, and an index present on one of them is a query
     ///         plan that only holds on that box. Deeper than the Dev Workflow suite's equivalent, which compares names
-    ///         only; that suite is not this slice's to change.
+    ///         only.
     ///     </para>
     /// </summary>
     [Test]

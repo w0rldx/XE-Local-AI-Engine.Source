@@ -75,7 +75,7 @@ public sealed class BenchmarkNiahGeneratorTests
     }
 
     /// <summary>
-    ///     R-6. The token count is an approximation that under-counts prose, so the generator aims BELOW the requested
+    ///     The token count is an approximation that under-counts prose, so the generator aims BELOW the requested
     ///     length rather than at it — and the label says so, because a probe that silently ran at 26k instead of 32k
     ///     is worse than one labeled approximate.
     /// </summary>

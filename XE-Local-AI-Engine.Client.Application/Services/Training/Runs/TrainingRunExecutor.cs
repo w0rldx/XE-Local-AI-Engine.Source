@@ -36,7 +36,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
     ///     shell encoding of SIGKILL (128 + 9), named rather than left as a bare literal.
     /// </summary>
     /// <remarks>
-    ///     It is never read — <c>CompleteAsync</c> answers a set <see cref="StreamState.WatchdogReason" /> before it
+    ///     It is never read — <c>CompleteAsync</c> answers a set <see cref="TrainingScriptWatchdog.FailureReason" /> before it
     ///     looks at the status.
     /// </remarks>
     private const int KilledExitCode = 137;
@@ -193,39 +193,46 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         await _store.SetLaunchReceiptAsync(run.Id, Serialize(TrainingProcessReaper.ToPersisted(handle.Receipt)), CancellationToken.None);
 
         var state = new StreamState(_timeProvider.GetUtcNow());
+        var watchdog = new TrainingScriptWatchdog(_options.InactivityTimeout,
+            _options.MaxRunDuration,
+            _options.ExitGracePeriod,
+            _timeProvider,
+            silentReason: "The trainer stopped reporting progress and was terminated.",
+            overrunReason: "The training run exceeded its maximum duration and was terminated.",
+            noExitReason: "The trainer stopped responding after closing its output and was terminated.",
+            KilledExitCode);
         // The registration is disposed before the handle is: an operator cancel that lands after the stream has closed
         // would otherwise signal a process this method no longer owns.
         var stopOnCancel = cancellation.Token.Register(handle.RequestStop);
         // The watchdog sleeps a whole poll interval between looks, so "the stream ended" has to reach it as a signal rather
         // than a flag it notices on its next wake — otherwise every run and every test pays an interval of dead wall clock.
         using var watchdogStop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        Task? watchdog = null;
+        Task? watching = null;
         try
         {
-            watchdog = WatchdogAsync(handle.KillGroup, state, watchdogStop.Token);
-            await ConsumeAsync(run.Id, handle, state, stoppingToken);
+            watching = watchdog.RunAsync(handle.KillGroup, watchdogStop.Token);
+            await ConsumeAsync(run.Id, handle, state, watchdog, stoppingToken);
         }
         finally
         {
             // The watchdog holds the handle, so it is joined here rather than on the happy path only: a throwing
             // consume must not leave it running against a process this method is about to dispose.
-            state.Finished = true;
             await watchdogStop.CancelAsync();
-            if (watchdog is not null)
+            if (watching is not null)
             {
-                await watchdog;
+                await watching;
             }
 
             await stopOnCancel.DisposeAsync();
         }
 
-        var exitCode = await WaitForExitOrEscalateAsync(handle, state);
+        var exitCode = await watchdog.WaitForExitOrEscalateAsync(handle);
         await FlushAsync(run.Id, state, force: true);
-        await CompleteAsync(run.Id, state, exitCode, cancellation.IsCancellationRequested);
+        await CompleteAsync(run.Id, state, watchdog.FailureReason, exitCode, cancellation.IsCancellationRequested);
     }
 
     /// <summary>Consumes the trainer's merged stdout/stderr, folding protocol lines into state and the rest into the log tail.</summary>
-    private async Task ConsumeAsync(Guid runId, ITrainingProcessHandle handle, StreamState state, CancellationToken stoppingToken)
+    private async Task ConsumeAsync(Guid runId, ITrainingProcessHandle handle, StreamState state, TrainingScriptWatchdog watchdog, CancellationToken stoppingToken)
     {
         await foreach (var line in handle.ReadOutputAsync(stoppingToken))
         {
@@ -239,7 +246,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
                 continue;
             }
 
-            state.LastEventAt = _timeProvider.GetUtcNow();
+            watchdog.MarkEvent();
             Apply(runId, state, parsed);
             await FlushAsync(runId, state, force: parsed.Kind is TrainingStdioEventKind.Phase or TrainingStdioEventKind.Error);
             if (parsed.Kind == TrainingStdioEventKind.Artifact)
@@ -307,76 +314,6 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         }
     }
 
-    /// <summary>
-    ///     How often the watchdog looks. Capped at a second for a production-length bound, but scaled down with the
-    ///     bound itself so a short one is not rounded up to the poll interval.
-    /// </summary>
-    private static TimeSpan WatchdogInterval(TimeSpan inactivityTimeout) =>
-        inactivityTimeout < TimeSpan.FromSeconds(4) ? inactivityTimeout / 4 : TimeSpan.FromSeconds(1);
-
-    /// <summary>Waits for the child to reap itself once its output has closed, bounded.</summary>
-    /// <remarks>
-    ///     A trainer wedged after its last write would otherwise hold this method — and with it the run's
-    ///     <c>TrainingCapacityReservation</c> — forever, starving every later spawn decision on the node. The bound is
-    ///     <see cref="TrainingRunQueueOptions.ExitGracePeriod" />, a teardown allowance rather than a silence tolerance, so it
-    ///     is short where the inactivity window is long. On expiry the escalation is the watchdog's own — SIGKILL to the group,
-    ///     recorded through <see cref="StreamState.WatchdogReason" /> — and the status is not waited for a second time.
-    /// </remarks>
-    private async Task<int> WaitForExitOrEscalateAsync(ITrainingProcessHandle handle, StreamState state)
-    {
-        using var exitGrace = new CancellationTokenSource(_options.ExitGracePeriod, _timeProvider);
-        try
-        {
-            return await handle.WaitForExitAsync(exitGrace.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            handle.KillGroup();
-            state.WatchdogReason ??= "The trainer stopped responding after closing its output and was terminated.";
-            return KilledExitCode;
-        }
-    }
-
-    /// <summary>Takes the kill callback rather than the handle: the watchdog's only power over the child is to end it.</summary>
-    private async Task WatchdogAsync(Action killGroup, StreamState state, CancellationToken stoppingToken)
-    {
-        while (!state.Finished && !stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(WatchdogInterval(_options.InactivityTimeout), _timeProvider, stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            // The flag is re-read HERE, not only in the while condition above: the delay can complete in the same instant the
-            // stream closes, and judging silence on the way out would record a finished run as Failed for its last stillness.
-            if (state.Finished)
-            {
-                return;
-            }
-
-            var now = _timeProvider.GetUtcNow();
-            if (now - state.LastEventAt > _options.InactivityTimeout)
-            {
-                state.WatchdogReason = "The trainer stopped reporting progress and was terminated.";
-            }
-            else if (now - state.StartedAt > _options.MaxRunDuration)
-            {
-                state.WatchdogReason = "The training run exceeded its maximum duration and was terminated.";
-            }
-
-            if (state.WatchdogReason is not null)
-            {
-                // Escalating to SIGKILL is the point: a cooperative stop is exactly what a wedged trainer cannot do.
-                killGroup();
-                return;
-            }
-        }
-    }
-
     private async Task RecordArtifactAsync(Guid runId, TrainingStdioEvent parsed)
     {
         if (parsed.Path is not { Length: > 0 } path)
@@ -388,8 +325,7 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         const TrainingArtifactKind kind = TrainingArtifactKind.HfAdapterDir;
         var staged = _workspace.StagedDirectory(runId);
         var full = Path.GetFullPath(path);
-        if (!full.StartsWith(Path.GetFullPath(staged) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            && !string.Equals(full, Path.GetFullPath(staged), StringComparison.Ordinal))
+        if (!PathContainment.IsRootOrUnderCanonical(full, Path.GetFullPath(staged)))
         {
             // The trainer names its own output path; anything outside the run's staged directory is refused rather
             // than recorded, so a compromised or buggy script cannot register a registry candidate from anywhere.
@@ -433,12 +369,12 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
             CancellationToken.None);
     }
 
-    private async Task CompleteAsync(Guid runId, StreamState state, int exitCode, bool cancelRequested)
+    private async Task CompleteAsync(Guid runId, StreamState state, string? watchdogReason, int exitCode, bool cancelRequested)
     {
-        var cancelled = state.Cancelled || exitCode == CancelledExitCode || (cancelRequested && state.WatchdogReason is null);
+        var cancelled = state.Cancelled || exitCode == CancelledExitCode || (cancelRequested && watchdogReason is null);
         var (status, message) = state switch
         {
-            { WatchdogReason: { } reason } => new RunOutcome(TrainingWorkStatus.Failed, reason),
+            _ when watchdogReason is not null => new RunOutcome(TrainingWorkStatus.Failed, watchdogReason),
             _ when cancelled => new RunOutcome(TrainingWorkStatus.Cancelled, "The training run was cancelled."),
             { Done: true, ErrorMessage: null } when exitCode == 0 => new RunOutcome(TrainingWorkStatus.Succeeded, null),
             { ErrorMessage: { } error } when !string.IsNullOrWhiteSpace(error) => new RunOutcome(TrainingWorkStatus.Failed, error),
@@ -522,23 +458,15 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
     /// <summary>Everything that survives across the stream loop. Mutable by design — it is one run's scratchpad.</summary>
     private sealed class StreamState
     {
-        public StreamState(DateTimeOffset startedAt)
-        {
-            StartedAt = startedAt;
-            LastEventAt = startedAt;
+        public StreamState(DateTimeOffset startedAt) =>
             LastPersistAt = startedAt;
-        }
 
-        public DateTimeOffset StartedAt { get; }
-        public DateTimeOffset LastEventAt { get; set; }
         public DateTimeOffset LastPersistAt { get; set; }
         public StringBuilder Log { get; } = new();
         public TrainingRunProgressV1 Progress { get; set; } = new();
         public int? ContractVersion { get; set; }
         public bool Done { get; set; }
         public bool Cancelled { get; set; }
-        public bool Finished { get; set; }
         public string? ErrorMessage { get; set; }
-        public string? WatchdogReason { get; set; }
     }
 }

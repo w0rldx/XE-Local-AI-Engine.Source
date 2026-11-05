@@ -73,7 +73,7 @@ function liveGraph(): GraphWorkflowGraph {
 }
 
 describe("validateGraphWorkflowGraph accepts what the server accepts", () => {
-	it("reports nothing for the graph the backend accepted in the S2 live round", () => {
+	it("reports nothing for the graph the backend accepted in a live run", () => {
 		expect(validateGraphWorkflowGraph(liveGraph())).toEqual([]);
 	});
 
@@ -82,8 +82,8 @@ describe("validateGraphWorkflowGraph accepts what the server accepts", () => {
 	});
 
 	it("reports the unrouted decision the moment the Pause node's Reject edge is taken away", () => {
-		// The brief's §3.1 listing draws only the Approve edge, which is why the fixture had to add the other one: the
-		// server refuses a Pause whose allowed decision no out-edge routes, and this is that rule's client mirror.
+		// The fixture carries both edges because the server refuses a Pause whose allowed decision no out-edge routes,
+		// and this is that rule's client mirror.
 		const unwired = graph(
 			eightNodeGraph.nodes ?? [],
 			(eightNodeGraph.edges ?? []).filter((edge) => edge.key !== "e9"),

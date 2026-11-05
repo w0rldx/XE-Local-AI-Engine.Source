@@ -71,7 +71,7 @@ public sealed class AppUpdateCheckServiceTests
         await AssertTheGateWaitsThenChecksAsync(undecidedProfile: null);
     }
 
-    // R5a: "pending" (an administrator exists, the choice has not been made) gates exactly as null does.
+    // "pending" (an administrator exists, the choice has not been made) gates exactly as null does.
     [Test]
     public async Task Execute_WhileTheProfileIsPending_Waits()
     {

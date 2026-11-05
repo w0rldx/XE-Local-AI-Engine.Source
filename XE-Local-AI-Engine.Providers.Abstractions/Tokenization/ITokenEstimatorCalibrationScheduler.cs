@@ -10,14 +10,3 @@ public interface ITokenEstimatorCalibrationScheduler
 
     void Invalidate(string modelName);
 }
-
-public sealed class NullTokenEstimatorCalibrationScheduler : ITokenEstimatorCalibrationScheduler
-{
-    public void Schedule(string modelName, Uri llamaServerBaseAddress)
-    {
-    }
-
-    public void Invalidate(string modelName)
-    {
-    }
-}

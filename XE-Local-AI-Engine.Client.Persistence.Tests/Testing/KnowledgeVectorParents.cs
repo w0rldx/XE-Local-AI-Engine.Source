@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 
 /// <summary>
 ///     Seeds the document and chunk a <c>knowledge_chunk_vectors</c> row declares. The node enforces foreign keys, so a
-///     bare vector row is a fixture production cannot produce — and, since Wave 5, one SQLite refuses to insert.
+///     bare vector row is a fixture production cannot produce — and one SQLite refuses to insert.
 /// </summary>
 internal static class KnowledgeVectorParents
 {

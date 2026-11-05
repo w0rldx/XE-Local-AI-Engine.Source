@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The R2 boundary adapter: everything whisper-server understands stops at this class, and everything the engine
+///     The boundary adapter: everything whisper-server understands stops at this class, and everything the engine
 ///     consumes starts here. The daemon's own JSON shape and multipart field names appear ONLY in this file on the
 ///     test side — asserting the boundary is the one thing a test is allowed to know them for.
 /// </summary>

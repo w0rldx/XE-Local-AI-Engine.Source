@@ -5,11 +5,11 @@ import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ChatMarkdown } from "@/core/chat/components/ChatMarkdown";
+import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/core/chat/components/ChatVisualTokens";
+import { MessageParts } from "@/core/chat/components/MessageParts";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import { ChatSourcesStrip } from "@/features/chat/components/ChatSourcesStrip";
-import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
-import { MessageParts } from "@/features/chat/components/MessageParts";
 import { chatFailureCategoryLabel, chatFailureHeadline } from "@/features/chat/models/ChatFailureCategory";
 import type { ChatMessageDisplay } from "@/features/chat/models/ChatMessageDisplay";
 import { hasText } from "@/features/chat/models/ChatMessageDisplay";

@@ -1,5 +1,5 @@
+import type { ChatMessagePart, ToolCallState } from "@/core/models/ChatMessageParts";
 import type { BenchmarkOutputPart, BenchmarkRepeatMode } from "@/features/benchmarks/models/BenchmarkRunModels";
-import type { ChatMessagePart, ToolCallState } from "@/features/chat/models/ChatModels";
 
 export * from "@/features/benchmarks/models/BenchmarkFidelityModels";
 export * from "@/features/benchmarks/models/BenchmarkLiveStreamModels";

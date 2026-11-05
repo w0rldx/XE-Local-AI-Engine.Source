@@ -546,7 +546,7 @@ public abstract class ManagedRuntimeAdoption<TBackend>
 
         var root = Path.GetFullPath(RuntimeRoot);
         var installRoot = Path.GetFullPath(Path.Combine(root, BackendSlug(installed.DesiredBackend), installed.SourceCommit));
-        if (!installRoot.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!PathContainment.IsUnderRoot(installRoot, root))
         {
             throw RuntimeError($"The recorded managed {_runtimeLabel} path is outside the managed cache.");
         }

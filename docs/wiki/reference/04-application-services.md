@@ -152,8 +152,8 @@ Its tools work only on the sandbox's workspace copy, and `allowedActions` decide
 There is no fifth value. `propose_memory` was **removed** from the schema rather than left standing, because the
 node collected the sandbox's proposals and then discarded them; the collector that read them has since been
 deleted too, so nothing in the run path reads the sandbox's `memory/proposals/` directory. Persisting a proposal
-into the adaptive-memory Suggested pipeline is a later slice that would add its own collector. (The shared
-`MemoryProposalSecretScanner` is unrelated to that slice and stays: its live callers are `MemoryExtractionService`
+into the adaptive-memory Suggested pipeline is later work that would add its own collector. (The shared
+`MemoryProposalSecretScanner` is unrelated to that work and stays: its live callers are `MemoryExtractionService`
 and `DevelopmentArtifactSanitizer` — see [Security & Privacy](../12-security-and-privacy.md).)
 
 **What bounds the loop.** Four budgets, separate from the sandbox's own per-command timeout and jail-disk
@@ -163,7 +163,7 @@ once per run; the options only seed them),
 `MaxWriteFileBytes` / `MaxTotalWriteBytes`, and `MaxCommandOutputBytes` for how much command output re-enters
 the model's context. A budget that fires **cuts the run off and says so** in the tool result; it never discards
 the partial work, which still exports as a patch. The shipped `MaxRunSeconds` default is a conservative starting
-point, not a measured one — a live round on the target model class is what should set it.
+point, not a measured one — a live run on the target model class is what should set it.
 
 **What confines the loop.** The inner tool list is built item by item from `allowedActions`, never read off the
 tool offer, so the inner agent structurally cannot reach an MCP tool, a custom tool, `spawn_subagent`,
@@ -294,7 +294,7 @@ only from facts the **node** derived: the header above, the run id and run-relat
 sentence, the per-folder copy counts, the loop's tool-call /
 refusal / written-file counts and elapsed seconds, an aggregate of the commands run with their exit codes, the
 patch's changed-file count, its added/removed line totals and byte size, the `fake`-backend honesty notice, and a fixed closing sentence saying
-the run has ended and need not be repeated (a live round watched a 27B model re-invoke the tool two and three
+the run has ended and need not be repeated (a live run watched a 27B model re-invoke the tool two and three
 times in one turn because the summary was too thin to trust). **Command output and workspace file bytes never
 appear there**, and neither do the paths `write_file` wrote: the outer model still holds the node's other tools,
 so workspace-authored text arriving as "your tool result" is steering text with a delivery mechanism. The detail

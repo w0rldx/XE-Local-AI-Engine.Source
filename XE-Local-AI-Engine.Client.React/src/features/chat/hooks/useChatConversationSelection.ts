@@ -3,9 +3,10 @@ import { useCallback, useMemo, useState } from "react";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import type { ChatScope } from "@/core/models/ChatScope";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { mergeSelectedConversation } from "@/features/chat/models/ChatConversationDerivations";
-import type { ChatConversationModel, ChatMessageFeedback, ChatScope } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatMessageFeedback } from "@/features/chat/models/ChatModels";
 import { deriveContextWindow, deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 
@@ -60,7 +61,8 @@ export function useChatConversationSelection({
 	const queryClient = useQueryClient();
 	const [showArchivedConversations, setShowArchivedConversations] = useState(false);
 	const [showingAllConversations, setShowingAllConversations] = useState(false);
-	// Memoized: Chat.tsx lists this key in useCallback deps, and a fresh array per render would rebuild those callbacks.
+	// Memoized: useChatConversationCache lists this key in useCallback deps, and a fresh array per render would rebuild
+	// those callbacks.
 	const conversationListQueryKey = useMemo(
 		() => nodeChatQueryKeys.conversationList(showArchivedConversations, !showingAllConversations),
 		[showArchivedConversations, showingAllConversations],

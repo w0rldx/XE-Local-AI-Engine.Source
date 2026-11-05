@@ -138,15 +138,15 @@ GitHub workflow state changed between checks. On 2026-07-24 workflows were repor
 
 ### Always finish with a Release build — a green Debug build is not verification
 
-The four Release-only rules (`S3267`, `MA0022`/`S4586`, `S1117`) were each paid for once in the External Apps slices
-S0–S3: a branch that built clean in Debug all day failed at the Release gate. Deleting `AgentHomeToolGateway.BuildHeader`'s
+The four Release-only rules (`S3267`, `MA0022`/`S4586`, `S1117`) were each paid for once during External Apps:
+a branch that built clean in Debug all day failed at the Release gate. Deleting `AgentHomeToolGateway.BuildHeader`'s
 only call site as a deliberate break tripped the unused-private-member analyzer, the Release build reported errors, and
 the test run that followed executed the previous binary; it cost a full lock round. Moving the call instead kept the
 analyzers quiet and also proved more: that the header sits at index 0 rather than merely being present.
 
 ### `dotnet_naming_rule.*.severity` is IDE-only — the build-time lever is the single `IDE1006` diagnostic
 
-The S0 config-hygiene slice measured `IDE1006` at 225 violations on 2026-09-16 and did not promote it. 221 of the 225
+A config-hygiene pass measured `IDE1006` at 225 violations on 2026-09-16 and did not promote it. 221 of the 225
 were one style disagreement: local constants written PascalCase against the declared camelCase style. Source: Microsoft
 Learn naming-rules page, "Severity specification within a naming rule is only respected inside development IDEs … not
 respected during build".
@@ -155,28 +155,28 @@ respected during build".
 
 The first `IDE1006` measurement appended the flip to the end of `.editorconfig`, where the last section is an
 endpoint-DTO glob, and reported zero violations; it would have promoted the rule on false evidence. Re-run under
-`[*.cs]`, the same flip reported 225 (S0 config-hygiene slice, 2026-09-16).
+`[*.cs]`, the same flip reported 225 (2026-09-16).
 
 ### Commit before you trap-guard a mutation on a file you are still editing
 
-The S1 regression-guards lane hardening the `LayerDependencyTests` floors installed its break-proof trap on the very
-file it was writing and lost a cycle re-applying its edits (2026-09-16). The same loss was paid again in S6a.
+A regression-guards pass hardening the `LayerDependencyTests` floors installed its break-proof trap on the very
+file it was writing and lost a cycle re-applying its edits (2026-09-16). The same loss was paid again later.
 
 ### Measure a non-vacuity floor through the guard itself, never with a grep over source
 
 Three floors written from a grep proxy sat above the real count and turned the guard red on a clean tree. Measured on
 2026-09-16, the NetArchTest assembly counts for `Providers.LlamaServer`, `Providers.HuggingFace` and
-`Providers.WhisperCpp` came in roughly an eighth below their grep figures (S1 regression-guards slice).
+`Providers.WhisperCpp` came in roughly an eighth below their grep figures.
 
 ### A reflection walk over an endpoint's dependencies sees `ILogger<TSelf>` as a self-reference
 
 On the first empty-allowlist run of `EndpointDependencyTests`, nine endpoints landed on the allowlist for the sole
-offence of owning a logger, which would have frozen a false rule into the list S6 went on to empty (S1
-regression-guards slice, 2026-09-16).
+offence of owning a logger, which would have frozen a false rule into a list that was later emptied
+(2026-09-16).
 
 ### a bulk `.editorconfig` severity silences an analyzer without stopping it running
 
-The S7 analyzer-upgrade slice measured `XE-Local-AI-Engine.Client.Persistence` three ways on Sonar 10.34: as shipped,
+An analyzer upgrade measured `XE-Local-AI-Engine.Client.Persistence` three ways on Sonar 10.34: as shipped,
 with per-ID `none` lines added under the existing Migrations glob, and with `Migrations/**` removed from `<Compile>`.
 The reporting half was proved directly: the same `FromSqlRaw` string-concatenation violation is an `S2077` build error
 in ordinary Persistence source and compiles clean inside `Migrations/`. Per rule (each unset in `.editorconfig` except
@@ -186,30 +186,30 @@ the Migrations glob reached almost the same floor, so the cost is the generated 
 derives from `SonarDiagnosticAnalyzer`, which calls `ConfigureGeneratedCodeAnalysis` with the `Analyze` flag, so
 Roslyn's generated-code filter never applies; each of the ten registers only node actions inside a compilation-start
 action, so none is exempt from the per-tree skip (which is skipped for a rule that registers a symbol-start or
-compilation-end action). Per-rule figures are in the slice's progress report. The original entry also named a committed
+compilation-end action). The original entry also named a committed
 `spike/analyzer-*.txt` baseline; no such file exists in the repository (checked 2026-09-27), so the rule now says to
 measure before and after instead.
 
 ### an analyzer error in a file the change never touched: re-run after a build-server shutdown before believing it
 
-Observed once, in the static-quality S6i break-proof (2026-09-17): a Release build (`--no-incremental`, under the build
+Observed once, in a static-quality break-proof (2026-09-17): a Release build (`--no-incremental`, under the build
 lock, `MSBUILDDISABLENODEREUSE=1` and `NUGET_PACKAGES` exported, in the same shell chain as an earlier build with no
 `dotnet build-server shutdown` between them) reported `error S125: Remove this commented out code` at a prose comment in
-`NodeChatStreamService.cs`, a file the slice never touched, and `1 Error(s)`. The identical tree then built
+`NodeChatStreamService.cs`, a file the change never touched, and `1 Error(s)`. The identical tree then built
 `0 Error(s)` twice after a shutdown. The cause was not isolated: a stale build server is the suspect because the
 shutdown is what changed, but the red was not reproduced, no second variable was held, and the failing log was
-overwritten before it was kept. It may equally have been analyzer nondeterminism. One round was discarded.
+overwritten before it was kept. It may equally have been analyzer nondeterminism. One run was discarded.
 
 ### A Dev-mode sandbox run leaves MSBuild worker nodes holding a dead `NUGET_PACKAGES`
 
-The dead per-task path surfaced as NU5037 during the graph-workflows S0 merge and as CS0006 in the session after it,
+The dead per-task path surfaced as NU5037 during a graph-workflows merge and as CS0006 in the session after it,
 each build naming a `/tmp/xe-…/nuget` directory nothing had asked for. The writer was
 `DevelopmentWorkspaceTools.BuildEnvironment`, fixed by setting `MSBUILDDISABLENODEREUSE=1` alongside the per-task
 `NUGET_PACKAGES`.
 
 ### a constructor-caller census by `grep "new X("` misses target-typed `new(...)` and NUL-bearing files
 
-The static-quality S3 migration hit both blind spots: a "no callers outside the plan" census was disproved by the
+A static-quality migration hit both blind spots: a "no other callers" census was disproved by the
 first Release build (`SourceBuildRecoveryTests`, `DevelopmentWorkspaceAndCoderTests`, `LlamaGrammarToolOffer`,
 `EmbeddingToolRelevanceSelectorTests`). Two test files carry a literal NUL byte inside a string literal, which plain GNU
 grep classifies as binary.
@@ -235,7 +235,7 @@ Every host-based test failed at startup while narrow changed-class runs stayed g
 
 ### a batched-module red keeps only 3 grep'd lines, so capture the failure detail on the FIRST red
 
-Paid for in static-quality S6b (2026-09-16): a one-test `System.Net.Sockets` red in `XE_Local_AI_Engine.Tests.Hosting`
+Paid for on 2026-09-16: a one-test `System.Net.Sockets` red in `XE_Local_AI_Engine.Tests.Hosting`
 kept its stack frame but not the `SocketError` value or the port, because the message line was line 4 of a `head -3`.
 A second gate run recovers nothing.
 
@@ -314,7 +314,7 @@ Why the fixture rules exist: `WebApplicationFactory<Program>`'s `HostingListener
 
 ### A node-settings save path must carry the local-only members over from the stored record
 
-Live evidence, fu-b round 2a (2026-09-05): a dropped `MachineKey` made the next start mint a fresh GUID; because
+Live evidence (2026-09-05): a dropped `MachineKey` made the next start mint a fresh GUID; because
 inference profiles are keyed by machine key, every frozen profile was orphaned, each model re-fit from scratch, the rows
 still read `Frozen` through the profiles endpoint, and nothing was logged. Code shape at the fix:
 `ApplyAgenticPatchAsync` was already safe against plain erasure because it starts from `current with {…}`;
@@ -382,7 +382,7 @@ budget, or a `// real-timer:` site.
 
 ### Never infer this node's foreign-key posture from a connection string — measure `PRAGMA foreign_keys`
 
-The wrong belief (foreign keys off) scoped a whole audit slice on "the fixtures hide missing child deletes" and two
+The wrong belief (foreign keys off) scoped a whole audit pass on "the fixtures hide missing child deletes" and two
 store bugs that did not exist. `NodeSqlitePragmasTests` has one test per layer, one through the production path, and a
 pair pinning the split: a failing `foreign_keys` pragma propagates on both the sync and async paths while a failing
 tuning pragma logs a warning and lets the rest apply. The per-layer tests exist because a native default masks a
@@ -465,7 +465,7 @@ Operator ruling 2026-09-05 on explicit review bases.
 
 ### a path-scoped `git commit -- <paths>` silently skips an UNTRACKED file among those paths
 
-Tester round 3 (2026-09-25) paid two fix-up commits for workstream commits that lacked a new test or source file.
+A tester build (2026-09-25) paid two fix-up commits for commits that lacked a new test or source file.
 
 ### A relative test-project name in a worktree can resolve to a SIBLING worktree's binary
 
@@ -479,7 +479,7 @@ Registration callbacks race disposal and run in reverse registration order, so a
 
 - `StubNodeRuntimeSettings`: nine switch getters return `true` unless told otherwise. Paid for in `b202ba93b` and `80d064fda` (node-settings tier B).
 - The E2E project builds as `IsTestProject=false` / `OutputType=Library` unless `-p:RunE2ETests=true` is passed.
-- The backend-gate results-directory wipe was paid for in the model-matrix follow-ups round, 2026-10-05.
+- The backend-gate results-directory wipe was paid for on 2026-10-05.
 - `VelopackInstall.IsManaged()` reads `VelopackLocator.Current`, which is what throws until `VelopackApp.SetLocator` runs.
 - `MigratedDatabaseTemplate` publishes only after `PRAGMA wal_checkpoint(TRUNCATE)`, pool release and close; see the migrated-template section above.
 - `Microsoft.Data.Sqlite` binds a `Guid` as a 16-byte BLOB while EF's SQLite provider stores Guid columns as TEXT.
@@ -546,18 +546,18 @@ The first native Windows run on 2026-08-03 found:
 
 ### BYO CUDA runtime without `llama-fit-params` (2026-09-05)
 
-AI-trends follow-up pass B, B4 (D13 profile-authority live proof) round 1 against a BYO `~/cuda-llama/<tag>` build: six host
+A profile-authority live proof, first attempt against a BYO `~/cuda-llama/<tag>` build: six host
 restarts and about sixteen minutes produced five NOT RUN observations before the missing sibling binary explained them —
-every Explore answered 400. Round 2 against a scratch copy of the same bin directory with the freshly built
+every Explore answered 400. A second attempt against a scratch copy of the same bin directory with the freshly built
 `llama-fit-params` passed 6/6 in about twelve minutes; the shared directory's 25-file md5 manifest was identical before and
-after, and `installed-runtime.json` kept its original mtime. The blocked round's 400 is the one this incident is named for:
+after, and `installed-runtime.json` kept its original mtime. The blocked attempt's 400 is the one this incident is named for:
 `LlamaFitParamsProcessRunner` resolves the helper as a sibling of the `llama-server` it launched, so a BYO build missing it
 can freeze nothing. The rule lives in `docs/agent-knowledge/inference-runtime.md` ("llama.cpp binaries"); the supported scratch-copy
 procedure is recorded under "llama.cpp binaries" in §2 of this ledger.
 
 ### Host filtering runs from an `IStartupFilter`, ahead of every middleware the composition root registers
 
-The container bridge (C1, commit 3) shipped a listener no container could reach. Every loopback test passed:
+The container bridge shipped a listener no container could reach. Every loopback test passed:
 `DefaultHttpContext` has no host filter, and an in-process `HttpClient` sends `Host: 127.0.0.1`, which is allow-listed.
 Only a real container over a real socket (`ContainerBridgeRealDaemonTests`, after commits 1 and 2 were already green)
 presented a Host header the filter rejected with 400, logged by nothing the node owns. Diagnosis tell: the request reaches
@@ -566,20 +566,20 @@ the network or the container.
 
 ### An explicit Kestrel endpoint discards the addresses `UseUrls` was given
 
-Found in C1 commit 1: the plan specified `ConfigureKestrel(o => o.Listen(...))` for the container bridge and had to be
-deviated from, because `AddressBinder.CreateStrategy` picks the endpoints over the addresses whenever
+Found while building the container bridge: `ConfigureKestrel(o => o.Listen(...))` was specified and had to be
+dropped, because `AddressBinder.CreateStrategy` picks the endpoints over the addresses whenever
 `KestrelServerOptions.ListenOptions` is non-empty, logs "Overriding address(es)", and clears them.
 
 ### `FallbackPolicy` challenges every routed endpoint without auth metadata, and every request that matches no endpoint
 
-S2 deny-by-default slice, 2026-09-16: two `Microsoft.AspNetCore.TestHost` spikes against FastEndpoints 8.3.0, then two gate
+Deny-by-default work, 2026-09-16: two `Microsoft.AspNetCore.TestHost` spikes against FastEndpoints 8.3.0, then two gate
 reds (`RouteCoexistenceTests`, `ValidateExecutableEndpointTests`) that had asserted the old 404 and 405. The silent 401s
 hit Aspire's `WithHttpHealthCheck` poll, the login page the SPA fallback serves, and the dev-only OpenAPI document; none
 was named by a test beforehand.
 
 ### Refresh rotation's grace window is discriminated by the SUCCESSOR LINK, never by "revoked recently" or by a timestamp
 
-Sessions became independent chains by operator decision 2026-09-23 (live-QA F-01: a "one live token per user" model
+Sessions became independent chains by operator decision 2026-09-23 (live QA: a "one live token per user" model
 signed every other client out on each login). Before that, the grace matched "a live token of this user created at the
 revocation instant", which would let another client's login or rotation on the same tick vouch for a dead chain
 (`Refresh_WhenTheOwnChainIsDeadButAnotherSessionIsLive_FailsInsideTheWindow`). Because the grace pair is a sibling of the
@@ -590,7 +590,7 @@ window is no longer revealed by the other client being signed out. Tests written
 
 ### `dev-stop.sh` resolves the AppHost of your CURRENT DIRECTORY, and `pgrep -af` matches its own shell
 
-S7 live round, 2026-09-07: a drifted cwd made `dev-stop.sh` report no instance against a running host of another worktree.
+Live round, 2026-09-07: a drifted cwd made `dev-stop.sh` report no instance against a running host of another worktree.
 
 ### The node operator secret is seeded by dev-start.sh, not by any tracked file
 
@@ -606,31 +606,31 @@ missing/empty/corrupt and auto-registers any `.gguf` whose name `GgufQuantParser
 
 AI-trends live rounds 2026-09-03/04: each listed trap voided or wasted a round. A bare scratch `XDG_DATA_HOME` broke the
 `dotnet` shim and Aspire exited 7 reporting "the `--apphost` option specified a project that does not exist". With mise
-2026.8 the mirrored-symlink directory alone stopped being enough (External Apps follow-ups batch 3, 2026-09-12). Observed
+2026.8 the mirrored-symlink directory alone stopped being enough (2026-09-12). Observed
 `agent_execution_logs` envelope rows terminalizing about 45 minutes later. Before `75e0f7b60`, a fresh-DB start could delete
 the operator's managed CUDA build through the shared runtime record; the product now never deletes a build the record does
 not name (`LlamaCppSourceBuildReconciler.ReconcileAsync`), so the remaining stake is isolation, not data loss.
 
 ### an `XDG_DATA_HOME` override for a scratch host also blinds a per-user tool-version manager
 
-W1 follow-up round, 2026-09-19. The shim may also silently re-install an interpreter into the scratch directory.
+Seen 2026-09-19. The shim may also silently re-install an interpreter into the scratch directory.
 `dev_matching_app_json` returns 4 on the empty output.
 
 ### two hosts on one box must never share a llama-server BINARY PATH, or one host's reaper kills the other's models
 
-2026-09-25: the tester-round-3 live host lost its resident 7B mid-round when the live-QA lab host restarted ("Reaping stale
+2026-09-25: a tester live host lost its resident 7B mid-round when the live-QA lab host restarted ("Reaping stale
 llama-server orphan (pid ...)" in the lab's log). The losing host logged nothing (the prune path was silent until a
 follow-up added a Warning), the next run spawned the node default, and the model-reuse evidence was void.
 
 ### External Apps: container-written storage, the reserved variable prefix, and the evidence home
 
-S5 live step 36 failed then passed across `e8c5e64eb`: an image running as its own non-root user (searxng's uid 977) left
+A live step failed then passed across `e8c5e64eb`: an image running as its own non-root user (searxng's uid 977) left
 `0700` directories owned by a host uid in the operator's subuid range; the helper needs in-container root with
-`CAP_DAC_OVERRIDE`, so `cap_drop ALL` silently broke it and the delete exited 0 having removed one entry. S5 live step 30:
+`CAP_DAC_OVERRIDE`, so `cap_drop ALL` silently broke it and the delete exited 0 having removed one entry. Another live step:
 an `XE_`-named probe was refused and the catalog path swallowed the validation error into a cache fallback, caught only by
-asserting off the engine. The `\A…\z` rule came from review of the S1 catalog validator (five regexes); the
+asserting off the engine. The `\A…\z` rule came from review of the catalog validator (five regexes); the
 `image@sha256:<64 hex>\n` case passed `^…$`. The raw-text architecture guard is why `ExternalAppStateObserver` is an
-`IHostedService` with its own loop rather than a `BackgroundService`, whose entry point carries a banned name. The raw S5
+`IHostedService` with its own loop rather than a `BackgroundService`, whose entry point carries a banned name. The raw
 evidence was not retained; `docs/roadmaps/external-apps-status.md` records the verified state.
 
 ### llama.cpp binaries
@@ -654,7 +654,7 @@ Live round 2026-09-07: a Graph Workflow Agent node's `responseJsonSchema` is enf
 generation start (a `zqx-alpha`/`zqx-beta` enum held against a prompt forbidding JSON and both tokens). The compiled `root`
 rule leaves the `<think>` block optional and unconstrained, captured verbatim from a `--verbose` llama-server as
 `"<|im_start|>assistant\n" space ("<think>" "\n"? until-13 "\n"? "</think>" "\n"? "\n"?)? space (...)`, and held at
-`reasoningEffort` `none` and `high`. Before S7, the `Microsoft.Extensions.AI.OpenAI` 10.9.0 strict transform relocated the
+`reasoningEffort` `none` and `high`. Before the passthrough below, the `Microsoft.Extensions.AI.OpenAI` 10.9.0 strict transform relocated the
 value bounds: a `maxLength: 3` schema reached llama-server as `{"description":"maxLength: 3","type":"string"}` and produced a
 1302-character field, while an `enum` arrived untouched. The relocated set (source order, `unsupportedProperties` in
 `OpenAIClientExtensions.cs` at `dotnet/extensions` tag `v10.9.0`): `contentEncoding`, `contentMediaType`, `not`,
@@ -664,8 +664,8 @@ value bounds: a `maxLength: 3` schema reached llama-server as `{"description":"m
 `exclusiveMaximum` survive. The pass also makes every declared property `required`, injects `additionalProperties: false`
 only where an object has `properties` and omits the key, and walks only `properties`, `items`, `additionalProperties`,
 `not`, `anyOf`, `oneOf`, `allOf` (so `$defs`, `definitions`, `prefixItems` and `$ref` targets are untouched). Do not dump
-`Microsoft.Extensions.AI.Abstractions.dll` for the list: it carries an unrelated format vocabulary that looks alike. Since
-S7, `ApplyResponseSchemaPassthrough` sets `$.response_format.json_schema.schema` before `ToOpenAIOptions`' `??=`, so the
+`Microsoft.Extensions.AI.Abstractions.dll` for the list: it carries an unrelated format vocabulary that looks alike.
+`ApplyResponseSchemaPassthrough` sets `$.response_format.json_schema.schema` before `ToOpenAIOptions`' `??=`, so the
 transform never runs on the llama.cpp lane and `strict` is sent false; only a repetition bound above
 `MaxGrammarRepetitionBound` (1024) is still removed. `InvocationAgentFactoryTests.CreateAsync_WithAResponseJsonSchema_ConstrainsTheTurnToIt`
 asserts on the factory's `ChatOptions`, upstream of the adapter, so it cannot catch a rewrite. Serilog at Debug greps zero
@@ -774,12 +774,12 @@ honest for every other caller.
 The 2026-09-25 text-encoder round set `StableDiffusionRuntime__TextEncoderOnGpu=true`, saw it in the node's
 environment, and sd-server still launched with `te=cpu`: no `StableDiffusionRuntime:*` key (port range, TTL, cap) had
 ever reached the supervisor since the section was introduced, because the provider registered a bare
-`new StableDiffusionRuntimeOptions()`. Phase B of the round was void until the host bound the section
+`new StableDiffusionRuntimeOptions()`. The second half of that run was void until the host bound the section
 (`AddNodeImagesExtensions.BindStableDiffusionRuntimeOptions`).
 
 ### a reverse provider→application `ProjectReference` fails at RESTORE, not in an architecture test
 
-Found during a provider SDK boundary migration (static-quality S5): the reverse-cycle break-proof
+Found during a provider SDK boundary migration: the reverse-cycle break-proof
 (a provider project → `Client.Application`, which already references that provider) failed `dotnet restore` with
 `error MSB4006: There is a circular dependency in the target dependency graph involving target
 "_GenerateRestoreProjectPathWalk"`, before any test ran. The guard demonstrated is the project graph itself, not
@@ -788,7 +788,7 @@ Found during a provider SDK boundary migration (static-quality S5): the reverse-
 ### NAudio's `CaptureAsync` starts the client itself and silently drops Silent packets
 
 Established by reading upstream `NAudio` 3.1.0 `src/NAudio.Wasapi/WasapiRecorder.cs` from source during the Windows
-per-application capture slice (audio-transcription S5, deviations 4–5). Writing silence would need the zero-copy
+per-application capture work. Writing silence would need the zero-copy
 `DataAvailable` event, whose `ReadOnlySpan<byte>` cannot cross an `await`; the lagging `Others`-lane clock is therefore
 documented rather than fixed.
 
@@ -866,13 +866,13 @@ carried the wrong claim (that throwing ends the turn) until commit 4d7ee3ea. Not
 
 ### A blank tool-call id is the only id-less shape Microsoft.Extensions.AI 10.9.0 can hand you
 
-Established by a standalone probe against the then-pinned package during the S6 first-pass review fixes
+Established by a standalone probe against the then-pinned package during first-pass review fixes
 (2026-09-04). Not re-measured at the 10.10.0 pin.
 
 ### Persisted chat parts are a render/reload record, not model context
 
 Chat had written `NodeChatMessagePart` rows long before the integration continuation work and never replayed one. The
-S6 kickoff assumed chat already replayed parts; it did not, so half of D-7 was new code rather than plumbing
+The design assumed chat already replayed parts; it did not, so half of the work was new code rather than plumbing
 (2026-09-04 pass).
 
 ### MAF traps
@@ -910,12 +910,12 @@ two end-to-end tests in `GenAiErrorDescriptionRedactionProcessorTests`.
 ### A MAF-trio bump above patch level is not merged on a green build alone
 
 `8459cb962` fixed a `ChatClientAgent` positional-argument order that changed under an unaccompanied Dependabot merge;
-O1's premise went stale unnoticed across 1.17.0 → 1.20.0. Re-run for 1.20.0 → 1.21.0 on 2026-09-17:
-`HandoffWorkflowSpikeTests`, `FrameworkApprovalGateTests` and `AgentSkillsProviderContractTests` passed; an assembly
+The workflow-backbone ruling's premise went stale unnoticed across 1.17.0 → 1.20.0. Re-run for 1.20.0 → 1.21.0 on 2026-09-17:
+`HandoffWorkflowContractTests`, `FrameworkApprovalGateTests` and `AgentSkillsProviderContractTests` passed; an assembly
 diff of the two net10.0 sets showed `Microsoft.Agents.AI.Workflows` and `.Abstractions` identical in public surface
 (version strings only), with `Microsoft.Agents.AI`'s single break being PR #7671 (`file_access_read_lines`;
 `AgentFileStore.SearchAsync` abstract→virtual, `AgentFileSkillResource` ctor gained an internal-typed parameter); all
-four O1 workflow-backbone axes unchanged, so O1 stands at 1.21.0.
+four workflow-backbone axes unchanged, so the ruling stands at 1.21.0.
 
 ### `Microsoft.Extensions.AI.OpenAI` and the plain `OpenAI` SDK move together, and NuGet will not tell you
 
@@ -928,20 +928,20 @@ round reverted `OpenAI` 2.14.0 to 2.13.0 and recorded the reason on the pin.
 
 ### A second copy of the tool-invocation logic drifts, and the drift looks like a product bug
 
-Both drifts accumulated in the training path after S2 promoted the invocation seam out of it: `HeadlessToolExecutor`
+Both drifts accumulated in the training path after the invocation seam was promoted out of it: `HeadlessToolExecutor`
 never consulted `IClientLocalToolRegistry`, so `read_file` and its five worker-owned siblings failed for a teacher turn
 that asked for them; and a repair envelope from `ToolArgumentRepairAIFunction` came back as a successful sample
 carrying model-repair guidance as its tool result, poisoning the dataset quietly.
 
 ### Graph Workflows: a node's `input` is its ONE satisfied predecessor's output, so a node inserted mid-chain REPLACES the content
 
-The S4 live round watched agent-2 spend three chat and three embedding calls hunting for a haiku that was never in its
+A live round watched agent-2 spend three chat and three embedding calls hunting for a haiku that was never in its
 input, because a `Pause` between it and the producer replaced the content with the approval document.
 
 ### Graph Workflows: a cap has to be enforced BEFORE the work it bounds, not after it
 
 The old Graph order compared the node count against the parsed graph, so it bounded nothing about the parse that
-produced it. Dev Workflows had the same hole; S7 closed it under operator ruling R7-3 (re-opening what S6 recorded as a
+produced it. Dev Workflows had the same hole, closed by operator ruling (re-opening what had been recorded as a
 finding only). `DevWorkflowOptions.MaxNodesPerDefinition` is 500 (higher than Graph's 200 because one materialization
 expands a template subtree up to twenty times), held to `[Range(1, 10_000)]`. `DevWorkflowDefinitionSeeder` takes the
 uncapped default, so the cap binds API-written definitions and not the shipped seeds (11 nodes at their largest at the
@@ -966,20 +966,20 @@ Mantine bounded inputs fired a mount-time `onChange` and persisted a min/default
 ### OpenAPI → hey-api is the sole REST data layer for React
 
 - A Release-built host started by hand defaults to `Production`; `Program` maps the OpenAPI document only when
-  `!IsProduction()`, so the regen fetch answered 404 on every path. Cost one wasted host start in the S2 regen,
+  `!IsProduction()`, so the regen fetch answered 404 on every path. Cost one wasted host start,
   2026-09-06.
 - An isolated `HOME` hid mise's trust store: mise refused the toolchain and the host exited with a trust error before
-  OpenAPI readiness, which read as "the spec endpoint is broken" (S5 lane A regen, 2026-09-07).
+  OpenAPI readiness, which read as "the spec endpoint is broken" (2026-09-07).
 - `scripts/tests/install.test.sh` isolates `HOME` too; every mise shim, `python3` among them, then aborted, and the
   installer used to report `one safe skills/xe-local-ai-engine tree` for a toolchain failure. The test now forwards
   `MISE_TRUSTED_CONFIG_PATHS` and `MISE_DATA_DIR` into each isolated-`HOME` invocation using the
   `openapi-live-check.sh` shape, and `install_skill_tree` in `install.sh` runs `python3 -c ''` rather than only
-  locating it, so an interpreter that aborts says so (S7 lane A, 2026-09-07, reproduced both ways).
-- A flag-gated family was silently deleted from the committed document by a regen run without its flag: the S3
+  locating it, so an interpreter that aborts says so (2026-09-07, reproduced both ways).
+- A flag-gated family was silently deleted from the committed document by a regen run without its flag: an
   External Apps regen, 2026-09-11.
-- The unannotated-query-member binding (`UninstallExternalAppRequest.ExpectedVersion`) was found by the S4 executor
-  after S3's regen had landed; every endpoint test passed because each builds its own request.
-- `$ref` reordering: the S5 regen that added `graph` to `GraphWorkflowRunResponse` showed two graph-workflow schemas
+- The unannotated-query-member binding (`UninstallExternalAppRequest.ExpectedVersion`) was found
+  after the regen had landed; every endpoint test passed because each builds its own request.
+- `$ref` reordering: the regen that added `graph` to `GraphWorkflowRunResponse` showed two graph-workflow schemas
   removed at one offset and re-added at another; the live and committed path sets matched exactly.
 
 ### Before deleting a `.Produces<T>(status)`, trace every exception family the route can raise
@@ -987,25 +987,25 @@ Mantine bounded inputs fired a mount-time `onChange` and persisted a min/default
 On `CreateTrainingRunEndpoint`, `TrainingRunBlockedResponse` was dead, so the DTO and the 409 went together; but
 `TrainingRunStore.CreateAndEnqueueAsync` still throws `TrainingConflictException`, which the global
 `TrainingExceptionHandler` maps to a `TrainingErrorResponse` 409. ADR 0009's prose ("the route answers with a 400, so
-the 409 could not occur") was false before the change and was believed by the implementer, the brief and the diff
-review; an independent review in a separate lane caught it (2026-09-10 cleanup review). `pnpm run openapi:check`
+the 409 could not occur") was false before the change and was believed by the implementer and the diff
+review; an independent review caught it (2026-09-10 cleanup review). `pnpm run openapi:check`
 regenerates the client from the committed spec and agrees with a wrong spec; behaviour tests pin the throw and the
 envelope, not the declaration.
 
 ### A declared 413 is thrown by Kestrel inside model binding, so it needs a handler, not an early exit
 
-Until S7 both capped families answered 500 on the only refusal path a real connection takes (the graph-workflow
-four at 1 MiB, the development-workflow two at 2 MiB) while passing every in-process test; the S7 live round,
-2026-09-07 §C, found it. In S8 both refusal paths were unified on `RequestBodyTooLargeProblem.WriteAsync(HttpContext,
+Both capped families once answered 500 on the only refusal path a real connection takes (the graph-workflow
+four at 1 MiB, the development-workflow two at 2 MiB) while passing every in-process test; a live round,
+2026-09-07, found it. Both refusal paths were then unified on `RequestBodyTooLargeProblem.WriteAsync(HttpContext,
 detail, ct)` (`Client/ExceptionHandling/`): it sets the 413, `application/problem+json; charset=utf-8` and the body;
 the handler awaits it and `Result(detail)` returns a private `IResult` for the endpoint's `Send.ResultAsync`.
 `Results.Problem` was dropped because it writes the bare media type and serializes the body itself. The size-limit
 types lost their error sink: `GraphWorkflowRequestSizeLimit.RefuseIfOversized(HttpRequest, IValidationErrors)` and the
 Dev equivalent became `IsOversized(HttpRequest)` beside an `OversizedDetail` string (an absent Content-Length is still
-not a refusal). Before S8 the endpoint half sent FastEndpoints' `errors[]` body through `Send.ErrorsAsync(413)` while
+not a refusal). Before that the endpoint half sent FastEndpoints' `errors[]` body through `Send.ErrorsAsync(413)` while
 the six routes declared `ProducesProblem(413)`. The OpenAPI document did not change (live regen plus `openapi:check`
 gave a zero diff). The 400 paths on these routes write FastEndpoints' `errors[]` and declare
-`ProducesProblemDetails(400)`; S7's reading that some declared the ASP.NET shape on 400 was not true at the tip.
+`ProducesProblemDetails(400)`; an earlier reading that some declared the ASP.NET shape on 400 was not true.
 Shape assertions: `RequestBodyTooLargeAssert.DeclaredProblemShapeAsync` (`Tests/Testing`, compares the whole
 content-type string) used by `GraphWorkflowDefinitionEndpointTests.GraphRoute_WithABodyOverTheCap_Returns413AndNeverReachesTheStore`,
 `GraphWorkflowRunEndpointTests.StartRun_WithABodyOverTheCap_Returns413InTheDeclaredShape` and
@@ -1040,18 +1040,17 @@ three-effect behaviour was read from the installed `@mantine/core` ESM (`Optiona
 ### an AudioWorklet is ONE self-contained `.js` file imported with `?url`
 
 `extends AudioWorkletProcessor` is evaluated when the class declaration executes, so a class at module scope throws
-`ReferenceError` under vitest before any registration guard runs. Source: S4 plan §2.3 (R37/R37a) and the C2/C4 dist
-greps recorded in the S4 progress notes.
+`ReferenceError` under vitest before any registration guard runs.
 
 ### a worklet node needs a path to the destination, and a pre-gesture context starts suspended
 
-Introduced by commit `ae37b424b` (S4 plan §2.3 step 5), replacing a `numberOfOutputs: 0` construction.
+Introduced by commit `ae37b424b`, replacing a `numberOfOutputs: 0` construction.
 
 ### `CheckDependencyBaseline.mjs` fails on a new `warn` fingerprint, so a `no-orphans` warning is a gate failure
 
-In S4 the rule did not fire: depcruise resolves `./Pcm16DownsamplerWorklet.js?url` after stripping the query, so the
+For the worklet the rule did not fire: depcruise resolves `./Pcm16DownsamplerWorklet.js?url` after stripping the query, so the
 import in `PcmCapture.ts` is a real incoming edge and `.dependency-cruiser.cjs` was left untouched. The existing
-`**/*.js` biome override sets `globals: []`, which is why the worklet override must come after it (S4 plan §1a.3).
+`**/*.js` biome override sets `globals: []`, which is why the worklet override must come after it.
 
 ### nothing on the axios instance's import path may import the router
 
@@ -1059,7 +1058,7 @@ The full cycle: `AxiosInstance` -> `Interceptors` -> `Router` -> the route tree 
 -> `Generated.runtime.ts` -> `AxiosInstance`. With the interceptors missing, every non-2xx arrived as a plain
 `AxiosError` and `readGraphWorkflowConflict` / `isNodeChatReadOnlyConflict` read nothing. It surfaced in a Vitest file
 that mocked `NodeChatAdapter` (changing which module loaded first); the app's own entry order happened to avoid it.
-A lazy router `import()` re-split the bundle by about +60 kB, over budget (S1 frontend report).
+A lazy router `import()` re-split the bundle by about +60 kB, over budget.
 
 ## Maintenance
 

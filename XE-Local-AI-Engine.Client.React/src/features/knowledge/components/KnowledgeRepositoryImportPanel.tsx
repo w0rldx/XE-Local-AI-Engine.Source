@@ -3,7 +3,7 @@ import { IconGitBranch } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { DevelopmentRepository } from "@/features/development/models/DevelopmentModels";
+import type { DevelopmentRepository } from "@/core/development/queries/useDevelopmentRepositories";
 
 interface KnowledgeRepositoryImportPanelProps {
 	readonly repositories: readonly DevelopmentRepository[];

@@ -155,7 +155,7 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   written answer and an unclear request a note on what is missing, and both end there. Agent nodes may declare an
   `outputSchema` (a flat set of string, number, integer and boolean fields): the session must hand in a matching
   `output` to finish, edges route on `output.*`, and a definition whose classifier leaves an answer unrouted is refused
-  at save (`GRAPH-C4-5`).
+  at save (`GRAPH-5`).
 - **Dev Workflows hold the plan and the verification to the request** — every Agent node run is now handed the work
   item's request, not only the first one. The seeded plans keep every name, signature and interface the request
   specifies and list any departure under "Deviations from the request". Both `verify` nodes judge a patch against the

@@ -41,7 +41,7 @@ public sealed class SkillImportServiceTests
         AssertEx.True(skill.CanImport);
         AssertEx.Equal("upload", preview.SourceUri);
 
-        // Phase 1 is a dry run in the strongest sense: not one persistence call was made.
+        // Preview is a dry run in the strongest sense: not one persistence call was made.
         await harness.Store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
         await harness.Store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>());
         await harness.Store.DidNotReceive().ReplaceResourcesAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<AgentSkillResourceInput>>(), Arg.Any<CancellationToken>());
@@ -284,7 +284,7 @@ public sealed class SkillImportServiceTests
         using var harness = new SkillImportHarness();
         var preview = await harness.Service.PreviewMarkdownAsync(SkillImportFixtures.SkillMarkdown("pdf-tools"));
 
-        // Phase 2 replays the materialized payload only. A name the operator never saw cannot be smuggled in, and the
+        // Commit replays the materialized payload only. A name the operator never saw cannot be smuggled in, and the
         // whole commit is refused before anything is written rather than partially applied.
         await AssertEx.ThrowsAsync<SkillImportException>(() =>
             harness.Service.CommitAsync(new SkillImportCommitRequest

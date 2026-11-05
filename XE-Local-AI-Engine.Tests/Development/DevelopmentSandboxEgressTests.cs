@@ -80,7 +80,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
     }
 
     /// <summary>
-    ///     Option A, the half the <c>Development:Sandbox:RequireEgressDenial</c> switch adds: on a backend that CAN
+    ///     The half the <c>Development:Sandbox:RequireEgressDenial</c> switch adds: on a backend that CAN
     ///     deny, setting it changes nothing at all — the request was already <see cref="SandboxNetworkPolicy.None" />.
     ///     Asserted so that turning the switch on is known to be a no-op on a capable node rather than assumed to be.
     /// </summary>

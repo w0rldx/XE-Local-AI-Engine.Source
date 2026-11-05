@@ -187,8 +187,8 @@ internal sealed class GenerationProgressTracker
     /// </summary>
     /// <remarks>
     ///     Loading and encoding have no measurable rate, and the decode that follows the last step has no step counter
-    ///     at all — a countdown that survived into either would show "0s left" while the job kept running, which is the
-    ///     exact complaint this phase-aware timeline exists to fix.
+    ///     at all — a countdown that survived into either would show "0s left" while the job kept running, which this
+    ///     phase-aware timeline exists to prevent.
     /// </remarks>
     private TimeSpan? EstimateRemaining(ImageGenPhase phase)
     {

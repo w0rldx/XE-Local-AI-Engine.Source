@@ -573,18 +573,18 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
             MutationReserved = false,
             EvictionReserved = false
         });
-        var probe = StubProbe(new StableDiffusionCppSourceBuildPrerequisiteReport
+        var probe = StubProbe(new SourceBuildPrerequisiteReport
         {
             CanBuild = false,
             Items =
             [
-                new StableDiffusionCppSourceBuildPrerequisiteItem
+                new SourceBuildPrerequisiteRow
                 {
                     Key = "os-is-linux",
                     Satisfied = true,
                     Detail = "Linux host detected."
                 },
-                new StableDiffusionCppSourceBuildPrerequisiteItem
+                new SourceBuildPrerequisiteRow
                 {
                     Key = "nvcc",
                     Satisfied = false,
@@ -772,16 +772,16 @@ public sealed class StableDiffusionCppSourceBuildTransportTests
     ///     <c>LocalApplicationData</c>, so every host this class builds gets a substitute whether the test asserts on
     ///     the checklist or not.
     /// </summary>
-    private static IStableDiffusionCppSourceBuildPrerequisiteProbe StubProbe(StableDiffusionCppSourceBuildPrerequisiteReport? report = null)
+    private static IStableDiffusionCppSourceBuildPrerequisiteProbe StubProbe(SourceBuildPrerequisiteReport? report = null)
     {
         var probe = Substitute.For<IStableDiffusionCppSourceBuildPrerequisiteProbe>();
         probe.ProbeAsync(Arg.Any<SdGpuBackend>(), Arg.Any<CancellationToken>())
-             .Returns(report ?? new StableDiffusionCppSourceBuildPrerequisiteReport
+             .Returns(report ?? new SourceBuildPrerequisiteReport
              {
                  CanBuild = false,
                  Items =
                  [
-                     new StableDiffusionCppSourceBuildPrerequisiteItem
+                     new SourceBuildPrerequisiteRow
                      {
                          Key = "os-is-linux",
                          Satisfied = true,

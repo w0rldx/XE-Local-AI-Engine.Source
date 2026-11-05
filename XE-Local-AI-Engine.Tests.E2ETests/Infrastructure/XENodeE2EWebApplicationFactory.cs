@@ -121,7 +121,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     private readonly FakeOpenAiGatewayServer _fakeGateway;
     private readonly string _fixtureDataRoot = Path.Combine(Path.GetTempPath(), "xe-local-ai-engine-e2e-" + Guid.NewGuid().ToString("N"));
 
-    // Populated either from the explicit ctor (spike / direct use) or from the injected
+    // Populated either from the explicit ctor (direct use) or from the injected
     // ReactClient fixture in InitializeAsync (the TUnit [ClassDataSource] path used by the base class).
     private int _port;
     private string _webRoot = string.Empty;
@@ -138,8 +138,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     }
 
     /// <summary>
-    ///     Spike / direct-use path: the caller has already chosen the port and built the dist
-    ///     (see <c>TokenInjectionSpikeE2ETests</c>, <c>HostBootSmokeE2ETests</c>).
+    ///     Direct-use path: the caller has already chosen the port and built the dist
+    ///     (see <c>HostBootSmokeE2ETests</c>).
     /// </summary>
     /// <param name="port">Free loopback port chosen up front (before the React build).</param>
     /// <param name="webRoot">Temp directory whose root <c>index.html</c> is the freshly built dist (UseWebRoot).</param>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ChatToolPart } from "@/core/models/ChatMessageParts";
 import {
 	type AppliedNodeChatStreamEvent,
 	accumulateToolTimelineEntry,
@@ -8,7 +9,7 @@ import {
 	markNodeChatStreamTerminated,
 	nodeChatStreamEventTypes,
 } from "@/features/chat/api/NodeChatStreamState";
-import type { ChatConversationModel, ChatToolPart } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
@@ -1192,7 +1193,7 @@ describe("node chat stream state", () => {
 		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
 	});
 
-	it("marks a denied call denied and clears its pending approval (N-90)", () => {
+	it("marks a denied call denied and clears its pending approval", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
 			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
@@ -1350,7 +1351,7 @@ describe("node chat stream state", () => {
 				delta: null,
 			}),
 		);
-		// Reasoning after the tool (seq 6) must OPEN A NEW segment (Option A second Thoughts block).
+		// Reasoning after the tool (seq 6) must OPEN A NEW segment (the second Thoughts block).
 		const secondReasoning = applyNodeChatStreamEvent(
 			toolCompleted.conversation,
 			streamEvent({ sequence: 6, content: null, delta: null, reasoningDelta: "the tool says noon" }),

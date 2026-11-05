@@ -622,7 +622,7 @@ public sealed class SupervisorEvictionTests
                 ? static () => throw new InvalidOperationException("teardown failed")
                 : null;
 #pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
-            return new FakeProcessHandle(Interlocked.Increment(ref nextPid), onTreeKill: onTreeKill);
+            return new FakeProcessTreeHandle(Interlocked.Increment(ref nextPid), onTreeKill: onTreeKill);
 #pragma warning restore CA2000
         });
         var time = new AdvanceableTimeProvider();

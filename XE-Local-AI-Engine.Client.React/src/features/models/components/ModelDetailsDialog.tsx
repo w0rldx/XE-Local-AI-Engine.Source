@@ -7,7 +7,7 @@ import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { sameRepoVariants } from "@/core/models/ModelVariants";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { ModelFitPanel } from "@/features/models/components/ModelFitPanel";
+import { ModelFitPanel } from "@/features/model-fit/components/ModelFitPanel";
 import { ModelLaunchArgumentsPanel } from "@/features/models/components/ModelLaunchArgumentsPanel";
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
 import { buildKindOptions, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";

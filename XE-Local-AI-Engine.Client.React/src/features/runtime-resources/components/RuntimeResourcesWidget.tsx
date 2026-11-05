@@ -13,9 +13,9 @@ import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { isDesktopShell } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { RunningModel } from "@/core/loaded-models/models/RunningModelsModels";
+import { useEjectImageRuntime, useEjectTranscriptionRuntime } from "@/core/loaded-models/queries/useEjectRuntimes";
 import { useEjectRunningModel, useRunningModels } from "@/core/loaded-models/queries/useRunningModels";
 import { toast } from "@/core/ui/notifications/Toast";
-import { useEjectImageRuntime } from "@/features/node-settings/queries/useImageRuntime";
 import { RuntimeResidentRow } from "@/features/runtime-resources/components/RuntimeResidentRow";
 import {
 	HIGH_USAGE_PERCENT,
@@ -25,7 +25,6 @@ import {
 } from "@/features/runtime-resources/models/RuntimeResourcesModels";
 import { useRuntimeResidents } from "@/features/runtime-resources/queries/useRuntimeResidents";
 import { useRuntimeResources } from "@/features/runtime-resources/queries/useRuntimeResources";
-import { useEjectTranscriptionRuntime } from "@/features/transcription/queries/useTranscriptionQueries";
 
 type ResidentState = "exited" | "unresponsive" | "busy" | "transient" | "idle";
 

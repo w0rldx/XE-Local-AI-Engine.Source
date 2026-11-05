@@ -30,7 +30,7 @@ import {
 	imageModelFamilies,
 	imageModelPartRoles,
 	suggestFamilyForRepo,
-} from "@/features/images/models/ImageModels";
+} from "@/features/images/models/ImageModelInstallModels";
 import { useBrowseImageRepositories, useInspectImageRepository } from "@/features/images/queries/useImageQueries";
 
 interface ImageModelBrowsePanelProps {

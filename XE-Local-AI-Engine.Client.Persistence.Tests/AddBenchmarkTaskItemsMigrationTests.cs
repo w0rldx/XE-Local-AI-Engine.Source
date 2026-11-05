@@ -27,7 +27,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-up.sqlite");
 
-        AssertEx.True(await probe.TableExistsAsync("benchmark_task_items"), "M1 must create benchmark_task_items.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_task_items"), "The migration must create benchmark_task_items.");
         var itemColumns = await probe.ColumnsAsync("benchmark_task_items");
         AssertEx.True(itemColumns.IsSupersetOf(new[]
             {

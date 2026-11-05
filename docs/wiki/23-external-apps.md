@@ -66,7 +66,7 @@ that contract — it stands beside it.
   bridge listener is bound from the value `NodeStartupSettings` read before the host was built, so that half applies after
   a restart. The shipped `appsettings.json` sets it to `true`; the code default in `ExternalAppsOptions.Enabled` and
   `NodeStartupSettings` stays `false`, so a node with missing configuration fails closed.
-- **One instance per application.** A second install answers 409 `ExternalAppAlreadyInstalled` (decision D13). The
+- **One instance per application.** A second install answers 409 `ExternalAppAlreadyInstalled` (operator ruling). The
   409 is the seam to remove if multi-instance is ever wanted.
 
 **What it is not:**
@@ -163,7 +163,7 @@ environment, `CapAdd`, `ReadOnlyRootFilesystem`, `Ports`, `Storage`, `Files`, `H
   A test asserts this list is ordinally equal to the runtime layer's own `ContainerRuntimeCapabilities.Names`, so a
   drift is a red test rather than a runtime "incompatible" answer to a valid manifest.
 - **Variable types** are `string`, `secret`, `integer`, `boolean` and `enum`. A `secret` never ships a default
-  (decision D11). The reserved prefix `XE_` is refused for any declared variable name.
+  (operator ruling). The reserved prefix `XE_` is refused for any declared variable name.
 - **Substitution.** An environment value may reference `${NAME}` for a declared variable or one of the built-ins:
   `XE_UID`, `XE_GID`, `XE_INSTANCE_ID`, the `XE_UI_HOST_PORT_<service>` family, and the container-bridge pair
   `XE_BRIDGE_ENDPOINT` / `XE_BRIDGE_TOKEN` (§5). A malformed token or an undeclared name is a validation error,

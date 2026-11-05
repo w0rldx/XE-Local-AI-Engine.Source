@@ -645,7 +645,7 @@ public sealed class ProviderCallBudgetChatClientTests
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
         // ~4 chars/token plus per-message framing: 3,400 characters lands near 900 estimated tokens against a 1,000
-        // window — comfortably inside the old full-window budget, outside the 850 the margin allows.
+        // window — comfortably inside a full-window budget, outside the 850 the margin allows.
         var messages = new List<ChatMessage>
         {
             new(ChatRole.User, "first"),

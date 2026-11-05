@@ -312,8 +312,8 @@ public sealed class DevWorkflowRunQueryService
     }
 
     /// <summary>
-    ///     The bound agent's name, or the seed slug the node names when the binding is by slug — which is the Slice-A
-    ///     shape, where the node run carries no agent id at all.
+    ///     The bound agent's name, or the seed slug the node names when the binding is by slug:
+    ///     the node run then carries no agent id at all.
     /// </summary>
     private static string? AgentDisplayName(DevWorkflowNodeRunSnapshot nodeRun,
         ViewNode? node,

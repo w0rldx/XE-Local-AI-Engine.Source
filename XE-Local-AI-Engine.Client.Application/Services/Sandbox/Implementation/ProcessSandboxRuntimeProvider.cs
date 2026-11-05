@@ -263,14 +263,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // would put a workload promised a boundary onto the host filesystem. The caller learns why in a failed-launch shape.
             _logger.LogError(exception, "The sandbox filesystem boundary could not be established; the command was not run.");
 
-            return new SandboxCommandResult
-            {
-                ExecutionId = request.ExecutionId,
-                ExitCode = -1,
-                StandardError = $"{SandboxCommandResult.BoundaryFailurePrefix} ({exception.Message}).",
-                Completed = false,
-                Duration = _timeProvider.GetUtcNow() - startedAt
-            };
+            return NotCompleted(request.ExecutionId, $"{SandboxCommandResult.BoundaryFailurePrefix} ({exception.Message}).", startedAt);
         }
 
         // Anchor the occupancy baseline BEFORE the child starts, while the jail holds only what the ENGINE staged: measured
@@ -303,14 +296,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             // The executable could not be launched (not found / not executable, or MXC refused the spawn). Surface a non-completed result
             // rather than throwing, so the AgentHome run flow records a failed command the same way a non-zero exit does.
-            return new SandboxCommandResult
-            {
-                ExecutionId = request.ExecutionId,
-                ExitCode = -1,
-                StandardError = DescribeLaunchFailure(exception, launch),
-                Completed = false,
-                Duration = _timeProvider.GetUtcNow() - startedAt
-            };
+            return NotCompleted(request.ExecutionId, DescribeLaunchFailure(exception, launch), startedAt);
         }
 
         // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names, so the
@@ -341,14 +327,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             commandCancelSource.Dispose();
             if (registration == InFlightRegistration.SandboxDead)
             {
-                return new SandboxCommandResult
-                {
-                    ExecutionId = request.ExecutionId,
-                    ExitCode = -1,
-                    StandardError = SandboxKilledBeforeStart,
-                    Completed = false,
-                    Duration = _timeProvider.GetUtcNow() - startedAt
-                };
+                return NotCompleted(request.ExecutionId, SandboxKilledBeforeStart, startedAt);
             }
 
             throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
@@ -388,15 +367,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             if (process.TimedOut)
             {
                 // MXC enforced the same timeout inside its own wait and reaped the tree: the same shape as the engine's timeout below.
-                return new SandboxCommandResult
-                {
-                    ExecutionId = request.ExecutionId,
-                    ExitCode = -1,
-                    StandardOutput = standardOutputBuilder.ToString(),
-                    StandardError = "Command timed out.",
-                    Completed = false,
-                    Duration = _timeProvider.GetUtcNow() - startedAt
-                };
+                return NotCompleted(request.ExecutionId, "Command timed out.", startedAt, standardOutputBuilder.ToString());
             }
 
             var standardOutput = standardOutputBuilder.ToString();
@@ -407,14 +378,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 && SandboxWrapperExecFailure.Describe(request.Executable, exitCode, standardOutput, standardError) is { } launchFailure)
             {
                 _logger.LogWarning("The sandbox command {Executable} could not be launched: {LaunchFailure}", request.Executable, launchFailure);
-                return new SandboxCommandResult
-                {
-                    ExecutionId = request.ExecutionId,
-                    ExitCode = -1,
-                    StandardError = launchFailure,
-                    Completed = false,
-                    Duration = _timeProvider.GetUtcNow() - startedAt
-                };
+                return NotCompleted(request.ExecutionId, launchFailure, startedAt);
             }
 
             return new SandboxCommandResult
@@ -443,14 +407,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // reads a cancelled command, not a caller cancel. Scope and group kills run here: a tree walk stops at the helper.
             process.Kill();
             await TerminateLaunchAsync(launch, process);
-            return new SandboxCommandResult
-            {
-                ExecutionId = request.ExecutionId,
-                ExitCode = -1,
-                StandardError = "Command was cancelled before completion.",
-                Completed = false,
-                Duration = _timeProvider.GetUtcNow() - startedAt
-            };
+            return NotCompleted(request.ExecutionId, "Command was cancelled before completion.", startedAt);
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -458,14 +415,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // non-throwing timed-out result (Completed=false / ExitCode=-1), matching the container/fake timeout shape.
             process.Kill();
             await TerminateLaunchAsync(launch, process);
-            return new SandboxCommandResult
-            {
-                ExecutionId = request.ExecutionId,
-                ExitCode = -1,
-                StandardError = "Command timed out.",
-                Completed = false,
-                Duration = _timeProvider.GetUtcNow() - startedAt
-            };
+            return NotCompleted(request.ExecutionId, "Command timed out.", startedAt);
         }
         catch (OperationCanceledException)
         {
@@ -1088,12 +1038,19 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     private SandboxCommandResult DiskCeilingResult(string executionId, long jailDiskCeiling, DateTimeOffset startedAt) =>
+        NotCompleted(executionId,
+            string.Create(CultureInfo.InvariantCulture,
+                $"{SandboxCommandResult.JailDiskCeilingExceededPrefix} of {jailDiskCeiling} bytes and was terminated."),
+            startedAt);
+
+    /// <summary>The non-throwing result of a command that did not run to completion; <see cref="SandboxCommandResult.Duration" /> is stamped here, so a caller kills the child first.</summary>
+    private SandboxCommandResult NotCompleted(string executionId, string standardError, DateTimeOffset startedAt, string? standardOutput = null) =>
         new()
         {
             ExecutionId = executionId,
             ExitCode = -1,
-            StandardError = string.Create(CultureInfo.InvariantCulture,
-                $"{SandboxCommandResult.JailDiskCeilingExceededPrefix} of {jailDiskCeiling} bytes and was terminated."),
+            StandardOutput = standardOutput ?? string.Empty,
+            StandardError = standardError,
             Completed = false,
             Duration = _timeProvider.GetUtcNow() - startedAt
         };

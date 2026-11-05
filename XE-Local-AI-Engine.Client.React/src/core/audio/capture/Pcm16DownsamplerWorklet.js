@@ -1,13 +1,13 @@
 /**
  * The AudioWorklet that turns whatever rate the browser gave us into the 16 kHz mono int16 frames the
- * transcription hub accepts (S4 plan §2.3).
+ * transcription hub accepts.
  *
  * ONE self-contained file with no module dependencies of any kind, and it must stay that way. `PcmCapture.ts`
  * pulls it in for its URL alone, through Vite's `?url` suffix: the asset plugin emits this file's raw bytes and
  * does not traverse its module graph, so a sibling module would ship as an unresolved specifier,
  * `registerProcessor` would never run, and the failure would surface only in a browser as a `worklet-failed`
- * capture error with every build gate still green. The slice gate greps the emitted asset for the module-loading
- * keyword and requires zero hits, so keep that keyword out of this file's prose too — a comment that spells it out
+ * capture error with every build gate still green. The check is a grep of the emitted asset for the module-loading
+ * keyword that must find zero hits, so keep that keyword out of this file's prose too — a comment that spells it out
  * turns the one mechanical proof there is into noise.
  *
  * Both the class and its registration sit inside the worklet-global guard: `extends AudioWorkletProcessor` is
@@ -16,7 +16,7 @@
  * With the guard, loading this file from a test defines only `downsampleToInt16`.
  *
  * simplified: linear interpolation, not a polyphase resampler — whisper's own front end is a 16 kHz mel filterbank
- * and the aliasing at 48k→16k is far below its noise floor; swap in a windowed-sinc kernel only if a live round
+ * and the aliasing at 48k→16k is far below its noise floor; swap in a windowed-sinc kernel only if a live test
  * shows accuracy loss versus the same clip uploaded as a file.
  */
 

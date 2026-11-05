@@ -75,7 +75,7 @@ describe("WorkSessionPlanPanel", () => {
 		expect(screen.getByTestId("work-session-task-child-b").getAttribute("data-current")).toBeNull();
 	});
 
-	it("says a host stop paused the session, not the operator (R5-04)", () => {
+	it("says a host stop paused the session, not the operator", () => {
 		const paused = (sequence: number, reason: string): WorkSessionEventResponse => ({
 			id: `e${sequence}`,
 			sequence,
@@ -100,7 +100,7 @@ describe("WorkSessionPlanPanel", () => {
 		expect(screen.queryByTestId("work-session-pause-reason")).toBeNull();
 	});
 
-	it("says when a completed session did not meet its objective (F-29)", () => {
+	it("says when a completed session did not meet its objective", () => {
 		const completion = (sequence: number, detailJson: string | null): WorkSessionEventResponse => ({
 			id: `e${sequence}`,
 			sequence,

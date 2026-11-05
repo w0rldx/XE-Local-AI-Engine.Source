@@ -130,7 +130,7 @@ public sealed class IntegrationSseEndToEndTests
 
     private TestServerWebAppFactory Factory => Host.Factory;
 
-    /// <summary>Test 39 — the frame sequence of a whole run.</summary>
+    /// <summary>The frame sequence of a whole run.</summary>
     [Test]
     public async Task Invoke_WithAStreamAccept_EmitsTheWholeRunInOrderWithAscendingIds()
     {
@@ -154,7 +154,7 @@ public sealed class IntegrationSseEndToEndTests
         AssertEx.Empty(order.Where(static type => type == IntegrationStreamEventTypes.ExecutionQueued).Skip(count: 1));
     }
 
-    /// <summary>Test 40 — a dropped stream resumed with <c>Last-Event-ID</c> loses nothing and repeats nothing.</summary>
+    /// <summary>A dropped stream resumed with <c>Last-Event-ID</c> loses nothing and repeats nothing.</summary>
     [Test]
     public async Task Events_ResumedAfterADrop_ConcatenateIntoTheSingleStreamSequence()
     {
@@ -172,7 +172,7 @@ public sealed class IntegrationSseEndToEndTests
         AssertEx.Equal(IntegrationStreamEventTypes.ExecutionCompleted, combined[^1].Type, "The resumed half still carries the run to its terminal event.");
     }
 
-    /// <summary>Test 41 — the persisted rows a completed run leaves, and what is deliberately not among them.</summary>
+    /// <summary>The persisted rows a completed run leaves, and what is deliberately not among them.</summary>
     [Test]
     public async Task Invoke_LeavesThePersistedSubsetAndNoAssistantRows()
     {

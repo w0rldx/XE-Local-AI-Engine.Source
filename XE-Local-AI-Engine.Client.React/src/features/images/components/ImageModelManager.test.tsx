@@ -6,7 +6,8 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageModelManager } from "@/features/images/components/ImageModelManager";
-import type { ImageModelCatalogEntryView, ImageModelDownloadView, ImageModelView } from "@/features/images/models/ImageModels";
+import type { ImageModelCatalogEntryView, ImageModelDownloadView } from "@/features/images/models/ImageModelInstallModels";
+import type { ImageModelView } from "@/features/images/models/ImageModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const startMutate = vi.fn();

@@ -139,8 +139,8 @@ public sealed class ExternalAccessProfileBackfillTests
             expectedSwitches: false);
     }
 
-    // The regression the round-2 review bought: a settings file holding ONLY an unrecognised profile. Nulling it made
-    // the record indistinguishable from a legacy install, so the backfill stamped "recommended" plus all three switches
+    // A settings file holding ONLY an unrecognised profile. Nulling it would make the record indistinguishable from
+    // a legacy install, so the backfill would stamp "recommended" plus all three switches
     // on a node whose operator had written a profile. Loading it as "pending" makes it non-null, i.e. left alone.
     [Test]
     public async Task NodeWithAJunkProfileAndNoSwitches_IsReadAsPendingAndNotBackfilled()

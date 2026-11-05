@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
 ///     Bounded Linux toolchain checks, run before a managed native-runtime source build is allowed to start.
@@ -46,7 +45,18 @@ public abstract class SourceBuildPrerequisiteProbe
     /// <summary>The whole checklist, in the order the SPA shows it.</summary>
     /// <param name="probeBackendTools">Probes the accelerator rows the requested backend needs, shown right after the OS gate.</param>
     /// <param name="ct">Cancels the probe and kills the tool it is running.</param>
-    protected async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeRowsAsync(Func<CancellationToken, Task<IReadOnlyList<SourceBuildPrerequisiteRow>>> probeBackendTools,
+    protected async Task<SourceBuildPrerequisiteReport> ProbeReportAsync(Func<CancellationToken, Task<IReadOnlyList<SourceBuildPrerequisiteRow>>> probeBackendTools,
+        CancellationToken ct)
+    {
+        var rows = await ProbeRowsAsync(probeBackendTools, ct).ConfigureAwait(false);
+        return new SourceBuildPrerequisiteReport
+        {
+            CanBuild = rows.All(static row => row.Satisfied),
+            Items = rows
+        };
+    }
+
+    private async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeRowsAsync(Func<CancellationToken, Task<IReadOnlyList<SourceBuildPrerequisiteRow>>> probeBackendTools,
         CancellationToken ct)
     {
         // The OS gate is reported as the single unsatisfied row rather than an exception, so the SPA renders one
@@ -78,13 +88,23 @@ public abstract class SourceBuildPrerequisiteProbe
         return rows;
     }
 
-    /// <summary>The CUDA compiler and driver rows both runtimes' CUDA backends need.</summary>
+    /// <summary>The CUDA compiler and driver rows every runtime's CUDA backend needs.</summary>
     protected async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeCudaToolsAsync(CancellationToken ct)
     {
         return
         [
             await ProbeToolAsync("nvcc", ["--version"], "NVIDIA CUDA compiler (nvcc)", ct, CudaToolkitLocator.FindNvccOutsidePath()).ConfigureAwait(false),
             await ProbeToolAsync("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], "NVIDIA driver probe", ct).ConfigureAwait(false)
+        ];
+    }
+
+    /// <summary>The shader compiler and runtime rows a Vulkan backend needs.</summary>
+    protected async Task<IReadOnlyList<SourceBuildPrerequisiteRow>> ProbeVulkanToolsAsync(CancellationToken ct)
+    {
+        return
+        [
+            await ProbeToolAsync("glslc", ["--version"], "Vulkan shader compiler (glslc)", ct).ConfigureAwait(false),
+            await ProbeToolAsync("vulkaninfo", ["--summary"], "Vulkan runtime probe", ct).ConfigureAwait(false)
         ];
     }
 
@@ -217,7 +237,9 @@ public abstract class SourceBuildPrerequisiteProbe
                 throw;
             }
         }
-        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or IOException)
+        // UnauthorizedAccessException is an isolation root that cannot be created: the row stays unsatisfied, because a
+        // build could not write there either, and the checklist still renders.
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or IOException or UnauthorizedAccessException)
         {
             return Missing(fileName, displayName);
         }

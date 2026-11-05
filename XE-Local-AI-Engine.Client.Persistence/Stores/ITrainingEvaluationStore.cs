@@ -206,6 +206,7 @@ public sealed record TrainingEvaluationKindTally(int Total, int Passed);
 /// </summary>
 public static class TrainingEvaluationResults
 {
+    // Same settings as TrainingJson in the application layer, which this project cannot reference.
     public static JsonSerializerOptions Options { get; } = Create();
 
     /// <summary>Returns an empty list rather than throwing on a legacy or unreadable blob — a corrupt tail must not strand a resume.</summary>

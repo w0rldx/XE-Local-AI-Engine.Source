@@ -26,7 +26,7 @@ internal sealed record class PlaybookAction
     ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>trigger_condition</c>.
     /// </summary>
     /// <remarks>
-    ///     Advisory/display only (not injected into the prompt); drives retrieval in later phases.
+    ///     Not injected into the prompt; the playbook retrieval rankers rank on it.
     /// </remarks>
     public byte[]? TriggerCondition { get; set; }
 

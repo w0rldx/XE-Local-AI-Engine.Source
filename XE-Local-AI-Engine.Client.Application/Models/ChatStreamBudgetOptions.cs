@@ -57,8 +57,7 @@ public sealed class ChatStreamBudgetOptions
     public int MaxReplaySnapshotChars { get; set; } = 1_048_576;
 
     /// <summary>
-    ///     Floor on the partial-flush cadence: never persist more often than this, whatever the growth. Matches the
-    ///     fixed cadence this policy replaced, so a slow, small message writes no more often than it used to.
+    ///     Floor on the partial-flush cadence: never persist more often than this, whatever the growth.
     /// </summary>
     [Range(1, 60_000)]
     public int PartialFlushMinIntervalMs { get; set; } = 100;

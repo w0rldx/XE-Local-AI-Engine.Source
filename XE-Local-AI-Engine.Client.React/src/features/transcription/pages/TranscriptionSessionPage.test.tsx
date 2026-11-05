@@ -306,7 +306,7 @@ describe("TranscriptionSessionPage", () => {
 		expect((await screen.findByTestId("transcription-capture-behind")).textContent).toBe("Transcribing… 3 s behind");
 	});
 
-	// Item 7: silence commits no segment, so a timer read off the committed transcript sat at 00:00 while capturing.
+	// Silence commits no segment, so a timer read off the committed transcript would sit at 00:00 while capturing.
 	it("times a running capture from the captured audio even with no committed segment", async () => {
 		liveCapture.state = "capturing";
 		liveCapture.capturedMs = 65_000;

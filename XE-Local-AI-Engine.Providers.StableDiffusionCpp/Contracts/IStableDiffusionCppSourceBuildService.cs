@@ -89,7 +89,7 @@ public sealed class StableDiffusionCppSourceBuildStartResult
 {
     public required StableDiffusionCppSourceBuildStartOutcome Outcome { get; init; }
 
-    public StableDiffusionCppSourceBuildPrerequisiteReport? Prerequisites { get; init; }
+    public SourceBuildPrerequisiteReport? Prerequisites { get; init; }
 
     public RuntimeActivitySnapshot? Activity { get; init; }
 }

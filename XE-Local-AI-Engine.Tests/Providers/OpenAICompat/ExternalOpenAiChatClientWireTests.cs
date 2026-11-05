@@ -40,8 +40,8 @@ public sealed class ExternalOpenAiChatClientWireTests
     [Arguments(true)]
     public async Task Send_WhenTheCallerOptionsCarryTheNamespacedId_SendsTheWireIdAndLeavesTheOptionsUntouched(bool streaming)
     {
-        // Every chat, agent and work-session turn passes options whose ModelId is the node's ext: id; it used to
-        // override the adapter's wire-id default, so the endpoint was asked for a model it has never heard of.
+        // Every chat, agent and work-session turn passes options whose ModelId is the node's ext: id; it must not
+        // override the adapter's wire-id default, or the endpoint is asked for a model it has never heard of.
         var recorder = new OpenAiWireRecorder
         {
             Responder = _ => streaming ? OpenAiWireRecorder.Stream("{\"content\":\"ok\"}") : OpenAiWireRecorder.Completion("ok")

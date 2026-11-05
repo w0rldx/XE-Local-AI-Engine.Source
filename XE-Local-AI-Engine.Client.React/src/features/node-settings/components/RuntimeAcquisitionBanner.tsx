@@ -88,7 +88,7 @@ export function RuntimeAcquisitionBanner() {
 	const totalBytes = status?.totalBytes;
 	const stepIndex = status?.stepIndex ?? 1;
 
-	// UX-11 rate/ETA, derived client-side from successive pushes (no timestamps ride the wire). `Downloading` is this
+	// Rate/ETA, derived client-side from successive pushes (no timestamps ride the wire). `Downloading` is this
 	// channel's active phase — the default `Running` belongs to the GGUF channel and would drop every sample here.
 	const progressByKey = useMemo<ReadonlyMap<string, RateTrackedProgress>>(() => {
 		if (phase === undefined) {

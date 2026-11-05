@@ -515,7 +515,7 @@ public sealed partial class InvocationRunner
         loop.CurrentMessages.Add(new ChatMessage(ChatRole.User, ReasoningToolCallRepromptMessage));
 
         // Thinking stays off for the rest of the turn: back on after the re-prompt, the 9B put its next call in the reasoning
-        // again (live C1: 2 of 6), with thinking off it never did. The next turn's budget starts with it on.
+        // again (2 of 6 measured), with thinking off it never did. The next turn's budget starts with it on.
         ProviderCallBudget.Current?.TurnThinkingOff();
         loop.FinalRoundContentStart = stream.ResponseBuilder.Length;
         loop.FinalRoundReasoningStart = stream.ReasoningBuilder.Length;

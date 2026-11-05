@@ -54,7 +54,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const int MinWindowToolResultCharacters = 8_192;
 
     // The one tool round-trip a window-fitted offer keeps room for: short arguments and a short result, enough for the
-    // Default Assistant's short-result tools (live C2: Calculate returned 13 characters). Larger results are trimmed per round.
+    // Default Assistant's short-result tools (measured: Calculate returned 13 characters). Larger results are trimmed per round.
     private const int FittedRoundTripArgumentCharacters = 128;
     private const int FittedRoundTripResultCharacters = 512;
 

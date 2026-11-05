@@ -104,7 +104,7 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
         }
 
         // The rollback rebuilds the table from the preceding migration's model, so the columns that were already there
-        // are the ones a sibling slice would lose if this migration ever stopped being the tail.
+        // are the ones a sibling migration would lose if this migration ever stopped being the tail.
         AssertEx.True(columns.Contains("failure_class"), "Rolling back the telemetry migration must not disturb the columns that preceded it.");
         AssertEx.True(columns.Contains("terminal_reason"), "Rolling back the telemetry migration must not disturb the columns that preceded it.");
     }

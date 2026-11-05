@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -629,8 +630,8 @@ public sealed class SourceBuildRecoveryTests
 
     private sealed class ReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
-        public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
-            Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport
+        public Task<SourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
+            Task.FromResult(new SourceBuildPrerequisiteReport
             {
                 CanBuild = true,
                 Items = []

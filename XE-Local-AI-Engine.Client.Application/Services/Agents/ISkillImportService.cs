@@ -17,14 +17,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public interface ISkillImportService
 {
     /// <summary>
-    ///     Phase 1 for an uploaded <c>.zip</c>. Extracts in memory under the archive guards, discovers every
+    ///     Preview for an uploaded <c>.zip</c>. Extracts in memory under the archive guards, discovers every
     ///     <c>SKILL.md</c>, and returns the report. Writes nothing.
     /// </summary>
     /// <exception cref="SkillImportException">An archive guard tripped, or the archive holds no skill.</exception>
     Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Phase 1 for an uploaded <c>.zip</c> that is still a stream: buffers it under
+    ///     Preview for an uploaded <c>.zip</c> that is still a stream: buffers it under
     ///     <see cref="SkillImportOptions.MaxArchiveBytes" />, then runs the same archive preview. Writes nothing.
     /// </summary>
     /// <remarks>
@@ -37,14 +37,14 @@ public interface ISkillImportService
     Task<SkillImportPreview> PreviewArchiveAsync(Stream archive, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Phase 1 for a pasted raw <c>SKILL.md</c>. A pasted document has no containing directory and no bundled
+    ///     Preview for a pasted raw <c>SKILL.md</c>. A pasted document has no containing directory and no bundled
     ///     files, so the frontmatter <c>name</c> is authoritative and the skill imports instructions-only. Writes nothing.
     /// </summary>
     /// <exception cref="SkillImportException">The document carries no parsable frontmatter block.</exception>
     Task<SkillImportPreview> PreviewMarkdownAsync(string skillMarkdown, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Phase 1 for a GitHub repository. Writes nothing.
+    ///     Preview for a GitHub repository. Writes nothing.
     /// </summary>
     /// <remarks>
     ///     <paramref name="owner" /> and <paramref name="repository" /> are the only caller-supplied parts of the
@@ -55,7 +55,7 @@ public interface ISkillImportService
     Task<SkillImportPreview> PreviewGitHubRepositoryAsync(string owner, string repository, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Phase 2. Persists the selected skills from a previously issued preview. Fails — writing nothing — unless
+    ///     Commit. Persists the selected skills from a previously issued preview. Fails — writing nothing — unless
     ///     <see cref="SkillImportCommitRequest.Acknowledged" /> is <c>true</c> and the token is still live and unused.
     /// </summary>
     /// <exception cref="SkillImportException">Unacknowledged, unknown/expired token, or an unselectable skill name.</exception>
@@ -107,7 +107,7 @@ public sealed class SkillImportOptions
 
 /// <summary>
 ///     The dry-run report the operator approves. <see cref="Token" /> is a short-lived, single-use handle to the
-///     materialized payload behind this report — the payload phase 2 persists verbatim.
+///     materialized payload behind this report — the payload the commit persists verbatim.
 /// </summary>
 public sealed class SkillImportPreview
 {
@@ -126,7 +126,7 @@ public sealed class SkillImportPreview
 
 /// <summary>
 ///     One discovered skill, exactly as it would be written. <see cref="Body" /> and <see cref="Resources" /> are
-///     carried so the operator reviews the real content and so phase 2 has nothing left to re-derive.
+///     carried so the operator reviews the real content and so the commit has nothing left to re-derive.
 /// </summary>
 public sealed class SkillImportCandidate
 {
@@ -184,7 +184,7 @@ public sealed class SkillImportResource
     public required int SizeBytes { get; init; }
 }
 
-/// <summary>Phase 2 input: which skills from <see cref="Token" />'s report to write, and the operator's explicit consent.</summary>
+/// <summary>Commit input: which skills from <see cref="Token" />'s report to write, and the operator's explicit consent.</summary>
 public sealed class SkillImportCommitRequest
 {
     public required Guid Token { get; init; }

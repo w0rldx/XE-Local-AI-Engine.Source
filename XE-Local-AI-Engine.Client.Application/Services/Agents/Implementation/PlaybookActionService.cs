@@ -441,17 +441,17 @@ internal sealed class PlaybookActionService : IPlaybookActionService
     {
         ValidateText(input.Behavior, input.TriggerCondition);
 
-        // Manual authoring creates only manual actions; Analysis is reserved for the deferred self-improvement phase.
+        // Manual authoring creates only manual actions; the Analysis source belongs to the analysis-review workflow.
         if (input.Source != PlaybookActionSource.Manual)
         {
-            throw new PlaybookActionValidationException("Only Manual playbook actions can be authored in this phase.");
+            throw new PlaybookActionValidationException("Only Manual playbook actions can be authored.");
         }
 
         // The full lifecycle is persisted, but Manual authoring accepts only the human-toggleable states; Suggested (analysis
         // proposals) and Archived are reserved for the analysis-review workflow.
         if (input.State is not PlaybookActionState.Enabled and not PlaybookActionState.Disabled)
         {
-            throw new PlaybookActionValidationException($"State '{input.State}' is not available in this phase; use Enabled or Disabled.");
+            throw new PlaybookActionValidationException($"State '{input.State}' cannot be authored; use Enabled or Disabled.");
         }
 
         // The FK demands an existing owning agent; reject up front rather than surface a downstream constraint failure.

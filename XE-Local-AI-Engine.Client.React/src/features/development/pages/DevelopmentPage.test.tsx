@@ -30,6 +30,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("@/features/development/queries/useDevelopment", () => hooksMock);
+vi.mock("@/core/development/queries/useDevelopmentRepositories", () => hooksMock);
 vi.mock("@/features/development/hooks/useDevelopmentAttemptHub", () => ({
 	useDevelopmentAttemptHub: () => ({
 		connectionState: "idle",
@@ -300,7 +301,7 @@ describe("DevelopmentPage", () => {
 
 		renderPage({ initialProjectId: "project-2", initialTaskId: "task-9" });
 
-		// The first render already asks for the linked project: seeding through the default-to-first effect instead
+		// The first render already asks for the linked project: seeding through the default-to-first rule instead
 		// would have made the page flash the wrong project's evidence before correcting itself.
 		await waitFor(() => expect(hooksMock.useDevelopmentProject).toHaveBeenCalled());
 		expect(hooksMock.useDevelopmentProject.mock.calls[0]?.[0]).toBe("project-2");
@@ -322,6 +323,21 @@ describe("DevelopmentPage", () => {
 
 		await waitFor(() => expect(hooksMock.useDevelopmentProject.mock.calls.at(-1)?.[0]).toBe("project-1"));
 	});
+
+	it("keeps the defaulted project open when another one's update moves it down the list", () => {
+		const first = { id: "project-1", objective: "Ship Development mode" };
+		const second = { id: "project-2", objective: "The one that just changed" };
+		hooksMock.useDevelopmentProjects.mockReturnValue({ data: [first, second], isLoading: false, error: null });
+		hooksMock.useDevelopmentProject.mockReturnValue({ data: undefined, isLoading: true, error: null, refetch: vi.fn() });
+		const { result, rerender } = renderHook(() => useDevelopmentPageController());
+		expect(result.current.selectedProjectId).toBe("project-1");
+
+		hooksMock.useDevelopmentProjects.mockReturnValue({ data: [second, first], isLoading: false, error: null });
+		rerender();
+
+		expect(result.current.selectedProjectId).toBe("project-1");
+	});
+
 	it("offers no task switcher for a project with one task, and one for a decomposed project", async () => {
 		hooksMock.useDevelopmentProject.mockReturnValue({ data: detail("Planned"), isLoading: false, error: null, refetch: vi.fn() });
 		renderPage();

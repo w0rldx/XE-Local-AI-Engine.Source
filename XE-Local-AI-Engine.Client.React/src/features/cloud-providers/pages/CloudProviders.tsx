@@ -14,7 +14,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { AzureFoundryPanel } from "@/features/cloud-providers/azure/components/AzureFoundryPanel";
-import { errorMessage as cloudSettingsErrorMessage } from "@/features/cloud-providers/azure/models/CloudSettingsFormState";
+import { cloudSettingsErrorMessage } from "@/features/cloud-providers/azure/models/CloudSettingsFormState";
 import { hasStoredAzureConnection } from "@/features/cloud-providers/azure/models/CloudSettingsModel";
 import { CodexSignInCard } from "@/features/cloud-providers/codex/components/CodexSignInCard";
 import { AddProviderMenu } from "@/features/cloud-providers/components/AddProviderMenu";
@@ -22,7 +22,7 @@ import { CloudProviderList } from "@/features/cloud-providers/components/CloudPr
 import { ExternalProviderPanel } from "@/features/cloud-providers/external/components/ExternalProviderPanel";
 import {
 	connectionToFormValues,
-	errorMessage as externalErrorMessage,
+	externalProviderErrorMessage,
 } from "@/features/cloud-providers/external/models/ExternalProviderFormState";
 import type { EditorTarget, ExternalProviderFormValues } from "@/features/cloud-providers/external/models/ExternalProviderModel";
 import {
@@ -107,7 +107,7 @@ export function CloudProviders() {
 				</Group>
 			) : null}
 
-			{connectionsQuery.error ? <InlineErrorAlert message={externalErrorMessage(connectionsQuery.error)} /> : null}
+			{connectionsQuery.error ? <InlineErrorAlert message={externalProviderErrorMessage(connectionsQuery.error)} /> : null}
 			{cloudSettingsQuery.error ? <InlineErrorAlert message={cloudSettingsErrorMessage(cloudSettingsQuery.error)} /> : null}
 
 			{/* Shown whenever a Codex session is active, wherever the operator is on this page. */}

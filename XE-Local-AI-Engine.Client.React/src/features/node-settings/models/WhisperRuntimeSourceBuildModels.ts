@@ -12,7 +12,7 @@ import type {
  */
 export type WhisperSourceBackend = "cpu" | "cuda";
 
-// Wire-identical to the other two source-build lanes (the backends copy one shape per ADR 0012 D1), so the shared
+// Wire-identical to the other two source-build lanes (the backends copy one shape per ADR 0012), so the shared
 // descriptor / prerequisite / status types are aliased rather than retyped. Only the backend union and the activity
 // counters actually differ.
 export type WhisperSourceBuildDescriptor = LlamaCppSourceBuildDescriptor;

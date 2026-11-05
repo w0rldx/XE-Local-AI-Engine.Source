@@ -42,7 +42,7 @@ export function SchedulerPage() {
 	const closeEditor = useSchedulerManagementStore((state) => state.actions.closeEditor);
 	const selectRun = useSchedulerManagementStore((state) => state.actions.selectRun);
 
-	// STUCK-BUG FIX: reset both the editor and the selected run on unmount so navigating away and
+	// Reset both the editor and the selected run on unmount so navigating away and
 	// back does not reopen the editor / run-detail panel from stale Zustand state.
 	useEffect(() => {
 		return () => {
@@ -94,7 +94,7 @@ export function SchedulerPage() {
 				)
 			: undefined;
 
-	// MED-1: close helper that also clears isFormDirty so useUnsavedChangesGuard does
+	// Close helper that also clears isFormDirty so useUnsavedChangesGuard does
 	// not fire a spurious "unsaved changes" prompt when the operator navigates right
 	// after a successful save.
 	const closeEditorClean = useCallback(() => {

@@ -37,7 +37,8 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         ArgumentNullException.ThrowIfNull(whisperRuntime);
         _sessions = sessions;
         _whisperRuntime = whisperRuntime;
-        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+        ArgumentNullException.ThrowIfNull(securityOptions);
+        _maxUploadBytes = MultipartUploadLimits.MaxUploadBytes(securityOptions.Value);
     }
 
     public override void Configure()
@@ -102,9 +103,9 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
             FileMultipartSection? section;
             try
             {
-                section = await NextFileSectionAsync(sections);
+                section = await MultipartUploadLimits.NextFileSectionAsync(sections);
             }
-            catch (Exception exception) when (IsMalformedBody(exception))
+            catch (Exception exception) when (MultipartUploadLimits.IsMalformedBody(exception))
             {
                 // A body that is not a well-formed multipart document is a client error, not a server fault. The degenerate case is a form carrying no parts at all, which
                 // the reader reports as a truncated stream — without this arm the caller gets a 500 for having sent nothing.
@@ -152,7 +153,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
 
             // Reading past the first file answers a question the caller never gets told otherwise: a form carrying two
             // files would have had exactly one of them transcribed, silently, with the second discarded.
-            if (await NextFileSectionAsync(sections) is not null)
+            if (await MultipartUploadLimits.NextFileSectionAsync(sections) is not null)
             {
                 AddError("Exactly one file is accepted.");
                 await Send.ErrorsAsync(cancellation: ct);
@@ -164,7 +165,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
             await Send.ResultAsync(RequestBodyTooLargeProblem.Result(exception.Message));
             return;
         }
-        catch (Exception exception) when (IsMalformedBody(exception))
+        catch (Exception exception) when (MultipartUploadLimits.IsMalformedBody(exception))
         {
             // A body truncated INSIDE the file section throws here rather than at the section read above, and a client that hung up mid-upload is still a client error. The
             // slot's disposal is unaffected (the enclosing await using), so the partial audio goes either way; a write failure on the engine's own temp file lands here too.
@@ -205,25 +206,6 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         var session = result.Session ?? await _sessions.GetSessionAsync(req.SessionId, ct);
         await Send.OkAsync(session.ToResponse(result.ErrorCode, result.ErrorMessage), ct);
     }
-
-    /// <summary>Advances to the next FILE section, skipping the nulls the reader yields for every other part.</summary>
-    private static async Task<FileMultipartSection?> NextFileSectionAsync(IAsyncEnumerator<FileMultipartSection?> sections)
-    {
-        while (await sections.MoveNextAsync())
-        {
-            if (sections.Current is not null)
-            {
-                return sections.Current;
-            }
-        }
-
-        return null;
-    }
-
-    // BadHttpRequestException derives from IOException, so this covers a body the server itself refused as well as one
-    // the multipart reader ran off the end of. A cancellation is neither, and must keep propagating.
-    private static bool IsMalformedBody(Exception exception) =>
-        exception is IOException or InvalidDataException;
 
     private async Task SendFinishedAsync(TranscriptionSessionStatus status, CancellationToken ct)
     {

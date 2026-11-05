@@ -129,7 +129,7 @@ function renderChat(selectedConversationId: string) {
 	);
 }
 
-// ADR 0017 D8: the review mode is chosen per conversation, and every turn — a send or a regenerate — carries the mode of
+// ADR 0017: the review mode is chosen per conversation, and every turn — a send or a regenerate — carries the mode of
 // the conversation it runs in. Conversation "auto" was switched to auto-accept; "review" never was.
 describe("Chat web content review mode on the wire", () => {
 	beforeEach(() => {

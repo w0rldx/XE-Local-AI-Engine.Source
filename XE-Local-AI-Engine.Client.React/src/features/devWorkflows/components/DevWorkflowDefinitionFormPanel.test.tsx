@@ -561,7 +561,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 		);
 		renderPanel();
 
-		// `decompose` is the entry node, so nothing gates it: declaring a write there is GRAPH-C4-2, before the request.
+		// `decompose` is the entry node, so nothing gates it: declaring a write there is GRAPH-2, before the request.
 		fireEvent.click(await screen.findByTestId("dev-workflow-definition-node-capabilities-0"));
 		fireEvent.click(await screen.findByText("WriteExecute"));
 

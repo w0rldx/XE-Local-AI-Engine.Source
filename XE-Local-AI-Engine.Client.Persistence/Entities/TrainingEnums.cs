@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>Dataset shape. v1 ships tool-calling only; the seam stays open for later kinds.</summary>
+/// <summary>Dataset shape. Tool-calling is the only kind.</summary>
 public enum TrainingDatasetKind
 {
     ToolCalling

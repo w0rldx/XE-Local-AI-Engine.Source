@@ -46,7 +46,7 @@ public sealed class WhisperRuntimeOrchestrationService
     }
 
     /// <summary>The toolchain checklist for one backend, so a refusal can name which prerequisite is missing.</summary>
-    public Task<WhisperCppSourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
+    public Task<SourceBuildPrerequisiteReport> ProbeAsync(WhisperBackend backend, CancellationToken ct)
     {
         return _prerequisiteProbe.ProbeAsync(backend, ct);
     }

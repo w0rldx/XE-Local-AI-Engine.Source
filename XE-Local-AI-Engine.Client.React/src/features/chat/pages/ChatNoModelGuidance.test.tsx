@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { Chat, type ChatSetupDownload } from "@/features/chat/pages/Chat";
+import type { ChatSetupDownload } from "@/features/chat/components/ChatNotice";
+import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 

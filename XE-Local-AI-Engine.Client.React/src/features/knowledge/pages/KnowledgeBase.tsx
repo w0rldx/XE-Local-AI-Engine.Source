@@ -4,6 +4,8 @@ import { IconDatabase, IconRefresh, IconRefreshAlert } from "@tabler/icons-react
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useDevelopmentRepositories } from "@/core/development/queries/useDevelopmentRepositories";
+import { TutorialInvitation } from "@/core/onboarding/components/TutorialInvitation/TutorialInvitation";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -11,7 +13,6 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import { useDevelopmentRepositories } from "@/features/development/queries/useDevelopment";
 import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
 import { KnowledgeDocumentsTable } from "@/features/knowledge/components/KnowledgeDocumentsTable";
 import { KnowledgeEmbeddingModelAlert } from "@/features/knowledge/components/KnowledgeEmbeddingModelAlert";
@@ -36,7 +37,6 @@ import {
 import { useKnowledgeRepositoryImport } from "@/features/knowledge/queries/useKnowledgeRepositoryImport";
 import { useKnowledgeSearch } from "@/features/knowledge/queries/useKnowledgeSearch";
 import { useKnowledgeUpload } from "@/features/knowledge/queries/useKnowledgeUpload";
-import { TutorialInvitation } from "@/core/onboarding/components/TutorialInvitation/TutorialInvitation";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Mutation callbacks must coordinate the drawer selection and server-result notifications after each user action. */
 

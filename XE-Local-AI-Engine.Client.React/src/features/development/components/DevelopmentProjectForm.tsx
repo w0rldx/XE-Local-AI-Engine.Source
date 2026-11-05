@@ -1,12 +1,12 @@
 import { useTranslation } from "react-i18next";
 
+import type { DevelopmentRepository } from "@/core/development/queries/useDevelopmentRepositories";
 import { DevelopmentProjectFormPresentation } from "@/features/development/components/DevelopmentProjectFormPresentation";
 import { useProjectDraft } from "@/features/development/hooks/useProjectDraft";
 import { useRepositoryRegistration } from "@/features/development/hooks/useRepositoryRegistration";
 import { useTemplateRepositoryRegistry } from "@/features/development/hooks/useTemplateRepositoryRegistry";
 import {
 	type DevelopmentProfileDetection,
-	type DevelopmentRepository,
 	type DevelopmentTemplate,
 	isDevelopmentContainerProvider,
 } from "@/features/development/models/DevelopmentModels";

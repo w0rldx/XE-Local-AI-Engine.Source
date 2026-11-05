@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The composer's per-conversation "Auto-accept web content" switch (ADR 0017, D8): shown only when the node allows web
+// The composer's per-conversation "Auto-accept web content" switch (ADR 0017): shown only when the node allows web
 // access, off for every conversation until chosen, and gated per user behind a one-time prompt-injection notice that is
 // recorded through the tutorial state.
 

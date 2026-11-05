@@ -186,7 +186,7 @@ describe("DevWorkflowNodeRunTable", () => {
 			<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ label: "Research" })]} onSelect={onSelect} />,
 		);
 
-		// This table is A0's ONLY execution view, so every node has to be reachable without a pointer.
+		// This table is the keyboard path through the run, so every node has to be reachable without a pointer.
 		const control = screen.getByRole("button", { name: "Research" });
 		control.focus();
 		expect(document.activeElement).toBe(control);

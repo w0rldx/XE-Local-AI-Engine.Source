@@ -93,7 +93,7 @@ public sealed class GraphWorkflowToolsEndpointTests
 
         AssertEx.Equal(string.Join(',', ExpectedInvocable),
             string.Join(',', tools.Select(static tool => tool.GetProperty("name").GetString()).Order(StringComparer.Ordinal)),
-            "the picker offers the D6 envelope and nothing else — no MCP tool, no custom tool, no write-class built-in.");
+            "the picker offers the Tool-node envelope and nothing else — no MCP tool, no custom tool, no write-class built-in.");
 
         foreach (var tool in tools)
         {

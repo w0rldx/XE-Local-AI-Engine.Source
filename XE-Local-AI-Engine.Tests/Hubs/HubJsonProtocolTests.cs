@@ -71,7 +71,7 @@ public sealed class HubJsonProtocolTests
         AssertEx.Contains(frame, "\"manualFireId\":\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"");
     }
 
-    /// <summary>U6/U7: the loading-phase detail and the terminal throughput, in the spelling the SPA's hand-written stream types read.</summary>
+    /// <summary>The loading-phase detail and the terminal throughput, in the spelling the SPA's hand-written stream types read.</summary>
     [Test]
     public void ChatStreamEvent_SerializesThePhaseDetailAndTheThroughputInCamelCase()
     {

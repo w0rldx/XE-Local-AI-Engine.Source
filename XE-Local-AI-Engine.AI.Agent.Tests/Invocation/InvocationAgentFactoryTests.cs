@@ -868,7 +868,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WithOfferedMcpName_ResolvesFromMcpRegistry()
     {
-        // Option C: an offered MCP-qualified name that matches neither the built-in nor the ClientLocal registry
+        // An offered MCP-qualified name that matches neither the built-in nor the ClientLocal registry
         // resolves against the MCP tool registry's cached executable.
         var mcpRegistry = new FakeMcpToolRegistry(AIFunctionFactory.Create((string input) => input, "mcp__weather__get_forecast"));
         var definition = new InvocationAgentDefinition
@@ -892,7 +892,7 @@ public sealed class InvocationAgentFactoryTests
     public async Task CreateAsync_WithApprovalWrappedMcpTool_ResolvesWrappedExecutable()
     {
         // An MCP tool is registered approval-wrapped (the catalog default). The factory must resolve the wrapped
-        // executable through Option C so the approval gate survives the offer -> resolve path.
+        // executable from the MCP tool registry so the approval gate survives the offer -> resolve path.
         var wrapped = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, "mcp__files__write_file"));
         var snapshot = new[]
         {
@@ -1472,7 +1472,7 @@ public sealed class InvocationAgentFactoryTests
 
         var offered = await ResolveOfferedToolsAsync(chatClient, toolCount: 20);
 
-        AssertEx.Empty(offered.OfType<ListToolsFunction>(), "The shipped default offers exactly the tools it offered before this slice existed.");
+        AssertEx.Empty(offered.OfType<ListToolsFunction>(), "The shipped default does not offer the tool-listing function.");
     }
 
     [Test]

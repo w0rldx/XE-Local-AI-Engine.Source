@@ -198,7 +198,7 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
 	});
 
-	// Tester round 6, item 8: a turn that stopped while thinking has no answer text, and its Thoughts must still render
+	// A turn that stopped while thinking has no answer text, and its Thoughts must still render
 	// above the notice that points at them — including when the persisted parts carry only the notice.
 	it.each([
 		["the persisted reasoning part", true],
@@ -343,7 +343,7 @@ describe("ChatMessage actions", () => {
 			/>,
 		);
 
-		// Two distinct folded Thoughts blocks (Option A) plus one tool card, all from the ordered parts.
+		// Two distinct folded Thoughts blocks plus one tool card, all from the ordered parts.
 		expect(screen.getByTestId("chat-message-reasoning-assistant-1:0")).toBeTruthy();
 		expect(screen.getByTestId("chat-message-reasoning-assistant-1:2")).toBeTruthy();
 		expect(screen.getByTestId("chat-tool-call-card-get_time")).toBeTruthy();

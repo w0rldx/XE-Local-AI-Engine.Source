@@ -30,7 +30,7 @@ public sealed partial class LlamaCppBinaryManager
     ///     the banner would flicker on a warm cache. <b>Sanitization:</b> <see cref="LlamaRuntimeException" /> messages
     ///     are user-safe by contract; any other exception is collapsed to a generic reason, never surfaced verbatim.
     /// </remarks>
-    private sealed class AcquisitionReporter
+    internal sealed class AcquisitionReporter
     {
         /// <summary>The user-safe stand-in for an exception whose message is not sanitized by contract.</summary>
         private const string GenericFailureReason =

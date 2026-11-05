@@ -26,7 +26,8 @@ public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversation
     {
         ArgumentNullException.ThrowIfNull(ingestor);
         _ingestor = ingestor;
-        _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
+        ArgumentNullException.ThrowIfNull(securityOptions);
+        _maxUploadBytes = MultipartUploadLimits.MaxUploadBytes(securityOptions.Value);
     }
 
     public override void Configure()

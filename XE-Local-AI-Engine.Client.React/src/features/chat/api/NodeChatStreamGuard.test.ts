@@ -173,7 +173,7 @@ describe("guardNodeChatStream", () => {
 		expect(await stalled).toMatchObject({ category: "inter-chunk-stall" });
 	});
 
-	it("keeps the park armed across a reasoning-only delta after the request (V-04)", async () => {
+	it("keeps the park armed across a reasoning-only delta after the request", async () => {
 		vi.useFakeTimers();
 		let answer: (() => void) | undefined;
 		async function* parkWithTrailingReasoning(): AsyncGenerator<NodeChatStreamEventDto> {

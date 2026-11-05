@@ -92,7 +92,7 @@ public sealed class GraphWorkflowEndToEndTests
         // that does not exist yet.
         var pings = Publisher(harness).PingsFor(runId);
         AssertEx.Equal(events.Count - 1, pings.Count);
-        AssertEx.Empty(pings.Where(static ping => ping.Kind == GraphWorkflowChangeKind.Gate), "this slice has no gates to announce.");
+        AssertEx.Empty(pings.Where(static ping => ping.Kind == GraphWorkflowChangeKind.Gate), "this graph has no gates to announce.");
     }
 
     private static async Task<GraphWorkflowRunSnapshot> AdvanceUntilRunTerminalAsync(GraphWorkflowHarness harness, Guid runId, int maxTicks = 80)

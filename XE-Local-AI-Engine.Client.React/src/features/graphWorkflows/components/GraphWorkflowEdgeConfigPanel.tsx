@@ -10,21 +10,20 @@ import { IconTrash } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type {
 	GraphWorkflowCanvasEdge,
 	GraphWorkflowCanvasEdgeCondition,
 	GraphWorkflowCanvasNodeData,
 	GraphWorkflowEdgeData,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { edgeConditionSchema } from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
 import {
 	type GraphWorkflowConditionOperator,
 	graphWorkflowConditionOperators,
 	normalizeGraphWorkflowConditionOperator,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { edgeConditionSchema } from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
 import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
-
-import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export interface GraphWorkflowEdgeConfigPanelProps {
 	readonly edge: GraphWorkflowCanvasEdge;

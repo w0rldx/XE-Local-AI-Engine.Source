@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The run command surface over the real store and a real database. Only the dispatcher signal is faked, and only
-///     so a test can see it — there is no dispatcher in this slice, so a started run legitimately sits <c>Pending</c>.
+///     so a test can see it — no dispatcher runs here, so a started run legitimately sits <c>Pending</c>.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class GraphWorkflowRunServiceTests
@@ -402,7 +402,7 @@ public sealed class GraphWorkflowRunServiceTests
 
         var started = await StartAsync(definitionId, Guid.NewGuid());
 
-        AssertEx.Equal(GraphWorkflowRunStatus.Pending, started.Run.Status, "no dispatcher in this slice, so a started run sits Pending.");
+        AssertEx.Equal(GraphWorkflowRunStatus.Pending, started.Run.Status, "no dispatcher runs here, so a started run sits Pending.");
         AssertEx.Contains(started.NodeRuns, nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Tool);
     }
 
@@ -534,7 +534,7 @@ public sealed class GraphWorkflowRunServiceTests
         await using var scope = Host.Factory.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
 
-        // Driven terminal through the store, because there is no dispatcher in this slice to do it.
+        // Driven terminal through the store, because no dispatcher runs here to do it.
         _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
         {
             RunId = started.Run.Id,

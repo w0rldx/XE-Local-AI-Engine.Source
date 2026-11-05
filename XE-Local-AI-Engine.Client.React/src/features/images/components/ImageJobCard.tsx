@@ -7,13 +7,8 @@ import { ImageJobDeleteButton } from "@/features/images/components/ImageJobDelet
 import { ImageResultView } from "@/features/images/components/ImageResultView";
 import { ImageEditLineage } from "@/features/images/components/ImageSourceThumbnail";
 import { useImageJobProgress } from "@/features/images/hooks/useImageJobHub";
-import {
-	type ImageEditSource,
-	type ImageJobView,
-	type ImageProgressDisplay,
-	isTerminalStatus,
-	toProgressDisplay,
-} from "@/features/images/models/ImageModels";
+import { type ImageProgressDisplay, toProgressDisplay } from "@/features/images/models/ImageJobProgressModels";
+import { type ImageEditSource, type ImageJobView, isTerminalStatus } from "@/features/images/models/ImageModels";
 import { statusColor } from "@/features/images/models/ImageStatusModel";
 
 // Live elapsed seconds since a generating job started, ticking once per second. Returns 0 when inactive so a

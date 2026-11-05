@@ -27,26 +27,3 @@ public interface IToolApprovalPolicy
     /// <param name="catalogDefault">The tool's own catalog approval flag (the floor the policy composes on top of).</param>
     bool RequiresApproval(string toolName, ToolCategory category, bool catalogDefault);
 }
-
-/// <summary>
-///     No-op <see cref="IToolApprovalPolicy" /> floor that applies no node-level tightening, so a host without a
-///     node-configured policy behaves byte-for-byte as it did before this layer existed. Mirrors
-///     <c>NoOpGpuModelLoadAdmission</c>.
-/// </summary>
-/// <remarks>
-///     Wired via <c>TryAddSingleton</c> so a provider-only host or a test always resolves a policy; the real
-///     <c>NodeToolApprovalPolicy</c>, registered by the composition root with a plain <c>AddSingleton</c>, wins under
-///     last-registration-wins. The one non-identity term is the fail-closed <see cref="ToolCategory.Unknown" /> rule
-///     both policies share — an uncategorized tool is never auto-executed — kept here for defense in depth, and
-///     byte-identical today because no offered tool ships <see cref="ToolCategory.Unknown" />.
-/// </remarks>
-public sealed class PermissiveToolApprovalPolicy : IToolApprovalPolicy
-{
-    /// <inheritdoc />
-    public bool RequiresApproval(string toolName, ToolCategory category, bool catalogDefault)
-    {
-        // Identity on the catalog default, with the shared fail-closed Unknown rule: an uncategorized tool always
-        // requires approval. No offered tool ships Unknown today, so this is byte-identical to the pre-policy behavior.
-        return catalogDefault || category == ToolCategory.Unknown;
-    }
-}

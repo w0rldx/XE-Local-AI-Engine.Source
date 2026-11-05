@@ -224,7 +224,7 @@ public sealed class NodeChatHubTests
 
         AssertEx.True(recorder.Invoked, "the send itself is not rejected — only the field is dropped.");
         AssertEx.False(AssertEx.NotNull(recorder.LastRequest).RefuseUndeclaredWrites,
-            "a client may not arm GRAPH-C4-2's runtime half on a turn no workflow node is driving.");
+            "a client may not arm GRAPH-2's runtime half on a turn no workflow node is driving.");
     }
 
     /// <summary>

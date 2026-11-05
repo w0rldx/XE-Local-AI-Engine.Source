@@ -150,7 +150,7 @@ public sealed class RuntimeCacheDirectoryTests
             Substitute.For<IStableDiffusionCppSourceBuildEventPublisher>(), NullLogger<StableDiffusionCppSourceBuildService>.Instance, TimeProvider.System);
         using var whisper = new WhisperCppSourceBuildService(Substitute.For<IWhisperCppSourceBuildPrerequisiteProbe>(),
             whisperStore, new ManagedSourceBuildSignal<WhisperBackend>(), new WhisperRuntimeActivityGate(),
-            Substitute.For<IWhisperCppSourceBuildEventPublisher>(), NullLogger<WhisperCppSourceBuildService>.Instance, TimeProvider.System);
+            NullLogger<WhisperCppSourceBuildService>.Instance, TimeProvider.System);
         var workDirectories = new[]
                               {
                                   "llama.cpp",

@@ -1,10 +1,9 @@
-import { z } from "zod";
-
 import type {
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunDefaultsResponse as TrainingRunDefaultsResponse,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload as TrainingRunOptionsPayload,
 	XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse as TrainingRunResponse,
 } from "@/core/api/generated";
+import type { RunStreamEvent } from "@/core/api/signalr/useRunStreamSubscription";
 
 export type TrainingRunStatusValue =
 	| "Queued"
@@ -81,35 +80,6 @@ export interface TrainingRunDefaultsView {
 	readonly rejectionReason: string | null;
 	readonly license: TrainingRunLicenseView | null;
 }
-
-export const trainingRunEventSchema = z.object({
-	runId: z.string(),
-	sequence: z.number(),
-	// Every member of the server's TrainingRunEventKind, or the frame is dropped: "Export" rides this stream because the
-	// run's own status never moves for an export, and the two Evaluation kinds because an evaluation rides its run's
-	// group rather than one of its own. scripts/CheckSignalrProxySync.mjs holds this list to the C# enum.
-	kind: z.enum(["State", "Phase", "Progress", "Artifact", "Error", "EvaluationState", "EvaluationProgress", "Export"]),
-	payload: z.object({
-		state: z.string().nullish(),
-		phase: z.string().nullish(),
-		step: z.number().nullish(),
-		totalSteps: z.number().nullish(),
-		epoch: z.number().nullish(),
-		loss: z.number().nullish(),
-		learningRate: z.number().nullish(),
-		vramBytes: z.number().nullish(),
-		message: z.string().nullish(),
-		runVersion: z.number().nullish(),
-	}),
-});
-
-export const trainingRunReplayResetSchema = z.object({
-	runId: z.string(),
-	latestSequence: z.number(),
-	runVersion: z.number(),
-});
-
-export type TrainingRunEvent = z.infer<typeof trainingRunEventSchema>;
 
 /** Live progress for one run, folded from the hub stream. */
 export interface TrainingRunLiveProgress {
@@ -204,7 +174,7 @@ export function toTrainingRunDefaultsView(response: TrainingRunDefaultsResponse)
 }
 
 /** Folds one hub event into the running progress view. */
-export function applyRunEvent(current: TrainingRunLiveProgress, event: TrainingRunEvent): TrainingRunLiveProgress {
+export function applyRunEvent(current: TrainingRunLiveProgress, event: RunStreamEvent): TrainingRunLiveProgress {
 	// An evaluation's frames ride this stream but describe the EVALUATION, not the run: its `state` is an evaluation
 	// status and its step/totalSteps are samples scored/total. Folding them here would overwrite the run's own status and
 	// drive the training progress bar off the wrong counters, so the run view ignores them and the evaluations list —

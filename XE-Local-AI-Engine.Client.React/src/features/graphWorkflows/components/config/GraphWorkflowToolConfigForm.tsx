@@ -1,4 +1,4 @@
-// The Tool node's body, and the one place the two shape conversions the plan names are visible to an operator: the
+// The Tool node's body, and the one place two shape conversions are visible to an operator: the
 // wire's `arguments` OBJECT is edited as text here, and the wire's `argumentBindings` MAP is edited as ordered rows.
 // `canvasToGraph` owns both conversions; this file only makes the tool's own parameter schema drive what the operator
 // can pick, so a binding names a real parameter rather than a typed guess.
@@ -14,8 +14,8 @@ import type {
 	GraphWorkflowArgumentBinding,
 	GraphWorkflowCanvasNodeData,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
-import type { GraphWorkflowToolResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { webFetchToolName } from "@/features/graphWorkflows/models/GraphWorkflowConfigSchemas";
+import type { GraphWorkflowToolResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 type ToolNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "Tool" }>;
 

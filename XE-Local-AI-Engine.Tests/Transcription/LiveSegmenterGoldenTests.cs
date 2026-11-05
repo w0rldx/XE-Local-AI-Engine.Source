@@ -144,7 +144,7 @@ public sealed class LiveSegmenterGoldenTests
         return (transcriber, commits);
     }
 
-    /// <summary>Lower-cases, drops punctuation and collapses whitespace, which is the comparison R17 asks for.</summary>
+    /// <summary>Lower-cases, drops punctuation and collapses whitespace before the comparison.</summary>
     private static string Normalize(string text)
     {
         var builder = new StringBuilder(text.Length);

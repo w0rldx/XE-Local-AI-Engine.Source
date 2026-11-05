@@ -2,7 +2,7 @@ import { ActionIcon, Button, Card, Flex, Group, NumberInput, SimpleGrid, Stack, 
 import { IconCoin, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { newUsageRateRow, type UsageRateRow } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { newUsageRateRow, type UsageRateRow } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
 
 interface Props {
 	readonly usageRates: UsageRateRow[];

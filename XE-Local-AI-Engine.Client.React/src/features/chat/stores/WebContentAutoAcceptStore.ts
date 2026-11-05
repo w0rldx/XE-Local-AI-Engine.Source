@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 /* eslint-disable react-doctor/auth-token-in-web-storage -- xe-node-chat-web-auto:* holds a per-conversation UI toggle only; no credential or session token is persisted here. */
 
-// Per-conversation web content review mode (ADR 0017, D8). Off = every web_fetch/web_search result is shown for review
+// Per-conversation web content review mode (ADR 0017). Off = every web_fetch/web_search result is shown for review
 // before the model reads it; on = it reaches the model directly. Every conversation starts off, so only "true" is stored.
 // The empty id is the draft that has no conversation yet: its choice lives in memory only until
 // adoptWebContentAutoAcceptDraft moves it onto the conversation created at its first send.

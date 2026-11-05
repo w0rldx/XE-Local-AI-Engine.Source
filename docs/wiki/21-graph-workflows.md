@@ -39,7 +39,7 @@ dispatcher and the node lanes), `Client.Persistence` (four tables, per-column AE
 `LocalApiRoutes.GraphWorkflows` endpoint family plus `GraphWorkflowRunHub`, and
 `Client.React/src/features/graphWorkflows/` (a React Flow editor and a read-only run view).
 
-**It replaced Open Canvas.** The Preview / Open Canvas visual builder was removed in the same slice that turned this
+**It replaced Open Canvas.** The Preview / Open Canvas visual builder was removed in the same change that turned this
 feature on by default; saved canvases are converted into Graph Workflow definitions once, automatically, on the first
 start of the new build. That conversion is §9; read its recovery and backup guidance before upgrading a node with
 canvases you care about.
@@ -251,7 +251,7 @@ rather than enforcing it, requires every declared property ('summary', 'notes' a
 additional properties.
 ```
 
-**Since S7 this warning is narrowed at the service, not at the parser.** The rewrite it describes is the OpenAI
+**This warning is narrowed at the service, not at the parser.** The rewrite it describes is the OpenAI
 adapter's, and the llama.cpp lane no longer suffers it (§4.2): a node whose model llama-server serves receives the
 schema as authored. The parser cannot tell which nodes those are — it has no route to the model-to-provider map — so
 it keeps raising the warning for every Agent node and `GraphWorkflowDefinitionService.ValidateAsync` drops the ones
@@ -577,7 +577,7 @@ memory) — after that the run completes without the message. A run that is canc
 
 ### 3.7 Steer
 
-Operator ruling D4 (2026-09-23): the running Agent or LLM Call node of a **chat-bound** run can be steered. `POST
+Operator ruling (2026-09-23): the running Agent or LLM Call node of a **chat-bound** run can be steered. `POST
 graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` with `{ operationId, message }` goes through
 `IGraphWorkflowChatService.SteerAsync`, which writes the text as a user message of the run's conversation under the
 deterministic id `GraphWorkflowChatIds.SteerMessage(operationId, runId, nodeKey)` and then calls
@@ -610,7 +610,7 @@ work. The re-run's seed prompt ends with an `## Operator steering` section listi
 (§4.2, §4.2a). Each reset restarts the node deadline, so `MaxSteersPerNode` is the bound. Steering text is **not**
 counted against `MaxRunInputBytes`: each entry is bounded by its own per-entry byte cap (above) and a row by
 `MaxSteersPerNode`. Cross-node routing stays
-absent (register 22, D6(a)).
+absent (register 22).
 
 ### 3.8 Attachments
 
@@ -758,7 +758,7 @@ grammar from the first output token, so the **structure** is guaranteed: the obj
 `enum`'s member list, the required keys. The compiled `root` rule leaves the model's `<think>` block optional and
 unconstrained and forces the schema only on what follows, so a reasoning model is not fighting the grammar.
 
-**Since S7 the value bounds are guaranteed too, on llama-server.** `minLength`, `maxLength`, `pattern`, `format`, the
+**The value bounds are guaranteed too, on llama-server.** `minLength`, `maxLength`, `pattern`, `format`, the
 numeric minimum and maximum, the item counts and the rest now reach llama.cpp as written, and so does the author's own
 `required` list — a property left optional stays optional, and an object that omits `additionalProperties` stays open.
 `DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough` writes the authored schema onto the request body
@@ -769,7 +769,7 @@ GBNF converter cannot compile it into a grammar at all — see §8.
 
 **On every other runtime the old rule stands.** The strict-schema transform relocates twenty-two value keywords into
 the schema's `description` string on the way out of the .NET process, where they are advice to the model rather than a
-constraint (a `maxLength: 3` produced a 1302-character field in the S6 live round), marks every declared property
+constraint (a `maxLength: 3` produced a 1302-character field in a live run), marks every declared property
 `required`, and closes an object that has `properties` and omits `additionalProperties`. There, validate a value bound
 downstream — in an edge condition or the consuming node — and never in the schema alone. You do not have to notice
 this unaided: saving or validating a graph raises the non-blocking warning of §2.4 on an Agent node whose schema asks
@@ -882,7 +882,7 @@ otherwise. That one try-parse is what lets a downstream `Condition`, which passe
 verbatim, dot-path into a structured answer. Stated rather than hidden: plain text that happens to be a JSON object
 is embedded as JSON, and the tools that do that mean it.
 
-**A Tool node passes two gates, not one** (`GraphWorkflowToolGate`, ruling D6 and
+**A Tool node passes two gates, not one** (`GraphWorkflowToolGate`, an operator ruling and
 [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md)):
 
 1. the tool must be a **built-in** tool in the `ToolCategory.ReadLocal` envelope, and
@@ -1129,7 +1129,7 @@ process (starting it when cold) under its own budget of 5 s plus 10 ms per estim
 one model are serialized in the client (the process is `--parallel 1`), and the budget starts only once a call owns the
 model, so concurrent nodes queue against their node timeout rather than time out on the server's queue. The 5–30 s
 window does not scale with model size: the small BERT-class models answer in about 0.1 s, but Kev-4B on a CPU build took
-about 1.3 s for a 200-token input in the live round, so an input of a few thousand tokens on CPU can exceed 30 s and fail
+about 1.3 s for a 200-token input in a live run, so an input of a few thousand tokens on CPU can exceed 30 s and fail
 `Timeout` on every attempt. It
 deliberately takes no node-wide invocation slot (the decision process is a pooled companion with its own lease, and
 the chat slot would queue it behind chat turns) and runs no invocation runner, so there is no invocation record and no
@@ -1263,13 +1263,13 @@ no-op, so a host without the hub stays resolvable.
 The event vocabulary is the closed nineteen-token `GraphWorkflowEventTypes` catalog — `run.created`, `run.started`,
 `run.waiting`, `run.completed`, `run.failed`, `run.cancelled`, `node.queued`, `node.started`, `node.completed`,
 `node.failed`, `node.skipped`, `node.cancelled`, `node.interrupted`, `node.retried`, `gate.requested`,
-`gate.decided`, `node.published` (amendment 2026-09-23, Chat Workflows S1: a result became a chat message, §3.6),
-and `node.steered` / `node.steer-ignored` (amendment 2026-09-23, Chat Workflows S3: a steer reset its row, or arrived
+`gate.decided`, `node.published` (amendment 2026-09-23, Chat Workflows: a result became a chat message, §3.6),
+and `node.steered` / `node.steer-ignored` (amendment 2026-09-23, Chat Workflows: a steer reset its row, or arrived
 after the row settled, §3.7). The feed is append-only and durable, so a token written once is a token every later reader must
 understand: extend it by amendment, never silently. Event details are small structured payloads — a failure summary,
 a decision outcome — and never a transcript.
 
-**Live activity** (Chat Workflows S2). `StreamNodeActivity(runId, nodeKey)` is a server stream over the node run's
+**Live activity** (Chat Workflows). `StreamNodeActivity(runId, nodeKey)` is a server stream over the node run's
 `InvocationId`, served straight from `IInvocationResumeRegistry.ResumeAsync`: a snapshot, then offset deltas for
 content, reasoning, tool calls and phases, then the terminal event — the same `ChatStreamEvent`s
 `LocalChatHub.ResumeMessage` serves, so the client reuses the chat stream folding. The registry already mirrors every
@@ -1292,14 +1292,14 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 
 | Directory | Holds |
 |---|---|
-| `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowConfigSchemas.ts` (the config-drawer Zod schemas), `GraphWorkflowRunGraph.ts`, `GraphWorkflowExportFormat.ts` (the share-file envelope and its shape check, see **Export and import** below). |
-| `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed, the several-node-runs read (`useSettledGraphWorkflowNodeRuns`) and the two chat routes (`useGraphWorkflowConversationRuns`, `useSendGraphWorkflowChatMessage`). |
+| `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the shared constants), `GraphWorkflowCanvasConversion.ts` (the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowAuthoring.ts` (a fresh node's defaults, key minting, the rename cascade), `GraphWorkflowPauseContext.ts` (`pauseContextEdges`), `GraphWorkflowEquality.ts` (the dirty check), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowConfigSchemas.ts` (the config-drawer Zod schemas), `GraphWorkflowRunGraph.ts`, `GraphWorkflowExportFormat.ts` (the share-file envelope and its shape check, see **Export and import** below). |
+| `queries/` | Every read and mutation over the generated adapters: `useGraphWorkflows.ts` (including the several-node-runs read (`useSettledGraphWorkflowNodeRuns`) and the two chat routes (`useGraphWorkflowConversationRuns`, `useSendGraphWorkflowChatMessage`)), `useGraphWorkflowRunEvents.ts` (the forward-paged events feed) and `useGraphWorkflowPickerOptions.ts` (the tool, agent and model lists the config pickers offer). |
 | `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause or ChatInput on connect — §4.6) and `useGraphWorkflowRunHub`. |
-| `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (the DecisionModel body and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel, the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput) and the run result panel. |
+| `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (each node kind's body, the chat switches and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel, the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput) and the run result panel. |
 | `samples/` | The sample graphs the New workflow dialog can start from, and their index `GraphWorkflowSamples.ts` (see **Samples** below). |
 | `pages/` | `GraphWorkflowsPage` — editor mode without a `runId`, run mode with one. |
 | `api/` | `GraphWorkflowConflict.ts`, which reads the `NodeConflictProblemType` members by name — the three run/definition/gate refusals and the three chat-send ones (`GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`). |
-| `features/chat/workflow/` (the chat side, not this folder) | `useChatWorkflow` (the chat page's workflow mode: picker state, send routing, 409 handling, the live bound run's hub subscription), `WorkflowSelectorCard`, `WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels.ts` (taken path by layout rank, activity rows), `ChatWorkflowStore` (UI state only). It imports this feature's queries, hub hook, layout, models, status badge and conflict reader — ten reviewed `no-cross-feature` fingerprints in `config/dependency-baseline.json`. See [Chat](05-chat.md#chat-workflow-mode-in-the-client). |
+| `features/chat/workflow/` (the chat side, not this folder) | `useChatWorkflow` (the chat page's workflow mode: picker state, send routing, 409 handling, the live bound run's hub subscription), `WorkflowSelectorCard`, `WorkflowNodeLiveDetail`, `useGraphWorkflowNodeActivity`, `ChatWorkflowStore` (UI state only). `useChatWorkflow` is the one chat file that imports this feature: its queries, hub hook, models and conflict reader, and the run view this folder holds for it (`components/WorkflowRunStatusCard`, `components/WorkflowActivityBlock`, `models/ChatWorkflowModels.ts`: taken path by layout rank, activity rows). Nothing here imports `chat`. The reviewed `no-cross-feature` fingerprints are in `config/dependency-baseline.json`. See [Chat](05-chat.md#chat-workflow-mode-in-the-client). |
 
 **The editor** mirrors the server's rules rather than inventing its own, and the mirror is a mirror on purpose: the
 authoritative answer comes from `graph-workflows/definitions/validate`, which runs the parser a run would run, and
@@ -1451,7 +1451,7 @@ routes that carry one (create, update, validate, start-run, the chat send and th
 
 One ceiling that lives outside this module: an `Agent` node's `responseJsonSchema` goes down the same llama.cpp GBNF
 path as a tool schema, which has an empirical combined repetition bound
-(`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound`, 1024). Keep a response schema flat. Since S7 that
+(`LlamaGrammarToolSchemaCompatibility.MaxGrammarRepetitionBound`, 1024). Keep a response schema flat. That
 sanitiser covers the response schema too: `DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough` runs the
 authored schema through the same `Sanitize` pass before it reaches the wire, so an over-large bound is dropped rather
 than failing the turn with HTTP 400 `Failed to initialize samplers`. Every bound **within** the cap is now enforced by
@@ -1537,7 +1537,7 @@ the answer it was waiting on unchanged. A Graph Workflow `Pause` writes a decisi
 `{decision, comment, payload}` — and a node's `input` is its ONE satisfied predecessor's output document, becoming
 the `upstream` map only when there are several (§3.2). Mapped one-for-one, `Agent A → Pause → Agent B` therefore
 hands B the approval metadata and never A's answer, and a `Pause` before an `End` loses the result the same way.
-That was observed live in the S4 round, not reasoned about.
+That was observed live, not reasoned about.
 
 So the importer emits one extra unconditional edge from the pause's nearest non-`Pause` ancestor `X` to each
 **starved** successor `Y`. `Y` keeps the default `All` join policy, so it is admitted only once **both** the content

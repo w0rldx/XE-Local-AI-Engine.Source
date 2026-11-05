@@ -18,6 +18,14 @@ import { getGraphWorkflowNodeRunQueryKey } from "@/core/api/generated/@tanstack/
 import { readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
+	useGraphWorkflowAgentOptions,
+	useGraphWorkflowDecisionModelOptions,
+	useGraphWorkflowLlmModelOptions,
+	useGraphWorkflowModelOptions,
+	useGraphWorkflowTools,
+} from "@/features/graphWorkflows/queries/useGraphWorkflowPickerOptions";
+import { useGraphWorkflowRunEvents } from "@/features/graphWorkflows/queries/useGraphWorkflowRunEvents";
+import {
 	GRAPH_WORKFLOW_RUN_PAGE_SIZE,
 	graphWorkflowInvalidationKey,
 	graphWorkflowQueryIds,
@@ -25,17 +33,11 @@ import {
 	useCreateGraphWorkflowDefinition,
 	useDecideGraphWorkflowNodeRun,
 	useDeleteGraphWorkflowDefinition,
-	useGraphWorkflowAgentOptions,
-	useGraphWorkflowDecisionModelOptions,
 	useGraphWorkflowDefinition,
 	useGraphWorkflowDefinitions,
-	useGraphWorkflowLlmModelOptions,
-	useGraphWorkflowModelOptions,
 	useGraphWorkflowNodeRun,
 	useGraphWorkflowRun,
-	useGraphWorkflowRunEvents,
 	useGraphWorkflowRuns,
-	useGraphWorkflowTools,
 	useStartGraphWorkflowRun,
 	useUpdateGraphWorkflowDefinition,
 	useValidateGraphWorkflowDefinition,

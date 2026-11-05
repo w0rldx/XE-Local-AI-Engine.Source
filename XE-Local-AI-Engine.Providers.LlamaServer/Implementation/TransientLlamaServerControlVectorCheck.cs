@@ -70,13 +70,11 @@ internal static class TransientLlamaServerControlVectorCheck
         }
 
         var model = await reader.ReadTensorsAsync(request.ModelFilePath, ct).ConfigureAwait(false);
-        if (model.Failure != GgufTensorReadFailure.None || model.BlockCount is not { } blockCount || model.EmbeddingLength is not { } embeddingLength)
+        if (model.Failure != GgufTensorReadFailure.None || model.SteerableBlockCount is not { } steerableBlocks || model.EmbeddingLength is not { } embeddingLength)
         {
             throw new LlamaRuntimeException("The model's header could not be read, so the control vector cannot be checked against it.");
         }
 
-        // llama.cpp sets up vector tensors only for the trunk: an MTP block counts in block_count, but a vector there is dropped with no error.
-        var steerableBlocks = blockCount - (model.NextnPredictLayers ?? 0);
         if (layer < 1 || layer >= steerableBlocks)
         {
             throw new LlamaRuntimeException(string.Create(CultureInfo.InvariantCulture,

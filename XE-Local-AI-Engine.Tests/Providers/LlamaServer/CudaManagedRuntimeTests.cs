@@ -58,7 +58,7 @@ public sealed class CudaManagedRuntimeTests
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.Arm64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
 
-        // The live-QA shape on a host with no CUDA prebuilt: the CPU asset handed in under a CUDA request must never be downloaded or recorded as CUDA.
+        // A host with no CUDA prebuilt: the CPU asset handed in under a CUDA request must never be downloaded or recorded as CUDA.
         var install = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(LlamaCppReleasePins.PinnedTag,
             "llama-b10201-bin-ubuntu-arm64.tar.gz",
             new string('b', 64),

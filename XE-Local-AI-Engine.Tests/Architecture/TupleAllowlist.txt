@@ -12,7 +12,7 @@ XE-Local-AI-Engine.AI.Agent.Tests/Chat/ToolInvocationObservabilityChatClientTest
 XE-Local-AI-Engine.AI.Agent.Tests/Chat/ToolRelevanceChatClientTests.cs|2
 XE-Local-AI-Engine.AI.Agent.Tests/DependencyInjection/AgentToolPipelinePolicyTests.cs|2
 XE-Local-AI-Engine.AI.Agent.Tests/Invocation/FrameworkApprovalGateTests.cs|2
-XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowSpikeTests.cs|12
+XE-Local-AI-Engine.AI.Agent.Tests/Invocation/HandoffWorkflowContractTests.cs|12
 XE-Local-AI-Engine.AI.Agent.Tests/Tools/InvocationToolResolverTests.cs|5
 XE-Local-AI-Engine.AI.Agent.Tests/Tools/ListToolsFunctionTests.cs|10
 XE-Local-AI-Engine.AI.Agent.Tests/Tools/ToolArgumentRepairAIFunctionTests.cs|35
@@ -127,7 +127,7 @@ XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowGraphTests.cs|4
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowHarness.cs|12
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRouteTests.cs|2
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowRunServiceTests.cs|1
-XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSliceATests.cs|3
+XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowSeededTemplateEndToEndTests.cs|3
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowStateMachineTests.cs|41
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolExecutorTests.cs|4
 XE-Local-AI-Engine.Tests/DevWorkflows/DevWorkflowToolSandboxTests.cs|3

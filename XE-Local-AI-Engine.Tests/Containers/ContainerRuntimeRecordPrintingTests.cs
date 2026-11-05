@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     whoever collects logs.
 ///     <para>
 ///         Suppressing the printer makes that impossible rather than merely forbidden, which is why this is a test and
-///         not a review note: a reviewer cannot see the log statement a later slice adds, and this can.
+///         not a review note: a reviewer cannot see a future log statement, and this can.
 ///     </para>
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -44,7 +44,7 @@ public sealed class ContainerRuntimeRecordPrintingTests
 
     /// <summary>
     ///     By enumeration rather than by inspection: any record in this namespace that carries an environment map
-    ///     must suppress its printer the same way. The check is what keeps the rule true for records a later slice
+    ///     must suppress its printer the same way. The check is what keeps the rule true for records a later change
     ///     adds, since nothing else in the tree would notice a new one.
     /// </summary>
     [Test]

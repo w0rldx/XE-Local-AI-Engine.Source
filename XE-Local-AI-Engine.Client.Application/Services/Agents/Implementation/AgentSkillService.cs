@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     The store stamps id, version and timestamp and owns the version-bump rule; this service never touches
 ///     versioning, and its <see cref="AgentSkillValidationException" /> messages never echo the Description or Body.
 ///     Name and Description are validated by <see cref="AgentSkillFrontmatter" /> itself, the very code MAF runs when
-///     building an <c>AgentInlineSkill</c>, never by a local regex: a local one drifted from the specification and
-///     persisted names MAF then rejected at agent-construction time, breaking every agent the skill was assigned to.
+///     building an <c>AgentInlineSkill</c>, never by a local regex: a local one can drift from the specification and
+///     persist names MAF then rejects at agent-construction time, breaking every agent the skill is assigned to.
 /// </remarks>
 internal sealed class AgentSkillService : IAgentSkillService
 {
