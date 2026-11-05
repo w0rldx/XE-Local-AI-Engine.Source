@@ -846,20 +846,58 @@ public sealed class ModelLabExperimentServiceTests
     {
         LabHost? labHost = null;
         Task? stop = null;
+        var completing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var completionMayProceed = new ManualResetEventSlim();
         using var process = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(process, configure: services => WrapStore(services, store => new FaultingStore(store)
         {
-            AfterCreate = () => stop = labHost!.Service.StopAsync(CancellationToken.None)
+            AfterCreate = () => stop = labHost!.Service.StopAsync(CancellationToken.None),
+            OnComplete = _ =>
+            {
+                completing.TrySetResult();
+                completionMayProceed.Wait(TestBudgets.Contended);
+            }
         }));
         labHost = host;
 
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+        await completing.Task.WaitAsync(TestBudgets.Contended);
+        await AssertEx.StaysIncompleteAsync(stop!, "The stop must wait for the job's row, or it is written through a host that may be gone.");
+        completionMayProceed.Set();
         await stop!.WaitAsync(TestBudgets.Contended);
-        await host.Service.InFlight!.WaitAsync(TimeSpan.FromSeconds(20));
 
+        // No wait on the job's task here: the stop returning is the claim.
         AssertEx.Null(process.Request, "A cancelled job spawns nothing.");
         AssertEx.Equal(ModelLabExperimentStatus.Cancelled, (await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None))!.Status);
         AssertEx.Null(host.Gate.ExclusiveKind);
+    }
+
+    /// <summary>The lease can take minutes to come free. A stop must not sit that out, and must not leave a start behind it that commits a row after the host has gone.</summary>
+    [Test]
+    public async Task HostShutdown_DuringTheLeaseWait_EndsTheStart_AndLeavesNoRow()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        var held = await host.Supervisor.AcquireRuntimeMutationLeaseOrNullAsync(CancellationToken.None);
+        try
+        {
+            var starting = host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
+            await AssertEx.EventuallyAsync(() => host.Service.ActiveBaseArtifactId == host.Request().BaseArtifactId, TestBudgets.Contended, "The start reached its admission.");
+
+            await host.Service.StopAsync(CancellationToken.None).WaitAsync(TestBudgets.Contended);
+
+            AssertEx.Null(host.Gate.ExclusiveKind, "The stop returns only once the start has given the gate back.");
+            AssertEx.Null(host.Service.ActiveBaseArtifactId);
+            var refused = await starting.WaitAsync(TestBudgets.Contended);
+            AssertEx.Equal(ModelLabStartRefusal.Busy, refused.Refusal!.Value);
+            AssertEx.Contains(refused.RefusalMessage!, "stopping", StringComparison.Ordinal);
+            AssertEx.Empty(await host.Service.ListAsync(CancellationToken.None));
+            AssertEx.Null(process.Request);
+        }
+        finally
+        {
+            await held!.DisposeAsync();
+        }
     }
 
     /// <summary>The lease can take minutes to come free, and a delete in that wait would pull the checkpoint from under the job.</summary>

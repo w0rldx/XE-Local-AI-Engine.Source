@@ -694,11 +694,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         CancellationToken ct)
     {
         var hadPrevious = Directory.Exists(finalTagDir);
+        var parked = false;
         try
         {
             if (hadPrevious)
             {
                 Directory.Move(finalTagDir, backupTagDir);
+                parked = true;
             }
 
             Directory.Move(stagingTagDir, finalTagDir);
@@ -717,8 +719,15 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             // Discard the failed build and restore the previous working runtime in place.
             BestEffortFile.TryDeleteDirectory(stagingTagDir);
+
+            // The park itself failed: finalTagDir is still the live runtime, and there is nothing to restore.
+            if (hadPrevious && !parked)
+            {
+                throw;
+            }
+
             BestEffortFile.TryDeleteDirectory(finalTagDir);
-            if (hadPrevious)
+            if (parked)
             {
                 Directory.Move(backupTagDir, finalTagDir);
             }

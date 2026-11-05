@@ -294,6 +294,12 @@ internal static class NodeChatPersistenceSql
             {
                 title = DecryptTitle(titleBytes, dbContext, convId);
                 content = contentBytes is null ? null : dbContext.DecryptMessageContent(contentBytes, convId, Guid.Parse(reader.GetString(10)));
+
+                // The blank turn's own user message (ordinals 11, 12). Blankness is only readable after the decrypt, so the fallback is here and not in the SQL.
+                if (string.IsNullOrWhiteSpace(content) && !await reader.IsDBNullAsync(ordinal: 11, cancellationToken))
+                {
+                    content = dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 11, cancellationToken), convId, Guid.Parse(reader.GetString(12)));
+                }
             }
             catch (Exception exception) when (exception is CryptographicException or InvalidOperationException)
             {

@@ -128,8 +128,8 @@ internal sealed class NodeChatReadModel
             cancellationToken);
     }
 
-    // The status is the last message's; the preview skips a failed assistant reply, whose content is empty, so a
-    // conversation whose only answer failed previews the user's message instead of "No messages".
+    // The status is the last message's; the preview skips a failed assistant reply, whose content is empty. When the preview is
+    // blank, as a stopped or running turn's is, the reader falls back to the latest user message (u): only it can see through the encryption.
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
     {
         return await _writer.ExecuteConversationSharedAsync(Guid.Empty,
@@ -138,7 +138,8 @@ internal sealed class NodeChatReadModel
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             p.content, m.status, c.origin, c.is_pinned, c.archived, p.message_id
+                                             p.content, m.status, c.origin, c.is_pinned, c.archived, p.message_id,
+                                             u.content, u.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
@@ -148,6 +149,10 @@ internal sealed class NodeChatReadModel
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                             AND NOT (mi.role = 'assistant' AND mi.status = 'failed')
+                                          ORDER BY mi.sequence DESC LIMIT 1)
+                                      LEFT JOIN messages u ON u.message_id = (
+                                          SELECT mi.message_id FROM messages mi
+                                          WHERE mi.conversation_id = c.conversation_id AND mi.role = 'user'
                                           ORDER BY mi.sequence DESC LIMIT 1)
                                       WHERE c.purged = 0 AND c.archived = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
@@ -166,7 +171,8 @@ internal sealed class NodeChatReadModel
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             p.content, m.status, c.origin, c.is_pinned, c.archived, p.message_id
+                                             p.content, m.status, c.origin, c.is_pinned, c.archived, p.message_id,
+                                             u.content, u.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
@@ -176,6 +182,10 @@ internal sealed class NodeChatReadModel
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                             AND NOT (mi.role = 'assistant' AND mi.status = 'failed')
+                                          ORDER BY mi.sequence DESC LIMIT 1)
+                                      LEFT JOIN messages u ON u.message_id = (
+                                          SELECT mi.message_id FROM messages mi
+                                          WHERE mi.conversation_id = c.conversation_id AND mi.role = 'user'
                                           ORDER BY mi.sequence DESC LIMIT 1)
                                       WHERE c.purged = 0 AND c.kind = 'chat'
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC

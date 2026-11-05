@@ -50,7 +50,7 @@ export function needsFirstSendTitle(conversation: ChatConversationModel): boolea
 }
 
 /**
- * The failure a send surfaces. A send against a remote-origin conversation is rejected by the server-side mutation
+ * The failure a send or regenerate surfaces. A send against a remote-origin conversation is rejected by the server-side mutation
  * guard; over SignalR that arrives as a HubException leading with the ReadOnlyConversation token, not a 409. The client
  * watchdog is the ONE failure the browser itself raises, so it says so: its raw message ("Local chat stream timed out
  * (inter-chunk-stall).") reads like a node timeout and makes a premature client-side give-up indistinguishable from the

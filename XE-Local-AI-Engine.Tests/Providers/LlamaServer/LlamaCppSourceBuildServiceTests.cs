@@ -531,6 +531,97 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.True(publisher.Events.Count > 0);
         AssertEx.True(publisher.Events[^1].Terminal);
         AssertEx.True(publisher.Events.All(statusEvent => statusEvent.CurrentBuild?.BuildId == service.GetStatus().CurrentBuild?.BuildId));
+        AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "llama.cpp", "source-build", "active")), "With no previous runtime, the failed build must not stay in its place.");
+    }
+
+    /// <summary>Renaming the live runtime can fail, and then nothing was parked: it is still in place, and the rename's own failure is what gets reported.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Swap_WhenParkingThePreviousRuntimeFails_LeavesItByteIdentical()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var (previousState, previousServer) = await SeedActiveRuntimeAsync(temp.Path, store);
+        var sourceBuildRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
+        var active = Path.Combine(sourceBuildRoot, "active");
+        var before = HashTree(active);
+        if (IgnoresDirectoryPermissions(temp.Path))
+        {
+            Skip.Test("This user is not stopped by a directory with no permissions (running as root), so the rename cannot be made to fail.");
+        }
+
+        try
+        {
+            // Planted by the build step, past the two deletes that run before it: a backup that cannot be removed makes the rename onto it fail.
+            var locked = Path.Combine(sourceBuildRoot, ".backup", "locked");
+            var stubs = Path.Combine(temp.Path, "stubs");
+            Directory.CreateDirectory(stubs);
+            WriteBuildStubs(stubs, beforeBuild: $"mkdir -p '{locked}'; chmod 000 '{locked}'; ");
+            using var path = new PathScope(stubs);
+            var signal = new CudaManagedBuildSignal();
+            signal.SetActive(GpuVariant.Cpu);
+            var logger = new RecordingLogger<LlamaCppSourceBuildService>();
+            using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+                new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
+                logger, TimeProvider.System, temp.Path);
+
+            AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, (await service.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            }, CancellationToken.None)).Outcome);
+            await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+            AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
+            AssertEx.True(File.Exists(previousServer), "The live runtime must survive a rename that never moved it.");
+            AssertEx.Equal(before, HashTree(active));
+            AssertEx.Equal(previousState, await store.ReadAsync(CancellationToken.None));
+            AssertEx.Equal(GpuVariant.Cpu, signal.ActiveVariant!.Value);
+            var failure = logger.Entries.Last(static entry => entry.Exception is not null).Exception;
+            AssertEx.True(failure is IOException and not DirectoryNotFoundException, $"The rename's own failure is what must surface, not {failure}.");
+        }
+        finally
+        {
+            foreach (var directory in Directory.EnumerateDirectories(sourceBuildRoot, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.None }))
+            {
+                File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Swap_WhenAdoptionFails_RestoresThePreviousRuntimeByteIdentical()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var (previousState, _) = await SeedActiveRuntimeAsync(temp.Path, store);
+        var sourceBuildRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
+        var before = HashTree(Path.Combine(sourceBuildRoot, "active"));
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        WriteBuildStubs(stubs);
+        using var path = new PathScope(stubs);
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal, failAdoption: true), store, signal,
+            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
+
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, (await service.StartAsync(new LlamaCppSourceBuildRequest
+        {
+            Backend = LlamaCppSourceBackend.Cpu,
+            Source = LlamaCppSourceSelection.Official
+        }, CancellationToken.None)).Outcome);
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
+        AssertEx.Equal(before, HashTree(Path.Combine(sourceBuildRoot, "active")));
+        AssertEx.False(Directory.Exists(Path.Combine(sourceBuildRoot, ".backup")), "The parked runtime went back, so nothing stays parked.");
+        AssertEx.False(Directory.Exists(Path.Combine(sourceBuildRoot, ".staging")));
+        AssertEx.Equal(previousState, await store.ReadAsync(CancellationToken.None));
     }
 
     [Test]
@@ -802,6 +893,43 @@ public sealed class LlamaCppSourceBuildServiceTests
     {
         File.WriteAllText(path, content);
         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    /// <summary>A git and a cmake that together produce a build the swap can take.</summary>
+    [UnsupportedOSPlatform("windows")]
+    private static void WriteBuildStubs(string stubs, string beforeBuild = "")
+    {
+        WriteScript(Path.Combine(stubs, "git"),
+            $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\nexit 0\n");
+        WriteScript(Path.Combine(stubs, "cmake"),
+            $"#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then {beforeBuild}mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params; do printf '#!/bin/sh\\necho new-build\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");
+    }
+
+    private static string HashTree(string root)
+    {
+        return string.Join('\n', Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                                          .Order(StringComparer.Ordinal)
+                                          .Select(file => $"{Path.GetRelativePath(root, file)} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)))}"));
+    }
+
+    [UnsupportedOSPlatform("windows")]
+    private static bool IgnoresDirectoryPermissions(string parent)
+    {
+        var probe = Directory.CreateDirectory(Path.Combine(parent, "no-permissions-probe")).FullName;
+        File.SetUnixFileMode(probe, UnixFileMode.None);
+        try
+        {
+            _ = Directory.GetFileSystemEntries(probe);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        finally
+        {
+            File.SetUnixFileMode(probe, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     private sealed class AlwaysReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe

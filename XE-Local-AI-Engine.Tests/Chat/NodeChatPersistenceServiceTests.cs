@@ -1842,6 +1842,122 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal("what is the weather", withArchived.LastMessagePreview);
     }
 
+    /// <summary>A reply stopped before its first token is blank but not failed, and the list must not read as "No messages" with the user's question right there.</summary>
+    [Test]
+    public async Task ListConversationsAsync_WhenTheLastReplyWasStoppedBlank_PreviewsTheUserMessage()
+    {
+        await using var provider = await BuildProviderAsync("stopped-blank-preview.sqlite");
+        var service = CreateService(provider);
+        var correlation = await SeedTurnAsync(service, "what is the weather");
+        await service.CancelMessageAsync(new NodeChatCancelRequest
+        {
+            Correlation = correlation,
+            CancelledAtUtc = 44
+        });
+
+        foreach (var summary in await ListBothQueriesAsync(service))
+        {
+            AssertEx.Equal("what is the weather", summary.LastMessagePreview);
+            AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, summary.LastMessageStatus);
+        }
+    }
+
+    [Test]
+    public async Task ListConversationsAsync_WhenTheLastReplyWasStoppedPartway_PreviewsItsOwnText()
+    {
+        await using var provider = await BuildProviderAsync("stopped-partial-preview.sqlite");
+        var service = CreateService(provider);
+        var correlation = await SeedTurnAsync(service, "what is the weather");
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 43);
+        await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest
+        {
+            Correlation = correlation,
+            Content = "it looks like rain",
+            Reasoning = null,
+            UpdatedAtUtc = 44
+        });
+        await service.CancelMessageAsync(new NodeChatCancelRequest
+        {
+            Correlation = correlation,
+            CancelledAtUtc = 45
+        });
+
+        foreach (var summary in await ListBothQueriesAsync(service))
+        {
+            AssertEx.Equal("it looks like rain", summary.LastMessagePreview);
+        }
+    }
+
+    [Test]
+    public async Task ListConversationsAsync_WhenTheTurnIsStillBlank_PreviewsTheUserMessage()
+    {
+        await using var provider = await BuildProviderAsync("running-blank-preview.sqlite");
+        var service = CreateService(provider);
+        await SeedTurnAsync(service, "what is the weather");
+
+        foreach (var summary in await ListBothQueriesAsync(service))
+        {
+            AssertEx.Equal("what is the weather", summary.LastMessagePreview);
+        }
+    }
+
+    [Test]
+    public async Task ListConversationsAsync_WithNoMessages_HasNoPreview()
+    {
+        await using var provider = await BuildProviderAsync("empty-preview.sqlite");
+        var service = CreateService(provider);
+        await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = null,
+            UserId = null,
+            CreatedAtUtc = 40
+        });
+
+        foreach (var summary in await ListBothQueriesAsync(service))
+        {
+            AssertEx.Null(summary.LastMessagePreview);
+            AssertEx.Null(summary.LastMessageStatus);
+        }
+    }
+
+    private static async Task<NodeChatMessageCorrelation> SeedTurnAsync(NodeChatPersistenceService service, string userMessage)
+    {
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = null,
+            UserId = null,
+            CreatedAtUtc = 40
+        });
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = userMessage,
+            CreatedAtUtc = 41
+        });
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = correlation.MessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 42
+        });
+        return correlation;
+    }
+
+    // The plain and the archived-inclusive list are two copies of the same query, so each claim is held against both.
+    private static async Task<NodeChatConversationSummaryDto[]> ListBothQueriesAsync(NodeChatPersistenceService service) =>
+    [
+        (await service.ListConversationsAsync(new NodeChatListConversationsRequest())).Single(),
+        (await service.ListConversationsAsync(new NodeChatListConversationsRequest { IncludeArchived = true })).Single()
+    ];
+
     [Test]
     public async Task ListConversationsAsync_WithOneUndecryptableTitle_ListsEveryConversation()
     {

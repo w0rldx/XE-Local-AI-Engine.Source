@@ -7,7 +7,6 @@ import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import type { ModelOption } from "@/core/models/ModelOption";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { isNodeChatTurnParkedConflict } from "@/features/chat/api/NodeChatConflict";
 import { StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
 import {
 	type AppliedNodeChatStreamEvent,
@@ -22,7 +21,7 @@ import {
 	stampVariantGroup,
 	titleFromContent,
 } from "@/features/chat/models/ChatConversationDerivations";
-import { chatErrorMessage, chatWriteErrorMessage } from "@/features/chat/models/ChatErrorMessage";
+import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type {
 	ChatConversationModel,
 	ChatStreamingState,
@@ -504,16 +503,7 @@ export function useChatStreamController({
 				// The turn errored: drop any batched delta before surfacing the error.
 				streamScheduler.cancel();
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
-					if (isNodeChatTurnParkedConflict(error)) {
-						setStreamError(
-							t(
-								"pages.chat.turnParked",
-								"A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
-							),
-						);
-					} else {
-						setStreamError(chatWriteErrorMessage(error, t));
-					}
+					setStreamError(sendFailureMessage(error, t).message);
 				}
 			} finally {
 				const finishedMessageId = activeStream.current?.messageId;

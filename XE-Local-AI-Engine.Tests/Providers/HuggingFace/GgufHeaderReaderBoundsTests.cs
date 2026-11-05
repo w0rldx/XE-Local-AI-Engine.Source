@@ -65,6 +65,31 @@ public sealed class GgufHeaderReaderBoundsTests
             string.Join(separator: ',', handler.Requests.Select(static request => request.Range)));
     }
 
+    /// <summary>A server that ignores Range answers 200 with the whole file, which can be many gigabytes: the read takes what it asked for and stops.</summary>
+    [Test]
+    public async Task ReadHeader_ServerIgnoringTheRange_ReadsNoMoreThanItAskedFor()
+    {
+        var body = new byte[3 * MiB];
+        EarlierKeys().Build().CopyTo(body, index: 0);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage { Content = new StreamContent(new CappedBodyStream(body, MiB)) });
+
+        var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
+
+        AssertEarlierKeysKept(metadata);
+        AssertEx.Equal(expected: 1, handler.CallCount);
+    }
+
+    /// <summary>A connection dropped inside the body costs this file's metadata, and must not escape to fail the whole discovery.</summary>
+    [Test]
+    public async Task ReadHeader_ServerDroppingTheBody_ReturnsEmptyMetadata()
+    {
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage { Content = new StreamContent(new DroppedBodyStream()) });
+
+        var metadata = await ReadRemoteAsync(handler, probeBytes: MiB);
+
+        AssertEx.Equal(GgufHeaderMetadata.Empty, metadata);
+    }
+
     [Test]
     public async Task ReadHeaderFromFile_NestedArray_StopsThere_KeepingTheKeysBeforeIt()
     {
@@ -200,5 +225,28 @@ public sealed class GgufHeaderReaderBoundsTests
         var options = new HuggingFaceOptions { HeaderProbeBytes = probeBytes };
         var reader = new GgufHeaderReader(http, GgufStoreTestInfrastructure.NoTokenStore(), options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
         return await reader.ReadHeaderAsync("org/repo", "model.gguf", "main", CancellationToken.None);
+    }
+
+    /// <summary>Fails the read instead of answering it once a read would go past the cap.</summary>
+    private sealed class DroppedBodyStream : MemoryStream
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            throw new IOException("The response ended prematurely.");
+    }
+
+    private sealed class CappedBodyStream : MemoryStream
+    {
+        private readonly long _cap;
+
+        public CappedBodyStream(byte[] body, long cap)
+            : base(body, writable: false)
+        {
+            _cap = cap;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            Position + buffer.Length > _cap
+                ? throw new InvalidOperationException($"The body was read past the {_cap} bytes that were asked for.")
+                : base.ReadAsync(buffer, cancellationToken);
     }
 }

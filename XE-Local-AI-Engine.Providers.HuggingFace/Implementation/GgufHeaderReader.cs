@@ -290,7 +290,19 @@ internal sealed class GgufHeaderReader
             return null;
         }
 
-        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        // Bounded, because a server that ignores Range answers 200 with the whole file. A short read is the end of the file, and exactly count bytes reads as a full range.
+        try
+        {
+            await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var buffer = new byte[count];
+            var read = await body.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, ct).ConfigureAwait(false);
+            return read == buffer.Length ? buffer : buffer[..read];
+        }
+        catch (IOException exception)
+        {
+            // A stream read does not wrap this the way a buffered read does; FetchHeaderAsync's handler is what keeps one dropped file from failing a discovery.
+            throw new HttpRequestException("The GGUF header response ended before its body was read.", exception);
+        }
     }
 
     /// <summary>

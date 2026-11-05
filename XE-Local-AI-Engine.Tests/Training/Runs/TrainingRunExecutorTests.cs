@@ -101,6 +101,82 @@ public sealed class TrainingRunExecutorTests : IDisposable
     }
 
     [Test]
+    public async Task Execute_IgnoresAnArtifactThatIsALink()
+    {
+        await AssertArtifactIgnoredAsync("adapter", (staged, outside) => Directory.CreateSymbolicLink(Path.Combine(staged, "adapter"), outside));
+    }
+
+    [Test]
+    public async Task Execute_IgnoresAnArtifactReachedThroughALinkedDirectory()
+    {
+        await AssertArtifactIgnoredAsync("linked/adapter", (staged, outside) =>
+        {
+            Directory.CreateDirectory(Path.Combine(outside, "adapter"));
+            Directory.CreateSymbolicLink(Path.Combine(staged, "linked"), outside);
+        });
+    }
+
+    /// <summary>A dot-directory on purpose: the default enumeration options skip hidden entries, which is where a link would then sit unseen.</summary>
+    [Test]
+    public async Task Execute_IgnoresAnArtifactWhoseTreeHoldsALink()
+    {
+        await AssertArtifactIgnoredAsync("adapter", (staged, outside) =>
+        {
+            var nested = Directory.CreateDirectory(Path.Combine(staged, "adapter", ".nested", "deeper")).FullName;
+            File.WriteAllText(Path.Combine(outside, "secret"), "outside the run");
+            File.CreateSymbolicLink(Path.Combine(nested, "tokenizer.json"), Path.Combine(outside, "secret"));
+        });
+    }
+
+    [Test]
+    public async Task Execute_IgnoresAnArtifactWhoseTreeHoldsADanglingLink()
+    {
+        await AssertArtifactIgnoredAsync("adapter", (staged, outside) =>
+        {
+            var adapter = Directory.CreateDirectory(Path.Combine(staged, "adapter")).FullName;
+            File.CreateSymbolicLink(Path.Combine(adapter, "tokenizer.json"), Path.Combine(outside, "gone"));
+        });
+    }
+
+    [Test]
+    public async Task Execute_RegistersAPlainAdapterDirectory()
+    {
+        await using var harness = await Harness.CreateAsync(this,
+        [
+            """{"event":"artifact","kind":"HfAdapterDir","path":"__STAGED__/adapter"}""",
+            """{"event":"done","cancelled":false}"""
+        ]);
+        var adapter = Path.Combine(harness.Workspace.StagedDirectory(harness.RunId), "adapter");
+        Directory.CreateDirectory(Path.Combine(adapter, "nested"));
+        await File.WriteAllTextAsync(Path.Combine(adapter, "nested", "adapter_config.json"), "{}");
+
+        await harness.ExecuteAsync();
+
+        _ = await harness.Store.Received(1)
+                         .CreateArtifactAsync(Arg.Is<TrainingArtifactInput>(input => input.Path == adapter), Arg.Any<CancellationToken>());
+    }
+
+    private async Task AssertArtifactIgnoredAsync(string artifact, Action<string, string> plant)
+    {
+        SymlinkSupport.EnsureSupported();
+        await using var harness = await Harness.CreateAsync(this,
+        [
+            $$"""{"event":"artifact","kind":"HfAdapterDir","path":"__STAGED__/{{artifact}}"}""",
+            """{"event":"done","cancelled":false}"""
+        ]);
+        var staged = harness.Workspace.StagedDirectory(harness.RunId);
+        Directory.CreateDirectory(staged);
+        var outside = Directory.CreateDirectory(Path.Combine(_root, "outside-" + Guid.NewGuid().ToString("N"))).FullName;
+        plant(staged, outside);
+
+        await harness.ExecuteAsync();
+
+        // Refused, not failed: the run keeps its outcome, and its log says what was ignored.
+        _ = await harness.Store.DidNotReceiveWithAnyArgs().CreateArtifactAsync(default!, default);
+        _ = await harness.Store.Received(1).CompleteRunAsync(harness.RunId, TrainingWorkStatus.Succeeded, null, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Watchdog_NoHeartbeat_TerminatesRun()
     {
         // A trainer that emits nothing at all: exactly what a wedged CUDA call looks like from the outside, and the

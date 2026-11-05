@@ -357,11 +357,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         ActiveJob? active;
-        Task? inFlight;
         lock (_jobLock)
         {
             active = _active;
-            inFlight = InFlight;
         }
 
         if (active is null)
@@ -378,10 +376,10 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             // The job finished between the read and the cancel.
         }
 
-        // None yet: the admission is still handing off, and the job stops at its first step on the cancelled token.
-        if (inFlight is not null)
+        // A start still in admission ends its waits on this cancel and then says whether it left a job. The job writes its row while the host's scope factory still works.
+        if (await active.Admission.Task.WaitAsync(cancellationToken) is { } job)
         {
-            await inFlight.WaitAsync(cancellationToken);
+            await job.WaitAsync(cancellationToken);
         }
     }
 
@@ -418,7 +416,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             _active = active;
         }
 
-        var handedOff = false;
+        Task? job = null;
         try
         {
             // The delete guard could not see this job until the line above, so the first read may be stale.
@@ -428,7 +426,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 return gone;
             }
 
-            lease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(ct);
+            // For the two waits only, which a host stop must not sit out. From the row's commit on, a cancel is the job's to see at its first step.
+            using var waits = CancellationTokenSource.CreateLinkedTokenSource(ct, active.Cancellation.Token);
+            lease = await _supervisor.AcquireRuntimeMutationLeaseOrNullAsync(waits.Token);
             if (lease is null)
             {
                 return Refuse(ModelLabStartRefusal.ModelLoaded, "A model is loaded. Eject it, then start the experiment again.");
@@ -441,7 +441,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 ParameterCount = 0,
                 TrainableParameterCount = 0,
                 Experimental = false
-            }, ct);
+            }, waits.Token);
             if (!reservation.Granted)
             {
                 return Refuse(ModelLabStartRefusal.InsufficientMemory, reservation.Reason ?? "There is not enough free memory to start the experiment.");
@@ -462,7 +462,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             };
             var heldLease = lease;
             var heldReservation = reservation;
-#pragma warning disable CA2025 // The job owns all three holds from here; handedOff below keeps this method from disposing them.
+#pragma warning disable CA2025 // The job owns all three holds from here; job below keeps this method from disposing them.
             Func<Task<ModelLabExperimentCompletion>> execute = layer is { } steeredLayer
                 ? () => ExecuteSteeringAsync(active, request, checkpoint, steeredLayer, script, heldLease, heldReservation)
                 : () => ExecuteTraceAsync(active, new ModelLabTraceJobV1
@@ -478,30 +478,41 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
             {
                 var heldAdmission = admission;
                 // Detached: the request's token dies with the HTTP response. The job's own token is what a cancel and a shutdown use.
-                InFlight = Task.Run(() => RunAsync(active, execute, heldAdmission, heldLease, heldReservation), CancellationToken.None);
+                job = Task.Run(() => RunAsync(active, execute, heldAdmission, heldLease, heldReservation), CancellationToken.None);
+                InFlight = job;
 #pragma warning restore CA2025
             }
 
-            handedOff = true;
             return new ModelLabStart { ExperimentId = id };
+        }
+        catch (OperationCanceledException) when (active.Cancellation.IsCancellationRequested)
+        {
+            return Refuse(ModelLabStartRefusal.Busy, "The node is stopping. Start the experiment again once it is back.");
         }
         finally
         {
-            if (!handedOff)
+            try
             {
-                lock (_jobLock)
+                if (job is null)
                 {
-                    _active = null;
-                }
+                    lock (_jobLock)
+                    {
+                        _active = null;
+                    }
 
-                active.Cancellation.Dispose();
-                reservation?.Dispose();
-                if (lease is not null)
-                {
-                    await lease.DisposeAsync();
-                }
+                    active.Cancellation.Dispose();
+                    reservation?.Dispose();
+                    if (lease is not null)
+                    {
+                        await lease.DisposeAsync();
+                    }
 
-                admission.Dispose();
+                    admission.Dispose();
+                }
+            }
+            finally
+            {
+                active.Admission.TrySetResult(job);
             }
         }
     }
@@ -911,6 +922,9 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         public required Guid BaseArtifactId { get; init; }
 
         public required CancellationTokenSource Cancellation { get; init; }
+
+        /// <summary>Completes when the start has let go: with this job's task, or with null when it ended without one, every hold already given back.</summary>
+        public TaskCompletionSource<Task?> Admission { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>Written and read under the job lock.</summary>
         public bool RowCommitted { get; set; }

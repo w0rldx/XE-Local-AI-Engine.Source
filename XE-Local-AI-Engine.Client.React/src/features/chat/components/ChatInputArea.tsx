@@ -15,6 +15,7 @@ import { ChatComposerToolbar } from "@/features/chat/components/ChatInputArea/Ch
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
 import { SlashCommandAutocomplete } from "@/features/chat/components/SlashCommandAutocomplete";
 import { useComposerToolbarHeight } from "@/features/chat/hooks/useComposerToolbarHeight";
+import { isFileDrag } from "@/features/chat/hooks/usePaneFileDrop";
 import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import type { ChatWorkflowSlots, ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
@@ -288,24 +289,25 @@ export function ChatInputArea({
 	};
 
 	const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
-		if (!attachmentControlsAvailable || attachmentControlsDisabled) {
+		if (!attachmentControlsAvailable || attachmentControlsDisabled || !isFileDrag(event)) {
 			return;
 		}
-		// Stop the event reaching the chat-pane-level drop zone (ChatDisplayShell) so a drop on the composer is handled
-		// here once, not also by the pane — and the pane overlay stays hidden while hovering the composer.
+		// Stop the event reaching the chat-pane-level drop zone (ChatDisplayShell), which only keeps the pane from raising
+		// its overlay from here: one already up from crossing the pane stays up until the drop or until the drag leaves
+		// the pane. handleDrop stops its own event so a drop on the composer uploads once, not also through the pane.
 		event.stopPropagation();
 		event.preventDefault();
 		setDragActive(true);
 	};
 
-	const handleDragLeave = (event: DragEvent<HTMLDivElement>): void => {
-		event.stopPropagation();
-		event.preventDefault();
+	// Bubbles on purpose: the pane's overlay can already be up, and only its own leave handler can take it down when the
+	// drag exits the window through the composer.
+	const handleDragLeave = (): void => {
 		setDragActive(false);
 	};
 
 	const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
-		if (!attachmentControlsAvailable || attachmentControlsDisabled) {
+		if (!attachmentControlsAvailable || attachmentControlsDisabled || !isFileDrag(event)) {
 			return;
 		}
 		event.stopPropagation();

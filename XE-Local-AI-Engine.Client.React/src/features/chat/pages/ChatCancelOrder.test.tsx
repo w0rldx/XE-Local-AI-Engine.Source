@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
+import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
 import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
 import { useChatStreamController } from "@/features/chat/hooks/useChatStreamController";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
@@ -488,4 +489,107 @@ describe("Chat cancel ordering", () => {
 		expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
 		expect(refreshConversation).toHaveBeenCalledTimes(2);
 	});
+
+	const hubRefusal = (token: string): Error =>
+		new Error(`An error occurred on the server while streaming results. HubException: ${token}: refused by the node.`);
+
+	it.each([
+		[
+			"the first-chunk watchdog",
+			new StreamWatchdogError("no-first-chunk", "Local chat stream timed out (no-first-chunk)."),
+			"Connection watchdog: the response never started arriving in this browser.",
+		],
+		[
+			"the stall watchdog",
+			new StreamWatchdogError("inter-chunk-stall", "Local chat stream timed out (inter-chunk-stall)."),
+			"Connection watchdog: the response stopped arriving in this browser.",
+		],
+		[
+			"a live workflow run",
+			hubRefusal("GraphWorkflowRunLiveInConversation"),
+			"This conversation is running a workflow; answer through it or stop it first.",
+		],
+		[
+			"a parked turn",
+			hubRefusal("ConversationTurnParked"),
+			"A reply in this conversation is waiting for your answer. Answer the waiting card, then send again.",
+		],
+		[
+			"a read-only conversation",
+			hubRefusal("ReadOnlyConversation"),
+			"This conversation was started from a paired client and is view-only on this node.",
+		],
+		["any other failure", hubRefusal("Backend"), "Backend: refused by the node."],
+	])(
+		"regenerate maps %s to its banner, leaves the original turn alone and releases the stream",
+		async (_name, failure, banner) => {
+			const original: ChatConversationModel = {
+				...conversation(),
+				messages: [
+					{
+						id: "assistant-1",
+						conversationId: "conversation-1",
+						requestId: "request-1",
+						role: "assistant",
+						content: "first answer",
+						status: "completed",
+						createdAt: "2026-05-24T00:00:00.000Z",
+						sortOrder: 1,
+					},
+				],
+			};
+			adapter.regenerateMessage.mockImplementation(() => ({
+				[Symbol.asyncIterator]: () => ({
+					next: async () => {
+						throw failure;
+					},
+				}),
+			}));
+			const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+			queryClient.setQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"), original);
+			const setStreamError = vi.fn();
+			const refreshConversation = vi.fn(async () => undefined);
+			const writeConversation = (updated: ChatConversationModel) =>
+				queryClient.setQueryData(nodeChatQueryKeys.conversation(updated.id), updated);
+			const { wrapper } = createProvidersWrapper({ queryClient });
+			const { result } = renderHook(
+				() =>
+					useChatStreamController({
+						setStreamError,
+						cacheConversation: writeConversation,
+						cacheConversationDetail: writeConversation,
+						refreshConversation,
+						resolveSendConversation: vi.fn(),
+						selectedConversationId: "conversation-1",
+						displayConversations: [],
+						modelOptions: [],
+						cloudModelOptions: [],
+						agentModeEnabled: false,
+						selectedAgentId: "",
+						agentOptions: [],
+						activeRevisionByGroup: {},
+						attachmentFileIds: [],
+						toolsEnabled: false,
+						knowledgeBaseEnabled: false,
+						reasoningEffort: "medium",
+						onVoiceTurnStart: vi.fn(),
+						onVoiceAnswerProgress: vi.fn(),
+						loadedSelectedConversationId: "",
+					}),
+				{ wrapper },
+			);
+
+			act(() => result.current.handleRegenerate("assistant-1"));
+
+			await waitFor(() => expect(refreshConversation).toHaveBeenCalledTimes(1));
+			expect(setStreamError).toHaveBeenLastCalledWith(banner);
+			// Unlike a send, a refused regenerate has no turn of its own to fail: the original answer stays as it was.
+			expect(queryClient.getQueryData(nodeChatQueryKeys.conversation("conversation-1"))).toEqual(original);
+
+			// The stream slot is free again: a stuck `activeStream` would return before reaching the adapter.
+			act(() => result.current.handleRegenerate("assistant-1"));
+			await waitFor(() => expect(refreshConversation).toHaveBeenCalledTimes(2));
+			expect(adapter.regenerateMessage).toHaveBeenCalledTimes(2);
+		},
+	);
 });

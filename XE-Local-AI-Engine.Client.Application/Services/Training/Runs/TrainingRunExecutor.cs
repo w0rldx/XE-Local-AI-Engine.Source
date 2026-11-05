@@ -325,11 +325,12 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         const TrainingArtifactKind kind = TrainingArtifactKind.HfAdapterDir;
         var staged = _workspace.StagedDirectory(runId);
         var full = Path.GetFullPath(path);
-        if (!PathContainment.IsRootOrUnderCanonical(full, Path.GetFullPath(staged)))
+        var root = Path.GetFullPath(staged);
+        if (!PathContainment.IsRootOrUnderCanonical(full, root) || HoldsLink(root, full))
         {
             // The trainer names its own output path; anything outside the run's staged directory is refused rather
             // than recorded, so a compromised or buggy script cannot register a registry candidate from anywhere.
-            _logger.LogWarning("The training run {RunId} reported an artifact outside its staged directory; it was ignored.", runId);
+            _logger.LogWarning("The training run {RunId} reported an artifact outside its staged directory or through a link; it was ignored.", runId);
             return;
         }
 
@@ -343,6 +344,35 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         {
             Message = kind.ToString()
         });
+    }
+
+    /// <summary>Whether a link sits on the way from the staged directory down to the artifact or inside its tree. What cannot be read counts as one.</summary>
+    /// <remarks>
+    ///     The containment check is lexical, so a link reads as contained wherever it leads. A trainer's save writes none, so one is refused, not resolved.
+    ///     Accepted ceiling: this reads the tree once, while the trainer still runs; a later reader of the artifact keeps its own guard.
+    /// </remarks>
+    private static bool HoldsLink(string stagedRoot, string artifact)
+    {
+        try
+        {
+            for (var current = Path.TrimEndingDirectorySeparator(artifact); current.Length >= stagedRoot.Length; current = Path.GetDirectoryName(current)!)
+            {
+                if (new FileInfo(current).LinkTarget is not null)
+                {
+                    return true;
+                }
+            }
+
+            // Hidden entries included, and an unreadable directory throws rather than being skipped. The first link ends the walk, so none is followed.
+            return Directory.Exists(artifact)
+                   && new DirectoryInfo(artifact)
+                      .EnumerateFileSystemInfos("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.None, IgnoreInaccessible = false })
+                      .Any(static entry => entry.LinkTarget is not null);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
     }
 
     private async Task FlushAsync(Guid runId, StreamState state, bool force)

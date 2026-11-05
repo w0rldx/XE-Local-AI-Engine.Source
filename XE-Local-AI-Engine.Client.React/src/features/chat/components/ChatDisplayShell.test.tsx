@@ -302,17 +302,7 @@ describe("ChatDisplayShell temporary-chat toggle", () => {
 
 describe("ChatDisplayShell file drag-and-drop", () => {
 	beforeEach(() => {
-		Object.defineProperty(window, "matchMedia", {
-			writable: true,
-			value: vi.fn().mockImplementation((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				dispatchEvent: vi.fn(),
-			})),
-		});
+		installJsdomEnvironmentMocks();
 	});
 
 	afterEach(() => {
@@ -353,6 +343,106 @@ describe("ChatDisplayShell file drag-and-drop", () => {
 
 		fireEvent.drop(pane, { dataTransfer });
 		expect(onUploadFiles).not.toHaveBeenCalled();
+	});
+
+	// fireEvent returns false when a handler called preventDefault, so `true` below means the browser keeps its native
+	// text handling: a selection dragged into the composer lands in the textarea.
+	const textTransfer = { files: [], types: ["text/plain"] };
+
+	it("leaves a text drag over the composer alone", () => {
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles: vi.fn() })} />);
+
+		const composer = screen.getByTestId("chat-input-area");
+
+		expect(fireEvent.dragOver(composer, { dataTransfer: textTransfer })).toBe(true);
+		expect(composer.style.outline).toBe("");
+		expect(screen.queryByTestId("chat-file-drop-overlay")).toBeNull();
+	});
+
+	it("does not swallow a text drop on the composer", () => {
+		const onUploadFiles = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles })} />);
+
+		expect(fireEvent.drop(screen.getByTestId("chat-input-area"), { dataTransfer: textTransfer })).toBe(true);
+		expect(onUploadFiles).not.toHaveBeenCalled();
+	});
+
+	it("does not swallow a text drop on the pane", () => {
+		const onUploadFiles = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles })} />);
+
+		expect(fireEvent.drop(screen.getByTestId("chat-pane"), { dataTransfer: textTransfer })).toBe(true);
+		expect(onUploadFiles).not.toHaveBeenCalled();
+	});
+
+	it("uploads a file dropped on the composer exactly once", () => {
+		const onUploadFiles = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles })} />);
+
+		const composer = screen.getByTestId("chat-input-area");
+		const file = new File(["spec"], "spec.md", { type: "text/markdown" });
+		const dataTransfer = { files: [file], types: ["Files"] };
+
+		expect(fireEvent.dragOver(composer, { dataTransfer })).toBe(false);
+		expect(composer.style.outline).not.toBe("");
+
+		expect(fireEvent.drop(composer, { dataTransfer })).toBe(false);
+		expect(onUploadFiles).toHaveBeenCalledTimes(1);
+		expect(onUploadFiles).toHaveBeenCalledWith([file]);
+		expect(composer.style.outline).toBe("");
+	});
+
+	it("clears the pane overlay when a file drag leaves the window through the composer", () => {
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles: vi.fn() })} />);
+
+		const composer = screen.getByTestId("chat-input-area");
+		const dataTransfer = { files: [new File(["spec"], "spec.md")], types: ["Files"] };
+
+		fireEvent.dragOver(screen.getByTestId("chat-pane"), { dataTransfer });
+		expect(screen.queryByTestId("chat-file-drop-overlay")).not.toBeNull();
+		fireEvent.dragOver(composer, { dataTransfer });
+
+		fireEvent.dragLeave(composer, { dataTransfer, relatedTarget: null });
+
+		expect(screen.queryByTestId("chat-file-drop-overlay")).toBeNull();
+		expect(composer.style.outline).toBe("");
+	});
+
+	it("clears the pane overlay when a file that crossed the pane is dropped on the composer", () => {
+		const onUploadFiles = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles })} />);
+
+		const composer = screen.getByTestId("chat-input-area");
+		const file = new File(["spec"], "spec.md");
+		const dataTransfer = { files: [file], types: ["Files"] };
+
+		fireEvent.dragOver(screen.getByTestId("chat-pane"), { dataTransfer });
+		expect(screen.queryByTestId("chat-file-drop-overlay")).not.toBeNull();
+		fireEvent.dragOver(composer, { dataTransfer });
+
+		fireEvent.drop(composer, { dataTransfer });
+
+		expect(onUploadFiles).toHaveBeenCalledTimes(1);
+		expect(onUploadFiles).toHaveBeenCalledWith([file]);
+		expect(screen.queryByTestId("chat-file-drop-overlay")).toBeNull();
+	});
+
+	it("uploads a file dropped on the pane outside the composer exactly once and clears the overlay", () => {
+		const onUploadFiles = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles })} />);
+
+		const pane = screen.getByTestId("chat-pane");
+		const file = new File(["spec"], "spec.md");
+		const dataTransfer = { files: [file], types: ["Files"] };
+
+		fireEvent.dragOver(pane, { dataTransfer });
+		expect(screen.queryByTestId("chat-file-drop-overlay")).not.toBeNull();
+
+		expect(fireEvent.drop(pane, { dataTransfer })).toBe(false);
+
+		expect(onUploadFiles).toHaveBeenCalledTimes(1);
+		expect(onUploadFiles).toHaveBeenCalledWith([file]);
+		expect(screen.queryByTestId("chat-file-drop-overlay")).toBeNull();
 	});
 });
 
