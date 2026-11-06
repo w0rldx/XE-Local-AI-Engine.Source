@@ -62,9 +62,10 @@ internal ref struct GgufSpanReader
         switch (type)
         {
             case 0: // UINT8
-            case 1: // INT8
             case 7: // BOOL
                 return TryTake(count: 1, out slice) && Assign((long)slice[0], out value);
+            case 1: // INT8
+                return TryTake(count: 1, out slice) && Assign((long)(sbyte)slice[0], out value);
             case 2: // UINT16
                 return TryTake(count: 2, out slice) && Assign((long)BinaryPrimitives.ReadUInt16LittleEndian(slice), out value);
             case 3: // INT16

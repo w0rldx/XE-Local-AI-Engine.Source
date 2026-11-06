@@ -17,6 +17,7 @@ const {
 	listConversations,
 	usageSummary,
 	listUpcoming,
+	nodeInfo,
 	updateStatus,
 	releaseNotes,
 	uiMode,
@@ -28,6 +29,7 @@ const {
 	listConversations: vi.fn(),
 	usageSummary: vi.fn(),
 	listUpcoming: vi.fn(),
+	nodeInfo: vi.fn(),
 	updateStatus: vi.fn(),
 	releaseNotes: vi.fn(),
 	uiMode: { current: "advanced" as "simple" | "advanced" },
@@ -48,6 +50,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 		queryKey: ["listUpcoming", options],
 		queryFn: () => listUpcoming(options),
 	}),
+	getNodeInfoOptions: () => ({ queryKey: ["nodeInfo"], queryFn: () => nodeInfo() }),
 	getAppUpdateStatusOptions: (options: unknown) => ({
 		queryKey: ["appUpdateStatus", options],
 		queryFn: () => updateStatus(options),
@@ -150,6 +153,7 @@ beforeEach(() => {
 	usageSummary.mockResolvedValue(usage(3));
 	schedulerCapability.current = true;
 	listUpcoming.mockResolvedValue({ items: [] });
+	nodeInfo.mockResolvedValue({ isLocalMode: true });
 	updateStatus.mockResolvedValue(status(true));
 	releaseNotes.mockResolvedValue({ currentVersion: "1.2.0", items: [] });
 	usePendingChatConversationStore.setState({ pendingConversationId: "", newConversationRequested: false });
@@ -438,5 +442,18 @@ describe("Home What's New card", () => {
 		expect(await screen.findByTestId("home-recent-empty")).toBeTruthy();
 		expect(screen.queryByTestId("home-whats-new")).toBeNull();
 		expect(releaseNotes).not.toHaveBeenCalled();
+	});
+
+	// Off local mode both app-update routes are unmapped, so asking for the status there is a 404 on every visit.
+	it("never asks for the update status when the node is not in local mode", async () => {
+		nodeInfo.mockResolvedValue({ isLocalMode: false });
+
+		renderHome();
+
+		expect(await screen.findByTestId("home-recent-empty")).toBeTruthy();
+		expect(updateStatus).not.toHaveBeenCalled();
+		expect(releaseNotes).not.toHaveBeenCalled();
+		expect(nodeInfo).toHaveBeenCalled();
+		expect(screen.queryByTestId("home-whats-new")).toBeNull();
 	});
 });

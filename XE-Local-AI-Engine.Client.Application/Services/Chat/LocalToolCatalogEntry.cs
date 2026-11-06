@@ -36,4 +36,10 @@ public sealed record LocalToolCatalogEntry
     ///     carry a session-scoped approval, a Parameterized one is once-or-deny.
     /// </remarks>
     public bool IsFixedCustomTool { get; init; }
+
+    /// <summary>
+    ///     Whether this node can offer the tool at all; <see langword="false" /> only for a tool its platform cannot run
+    ///     (<c>run_python</c> off Linux x64 and Windows x64), which an agent may select but is never offered.
+    /// </summary>
+    public bool IsAvailableOnNode { get; init; } = true;
 }

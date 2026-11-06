@@ -557,11 +557,9 @@ public sealed class LocalToolOfferProviderTests
 
         AssertEx.Contains(provider.GetKnownToolNames(), ComputeToolDefinition.ToolName);
         var catalogEntry = provider.GetKnownTools().Single(static entry => entry.Name == ComputeToolDefinition.ToolName);
-        // The picker is the one place an operator learns the tool is unavailable on this node; on a pinned platform no caveat is owed.
-        AssertEx.Equal(!ManagedPythonPins.IsCurrentPlatformSupported,
-            catalogEntry.Description.EndsWith(" (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
-                StringComparison.Ordinal),
-            "The platform caveat is shown exactly where the tool is withheld.");
+        // The picker labels the tool unavailable from the flag, in the operator's language; the description stays the tool's own.
+        AssertEx.Equal(ManagedPythonPins.IsCurrentPlatformSupported, catalogEntry.IsAvailableOnNode, "The flag is false exactly where the tool is withheld.");
+        AssertEx.Equal(ComputeToolDefinition.Description, catalogEntry.Description);
     }
 
     [Test]

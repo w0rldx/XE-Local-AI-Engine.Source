@@ -76,6 +76,14 @@ unless `needs.backend-tests.result == 'success'`. `TEST_SHARD` without `TEST_GRO
 
 **Rule:** run `gh` alone and under `timeout`, never inside a chained evidence command. The GitHub CLI can hang indefinitely on a stale credential helper, and a chain containing it then never returns. A hang is never a pass. **Prevents:** a stuck `gh` call read as a hung gate, or a chain that never finished reported as evidence. **Authority:** operator experience in two rounds, 2026-10-07 and 2026-10-09.
 
+### `python-validation.sh --scope changed` is blind to workflow, `publish/` and package-pin edits
+
+**Rule:** the changed scope maps only Python sources, the catalog inputs and the Python tooling files to a run; an edit under `.github/workflows/`, `publish/`, `scripts/release/` or a pin the release contracts mirror (`Directory.Packages.props`, `eng/ReleaseVersion.props`) prints "No Python validation needed" and proves nothing. After such an edit run `scripts/run-release-contract-tests.sh`, which is what the CI `release-contracts` job executes. **Prevents:** a green local Python gate followed by a red `release-contracts` leg (the vpk pin lockstep and Aspire version-tuple tests, 2026-10-18). **Authority:** the `case` arms in `scope_changed` of `scripts/python-validation.sh`; the `release-contracts` job in `.github/workflows/build-and-test.yml`.
+
+### A dependency round is done only after a dispatched `dev-build` packs
+
+**Rule:** after a NuGet or packaging dependency round lands on `develop`, dispatch `dev-build` on `develop` and wait for its `package / build-pack` jobs on linux-x64 and win-x64; `build-and-test` never packs. **Prevents:** a green `build-and-test` hiding a package job that fails on the backend license corpus, the bundle-input evidence merge across the single-file publishes, or the `vpk` pin (both package jobs red after the Velopack 1.2.161 round, 2026-10-18). **Authority:** `.github/workflows/dev-build.yml`, `package-velopack.yml`; "A NuGet bump of a package with a curated upstream license needs a new exact mapping" above.
+
 ## Packaging and release
 
 ### Packaging (Velopack)
@@ -133,6 +141,10 @@ and calls it (behind `OperatingSystem.IsLinux()`) first in a synchronous `Main`,
 **Prevents:** two processes racing one update. **Authority:** `XE-Local-AI-Engine.Desktop/Program.cs`,
 `XE-Local-AI-Engine.WindowsLauncher/Program.cs`, `FrameworkDependentVelopackBootstrap.CreateSupervisedProcess`, the
 `main-exe` matrix in `.github/workflows/package-velopack.yml`.
+
+### A new project's publish profile is untracked until `.gitignore` un-ignores its folder
+
+**Rule:** `.gitignore` ignores `*.pubxml`; after adding `Properties/PublishProfiles/*.pubxml` to a new project, add `!/<project>/Properties/PublishProfiles/*.pubxml` beside the existing un-ignore lines and confirm with `git ls-files <project>/Properties` before any packaging step or test names the profile. **Prevents:** a profile that passes `RuntimeLicensePackagingTests` and local publishes but is in no commit, so CI and a clean checkout publish without its RID, self-contained and single-file settings (the `xe` client, 2026-10-17; caught by review, not by a gate). **Authority:** the `*.pubxml` rule and its per-project exceptions in `.gitignore`.
 
 ## Git and review
 

@@ -2,4 +2,3 @@
 # One test METHOD name per line: <name>|<date added>|<note>. MTP prints only the method name, so a
 # flaky class is listed method by method. A match only annotates the failure line; the gate stays
 # red, nothing is skipped or retried. Remove a line when its root cause is fixed.
-McpOnlyPrimaryServe_EmitsCanonicalReadinessSupportsStatusAndEnforcesPortAndLeaseExits|2026-10-08|EngineCliProcessTests: socket error, green 3/3 alone, cause not found

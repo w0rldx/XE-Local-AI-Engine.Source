@@ -10,7 +10,7 @@ import { parseToolCatalogSource, parseToolCategory, type ToolCatalogEntry } from
 // sessionScopeEligible defaults to TRUE when absent, which keeps the pre-field behavior (the approval card offered
 // session scope for every tool). Fail-closed makes no sense here: the value only decides whether a UI button is shown,
 // and the node re-decides authoritatively on the decision itself, so an absent field must not silently remove a
-// control that works.
+// control that works. isAvailableOnNode defaults to TRUE when absent for the same reason: it only greys out a picker row.
 export function toToolCatalogEntry(dto: XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse): ToolCatalogEntry {
 	return {
 		name: dto.name ?? "",
@@ -20,5 +20,6 @@ export function toToolCatalogEntry(dto: XeLocalAiEngineClientEndpointsMcpV1ToolC
 		category: parseToolCategory(dto.category ?? "Unknown"),
 		effectiveRequiresApproval: dto.effectiveRequiresApproval ?? true,
 		sessionScopeEligible: dto.sessionScopeEligible ?? true,
+		isAvailableOnNode: dto.isAvailableOnNode ?? true,
 	};
 }

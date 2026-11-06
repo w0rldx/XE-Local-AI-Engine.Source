@@ -293,6 +293,43 @@ public sealed class McpServerEndpointTests
     }
 
     [Test]
+    public async Task GetToolCatalog_CarriesWhetherEachToolIsAvailableOnThisNode()
+    {
+        // The picker localizes "not available on this node" from this flag; the description carries no English caveat.
+        var service = Substitute.For<IMcpServerService>();
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetKnownToolsAsync(Arg.Any<CancellationToken>()).Returns([
+            new LocalToolCatalogEntry
+            {
+                Name = "run_python",
+                Description = "Runs Python.",
+                RequiresApproval = true,
+                Source = "builtin",
+                Category = ToolCategory.WriteExecute,
+                IsAvailableOnNode = false
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = "GetCurrentTime",
+                Description = "Returns the time.",
+                RequiresApproval = false,
+                Source = "builtin",
+                Category = ToolCategory.ReadLocal
+            }
+        ]);
+        await using var factory = CreateFactory(service, offerProvider);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ToolCatalogRoute);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<ToolCatalogResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.ContainsSingle(body.Tools, static tool => tool.Name == "run_python" && !tool.IsAvailableOnNode);
+        AssertEx.ContainsSingle(body.Tools, static tool => tool.Name == "GetCurrentTime" && tool.IsAvailableOnNode);
+    }
+
+    [Test]
     public async Task GetToolCatalog_MarksAFixedCustomToolSessionScopeEligible_AndAParameterizedOneNot()
     {
         // The one boolean the chat approval card keys off. It is computed through the SAME predicate the invocation

@@ -354,6 +354,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Model catalog 2026.11.6: Laya is the recommended decision model (English), Kev-4B the one for German inputs, Julia-1
+  moves to tier B.**
+- **Tool catalog entries carry `isAvailableOnNode`**; the agent tool picker disables a tool this node cannot run and labels it
+  in the UI language, instead of appending an English sentence to the tool description.
 - **Base checkpoints are identified by commit.** A base artifact now always stores the commit the Hub resolved, and a repository
   that reports none is refused. Requesting `main` used to store `main`, so one row could describe different weights over time. Because
   requests now resolve to the commit, a checkpoint stored under a branch name such as `main` downloads again on its next request. The
@@ -593,6 +597,21 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- **GGUF INT8 metadata values are read as signed** — they were read as 0 to 255.
+- **Regenerating an answer is refused while the conversation's bound workflow run is live**, the same as sending.
+- **A managed runtime publish removes leftover `*.aside` folders** of earlier interrupted publishes (llama.cpp, whisper.cpp,
+  stable-diffusion.cpp).
+- **The training runtime install requires a C compiler** (`cc`, `gcc` or `clang`), which Triton needs; it no longer ends
+  Ready without one.
+- **`POST transcription/dictation-sessions` with no body is treated as `{}`** (language detected) instead of answering 415.
+- **On restart, an abandoned integration execution cancels its graph workflow run before the graph dispatcher can resume its
+  nodes.**
+- **What's New on Home no longer asks for the desktop-only update status off desktop**, which logged a 404 on every visit.
+- **A file dropped on the chat pane is not uploaded while the bound workflow refuses attachments or disables the composer.**
+- **A "model not installed" chat failure has a localized headline**; the server's text stays as a detail line.
+- **The CPU-fallback banner, the "could not determine your GPU backend" alert and the hardware card show localized
+  text only**: the hardware profile carries `cpuFallbackReasonCode`, `cpuFallbackRemediationCode` and
+  `backendUndeterminedReasonCode` beside the English fields.
 - **`--setup` and `--mcp-key` work from any directory on an unpacked build** — they failed with `WorkerNode:NodeName is required` outside the install directory, because they looked for the shipped configuration in the working directory.
 - **A publish from a used checkout no longer ships its local data** — the Client project excludes the directories a running node writes, such as `training/`, `runtime/` and `model-lab/`, and its remote catalog cache file, and the packagers refuse an output that holds one.
 - **A Model Lab steering run on an Offline node with no llama.cpp runtime is refused at the start** — with the same reason as before, instead of after the derive has spent its GPU time. A first-use runtime download now reads as the baseline phase, not as saving results, and a failed arm's message gives the reason without an exception type.

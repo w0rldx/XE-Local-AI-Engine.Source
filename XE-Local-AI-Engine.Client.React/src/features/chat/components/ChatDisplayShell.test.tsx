@@ -345,6 +345,25 @@ describe("ChatDisplayShell file drag-and-drop", () => {
 		expect(onUploadFiles).not.toHaveBeenCalled();
 	});
 
+	// The composer refuses the drop without stopping it, so the event reaches the pane: the pane must refuse it too.
+	it.each([
+		["a workflow that refuses attachments", { attachmentsDisabledHint: "This workflow does not accept attachments." }],
+		["a workflow that disables the composer", { composerDisabled: true }],
+	])("does not overlay or upload for %s, on the composer or the pane", (_case, workflow) => {
+		const onUploadFiles = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles, workflow })} />);
+
+		const file = new File(["spec"], "spec.md", { type: "text/markdown" });
+		const dataTransfer = { files: [file], types: ["Files"] };
+
+		for (const target of [screen.getByTestId("chat-input-area"), screen.getByTestId("chat-pane")]) {
+			fireEvent.dragOver(target, { dataTransfer });
+			expect(screen.queryByTestId("chat-file-drop-overlay")).toBeNull();
+			fireEvent.drop(target, { dataTransfer });
+		}
+		expect(onUploadFiles).not.toHaveBeenCalled();
+	});
+
 	// fireEvent returns false when a handler called preventDefault, so `true` below means the browser keeps its native
 	// text handling: a selection dragged into the composer lands in the textarea.
 	const textTransfer = { files: [], types: ["text/plain"] };

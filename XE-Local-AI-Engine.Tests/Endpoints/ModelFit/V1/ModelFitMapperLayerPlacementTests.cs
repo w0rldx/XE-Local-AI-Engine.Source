@@ -107,13 +107,35 @@ public sealed class ModelFitMapperLayerPlacementTests
             InferenceBackend = "unknown",
             GpuExpected = true,
             CpuFallback = false,
-            BackendUndeterminedReason = "The CUDA llama.cpp runtime is selected, but listing its GPU devices did not complete."
+            BackendUndeterminedReason = "The CUDA llama.cpp runtime is selected, but listing its GPU devices did not complete.",
+            BackendUndeterminedReasonCode = RuntimeDeviceUndeterminedReasonCodes.ProbeFailed
         });
 
         AssertEx.Equal("The CUDA llama.cpp runtime is selected, but listing its GPU devices did not complete.",
             response.BackendUndeterminedReason);
+        AssertEx.Equal("probe_failed", response.BackendUndeterminedReasonCode);
         AssertEx.False(response.CpuFallback);
         AssertEx.Null(response.CpuFallbackReason);
+    }
+
+    [Test]
+    public void ToResponse_CpuFallback_CarriesTheCodesBesideTheEnglishText()
+    {
+        var response = Profile().ToResponse(new RuntimeDeviceAuditState
+        {
+            InferenceBackend = "cpu",
+            GpuExpected = true,
+            CpuFallback = true,
+            Reason = "The Vulkan llama.cpp runtime is selected but enumerated no GPU devices.",
+            Remediation = "Update the GPU driver.",
+            ReasonCode = RuntimeDeviceFallbackReasonCodes.ZeroDevices,
+            RemediationCode = RuntimeDeviceFallbackRemediationCodes.Windows
+        });
+
+        AssertEx.Equal("zero_devices", response.CpuFallbackReasonCode);
+        AssertEx.Equal("windows", response.CpuFallbackRemediationCode);
+        AssertEx.Equal("The Vulkan llama.cpp runtime is selected but enumerated no GPU devices.", response.CpuFallbackReason);
+        AssertEx.Equal("Update the GPU driver.", response.CpuFallbackRemediation);
     }
 
     private static HardwareProfile Profile()

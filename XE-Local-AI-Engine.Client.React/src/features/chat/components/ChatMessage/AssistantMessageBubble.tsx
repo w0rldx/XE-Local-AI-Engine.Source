@@ -152,19 +152,11 @@ export function AssistantMessageBubble({
 						style={{ borderRadius: "4px 14px 14px 14px" }}
 						message={
 							<Stack gap={6}>
-								{/* ModelNotInstalled covers both no chat model at all and one named model missing beside others, and
-								    only the server knows which, so its text wins; the localized line never claims either case. A category
-								    with a localized headline shows it above the raw server text, which stays as a dimmed detail
-								    line because it names the models and what to do; any other category keeps the raw text alone. */}
-								{failureCategory === "ModelNotInstalled" ? (
-									<Text size="sm">
-										{display.errorText ||
-											t(
-												"pages.chat.error.modelNotInstalled",
-												"The requested chat model is not installed. Install it or choose another model.",
-											)}
-									</Text>
-								) : failureHeadline ? (
+								{/* A category with a localized headline shows it above the raw server text, which stays as a dimmed
+								    detail line because it names the models and what to do; any other category keeps the raw text alone.
+								    ModelNotInstalled covers both no chat model at all and one named model missing beside others, and
+								    only the server text says which, so its headline claims neither case. */}
+								{failureHeadline ? (
 									<>
 										<Text size="sm" data-testid={`chat-message-error-headline-${message.id}`}>
 											{failureHeadline}

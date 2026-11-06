@@ -24518,6 +24518,11 @@
               "schema": {
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1StartDictationSessionRequest"
               }
+            },
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1StartDictationSessionRequest"
+              }
             }
           },
           "required": true,
@@ -43527,7 +43532,8 @@
           "category",
           "effectiveRequiresApproval",
           "sessionScopeEligible",
-          "unattendedBehaviour"
+          "unattendedBehaviour",
+          "isAvailableOnNode"
         ],
         "properties": {
           "name": {
@@ -43553,6 +43559,9 @@
           },
           "unattendedBehaviour": {
             "type": "string"
+          },
+          "isAvailableOnNode": {
+            "type": "boolean"
           }
         }
       },
@@ -44190,7 +44199,19 @@
             "type": "string",
             "nullable": true
           },
+          "cpuFallbackReasonCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "cpuFallbackRemediationCode": {
+            "type": "string",
+            "nullable": true
+          },
           "backendUndeterminedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "backendUndeterminedReasonCode": {
             "type": "string",
             "nullable": true
           },

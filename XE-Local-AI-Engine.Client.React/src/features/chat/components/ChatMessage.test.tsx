@@ -431,7 +431,7 @@ describe("ChatMessage actions", () => {
 		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toBe("SomeFutureCategory");
 	});
 
-	it("renders the server's ModelNotInstalled message and a Models link for the no-chat-model failure", () => {
+	it("heads the ModelNotInstalled failure with a localized line, keeps the server's text as detail and links Models", () => {
 		// A "Local runtime default" send with no installed GGUF chat model surfaces FailureCategory ModelNotInstalled.
 		renderWithProviders(
 			<ChatMessage
@@ -444,13 +444,16 @@ describe("ChatMessage actions", () => {
 			/>,
 		);
 
-		const errorBlock = screen.getByTestId("chat-message-error-assistant-1");
-		expect(errorBlock.textContent).toContain("No chat model installed. Pull a GGUF model to start chatting.");
-
-		const modelsLink = screen.getByTestId("chat-message-error-models-link-assistant-1");
-		expect(modelsLink.getAttribute("href")).toBe("/models");
-		// No headline key for this category, so the badge names it, localized.
-		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toBe("Model not installed");
+		// The headline comes from the category code, so a non-English operator reads it in their language.
+		expect(screen.getByTestId("chat-message-error-headline-assistant-1").textContent).toBe(
+			"The requested chat model is not installed. Install it or choose another model.",
+		);
+		expect(screen.getByTestId("chat-message-error-detail-assistant-1").textContent).toBe(
+			"No chat model installed. Pull a GGUF model to start chatting.",
+		);
+		expect(screen.getByTestId("chat-message-error-models-link-assistant-1").getAttribute("href")).toBe("/models");
+		// The headline already names the category, so no badge repeats it.
+		expect(screen.queryByTestId("chat-message-error-category-assistant-1")).toBeNull();
 	});
 
 	it("does not claim no chat model is installed when one named model is missing beside others", () => {
@@ -477,9 +480,10 @@ describe("ChatMessage actions", () => {
 			<ChatMessage message={assistantMessage({ content: "", status: "failed" })} failureCategory="ModelNotInstalled" />,
 		);
 
-		const errorBlock = screen.getByTestId("chat-message-error-assistant-1");
-		expect(errorBlock.textContent).toContain("The requested chat model is not installed. Install it or choose another model.");
-		expect(errorBlock.textContent).not.toContain("No chat model installed");
+		expect(screen.getByTestId("chat-message-error-headline-assistant-1").textContent).toBe(
+			"The requested chat model is not installed. Install it or choose another model.",
+		);
+		expect(screen.queryByTestId("chat-message-error-detail-assistant-1")).toBeNull();
 		expect(screen.getByTestId("chat-message-error-models-link-assistant-1").getAttribute("href")).toBe("/models");
 	});
 

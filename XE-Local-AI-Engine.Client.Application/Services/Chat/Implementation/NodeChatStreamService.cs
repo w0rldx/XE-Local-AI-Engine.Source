@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -639,14 +638,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // authoritative; throwing here propagates to the hub caller.
         await _mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken);
 
-        // A live bound workflow run owns the conversation (parked runs included): a normal send would interleave with it.
-        // The SPA gate is cosmetic beside this. Only the newest run can be live; the database allows one per conversation.
-        var runs = await _graphWorkflows.ListRunsByConversationAsync(request.ConversationId, limit: 1, cancellationToken);
-        if (runs.Count > 0 && !GraphWorkflowStateMachine.IsTerminal(runs[0].Status))
-        {
-            throw new NodeChatWorkflowRunLiveException(request.ConversationId);
-        }
-
+        await InvocationSlotAdmission.EnsureNoLiveWorkflowRunAsync(_graphWorkflows, request.ConversationId, cancellationToken);
         InvocationSlotAdmission.EnsureNoParkedTurn(_eventDispatcher, request.ConversationId);
 
         // A file of another conversation was dropped silently and the model answered as if nothing was attached. The ownership

@@ -362,7 +362,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 var stagedServer = ResolveServerPath(stagingDir, pin)
                                    ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
                 await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, stagingDir, stagedServer, reporter, ct).ConfigureAwait(false);
-                await StagedDirectoryPublish.PublishAsync(stagingDir, variantDir, ct).ConfigureAwait(false);
+                await StagedDirectoryPublish.PublishAsync(stagingDir, variantDir, _logger, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -766,7 +766,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 var stagedServer = ResolveServerPathForAsset(stagingDir, pin)
                                    ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
                 await EnsureCudartRuntimeAsync(tag, pin, cudartAsset: assetName, variant, stagingDir, stagedServer, reporter, ct).ConfigureAwait(false);
-                await StagedDirectoryPublish.PublishAsync(stagingDir, variantDir, ct).ConfigureAwait(false);
+                await StagedDirectoryPublish.PublishAsync(stagingDir, variantDir, _logger, ct).ConfigureAwait(false);
             }
             finally
             {

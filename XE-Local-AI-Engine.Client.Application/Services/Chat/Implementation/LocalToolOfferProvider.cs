@@ -232,12 +232,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             new LocalToolCatalogEntry
             {
                 Name = ComputeToolDefinition.ToolName,
-                // Picker text only; the model never sees this entry, and is offered the tool only where it can run. Off the pinned
-                // platforms this suffix is where an operator learns that a profile selecting it gets no tool on this node.
-                Description = ManagedPythonPins.IsCurrentPlatformSupported
-                    ? ComputeToolDefinition.Description
-                    : ComputeToolDefinition.Description
-                      + " (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
+                Description = ComputeToolDefinition.Description,
+                // The model is offered the tool only where it can run. Off the pinned platforms the picker labels it from this
+                // flag, which is where an operator learns that a profile selecting it gets no tool on this node.
+                IsAvailableOnNode = ManagedPythonPins.IsCurrentPlatformSupported,
                 RequiresApproval = true,
                 Source = BuiltinSource,
                 // run_python runs commands on the node, the category that drives the picker's danger badge. Listing it

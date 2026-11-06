@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -20,7 +21,7 @@ public sealed class StagedDirectoryPublishTests
         var stagingDir = Directory.CreateDirectory($"{targetDir}.staged.tmp").FullName;
         await File.WriteAllTextAsync(Path.Combine(stagingDir, "new.dll"), "new");
 
-        await StagedDirectoryPublish.PublishAsync(stagingDir, targetDir, CancellationToken.None);
+        await StagedDirectoryPublish.PublishAsync(stagingDir, targetDir, NullLogger.Instance, CancellationToken.None);
 
         AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(targetDir, "new.dll")));
         AssertEx.False(File.Exists(Path.Combine(targetDir, "old.dll")), "The old contents must be fully replaced.");
@@ -37,7 +38,7 @@ public sealed class StagedDirectoryPublishTests
         var deniedMoveIns = 0;
         var delays = new List<TimeSpan>();
 
-        await StagedDirectoryPublish.PublishCoreAsync(stagingDir, targetDir, CancellationToken.None,
+        await StagedDirectoryPublish.PublishCoreAsync(stagingDir, targetDir, NullLogger.Instance, CancellationToken.None,
             move: (source, destination) =>
             {
                 if (source == stagingDir && deniedMoveIns++ < 2)
@@ -69,7 +70,7 @@ public sealed class StagedDirectoryPublishTests
         var delays = new List<TimeSpan>();
 
         var thrown = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => StagedDirectoryPublish.PublishCoreAsync(stagingDir, targetDir,
-            CancellationToken.None,
+            NullLogger.Instance, CancellationToken.None,
             move: (source, destination) =>
             {
                 if (source == stagingDir)
@@ -103,7 +104,7 @@ public sealed class StagedDirectoryPublishTests
         var deniedAsides = 0;
         var delays = new List<TimeSpan>();
 
-        await StagedDirectoryPublish.PublishCoreAsync(stagingDir, targetDir, CancellationToken.None,
+        await StagedDirectoryPublish.PublishCoreAsync(stagingDir, targetDir, NullLogger.Instance, CancellationToken.None,
             move: (source, destination) =>
             {
                 if (source == targetDir && deniedAsides++ < 1)
@@ -125,6 +126,24 @@ public sealed class StagedDirectoryPublishTests
     }
 
     [Test]
+    public async Task Publish_SweepsStrayAsidesOfThisTarget_AndKeepsADottedSiblingTargetsAside()
+    {
+        // A publish that crashed between the aside rename and its delete leaves "{target}.{guid}.aside" behind.
+        using var cache = new TempDirectory("xe-staged-publish");
+        var targetDir = Path.Combine(cache.Path, "runtime", "cuda");
+        var stagingDir = await StageOverExistingTargetAsync(targetDir);
+        var stray = Directory.CreateDirectory($"{targetDir}.{Guid.NewGuid():N}.aside").FullName;
+        await File.WriteAllTextAsync(Path.Combine(stray, "older.dll"), "older");
+        var siblingTargetsAside = Directory.CreateDirectory($"{targetDir}.12.{Guid.NewGuid():N}.aside").FullName;
+
+        await StagedDirectoryPublish.PublishAsync(stagingDir, targetDir, NullLogger.Instance, CancellationToken.None);
+
+        AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(targetDir, "new.dll")));
+        AssertEx.False(Directory.Exists(stray), "The stray aside of this target must be swept.");
+        AssertEx.True(Directory.Exists(siblingTargetsAside), "The aside of the 'cuda.12' target is not this target's.");
+    }
+
+    [Test]
     public void RenameRetryDelays_BackOffFrom250MillisecondsToTwoSecondsOverFiveAttempts()
     {
         AssertEx.Equal(expected: "00:00:00.2500000, 00:00:00.5000000, 00:00:01, 00:00:02", Schedule(StagedDirectoryPublish.RenameRetryDelays));
@@ -142,7 +161,7 @@ public sealed class StagedDirectoryPublishTests
 
         // A missing source never appears, so it is not retried: the injected delay throws if a retry is attempted.
         await AssertEx.ThrowsAsync<DirectoryNotFoundException>(() => StagedDirectoryPublish.PublishCoreAsync($"{targetDir}.missing.tmp", targetDir,
-            CancellationToken.None,
+            NullLogger.Instance, CancellationToken.None,
             delay: (_, _) => throw new InvalidOperationException("A missing staging dir must not be retried.")));
 
         AssertEx.Equal(expected: "old-server", await File.ReadAllTextAsync(Path.Combine(targetDir, "build", "bin", "server.exe")));

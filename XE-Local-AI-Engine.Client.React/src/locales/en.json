@@ -1044,6 +1044,7 @@
 					"label": "Tools",
 					"loadError": "Could not load the tool catalog.",
 					"loading": "Loading tools…",
+					"notAvailableOnNode": "Not available on this node's platform; an agent selecting it gets no tool.",
 					"notCapableWarning": "The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools.",
 					"requiresApproval": "requires approval",
 					"webAccessRequired": "Requires web access in Node Settings",
@@ -2269,6 +2270,7 @@
 				"categories": {
 					"InsufficientCapacity": "Not enough free memory to load this model right now.",
 					"ModelLoadFailed": "The model could not be loaded.",
+					"ModelNotInstalled": "The requested chat model is not installed. Install it or choose another model.",
 					"ModelUnavailable": "The selected model is not installed or not reachable.",
 					"Timeout": "The response timed out."
 				},
@@ -2285,7 +2287,6 @@
 				"clientWatchdogNoFirstChunk": "Connection watchdog: the response never started arriving in this browser.",
 				"clientWatchdogStall": "Connection watchdog: the response stopped arriving in this browser.",
 				"goToModels": "Go to Models",
-				"modelNotInstalled": "The requested chat model is not installed. Install it or choose another model.",
 				"providerError": "The model provider rejected or did not answer the request.",
 				"title": "Response failed"
 			},
@@ -6162,6 +6163,11 @@
 			"hardware": {
 				"availableRam": "Available RAM",
 				"backendUndeterminedAlert": {
+					"details": {
+						"companionLibrariesIncomplete": "The llama.cpp runtime is installed, but some of its CUDA companion libraries are missing, so it cannot use the GPU. Models load on the CPU until it is repaired. Retry the runtime download from Node Settings, or start a chat, to repair it.",
+						"probeFailed": "Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override that was rejected because it exposes no GPU device for its configured variant (check the log for the override's own error), a runtime whose libraries could not be loaded, or a busy GPU driver that made the probe overrun. Refreshing the hardware profile re-runs the probe.",
+						"runtimeMissing": "No llama.cpp runtime is installed yet. It is downloaded when you install it from Node Settings, or the first time you start a chat, benchmark or training run; this page never downloads it by itself."
+					},
 					"reason": "The GPU devices of the selected runtime have not been listed, so whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM is usable.",
 					"title": "Could not determine your GPU backend"
 				},
@@ -6172,6 +6178,15 @@
 				},
 				"cpuFallbackAlert": {
 					"reason": "The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
+					"reasons": {
+						"cpuVariant": "A GPU was detected, but the CPU llama.cpp runtime is selected, so inference is running on the CPU.",
+						"zeroDevices": "The selected llama.cpp GPU runtime found no GPU devices, so inference is running on the CPU."
+					},
+					"remediations": {
+						"linuxNvidia": "In Node Settings, use automatic variant selection (or install the CUDA variant) so the managed CUDA prebuilt serves; it needs the NVIDIA driver 525 series or newer. Otherwise build the Vulkan runtime with the in-app source build, choosing the Vulkan backend, which then takes precedence over the prebuilt; that needs a Vulkan ICD (commonly missing under WSL2). If a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary.",
+						"linuxOther": "In Node Settings, use automatic variant selection if a variant was pinned; the managed Vulkan runtime needs a GPU driver with a Vulkan ICD (commonly missing under WSL2). Otherwise build the Vulkan runtime with the in-app source build, choosing the Vulkan backend, which then takes precedence over the prebuilt; that needs a Vulkan ICD (commonly missing under WSL2). If a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary.",
+						"windows": "Update the GPU driver, check the GPU is visible to the system, then reinstall the runtime from Node Settings. If a bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary."
+					},
 					"title": "Running on CPU despite a detected GPU"
 				},
 				"cpuMode": "CPU mode",
@@ -8357,6 +8372,10 @@
 					"Verifying": "Verifying"
 				},
 				"prerequisiteItems": {
+					"c-compiler": {
+						"satisfied": "C compiler found",
+						"unsatisfied": "No C compiler (cc, gcc or clang) found; training needs one to compile GPU kernels"
+					},
 					"free-disk": {
 						"satisfied": "Enough free disk space",
 						"unsatisfied": "Not enough free disk space, or it could not be determined"

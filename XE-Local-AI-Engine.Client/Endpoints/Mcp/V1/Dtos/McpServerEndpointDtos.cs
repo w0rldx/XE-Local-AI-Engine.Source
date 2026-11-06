@@ -288,6 +288,12 @@ public sealed class ToolCatalogEntryResponse
     ///     driven off the approval flag alone names a tool that would not actually fail the run.
     /// </remarks>
     public required string UnattendedBehaviour { get; init; }
+
+    /// <summary>
+    ///     Whether this node can offer the tool at all. <see langword="false" /> for a tool its platform cannot run: an
+    ///     agent may still select it, and gets no tool; the picker labels it in the operator's language.
+    /// </summary>
+    public required bool IsAvailableOnNode { get; init; }
 }
 
 /// <summary>

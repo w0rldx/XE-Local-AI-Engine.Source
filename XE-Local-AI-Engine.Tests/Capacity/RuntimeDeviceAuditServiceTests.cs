@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Capacity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -96,6 +97,55 @@ public sealed class RuntimeDeviceAuditServiceTests
         AssertEx.True(remediation.Contains("driver", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(remediation.Contains("Vulkan ICD", StringComparison.Ordinal),
             "the Linux remediation does not apply on Windows");
+    }
+
+    // The operator UI localizes the fallback from these codes, so each case pins its pair: the reason follows the variant,
+    // the remediation the host OS and GPU vendor.
+    [Test]
+    [Arguments(GpuVendor.Nvidia, GpuVariant.Cpu, false, RuntimeDeviceFallbackReasonCodes.CpuVariant, RuntimeDeviceFallbackRemediationCodes.LinuxNvidia)]
+    [Arguments(GpuVendor.Amd, GpuVariant.Cpu, false, RuntimeDeviceFallbackReasonCodes.CpuVariant, RuntimeDeviceFallbackRemediationCodes.LinuxOther)]
+    [Arguments(GpuVendor.Nvidia, GpuVariant.Cpu, true, RuntimeDeviceFallbackReasonCodes.CpuVariant, RuntimeDeviceFallbackRemediationCodes.Windows)]
+    [Arguments(GpuVendor.Nvidia, GpuVariant.Vulkan, false, RuntimeDeviceFallbackReasonCodes.ZeroDevices, RuntimeDeviceFallbackRemediationCodes.LinuxNvidia)]
+    [Arguments(GpuVendor.Intel, GpuVariant.Vulkan, false, RuntimeDeviceFallbackReasonCodes.ZeroDevices, RuntimeDeviceFallbackRemediationCodes.LinuxOther)]
+    [Arguments(GpuVendor.Nvidia, GpuVariant.Cuda, true, RuntimeDeviceFallbackReasonCodes.ZeroDevices, RuntimeDeviceFallbackRemediationCodes.Windows)]
+    public void BuildState_Fallback_CarriesItsReasonAndRemediationCodes(GpuVendor vendor,
+        GpuVariant variant,
+        bool isWindows,
+        string expectedReasonCode,
+        string expectedRemediationCode)
+    {
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(vendor), variant, LlamaDeviceInventory.Empty(variant), isWindows);
+
+        AssertEx.True(state.CpuFallback);
+        AssertEx.Equal(expectedReasonCode, state.ReasonCode);
+        AssertEx.Equal(expectedRemediationCode, state.RemediationCode);
+    }
+
+    [Test]
+    public void BuildState_NoFallback_CarriesNoCodes()
+    {
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, WithDevices(GpuVariant.Cuda));
+
+        AssertEx.False(state.CpuFallback);
+        AssertEx.Null(state.ReasonCode);
+        AssertEx.Null(state.RemediationCode);
+        AssertEx.Null(state.BackendUndeterminedReasonCode);
+    }
+
+    // The operator UI localizes the undetermined-backend detail from this code, so each cause pins its own.
+    [Test]
+    public void BuildState_UndeterminedBackend_CarriesTheCodeOfItsCause()
+    {
+        var missing = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, LlamaDeviceInventory.RuntimeNotInstalled(GpuVariant.Cuda));
+        var incomplete = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia),
+            GpuVariant.Cuda,
+            LlamaDeviceInventory.CompanionLibrariesIncomplete(GpuVariant.Cuda));
+        var failed = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia), GpuVariant.Vulkan, LlamaDeviceInventory.Unknown(GpuVariant.Vulkan));
+
+        AssertEx.Equal(RuntimeDeviceUndeterminedReasonCodes.RuntimeMissing, missing.BackendUndeterminedReasonCode);
+        AssertEx.Equal(RuntimeDeviceUndeterminedReasonCodes.CompanionLibrariesIncomplete, incomplete.BackendUndeterminedReasonCode);
+        AssertEx.Equal(RuntimeDeviceUndeterminedReasonCodes.ProbeFailed, failed.BackendUndeterminedReasonCode);
+        AssertEx.Equal("unknown", failed.InferenceBackend);
     }
 
     [Test]

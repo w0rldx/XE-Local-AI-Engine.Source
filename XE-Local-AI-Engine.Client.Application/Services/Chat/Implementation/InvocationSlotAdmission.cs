@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>Takes the node's one invocation slot for a chat turn, queueing behind the turn that holds it.</summary>
 /// <remarks>
@@ -22,6 +24,17 @@ internal static class InvocationSlotAdmission
                                        && (state.PendingApproval is not null || state.PendingQuestion is not null || state.InvocationId != holderId)))
         {
             throw new NodeChatTurnParkedException(conversationId);
+        }
+    }
+
+    /// <summary>Refuses a turn into a conversation whose bound graph-workflow run is live, parked runs included: a normal turn would interleave with it.</summary>
+    /// <remarks>Only the newest run can be live; the database allows one per conversation. The SPA gate is cosmetic beside this.</remarks>
+    public static async Task EnsureNoLiveWorkflowRunAsync(IGraphWorkflowStore graphWorkflows, Guid conversationId, CancellationToken cancellationToken)
+    {
+        var runs = await graphWorkflows.ListRunsByConversationAsync(conversationId, limit: 1, cancellationToken);
+        if (runs.Count > 0 && !GraphWorkflowStateMachine.IsTerminal(runs[0].Status))
+        {
+            throw new NodeChatWorkflowRunLiveException(conversationId);
         }
     }
 

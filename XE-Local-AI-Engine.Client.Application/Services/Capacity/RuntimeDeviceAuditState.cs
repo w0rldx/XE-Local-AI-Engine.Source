@@ -47,6 +47,12 @@ public sealed record RuntimeDeviceAuditState
     /// <summary>Operator-facing remediation (in-app paths) for the fallback, or <see langword="null" /> when not in fallback.</summary>
     public string? Remediation { get; init; }
 
+    /// <summary>The <see cref="RuntimeDeviceFallbackReasonCodes" /> value behind <see cref="Reason" />, or <see langword="null" /> when not in fallback.</summary>
+    public string? ReasonCode { get; init; }
+
+    /// <summary>The <see cref="RuntimeDeviceFallbackRemediationCodes" /> value behind <see cref="Remediation" />, or <see langword="null" /> when not in fallback.</summary>
+    public string? RemediationCode { get; init; }
+
     /// <summary>The GPU devices the selected runtime enumerated (empty when none, or when the probe was indeterminate).</summary>
     public IReadOnlyList<RuntimeAuditDevice> Devices { get; init; } = [];
 
@@ -60,6 +66,12 @@ public sealed record RuntimeDeviceAuditState
     ///     driver is indistinguishable from health and the UI shows nothing at all.
     /// </remarks>
     public string? BackendUndeterminedReason { get; init; }
+
+    /// <summary>
+    ///     The <see cref="RuntimeDeviceUndeterminedReasonCodes" /> value behind <see cref="BackendUndeterminedReason" />, or
+    ///     <see langword="null" /> when the backend is known.
+    /// </summary>
+    public string? BackendUndeterminedReasonCode { get; init; }
 
     /// <summary>
     ///     What the most recent observed model load actually did with that model's layers, or <see langword="null" /> when no load has been

@@ -107,6 +107,19 @@ public sealed class ModelCatalogBundledLoaderTests
     }
 
     [Test]
+    public void Load_BundledSeedCatalog_RecommendsLayaAndDemotesJuliaAmongDecisionModels()
+    {
+        // The D11 ruling: Laya is the recommended decision model, Kev-4B the German one, Julia-1 tier B after its live-check misses.
+        var decision = ModelCatalogBundledLoader.Load(NullLogger.Instance)
+                                                .Models
+                                                .Where(static entry => entry.UseCases.Contains("decision"))
+                                                .Select(static entry => $"{entry.Id}:{entry.Tier}")
+                                                .ToList();
+
+        AssertEx.Equal(expected: "laya:A, kev-4b:A, julia-1:B", string.Join(", ", decision));
+    }
+
+    [Test]
     public void Load_BundledSeedCatalog_IncludesAtLeastOneMoeEntry()
     {
         var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);

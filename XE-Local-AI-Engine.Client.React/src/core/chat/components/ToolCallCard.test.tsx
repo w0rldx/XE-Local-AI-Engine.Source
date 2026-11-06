@@ -36,6 +36,7 @@ const chatCatalog: ToolCatalogEntry[] = [
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
 		sessionScopeEligible: true,
+		isAvailableOnNode: true,
 	},
 	{
 		name: "mcp__files__write_file",
@@ -45,6 +46,7 @@ const chatCatalog: ToolCatalogEntry[] = [
 		category: "WriteExecute",
 		effectiveRequiresApproval: true,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 ];
 

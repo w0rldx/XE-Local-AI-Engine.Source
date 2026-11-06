@@ -100,6 +100,24 @@ public sealed class GgufHeaderReaderLocalFileTests
     }
 
     [Test]
+    public async Task ReadHeaderFromFile_Int8Value_IsSigned()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen2-int8.gguf");
+        // GGUF value type 1 is INT8: the byte 0xFF is -1, not 255.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen2")
+                     .WithRawValue("qwen2.context_length", type: 1, [0xFF])
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: -1L, metadata.ContextLength!.Value);
+    }
+
+    [Test]
     public async Task ReadHeaderFromFile_DenseModel_NoExpertCount_IsNotMoe()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

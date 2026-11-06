@@ -25,6 +25,7 @@ const catalog: ToolCatalogEntry[] = [
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 	{
 		name: "mcp__filesystem-tools__read",
@@ -34,6 +35,7 @@ const catalog: ToolCatalogEntry[] = [
 		category: "Network",
 		effectiveRequiresApproval: true,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 ];
 
@@ -142,23 +144,26 @@ describe("AgentToolSelector", () => {
 		expect(checkbox.checked).toBe(true);
 	});
 
-	it("keeps a tool this node withholds unselectable, its label intact, but lets a stored selection be removed", () => {
-		const description =
-			"Runs Python. (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)";
+	it("keeps a tool this node withholds unselectable, labelled from the flag, but lets a stored selection be removed", () => {
 		const withheld: ToolCatalogEntry = {
 			name: "run_python",
-			description,
+			description: "Runs Python.",
 			requiresApproval: true,
 			source: { kind: "builtin", serverSlug: null },
 			category: "WriteExecute",
 			effectiveRequiresApproval: true,
 			sessionScopeEligible: false,
+			isAvailableOnNode: false,
 		};
 		useToolCatalogMock.mockReturnValue({ data: [...catalog, withheld], isLoading: false, error: null });
 
 		renderSelector();
 		expect((screen.getByTestId("agent-tool-checkbox-run_python") as HTMLInputElement).disabled).toBe(true);
-		expect(screen.getByText(description)).toBeTruthy();
+		expect(screen.getByTestId("agent-tool-unavailable-run_python").textContent).toBe(
+			"Not available on this node's platform; an agent selecting it gets no tool.",
+		);
+		expect(screen.getByText("Runs Python.")).toBeTruthy();
+		expect(screen.queryByTestId("agent-tool-unavailable-GetCurrentTime")).toBeNull();
 		expect((screen.getByTestId("agent-tool-checkbox-GetCurrentTime") as HTMLInputElement).disabled).toBe(false);
 		cleanup();
 
@@ -182,6 +187,7 @@ describe("AgentToolSelector", () => {
 		category: "Network",
 		effectiveRequiresApproval: true,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	};
 	const runPython: ToolCatalogEntry = {
 		name: "run_python",
@@ -191,6 +197,7 @@ describe("AgentToolSelector", () => {
 		category: "WriteExecute",
 		effectiveRequiresApproval: true,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	};
 
 	it("checks and locks exactly the server's Default Assistant offer, whatever the catalog holds", () => {
@@ -285,6 +292,7 @@ describe("AgentToolSelector", () => {
 			category: "ReadLocal",
 			effectiveRequiresApproval: true,
 			sessionScopeEligible: false,
+			isAvailableOnNode: true,
 		};
 		useToolCatalogMock.mockReturnValue({ data: [...catalog, askUser], isLoading: false, error: null });
 

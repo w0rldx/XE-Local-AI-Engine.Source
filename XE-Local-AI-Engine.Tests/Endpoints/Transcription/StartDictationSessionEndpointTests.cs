@@ -177,6 +177,24 @@ public sealed class StartDictationSessionEndpointTests
     }
 
     [Test]
+    public async Task StartDictationSession_WithNoBody_DetectsTheLanguageLikeAnEmptyObject()
+    {
+        // A body-less POST carries no Content-Type; it must behave as {} rather than answer 415.
+        var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
+        await using var factory = FactoryWith(new FakeWhisperServerSupervisor(), registry: registry);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory);
+        request.Content = null;
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        await registry.Received(1).StartLiveSessionAsync(Arg.Any<Guid>(),
+            Arg.Is<LiveSessionOptions>(options => options.Language == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments("e")]
     [Arguments("")]
     [Arguments("not-a-code")]

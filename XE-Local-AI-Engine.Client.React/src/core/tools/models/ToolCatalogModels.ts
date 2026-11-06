@@ -65,6 +65,7 @@ export function parseToolCategory(raw: string): ToolCategory {
 // (only the skill tools and Fixed custom tools can, and an operator switch turns it off node-wide). The chat approval
 // card withholds its session button when this is false, so it never offers a durable decision the node downgrades to a
 // one-shot approval. It is an upper bound: the node applies further per-CALL narrowings it cannot see here.
+// isAvailableOnNode is false for a tool this node's platform cannot run: an agent may select it and gets no tool.
 export interface ToolCatalogEntry {
 	readonly name: string;
 	readonly description: string;
@@ -73,6 +74,7 @@ export interface ToolCatalogEntry {
 	readonly category: ToolCategory;
 	readonly effectiveRequiresApproval: boolean;
 	readonly sessionScopeEligible: boolean;
+	readonly isAvailableOnNode: boolean;
 }
 
 const MCP_NAME_PREFIX = "mcp__";

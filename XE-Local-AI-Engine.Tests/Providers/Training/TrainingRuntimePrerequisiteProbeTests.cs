@@ -31,6 +31,7 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
         AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.Platform && item.Satisfied);
         AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.Lockfile && item.Satisfied);
         AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.NvidiaDriver && item.Satisfied);
+        AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.CCompiler && item.Satisfied);
         AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.FreeDisk);
         AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.SystemMemory);
     }
@@ -73,6 +74,51 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
 
         AssertEx.Contains(report.Items,
             static item => item.Key == TrainingRuntimePrerequisiteKeys.NvidiaDriver && !item.Satisfied);
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Probe_WhenNoCCompilerIsOnPath_RefusesAndSaysSo()
+    {
+        // Triton compiles its launcher with cc, gcc or clang; with the driver present and none of them, install must not proceed.
+        var runner = new FakeProcessRunner((file, _, logSink) =>
+        {
+            if (file != "nvidia-smi")
+            {
+                throw new ManagedPythonException("A managed Python process did not start.");
+            }
+
+            logSink("999.99, NVIDIA GeForce RTX 5090");
+            return 0;
+        });
+
+        var report = await ProbeAsync(WithScripts(), runner);
+
+        AssertEx.False(report.CanBuild);
+        var item = AssertEx.NotNull(report.Items.FirstOrDefault(static item => item.Key == TrainingRuntimePrerequisiteKeys.CCompiler),
+            "The C compiler item must always be reported.");
+        AssertEx.False(item.Satisfied);
+        AssertEx.Equal("cc, gcc, clang", string.Join(", ", runner.Invocations.Select(static call => call.File).Where(static file => file != "nvidia-smi")));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Probe_WhenOnlyClangIsOnPath_ReportsTheCompilerSatisfied()
+    {
+        var runner = new FakeProcessRunner((file, _, logSink) =>
+        {
+            if (file is "cc" or "gcc")
+            {
+                throw new ManagedPythonException("A managed Python process did not start.");
+            }
+
+            logSink("tool output");
+            return 0;
+        });
+
+        var report = await ProbeAsync(WithScripts(), runner);
+
+        AssertEx.Contains(report.Items, static item => item.Key == TrainingRuntimePrerequisiteKeys.CCompiler && item.Satisfied && item.Detail.Contains("clang", StringComparison.Ordinal));
     }
 
     [Test]

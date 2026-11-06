@@ -4648,6 +4648,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = z.ob
 	effectiveRequiresApproval: z.boolean(),
 	sessionScopeEligible: z.boolean(),
 	unattendedBehaviour: z.string(),
+	isAvailableOnNode: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object({
@@ -4811,7 +4812,10 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = 
 	cpuFallback: z.boolean().optional(),
 	cpuFallbackReason: z.string().nullish(),
 	cpuFallbackRemediation: z.string().nullish(),
+	cpuFallbackReasonCode: z.string().nullish(),
+	cpuFallbackRemediationCode: z.string().nullish(),
 	backendUndeterminedReason: z.string().nullish(),
+	backendUndeterminedReasonCode: z.string().nullish(),
 	gpuOffloadedLayers: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

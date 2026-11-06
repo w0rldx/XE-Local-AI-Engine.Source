@@ -13,6 +13,18 @@ binaries, knowingly accepts the consequences of unsigned delivery:
 - Users cannot cryptographically verify the publisher identity from the OS
   signature; they rely on the published SHA-256 checksums and the release
   provenance instead.
+- Windows Smart App Control in enforce mode, or an organization's application
+  control (WDAC) policy, can refuse to load an unsigned file whose hash has no
+  reputation yet. This has been seen on a Windows tester install with a shipped
+  third-party DLL (a Quartz assembly), and an update that replaces a file can
+  trigger it again. The engine does not crash on it: it names the blocked file
+  on stderr (`Application control blocked: <file>. ...`), logs it (or writes
+  `startup-crash.log` when the log is not open yet) and exits with code 11;
+  the desktop app shows a dialog naming the file and the install folder. Only
+  signing removes the cause. Until then a user can turn Smart App Control off
+  in Windows Security under "App & browser control", or retry later once the
+  file's hash has gained reputation; a managed policy needs the organization's
+  IT administrators to allow the install folder.
 
 ## Forward gate
 

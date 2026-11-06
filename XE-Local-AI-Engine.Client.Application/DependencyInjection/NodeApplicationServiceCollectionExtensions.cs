@@ -70,13 +70,13 @@ public static class NodeApplicationServiceCollectionExtensions
         // Development task and vice versa, so Development's reconciler must terminalize its orphans before this dispatcher admits runs.
         builder.AddNodeDevWorkflows(configuration, startupSettings);
 
-        // Immediately after: the graph-workflow runtime has the same shape, and its hosted services
-        // must start behind the ones whose orphaned rows they would otherwise adopt mid-repair.
-        builder.AddNodeGraphWorkflows(configuration);
-
-        // After AddNodeDevWorkflows for the same hosted-service START order reason: this module's coordinator must start
-        // after chat restart recovery has terminalized crash-orphaned rows, so it never adopts an execution chat is repairing.
+        // Hosted-service START order: after chat restart recovery, so the coordinator never adopts an execution chat is repairing,
+        // and BEFORE AddNodeGraphWorkflows, so its restart sweep cancels an abandoned execution's graph run before the dispatcher resumes a node.
         builder.AddNodeIntegrations(configuration);
+
+        // The graph-workflow runtime has the same shape, and its hosted services must start behind the ones whose
+        // orphaned rows they would otherwise adopt mid-repair.
+        builder.AddNodeGraphWorkflows(configuration);
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.
         builder.AddNodeContainerSandbox(configuration);

@@ -193,9 +193,10 @@ internal static class GgufTensorBlockReader
         switch (valueType)
         {
             case 0:
-            case 1:
             case 7:
                 return (long)(await cursor.ReadBytesAsync(count: 1, ct).ConfigureAwait(false)).Span[0];
+            case 1:
+                return (long)(sbyte)(await cursor.ReadBytesAsync(count: 1, ct).ConfigureAwait(false)).Span[0];
             case 2:
                 return (long)BinaryPrimitives.ReadUInt16LittleEndian((await cursor.ReadBytesAsync(count: 2, ct).ConfigureAwait(false)).Span);
             case 3:

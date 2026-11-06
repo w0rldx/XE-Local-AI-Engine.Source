@@ -167,9 +167,15 @@ export function ChatDisplayShell({
 	// Pane-level file drop: a user can drop files anywhere on the chat window (message list + composer), not only on the
 	// composer's paperclip. Gated by the same capability + wired handler as the composer, and suppressed while the input
 	// is disabled / mid-send. Drops onto the composer itself are handled there (it stops propagation), so this never
-	// double-fires for the same drop.
+	// double-fires for the same drop. A drop the composer refuses (a workflow that disables it or takes no attachments)
+	// bubbles here unstopped, so the pane refuses on the same workflow conditions.
 	const fileDropEnabled =
-		capabilities.showFileAttachmentControls && Boolean(onUploadFiles) && !inputStatus.chatInputDisabled && !inputStatus.isSending;
+		capabilities.showFileAttachmentControls &&
+		Boolean(onUploadFiles) &&
+		!inputStatus.chatInputDisabled &&
+		!inputStatus.isSending &&
+		workflow?.composerDisabled !== true &&
+		workflow?.attachmentsDisabledHint === undefined;
 	const { isFileDragActive, dropProps } = usePaneFileDrop(fileDropEnabled, (files) => onUploadFiles?.(files));
 
 	const conversationList = (

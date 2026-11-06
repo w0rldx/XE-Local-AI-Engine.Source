@@ -41,7 +41,7 @@ this file holds only the traps those pages lack. Benchmarks, knowledge base, tra
 
 ### Model kind classification
 
-**Rule:** `ModelKind` includes Reranker and Decision; a GGUF whose header declares `<arch>.decision.type` is Decision before any name rule (Kev-4B is a `qwen35` with a tool-calling chat template), and test reranker names before embedding names. **Prevents:** rerankers classified as embedding models. **Authority:** `ModelKind` (`Client.Persistence`).
+**Rule:** `ModelKind` includes Reranker and Decision; a GGUF whose header declares `<arch>.decision.type` is Decision before any name rule (Kev-4B is a `qwen35` with a tool-calling chat template), and test reranker names before embedding names. The header value (`laya`, `kev`, ...) names the upstream family only (Julia-1 carries `laya`); the question type (`choice`, `noul`, `score`) is the node's per-request `questionType`, so never gate question types or refuse a model on that value. **Prevents:** rerankers classified as embedding models, and a decision model refused as an "unknown family". **Authority:** `ModelKind` (`Client.Persistence`).
 
 ### Local-default chat resolution reads persisted state only
 
@@ -75,7 +75,7 @@ this file holds only the traps those pages lack. Benchmarks, knowledge base, tra
 
 ### llama-server node settings are captured once per boot — a `PUT` after that changes nothing until a restart
 
-**Rule:** `speculativeMode` and `chatCacheReuse` are captured when the `LlamaServerSupervisorOptions` singleton is first resolved, and `kvCacheType` when `LlamaServerLaunchPolicyOptions` is (both lazy factories, not a reliable "first spawn" marker). A `PUT node-settings` after that does not reach a later spawn: restart with `scripts/dev-stop.sh` + `scripts/dev-start.sh` and read the values back with a `GET` before measuring. **Prevents:** an in-boot A/B concluding "the knob does nothing". **Authority:** `AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`, `BuildSeededLlamaServerLaunchPolicyOptions`. [evidence](../agent-knowledge-evidence.md#llama-server-node-settings-are-captured-once-per-boot--a-put-after-that-changes-nothing-until-a-restart)
+**Rule:** `speculativeMode` and `chatCacheReuse` are captured when the `LlamaServerSupervisorOptions` singleton is first resolved, and `kvCacheType` when `LlamaServerLaunchPolicyOptions` is (both lazy factories, not a reliable "first spawn" marker). `NodeSettingsRestartGate.Fields` lists every such field (also `llamaChatCacheRamMiB`, `llamaMaxLoadedProcesses`). A `PUT node-settings` then reaches no later spawn, not even an eject's: restart with `scripts/dev-stop.sh` + `scripts/dev-start.sh` and read the values back with a `GET` before measuring. **Prevents:** an in-boot A/B concluding "the knob does nothing". **Authority:** `AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`, `BuildSeededLlamaServerLaunchPolicyOptions`. [evidence](../agent-knowledge-evidence.md#llama-server-node-settings-are-captured-once-per-boot--a-put-after-that-changes-nothing-until-a-restart)
 
 ### a callback that runs under the supervisor's per-key gate must never re-enter the gated path for that key
 

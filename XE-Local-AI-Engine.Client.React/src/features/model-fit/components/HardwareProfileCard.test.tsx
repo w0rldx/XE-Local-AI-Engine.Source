@@ -47,9 +47,9 @@ function profile(overrides: Partial<HardwareProfile> = {}): HardwareProfile {
 		inferenceBackend: "cuda",
 		gpuExpected: true,
 		cpuFallback: false,
-		cpuFallbackReason: null,
-		cpuFallbackRemediation: null,
-		backendUndeterminedReason: null,
+		cpuFallbackReasonCode: null,
+		cpuFallbackRemediationCode: null,
+		backendUndeterminedReasonCode: null,
 		gpuOffloadedLayers: null,
 		gpuTotalLayers: null,
 		gpuExpertsOffloaded: false,
@@ -90,13 +90,13 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 		cleanup();
 	});
 
-	it("renders a persistent alert with the reason and remediation when cpuFallback is true", () => {
+	it("renders a persistent alert with the reason and remediation its codes select when cpuFallback is true", () => {
 		renderWithProviders(
 			<HardwareProfileCard
 				profile={profile({
 					cpuFallback: true,
-					cpuFallbackReason: "The Vulkan build found no usable GPU device.",
-					cpuFallbackRemediation: "Install a CUDA runtime or build llama.cpp from source.",
+					cpuFallbackReasonCode: "zero_devices",
+					cpuFallbackRemediationCode: "linux_other",
 				})}
 				isLoading={false}
 				isFetching={false}
@@ -105,15 +105,12 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 			/>,
 		);
 
-		const alert = screen.getByTestId("model-fit-hardware-cpu-fallback-alert");
-		expect(alert.textContent).toContain(
-			"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
-		);
+		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-alert")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-reason").textContent).toBe(
-			"The Vulkan build found no usable GPU device.",
+			"The selected llama.cpp GPU runtime found no GPU devices, so inference is running on the CPU.",
 		);
 		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-remediation").textContent).toContain(
-			"Install a CUDA runtime or build llama.cpp from source.",
+			"In Node Settings, use automatic variant selection if a variant was pinned",
 		);
 	});
 
@@ -131,10 +128,10 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 		expect(screen.queryByTestId("model-fit-hardware-cpu-fallback-alert")).toBeNull();
 	});
 
-	it("omits the remediation line when the backend reports none", () => {
+	it("falls back to the generic sentence and omits the remediation for codes this client does not know", () => {
 		renderWithProviders(
 			<HardwareProfileCard
-				profile={profile({ cpuFallback: true, cpuFallbackReason: "GPU unusable.", cpuFallbackRemediation: null })}
+				profile={profile({ cpuFallback: true, cpuFallbackReasonCode: "future_reason", cpuFallbackRemediationCode: null })}
 				isLoading={false}
 				isFetching={false}
 				error={null}
@@ -142,7 +139,9 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 			/>,
 		);
 
-		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-alert")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-hardware-cpu-fallback-reason").textContent).toBe(
+			"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
+		);
 		expect(screen.queryByTestId("model-fit-hardware-cpu-fallback-remediation")).toBeNull();
 	});
 
@@ -277,18 +276,32 @@ describe("HardwareProfileCard undetermined backend", () => {
 	it("surfaces an undetermined backend instead of showing nothing at all", () => {
 		// The regression this covers: a wedged driver or an overrun device probe leaves the backend "unknown" with
 		// cpuFallback false, which previously rendered no indication of any kind.
-		renderCard({
-			inferenceBackend: "unknown",
-			backendUndeterminedReason: "Listing GPU devices did not complete, so whether inference will use the GPU is unknown.",
-		});
+		renderCard({ inferenceBackend: "unknown", backendUndeterminedReasonCode: "probe_failed" });
 
 		const alert = screen.getByTestId("model-fit-hardware-backend-undetermined-alert");
 		expect(alert.textContent).toContain("The GPU devices of the selected runtime have not been listed");
-		expect(screen.getByTestId("model-fit-hardware-backend-undetermined-detail").textContent).toContain(
-			"Listing GPU devices did not complete",
-		);
 		// It is not a fallback claim: nobody proved the GPU is unused.
 		expect(screen.queryByTestId("model-fit-hardware-cpu-fallback-alert")).toBeNull();
+	});
+
+	// The server's undetermined reason is English; the detail line is the localized text its code selects.
+	it.each([
+		["runtime_missing", "No llama.cpp runtime is installed yet."],
+		["companion_libraries_incomplete", "some of its CUDA companion libraries are missing"],
+		["probe_failed", "Refreshing the hardware profile re-runs the probe."],
+	])("localizes the %s detail from its code", (code, detail) => {
+		renderCard({ inferenceBackend: "unknown", backendUndeterminedReasonCode: code });
+
+		expect(screen.getByTestId("model-fit-hardware-backend-undetermined-detail").textContent).toContain(detail);
+	});
+
+	it("keeps only the generic sentence for an undetermined code this client does not know", () => {
+		renderCard({ inferenceBackend: "unknown", backendUndeterminedReasonCode: "future_cause" });
+
+		expect(screen.getByTestId("model-fit-hardware-backend-undetermined-alert").textContent).toContain(
+			"The GPU devices of the selected runtime have not been listed",
+		);
+		expect(screen.queryByTestId("model-fit-hardware-backend-undetermined-detail")).toBeNull();
 	});
 
 	it("shows no undetermined alert when the backend is known", () => {

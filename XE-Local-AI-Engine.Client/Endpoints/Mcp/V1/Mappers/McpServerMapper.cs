@@ -112,7 +112,8 @@ internal static class McpServerMapper
             Category = entry.Category.ToString(),
             EffectiveRequiresApproval = effectiveRequiresApproval,
             SessionScopeEligible = toolCatalog.IsSessionScopeEligible(entry),
-            UnattendedBehaviour = unattendedBehaviour
+            UnattendedBehaviour = unattendedBehaviour,
+            IsAvailableOnNode = entry.IsAvailableOnNode
         };
     }
 

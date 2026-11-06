@@ -83,7 +83,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
                 _deviceProbe.ForgetFailedProbes();
             }
 
-            var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct);
+            var (state, determinate, signalVersion) = await ComputeAsync(ct);
 
             // Latch only a determinate audit: an indeterminate probe yields backend "unknown" with CpuFallback false, and memoizing it would keep capacity
             // and the advisor trusting the raw profile's VRAM until restart — the probe layer caches no failed probe, so leaving it uncached re-probes.
@@ -93,7 +93,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
                 Volatile.Write(ref _cachedSignalVersion, signalVersion);
             }
 
-            EmitIfFallbackChanged(state, fallbackReasonCode);
+            EmitIfFallbackChanged(state);
             return WithLivePlacement(state);
         }
         finally
@@ -182,16 +182,11 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         var inventory = await _deviceProbe.GetDeviceInventoryAsync(variant, ct);
 
         var state = BuildState(raw, variant, inventory);
-        string? reasonCode = null;
-        if (state.CpuFallback)
-        {
-            reasonCode = variant == GpuVariant.Cpu ? "cpu_variant" : "zero_devices";
-        }
 
         // Determinate = safe to memoize: the audit for a CPU variant never depends on the probe, and a GPU variant's
         // audit is only trustworthy when the probe actually ran.
         var determinate = variant == GpuVariant.Cpu || inventory.ProbeSucceeded;
-        return new DeviceAuditComputation(state, reasonCode, determinate, signalVersion);
+        return new DeviceAuditComputation(state, determinate, signalVersion);
     }
 
     /// <summary>Pure audit decision over (host profile, selected variant, enumerated devices) — unit-testable without I/O.</summary>
@@ -210,6 +205,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         var fallbackText = cpuFallback ? BuildFallbackText(raw.GpuVendor, variant, cpuVariant, isWindows ?? OperatingSystem.IsWindows()) : null;
 
         var backend = ResolveInferenceBackend(variant, inventory);
+        var undeterminedText = backend == "unknown" ? BuildUndeterminedText(variant, inventory) : null;
         return new RuntimeDeviceAuditState
         {
             InferenceBackend = backend,
@@ -218,7 +214,10 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             CpuFallback = cpuFallback,
             Reason = fallbackText?.Reason,
             Remediation = fallbackText?.Remediation,
-            BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant, inventory) : null,
+            ReasonCode = fallbackText?.ReasonCode,
+            RemediationCode = fallbackText?.RemediationCode,
+            BackendUndeterminedReason = undeterminedText?.Reason,
+            BackendUndeterminedReasonCode = undeterminedText?.ReasonCode,
             Devices =
             [
                 .. inventory.Devices.Select(static device => new RuntimeAuditDevice
@@ -238,29 +237,41 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     ///     device is refused by the no-silent-CPU invariant, which no probe can tell from a glitch. Two causes are known and named
     ///     outright: no runtime installed, and a Windows CUDA build missing companion libraries.
     /// </remarks>
-    private static string BuildUndeterminedText(GpuVariant variant, LlamaDeviceInventory inventory)
+    private static UndeterminedText BuildUndeterminedText(GpuVariant variant, LlamaDeviceInventory inventory)
     {
         if (inventory.CompanionSetIncomplete)
         {
-            return $"The {VariantName(variant)} llama.cpp runtime is installed, but some of its CUDA companion libraries "
-                   + "are missing, so it cannot use the GPU and its devices have not been listed. Models load on the CPU "
-                   + "until it is repaired. Retry the runtime download from Node Settings, or start a chat, to repair it.";
+            return new UndeterminedText
+            {
+                Reason = $"The {VariantName(variant)} llama.cpp runtime is installed, but some of its CUDA companion libraries "
+                         + "are missing, so it cannot use the GPU and its devices have not been listed. Models load on the CPU "
+                         + "until it is repaired. Retry the runtime download from Node Settings, or start a chat, to repair it.",
+                ReasonCode = RuntimeDeviceUndeterminedReasonCodes.CompanionLibrariesIncomplete
+            };
         }
 
         if (inventory.RuntimeMissing)
         {
-            return $"No llama.cpp runtime is installed yet, so the {VariantName(variant)} GPU devices have not been "
-                   + "listed and whether inference will use the GPU is unknown. Model sizing on this page still assumes "
-                   + "the GPU's VRAM is usable. The runtime is downloaded when you install it from Node Settings, or the "
-                   + "first time you start a chat, benchmark or training run; this page never downloads it by itself.";
+            return new UndeterminedText
+            {
+                Reason = $"No llama.cpp runtime is installed yet, so the {VariantName(variant)} GPU devices have not been "
+                         + "listed and whether inference will use the GPU is unknown. Model sizing on this page still assumes "
+                         + "the GPU's VRAM is usable. The runtime is downloaded when you install it from Node Settings, or the "
+                         + "first time you start a chat, benchmark or training run; this page never downloads it by itself.",
+                ReasonCode = RuntimeDeviceUndeterminedReasonCodes.RuntimeMissing
+            };
         }
 
-        return $"The {VariantName(variant)} llama.cpp runtime is selected, but its GPU devices could not be listed, so "
-               + "whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM "
-               + "is usable. Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override that was rejected because "
-               + "it exposes no GPU device for its configured variant (check the log for the override's own error), a "
-               + "runtime whose libraries could not be loaded, or a busy GPU driver that made the probe overrun. "
-               + "Refreshing the hardware profile re-runs the probe.";
+        return new UndeterminedText
+        {
+            Reason = $"The {VariantName(variant)} llama.cpp runtime is selected, but its GPU devices could not be listed, so "
+                     + "whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM "
+                     + "is usable. Common causes: a bring-your-own XE_LLAMACPP_SERVER_PATH override that was rejected because "
+                     + "it exposes no GPU device for its configured variant (check the log for the override's own error), a "
+                     + "runtime whose libraries could not be loaded, or a busy GPU driver that made the probe overrun. "
+                     + "Refreshing the hardware profile re-runs the probe.",
+            ReasonCode = RuntimeDeviceUndeterminedReasonCodes.ProbeFailed
+        };
     }
 
     // The backend inference actually runs on: a GPU variant that enumerated devices is that variant; a GPU variant with
@@ -303,18 +314,31 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             "In Node Settings, use automatic variant selection if a variant was pinned; the managed Vulkan runtime needs a GPU "
             + "driver with a Vulkan ICD (commonly missing under WSL2)." + LinuxAlternatives;
 
-        var linuxRemediation = vendor == GpuVendor.Nvidia ? LinuxNvidiaRemediation : LinuxOtherRemediation;
-
         const string WindowsRemediation =
             "Update the GPU driver, check the GPU is visible to the system, then reinstall the runtime from Node Settings. If a "
             + "bring-your-own override is set, verify XE_LLAMACPP_SERVER_PATH points to a valid GPU-capable binary.";
+
+        var remediationCode = (isWindows, vendor) switch
+        {
+            (true, _) => RuntimeDeviceFallbackRemediationCodes.Windows,
+            (false, GpuVendor.Nvidia) => RuntimeDeviceFallbackRemediationCodes.LinuxNvidia,
+            _ => RuntimeDeviceFallbackRemediationCodes.LinuxOther
+        };
+        var remediation = remediationCode switch
+        {
+            RuntimeDeviceFallbackRemediationCodes.Windows => WindowsRemediation,
+            RuntimeDeviceFallbackRemediationCodes.LinuxNvidia => LinuxNvidiaRemediation,
+            _ => LinuxOtherRemediation
+        };
 
         if (cpuVariant)
         {
             return new FallbackText
             {
                 Reason = $"A {VendorName(vendor)} GPU was detected, but the CPU llama.cpp runtime is selected — inference is running on the CPU.",
-                Remediation = isWindows ? WindowsRemediation : linuxRemediation
+                Remediation = remediation,
+                ReasonCode = RuntimeDeviceFallbackReasonCodes.CpuVariant,
+                RemediationCode = remediationCode
             };
         }
 
@@ -325,7 +349,9 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         return new FallbackText
         {
             Reason = reason,
-            Remediation = isWindows ? WindowsRemediation : linuxRemediation
+            Remediation = remediation,
+            ReasonCode = RuntimeDeviceFallbackReasonCodes.ZeroDevices,
+            RemediationCode = remediationCode
         };
     }
 
@@ -350,7 +376,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         };
     }
 
-    private void EmitIfFallbackChanged(RuntimeDeviceAuditState state, string? fallbackReasonCode)
+    private void EmitIfFallbackChanged(RuntimeDeviceAuditState state)
     {
         // Fire the warning + counter at most once per distinct (fallback, backend) — the audit is cached per binary, so a
         // change here means the binary (or its device enumeration) changed, which is exactly when an operator should hear.
@@ -375,20 +401,31 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             return;
         }
 
-        NodeMetrics.DeviceFallbackTotal.Add(1, new KeyValuePair<string, object?>("reason", fallbackReasonCode ?? "unknown"));
+        NodeMetrics.DeviceFallbackTotal.Add(1, new KeyValuePair<string, object?>("reason", state.ReasonCode ?? "unknown"));
         _logger.LogWarning("Runtime device audit detected a CPU fallback (backend {Backend}): {Reason} {Remediation}",
             state.InferenceBackend, state.Reason, state.Remediation);
     }
 
-    // One audit pass: the decided state, the fallback reason code when it fell back, whether the pass is safe to
-    // memoize, and the managed-CUDA signal stamp the pass is valid for.
-    private sealed record DeviceAuditComputation(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate, long SignalVersion);
+    // One audit pass: the decided state, whether the pass is safe to memoize, and the managed-CUDA signal stamp the pass is valid for.
+    private sealed record DeviceAuditComputation(RuntimeDeviceAuditState State, bool Determinate, long SignalVersion);
 
-    // Operator-facing prose for a detected CPU fallback: what happened, and what to do about it.
+    // Operator-facing prose for a detected CPU fallback: what happened, and what to do about it, with the codes the UI localizes from.
     private sealed record FallbackText
     {
         public required string Reason { get; init; }
 
         public required string? Remediation { get; init; }
+
+        public required string ReasonCode { get; init; }
+
+        public required string RemediationCode { get; init; }
+    }
+
+    // Operator-facing prose for an undetermined backend, with the code the UI localizes from.
+    private sealed record UndeterminedText
+    {
+        public required string Reason { get; init; }
+
+        public required string ReasonCode { get; init; }
     }
 }

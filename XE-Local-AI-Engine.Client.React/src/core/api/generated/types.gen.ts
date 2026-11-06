@@ -4536,6 +4536,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
 	effectiveRequiresApproval: boolean;
 	sessionScopeEligible: boolean;
 	unattendedBehaviour: string;
+	isAvailableOnNode: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = {
@@ -4737,7 +4738,10 @@ export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
 	cpuFallback?: boolean;
 	cpuFallbackReason?: string | null;
 	cpuFallbackRemediation?: string | null;
+	cpuFallbackReasonCode?: string | null;
+	cpuFallbackRemediationCode?: string | null;
 	backendUndeterminedReason?: string | null;
+	backendUndeterminedReasonCode?: string | null;
 	gpuOffloadedLayers?: number | null;
 	gpuTotalLayers?: number | null;
 	gpuExpertsOffloaded?: boolean;

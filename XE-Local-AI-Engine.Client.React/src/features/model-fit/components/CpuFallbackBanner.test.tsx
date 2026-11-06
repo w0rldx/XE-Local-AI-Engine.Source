@@ -7,10 +7,6 @@ import { CpuFallbackBanner } from "@/features/model-fit/components/CpuFallbackBa
 import type { HardwareProfile } from "@/features/model-fit/models/ModelFitModels";
 import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
 
-vi.mock("react-i18next", () => ({
-	useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
-}));
-
 const hardware: { data: Partial<HardwareProfile> | undefined } = { data: undefined };
 vi.mock("@/features/model-fit/queries/useModelFit", () => ({ useHardwareProfile: () => hardware }));
 
@@ -23,25 +19,54 @@ beforeAll(installJsdomEnvironmentMocks);
 afterEach(cleanup);
 
 describe("CpuFallbackBanner", () => {
-	// The server's reason is English; the banner leads with the localized sentence and keeps the server text as detail.
-	it("leads a CPU fallback with the localized sentence and keeps the server text as detail", () => {
+	// The server's reason and remediation are English; the banner renders only the bundle text its codes select.
+	it.each([
+		[
+			"cpu_variant",
+			"windows",
+			"A GPU was detected, but the CPU llama.cpp runtime is selected, so inference is running on the CPU.",
+			"Update the GPU driver, check the GPU is visible to the system, then reinstall the runtime from Node Settings.",
+		],
+		[
+			"zero_devices",
+			"linux_nvidia",
+			"The selected llama.cpp GPU runtime found no GPU devices, so inference is running on the CPU.",
+			"In Node Settings, use automatic variant selection (or install the CUDA variant)",
+		],
+		[
+			"zero_devices",
+			"linux_other",
+			"The selected llama.cpp GPU runtime found no GPU devices, so inference is running on the CPU.",
+			"In Node Settings, use automatic variant selection if a variant was pinned",
+		],
+	])("localizes a %s fallback with the %s remediation from its codes", (reasonCode, remediationCode, reason, remediation) => {
 		renderBanner({
 			cpuFallback: true,
 			gpuAccelAvailable: true,
-			cpuFallbackReason: "The Vulkan build found no usable GPU device.",
-			cpuFallbackRemediation: "Install a CUDA runtime.",
+			cpuFallbackReasonCode: reasonCode,
+			cpuFallbackRemediationCode: remediationCode,
+		});
+
+		expect(screen.getByTestId("cpu-fallback-banner").textContent).toContain(reason);
+		expect(screen.getByTestId("cpu-fallback-banner-detail").textContent).toContain(remediation);
+	});
+
+	it("shows the generic sentence and no remediation for a code this client does not know", () => {
+		renderBanner({
+			cpuFallback: true,
+			gpuAccelAvailable: true,
+			cpuFallbackReasonCode: "future_reason",
+			cpuFallbackRemediationCode: "future_os",
 		});
 
 		expect(screen.getByTestId("cpu-fallback-banner").textContent).toContain(
-			"The selected inference runtime could not use this machine's GPU",
+			"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
 		);
-		expect(screen.getByTestId("cpu-fallback-banner-detail").textContent).toBe(
-			"The Vulkan build found no usable GPU device. Install a CUDA runtime.",
-		);
+		expect(screen.queryByTestId("cpu-fallback-banner-detail")).toBeNull();
 	});
 
 	it("shows only the localized sentence when no supported GPU exists", () => {
-		renderBanner({ cpuFallback: false, gpuAccelAvailable: false, cpuFallbackReason: null, cpuFallbackRemediation: null });
+		renderBanner({ cpuFallback: false, gpuAccelAvailable: false, cpuFallbackReasonCode: null, cpuFallbackRemediationCode: null });
 
 		expect(screen.getByTestId("cpu-fallback-banner").textContent).toContain("No supported GPU detected");
 		expect(screen.queryByTestId("cpu-fallback-banner-detail")).toBeNull();

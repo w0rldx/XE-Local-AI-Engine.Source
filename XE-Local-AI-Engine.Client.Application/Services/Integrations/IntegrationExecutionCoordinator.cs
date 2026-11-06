@@ -346,7 +346,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 continue;
             }
 
-            // The graph reconciler and dispatcher started first and may have resumed this run's nodes; Cancelling still stops every node not yet running.
+            // This sweep starts before the graph dispatcher (composition root order), so Cancelling lands before any node of the run can resume.
             if (row.GraphWorkflowRunId is { } graphRunId)
             {
                 await CancelGraphRunAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>(), graphRunId);

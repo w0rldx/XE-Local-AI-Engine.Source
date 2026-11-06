@@ -150,17 +150,18 @@ export interface HardwareProfile {
 	readonly cpuCores: number;
 	readonly freeDiskBytes: number;
 	// Runtime device audit: the SELECTED inference backend, whether a GPU was expected for it, and whether it
-	// silently fell back to the CPU (a GPU box whose runtime cannot use the GPU). When cpuFallback is true the reason +
-	// remediation carry the actionable "why + what to do" the CPU-fallback alert surfaces.
+	// silently fell back to the CPU (a GPU box whose runtime cannot use the GPU). When cpuFallback is true the reason and
+	// remediation codes select the localized "why + what to do" the CPU-fallback alert surfaces (RuntimeAuditText.ts).
 	readonly inferenceBackend: string;
 	readonly gpuExpected: boolean;
 	readonly cpuFallback: boolean;
-	readonly cpuFallbackReason: string | null;
-	readonly cpuFallbackRemediation: string | null;
+	readonly cpuFallbackReasonCode: string | null;
+	readonly cpuFallbackRemediationCode: string | null;
 	// Set only when inferenceBackend is "unknown" because the device probe could not complete. Distinct from
 	// cpuFallback: nobody proved the GPU is unused, but nobody proved it is used either, and model sizing on this page
-	// still assumes the VRAM is usable. Without it a wedged driver looks exactly like a healthy machine.
-	readonly backendUndeterminedReason: string | null;
+	// still assumes the VRAM is usable. Without it a wedged driver looks exactly like a healthy machine. The code selects
+	// the localized detail (RuntimeAuditText.ts).
+	readonly backendUndeterminedReasonCode: string | null;
 	// Measured GPU layer placement from the most recent observed model load, read from llama.cpp's own load banner.
 	// Null until a model has been loaded and observed. offloaded < total means the GPU IS in use but part of the model
 	// runs from system RAM (much slower) — a distinct state from cpuFallback, never folded into it. The model name and

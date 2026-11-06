@@ -186,7 +186,7 @@ public sealed class GgufHeaderReaderBoundsTests
 
     [Test]
     [Arguments(0u, "C8", 200L)]
-    [Arguments(1u, "C8", 200L)]
+    [Arguments(1u, "C8", -56L)]
     [Arguments(7u, "01", 1L)]
     [Arguments(2u, "FEFF", 65_534L)]
     [Arguments(3u, "FEFF", -2L)]

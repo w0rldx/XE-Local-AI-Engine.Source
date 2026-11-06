@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -161,12 +161,15 @@ describe("MarkdownEditorField", () => {
 			expect(screen.getByText("*")).toBeTruthy();
 			expect(screen.getByText("The full instructions.")).toBeTruthy();
 			expect(screen.getByText("Body is required.")).toBeTruthy();
-			expect(editorMock.create.mock.calls[0]?.[1]).toMatchObject({
-				value: "# Title",
-				language: "markdown",
-				wordWrap: "on",
-				readOnly: false,
-				ariaLabel: "Body",
+			// The host renders before the lazily loaded editor is created, so wait for the create call itself.
+			await waitFor(() => {
+				expect(editorMock.create.mock.calls[0]?.[1]).toMatchObject({
+					value: "# Title",
+					language: "markdown",
+					wordWrap: "on",
+					readOnly: false,
+					ariaLabel: "Body",
+				});
 			});
 		});
 

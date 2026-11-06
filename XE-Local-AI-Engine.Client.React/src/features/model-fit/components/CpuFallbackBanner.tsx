@@ -2,6 +2,7 @@ import { Alert, CloseButton, Group, Stack, Text } from "@mantine/core";
 import { IconCpu } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { cpuFallbackReasonText, cpuFallbackRemediationText } from "@/features/model-fit/models/RuntimeAuditText";
 import { useHardwareProfile } from "@/features/model-fit/queries/useModelFit";
 import { useCpuFallbackBannerStore } from "@/features/model-fit/stores/CpuFallbackBannerStore";
 
@@ -25,16 +26,11 @@ export function CpuFallbackBanner() {
 		return null;
 	}
 
-	// The sentence is localized from the audit state; the server's English reason and remediation follow as detail.
+	// Both lines are localized from the audit's codes, never the server's English text.
 	const message = profile?.cpuFallback
-		? t(
-				"pages.modelFit.hardware.cpuFallbackAlert.reason",
-				"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
-			)
+		? cpuFallbackReasonText(t, profile.cpuFallbackReasonCode ?? null)
 		: t("pages.modelFit.hardware.cpuFallback.message", "No supported GPU detected — running on CPU. Responses will be slower.");
-	const detail = profile?.cpuFallback
-		? [profile.cpuFallbackReason, profile.cpuFallbackRemediation].filter(Boolean).join(" ")
-		: "";
+	const detail = profile?.cpuFallback ? cpuFallbackRemediationText(t, profile.cpuFallbackRemediationCode ?? null) : null;
 
 	return (
 		<Alert

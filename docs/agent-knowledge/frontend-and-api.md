@@ -119,7 +119,7 @@ word. **Authority:** `core/audio/capture/Pcm16DownsamplerWorklet.js`; `core/audi
 
 ### `openapi:check` and `licenses:check` diff the working tree against the INDEX
 
-**Rule:** both scripts end in `git diff --exit-code` over their generated paths, which compares the working tree with the index, not `HEAD`: an unstaged regeneration fails and a staged or committed one passes. `licenses:check` also lists backend NuGet package versions, so every NuGet bump needs `licenses:generate` and the regenerated file in the same commit. **Prevents:** a correct regeneration reported as a failure until it is staged, and a NuGet bump red on `licenses:check` because its inventory was never regenerated. **Authority:** the `openapi:check` and `licenses:check` scripts in `package.json`; `scripts/GenerateLicenses.mjs`.
+**Rule:** both scripts end in `git diff --exit-code` over their generated paths, which compares the working tree with the index, not `HEAD`: an unstaged regeneration fails and a staged or committed one passes. `licenses:check` also lists backend NuGet package versions, so every NuGet bump, and every re-keyed entry in `scripts/compliance/nuget-license-overrides.json` (an override is the license written), needs `licenses:generate` and the regenerated file in the same commit, a backend-only change included. **Prevents:** a correct regeneration reported as a failure until it is staged, and a NuGet bump red on `licenses:check` because its inventory was never regenerated. **Authority:** the `openapi:check` and `licenses:check` scripts in `package.json`; `scripts/GenerateLicenses.mjs`.
 
 ### OpenAPI → hey-api is the sole REST data layer for React
 
@@ -265,7 +265,7 @@ payload enum lists, never hub method signatures; a signature change needs its ow
 
 ### pnpm's release-age gate decides which patch a bump installs
 
-**Rule:** `pnpm-workspace.yaml` sets `minimumReleaseAge` (seven days) with `minimumReleaseAgeStrict: false`, so an update resolves to the newest version old enough, which can be an older patch than the one a registry page or a PR names. Check the lockfile for the installed version and state it in the commit body. **Prevents:** a fix assumed present in a bump that resolved below it. **Authority:** `XE-Local-AI-Engine.Client.React/pnpm-workspace.yaml`.
+**Rule:** `pnpm-workspace.yaml` sets `minimumReleaseAge` (seven days) with `minimumReleaseAgeStrict: false`, so an update resolves to the newest version old enough, which can be an older patch than the one a registry page or a PR names. Check the lockfile for the installed version and state it in the commit body. pnpm 12 may also write a `minimumReleaseAgeExclude` entry on its own when a request names a version younger than the hold: diff `pnpm-workspace.yaml` and revert any entry you did not mean to add (each deliberate one carries a comment saying why). **Prevents:** a fix assumed present in a bump that resolved below it, and a lockfile that silently bypasses the hold. **Authority:** `XE-Local-AI-Engine.Client.React/pnpm-workspace.yaml`.
 
 ### Frontend lint
 

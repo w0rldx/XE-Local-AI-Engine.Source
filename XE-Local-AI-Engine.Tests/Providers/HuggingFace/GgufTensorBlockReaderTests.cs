@@ -134,6 +134,21 @@ public sealed class GgufTensorBlockReaderTests
     }
 
     [Test]
+    public async Task Read_Int8MetadataValue_IsSigned()
+    {
+        // GGUF value type 1 is INT8: the byte 0xFF is -1, not 255.
+        var bytes = new GgufHeaderBytesBuilder()
+                    .WithString("general.architecture", "qwen35")
+                    .WithRawValue("qwen35.block_count", type: 1, [0xFF])
+                    .Build();
+
+        var result = await ReadAsync(bytes);
+
+        AssertEx.Equal(GgufTensorReadFailure.None, result.Failure);
+        AssertEx.Equal(expected: -1L, result.BlockCount!.Value);
+    }
+
+    [Test]
     public async Task Read_UnknownGgmlType_IsListedWithoutNameOrSize()
     {
         var bytes = BaseHeader()

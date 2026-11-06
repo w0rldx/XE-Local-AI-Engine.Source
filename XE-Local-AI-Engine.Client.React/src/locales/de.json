@@ -1044,6 +1044,7 @@
 					"label": "Tools",
 					"loadError": "Der Tool-Katalog konnte nicht geladen werden.",
 					"loading": "Tools werden geladen…",
+					"notAvailableOnNode": "Auf der Plattform dieses Nodes nicht verfügbar; ein Agent, der es auswählt, erhält kein Tool.",
 					"notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wählen Sie ein tool-fähiges Modell, um Tools zu aktivieren.",
 					"requiresApproval": "Freigabe erforderlich",
 					"webAccessRequired": "Erfordert Webzugriff in den Node-Einstellungen",
@@ -2269,6 +2270,7 @@
 				"categories": {
 					"InsufficientCapacity": "Derzeit ist nicht genug freier Speicher vorhanden, um dieses Modell zu laden.",
 					"ModelLoadFailed": "Das Modell konnte nicht geladen werden.",
+					"ModelNotInstalled": "Das angeforderte Chat-Modell ist nicht installiert. Installieren Sie es oder wählen Sie ein anderes Modell.",
 					"ModelUnavailable": "Das ausgewählte Modell ist nicht installiert oder nicht erreichbar.",
 					"Timeout": "Die Antwort hat das Zeitlimit überschritten."
 				},
@@ -2285,7 +2287,6 @@
 				"clientWatchdogNoFirstChunk": "Verbindungsüberwachung: In diesem Browser ist nie eine Antwort eingetroffen.",
 				"clientWatchdogStall": "Verbindungsüberwachung: In diesem Browser treffen keine Antwortdaten mehr ein.",
 				"goToModels": "Zu den Modellen",
-				"modelNotInstalled": "Das angeforderte Chat-Modell ist nicht installiert. Installieren Sie es oder wählen Sie ein anderes Modell.",
 				"providerError": "Der Modellanbieter hat die Anfrage abgelehnt oder nicht beantwortet.",
 				"title": "Antwort fehlgeschlagen"
 			},
@@ -6162,6 +6163,11 @@
 			"hardware": {
 				"availableRam": "Verfügbarer RAM",
 				"backendUndeterminedAlert": {
+					"details": {
+						"companionLibrariesIncomplete": "Die llama.cpp-Laufzeit ist installiert, aber einige ihrer CUDA-Begleitbibliotheken fehlen, daher kann sie die GPU nicht nutzen. Modelle werden bis zur Reparatur auf der CPU geladen. Wiederholen Sie den Download der Laufzeit in den Node-Einstellungen oder starten Sie einen Chat, um sie zu reparieren.",
+						"probeFailed": "Häufige Ursachen: eine eigene XE_LLAMACPP_SERVER_PATH-Überschreibung, die abgelehnt wurde, weil sie für ihre konfigurierte Variante kein GPU-Gerät bereitstellt (die eigene Fehlermeldung der Überschreibung steht im Log), eine Laufzeit, deren Bibliotheken nicht geladen werden konnten, oder ein ausgelasteter GPU-Treiber, durch den die Abfrage zu lange gedauert hat. Ein Aktualisieren des Hardwareprofils führt die Abfrage erneut aus.",
+						"runtimeMissing": "Es ist noch keine llama.cpp-Laufzeit installiert. Sie wird heruntergeladen, wenn Sie sie in den Node-Einstellungen installieren oder zum ersten Mal einen Chat, einen Benchmark oder ein Training starten; diese Seite lädt sie nie selbst herunter."
+					},
 					"reason": "Die GPU-Geräte der ausgewählten Laufzeit wurden noch nicht ermittelt, daher ist unbekannt, ob die Inferenz die GPU nutzt. Die Modellgrößen auf dieser Seite gehen weiterhin davon aus, dass der VRAM der GPU nutzbar ist.",
 					"title": "GPU-Backend konnte nicht ermittelt werden"
 				},
@@ -6172,6 +6178,15 @@
 				},
 				"cpuFallbackAlert": {
 					"reason": "Die gewählte Inferenz-Laufzeit konnte die GPU dieses Rechners nicht nutzen, daher läuft die Inferenz auf der CPU.",
+					"reasons": {
+						"cpuVariant": "Eine GPU wurde erkannt, aber die CPU-Variante der llama.cpp-Laufzeit ist ausgewählt, daher läuft die Inferenz auf der CPU.",
+						"zeroDevices": "Die gewählte GPU-Variante der llama.cpp-Laufzeit hat keine GPU-Geräte gefunden, daher läuft die Inferenz auf der CPU."
+					},
+					"remediations": {
+						"linuxNvidia": "Verwenden Sie in den Node-Einstellungen die automatische Variantenauswahl (oder installieren Sie die CUDA-Variante), damit die verwaltete vorkompilierte CUDA-Laufzeit verwendet wird; sie benötigt einen NVIDIA-Treiber der Serie 525 oder neuer. Alternativ können Sie die Vulkan-Laufzeit mit dem In-App-Quell-Build erstellen und dabei das Vulkan-Backend wählen, das dann Vorrang vor der vorkompilierten Laufzeit hat; dafür ist ein Vulkan-ICD nötig (fehlt häufig unter WSL2). Falls eine eigene Überschreibung gesetzt ist, prüfen Sie, ob XE_LLAMACPP_SERVER_PATH auf eine gültige, GPU-fähige Binärdatei zeigt.",
+						"linuxOther": "Verwenden Sie in den Node-Einstellungen die automatische Variantenauswahl, falls eine Variante festgelegt wurde; die verwaltete Vulkan-Laufzeit benötigt einen GPU-Treiber mit Vulkan-ICD (fehlt häufig unter WSL2). Alternativ können Sie die Vulkan-Laufzeit mit dem In-App-Quell-Build erstellen und dabei das Vulkan-Backend wählen, das dann Vorrang vor der vorkompilierten Laufzeit hat; dafür ist ein Vulkan-ICD nötig (fehlt häufig unter WSL2). Falls eine eigene Überschreibung gesetzt ist, prüfen Sie, ob XE_LLAMACPP_SERVER_PATH auf eine gültige, GPU-fähige Binärdatei zeigt.",
+						"windows": "Aktualisieren Sie den GPU-Treiber, prüfen Sie, ob die GPU für das System sichtbar ist, und installieren Sie die Laufzeit dann über die Node-Einstellungen neu. Falls eine eigene Überschreibung gesetzt ist, prüfen Sie, ob XE_LLAMACPP_SERVER_PATH auf eine gültige, GPU-fähige Binärdatei zeigt."
+					},
 					"title": "Ausführung auf der CPU trotz erkannter GPU"
 				},
 				"cpuMode": "CPU-Modus",
@@ -8357,6 +8372,10 @@
 					"Verifying": "Wird überprüft"
 				},
 				"prerequisiteItems": {
+					"c-compiler": {
+						"satisfied": "C-Compiler gefunden",
+						"unsatisfied": "Kein C-Compiler (cc, gcc oder clang) gefunden; das Training benötigt einen, um GPU-Kernel zu kompilieren"
+					},
 					"free-disk": {
 						"satisfied": "Genügend freier Speicherplatz",
 						"unsatisfied": "Nicht genügend freier Speicherplatz, oder er konnte nicht ermittelt werden"

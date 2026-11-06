@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.10.7",
-  "updatedAt": "2026-10-22",
+  "catalogVersion": "2026.11.6",
+  "updatedAt": "2026-11-06",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -758,7 +758,7 @@
       "contextLength": 8192,
       "minLlamaCppTag": "b11669",
       "releaseDate": "2026-10-01",
-      "notes": "Native decision model for DecisionModel nodes with provider systemone; English only."
+      "notes": "The recommended native decision model for DecisionModel nodes with provider systemone; English only. For German inputs use Kev-4B."
     },
     {
       "id": "kev-4b",
@@ -775,7 +775,7 @@
       "contextLength": 262144,
       "minLlamaCppTag": "b11669",
       "releaseDate": "2026-10-01",
-      "notes": "Native decision model on a Qwen3.5-4B base for DecisionModel nodes with provider systemone; the engine runs it at an 8192-token window."
+      "notes": "Native decision model on a Qwen3.5-4B base for DecisionModel nodes with provider systemone; the decision model for German inputs, which Laya does not cover. The engine runs it at an 8192-token window."
     },
     {
       "id": "julia-1",
@@ -784,7 +784,7 @@
       "publisher": "SupersonicLabs",
       "ggufRepo": "ggml-org/Julia-1-GGUF",
       "license": "apache-2.0",
-      "tier": "A",
+      "tier": "B",
       "useCases": ["decision"],
       "totalParamsB": 0.144,
       "activeParamsB": null,

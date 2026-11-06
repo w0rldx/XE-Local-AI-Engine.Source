@@ -120,8 +120,9 @@ override. `agent_execution_logs` rows terminalize asynchronously (re-read); `dev
 **Rule:** with a scratch `XDG_DATA_HOME`, also export the tool-version manager's own data-dir variable at the real location
 (for mise, `MISE_DATA_DIR=$HOME/.local/share/mise`) on EVERY command of the round: start, status, `aspire logs`, stop.
 Otherwise the `aspire`/`python3` shim fails, `dev_aspire_ps_json` discards its stderr, and `dev-start.sh` only says "Could
-not query Aspire state safely"; diagnose by running `aspire ps` without discarding stderr. **Prevents:** a toolchain failure
-read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_matching_app_json` in
+not query Aspire state safely"; diagnose by running `aspire ps` without discarding stderr. Run the backend gate and
+contract lane without the mise shims first on `PATH`: the dev-workflow sandbox cannot reach a shimmed `dotnet`/`python3`
+(`runner_not_installed`). **Prevents:** a toolchain failure read as a stale-AppHost or sandbox bug. **Authority:** `dev_aspire_ps_json`, `dev_matching_app_json` in
 `scripts/dev-aspire-common.sh`; the `query_status -ne 3` branch in `scripts/dev-start.sh`.
 
 ### two hosts on one box must never share a llama-server BINARY PATH, or one host's reaper kills the other's models
@@ -140,6 +141,10 @@ read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_match
 ### `lab-up.sh` in a worktree needs the models hard-linked, projector included, and a Debug AppHost built before `--no-build`
 
 **Rule:** before `scripts/lab-up.sh` runs from a worktree, hard-link every installed model file the round needs into that worktree's lab models dir, including the multimodal projector GGUF beside its weights, and build the AppHost once in Debug; only then is `--no-build` valid. **Prevents:** a lab that boots but reports the 27B as not installed (projector missing), or fails on a stale or absent Debug build. **Authority:** the `scripts/lab-up.sh` header; "A lab or scratch models dir holds hard links or copies, never symlinks" above.
+
+### A CPU trace of a turn driven by `gpu-smoke-driver.py chat` mostly measures the driver
+
+**Rule:** to profile the node's own CPU during a chat turn, drive the turn from a WebSocket or keep-alive client (the SPA), or subtract the transport frames: `scripts/gpu-smoke-driver.py chat` uses SignalR long polling with a new TLS connection per poll, about 130 requests per turn. **Prevents:** reading Kestrel TLS handshakes, `NodeSecurityStampCheck.IsCurrentAsync` and the middleware pipeline, 60–70 % of the sampled CPU in that setup, as product cost (2026-10-19). **Authority:** `command_chat` and its long-polling client in `scripts/gpu-smoke-driver.py`.
 
 ## Containers, sandbox and External Apps (host side)
 

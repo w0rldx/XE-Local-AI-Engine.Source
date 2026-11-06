@@ -26,6 +26,7 @@ const catalogTools: ToolCatalogEntry[] = [
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 	{
 		name: "Calculate",
@@ -35,6 +36,7 @@ const catalogTools: ToolCatalogEntry[] = [
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 ];
 

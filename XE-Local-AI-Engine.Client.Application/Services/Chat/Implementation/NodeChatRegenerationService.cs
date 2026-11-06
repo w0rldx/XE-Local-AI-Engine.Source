@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
@@ -54,6 +55,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private readonly IOptions<ChatStreamBudgetOptions> _streamBudgetOptions;
     private readonly TimeProvider _timeProvider;
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
+    private readonly IGraphWorkflowStore _graphWorkflows;
     private readonly ILogger<NodeChatRegenerationService> _logger;
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly IHostApplicationLifetime? _applicationLifetime;
@@ -78,6 +80,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
+        IGraphWorkflowStore graphWorkflows,
         ILogger<NodeChatRegenerationService> logger,
         IGpuWorkGate gpuWorkGate,
         IHostApplicationLifetime? applicationLifetime = null)
@@ -105,6 +108,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         _streamBudgetOptions = streamBudgetOptions;
         _timeProvider = timeProvider;
         _toolApprovalPolicy = toolApprovalPolicy;
+        _graphWorkflows = graphWorkflows;
         _logger = logger;
     }
 
@@ -374,6 +378,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // Reject regeneration on a remote-origin (view-only) conversation before any persistence. The guard is
         // authoritative; throwing here propagates to the hub caller.
         await _mutationGuard.EnsureMutableAsync(conversationId, cancellationToken);
+        await InvocationSlotAdmission.EnsureNoLiveWorkflowRunAsync(_graphWorkflows, conversationId, cancellationToken);
         InvocationSlotAdmission.EnsureNoParkedTurn(_eventDispatcher, conversationId);
 
         // A request-supplied selection is persisted BEFORE the read, because that write also CLEARS the stored

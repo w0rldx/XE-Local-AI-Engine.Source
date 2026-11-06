@@ -28,7 +28,10 @@ public sealed class StartDictationSessionEndpoint : Endpoint<StartDictationSessi
     {
         Post(LocalApiRoutes.Transcription.DictationSessions);
         Policies(NodeAuthorizationPolicies.Operator);
+        // A body-less POST has no Content-Type, which application/json alone answers with 415; */* lets it bind as {} (Language null,
+        // detected). JSON stays first so the generated client keeps sending it: a JSON body under any other type is not read.
         Description(builder => builder
+                               .Accepts<StartDictationSessionRequest>("application/json", "*/*")
                                .Produces<StartDictationSessionResponse>(StatusCodes.Status200OK)
                                .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }

@@ -14,6 +14,7 @@ public static class TrainingRuntimePrerequisiteKeys
     public const string NvidiaDriver = "nvidia-driver";
     public const string SystemMemory = "system-memory";
     public const string Lockfile = "lockfile";
+    public const string CCompiler = "c-compiler";
 }
 
 /// <summary>

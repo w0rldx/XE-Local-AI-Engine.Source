@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -17,12 +18,13 @@ public static class StagedDirectoryPublish
     internal static readonly IReadOnlyList<TimeSpan> RenameRetryDelays =
         [TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
 
-    /// <summary>Publishes <paramref name="stagingDir" /> as <paramref name="targetDir" />.</summary>
-    public static Task PublishAsync(string stagingDir, string targetDir, CancellationToken ct) =>
-        PublishCoreAsync(stagingDir, targetDir, ct);
+    /// <summary>Publishes <paramref name="stagingDir" /> as <paramref name="targetDir" />, then sweeps stray asides of earlier publishes.</summary>
+    public static Task PublishAsync(string stagingDir, string targetDir, ILogger logger, CancellationToken ct) =>
+        PublishCoreAsync(stagingDir, targetDir, logger, ct);
 
     /// <summary>The publish behind <see cref="PublishAsync" />; <paramref name="move" /> and <paramref name="delay" /> are test seams.</summary>
-    internal static async Task PublishCoreAsync(string stagingDir, string targetDir, CancellationToken ct,
+    /// <remarks>Accepted ceiling: the retry pause defaults to the real clock, the type has no TimeProvider in reach; upgrade path: thread the callers' TimeProvider.</remarks>
+    internal static async Task PublishCoreAsync(string stagingDir, string targetDir, ILogger logger, CancellationToken ct,
         Action<string, string>? move = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         move ??= Directory.Move;
@@ -58,6 +60,26 @@ public static class StagedDirectoryPublish
         if (aside is not null)
         {
             BestEffortFile.TryDeleteDirectory(aside);
+        }
+
+        SweepStrayAsides(targetDir, logger);
+    }
+
+    // An aside a crashed or failed publish left behind holds a superseded tree; once the new tree is live it only costs disk.
+    private static void SweepStrayAsides(string targetDir, ILogger logger)
+    {
+        var trimmed = targetDir.TrimEnd(Path.DirectorySeparatorChar);
+        var prefixLength = Path.GetFileName(trimmed).Length + 1;
+        foreach (var stray in Directory.EnumerateDirectories(Path.GetDirectoryName(trimmed)!, $"{Path.GetFileName(trimmed)}.*.aside"))
+        {
+            // Only this target's own "{target}.{guid:N}.aside", never the aside of a sibling target whose name has a dot.
+            if (!Guid.TryParseExact(Path.GetFileName(stray)[prefixLength..^".aside".Length], "N", out _))
+            {
+                continue;
+            }
+
+            logger.LogInformation("Removing the leftover publish aside {AsideDir}.", stray);
+            BestEffortFile.TryDeleteDirectory(stray);
         }
     }
 

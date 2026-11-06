@@ -111,6 +111,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -317,6 +318,32 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    [Arguments(GraphWorkflowRunStatus.Running)]
+    [Arguments(GraphWorkflowRunStatus.WaitingForApproval)]
+    public async Task RegenerateAsync_WhenTheBoundWorkflowRunIsLive_RefusesBeforeMintingAVariant(GraphWorkflowRunStatus status)
+    {
+        // Same rule as a normal send: a live bound run owns the conversation, parked runs included.
+        await using var provider = await BuildProviderAsync($"regeneration-workflow-live-{status}.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>(), UnknownUsageProviderResolver.Instance);
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
+        var dispatcher = new RegenRecordingDispatcher();
+        var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher),
+            graphWorkflows: NodeChatStreamServiceTestSupport.BoundRunStore(conversationId, status));
+
+        var exception = await AssertEx.ThrowsAsync<NodeChatWorkflowRunLiveException>(async () =>
+        {
+            await foreach (var _ in service.RegenerateAsync(conversationId, originalId))
+            {
+                // The refusal lands before the first event.
+            }
+        });
+
+        AssertEx.Equal(conversationId, exception.ConversationId);
+        var conversation = AssertEx.NotNull(await persistence.GetConversationAsync(conversationId));
+        AssertEx.Equal(expected: 2, conversation.Messages.Count, "no variant was minted.");
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenVariantTerminalAfterLease_ReportsTerminalAndClearsResume()
     {
         // The variant is finalized between the lease grant and the streaming mark. The Assigned state the lease
@@ -406,7 +433,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         RegenRecordingDispatcher dispatcher,
         IInvocationRunner runner,
         INodeRuntimeSettings? runtimeSettings = null,
-        IGpuWorkGate? gpuWorkGate = null)
+        IGpuWorkGate? gpuWorkGate = null,
+        IGraphWorkflowStore? graphWorkflows = null)
     {
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -430,6 +458,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            graphWorkflows ?? Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             gpuWorkGate ?? new GpuWorkGate());
     }
@@ -702,6 +731,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -797,6 +827,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -868,6 +899,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -965,6 +997,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1068,6 +1101,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1183,6 +1217,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1300,6 +1335,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1397,6 +1433,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1492,6 +1529,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1582,6 +1620,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1669,6 +1708,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1758,6 +1798,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1867,6 +1908,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -1951,6 +1993,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -2051,6 +2094,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -2146,6 +2190,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -2238,6 +2283,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -2320,6 +2366,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -2440,6 +2487,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -3158,6 +3206,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -3238,6 +3287,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -3291,6 +3341,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -3372,6 +3423,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
     }
@@ -3455,6 +3507,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
 
@@ -3673,6 +3726,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
     }
@@ -3799,6 +3853,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatRegenerationService>.Instance,
             new GpuWorkGate());
     }

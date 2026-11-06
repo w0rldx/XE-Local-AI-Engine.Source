@@ -85,6 +85,18 @@ the browser E2E host.
 
 **Rule:** an `IModelTrustResolver` built with `Substitute.For<T>()` returns null from `ResolveCloudGrantsAsync` and `ClassifyCloudGrants` unless configured. Any test whose trust answer is not `Local` must stub both to `ExternalProviderCloudGrants.None` (or use `FakeModelTrustResolver`, which mirrors the real rule), or the gate under test dies with a `NullReferenceException` instead of withholding. **Prevents:** a cloud-path test that crashes before it reaches the gate it pins. **Authority:** `GraphWorkflowAgentHostFixture`, `GraphWorkflowResponseSchemaWarningTests.BuildService`, `ModelTrustResolverTests.FakeModelTrustResolver_AnswersGrantsLikeTheRealResolver`.
 
+### A test console built with `AnsiConsole.Create` opts out of Spectre's profile enrichers
+
+**Rule:** every fake or capturing console built through `AnsiConsole.Create(new AnsiConsoleSettings { … })` sets `Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }` beside its `Interactive` and `Ansi` settings. To reproduce a CI-only CLI test failure, run the Cli test host with `GITHUB_ACTIONS=true` (`CI=true` alone does not trigger it); the local gate never sets it. **Prevents:** Spectre's GitHub enricher forcing `Interactive=false` and `Ansi=true` after the explicit settings, so a prompt refuses to read keys and a scripted turn gated on that read never ends (a CI leg hung to its 45-minute timeout, 2026-10-17). **Authority:** `GatedConsole` in `TurnRunnerTests` and `TestCli` (`XE-Local-AI-Engine.Cli.Tests`).
+
+### A symlink-chain fixture stays at or below 20 links
+
+**Rule:** Linux follows at most 40 links, and its lock-free path walk restarts and re-counts the links already followed whenever anything mounts, so a chain longer than 20 is not reliably resolvable while other tests launch sandboxes. **Prevents:** a fixture that resolves alone and fails `stat` with ELOOP inside a gate (`SandboxedMcpStdioTransport.MaxLinkHops` was 40 in the 2026-10-22 gate reds). **Authority:** `SandboxedMcpStdioTransport.MaxLinkHops`; `SandboxedMcpStdioTransportTests`.
+
+### A test that starts a Quartz 4 scheduler must shut it down, or the test host never exits
+
+**Rule:** a test that builds a provider with `AddNodeScheduler` registers `SchedulerShutdownGuard.AddTo` and disposes it, so every scheduler the provider started is shut down even when the test fails before its own `Shutdown`; production's `UseBackgroundThreads = true` is wiki 06's. **Prevents:** the ADO store's misfire handler, a foreground thread by default since Quartz 4, keeping the host alive after one failed scheduler test, so the run hangs instead of reporting the red. **Authority:** `SchedulerShutdownGuard` (`Client.Persistence.Tests`); `NodeSchedulerServiceCollectionExtensions.AddNodeScheduler`.
+
 ## Browser E2E host
 
 ### a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run

@@ -5,6 +5,11 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import {
+	backendUndeterminedDetailText,
+	cpuFallbackReasonText,
+	cpuFallbackRemediationText,
+} from "@/features/model-fit/models/RuntimeAuditText";
 import type { HardwareProfile } from "@/features/model-fit/models/ModelFitModels";
 
 interface HardwareProfileCardProps {
@@ -52,6 +57,8 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 	const { t } = useTranslation();
 	const placement = profile ? layerPlacement(profile) : null;
 	const showRuntimeAlerts = Boolean(profile) && !isLoading && !error;
+	const remediation = profile?.cpuFallback ? cpuFallbackRemediationText(t, profile.cpuFallbackRemediationCode) : null;
+	const undeterminedDetail = backendUndeterminedDetailText(t, profile?.backendUndeterminedReasonCode ?? null);
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="model-fit-hardware-card">
@@ -102,30 +109,21 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 						title={t("pages.modelFit.hardware.cpuFallbackAlert.title", "Running on CPU despite a detected GPU")}
 						data-testid="model-fit-hardware-cpu-fallback-alert"
 					>
-						{/* The localized sentence comes from the audit state; the server's English reason and remediation stay
-						    below it as detail, as the chat error headline does. */}
+						{/* Both lines are localized from the audit's codes, never the server's English text. */}
 						<Stack gap={4}>
-							<Text size="sm">
-								{t(
-									"pages.modelFit.hardware.cpuFallbackAlert.reason",
-									"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
-								)}
+							<Text size="sm" data-testid="model-fit-hardware-cpu-fallback-reason">
+								{cpuFallbackReasonText(t, profile.cpuFallbackReasonCode)}
 							</Text>
-							{profile.cpuFallbackReason ? (
-								<Text size="xs" data-testid="model-fit-hardware-cpu-fallback-reason">
-									{profile.cpuFallbackReason}
-								</Text>
-							) : null}
-							{profile.cpuFallbackRemediation ? (
+							{remediation ? (
 								<Text size="xs" data-testid="model-fit-hardware-cpu-fallback-remediation">
-									{profile.cpuFallbackRemediation}
+									{remediation}
 								</Text>
 							) : null}
 						</Stack>
 					</Alert>
 				) : null}
 
-				{showRuntimeAlerts && profile?.backendUndeterminedReason ? (
+				{showRuntimeAlerts && profile?.backendUndeterminedReasonCode ? (
 					<Alert
 						color="yellow"
 						variant="light"
@@ -140,9 +138,11 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 									"The GPU devices of the selected runtime have not been listed, so whether inference will use the GPU is unknown. Model sizing on this page still assumes the GPU's VRAM is usable.",
 								)}
 							</Text>
-							<Text size="xs" data-testid="model-fit-hardware-backend-undetermined-detail">
-								{profile.backendUndeterminedReason}
-							</Text>
+							{undeterminedDetail ? (
+								<Text size="xs" data-testid="model-fit-hardware-backend-undetermined-detail">
+									{undeterminedDetail}
+								</Text>
+							) : null}
 						</Stack>
 					</Alert>
 				) : null}

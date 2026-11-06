@@ -26,6 +26,8 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
     internal const long RequiredSystemMemoryBytes = 16L * 1024 * 1024 * 1024;
 
     private static readonly TimeSpan NvidiaSmiTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan CompilerProbeTimeout = TimeSpan.FromSeconds(10);
+    private static readonly string[] CCompilers = ["cc", "gcc", "clang"];
 
     // The one free-disk measurement in the node; see DriveInfoFreeSpaceProbe for why a path root is the wrong input.
     private static readonly IFreeSpaceProbe FreeSpace = new DriveInfoFreeSpaceProbe();
@@ -57,14 +59,26 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
 
         // Only worth spawning a process once the platform gate passed; on Windows nvidia-smi would be a different
         // binary answering a question the platform item has already refused.
-        items.Add(OperatingSystem.IsLinux()
-            ? await ProbeNvidiaDriverAsync(ct).ConfigureAwait(false)
-            : new SourceBuildPrerequisiteRow
+        if (OperatingSystem.IsLinux())
+        {
+            items.Add(await ProbeNvidiaDriverAsync(ct).ConfigureAwait(false));
+            items.Add(await ProbeCCompilerAsync(ct).ConfigureAwait(false));
+        }
+        else
+        {
+            items.Add(new SourceBuildPrerequisiteRow
             {
                 Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
                 Satisfied = false,
                 Detail = "The NVIDIA driver was not checked because training is available on Linux only."
             });
+            items.Add(new SourceBuildPrerequisiteRow
+            {
+                Key = TrainingRuntimePrerequisiteKeys.CCompiler,
+                Satisfied = false,
+                Detail = "The C compiler was not checked because training is available on Linux only."
+            });
+        }
 
         return new SourceBuildPrerequisiteReport
         {
@@ -221,6 +235,49 @@ internal sealed class TrainingRuntimePrerequisiteProbe : ITrainingRuntimePrerequ
             Key = TrainingRuntimePrerequisiteKeys.NvidiaDriver,
             Satisfied = true,
             Detail = $"NVIDIA driver detected: {lines[0].Trim()}."
+        };
+    }
+
+    // Triton compiles its CUDA launcher at the first training step with the first of cc, gcc and clang it finds; without one
+    // the install ends Ready and the run fails. Spawned under the same scrubbed environment, so PATH is the one a run sees.
+    private async Task<SourceBuildPrerequisiteRow> ProbeCCompilerAsync(CancellationToken ct)
+    {
+        foreach (var compiler in CCompilers)
+        {
+            try
+            {
+                var exitCode = await _processRunner.RunAsync(compiler,
+                    ["--version"],
+                    TrainingRuntimeEnvironment.BuildProbeEnvironment(AppContext.BaseDirectory),
+                    AppContext.BaseDirectory,
+                    static _ => { },
+                    CompilerProbeTimeout,
+                    ct).ConfigureAwait(false);
+                if (exitCode == 0)
+                {
+                    return new SourceBuildPrerequisiteRow
+                    {
+                        Key = TrainingRuntimePrerequisiteKeys.CCompiler,
+                        Satisfied = true,
+                        Detail = $"C compiler found: {compiler}."
+                    };
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is TrainingRuntimeException or ManagedPythonException or IOException or UnauthorizedAccessException)
+            {
+                // Not on PATH: try the next name.
+            }
+        }
+
+        return new SourceBuildPrerequisiteRow
+        {
+            Key = TrainingRuntimePrerequisiteKeys.CCompiler,
+            Satisfied = false,
+            Detail = "No C compiler (cc, gcc or clang) was found. Triton needs one to compile its GPU kernels; install gcc."
         };
     }
 

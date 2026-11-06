@@ -37,10 +37,6 @@ const askUserToolName = "ask_user";
 
 const EMPTY_TOOL_NAMES: readonly string[] = [];
 
-// The catalog marks a tool this node never offers (run_python off Linux x64 and Windows x64) only in its description, with this
-// exact text from LocalToolOfferProvider's catalog entry: change both together. Such a tool cannot be newly selected.
-const withheldOnNodeMarker = "(not available on this node's platform";
-
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
 // deselect it; it defaults to requiresApproval=true (the strict default), an unknown source, and the fail-closed
@@ -56,6 +52,7 @@ function unknownToolEntry(name: string): ToolCatalogEntry {
 		category: "Unknown",
 		effectiveRequiresApproval: true,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	};
 }
 
@@ -149,8 +146,9 @@ export function AgentToolSelector({
 				const isAlwaysOffered = !isDefaultAssistant && toolCapable && tool.name === askUserToolName;
 				const isSelected = isAlwaysOffered || checkedToolNameSet.has(tool.name);
 				const locked = !toolCapable || isDefaultAssistant || isAlwaysOffered;
-				// An already-selected withheld tool stays enabled, so the operator can still untick it.
-				const withheld = !isSelected && tool.description.includes(withheldOnNodeMarker);
+				// A tool this node never offers (run_python off Linux x64 and Windows x64) cannot be newly selected; an
+				// already-selected one stays enabled, so the operator can still untick it.
+				const withheld = !isSelected && !tool.isAvailableOnNode;
 				// A custom (user-defined) tool always requires approval at runtime (forced by the tool registry),
 				// so the per-tool approval switch is pinned on and locked — flipping it would be a misleading no-op.
 				const isCustom = tool.source.kind === "custom";
@@ -218,6 +216,14 @@ export function AgentToolSelector({
 									{t("pages.agents.form.tools.webAccessRequired", "Requires web access in Node Settings")}
 								</ButtonLink>
 							) : null}
+							{tool.isAvailableOnNode ? null : (
+								<Text size="xs" c="yellow" data-testid={`agent-tool-unavailable-${tool.name}`}>
+									{t(
+										"pages.agents.form.tools.notAvailableOnNode",
+										"Not available on this node's platform; an agent selecting it gets no tool.",
+									)}
+								</Text>
+							)}
 							{tool.description ? (
 								<Text size="xs" c="dimmed">
 									{tool.description}

@@ -464,7 +464,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     ///     Dispatches on the archive kind because whisper.cpp ships zip on Windows and tar.gz on Linux — unlike
     ///     stable-diffusion.cpp, which is zip everywhere.
     /// </remarks>
-    private static async Task ExtractArchiveAsync(string archivePath, WhisperArchiveKind archiveKind, string backendDir, CancellationToken ct)
+    private async Task ExtractArchiveAsync(string archivePath, WhisperArchiveKind archiveKind, string backendDir, CancellationToken ct)
     {
         var stagingDir = $"{backendDir}.{Guid.NewGuid():N}.tmp";
         Directory.CreateDirectory(stagingDir);
@@ -487,7 +487,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
                     throw new WhisperRuntimeException("The pinned whisper.cpp asset declares an unknown archive format.");
             }
 
-            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, ct).ConfigureAwait(false);
+            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, _logger, ct).ConfigureAwait(false);
         }
         finally
         {

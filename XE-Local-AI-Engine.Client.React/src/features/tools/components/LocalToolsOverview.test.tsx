@@ -41,6 +41,7 @@ const builtinTools: ToolCatalogEntry[] = [
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 	{
 		name: "Calculate",
@@ -50,6 +51,7 @@ const builtinTools: ToolCatalogEntry[] = [
 		category: "ReadLocal",
 		effectiveRequiresApproval: false,
 		sessionScopeEligible: false,
+		isAvailableOnNode: true,
 	},
 ];
 
@@ -61,6 +63,7 @@ const mcpTool: ToolCatalogEntry = {
 	category: "Network",
 	effectiveRequiresApproval: true,
 	sessionScopeEligible: false,
+	isAvailableOnNode: true,
 };
 
 function renderWithProviders(ui: ReactElement) {

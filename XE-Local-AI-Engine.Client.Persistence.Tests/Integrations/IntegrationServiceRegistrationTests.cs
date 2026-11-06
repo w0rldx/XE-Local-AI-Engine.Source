@@ -82,6 +82,20 @@ public sealed class IntegrationServiceRegistrationTests
         AssertEx.True(integrationsIndex > chatIndex, "AddNodeIntegrations must be invoked after AddNodeChat in the composition root.");
     }
 
+    [Test]
+    public void CompositionRoot_InvokesTheModuleBeforeTheGraphWorkflowModule()
+    {
+        // The coordinator's restart sweep cancels the graph run of every abandoned execution. Hosted services start in
+        // registration order, so it must be registered before the graph dispatcher, or a node of that run resumes and finishes.
+        var source = File.ReadAllText(CompositionRootPath());
+        var integrationsIndex = source.IndexOf("AddNodeIntegrations(configuration)", StringComparison.Ordinal);
+        var graphIndex = source.IndexOf("AddNodeGraphWorkflows(configuration)", StringComparison.Ordinal);
+
+        AssertEx.True(graphIndex >= 0, "The composition root must still call AddNodeGraphWorkflows.");
+        AssertEx.True(integrationsIndex >= 0 && integrationsIndex < graphIndex,
+            "AddNodeIntegrations must be invoked before AddNodeGraphWorkflows in the composition root.");
+    }
+
     private static string CompositionRootPath()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -531,7 +531,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         }
     }
 
-    private static async Task ExtractArchiveAsync(string archivePath, string backendDir, CancellationToken ct)
+    private async Task ExtractArchiveAsync(string archivePath, string backendDir, CancellationToken ct)
     {
         // Every stable-diffusion.cpp asset is a .zip (unlike llama.cpp's tar.gz on Linux). Extract into a temp sibling, then
         // publish it swap-aside so neither a partial extract nor a failed publish replaces a cached install.
@@ -541,7 +541,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         {
             await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
 
-            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, ct).ConfigureAwait(false);
+            await StagedDirectoryPublish.PublishAsync(stagingDir, backendDir, _logger, ct).ConfigureAwait(false);
         }
         finally
         {

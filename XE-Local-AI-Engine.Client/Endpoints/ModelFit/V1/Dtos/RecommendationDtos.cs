@@ -270,10 +270,25 @@ public sealed class HardwareProfileResponse
     public string? CpuFallbackRemediation { get; init; }
 
     /// <summary>
+    ///     Why the runtime fell back (<c>cpu_variant|zero_devices</c>), or null when the GPU is being used. The UI localizes from this;
+    ///     <see cref="CpuFallbackReason" /> stays as the English text for logs and API clients.
+    /// </summary>
+    public string? CpuFallbackReasonCode { get; init; }
+
+    /// <summary>Which remediation applies (<c>windows|linux_nvidia|linux_other</c>), or null when the GPU is being used.</summary>
+    public string? CpuFallbackRemediationCode { get; init; }
+
+    /// <summary>
     ///     Operator-facing explanation when <see cref="InferenceBackend" /> is <c>unknown</c> because the device probe
     ///     could not complete, or null when the backend is known. NOT a CPU fallback — it is an unanswered question.
     /// </summary>
     public string? BackendUndeterminedReason { get; init; }
+
+    /// <summary>
+    ///     Why the backend is undetermined (<c>runtime_missing|companion_libraries_incomplete|probe_failed</c>), or null when it is
+    ///     known. The UI localizes from this; <see cref="BackendUndeterminedReason" /> stays as the English text.
+    /// </summary>
+    public string? BackendUndeterminedReasonCode { get; init; }
 
     // Measured GPU layer placement from the most recent observed model load, null until one is observed; unlike the
     // CPU-fallback fields, a partial offload means the GPU IS in use. The model name keeps the figures attributable.
