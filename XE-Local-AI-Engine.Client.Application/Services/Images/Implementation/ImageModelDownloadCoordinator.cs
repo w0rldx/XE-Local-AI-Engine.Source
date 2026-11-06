@@ -75,7 +75,10 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        if (!_inFlight.TryGetValue(modelName, out var cts))
+        // The run publishes its terminal phase before its finally removes the _inFlight entry, so the entry alone does not
+        // mean the download is still going: a cancel landing in that window must not claim to stop a finished download.
+        if (!_inFlight.TryGetValue(modelName, out var cts)
+            || (_status.TryGetValue(modelName, out var status) && status.Phase != ImageModelDownloadPhase.Running))
         {
             return false;
         }

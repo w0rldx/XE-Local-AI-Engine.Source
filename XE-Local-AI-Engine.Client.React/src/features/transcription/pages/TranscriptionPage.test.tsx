@@ -245,6 +245,7 @@ describe("TranscriptionPage", () => {
 	// The 415 carries the readable-container list; showing only "unsupported" would leave the operator guessing which
 	// formats this node can actually take.
 	it("names the readable containers when the upload refuses the file", async () => {
+		let deleteRequests = 0;
 		server.use(
 			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
 			jsonRoute("post", "transcription/sessions", detail()),
@@ -255,7 +256,10 @@ describe("TranscriptionPage", () => {
 				supportedContainers: ["Wav", "Mp3"],
 				ffmpegRequired: false,
 			}),
-			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => new HttpResponse(null, { status: 204 })),
+			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => {
+				deleteRequests += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
 			...runtimeRoutes(),
 		);
 		renderPage();
@@ -268,6 +272,10 @@ describe("TranscriptionPage", () => {
 		expect(error.textContent).toContain("Wav, Mp3");
 		expect(error.textContent).not.toContain("ffmpeg");
 		expect(navigate).not.toHaveBeenCalled();
+		// The refusal fires a cleanup DELETE for this same session id; left in flight, it lands in the next test's handler.
+		await waitFor(() => {
+			expect(deleteRequests).toBe(1);
+		});
 	});
 
 	// The recording is never stored, so the transcript is the only copy — deleting it is irreversible and must not
@@ -298,6 +306,7 @@ describe("TranscriptionPage", () => {
 	// The two 415 cases need different actions: one says "re-export", the other says "install ffmpeg and the engine
 	// will convert it for you". A shared sentence would send the ffmpeg case down the wrong path.
 	it("tells the operator to install ffmpeg when that is what the refusal was about", async () => {
+		let deleteRequests = 0;
 		server.use(
 			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
 			jsonRoute("post", "transcription/sessions", detail()),
@@ -308,7 +317,10 @@ describe("TranscriptionPage", () => {
 				supportedContainers: ["Wav", "Mp3"],
 				ffmpegRequired: true,
 			}),
-			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => new HttpResponse(null, { status: 204 })),
+			http.delete(localApiPath(`transcription/sessions/${sessionId}`), () => {
+				deleteRequests += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
 			...runtimeRoutes(),
 		);
 		renderPage();
@@ -322,6 +334,9 @@ describe("TranscriptionPage", () => {
 		expect(error.textContent).toContain("Wav, Mp3");
 		// The operator uploaded a .webm; the node's detected type is named the way they know it.
 		expect(error.textContent).toContain("webm audio");
+		await waitFor(() => {
+			expect(deleteRequests).toBe(1);
+		});
 	});
 
 	// The row exists only to receive this file, so a refused upload must not leave an empty Created session behind.
