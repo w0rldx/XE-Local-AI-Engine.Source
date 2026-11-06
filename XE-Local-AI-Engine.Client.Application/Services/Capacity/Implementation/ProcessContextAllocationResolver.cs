@@ -34,6 +34,14 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     /// </remarks>
     private const int ResidentPreferenceFloorTokens = 16384;
 
+    /// <summary>What a chat process's background slot costs beyond its headroom KV: the second sequence's recurrent state and buffers.</summary>
+    /// <remarks>
+    ///     The estimator models neither, so this is a measured allowance, not a derivation: the largest non-KV growth the second slot showed was about
+    ///     234 MiB (Qwen3.5-9B, hybrid; 27B about 40 MiB). Accepted ceiling: a flat figure over-reserves for a small dense model; derive it from
+    ///     the GGUF's recurrent-state dimensions if a borderline model needs the bytes back.
+    /// </remarks>
+    private const long BackgroundSlotStateAllowanceBytes = 256L * 1024 * 1024;
+
     private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
         new(StringComparer.Ordinal);
 
@@ -145,24 +153,24 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         ArgumentNullException.ThrowIfNull(current);
         downTiered = current;
-        if (current.Source != ProcessContextAllocationSource.HardwareTier
-            || !_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context)
-            || context.Role != ModelRole.Chat
-            || !TryGetNextTier(current.ProcessContextTokens, out var next))
+        if (!_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context) || context.Role != ModelRole.Chat)
         {
             return false;
         }
 
-        downTiered = BuildAllocation(current.CacheKey,
-            context.ContentIdentity,
-            next,
-            context.TrainCeiling,
-            ProcessContextAllocationSource.HardwareTier,
-            context.Variant,
-            context.Profile,
-            context.Facts,
-            context.ProcessGpuBudget,
-            context.KvCacheQuant);
+        // The background slot goes first, at the same window: slot 2 never costs the window. A frozen or overridden window keeps its size.
+        if (current.ChatSlots > 1)
+        {
+            downTiered = BuildAllocation(current.CacheKey, context, current.ProcessContextTokens, chatSlots: 1, current.Source);
+            return true;
+        }
+
+        if (current.Source != ProcessContextAllocationSource.HardwareTier || !TryGetNextTier(current.ProcessContextTokens, out var next))
+        {
+            return false;
+        }
+
+        downTiered = BuildPreferringTwoSlots(current.CacheKey, context, next, ProcessContextAllocationSource.HardwareTier, context.KvCacheQuant);
         return true;
     }
 
@@ -183,7 +191,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
         // An admission down-tier is NOT cached: it reflects the residents of that moment, and the admission carries its window into the launch on its own, so
         // the next spawn after they leave tiers back up. Only an out-of-memory down-tier is sticky, and an admission never claims more than it allows.
-        if (_adjustedAllocations.TryGetValue(candidate.CacheKey, out var adjusted) && adjusted.ProcessContextTokens < candidate.ProcessContextTokens)
+        if (_adjustedAllocations.TryGetValue(candidate.CacheKey, out var adjusted) && IsSmaller(adjusted, candidate))
         {
             committed = adjusted;
         }
@@ -214,7 +222,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 return false;
             }
 
-            if (adjusted.ProcessContextTokens <= admitted.ProcessContextTokens)
+            if (!IsSmaller(admitted, adjusted))
             {
                 effective = adjusted;
             }
@@ -227,11 +235,6 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         ArgumentNullException.ThrowIfNull(current);
         downTiered = current;
-        if (current.Source != ProcessContextAllocationSource.HardwareTier)
-        {
-            return false;
-        }
-
         if (!_hardwareAllocationContexts.TryGetValue(current.CacheKey, out var context))
         {
             return false;
@@ -239,11 +242,19 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
         lock (context)
         {
-            var effective = _adjustedAllocations.TryGetValue(current.CacheKey, out var adjusted)
-                            && adjusted.ProcessContextTokens < current.ProcessContextTokens
+            var effective = _adjustedAllocations.TryGetValue(current.CacheKey, out var adjusted) && IsSmaller(adjusted, current)
                 ? adjusted
                 : current;
-            if (!TryGetNextTier(effective.ProcessContextTokens, out var next))
+
+            // A chat process drops its background slot before its window, whatever chose the window, and never gets it back after an out-of-memory
+            // start. The drop is no window step, so it leaves MaximumAutomaticDownTiers whole for the tier walk.
+            if (context.Role == ModelRole.Chat && effective.ChatSlots > 1)
+            {
+                downTiered = CommitAdjustedAllocation(BuildAllocation(current.CacheKey, context, effective.ProcessContextTokens, chatSlots: 1, effective.Source));
+                return true;
+            }
+
+            if (current.Source != ProcessContextAllocationSource.HardwareTier || !TryGetNextTier(effective.ProcessContextTokens, out var next))
             {
                 return false;
             }
@@ -254,17 +265,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 return false;
             }
 
-            var candidate = BuildAllocation(current.CacheKey,
-                context.ContentIdentity,
-                next,
-                context.TrainCeiling,
-                ProcessContextAllocationSource.HardwareTier,
-                context.Variant,
-                context.Profile,
-                context.Facts,
-                context.ProcessGpuBudget,
-                context.KvCacheQuant);
-            downTiered = CommitAdjustedAllocation(candidate);
+            downTiered = CommitAdjustedAllocation(BuildAllocation(current.CacheKey, context, next, chatSlots: 1, ProcessContextAllocationSource.HardwareTier));
             return true;
         }
     }
@@ -273,11 +274,14 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     {
         return _adjustedAllocations.AddOrUpdate(candidate.CacheKey,
             static (_, proposed) => proposed,
-            static (_, existing, proposed) => existing.ProcessContextTokens <= proposed.ProcessContextTokens
-                ? existing
-                : proposed,
+            static (_, existing, proposed) => IsSmaller(proposed, existing) ? proposed : existing,
             candidate);
     }
+
+    // Window first, then slot count: a smaller allocation launches a smaller window, or the same window with fewer chat slots.
+    private static bool IsSmaller(ProcessContextAllocation left, ProcessContextAllocation right) =>
+        left.ProcessContextTokens < right.ProcessContextTokens
+        || (left.ProcessContextTokens == right.ProcessContextTokens && left.ChatSlots < right.ChatSlots);
 
     private static bool TryGetNextTier(int currentTokens, out int next)
     {
@@ -338,22 +342,10 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         }
 
         var trainCeiling = ResolveTrainCeiling(facts.ContextLength);
-        if (source == ProcessContextAllocationSource.FrozenProfile)
-        {
-            var frozenTokens = Math.Max(1, resolved.CtxSize);
-            return BuildAllocation(key, contentIdentity, frozenTokens, trainCeiling, source, variant, profile, facts,
-                await ResolveProcessGpuBudgetAsync(variant, profile, ct), kvCacheQuant);
-        }
-
-        if (source == ProcessContextAllocationSource.DeterministicOverride && deterministicOverride is { } overrideTokens)
-        {
-            var overridden = CapAndAlign(overrideTokens, trainCeiling);
-            return BuildAllocation(key, contentIdentity, overridden, trainCeiling, source, variant, profile, facts,
-                await ResolveProcessGpuBudgetAsync(variant, profile, ct), kvCacheQuant);
-        }
-
         var processGpuBudget = await ResolveProcessGpuBudgetAsync(variant, profile, ct);
-        _hardwareAllocationContexts[key] = new HardwareAllocationContext
+
+        // Recorded for every source: an overridden window keeps its size, but its chat process may still drop the background slot.
+        var allocationContext = new HardwareAllocationContext
         {
             ContentIdentity = contentIdentity,
             Role = role,
@@ -364,6 +356,19 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             TrainCeiling = trainCeiling,
             KvCacheQuant = kvCacheQuant
         };
+        _hardwareAllocationContexts[key] = allocationContext;
+        // One chat slot: the profile's -ngl fits a pool whose slot count it does not record. Accepted ceiling: background work shares the chat's
+        // slot on a frozen profile; upgrade path: persist the fitted slot count on the profile (a schema change) and replay exactly that.
+        if (source == ProcessContextAllocationSource.FrozenProfile)
+        {
+            return BuildAllocation(key, allocationContext, Math.Max(1, resolved.CtxSize), chatSlots: 1, source, kvCacheQuant);
+        }
+
+        if (source == ProcessContextAllocationSource.DeterministicOverride && deterministicOverride is { } overrideTokens)
+        {
+            return BuildPreferringTwoSlots(key, allocationContext, CapAndAlign(overrideTokens, trainCeiling), source, kvCacheQuant);
+        }
+
         var candidates = role == ModelRole.Chat
             ? LlamaServerLaunchPolicyOptions.ChatContextTiers
             : [_options.ContextTokensForRole(role)];
@@ -380,8 +385,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 break;
             }
 
-            var allocation = BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
-                processGpuBudget, kvCacheQuant: null);
+            // The window is the outer loop: the background slot is kept only where it costs neither this window nor its residency.
+            var allocation = BuildPreferringTwoSlots(key, allocationContext, context, source, kvCacheQuant: null);
             if (!FitsStableBudgets(allocation.Footprint, variant, profile, processGpuBudget))
             {
                 continue;
@@ -400,18 +405,64 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
             return kvCacheQuant is null
                 ? allocation
-                : BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
-                    processGpuBudget, kvCacheQuant);
+                : BuildAllocation(key, allocationContext, context, allocation.ChatSlots, source, kvCacheQuant);
         }
 
         if (expertOffloadContext is { } offloadContext)
         {
-            return BuildAllocation(key, contentIdentity, offloadContext, trainCeiling, source, variant, profile, facts, processGpuBudget, kvCacheQuant);
+            return BuildPreferringTwoSlots(key, allocationContext, offloadContext, source, kvCacheQuant);
         }
 
         var fallback = ResolveFallbackContextTokens(role, candidates, facts, trainCeiling, variant, profile, processGpuBudget);
-        return BuildAllocation(key, contentIdentity, fallback, trainCeiling, source, variant, profile, facts, processGpuBudget, kvCacheQuant);
+        return BuildPreferringTwoSlots(key, allocationContext, fallback, source, kvCacheQuant);
     }
+
+    /// <summary>
+    ///     The allocation at <paramref name="contextTokens" />: a chat process with its background slot when that keeps the single-slot
+    ///     placement and fits the stable budgets, otherwise single-slot. Other roles always run one slot.
+    /// </summary>
+    private ProcessContextAllocation BuildPreferringTwoSlots(string key,
+        HardwareAllocationContext context,
+        int contextTokens,
+        ProcessContextAllocationSource source,
+        KvCacheQuant? kvCacheQuant)
+    {
+        var single = BuildAllocation(key, context, contextTokens, chatSlots: 1, source, kvCacheQuant);
+        if (context.Role != ModelRole.Chat)
+        {
+            return single;
+        }
+
+        var pinned = BuildAllocation(key, context, contextTokens, LlamaServerChatSlots.Count, source, kvCacheQuant);
+        return pinned.Placement == single.Placement && FitsStableBudgets(pinned.Footprint, context.Variant, context.Profile, context.ProcessGpuBudget)
+            ? pinned
+            : single;
+    }
+
+    private ProcessContextAllocation BuildAllocation(string key,
+        HardwareAllocationContext context,
+        int contextTokens,
+        int chatSlots,
+        ProcessContextAllocationSource source) =>
+        BuildAllocation(key, context, contextTokens, chatSlots, source, context.KvCacheQuant);
+
+    private ProcessContextAllocation BuildAllocation(string key,
+        HardwareAllocationContext context,
+        int contextTokens,
+        int chatSlots,
+        ProcessContextAllocationSource source,
+        KvCacheQuant? kvCacheQuant) =>
+        BuildAllocation(key,
+            context.ContentIdentity,
+            context.Role == ModelRole.Chat ? chatSlots : 1,
+            contextTokens,
+            context.TrainCeiling,
+            source,
+            context.Variant,
+            context.Profile,
+            context.Facts,
+            context.ProcessGpuBudget,
+            kvCacheQuant);
 
     /// <summary>The window to launch with when no tier fits the stable budgets with the model's weights resident.</summary>
     /// <remarks>
@@ -459,6 +510,7 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
 
     private ProcessContextAllocation BuildAllocation(string key,
         string contentIdentity,
+        int chatSlots,
         int contextTokens,
         int? trainCeiling,
         ProcessContextAllocationSource source,
@@ -472,31 +524,38 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         var useGpu = estimation.UseGpu;
         var gpuBudget = estimation.GpuBudget;
 
-        var estimate = Estimate(facts, contextTokens, estimation.Profile, kvCacheQuant);
+        // A chat process with its background slot (LlamaServerChatSlots): the slot's headroom KV rides the window, its state the allowance.
+        var backgroundSlot = chatSlots > 1;
+        var estimate = Estimate(facts,
+            backgroundSlot ? checked(contextTokens + LlamaServerChatSlots.BackgroundHeadroomTokens) : contextTokens,
+            estimation.Profile,
+            kvCacheQuant);
+        var slotStateBytes = backgroundSlot ? BackgroundSlotStateAllowanceBytes : 0;
+        var estimatedBytes = estimate.EstimatedBytes + slotStateBytes;
         ResourceFootprint footprint;
         ProcessPlacementMode placement;
         if (!useGpu)
         {
-            footprint = new ResourceFootprint(0, estimate.EstimatedBytes);
+            footprint = new ResourceFootprint(0, estimatedBytes);
             placement = ProcessPlacementMode.Cpu;
         }
         else if (estimate.MoeVerdict == MoeFitVerdict.FitsWithExpertOffload)
         {
-            footprint = new ResourceFootprint(estimate.GpuBytes ?? gpuBudget,
+            footprint = new ResourceFootprint((estimate.GpuBytes ?? gpuBudget) + slotStateBytes,
                 Math.Max(estimate.CpuBytes ?? 0, facts.FileSizeBytes));
             placement = ProcessPlacementMode.ExpertOffload;
         }
-        else if (estimate.EstimatedBytes <= gpuBudget)
+        else if (estimatedBytes <= gpuBudget)
         {
             // llama.cpp memory-maps the GGUF; a fully GPU-resident placement does not commit a second file-sized RAM
             // allocation. Reserving the on-disk size here made admission reject VRAM-fitting models on low-free-RAM hosts.
-            footprint = new ResourceFootprint(estimate.EstimatedBytes, RamBytes: 0);
+            footprint = new ResourceFootprint(estimatedBytes, RamBytes: 0);
             placement = ProcessPlacementMode.GpuResident;
         }
         else
         {
             var gpuBytes = Math.Max(0, gpuBudget);
-            var ramBytes = checked(Math.Max(facts.FileSizeBytes, estimate.EstimatedBytes - gpuBytes));
+            var ramBytes = checked(Math.Max(facts.FileSizeBytes, estimatedBytes - gpuBytes));
             footprint = new ResourceFootprint(gpuBytes, ramBytes);
             placement = ProcessPlacementMode.Hybrid;
         }
@@ -509,7 +568,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             Placement = placement,
             Footprint = footprint,
             ContentIdentity = contentIdentity,
-            CacheKey = key
+            CacheKey = key,
+            ChatSlots = chatSlots
         };
     }
 

@@ -335,6 +335,9 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
     /// </summary>
     public Uri? EnsureEndpoint { get; set; }
 
+    /// <summary>The <c>--parallel</c> slot count the <see cref="EnsureEndpoint" /> process reports (default 1, as an unlaunched endpoint).</summary>
+    public int EnsureParallelSlots { get; set; } = 1;
+
     /// <summary>
     ///     The acquisition <see cref="TryAcquireInferenceLease" /> returns. Defaults to
     ///     <see cref="LlamaServerLeaseAcquisition.NotRunning" /> (no lease, not evicting).
@@ -384,7 +387,8 @@ internal sealed class FakeProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 ModelName = modelName,
                 Role = role,
-                BaseAddress = endpoint
+                BaseAddress = endpoint,
+                ParallelSlots = EnsureParallelSlots
             });
         }
 

@@ -149,9 +149,9 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
 
         var allocation = decision.Admission?.Allocation;
         _logger.LogInformation(
-            "Chat admission for model {ModelName} ({LoadKind} load): {Verdict}; global free {GlobalFreeMiB} MiB, footprint {FootprintGpuMiB} MiB GPU, window {ContextTokens}, placement {Placement}, evicted [{Evicted}].",
+            "Chat admission for model {ModelName} ({LoadKind} load): {Verdict}; global free {GlobalFreeMiB} MiB, footprint {FootprintGpuMiB} MiB GPU, window {ContextTokens}, slots {ChatSlots}, placement {Placement}, evicted [{Evicted}].",
             modelName, mayUnloadIdleModels ? "user" : "background", decision.Verdict, decision.Admission?.GlobalFreeVramBytesAtAdmission / Mib, allocation?.Footprint.GpuBytes / Mib,
-            allocation?.ProcessContextTokens, allocation?.Placement, string.Join(", ", evicted));
+            allocation?.ProcessContextTokens, allocation?.ChatSlots, allocation?.Placement, string.Join(", ", evicted));
 
         return ToReservation(decision);
     }

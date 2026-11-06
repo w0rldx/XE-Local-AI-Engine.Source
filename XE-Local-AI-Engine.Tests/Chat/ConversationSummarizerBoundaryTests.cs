@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -585,6 +586,30 @@ public sealed class ConversationSummarizerBoundaryTests
             "The budget is window x calibrated chars-per-token x 0.6.");
         AssertEx.Equal(4096 * 4 * 6 / 10, CreateSummarizer(client, 12_000, 1000).ResolveRequestBudget(BudgetInput(effectiveContextTokens: 4096)),
             "An uncalibrated model uses the default four characters per token.");
+    }
+
+    [Test]
+    [Arguments(ModelResidencyIntent.Background, LlamaServerChatSlots.BackgroundHeadroomTokens - 1000)]
+    [Arguments(ModelResidencyIntent.Interactive, 12_000)]
+    public void ResolveRequestBudget_ForBackgroundWork_FitsPromptAndOutputInTheBackgroundHeadroom(ModelResidencyIntent intent, int expected)
+    {
+        // A one-character-per-token model (CJK) on a large window: a background fold runs on the chat process's second slot, whose KV room is
+        // only the headroom, so the prompt plus the synopsis cap must fit it. A foreground fold keeps the window-derived budget.
+        using var client = new CapturingChatClient();
+        var calibration = new TokenEstimatorCalibrationStore();
+        calibration.SetDivisor("model", 1);
+        var summarizer = CreateSummarizer(client, requestBudget: 12_000, maxSummaryChars: 1000, calibration);
+
+        var budget = summarizer.ResolveRequestBudget(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages = [],
+            ModelName = "model",
+            EffectiveContextTokens = 65_536,
+            ResidencyIntent = intent
+        });
+
+        AssertEx.Equal(expected, budget);
     }
 
     [Test]

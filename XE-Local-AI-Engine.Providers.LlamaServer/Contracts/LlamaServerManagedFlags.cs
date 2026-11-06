@@ -52,6 +52,9 @@ public static class LlamaServerManagedFlags
         CacheTypeV, "--cache-type-v",
         FlashAttentionShort, FlashAttention,
         "-np", Parallel,
+        // The chat role's two-slot pool (LlamaServerChatSlots): an override could split, uncap or re-clear it.
+        "-kvu", "--kv-unified", "-no-kvu", "--no-kv-unified", "--kv-unified-per-slot",
+        "--cache-idle-slots", "--no-cache-idle-slots",
         BatchSize, "--batch-size",
         UbatchSize, "--ubatch-size",
 

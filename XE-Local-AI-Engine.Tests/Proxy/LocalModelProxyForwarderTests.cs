@@ -196,6 +196,30 @@ public sealed class LocalModelProxyForwarderTests
     }
 
     [Test]
+    public async Task ForwardChatCompletions_ToATwoSlotChatProcess_PinsTheForegroundSlotOverTheCallersOwn()
+    {
+        // The second slot is the node's background slot: an external request landing there runs beside a user turn and keeps its cells.
+        using var upstream = new CapturingHandler(HttpStatusCode.OK, "application/json", "{}");
+        var forwarder = CreateForwarder(out _, out var supervisor, upstream);
+        supervisor.EnsureRunningAsync(InstalledModel, ModelRole.Chat, Arg.Any<CancellationToken>())
+                  .Returns(new LlamaServerEndpoint
+                  {
+                      ModelName = InstalledModel,
+                      Role = ModelRole.Chat,
+                      BaseAddress = ChildEndpoint,
+                      ParallelSlots = LlamaServerChatSlots.Count
+                  });
+        var context = BuildContext("{\"model\":\"test-model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"id_slot\":1}", out _);
+
+        await forwarder.ForwardChatCompletionsAsync(context);
+
+        using var forwarded = JsonDocument.Parse(AssertEx.NotNull(upstream.LastRequestBody));
+        AssertEx.Equal(LlamaServerChatSlots.Foreground, forwarded.RootElement.GetProperty("id_slot").GetInt32());
+        AssertEx.Equal("test-model", forwarded.RootElement.GetProperty("model").GetString());
+        AssertEx.Equal("hi", forwarded.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+    }
+
+    [Test]
     public async Task ForwardChatCompletions_WhenTheChildConnectionFails_Returns503WithRetryAfter()
     {
         // The child exited/refused after provisioning — an HttpRequestException before any response bytes. This must map

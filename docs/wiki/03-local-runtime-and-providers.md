@@ -113,7 +113,7 @@ Contract members:
 - `TryAcquireInferenceLease(modelName, role)` → `ILlamaServerInferenceLease?` — a per-request lease the chat client holds so a graceful eject waits for the turn; `WasEjected` lets an interrupted request classify a force-eject drop as operator-ejected rather than a generic failure.
 - `CheckHealthAsync(ct)` — aggregate every running process's health.
 
-**Keying.** Each distinct `(model, role)` is a distinct process (`ProcessKey`) and counts against the loaded-cap. A chat process launches with `--jinja`; an embedding process with `--embeddings --pooling mean`.
+**Keying.** Each distinct `(model, role)` is a distinct process (`ProcessKey`) and counts against the loaded-cap. A chat process launches with `--jinja` and two slots over one KV pool, slot 0 for turns and slot 1 for post-turn background work (`LlamaServerChatSlots`; it drops to one slot rather than cost window or residency); every other process runs one slot. An embedding process launches with `--embeddings --pooling mean`.
 
 See [the reference page](reference/03-llama-server-supervisor.md#llamaserverprocesssupervisor--process-lifecycle) for the rest of this section.
 
@@ -374,7 +374,7 @@ React chat / agent run
                                                          #   -> prebuilt (live->installed->pinned), SHA-verified
               profileResolver.ResolveAsync(model, role, variant)  # frozen replay args OR explore(--fit on)
               admit + allocate localhost port (cap-checked)
-              launcher.Launch(BuildLaunchSpec(..., resolved))  # OS-contained child, --parallel 1 --no-warmup pinned
+              launcher.Launch(BuildLaunchSpec(..., resolved))  # OS-contained child, --parallel (2 for chat, else 1) --no-warmup pinned
               healthProbe.WaitForReadyAsync(/health)
        -> build OpenAI adapter over the localhost endpoint
        -> stream tokens

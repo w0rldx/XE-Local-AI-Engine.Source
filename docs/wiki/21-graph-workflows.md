@@ -1126,7 +1126,7 @@ native lane (`RunNativeDecisionTurnAsync`) binds the input with the same binder 
 (node-local, installed, decision type present, else `ValidationFailed`), admits capacity for `ModelRole.Decision`
 (`CapacityRejected` on a refusal), then calls `ILlamaServerSystemOneClient`, which leases the model's decision-role
 process (starting it when cold) under its own budget of 5 s plus 10 ms per estimated input token, capped at 30 s. Calls on
-one model are serialized in the client (the process is `--parallel 1`), and the budget starts only once a call owns the
+one model are serialized in the client (the decision-role process is `--parallel 1`), and the budget starts only once a call owns the
 model, so concurrent nodes queue against their node timeout rather than time out on the server's queue. The 5–30 s
 window does not scale with model size: the small BERT-class models answer in about 0.1 s, but Kev-4B on a CPU build took
 about 1.3 s for a 200-token input in a live run, so an input of a few thousand tokens on CPU can exceed 30 s and fail

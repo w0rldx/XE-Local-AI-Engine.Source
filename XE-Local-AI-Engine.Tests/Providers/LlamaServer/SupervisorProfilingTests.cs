@@ -170,7 +170,7 @@ public sealed class SupervisorProfilingTests
         AssertEx.True(fitRunner.Calls.TryPeek(out var spec));
         AssertEx.Contains(spec!.Arguments, "--fit");
         AssertEx.Contains(spec.Arguments, "-v");
-        AssertArgumentValue(spec.Arguments, "-c", "16384");
+        AssertArgumentValue(spec.Arguments, "--kv-unified-per-slot", "16384");
         AssertArgumentValue(spec.Arguments, "-ctk", "q8_0");
         AssertArgumentValue(spec.Arguments, "-ctv", "q8_0");
         AssertArgumentValue(spec.Arguments, "-fa", "on");

@@ -28,5 +28,6 @@ XE_Local_AI_Engine.Providers.HuggingFace.Implementation.GgufSpanReader.TryReadVa
 XE_Local_AI_Engine.Providers.LlamaServer.Contracts.IProcessLaunchAdmissionRegistry.TryBeginLaunch(admission)  # direct launch: true with no capacity admission
 XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(kvTypeK)  # no -ctk: llama.cpp default
 XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(kvTypeV)  # no -ctv: llama.cpp default
+XE_Local_AI_Engine.Providers.LlamaServer.Implementation.LlamaFitParamsOutputParser.TryParseSuccessfulLaunchPolicy(slotWindow)  # no --kv-unified-per-slot: single-slot launch, -c is the window
 XE_Local_AI_Engine.Providers.LlamaServer.Implementation.ProcessLaunchAdmissionRegistry.TryBeginLaunch(admission)  # implements the interface member above
 XE_Local_AI_Engine.Providers.LlamaServer.Options.LlamaServerKvCacheTypes.TryNormalize(normalized)  # blank request: true, llama.cpp default

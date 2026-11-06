@@ -42,7 +42,10 @@ internal sealed class DefaultProcessContextAllocationResolver : IProcessContextA
             Placement = variant == GpuVariant.Cpu ? ProcessPlacementMode.Cpu : ProcessPlacementMode.GpuResident,
             Footprint = ResourceFootprint.Zero,
             ContentIdentity = modelName,
-            CacheKey = $"{modelName}|{role}|{variant}|{tokens}"
+            CacheKey = $"{modelName}|{role}|{variant}|{tokens}",
+
+            // A frozen profile replays one chat slot, as ProcessContextAllocationResolver decides it: the profile does not record the slot count its fit measured.
+            ChatSlots = frozen ? 1 : LlamaServerChatSlots.Count
         });
     }
 

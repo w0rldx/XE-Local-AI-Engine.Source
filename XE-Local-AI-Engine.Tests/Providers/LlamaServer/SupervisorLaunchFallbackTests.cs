@@ -202,6 +202,9 @@ public sealed class SupervisorLaunchFallbackTests
                             --jinja
                             --cache-reuse
                             --cache-ram
+                            --kv-unified-per-slot N
+                            -kvu,  --kv-unified, -no-kvu, --no-kv-unified
+                            --cache-idle-slots, --no-cache-idle-slots
                             -fa, --flash-attn [on|off|auto]
                             -ctk, --cache-type-k TYPE
                                 allowed values: f16, q8_0

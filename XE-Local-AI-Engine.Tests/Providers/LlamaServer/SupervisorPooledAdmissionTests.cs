@@ -137,7 +137,7 @@ public sealed class SupervisorPooledAdmissionTests
         AssertEx.Equal(expected: 2, launcher.LaunchCount, "the dead process is replaced by exactly one spawn");
         AssertEx.Equal(expected: 0, hook.ChatCalls, "the relaunch binds the held admission instead of deciding again");
         var relaunch = launcher.Launches.Last().Arguments;
-        AssertEx.Equal("2048", relaunch[relaunch.ToList().IndexOf(LlamaServerManagedFlags.ContextSize) + 1]);
+        AssertEx.Equal("2048", relaunch[relaunch.ToList().IndexOf("--kv-unified-per-slot") + 1]);
     }
 
     /// <summary>The skip is the only supervisor-side trace of a caller-decided chat launch, so it is logged at Information.</summary>

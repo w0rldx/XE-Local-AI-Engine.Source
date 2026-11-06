@@ -685,7 +685,8 @@ public sealed partial class LlamaServerProcessSupervisor
         {
             ModelName = key.ModelName,
             Role = key.Role,
-            BaseAddress = spec.BaseAddress
+            BaseAddress = spec.BaseAddress,
+            ParallelSlots = LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments)?.Parallel ?? 1
         };
         var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
         {
@@ -836,8 +837,8 @@ public sealed partial class LlamaServerProcessSupervisor
                 ? downTierPlan.WithoutKvCacheQuantization()
                 : downTierPlan
         });
-        _logger.LogWarning("llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens}.",
-            downTiered.ProcessContextTokens);
+        _logger.LogWarning("llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier {ContextTokens} with {ChatSlots} chat slot(s).",
+            downTiered.ProcessContextTokens, downTiered.ChatSlots);
         return downTieredSet;
     }
 

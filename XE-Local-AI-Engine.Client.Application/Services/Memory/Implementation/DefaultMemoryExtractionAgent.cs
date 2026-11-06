@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,8 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="IMemoryExtractionAgent" />, running a <b>node-local</b> model and forcing a structured JSON
@@ -25,10 +28,27 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 {
     // A structured answer of a few short candidates needs a few hundred tokens; the cap only stops a runaway generation
-    // from holding the single llama-server slot to the window while chat waits behind it.
+    // from holding the background slot to the window.
     private const int MaxOutputTokens = 1024;
 
-    private static readonly JsonSerializerOptions SerializerOptions = JsonSerializerOptions.Web;
+    // The most run text the prompt carries, the fold/distill ceiling (MaxInputCharsPerSummarizationCall's default). Each run is also
+    // bounded so the whole prompt and MaxOutputTokens fit the background slot's headroom at the model's calibrated characters per token.
+    internal const int MaxRunInputChars = 12_000;
+
+    // The JSON keys, quotes and separators around the run's text. Accepted ceiling: escaped quotes and line breaks are not charged.
+    private const int PromptFrameChars = 256;
+
+    // A sanitized error is a sentence or a stack head; its first characters say what failed.
+    private const int MaxErrorChars = 1_000;
+
+    // Relaxed escaping, as the summarizer's: the default encoder writes six characters per non-Latin rune, which the budget would not see.
+    // Safe because the body is only ever sent to the model, never rendered.
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    private readonly ITokenEstimatorCalibrationStore _calibrationStore;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DefaultMemoryExtractionAgent> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;
@@ -42,8 +62,10 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         INodeRuntimeSettings runtimeSettings,
         IModelTrustResolver modelTrustResolver,
         IServiceScopeFactory scopeFactory,
+        ITokenEstimatorCalibrationStore calibrationStore,
         ILogger<DefaultMemoryExtractionAgent> logger)
     {
+        _calibrationStore = calibrationStore ?? throw new ArgumentNullException(nameof(calibrationStore));
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
@@ -80,10 +102,13 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         // IChatClient is IDisposable — dispose the per-run node-local client.
         using var chatClient = provider.CreateChatClient(selection).WithProviderTelemetry();
 
+        var systemPrompt = BuildSystemPrompt(_options.MaxCandidates, run.Failed);
+        var headroomChars = LlamaServerChatSlots.BackgroundPromptChars(MaxOutputTokens, _calibrationStore.ResolveDivisor(modelName));
+        var runChars = (int)Math.Clamp(headroomChars - systemPrompt.Length - PromptFrameChars, 0, MaxRunInputChars);
         List<ChatMessage> messages =
         [
-            new(ChatRole.System, BuildSystemPrompt(_options.MaxCandidates, run.Failed)),
-            new(ChatRole.User, JsonSerializer.Serialize(ToPromptModel(run), SerializerOptions))
+            new(ChatRole.System, systemPrompt),
+            new(ChatRole.User, JsonSerializer.Serialize(ToPromptModel(run, runChars), SerializerOptions))
         ];
 
         var chatOptions = new ChatOptions
@@ -144,17 +169,71 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         };
     }
 
-    private static object ToPromptModel(MemoryExtractionRunInput run)
+    private static object ToPromptModel(MemoryExtractionRunInput run, int maxChars)
     {
         // Hand the model only what it needs to distill a durable lesson: the user turns, the assistant's answer, and
         // whether the run failed (+ the sanitized error string for a failed run). No ids — the model never needs them.
+        var fitted = FitRunInput(run, maxChars);
         return new
         {
-            UserTurns = run.UserTurns.Select(static turn => turn.Content).ToArray(),
-            run.AssistantResponse,
+            fitted.UserTurns,
+            AssistantResponse = fitted.Answer,
             run.Failed,
-            Error = run.Failed ? run.Error : null
+            fitted.Error
         };
+    }
+
+    /// <summary>
+    ///     The run's text bounded to <paramref name="maxChars" />: the error's head, the answer's tail, and the newest user turns.
+    /// </summary>
+    /// <remarks>
+    ///     The answer keeps its END because that is where its outcome is (the conclusion, or the last step before a failure), and it gets
+    ///     at least half the budget; the user turns fill the rest newest first, because the newest turns state the task the run
+    ///     answered and older ones only lead up to it. A turn that does not fit whole keeps its end too.
+    /// </remarks>
+    internal static FittedRunInput FitRunInput(MemoryExtractionRunInput run, int maxChars)
+    {
+        var error = run.Failed && run.Error is { } failure ? failure[..Math.Min(failure.Length, Math.Min(MaxErrorChars, Math.Max(0, maxChars)))] : null;
+        var budget = maxChars - (error?.Length ?? 0);
+        var userChars = run.UserTurns.Sum(static turn => turn.Content.Length);
+        var answer = KeepTail(run.AssistantResponse, Math.Max(budget / 2, budget - userChars));
+
+        var room = budget - answer.Length;
+        var kept = new List<string>();
+        for (var index = run.UserTurns.Count - 1; index >= 0 && room > 0; index--)
+        {
+            var turn = KeepTail(run.UserTurns[index].Content, room);
+            kept.Insert(0, turn);
+            room -= turn.Length;
+        }
+
+        return new FittedRunInput
+        {
+            UserTurns = [.. kept],
+            Answer = answer,
+            Error = error
+        };
+    }
+
+    internal sealed class FittedRunInput
+    {
+        public required string[] UserTurns { get; init; }
+
+        public required string Answer { get; init; }
+
+        public required string? Error { get; init; }
+    }
+
+    // Never starts on the low half of a surrogate pair, so the cut cannot produce an unpaired surrogate.
+    private static string KeepTail(string text, int maxChars)
+    {
+        if (text.Length <= maxChars)
+        {
+            return text;
+        }
+
+        var start = text.Length - Math.Max(0, maxChars);
+        return text[(start < text.Length && char.IsLowSurrogate(text[start]) ? start + 1 : start)..];
     }
 
     private static string BuildSystemPrompt(int maxCandidates, bool failed)

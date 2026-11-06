@@ -39,7 +39,9 @@ public sealed class SupervisorBenchmarkReceiptTests
         await RunBenchmarkAsync(supervisor, ResolvedLaunchArguments.Replay(ctxSize: 4096, nGpuLayers: 24));
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        AssertEx.Equal("4096", ValueOf(spec!.Arguments, "-c"));
+        // A replay benchmark is policy-free: one slot at the frozen window, the placement the profile was measured for.
+        AssertEx.Equal("1", ValueOf(spec!.Arguments, "--parallel"));
+        AssertEx.Equal("4096", ValueOf(spec.Arguments, "-c"));
         AssertEx.Equal("6", ValueOf(spec.Arguments, "-t"));
         AssertEx.Equal("8", ValueOf(spec.Arguments, "-tb"));
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "A CPU spawn must not replay GPU placement.");
@@ -252,6 +254,7 @@ public sealed class SupervisorBenchmarkReceiptTests
         // Everything the gate did not touch is still recorded exactly as launched.
         AssertEx.Equal("q8_0", recorded.LaunchProjection.KvCacheTypeK);
         AssertEx.Equal<int?>(expected: 8192, recorded.LaunchProjection.ContextTokens);
+        AssertEx.Null(recorded.LaunchProjection.SlotContextTokens);
     }
 
     [Test]
@@ -388,6 +391,9 @@ public sealed class SupervisorBenchmarkReceiptTests
                             --no-warmup
                             --jinja
                             --cache-ram N
+                            --kv-unified-per-slot N
+                            -kvu,  --kv-unified, -no-kvu, --no-kv-unified
+                            --cache-idle-slots, --no-cache-idle-slots
                             -fa, --flash-attn [on|off|auto]
                             -ctk, --cache-type-k TYPE
                                 allowed values: f32, f16, q8_0, q4_0

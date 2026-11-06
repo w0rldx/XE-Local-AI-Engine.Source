@@ -402,7 +402,7 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
    `ChatOptions.ModelId` (`RuntimeChatClient`).
    Launch args follow an **explore → freeze → replay** lifecycle: the supervisor no longer forces
    `--n-gpu-layers 999` — placement comes from `IInferenceProfileResolver` (explore-mode auto-fit, or a frozen
-   per-machine profile replayed verbatim), and every spawn pins `--parallel 1` + `--no-warmup`
+   per-machine profile replayed verbatim), and every spawn pins `--parallel` (two slots for chat, a foreground and a background one; one otherwise) + `--no-warmup`
    (the `BuildLaunchSpec` path in `LlamaServerProcessSupervisor.cs`). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 8. **Privacy-sensitive AI ops run node-local models only** (playbook analysis, eval). Cloud providers are
    never used for those paths. See [Agent Mode](04-agent-mode.md).

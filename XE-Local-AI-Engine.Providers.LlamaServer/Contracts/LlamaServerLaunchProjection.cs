@@ -62,8 +62,17 @@ public sealed record LlamaServerLaunchProjection
     /// <summary>The pooled-role physical micro-batch size (<c>-ub</c>), or <see langword="null" /> for chat.</summary>
     public required int? UbatchSize { get; init; }
 
-    /// <summary>The <c>--parallel</c> slot count (pinned to 1 by the single-slot serving design).</summary>
+    /// <summary>
+    ///     The <c>--parallel</c> slot count: the admitted chat slot count (<see cref="LlamaServerChatSlots.Count" /> over
+    ///     one unified KV pool, or 1), 1 for every other role.
+    /// </summary>
     public required int Parallel { get; init; }
+
+    /// <summary>
+    ///     The per-slot context cap (<c>--kv-unified-per-slot</c>), the chat window when <see cref="ContextTokens" />
+    ///     carries the window plus the background headroom; <see langword="null" /> for every other role.
+    /// </summary>
+    public required int? SlotContextTokens { get; init; }
 
     /// <summary>The chat prompt-prefix reuse window (<c>--cache-reuse</c>), or <see langword="null" /> when unset.</summary>
     public required int? CacheReuse { get; init; }
@@ -85,7 +94,7 @@ public sealed record LlamaServerLaunchProjection
     ///     A hash computed under one scheme says nothing about a hash computed under another, so persisted intents
     ///     record the scheme they were frozen under and work that straddles a change is failed rather than compared.
     /// </remarks>
-    public const int IdentitySchemeVersion = 2;
+    public const int IdentitySchemeVersion = 3;
 
     /// <summary>Flash-attention left to llama.cpp (no <c>-fa</c> flag emitted) — the f16 KV default.</summary>
     public const string FlashAttentionAuto = "auto";
@@ -155,6 +164,15 @@ public sealed record LlamaServerLaunchProjection
 
         var isChat = role == ModelRole.Chat;
 
+        // Chat runs the admitted slot count; a policy-free spawn (replay profiling, smoke load, evaluation) admitted none, so it runs one.
+        // With two, the pool grows by the background headroom and each slot stays capped at the window the policy chose.
+        var parallel = isChat ? plan?.ChatSlots ?? 1 : 1;
+        var slotContextTokens = parallel > 1 ? contextTokens : null;
+        if (slotContextTokens is { } window)
+        {
+            contextTokens = checked(window + LlamaServerChatSlots.BackgroundHeadroomTokens);
+        }
+
         return new LlamaServerLaunchProjection
         {
             AutoFit = isGpuExplore,
@@ -171,7 +189,8 @@ public sealed record LlamaServerLaunchProjection
             ThreadsBatch = isGpu ? null : plan?.CpuThreadsBatch,
             BatchSize = batchSize,
             UbatchSize = batchSize,
-            Parallel = 1,
+            Parallel = parallel,
+            SlotContextTokens = slotContextTokens,
             CacheReuse = isChat && chatCacheReuse > 0 ? chatCacheReuse : null,
             CacheRamMiB = isChat ? chatCacheRamMiB : 0,
             Jinja = isChat,
@@ -220,6 +239,7 @@ public sealed record LlamaServerLaunchProjection
             BatchSize = null,
             UbatchSize = null,
             Parallel = 1,
+            SlotContextTokens = null,
             CacheReuse = null,
             CacheRamMiB = 0,
             Jinja = false,
@@ -359,6 +379,12 @@ public sealed record LlamaServerLaunchProjection
                     Parallel = slots
                 }
                 : null,
+            "--kv-unified-per-slot" => TryParseInt(value, out var slotContext)
+                ? projection with
+                {
+                    SlotContextTokens = slotContext
+                }
+                : null,
             "--cache-reuse" => TryParseInt(value, out var cacheReuse)
                 ? projection with
                 {
@@ -406,7 +432,7 @@ public sealed record LlamaServerLaunchProjection
                 or "-ot" or "--override-tensor" or "-ctk" or "--cache-type-k" or "-ctv" or "--cache-type-v"
                 or "-fa" or "--flash-attn" or "-t" or "--threads" or "-tb" or "--threads-batch"
                 or "-b" or "--batch-size" or "-ub" or "--ubatch-size" or "--parallel" or "-np"
-                or "--cache-reuse" or "--cache-ram" or "--pooling" => true,
+                or "--kv-unified-per-slot" or "--cache-reuse" or "--cache-ram" or "--pooling" => true,
             _ => false
         };
 

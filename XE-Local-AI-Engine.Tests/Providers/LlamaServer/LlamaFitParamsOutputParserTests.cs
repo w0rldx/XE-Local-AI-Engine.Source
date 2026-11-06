@@ -75,6 +75,38 @@ public sealed class LlamaFitParamsOutputParserTests
     }
 
     [Test]
+    [Arguments(12288, 4096)]
+    [Arguments(6144, 4096)]
+    [Arguments(3072, 3072)]
+    public void ParseFittedArgsOrNull_TwoSlotChatSpawn_FreezesTheSlotWindowNeverThePool(int fittedPool, int expectedWindow)
+    {
+        // The helper echoes the two-slot pool (window 4096 + 8192 headroom); the profile records the window: a full pool (12288), or one
+        // that only fits one slot (6144), keeps it, and only a pool below the window shrinks it (3072).
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull([$"-c {fittedPool} -ngl 48"],
+            startupOutput: [],
+            successfulLaunchArguments:
+            [
+                "-m", "/models/dense.gguf", "--parallel", "2", "--fit", "on", "-c", "12288",
+                "--kv-unified", "--kv-unified-per-slot", "4096", "--no-cache-idle-slots"
+            ]);
+
+        var draft = AssertEx.NotNull(resolved);
+        AssertEx.Equal(expectedWindow, draft.CtxSize);
+        AssertEx.Equal(expected: 48, draft.NGpuLayers!.Value);
+    }
+
+    [Test]
+    public void ParseFittedArgsOrNull_SingleSlotSpawnWithAShrunkContext_KeepsTheFittedContext()
+    {
+        // No per-slot cap: -c is the window, so a fitted -c below the requested one is recorded as fitted, as before.
+        var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 6144 -ngl 48"],
+            startupOutput: [],
+            successfulLaunchArguments: ["-m", "/models/dense.gguf", "--parallel", "1", "--fit", "on", "-c", "8192"]);
+
+        AssertEx.Equal(expected: 6144, AssertEx.NotNull(resolved).CtxSize);
+    }
+
+    [Test]
     public void ParseFittedArgsOrNull_MultiDeviceGrammar_PreservesTensorSplit()
     {
         var resolved = LlamaFitParamsOutputParser.ParseFittedArgsOrNull(["-c 8192 -ngl 32 -ts 7,3"]);

@@ -552,6 +552,7 @@ public static class TrainingLifecycleE2ETestDoubles
                 BatchSize = 512,
                 UbatchSize = 512,
                 Parallel = 1,
+                SlotContextTokens = null,
                 CacheReuse = null,
                 CacheRamMiB = 0,
                 Jinja = true,

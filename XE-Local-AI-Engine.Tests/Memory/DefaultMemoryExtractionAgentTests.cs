@@ -15,6 +15,8 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -47,6 +49,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
             Substitute.For<IModelTrustResolver>(),
             Scopes(Substitute.For<IModelCapabilityResolver>()),
+            new TokenEstimatorCalibrationStore(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -76,6 +79,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
             Substitute.For<IModelTrustResolver>(),
             Scopes(Substitute.For<IModelCapabilityResolver>()),
+            new TokenEstimatorCalibrationStore(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         await agent.ProposeAsync(Run());
@@ -93,6 +97,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName(string.Empty).Build(),
             Substitute.For<IModelTrustResolver>(),
             Scopes(Substitute.For<IModelCapabilityResolver>()),
+            new TokenEstimatorCalibrationStore(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -113,6 +118,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("gpt-5-codex").Build(),
             trust,
             Scopes(Substitute.For<IModelCapabilityResolver>()),
+            new TokenEstimatorCalibrationStore(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -141,6 +147,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
             Substitute.For<IModelTrustResolver>(),
             Scopes(Substitute.For<IModelCapabilityResolver>()),
+            new TokenEstimatorCalibrationStore(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run(failed: false));
@@ -171,6 +178,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
             Substitute.For<IModelTrustResolver>(),
             Scopes(capabilities),
+            new TokenEstimatorCalibrationStore(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         await agent.ProposeAsync(Run());
@@ -181,8 +189,66 @@ public sealed class DefaultMemoryExtractionAgentTests
         AssertEx.Equal(supportsThinking, marker);
     }
 
+    [Test]
+    public async Task MemoryExtraction_OnAOneCharacterPerTokenModel_FitsPromptAndOutputInTheBackgroundHeadroom()
+    {
+        // A CJK run calibrates near one character a token: the 12,000-character run bound alone would overrun the background slot's headroom.
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        var provider = Substitute.For<ILocalModelProvider>();
+#pragma warning disable CA2000 // Ownership transfers to the agent, which disposes it via `using`.
+        var nodeLocalClient = new EnvelopeChatClient("""{ "memories": [] }""");
+#pragma warning restore CA2000
+        provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(nodeLocalClient);
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
+        var calibration = new TokenEstimatorCalibrationStore();
+        calibration.SetDivisor("qwen3:8b", 1);
+        var agent = new DefaultMemoryExtractionAgent(resolver,
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
+            Substitute.For<IModelTrustResolver>(),
+            Scopes(Substitute.For<IModelCapabilityResolver>()),
+            calibration,
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
+        var run = Run() with
+        {
+            UserTurns = [new MemoryExtractionTurn { Content = new string('中', 6_000) }],
+            AssistantResponse = new string('文', 6_000)
+        };
+
+        await agent.ProposeAsync(run);
+
+        var options = AssertEx.NotNull(nodeLocalClient.LastOptions);
+        var promptChars = AssertEx.NotNull(nodeLocalClient.LastMessages).Sum(static message => message.Text.Length);
+        AssertEx.True(promptChars + options.MaxOutputTokens <= LlamaServerChatSlots.BackgroundHeadroomTokens,
+            $"prompt {promptChars} chars + output {options.MaxOutputTokens} tokens must fit the {LlamaServerChatSlots.BackgroundHeadroomTokens}-token headroom at one char a token.");
+    }
+
     private static IServiceScopeFactory Scopes(IModelCapabilityResolver capabilities) =>
         new ServiceCollection().AddScoped(_ => capabilities).BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
+    [Test]
+    public void FitRunInput_LongRun_KeepsTheAnswerEndAndTheNewestTurnsWithinTheBudget()
+    {
+        // 20 turns of 1,000 characters and a 20,000-character answer: far over the budget the background slot's headroom allows.
+        var run = Run(failed: true) with
+        {
+            UserTurns = [.. Enumerable.Range(0, 20).Select(static index => new MemoryExtractionTurn { Content = $"turn-{index:D2}" + new string('u', 993) })],
+            AssistantResponse = "START" + new string('a', 19_990) + "END",
+            Error = new string('e', 5_000)
+        };
+
+        var fitted = DefaultMemoryExtractionAgent.FitRunInput(run, DefaultMemoryExtractionAgent.MaxRunInputChars);
+        var turns = fitted.UserTurns;
+        var answer = fitted.Answer;
+        var error = AssertEx.NotNull(fitted.Error);
+
+        AssertEx.True(turns.Sum(static turn => turn.Length) + answer.Length + error.Length <= DefaultMemoryExtractionAgent.MaxRunInputChars,
+            "the fitted run must stay inside the budget.");
+        AssertEx.True(answer.EndsWith("END", StringComparison.Ordinal) && !answer.StartsWith("START", StringComparison.Ordinal), "the answer keeps its end.");
+        AssertEx.True(turns[^1].StartsWith("turn-19", StringComparison.Ordinal), "the newest turn is kept whole and last.");
+        AssertEx.False(turns.Any(static turn => turn.StartsWith("turn-00", StringComparison.Ordinal)), "the oldest turns go first.");
+        AssertEx.True(error.Length < run.Error.Length, "the error is capped.");
+    }
 
     private static MemoryExtractionRunInput Run(bool failed = false)
     {
@@ -224,12 +290,15 @@ public sealed class DefaultMemoryExtractionAgentTests
 
         public ChatOptions? LastOptions { get; private set; }
 
+        public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             WasCalled = true;
             LastOptions = options;
+            LastMessages = [.. messages];
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _json)));
         }
 

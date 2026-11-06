@@ -596,7 +596,10 @@ same arithmetic (`ConversationStateDistiller.ResolveRequestBudget`) size a call'
 against an **already-resident** llama.cpp server — resolving it never triggers a model load. An unknown window (no
 server currently warm for that model) keeps `MaxInputCharsPerSummarizationCall` as the ceiling. So the option reads
 as a ceiling, not the request size: a resident model with a smaller window folds in smaller, cheaper calls
-automatically.
+automatically. A background call (automatic compaction, distillation) is also capped at
+`LlamaServerChatSlots.BackgroundPromptChars(outputCap, divisor)`, so its prompt and output cap (`MaxSummaryChars`
+or `DistillerMaxOutputTokens`) fit the chat process's 8192-token background slot headroom; the option's upper bound
+(`MaximumInputCharsPerSummarizationCall`, 65,536) is that headroom at the largest accepted divisor.
 
 ### Conversation state (distillation)
 

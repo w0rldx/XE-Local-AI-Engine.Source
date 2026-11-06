@@ -136,7 +136,9 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
             try
             {
-                return StripLeadingThinkTags(await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false));
+                return StripLeadingThinkTags(await resolved.Client
+                                                           .GetResponseAsync(messages, ApplySlotPin(options, _residencyIntent, resolved.ParallelSlots), cancellationToken)
+                                                           .ConfigureAwait(false));
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(ex))
             {
@@ -210,7 +212,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             }
 
             var enumerator =
-                resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                resolved.Client.GetStreamingResponseAsync(messages, ApplySlotPin(options, _residencyIntent, resolved.ParallelSlots), cancellationToken)
+                        .GetAsyncEnumerator(cancellationToken);
             var retry = false;
             var reasoningControlAdvertised = false;
             var stripper = new LeadingThinkTagStripper();
@@ -336,6 +339,25 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     {
         _inner?.Dispose();
         _initGate.Dispose();
+    }
+
+    /// <summary>
+    ///     Returns a clone of <paramref name="options" /> whose request body names the chat process's slot:
+    ///     <see cref="LlamaServerChatSlots.Background" /> for a background client on a two-slot process, otherwise
+    ///     <see cref="LlamaServerChatSlots.Foreground" />.
+    /// </summary>
+    /// <remarks>
+    ///     Unconditional, applied per attempt from the endpoint actually resolved, so the pin follows the launched shape: a
+    ///     single-slot fallback (or an external endpoint) gets slot 0 for everyone. Last in the chain, composing every
+    ///     earlier patch: an unpinned request lets the server pick a slot, and background work on the chat's slot evicts its prompt.
+    /// </remarks>
+    internal static ChatOptions ApplySlotPin(ChatOptions? options, ModelResidencyIntent residencyIntent, int parallelSlots)
+    {
+        var slot = residencyIntent == ModelResidencyIntent.Background && parallelSlots > 1
+            ? LlamaServerChatSlots.Background
+            : LlamaServerChatSlots.Foreground;
+        return OpenAICompatibleRequestBody.Chain(options ?? new ChatOptions(),
+            body => OpenAICompatibleRequestBody.SetField(body, "$.id_slot", slot));
     }
 
     /// <summary>
@@ -616,7 +638,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var current = Volatile.Read(ref _inner);
             if (current is not null && _innerEndpoint == endpoint.BaseAddress)
             {
-                return new ResolvedChatClient(current, endpoint.BaseAddress, bound);
+                return new ResolvedChatClient(current, endpoint.BaseAddress, bound, endpoint.ParallelSlots);
             }
 
             if (current is not null)
@@ -632,7 +654,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 #pragma warning restore CA2000
             _innerEndpoint = endpoint.BaseAddress;
             Volatile.Write(ref _inner, built);
-            return new ResolvedChatClient(built, endpoint.BaseAddress, bound);
+            return new ResolvedChatClient(built, endpoint.BaseAddress, bound, endpoint.ParallelSlots);
         }
         finally
         {
@@ -699,7 +721,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     }
 
     /// <summary><see cref="Bound" /> marks an endpoint that came from the endpoint binding — see ResolveEndpointCoreAsync.</summary>
-    private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress, bool Bound);
+    private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress, bool Bound, int ParallelSlots);
 
     /// <summary>The endpoint to talk to; <see cref="Bound" /> as on <see cref="ResolvedChatClient" />.</summary>
     private readonly record struct ResolvedEndpoint(LlamaServerEndpoint Endpoint, bool Bound);

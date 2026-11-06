@@ -54,7 +54,8 @@ internal sealed class LlamaServerLaunchCandidateBuilder
             if (!_allocationResolver.TryGetEffectiveCommittedAllocation(admittedAllocation, out allocation)
                 || !string.Equals(allocation.CacheKey, admittedAllocation.CacheKey, StringComparison.Ordinal)
                 || !string.Equals(allocation.ContentIdentity, admittedAllocation.ContentIdentity, StringComparison.Ordinal)
-                || allocation.ProcessContextTokens > admittedAllocation.ProcessContextTokens)
+                || allocation.ProcessContextTokens > admittedAllocation.ProcessContextTokens
+                || (allocation.ProcessContextTokens == admittedAllocation.ProcessContextTokens && allocation.ChatSlots > admittedAllocation.ChatSlots))
             {
                 throw reject("The admitted local model context allocation is no longer valid.");
             }

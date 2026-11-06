@@ -46,7 +46,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
                 UseKvCacheQuantization: false,
                 _options.KvCacheType,
                 cpuThreads,
-                cpuThreadsBatch);
+                cpuThreadsBatch,
+                ChatSlots: allocation.ChatSlots);
         }
 
         // GPU: a frozen-profile replay pins its own -c / KV / FA verbatim (highest precedence), so the policy leaves the
@@ -57,7 +58,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
                 UseKvCacheQuantization: false,
                 _options.KvCacheType,
                 CpuThreads: null,
-                CpuThreadsBatch: null);
+                CpuThreadsBatch: null,
+                ChatSlots: allocation.ChatSlots);
         }
 
         // GPU explore: the shared allocation's context plus the KV-cache quantization + flash attention optimization,
@@ -72,7 +74,8 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
             _options.KvCacheType,
             CpuThreads: null,
             CpuThreadsBatch: null,
-            allocation.Placement == ProcessPlacementMode.ExpertOffload);
+            allocation.Placement == ProcessPlacementMode.ExpertOffload,
+            ChatSlots: allocation.ChatSlots);
     }
 
     /// <inheritdoc />
@@ -88,11 +91,13 @@ internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
             ? (int?)null
             : resolved.CtxSize;
 
+        // Policy-free, so nothing admitted a background slot: one chat slot, like every other policy-free spawn.
         return new LlamaServerLaunchPlan(requestedContextTokens,
             UseKvCacheQuantization: false,
             _options.KvCacheType,
             cpuThreads,
-            cpuThreadsBatch);
+            cpuThreadsBatch,
+            ChatSlots: 1);
     }
 
     /// <inheritdoc />

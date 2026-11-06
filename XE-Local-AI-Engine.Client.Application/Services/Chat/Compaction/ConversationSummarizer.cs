@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="IConversationSummarizer" />, running a NODE-LOCAL model at temperature 0 to fold an older
@@ -252,27 +253,34 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         return clamped;
     }
 
-    // min(ceiling, window × chars-per-token × InputShare), floored at the smallest request that still fits; an
-    // unknown window (a cold runtime) keeps the ceiling, so the budget only ever shrinks below the option.
+    // min(ceiling, window × chars-per-token × InputShare), and for background work also the chat process's background headroom less the
+    // synopsis cap, floored at the smallest request that still fits; an unknown window (a cold runtime) leaves only the other bounds.
     internal int ResolveRequestBudget(ConversationSummarizerInput input)
     {
         var ceiling = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
-        if (input.EffectiveContextTokens is not > 0)
+        var divisor = _calibrationStore.ResolveDivisor(input.ModelName);
+        long derived = ceiling;
+        if (input.EffectiveContextTokens is > 0)
         {
-            return ceiling;
+            derived = (long)(input.EffectiveContextTokens.Value * (double)divisor * InputShare);
         }
 
-        var derived = (long)(input.EffectiveContextTokens.Value * (double)_calibrationStore.ResolveDivisor(input.ModelName) * InputShare);
+        if (input.ResidencyIntent == ModelResidencyIntent.Background)
+        {
+            derived = Math.Min(derived, LlamaServerChatSlots.BackgroundPromptChars(Math.Max(1, _options.MaxSummaryChars), divisor));
+        }
+
         if (derived >= ceiling)
         {
             return ceiling;
         }
 
+        // Accepted ceiling: below the minimum a background fold overruns the headroom; upgrade path: shrink MaxSummaryChars for that call.
         var minimum = GetMinimumRequestBudget(_options.MaxSummaryChars);
         if (derived < minimum)
         {
-            _logger.LogWarning("The {Window}-token effective window of {Model} leaves a {Derived}-character fold budget, below the {Minimum}-character minimum request; folding at the minimum.",
-                input.EffectiveContextTokens.Value, input.ModelName, derived, minimum);
+            _logger.LogWarning("The window and background headroom of {Model} leave a {Derived}-character fold budget, below the {Minimum}-character minimum request; folding at the minimum.",
+                input.ModelName, derived, minimum);
             return (int)Math.Min(minimum, ceiling);
         }
 

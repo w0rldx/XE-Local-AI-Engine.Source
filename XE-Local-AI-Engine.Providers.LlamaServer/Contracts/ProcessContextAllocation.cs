@@ -18,6 +18,12 @@ public sealed record ProcessContextAllocation
     public required string ContentIdentity { get; init; }
 
     public required string CacheKey { get; init; }
+
+    /// <summary>
+    ///     The slot count a chat process launches with: <see cref="LlamaServerChatSlots.Count" />, or 1 when the second slot
+    ///     would cost window or residency. Ignored for every other role, which always runs one slot.
+    /// </summary>
+    public int ChatSlots { get; init; } = LlamaServerChatSlots.Count;
 }
 
 /// <summary>Dual-axis resources reserved for a process.</summary>

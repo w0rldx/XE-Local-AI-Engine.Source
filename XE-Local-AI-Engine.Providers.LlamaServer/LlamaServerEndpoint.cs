@@ -17,4 +17,10 @@ public sealed record LlamaServerEndpoint
     ///     adapter points at. Bound to <c>127.0.0.1</c> only.
     /// </summary>
     public required Uri BaseAddress { get; init; }
+
+    /// <summary>
+    ///     The <c>--parallel</c> slot count the process was launched with, read from its final argument vector; 1 for a
+    ///     process the node did not launch (an external endpoint), so a request never names a slot that may not exist.
+    /// </summary>
+    public int ParallelSlots { get; init; } = 1;
 }

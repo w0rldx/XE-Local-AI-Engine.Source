@@ -32,6 +32,10 @@ internal static class LlamaServerLaunchArgumentComposer
         string? adapterFilePath = null,
         string? modelAlias = null)
     {
+        // Context, placement, KV-cache/flash-attention and CPU threads, all emitted from ONE projection of this spawn's launch shape so the vector that reaches the
+        // process and the shape a receipt records can never drift apart. Precedence lives in the launch policy that produced the plan; the matrix is in wiki 03.
+        var projection = LlamaServerLaunchProjection.From(variant, resolved, plan, key.Role, chatCacheReuse, chatCacheRamMiB);
+
         var args = new List<string>
         {
             LlamaServerManagedFlags.Model,
@@ -41,10 +45,10 @@ internal static class LlamaServerLaunchArgumentComposer
             LlamaServerManagedFlags.Port,
             port.ToString(CultureInfo.InvariantCulture),
 
-            // Single-slot serving, the locked design: one in-flight request per (model, role) process. Pinned on EVERY spawn, because the auto default reserves
-            // four times the KV cache and starves the weight offload. See wiki 03, "LlamaServerProcessSupervisor — process lifecycle".
+            // Pinned on EVERY spawn, because the auto default reserves four times the KV cache and starves the weight offload: one slot per process, except
+            // chat, whose second slot serves background work only (LlamaServerChatSlots). See wiki 03, "LlamaServerProcessSupervisor — process lifecycle".
             LlamaServerManagedFlags.Parallel,
-            "1",
+            projection.Parallel.ToString(CultureInfo.InvariantCulture),
 
             // Skip the empty-run warmup, which on a large model takes 45-110 s and overruns the readiness budget into a kill-and-respawn loop. The model serves
             // correctly without it: the readiness probe and the first real request warm it naturally.
@@ -58,9 +62,6 @@ internal static class LlamaServerLaunchArgumentComposer
             args.Add(modelAlias);
         }
 
-        // Context, placement, KV-cache/flash-attention and CPU threads, all emitted from ONE projection of this spawn's launch shape so the vector that reaches the
-        // process and the shape a receipt records can never drift apart. Precedence lives in the launch policy that produced the plan; the matrix is in wiki 03.
-        var projection = LlamaServerLaunchProjection.From(variant, resolved, plan, key.Role, chatCacheReuse, chatCacheRamMiB);
         AppendContextPlacementAndThreadArgs(args, projection);
 
         // LoRA adapter: the model file above is the BASE model this adapter was trained against, resolved by the caller, and the adapter is applied on top at load.
@@ -97,6 +98,7 @@ internal static class LlamaServerLaunchArgumentComposer
             args.Add("--cache-ram");
             args.Add(chatCacheRamMiB.ToString(CultureInfo.InvariantCulture));
 
+            AppendChatSlotArgs(args, projection);
             AppendSpeculativeArgs(args, speculative);
         }
         else if (key.Role == ModelRole.Embedding)
@@ -274,6 +276,33 @@ internal static class LlamaServerLaunchArgumentComposer
         args.Add(batchSize.ToString(CultureInfo.InvariantCulture));
         args.Add(LlamaServerManagedFlags.UbatchSize);
         args.Add(ubatchSize.ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    ///     Appends the flags that make the chat role's two slots share one KV pool without evicting each other.
+    /// </summary>
+    /// <remarks>
+    ///     <c>--kv-unified</c> gives both slots one pool (without it two slots split the context in half) and
+    ///     <c>--kv-unified-per-slot</c> caps each at the window. <c>--no-cache-idle-slots</c> is REQUIRED: by default a
+    ///     task starting on one slot saves every idle slot to <c>--cache-ram</c> and clears it under a unified pool, which
+    ///     throws away the chat's cached prompt each time background work starts on its slot. A single-slot fallback emits
+    ///     none of them: with one slot there is no idle slot to save and nothing to share, so its vector is develop's.
+    /// </remarks>
+    private static void AppendChatSlotArgs(List<string> args, LlamaServerLaunchProjection projection)
+    {
+        if (projection.Parallel < 2)
+        {
+            return;
+        }
+
+        args.Add("--kv-unified");
+        if (projection.SlotContextTokens is { } slotContextTokens)
+        {
+            args.Add("--kv-unified-per-slot");
+            args.Add(slotContextTokens.ToString(CultureInfo.InvariantCulture));
+        }
+
+        args.Add("--no-cache-idle-slots");
     }
 
     /// <summary>

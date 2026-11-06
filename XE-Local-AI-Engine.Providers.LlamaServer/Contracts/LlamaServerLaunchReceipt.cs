@@ -87,7 +87,7 @@ public sealed record LlamaServerLaunchReceipt
     public required LlamaServerBenchmarkLaunchPolicy BenchmarkLaunchPolicy { get; init; }
 
     /// <summary>The schema version every receipt this build produces carries.</summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>
     ///     The optional launch options the capability gate REMOVED because the selected runtime does not advertise

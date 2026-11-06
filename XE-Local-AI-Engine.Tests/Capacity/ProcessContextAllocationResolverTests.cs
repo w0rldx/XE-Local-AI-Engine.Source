@@ -21,6 +21,9 @@ public sealed class ProcessContextAllocationResolverTests
     private const long MeasuredProcessBudget = 32_429_309_952;
     private const long RamOfTheMeasuredHost = 50_509_557_760;
 
+    // What every chat allocation books for the background slot's recurrent state and buffers, beyond its headroom KV.
+    private const long ChatSlotStateAllowanceBytes = 256L * 1024 * 1024;
+
     [Test]
     public async Task Resolve_CpuOrPhantomVram_UsesCpuRamOnly()
     {
@@ -265,6 +268,38 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.True(q4.Footprint.RamBytes <= fp16.Footprint.RamBytes);
     }
 
+    [Test]
+    public async Task Resolve_ChatRole_ReservesTheBackgroundSlotsHeadroomKvAndStateAllowance()
+    {
+        // The chat process also holds the background slot: its KV is the window plus the headroom, and its recurrent state and buffers ride a flat
+        // allowance. A single-slot role at window + headroom books the same KV, so the difference is exactly the allowance.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        const int window = 32768;
+
+        var chat = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: window),
+            CancellationToken.None));
+        AssertEx.Equal(LlamaServerChatSlots.Count, chat.ChatSlots);
+        var singleSlotAtWindow = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Embedding,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: window),
+            CancellationToken.None));
+        var singleSlotAtPool = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Embedding,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: window + LlamaServerChatSlots.BackgroundHeadroomTokens),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, chat.Placement);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, singleSlotAtPool.Placement);
+        AssertEx.Equal(window, chat.ProcessContextTokens);
+        AssertEx.True(singleSlotAtPool.Footprint.GpuBytes > singleSlotAtWindow.Footprint.GpuBytes, "the headroom must add KV bytes.");
+        AssertEx.Equal(ChatSlotStateAllowanceBytes, chat.Footprint.GpuBytes - singleSlotAtPool.Footprint.GpuBytes);
+    }
+
     private static Task<ProcessContextAllocation?> Resolve(ProcessContextAllocationResolver resolver,
         ResolvedLaunchArguments resolved,
         string? kvCacheType) =>
@@ -342,6 +377,54 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.Equal(expected: 16384, allocation.ProcessContextTokens);
         AssertEx.Equal(ProcessPlacementMode.GpuResident, allocation.Placement);
         AssertEx.Equal(expected: 0, allocation.Footprint.RamBytes);
+
+        // Resident there only without the background slot: residency wins over slot 2.
+        AssertEx.Equal(expected: 1, allocation.ChatSlots);
+    }
+
+    [Test]
+    public async Task Resolve_Dense27BWithAmpleVram_KeepsTheLargestWindowWithTheBackgroundSlot()
+    {
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true), processBudget: MeasuredProcessBudget, facts: Qwen38DenseFacts());
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+        AssertEx.Equal(LlamaServerChatSlots.Count, allocation.ChatSlots);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, allocation.Placement);
+    }
+
+    [Test]
+    public async Task Resolve_Dense27BWhereOnlyOneSlotFits_KeepsTheWindowAndDropsTheBackgroundSlot()
+    {
+        // A budget that holds 65,536 with one slot but not with two: the window is the outer loop, so 65,536 single-slot, never 32,768 two-slot.
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true), processBudget: 26_000_000_000, facts: Qwen38DenseFacts());
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, allocation.ChatSlots);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, allocation.Placement);
+    }
+
+    [Test]
+    public async Task DownTierForAdmission_At23682MiBFree_DropsTheBackgroundSlotBeforeTheWindow()
+    {
+        // The voided live round: 23,682 MiB free at admission. Two slots at 65,536 book more than that; one slot at 65,536 does not, so the first
+        // down-tier step keeps the window and only the second one steps it down.
+        const long freeAtAdmission = 23_682L * 1024 * 1024;
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true), processBudget: MeasuredProcessBudget, facts: Qwen38DenseFacts());
+        var twoSlots = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+        AssertEx.True(twoSlots.Footprint.GpuBytes > freeAtAdmission, $"two slots must not fit 23,682 MiB ({twoSlots.Footprint.GpuBytes} B).");
+
+        AssertEx.True(resolver.TryDownTierForAdmission(twoSlots, out var oneSlot));
+
+        AssertEx.Equal(expected: 65536, oneSlot.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, oneSlot.ChatSlots);
+        AssertEx.True(oneSlot.Footprint.GpuBytes <= freeAtAdmission, $"one slot must fit 23,682 MiB ({oneSlot.Footprint.GpuBytes} B).");
+
+        AssertEx.True(resolver.TryDownTierForAdmission(oneSlot, out var nextTier));
+        AssertEx.Equal(expected: 32768, nextTier.ProcessContextTokens);
     }
 
     [Test]
@@ -518,6 +601,7 @@ public sealed class ProcessContextAllocationResolverTests
             attentionHeadCountKV: 2,
             embeddingLength: 16,
             attentionHeadCount: 4,
+            // A chat process's pool also holds the background slot's headroom.
             ctxTarget: 2048,
             profile with
             {
@@ -662,10 +746,16 @@ public sealed class ProcessContextAllocationResolverTests
             ResolvedLaunchArguments.Explore(),
             CancellationToken.None));
 
-        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var first));
+        AssertEx.Equal(LlamaServerChatSlots.Count, automatic.ChatSlots);
+
+        // The background slot goes first at the same window, and it is no window step: two window steps still follow, as on a one-slot process.
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var oneSlot));
+        AssertEx.Equal(automatic.ProcessContextTokens, oneSlot.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, oneSlot.ChatSlots);
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(oneSlot, out var first));
         AssertEx.True(resolver.TryDownTierAfterOutOfMemory(first, out var second));
         AssertEx.False(resolver.TryDownTierAfterOutOfMemory(second, out _));
-        AssertEx.True(first.Footprint.GpuBytes < automatic.Footprint.GpuBytes,
+        AssertEx.True(first.ProcessContextTokens < oneSlot.ProcessContextTokens && first.Footprint.GpuBytes < oneSlot.Footprint.GpuBytes,
             "the first lower context tier must recompute a smaller capacity footprint");
         AssertEx.True(second.Footprint.GpuBytes < first.Footprint.GpuBytes,
             "the second lower context tier must recompute its capacity footprint too");
@@ -686,6 +776,49 @@ public sealed class ProcessContextAllocationResolverTests
     }
 
     [Test]
+    public async Task Resolve_FrozenProfile_ReplaysOneChatSlotEvenWhereTwoWouldFit()
+    {
+        // The profile's -ngl was fitted for whatever pool its explore measured, and it does not record that slot count: a replay at two slots
+        // would grow the pool by the headroom at the same layer split. An overridden explore at the same window keeps both slots.
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var explored = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 32768),
+            CancellationToken.None));
+        AssertEx.Equal(LlamaServerChatSlots.Count, explored.ChatSlots);
+
+        var frozen = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 32768),
+            CancellationToken.None));
+
+        AssertEx.Equal(ProcessContextAllocationSource.FrozenProfile, frozen.Source);
+        AssertEx.Equal(expected: 32768, frozen.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, frozen.ChatSlots);
+    }
+
+    [Test]
+    public async Task OomDownTier_OfAnOverriddenTwoSlotWindow_DropsTheBackgroundSlotOnly()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var overridden = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(contextTokensOverride: 32768),
+            CancellationToken.None));
+        AssertEx.Equal(LlamaServerChatSlots.Count, overridden.ChatSlots);
+
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(overridden, out var oneSlot));
+
+        AssertEx.Equal(ProcessContextAllocationSource.DeterministicOverride, oneSlot.Source);
+        AssertEx.Equal(expected: 32768, oneSlot.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, oneSlot.ChatSlots);
+        AssertEx.False(resolver.TryDownTierAfterOutOfMemory(oneSlot, out _), "an overridden window is honored exactly or it fails.");
+    }
+
+    [Test]
     public async Task AdmissionDownTier_IsNeverCached_SoTheNextResolveTiersBackUp_WithoutConsumingOomRetries()
     {
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
@@ -695,10 +828,13 @@ public sealed class ProcessContextAllocationResolverTests
             ResolvedLaunchArguments.Explore(),
             CancellationToken.None));
 
+        // The background slot goes first at the same window, then the window steps down.
         AssertEx.True(resolver.TryDownTierForAdmission(automatic, out var first));
         AssertEx.True(resolver.TryDownTierForAdmission(first, out var second));
-        AssertEx.True(first.ProcessContextTokens < automatic.ProcessContextTokens);
+        AssertEx.Equal(automatic.ProcessContextTokens, first.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, first.ChatSlots);
         AssertEx.True(first.Footprint.GpuBytes < automatic.Footprint.GpuBytes);
+        AssertEx.True(second.ProcessContextTokens < automatic.ProcessContextTokens);
 
         var unchanged = AssertEx.NotNull(await resolver.ResolveAsync(Model,
             ModelRole.Chat,
@@ -722,7 +858,11 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.True(resolver.TryCommitAdmissionAllocation(automatic, out var committedFull));
         AssertEx.Equal(automatic, committedFull, "a later full-tier admission is not coerced down to an earlier admission's window");
 
-        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(second, out var firstOom));
+        // Both out-of-memory window steps are still available (the admitted lower tier kept its background slot, which goes first).
+        AssertEx.Equal(LlamaServerChatSlots.Count, second.ChatSlots);
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(second, out var oneSlotOom));
+        AssertEx.Equal(second.ProcessContextTokens, oneSlotOom.ProcessContextTokens);
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(oneSlotOom, out var firstOom));
         AssertEx.True(resolver.TryDownTierAfterOutOfMemory(firstOom, out var secondOom));
         AssertEx.False(resolver.TryDownTierAfterOutOfMemory(secondOom, out _));
     }
@@ -760,7 +900,7 @@ public sealed class ProcessContextAllocationResolverTests
             ResolvedLaunchArguments.Explore(),
             CancellationToken.None));
         var candidate = automatic;
-        while (candidate.ProcessContextTokens > 8192
+        while ((candidate.ProcessContextTokens > 8192 || candidate.ChatSlots > 1)
                && resolver.TryDownTierForAdmission(candidate, out var lower))
         {
             candidate = lower;
@@ -808,6 +948,9 @@ public sealed class ProcessContextAllocationResolverTests
             GpuVariant.Cuda,
             ResolvedLaunchArguments.Replay(ctxSize: 65536),
             CancellationToken.None));
+
+        // A frozen or deterministic window never changes; only the chat background slot may go first, and a frozen replay has none.
+        AssertEx.Equal(expected: 1, frozen.ChatSlots);
         AssertEx.False(frozenResolver.TryDownTierForAdmission(frozen, out _));
 
         var deterministicResolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true),
@@ -821,7 +964,9 @@ public sealed class ProcessContextAllocationResolverTests
             GpuVariant.Cuda,
             ResolvedLaunchArguments.Explore(),
             CancellationToken.None));
-        AssertEx.False(deterministicResolver.TryDownTierForAdmission(deterministic, out _));
+        AssertEx.True(deterministicResolver.TryDownTierForAdmission(deterministic, out var deterministicSingleSlot));
+        AssertEx.Equal(expected: 65536, deterministicSingleSlot.ProcessContextTokens);
+        AssertEx.False(deterministicResolver.TryDownTierForAdmission(deterministicSingleSlot, out _));
 
         var auxiliary = AssertEx.NotNull(await frozenResolver.ResolveAsync(Model,
             ModelRole.Embedding,
@@ -881,10 +1026,13 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.Equal(ProcessContextAllocationSource.DeterministicOverride, allocation.Source);
         AssertEx.Equal(expected: 32768, allocation.ProcessContextTokens);
 
-        // The tier walk was never entered, so no hardware allocation context exists for this key and the window cannot
-        // be quietly reduced later — an overridden explore is honored exactly or it fails.
-        AssertEx.False(resolver.TryDownTierForAdmission(allocation, out _),
-            "an overridden allocation must not be down-tiered: the tier walk never ran for it.");
+        // The window cannot be quietly reduced later — an overridden explore is honored exactly or it fails. Only the chat
+        // background slot may go, at the same window.
+        AssertEx.True(resolver.TryDownTierForAdmission(allocation, out var singleSlot));
+        AssertEx.Equal(allocation.ProcessContextTokens, singleSlot.ProcessContextTokens);
+        AssertEx.Equal(expected: 1, singleSlot.ChatSlots);
+        AssertEx.False(resolver.TryDownTierForAdmission(singleSlot, out _),
+            "an overridden window must not be down-tiered: the tier walk never ran for it.");
     }
 
     [Test]
@@ -1061,6 +1209,26 @@ public sealed class ProcessContextAllocationResolverTests
             attentionHeadCount: 64,
             attentionHeadCountKv: 8,
             embeddingLength: 8192);
+
+    // Qwen3.8-27B UD-Q4_K_M-like: weights = file size, 65 blocks (64 + MTP) of which every 4th is attention. With these the resolver books
+    // 24,093 MiB at 65,536 two-slot and 21,656 MiB at 32,768 two-slot, the figures the live admission logged.
+    private static GgufModelFootprintFacts Qwen38DenseFacts() =>
+        new()
+        {
+            Quant = "UD-Q4_K_M",
+            FileSizeBytes = 16_464_440_224,
+            ParamCount = null,
+            BlockCount = 65,
+            AttentionHeadCount = 24,
+            AttentionHeadCountKV = 4,
+            EmbeddingLength = 5120,
+            ContextLength = 262144,
+            AttentionKeyLength = 256,
+            AttentionValueLength = 256,
+            FullAttentionInterval = 4,
+            ContentIdentity = "sha256:qwen38-27b",
+            Architecture = "qwen35"
+        };
 
     // The real unsloth Qwen3.6-35B-A3B UD-Q4_K_M header: no general.parameter_count (weights = file size), 40 blocks of which every 4th is attention.
     private static GgufModelFootprintFacts Qwen36MoeFacts() =>

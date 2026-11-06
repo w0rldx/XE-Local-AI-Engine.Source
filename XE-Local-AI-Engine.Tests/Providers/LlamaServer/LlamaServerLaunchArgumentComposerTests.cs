@@ -41,7 +41,102 @@ public sealed class LlamaServerLaunchArgumentComposerTests
         AssertEx.True(fitIndex >= 0, "a GPU explore must emit --fit.");
         AssertEx.Equal("on", spec.Arguments[fitIndex + 1]);
         AssertEx.Equal("-c", spec.Arguments[fitIndex + 2]);
-        AssertEx.Equal("16384", spec.Arguments[fitIndex + 3]);
+
+        // The chat pool is the window plus the background headroom; the window itself is the per-slot cap.
+        AssertEx.Equal("24576", spec.Arguments[fitIndex + 3]);
+        AssertEx.Equal("16384", ValueOf(spec, "--kv-unified-per-slot"));
+    }
+
+    [Test]
+    public void Composer_ChatRole_RunsTwoSlotsOverOneUnifiedPoolCappedAtTheWindow()
+    {
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey("model", ModelRole.Chat),
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 0,
+            plan: new LlamaServerLaunchPlan(RequestedContextTokens: 4096,
+                UseKvCacheQuantization: false,
+                LlamaServerKvCacheTypes.F16,
+                CpuThreads: null,
+                CpuThreadsBatch: null,
+                ChatSlots: LlamaServerChatSlots.Count));
+
+        AssertEx.Equal("2", ValueOf(spec, "--parallel"));
+        AssertEx.Equal("12288", ValueOf(spec, "-c"));
+        AssertEx.Equal("4096", ValueOf(spec, "--kv-unified-per-slot"));
+        AssertEx.Contains(spec.Arguments, "--kv-unified");
+
+        // Without it the server saves and clears the idle chat slot whenever the background slot starts a task.
+        AssertEx.Contains(spec.Arguments, "--no-cache-idle-slots");
+    }
+
+    [Test]
+    public void Composer_ChatRoleWithNoPlan_RunsOneSlot()
+    {
+        // A policy-free spawn (a frozen replay's profiling, a smoke load, an evaluation) replays a placement measured without a second slot.
+        var spec = BuildGpuReplaySpec(ModelRole.Chat);
+
+        AssertEx.Equal("1", ValueOf(spec, "--parallel"));
+        AssertEx.Equal("4096", ValueOf(spec, "-c"));
+        AssertEx.False(spec.Arguments.Any(static argument => argument.Contains("kv-unified", StringComparison.Ordinal) || argument.Contains("cache-idle", StringComparison.Ordinal)),
+            "a policy-free chat spawn carries no pool flags.");
+    }
+
+    [Test]
+    public void Composer_ChatRoleAdmittedSingleSlot_EmitsTheSingleSlotVectorAndRecordsIt()
+    {
+        // The fallback when the second slot would cost window or residency: develop's vector, no pool flags, the window as -c.
+        var plan = new LlamaServerLaunchPlan(RequestedContextTokens: 65536,
+            UseKvCacheQuantization: false,
+            LlamaServerKvCacheTypes.F16,
+            CpuThreads: null,
+            CpuThreadsBatch: null,
+            ChatSlots: 1);
+
+        var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey("qwen3", ModelRole.Chat),
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 0,
+            plan: plan);
+
+        AssertEx.Equal("1", ValueOf(spec, "--parallel"));
+        AssertEx.Equal("65536", ValueOf(spec, "-c"));
+        AssertEx.False(spec.Arguments.Any(static argument => argument.Contains("kv-unified", StringComparison.Ordinal) || argument.Contains("cache-idle", StringComparison.Ordinal)),
+            "a single-slot chat process carries no pool flags.");
+
+        var recorded = AssertEx.NotNull(LlamaServerLaunchProjection.FromArgumentsOrNull(spec.Arguments));
+        AssertEx.Equal(expected: 1, recorded.Parallel);
+        AssertEx.Null(recorded.SlotContextTokens);
+    }
+
+    [Test]
+    [Arguments(ModelRole.Embedding)]
+    [Arguments(ModelRole.Reranker)]
+    [Arguments(ModelRole.Decision)]
+    public void Composer_NonChatRole_KeepsOneSlotAndTheRequestedContext(ModelRole role)
+    {
+        var spec = BuildGpuReplaySpec(role);
+
+        AssertEx.Equal("1", ValueOf(spec, "--parallel"));
+        AssertEx.Equal("4096", ValueOf(spec, "-c"));
+        AssertEx.False(spec.Arguments.Any(static argument => argument.Contains("kv-unified", StringComparison.Ordinal) || argument.Contains("cache-idle", StringComparison.Ordinal)),
+            "only the chat role runs the two-slot pool.");
+    }
+
+    [Test]
+    public void ManagedFlags_ReserveTheChatSlotPoolFlags()
+    {
+        // An operator override could split the pool in half, uncap a slot or bring back the idle-slot clear.
+        foreach (var flag in new[] { "--kv-unified", "-kvu", "--no-kv-unified", "-no-kvu", "--kv-unified-per-slot", "--cache-idle-slots", "--no-cache-idle-slots" })
+        {
+            AssertEx.Contains(LlamaServerManagedFlags.All, flag);
+        }
     }
 
     [Test]
@@ -88,6 +183,25 @@ public sealed class LlamaServerLaunchArgumentComposerTests
     public void HasVerbosityArgument_WhenNoVerbosityFlag_ReturnsFalse()
     {
         AssertEx.False(LlamaServerLaunchArgumentComposer.HasVerbosityArgument(["-m", "/fake/model.gguf", "--parallel", "1", "--no-warmup"]));
+    }
+
+    private static string ValueOf(LlamaServerLaunchSpec spec, string flag)
+    {
+        var index = spec.Arguments.ToList().IndexOf(flag);
+        AssertEx.True(index >= 0 && index + 1 < spec.Arguments.Count, $"'{flag}' must be emitted with a value.");
+        return spec.Arguments[index + 1];
+    }
+
+    // A GPU replay pins the frozen context verbatim, so -c is always emitted.
+    private static LlamaServerLaunchSpec BuildGpuReplaySpec(ModelRole role)
+    {
+        return LlamaServerLaunchArgumentComposer.BuildLaunchSpec(new LlamaServerProcessSupervisor.ProcessKey("model", role),
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Replay(ctxSize: 4096),
+            chatCacheReuse: 0);
     }
 
     private static LlamaServerLaunchSpec BuildChatSpec(string? modelAlias)

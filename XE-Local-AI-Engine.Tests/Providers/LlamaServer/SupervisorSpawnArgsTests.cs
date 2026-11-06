@@ -101,6 +101,9 @@ public sealed class SupervisorSpawnArgsTests
                                         -tb, --threads-batch N
                                         --jinja
                                         --cache-ram N
+                                        --kv-unified-per-slot N
+                                        -kvu,  --kv-unified, -no-kvu, --no-kv-unified
+                                        --cache-idle-slots, --no-cache-idle-slots
                                         """;
         var binary = new LlamaBinary
         {
@@ -213,8 +216,8 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "Explore mode must not emit an explicit -ngl (it disables auto-fit).");
         AssertEx.False(spec.Arguments.Contains("999"), "The forced -ngl 999 placement is removed.");
 
-        // The policy adds the deterministic chat context and the KV-cache quant + flash-attention optimization.
-        var ctxIndex = IndexOf(spec.Arguments, "-c");
+        // The policy adds the deterministic chat context (each slot's cap) and the KV-cache quant + flash-attention optimization.
+        var ctxIndex = IndexOf(spec.Arguments, "--kv-unified-per-slot");
         AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
         AssertEx.Contains(spec.Arguments, "-fa");
         AssertEx.Equal("on", spec.Arguments[IndexOf(spec.Arguments, "-fa") + 1]);
@@ -370,7 +373,7 @@ public sealed class SupervisorSpawnArgsTests
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        AssertEx.Equal("12288", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Equal("12288", spec!.Arguments[IndexOf(spec.Arguments, "--kv-unified-per-slot") + 1]);
         AssertEx.Contains(spec.Arguments, "--fit");
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "the post-admission frozen profile must not replace admitted Explore args");
         consumer!.Dispose();
@@ -474,7 +477,7 @@ public sealed class SupervisorSpawnArgsTests
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        AssertEx.Equal("32768", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Equal("32768", spec!.Arguments[IndexOf(spec.Arguments, "--kv-unified-per-slot") + 1]);
         await allocationResolver.Received(1).ResolveAsync(Arg.Any<string>(),
             Arg.Any<ModelRole>(),
             GpuVariant.Cuda,
@@ -542,9 +545,10 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(spec.Arguments.Contains("--metrics"), "The CPU variant must not emit --metrics.");
         AssertEx.False(spec.Arguments.Contains("-ctk"), "The CPU variant keeps f16 KV — no -ctk.");
 
-        // The CPU variant DOES get a deterministic -c (without one → full-train-ctx KV in RAM).
+        // The CPU variant DOES get a deterministic -c (without one → full-train-ctx KV in RAM): the window plus the background headroom.
         var ctxIndex = IndexOf(spec.Arguments, "-c");
-        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
+        AssertEx.Equal((LlamaServerLaunchPolicyOptions.DefaultChatContextTokens + LlamaServerChatSlots.BackgroundHeadroomTokens).ToString(CultureInfo.InvariantCulture),
+            spec.Arguments[ctxIndex + 1]);
 
         // The CPU thread policy.
         AssertEx.Equal("6", spec.Arguments[IndexOf(spec.Arguments, "-t") + 1]);
@@ -590,7 +594,10 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
         AssertEx.False(spec!.Arguments.Contains("--fit"), "A replay must not emit --fit (an explicit fit-arg disables auto-fit).");
         AssertEx.Equal(expected: 1, CountOf(spec.Arguments, "-c"));
+
+        // A frozen profile replays one slot at its window: its -ngl was fitted for a pool whose slot count it does not record.
         AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Equal("1", spec.Arguments[IndexOf(spec.Arguments, "--parallel") + 1]);
         AssertEx.Equal("24", spec.Arguments[IndexOf(spec.Arguments, "--n-gpu-layers") + 1]);
     }
 

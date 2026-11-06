@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default <see cref="IConversationStateDistiller" />: one forced-JSON call on a NODE-LOCAL model at temperature 0
@@ -192,16 +193,23 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
         };
     }
 
-    // min(ceiling, window x chars-per-token x InputShare); an unknown window keeps the ceiling.
+    // min(ceiling, window x chars-per-token x InputShare), and for background work also the chat process's background headroom less the
+    // output cap; an unknown window leaves only the other bounds.
     internal int ResolveRequestBudget(ConversationStateDistillerInput input)
     {
         var ceiling = Math.Max(1, _options.MaxInputCharsPerSummarizationCall);
-        if (input.EffectiveContextTokens is not > 0)
+        var divisor = _calibrationStore.ResolveDivisor(input.ModelName);
+        long derived = ceiling;
+        if (input.EffectiveContextTokens is > 0)
         {
-            return ceiling;
+            derived = (long)(input.EffectiveContextTokens.Value * (double)divisor * InputShare);
         }
 
-        var derived = (long)(input.EffectiveContextTokens.Value * (double)_calibrationStore.ResolveDivisor(input.ModelName) * InputShare);
+        if (input.ResidencyIntent == ModelResidencyIntent.Background)
+        {
+            derived = Math.Min(derived, LlamaServerChatSlots.BackgroundPromptChars(Math.Max(1, _options.DistillerMaxOutputTokens), divisor));
+        }
+
         return (int)Math.Min(derived, ceiling);
     }
 

@@ -31,7 +31,8 @@ internal static partial class LlamaFitParamsOutputParser
                 out var kvTypeK,
                 out var kvTypeV,
                 out var flashAttn,
-                out var expertOffload))
+                out var expertOffload,
+                out var slotWindow))
         {
             return null;
         }
@@ -68,6 +69,13 @@ internal static partial class LlamaFitParamsOutputParser
                 }
 
                 gpuLayers = -2;
+            }
+
+            // A two-slot chat spawn's -c is the pool (window + background headroom); the profile records the WINDOW. When the
+            // helper fitted a smaller pool, the background slot goes first, so the window only shrinks once the pool is below it.
+            if (slotWindow is { } window)
+            {
+                ctxSize = Math.Min(window, ctxSize);
             }
 
             var tensorSplit = OptionalValue(match, "ts");
@@ -125,13 +133,16 @@ internal static partial class LlamaFitParamsOutputParser
         out string? kvTypeK,
         out string? kvTypeV,
         out bool flashAttn,
-        out bool expertOffload)
+        out bool expertOffload,
+        out int? slotWindow)
     {
         kvTypeK = null;
         kvTypeV = null;
         flashAttn = false;
         expertOffload = false;
+        slotWindow = null;
         string? flashAttnValue = null;
+        string? slotWindowValue = null;
 
         if (arguments is null)
         {
@@ -164,6 +175,21 @@ internal static partial class LlamaFitParamsOutputParser
             {
                 return false;
             }
+            else if (argument is "--kv-unified-per-slot"
+                     && !TryReadSingleValue(arguments, ref index, ref slotWindowValue))
+            {
+                return false;
+            }
+        }
+
+        if (slotWindowValue is not null)
+        {
+            if (!int.TryParse(slotWindowValue, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedWindow) || parsedWindow <= 0)
+            {
+                return false;
+            }
+
+            slotWindow = parsedWindow;
         }
 
         if (flashAttnValue is not null)

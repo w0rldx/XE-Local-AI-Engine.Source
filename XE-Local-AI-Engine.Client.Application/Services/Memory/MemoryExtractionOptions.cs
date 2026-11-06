@@ -26,7 +26,11 @@ public sealed class MemoryExtractionOptions
     ///     unbounded fan-out (one per terminal turn) could spin up many concurrent model round-trips. Clamped to at
     ///     least 1.
     /// </summary>
-    public int MaxConcurrentExtractions { get; set; } = 2;
+    /// <remarks>
+    ///     Default 1: the chat process has ONE background slot (<c>LlamaServerChatSlots.Background</c>), so a second
+    ///     concurrent extraction would only queue behind the first on the server.
+    /// </remarks>
+    public int MaxConcurrentExtractions { get; set; } = 1;
 
     /// <summary>
     ///     Bound on how many pending extraction jobs the queue holds, clamped to at least 1.

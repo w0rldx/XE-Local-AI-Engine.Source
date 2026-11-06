@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -170,6 +171,19 @@ public sealed class ConversationStateDistillerTests
     }
 
     [Test]
+    public void ResolveRequestBudget_ForBackgroundWork_FitsPromptAndOutputInTheBackgroundHeadroom()
+    {
+        // A background distill runs on the chat process's second slot, whose KV room is only the headroom: prompt plus output cap must fit it.
+        using var client = new CapturingChatClient(EmptyDelta);
+        var distiller = CreateDistiller(client, budget: 12_000, distillerMaxOutputTokens: 6144);
+        var background = Input([], effectiveContextTokens: 65_536, residencyIntent: ModelResidencyIntent.Background);
+        var foreground = Input([], effectiveContextTokens: 65_536, residencyIntent: ModelResidencyIntent.Interactive);
+
+        AssertEx.Equal((LlamaServerChatSlots.BackgroundHeadroomTokens - 6144) * 4, distiller.ResolveRequestBudget(background));
+        AssertEx.Equal(12_000, distiller.ResolveRequestBudget(foreground));
+    }
+
+    [Test]
     public async Task DistillAsync_WhenTheModelOutputIsMalformed_ReturnsNull()
     {
         using var client = new CapturingChatClient("I could not find anything worth keeping.");
@@ -286,14 +300,16 @@ public sealed class ConversationStateDistillerTests
     private static ConversationStateDistillerInput Input(IReadOnlyList<ConversationStateSourceMessage> messages,
         bool supportsThinking = false,
         int? effectiveContextTokens = null,
-        ConversationStateDocument? state = null) =>
+        ConversationStateDocument? state = null,
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive) =>
         new()
         {
             State = state ?? new ConversationStateDocument(),
             Messages = messages,
             ModelName = "model",
             SupportsThinking = supportsThinking,
-            EffectiveContextTokens = effectiveContextTokens
+            EffectiveContextTokens = effectiveContextTokens,
+            ResidencyIntent = residencyIntent
         };
 
     private static ConversationStateDistiller CreateDistiller(CapturingChatClient client, int budget = 12_000, int distillerMaxOutputTokens = 1024)

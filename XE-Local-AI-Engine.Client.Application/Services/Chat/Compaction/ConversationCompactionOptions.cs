@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 using System.ComponentModel.DataAnnotations;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Operator-tunable knobs for manual and automatic non-destructive conversation compaction, bound from the
@@ -28,6 +30,12 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     ///     source content; <see cref="Validate" /> enforces the exact prompt-dependent requirement for each configuration.
     /// </summary>
     public const int MinimumInputCharsPerSummarizationCall = 2_000;
+
+    /// <summary>
+    ///     Largest supported total request budget: the chat process's background headroom at the most characters a token the
+    ///     calibration accepts.
+    /// </summary>
+    public const int MaximumInputCharsPerSummarizationCall = LlamaServerChatSlots.BackgroundHeadroomTokens * TokenEstimatorCalibrationStore.MaximumCharsPerToken;
 
     /// <summary>
     ///     How many of the most recent completed messages are always kept verbatim and never folded into the synopsis, so
@@ -58,7 +66,7 @@ public sealed class ConversationCompactionOptions : IValidatableObject
     ///     dozens of lossy passes. This is a ceiling: the summarizer lowers each call's budget to 60% of the fold
     ///     model's effective window in calibrated characters when that window is known.
     /// </remarks>
-    [Range(MinimumInputCharsPerSummarizationCall, int.MaxValue)]
+    [Range(MinimumInputCharsPerSummarizationCall, MaximumInputCharsPerSummarizationCall)]
     public int MaxInputCharsPerSummarizationCall { get; set; } = 12_000;
 
     /// <summary>

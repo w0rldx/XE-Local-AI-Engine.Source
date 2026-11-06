@@ -64,14 +64,14 @@ child also applies edited launch args). A role that is not running counts as suc
 reported `TimedOutStillBusy`. Never route on the provider map: it says where a model would be served, not where it is
 resident. **Prevents:** a resident model staying loaded. **Authority:** `ModelUnloadCoordinator.UnloadAsync`.
 
-### Post-turn background model work shares the chat's single llama-server slot, so it yields to every turn
+### Post-turn model work runs on the chat's pinned background slot and still yields
 
-**Rule:** `ConversationMaintenanceWorker` (Distill/Compact) and `MemoryExtractionWorker` run on the chat's slot
-(`--parallel 1`), so each runs its model work through `BackgroundInvocationYield`: it starts only once the node
-invocation slot stayed free for `IdleWindow` (2 s), and a turn taking the slot cancels it and reruns it whole at the next
-idle window. Only a post-turn worker may use it: a path a turn awaits while holding the slot (`ConversationStepContextBound`,
-the manual compact endpoint) would wait for itself. A yield is never a failure. **Prevents:** the next turn queueing
-behind the previous turn's job. **Authority:** `BackgroundInvocationYield`, `IWorkerEventDispatcher.SlotChanged`.
+**Rule:** post-turn model work (Distill/Compact, memory extraction) takes a `ModelResidencyIntent.Background` client,
+which pins it to the chat process's slot 1 (`id_slot`); anything else lands on slot 0 and evicts the chat's prompt. Keep
+the chat role's `--no-cache-idle-slots`: without it the server clears the idle chat slot whenever slot 1 starts. The
+work still runs through `BackgroundInvocationYield` (starts after a 2 s idle window, a turn cancels and reruns it):
+overlap slows the turn's decode and each new slot-1 prompt stalls the server on a `--cache-ram` save. No yield on a
+path a turn awaits. **Prevents:** the next turn re-prefilling or queueing. **Authority:** `DeferredLlamaServerChatClient.ApplySlotPin`, `BackgroundInvocationYield`.
 [evidence](../agent-knowledge-evidence.md#post-turn-background-model-work-shares-the-chats-single-llama-server-slot-so-it-yields-to-every-turn)
 
 ### "Idle" by lease is not idle right after a turn: a background request holds the model for seconds
@@ -151,4 +151,5 @@ Superseded claims; the entries above are the active rules.
 | A `maxLength` in a response schema never reaches llama.cpp, because the MEAI OpenAI strict-schema transform rewrote it into a `description` first. | Still true of every other provider (validate bounds downstream); on llama-server `ApplyResponseSchemaPassthrough` writes the schema onto the body, so the grammar enforces it. |
 | Every non-chat llama-server role takes a role flag (`--embeddings --pooling …` or `--rerank`), and there are three roles. | `ModelRole.Decision` is a fourth, pooled companion role launched with NO role flag (the server reads `decision.type` from the GGUF) and `-b`/`-ub` pinned to its context (wiki 03, "`ModelRole` and the external-endpoint option"). |
 | Two companion slots: the embedder and the reranker. | `MaxLoadedCompanionProcesses` defaults to 3, the third for one decision model. |
+| Every llama-server process runs `--parallel 1` (single-slot serving is the locked design). | Chat runs two slots over one unified pool (`LlamaServerChatSlots`), one slot when the second would cost window or residency, on a frozen-profile replay and on every policy-free spawn; every other role keeps one. Wiki reference 03, "LlamaServerProcessSupervisor — process lifecycle". |
 | A turn sent right after the previous one waits for that turn's memory extraction or distill inside llama-server. | Stale since 2026-10-30: both workers wait for an idle invocation slot and yield it to a turn mid-call (`BackgroundInvocationYield`). |

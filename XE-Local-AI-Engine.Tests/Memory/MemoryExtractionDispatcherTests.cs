@@ -444,6 +444,14 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     }
 
     [Test]
+    public void Options_DefaultToOneExtractionAtATime()
+    {
+        // The chat process has one background slot, so a second concurrent extraction would only queue on the server; the
+        // default lives in code so a node without an appsettings override gets it too.
+        AssertEx.Equal(expected: 1, new MemoryExtractionOptions().MaxConcurrentExtractions);
+    }
+
+    [Test]
     public async Task StopAsync_WhenSecondJobAwaitsConcurrencySlotAtShutdown_AccountsItAndDropsNothingSilently()
     {
         var agentId = Guid.NewGuid();

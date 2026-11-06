@@ -48,6 +48,21 @@ public sealed class ConversationCompactionOptionsTests
     }
 
     [Test]
+    [Arguments(ConversationCompactionOptions.MaximumInputCharsPerSummarizationCall, true)]
+    [Arguments(ConversationCompactionOptions.MaximumInputCharsPerSummarizationCall + 1, false)]
+    public void Validation_TotalBudget_IsBoundedAbove(int budget, bool valid)
+    {
+        var options = new ConversationCompactionOptions
+        {
+            MaxInputCharsPerSummarizationCall = budget
+        };
+
+        var errors = Validate(options).SelectMany(static result => result.MemberNames).ToList();
+
+        AssertEx.Equal(valid ? 0 : 1, errors.Count(static name => name == nameof(ConversationCompactionOptions.MaxInputCharsPerSummarizationCall)));
+    }
+
+    [Test]
     public void Defaults_LeaveRoomForSourceContentBesideTheSystemPromptAndAFullRunningSummary()
     {
         var options = new ConversationCompactionOptions();

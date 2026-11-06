@@ -45,9 +45,9 @@ public sealed class LlamaServerLaunchProjectionTests
 
         AssertVector(spec,
         [
-            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
-            "--metrics", "--fit", "on", "-c", "16384", "-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0",
-            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "2", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "24576", "-fa", "on", "-ctk", "q8_0", "-ctv", "q8_0",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512", .. ChatSlotArgs(window: 16384)
         ]);
     }
 
@@ -75,9 +75,9 @@ public sealed class LlamaServerLaunchProjectionTests
 
         AssertVector(spec,
         [
-            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
-            "--metrics", "--fit", "on", "-c", "16384",
-            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "2", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "24576",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512", .. ChatSlotArgs(window: 16384)
         ]);
         AssertEx.False(spec.Arguments.Contains("-ctk"), "f16 must emit no -ctk.");
         AssertEx.False(spec.Arguments.Contains("-ctv"), "f16 must emit no -ctv.");
@@ -106,9 +106,9 @@ public sealed class LlamaServerLaunchProjectionTests
 
         AssertVector(spec,
         [
-            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "1", "--no-warmup",
-            "--metrics", "--fit", "on", "-c", "16384", "-fa", "on", "-ctk", "q4_0", "-ctv", "q4_0",
-            "--jinja", "--cache-reuse", "256", "--cache-ram", "512"
+            "-m", ModelFilePath, "--host", "127.0.0.1", "--port", "8080", "--parallel", "2", "--no-warmup",
+            "--metrics", "--fit", "on", "-c", "24576", "-fa", "on", "-ctk", "q4_0", "-ctv", "q4_0",
+            "--jinja", "--cache-reuse", "256", "--cache-ram", "512", .. ChatSlotArgs(window: 16384)
         ]);
     }
 
@@ -234,7 +234,9 @@ public sealed class LlamaServerLaunchProjectionTests
 
         AssertEx.False(projection.AutoFit);
         AssertEx.True(projection.Metrics);
+        // No plan admitted a background slot: one slot at the frozen window.
         AssertEx.Equal<int?>(expected: 8192, projection.ContextTokens);
+        AssertEx.Null(projection.SlotContextTokens);
         AssertEx.Equal<int?>(expected: 24, projection.GpuLayers);
         AssertEx.Equal("0.6,0.4", projection.TensorSplit);
         AssertEx.Equal("exps=CPU", projection.OverrideTensor);
@@ -345,6 +347,10 @@ public sealed class LlamaServerLaunchProjectionTests
             baseline with
             {
                 Parallel = 2
+            },
+            baseline with
+            {
+                SlotContextTokens = 4096
             },
             baseline with
             {
@@ -603,9 +609,12 @@ public sealed class LlamaServerLaunchProjectionTests
         // f642c972396108f8129c6a01812775f43f15047eca05248886986f6c52b737b4; work frozen under it is failed at cutover
         // rather than compared, and LlamaServerLaunchReceipt.CurrentVersion moved 1 -> 2 in the same change so a
         // pre-slice and a post-slice identity are DISTINGUISHABLE rather than merely unequal.
-        AssertEx.Equal("3d17edf6e09739e9ad0a56b5b238e604ec11f49954ca9bcfd4cccf535081ef4f",
+        // RE-BASELINED again when SlotContextTokens joined the record for the chat role's two-slot pool (scheme 2 -> 3,
+        // receipt 2 -> 3); the scheme-2 literal was 3d17edf6e09739e9ad0a56b5b238e604ec11f49954ca9bcfd4cccf535081ef4f.
+        AssertEx.Equal("808d248de4f42fda283fdd1a4228a0cc7044be90dcacb551f9842e4d7eb32053",
             FullyPopulatedProjection().ComputeIdentity());
-        AssertEx.Equal(expected: 2, LlamaServerLaunchProjection.IdentitySchemeVersion);
+        AssertEx.Equal(expected: 3, LlamaServerLaunchProjection.IdentitySchemeVersion);
+        AssertEx.Equal(expected: 3, LlamaServerLaunchReceipt.CurrentVersion);
     }
 
     private static LlamaServerLaunchProjection FullyPopulatedProjection()
@@ -627,6 +636,7 @@ public sealed class LlamaServerLaunchProjectionTests
             BatchSize = 2048,
             UbatchSize = 2048,
             Parallel = 1,
+            SlotContextTokens = null,
             CacheReuse = 256,
             CacheRamMiB = 512,
             Jinja = true,
@@ -644,6 +654,10 @@ public sealed class LlamaServerLaunchProjectionTests
             },
             new FakeLaunchFallbackStore());
     }
+
+    // The chat role's two-slot pool flags, emitted after --cache-ram.
+    private static string[] ChatSlotArgs(int window) =>
+        ["--kv-unified", "--kv-unified-per-slot", window.ToString(System.Globalization.CultureInfo.InvariantCulture), "--no-cache-idle-slots"];
 
     private static void AssertVector(LlamaServerLaunchSpec spec, IReadOnlyList<string> expected)
     {

@@ -425,9 +425,23 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   Latency figures of a model that used to hit the window are not comparable with its older benchmark rows; nothing
   that gates a profile reads them.
 - **Background memory extraction, distillation and automatic compaction give way to your next turn.** They share the
-  chat model's single llama-server slot, so a turn sent right after the previous one used to wait behind them (about
+  chat model's llama-server, so a turn sent right after the previous one used to wait behind them (about
   0.7 s after an extraction and 2.9 s after a distill on a 27B model). Each now starts only once the node has been idle
   for two seconds, and a turn starting mid-call cancels it; the job reruns at the next idle moment and is never lost.
+- **Background model work no longer evicts the chat's cached prompt.** The chat model's llama-server now runs two
+  slots over one shared KV pool: your turns use slot 0, memory extraction, distillation and compaction use slot 1, so
+  the turn after them no longer re-reads the whole conversation. The chat window is unchanged. **Costs VRAM:** the
+  pool holds 8192 extra tokens plus the second slot's state, about 0.3–0.4 GB on the 27B and 9B models measured, and
+  capacity planning reserves it. The second slot never costs the window or residency: when it would, the model loads
+  single-slot exactly as before, and background work shares the chat's slot again. A frozen inference profile also
+  loads single-slot, because it does not record the slot count it was measured for. Requests through the external-app
+  model proxy use the foreground slot. Benchmark work queued before the upgrade is failed as superseded
+  (launch-identity scheme 3), one memory extraction runs at a time by default, and each background prompt (extraction,
+  distill, compaction) is capped so it and its output fit the 8192 extra tokens at the model's calibrated characters per
+  token: at most 12,000 characters for an extraction (the newest turns and the end of the answer), about 7,000 on a
+  one-character-a-token script. `MaxInputCharsPerSummarizationCall` is now limited to 65,536. A bring-your-own llama.cpp runtime must support `--kv-unified-per-slot` and
+  `--no-cache-idle-slots` (the pinned runtime does); an older one is refused for chat with an error naming the
+  missing option.
 - **A request on something in the wrong state answers 409, not 404.** A missing id still answers the same bodyless
   404 everywhere. Calls that used to answer 404 (or 401/400) for a different failure now say what went wrong:
   - Playbook actions: the manual edit of an analysis-provenance action is 409 `NotManual`; reject, suggested edit, eval

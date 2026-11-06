@@ -120,7 +120,7 @@ public sealed class SupervisorStartupCaptureWindowTests
 
         var contexts = launcher.Launches.Select(static spec =>
         {
-            var index = spec.Arguments.ToList().IndexOf("-c");
+            var index = spec.Arguments.ToList().IndexOf("--kv-unified-per-slot");
             return int.Parse(spec.Arguments[index + 1], CultureInfo.InvariantCulture);
         }).ToArray();
         AssertEx.True(contexts.Length >= 4);

@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http.Features;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -192,6 +193,13 @@ internal sealed class LocalModelProxyForwarder
 
         using var lease = acquired;
 
+        // A multi-slot chat process keeps its second slot for the node's background work (LlamaServerChatSlots): an external caller takes the
+        // foreground slot, as a node chat turn does, so it never runs beside a turn or leaves its full-window prompt in the background slot.
+        if (role == ModelRole.Chat && endpoint.ParallelSlots > 1)
+        {
+            body = PinForegroundSlot(body);
+        }
+
         var upstreamUri = new Uri($"{endpoint.BaseAddress.AbsoluteUri.TrimEnd('/')}/{upstreamPath}");
         using var upstreamRequest = new HttpRequestMessage(HttpMethod.Post, upstreamUri)
         {
@@ -345,6 +353,14 @@ internal sealed class LocalModelProxyForwarder
         var installed = await _ggufModelStore.ListInstalledModelsAsync(ct);
         return installed.Any(descriptor =>
             descriptor.IsAvailable && string.Equals(descriptor.ModelName, model, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // The body is a JSON object (TryReadModel proved it); the caller's own id_slot, if any, is overwritten.
+    private static byte[] PinForegroundSlot(byte[] body)
+    {
+        var request = JsonNode.Parse(body)!.AsObject();
+        request["id_slot"] = LlamaServerChatSlots.Foreground;
+        return JsonSerializer.SerializeToUtf8Bytes(request);
     }
 
     private static bool TryReadModel(byte[] body, [NotNullWhen(true)] out string? model)

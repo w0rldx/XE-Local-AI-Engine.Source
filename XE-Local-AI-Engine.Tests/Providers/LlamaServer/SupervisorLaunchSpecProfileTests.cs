@@ -113,10 +113,10 @@ public sealed class SupervisorLaunchSpecProfileTests
     }
 
     [Test]
-    public void LaunchSpec_AlwaysEmitsSingleSlotAndNoWarmup()
+    public void LaunchSpec_AlwaysPinsTheChatSlotCountAndNoWarmup()
     {
-        // Single-slot serving (locked design) + skip the empty-run warmup so a large model becomes ready before the
-        // readiness budget elapses (otherwise it tree-kills + respawns). Both apply to every spawn regardless of mode.
+        // A pinned slot count (the auto default reserves 4x the KV; with no plan admitting a background slot, chat runs one) + skip the
+        // empty-run warmup so a large model is ready inside the readiness budget. Both apply to every spawn regardless of mode.
         var explore = BuildGpuSpec(ResolvedLaunchArguments.Explore());
         AssertEx.Equal("1", explore.Arguments[IndexOf(explore.Arguments, "--parallel") + 1]);
         AssertEx.Contains(explore.Arguments, "--no-warmup");
