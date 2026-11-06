@@ -18,5 +18,8 @@ public static partial class LocalApiRoutes
         public const string ExperimentCancel = "model-lab/experiments/{experimentId:guid}/cancel";
 
         public const string ExperimentTrace = "model-lab/experiments/{experimentId:guid}/trace";
+
+        // An installed GGUF's blocks and tensors by component, from the header alone: no model load.
+        public const string Architecture = "model-lab/architecture/{modelName}";
     }
 }

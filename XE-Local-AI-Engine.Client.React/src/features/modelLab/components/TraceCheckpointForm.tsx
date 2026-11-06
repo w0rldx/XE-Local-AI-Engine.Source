@@ -31,6 +31,7 @@ import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNotice";
 import { SteeringForm } from "@/features/modelLab/components/SteeringForm";
+import { TraceLayerPicker } from "@/features/modelLab/components/TraceLayerPicker";
 import { starterSteeringDraft } from "@/features/modelLab/models/ModelLabSteering";
 
 // The transfer has no hub of its own, so the page reads its progress while it runs.
@@ -56,6 +57,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 	const [prompt, setPrompt] = useState("");
 	const [jobKind, setJobKind] = useState("trace");
 	const [steeringDraft, setSteeringDraft] = useState(starterSteeringDraft);
+	const [layers, setLayers] = useState<number[]>([]);
 
 	const preflight = useMutation(preflightModelLabCheckpointMutation());
 	const download = useMutation({
@@ -81,6 +83,8 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 		download.reset();
 		start.reset();
 		setLicenseConfirmed(false);
+		// Another checkpoint can have fewer blocks.
+		setLayers([]);
 	};
 
 	const body = { repoId: repoId.trim(), revision: revision.trim() || undefined, installedModelName: installedModelName ?? "" };
@@ -267,10 +271,13 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 									value={prompt}
 									onChange={(event) => setPrompt(event.currentTarget.value)}
 								/>
+								{check.checkpointBlockCount ? (
+									<TraceLayerPicker blockCount={check.checkpointBlockCount} value={layers} onChange={setLayers} disabled={busy} />
+								) : null}
 								<Text size="xs" c="dimmed">
 									{t(
 										"pages.modelLab.trace.spec",
-										"Three layers across the stack, up to 128 tokens, greedy. The trace is capped in size and saved encrypted on this node, with the prompt and the output.",
+										"Up to 128 tokens, greedy. The trace is capped in size by the number of blocks and saved encrypted on this node, with the prompt and the output.",
 									)}
 								</Text>
 								<Group>
@@ -284,6 +291,7 @@ export function TraceCheckpointForm({ busy }: { busy: boolean }) {
 													installedModelName: installedModelName ?? "",
 													prompt,
 													licenseConfirmed,
+													...(layers.length > 0 ? { layers } : {}),
 												},
 											})
 										}

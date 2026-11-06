@@ -664,6 +664,9 @@ import type {
 	GetModelGgufInspectionData,
 	GetModelGgufInspectionErrors,
 	GetModelGgufInspectionResponses,
+	GetModelLabArchitectureData,
+	GetModelLabArchitectureErrors,
+	GetModelLabArchitectureResponses,
 	GetModelLabExperimentData,
 	GetModelLabExperimentErrors,
 	GetModelLabExperimentResponses,
@@ -1694,6 +1697,7 @@ import {
 	zGetMcpServerToolsResponse,
 	zGetModelCatalogInfoResponse,
 	zGetModelGgufInspectionResponse,
+	zGetModelLabArchitectureResponse,
 	zGetModelLabExperimentResponse,
 	zGetModelLabExperimentTraceResponse,
 	zGetModelLaunchArgumentsResponse,
@@ -9846,6 +9850,28 @@ export const getRuntimeResidents = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-fit/runtime-residents",
+		...options,
+	});
+
+export const getModelLabArchitecture = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabArchitectureData, ThrowOnError>,
+): RequestResult<GetModelLabArchitectureResponses, GetModelLabArchitectureErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabArchitectureResponses, GetModelLabArchitectureErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabArchitectureResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/architecture/{modelName}",
 		...options,
 	});
 

@@ -276,6 +276,18 @@ def test_every_unusable_field_is_refused():
     raise AssertionError("A job that is not an object must be refused.")
 
 
+def test_trace_layers_out_of_order_are_refused_and_any_ascending_set_is_kept():
+    for layers in ([12, 3], [3, 18, 12], [23, 0]):
+        try:
+            validate_job({**VALID_JOB, "layers": layers})
+        except JobError as error:
+            assert "ascending" in str(error), str(error)
+            continue
+        raise AssertionError(f"layers={layers!r} must be refused: the tracer would file earlier blocks a step behind.")
+    for layers in ([15], [0, 1, 2], list(range(64))):
+        assert validate_job({**VALID_JOB, "layers": layers})["layers"] == layers
+
+
 def test_layers_past_the_last_block_are_named():
     assert out_of_range_layers([3, 24, 99], 24) == [24, 99]
     assert out_of_range_layers([3, 23], 24) == []

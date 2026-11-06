@@ -34,7 +34,8 @@ public sealed class StartModelLabExperimentEndpoint : Endpoint<StartModelLabExpe
             InstalledModelName = request.InstalledModelName,
             Prompt = request.Prompt,
             LicenseConfirmed = request.LicenseConfirmed,
-            Steering = request.Steering
+            Steering = request.Steering,
+            Layers = request.Layers
         }, ct);
         if (start.ExperimentId is { } id)
         {

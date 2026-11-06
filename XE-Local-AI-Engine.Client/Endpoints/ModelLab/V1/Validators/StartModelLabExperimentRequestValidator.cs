@@ -28,5 +28,18 @@ public sealed class StartModelLabExperimentRequestValidator : Validator<StartMod
         RuleFor(static request => request.Steering!)
             .SetValidator(new ModelLabSteeringRequestValidator())
             .When(static request => request.Steering is not null);
+
+        // The range depends on the checkpoint, so the start decides it.
+        RuleFor(static request => request.Layers!)
+            .Must(static layers => layers.Count is >= 1 and <= ModelLabTraceSpec.MaxTraceLayers
+                                   && layers.All(static layer => layer >= 0)
+                                   && layers.Distinct().Count() == layers.Count)
+            .WithMessage($"Choose 1 to {ModelLabTraceSpec.MaxTraceLayers} distinct trace layers, none below 0.")
+            .When(static request => request.Layers is not null);
+
+        RuleFor(static request => request.Layers)
+            .Null()
+            .WithMessage("A steering job has its own layer. Leave out the trace layers.")
+            .When(static request => request.Steering is not null);
     }
 }

@@ -267,6 +267,52 @@ describe("TraceExperiments", () => {
 
 		await waitFor(() => expect(starts).toHaveLength(1));
 		expect(starts[0]).toMatchObject({ baseArtifactId: artifactId, installedModelName: gguf, licenseConfirmed: true });
+		// Nothing chosen sends no layers, and the form says which the server then picks.
+		expect(starts[0]).not.toHaveProperty("layers");
+		expect(screen.getByText("None chosen: blocks 6, 12, 18 are traced.")).toBeTruthy();
+	});
+
+	it("sends the chosen blocks in ascending order, all of them on request, and none again after Clear", async () => {
+		const starts: { layers?: number[] }[] = [];
+		stubModels();
+		server.use(
+			http.get(localApiPath("model-lab/experiments"), () => HttpResponse.json(emptyList)),
+			http.get(localApiPath("training/base-artifacts"), () => HttpResponse.json({ items: [artifactRow("Ready")] })),
+			http.get(localApiPath("training/base-artifacts/:artifactId"), () => HttpResponse.json(artifactRow("Ready"))),
+			http.post(localApiPath("model-lab/checkpoint-preflight"), () => HttpResponse.json(preflightBase)),
+			http.post(localApiPath("model-lab/experiments"), async ({ request }) => {
+				starts.push((await request.json()) as { layers?: number[] });
+				return HttpResponse.json(
+					{ reason: "InvalidTraceLayers", message: "This checkpoint has blocks 0 to 23 only." },
+					{ status: 409 },
+				);
+			}),
+		);
+
+		renderWithProviders(<TraceExperiments />);
+		await chooseOption(/Installed GGUF/, gguf);
+		await chooseOption(/Checkpoint on this node/, "Qwen/Qwen3.5-0.8B @ 2fc06364715b");
+		fireEvent.click(screen.getByTestId("model-lab-check"));
+		fireEvent.click(await screen.findByRole("checkbox"));
+		fireEvent.change(await screen.findByRole("textbox", { name: /Prompt/ }), { target: { value: "hello" } });
+		await chooseOption(/Blocks to trace/, "Block 18");
+		await chooseOption(/Blocks to trace/, "Block 3");
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+
+		expect((await screen.findByTestId("model-lab-start-refused")).textContent).toContain("blocks 0 to 23 only");
+		expect(starts[0]?.layers).toEqual([3, 18]);
+
+		fireEvent.click(screen.getByTestId("model-lab-trace-layers-all"));
+		// Every block is chosen, so there is nothing left for "All blocks" to add.
+		expect((screen.getByTestId("model-lab-trace-layers-all") as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(2));
+		expect(starts[1]?.layers).toEqual(Array.from({ length: 24 }, (_, index) => index));
+
+		fireEvent.click(screen.getByTestId("model-lab-trace-layers-clear"));
+		fireEvent.click(screen.getByTestId("model-lab-start"));
+		await waitFor(() => expect(starts).toHaveLength(3));
+		expect(starts[2]).not.toHaveProperty("layers");
 	});
 
 	it("marks a steering row in the list, and only that one", async () => {

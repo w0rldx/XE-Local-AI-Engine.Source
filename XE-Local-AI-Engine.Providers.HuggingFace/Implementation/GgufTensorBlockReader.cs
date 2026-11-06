@@ -305,6 +305,8 @@ internal static class GgufTensorBlockReader
                 : null,
             BlockCount = header.BlockCount,
             NextnPredictLayers = GgufHeaderReader.GetLongOrNull(values, $"{header.Architecture}.nextn_predict_layers"),
+            SsmGroupCount = GgufHeaderReader.GetLongOrNull(values, $"{header.Architecture}.ssm.group_count"),
+            SsmTimeStepRank = GgufHeaderReader.GetLongOrNull(values, $"{header.Architecture}.ssm.time_step_rank"),
             Alignment = GgufHeaderReader.GetLongOrNull(values, "general.alignment"),
             AttentionHeadCount = header.AttentionHeadCount,
             AttentionHeadCountKv = header.AttentionHeadCountKV,

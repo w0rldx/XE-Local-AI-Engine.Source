@@ -49,6 +49,9 @@ def validate_job(job):
         raise JobError("The job has no usable 'layers'.")
     if len(set(layers)) != len(layers):
         raise JobError("The job names a layer twice.")
+    # A step is counted when the first listed layer's hook fires: an earlier block listed later lands a step behind.
+    if layers != sorted(layers):
+        raise JobError("The job's 'layers' are not in ascending order.")
     tokens = job.get("maxNewTokens")
     if not _is_int(tokens) or not 1 <= tokens <= MAX_NEW_TOKENS_LIMIT:
         raise JobError("The job has no usable 'maxNewTokens'.")

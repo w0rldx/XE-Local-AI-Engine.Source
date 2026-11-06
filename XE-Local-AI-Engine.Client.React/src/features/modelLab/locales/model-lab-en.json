@@ -1,6 +1,55 @@
 {
 	"pages": {
 		"modelLab": {
+			"architecture": {
+				"blockTraced": "Block {{index}}: {{kind}}, traced",
+				"blockUntraceable": "Block {{index}}: {{kind}}, not traceable",
+				"component": {
+					"attention": "Attention",
+					"embedding": "Embedding",
+					"ffn": "Feed-forward",
+					"mtp": "Multi-token prediction",
+					"norm": "Norm",
+					"other": "Other",
+					"output": "Output",
+					"ssm": "Linear attention (SSM)"
+				},
+				"ggufName": "GGUF name",
+				"groups": "Tensor groups",
+				"hfName": "Hugging Face name",
+				"inferredBadge": "Inferred from llama.cpp ({{source}})",
+				"kindUntraceable": "{{kind}} (not traceable)",
+				"loadFailed": "The model's structure could not be read.",
+				"noHfName": "None",
+				"noOutput": "No separate output tensor in this file; the output may share the embedding weights.",
+				"noTraceChosen": "No trace",
+				"noTraces": "No finished trace of this model yet. A trace started under Trace and steer can be laid over its blocks here.",
+				"notTraced": "Not traced: the chosen trace did not measure this block.",
+				"operations": "Operations",
+				"overviewOnly": "No operation graph is shown for the {{architecture}} architecture: only the tensor groups read from the file.",
+				"readBadge": "Read from the file",
+				"relation": {
+					"equal": "Same values as the Hugging Face tensor",
+					"label": "Value relation",
+					"negExp": "Minus the exponential of the Hugging Face value",
+					"notStated": "Not stated",
+					"plusOne": "The Hugging Face value plus one",
+					"quantized": "Quantized from the Hugging Face values",
+					"reordered": "Value heads reordered from the Hugging Face tensor, so values sit in another order"
+				},
+				"shape": "Shape (GGUF order)",
+				"tab": "Architecture",
+				"templateHint": "A solid node uses a tensor group of this block; selecting it selects that group. A dashed node holds no tensors.",
+				"templateLabel": "Operation graph of this block kind",
+				"templateReadOnly": "Read-only graph. Select an operation with a pointer, or use the tensor groups to select by keyboard.",
+				"trace": "Trace to lay over the blocks",
+				"traceNote": "Measured on the Hugging Face checkpoint, joined by block index. The checkpoint was paired with this GGUF by shape only.",
+				"traceSummary": "Mean norm {{mean}}, highest p99 {{p99}}. Most frequent top dimensions: {{dimensions}}.",
+				"tracedBlocks": "Traced blocks: {{blocks}} ({{traced}} of {{total}}).",
+				"tracedLegend": "A dot marks a traced block.",
+				"unreadable": "The file could not be read ({{reason}}), so there is no structure to show.",
+				"untraceable": "Not traceable: this multi-token prediction block has no layer in the Hugging Face checkpoint."
+			},
 			"compare": {
 				"modelA": "Model A",
 				"modelB": "Model B",
@@ -50,7 +99,7 @@
 				"start": "Start steering run",
 				"tests": "Test prompts"
 			},
-			"subtitle": "Compare two local models on one prompt, inspect a model's file, or trace and steer a checkpoint. Only traces and steering runs are saved.",
+			"subtitle": "Compare two local models on one prompt, inspect a model's file or its architecture, or trace and steer a checkpoint. Only traces and steering runs are saved.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {
@@ -72,6 +121,12 @@
 				"gguf": "Installed GGUF",
 				"ggufHint": "The checkpoint is paired with it by embedding size and block count.",
 				"layerNorm": "Layer {{index}} ({{kind}}) norm",
+				"layerOption": "Block {{index}}",
+				"layers": "Blocks to trace",
+				"layersAll": "All blocks",
+				"layersClear": "Clear",
+				"layersCost": "Each traced block adds generation time: on tested models three blocks added about 9 % and every block about 60 %.",
+				"layersDefault": "None chosen: blocks {{layers}} are traced.",
 				"listFailed": "The experiments could not be loaded.",
 				"loadFailed": "The experiment could not be loaded.",
 				"measured": "Measured",
@@ -96,7 +151,7 @@
 				"savedFailed": "The checkpoints on this node could not be read.",
 				"savedHint": "Already downloaded, so it is checked and traced without contacting Hugging Face.",
 				"scope": "Tracing loads the full-precision checkpoint on the GPU, so it needs the checkpoint's weights plus about 2 GB of the card's memory. A model above that is refused before anything is downloaded, however it was quantized for chat.",
-				"spec": "Three layers across the stack, up to 128 tokens, greedy. The trace is capped in size and saved encrypted on this node, with the prompt and the output.",
+				"spec": "Up to 128 tokens, greedy. The trace is capped in size by the number of blocks and saved encrypted on this node, with the prompt and the output.",
 				"start": "Start trace",
 				"startFailed": "The experiment could not start.",
 				"status": {

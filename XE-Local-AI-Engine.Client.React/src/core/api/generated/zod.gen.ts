@@ -5267,6 +5267,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeReque
 	variant: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1GetModelLabArchitectureRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest = z.object({
 	repoId: z.string(),
 	revision: z.string().min(0).max(100).nullish(),
@@ -7919,6 +7921,65 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse =
 	endpointUrl: z.string(),
 });
 
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge = z.object({
+	from: z.string(),
+	to: z.string(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateNode = z.object({
+	id: z.string(),
+	label: z.string(),
+	component: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate = z.object({
+	kind: z.string(),
+	provenance: z.string(),
+	source: z.string(),
+	nodes: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateNode),
+	edges: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTensor = z.object({
+	ggufName: z.string(),
+	hfName: z.string().nullable(),
+	shape: z.array(z.int()),
+	ggmlType: z.string().nullable(),
+	byteSize: z.int().nullable(),
+	valueRelation: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup = z.object({
+	componentId: z.string(),
+	component: z.string(),
+	provenance: z.string(),
+	tensors: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTensor),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock = z.object({
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: z.string(),
+	byteSize: z.int().nullable(),
+	groups: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse = z.object({
+	descriptorVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	modelName: z.string(),
+	architecture: z.string().nullable(),
+	support: z.string(),
+	readFailure: z.string().nullable(),
+	blocks: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock),
+	templates: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate),
+	nonBlock: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup),
+});
+
 export const zXeLocalAiEngineClientServicesModelLabModelLabArmOutput = z.object({
 	prompt: z.string(),
 	text: z.string(),
@@ -8006,6 +8067,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabStartRefusal = z.enum
 	"InsufficientMemory",
 	"ProcessNotConfirmedStopped",
 	"InvalidLayer",
+	"InvalidTraceLayers",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse = z.object({
@@ -8044,6 +8106,14 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReq
 	prompt: z.string().min(0).max(8000),
 	licenseConfirmed: z.boolean(),
 	steering: zXeLocalAiEngineClientServicesModelLabModelLabSteeringRequest.nullish(),
+	layers: z
+		.array(
+			z
+				.int()
+				.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+				.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+		)
+		.nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabSteeringResult = z.object({
@@ -13162,6 +13232,15 @@ export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFi
  * Success
  */
 export const zGetRuntimeResidentsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RuntimeResidentsResponse;
+
+export const zGetModelLabArchitecturePath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabArchitectureResponse = zXeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse;
 
 export const zStartModelLabCheckpointDownloadBody = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest;
 

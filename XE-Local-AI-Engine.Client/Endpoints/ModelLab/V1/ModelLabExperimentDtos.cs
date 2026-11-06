@@ -37,6 +37,9 @@ public sealed class StartModelLabExperimentRequest
 
     /// <summary>Makes this a steering job. Left out, it is a trace.</summary>
     public ModelLabSteeringRequest? Steering { get; init; }
+
+    /// <summary>The distinct blocks a trace records, in any order. Left out, the three quarter points; not allowed with <see cref="Steering" />.</summary>
+    public IReadOnlyList<int>? Layers { get; init; }
 }
 
 public sealed class StartModelLabExperimentResponse

@@ -128,8 +128,8 @@ describe("ModelLabPage inspect tab", () => {
 
 		fireEvent.click(await screen.findByRole("tab", { name: "Inspect" }));
 
-		// The A/B panel stays mounted and shows the same notice, one per tab.
-		expect(await screen.findAllByTestId(testId)).toHaveLength(2);
+		// The A/B and Architecture panels stay mounted and show the same notice, one per tab.
+		expect(await screen.findAllByTestId(testId)).toHaveLength(3);
 	});
 
 	it("opens the shared panel for the chosen installed llama.cpp model", async () => {

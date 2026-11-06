@@ -15,6 +15,8 @@ import { ModelInspectMetadataItem } from "@/core/models/inspect/ModelInspectMeta
 import {
 	type BlockKind,
 	blockKind,
+	blockKindColors,
+	blockKindLabels,
 	hasExperts,
 	shortTensorName,
 	tensorSizeLabel,
@@ -29,13 +31,6 @@ interface ModelInspectPanelProps {
 	// Other installed variants of the same repo; none hides the comparison.
 	compareCandidates: string[];
 }
-
-const blockKindColors: Record<BlockKind, string> = {
-	linearAttention: "teal",
-	fullAttention: "blue",
-	mtp: "violet",
-	other: "gray.6",
-};
 
 // The ring reads as a shape on any kind colour, in both colour schemes.
 const expertMarker = "inset 0 0 0 2px var(--mantine-color-text)";
@@ -58,15 +53,6 @@ const tensorTypeColors = [
 	"grape",
 	"orange.9",
 ];
-
-function blockKindLabels(t: TFunction): Record<BlockKind, string> {
-	return {
-		linearAttention: t("pages.models.inspect.blockKinds.linearAttention", "Linear attention"),
-		fullAttention: t("pages.models.inspect.blockKinds.fullAttention", "Full attention"),
-		mtp: t("pages.models.inspect.blockKinds.mtp", "MTP"),
-		other: t("pages.models.inspect.blockKinds.other", "Other"),
-	};
-}
 
 function numberLabel(t: TFunction, value: number | null | undefined): string {
 	return value === null || value === undefined ? t("pages.models.details.unknown", "Unknown") : value.toLocaleString();

@@ -229,6 +229,7 @@ import {
 	getMcpServerTools,
 	getModelCatalogInfo,
 	getModelGgufInspection,
+	getModelLabArchitecture,
 	getModelLabExperiment,
 	getModelLabExperimentTrace,
 	getModelLaunchArguments,
@@ -1047,6 +1048,9 @@ import type {
 	GetModelGgufInspectionData,
 	GetModelGgufInspectionError,
 	GetModelGgufInspectionResponse,
+	GetModelLabArchitectureData,
+	GetModelLabArchitectureError,
+	GetModelLabArchitectureResponse,
 	GetModelLabExperimentData,
 	GetModelLabExperimentResponse,
 	GetModelLabExperimentTraceData,
@@ -9615,6 +9619,28 @@ export const getRuntimeResidentsOptions = (options?: Options<GetRuntimeResidents
 			return data;
 		},
 		queryKey: getRuntimeResidentsQueryKey(options),
+	});
+
+export const getModelLabArchitectureQueryKey = (options: Options<GetModelLabArchitectureData>) =>
+	createQueryKey("getModelLabArchitecture", options, false, ["Model-Lab"]);
+
+export const getModelLabArchitectureOptions = (options: Options<GetModelLabArchitectureData>) =>
+	queryOptions<
+		GetModelLabArchitectureResponse,
+		AxiosError<GetModelLabArchitectureError>,
+		GetModelLabArchitectureResponse,
+		ReturnType<typeof getModelLabArchitectureQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabArchitecture({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabArchitectureQueryKey(options),
 	});
 
 export const startModelLabCheckpointDownloadMutation = (

@@ -60,6 +60,22 @@ public sealed class GgufTensorBlockReaderTests
     }
 
     [Test]
+    public async Task Read_LinearAttentionHeadCounts_AreReadUnderTheArchitecturePrefix_AndNullWhenAbsent()
+    {
+        var declared = await ReadAsync(BaseHeader()
+                                       .WithUint32("qwen35.ssm.group_count", value: 16)
+                                       .WithUint32("qwen35.ssm.time_step_rank", value: 48)
+                                       .WithTensor("blk.0.attn_norm.weight", [256], F32, offset: 0)
+                                       .Build());
+        var absent = await ReadAsync(BaseHeader().WithTensor("blk.0.attn_norm.weight", [256], F32, offset: 0).Build());
+
+        AssertEx.Equal(expected: 16L, declared.SsmGroupCount!.Value);
+        AssertEx.Equal(expected: 48L, declared.SsmTimeStepRank!.Value);
+        AssertEx.Null(absent.SsmGroupCount);
+        AssertEx.Null(absent.SsmTimeStepRank);
+    }
+
+    [Test]
     public async Task Read_TruncatedTensorBlock_ReturnsTruncatedFailure()
     {
         var bytes = BaseHeader()

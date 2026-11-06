@@ -7,6 +7,22 @@ type TensorDto = XeLocalAiEngineClientEndpointsLocalModelsV1ModelGgufTensorDto;
 
 export type BlockKind = "fullAttention" | "linearAttention" | "mtp" | "other";
 
+export const blockKindColors: Record<BlockKind, string> = {
+	linearAttention: "teal",
+	fullAttention: "blue",
+	mtp: "violet",
+	other: "gray.6",
+};
+
+export function blockKindLabels(t: TFunction): Record<BlockKind, string> {
+	return {
+		linearAttention: t("pages.models.inspect.blockKinds.linearAttention", "Linear attention"),
+		fullAttention: t("pages.models.inspect.blockKinds.fullAttention", "Full attention"),
+		mtp: t("pages.models.inspect.blockKinds.mtp", "MTP"),
+		other: t("pages.models.inspect.blockKinds.other", "Other"),
+	};
+}
+
 // First match wins: an MTP block is also a full-attention block, and a linear block also carries attn_qkv, which outside
 // a linear block is full attention fused into one tensor.
 const kindPatterns: readonly (readonly [BlockKind, RegExp])[] = [

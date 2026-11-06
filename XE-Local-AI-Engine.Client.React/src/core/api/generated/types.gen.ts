@@ -5118,6 +5118,10 @@ export type XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest
 	variant?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsModelLabV1GetModelLabArchitectureRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest = {
 	repoId: string;
 	revision?: string | null;
@@ -5213,6 +5217,7 @@ export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentReque
 	prompt: string;
 	licenseConfirmed: boolean;
 	steering?: XeLocalAiEngineClientServicesModelLabModelLabSteeringRequest | null;
+	layers?: Array<number> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1StartModelLabExperimentResponse = {
@@ -7397,6 +7402,59 @@ export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 
 export type XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = "delegate" | "agentic";
 
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock = {
+	index: number;
+	kind: string;
+	byteSize: number | null;
+	groups: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup = {
+	componentId: string;
+	component: string;
+	provenance: string;
+	tensors: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTensor>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse = {
+	descriptorVersion: number;
+	modelName: string;
+	architecture: string | null;
+	support: string;
+	readFailure: string | null;
+	blocks: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock>;
+	templates: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate>;
+	nonBlock: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate = {
+	kind: string;
+	provenance: string;
+	source: string;
+	nodes: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateNode>;
+	edges: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateEdge = {
+	from: string;
+	to: string;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplateNode = {
+	id: string;
+	label: string;
+	component: string | null;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureTensor = {
+	ggufName: string;
+	hfName: string | null;
+	shape: Array<number>;
+	ggmlType: string | null;
+	byteSize: number | null;
+	valueRelation: string | null;
+};
+
 export type XeLocalAiEngineClientServicesModelLabModelLabArmOutput = {
 	prompt: string;
 	text: string;
@@ -7435,7 +7493,8 @@ export type XeLocalAiEngineClientServicesModelLabModelLabStartRefusal =
 	| "ModelLoaded"
 	| "InsufficientMemory"
 	| "ProcessNotConfirmedStopped"
-	| "InvalidLayer";
+	| "InvalidLayer"
+	| "InvalidTraceLayers";
 
 export type XeLocalAiEngineClientServicesModelLabModelLabSteeringArm = {
 	name: string;
@@ -18586,6 +18645,41 @@ export type GetRuntimeResidentsResponses = {
 };
 
 export type GetRuntimeResidentsResponse = GetRuntimeResidentsResponses[keyof GetRuntimeResidentsResponses];
+
+export type GetModelLabArchitectureData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/architecture/{modelName}";
+};
+
+export type GetModelLabArchitectureErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetModelLabArchitectureError = GetModelLabArchitectureErrors[keyof GetModelLabArchitectureErrors];
+
+export type GetModelLabArchitectureResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse;
+};
+
+export type GetModelLabArchitectureResponse = GetModelLabArchitectureResponses[keyof GetModelLabArchitectureResponses];
 
 export type StartModelLabCheckpointDownloadData = {
 	body: XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest;

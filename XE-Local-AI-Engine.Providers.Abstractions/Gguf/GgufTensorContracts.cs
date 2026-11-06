@@ -71,6 +71,12 @@ public sealed class GgufTensorInspection
     /// </summary>
     public long? SteerableBlockCount => BlockCount - (NextnPredictLayers ?? 0);
 
+    /// <summary>Linear-attention key heads (<c>{arch}.ssm.group_count</c>), or <see langword="null" /> when absent.</summary>
+    public long? SsmGroupCount { get; init; }
+
+    /// <summary>Linear-attention value heads (<c>{arch}.ssm.time_step_rank</c>), or <see langword="null" /> when absent.</summary>
+    public long? SsmTimeStepRank { get; init; }
+
     /// <summary>The data alignment the file declares (<c>general.alignment</c>), or <see langword="null" /> for the format's default.</summary>
     public required long? Alignment { get; init; }
 

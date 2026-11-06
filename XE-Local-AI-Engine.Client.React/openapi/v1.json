@@ -18809,6 +18809,60 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/architecture/{modelName}": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabArchitecture",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-lab/checkpoint-download": {
       "post": {
         "tags": [
@@ -45660,6 +45714,10 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1GetModelLabArchitectureRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -46081,6 +46139,14 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabSteeringRequest"
               }
             ]
+          },
+          "layers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         }
       },
@@ -54208,6 +54274,224 @@
           "agentic"
         ]
       },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureBlock": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "kind",
+          "byteSize",
+          "groups"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer",
+            "nullable": true
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureGroup"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureGroup": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "componentId",
+          "component",
+          "provenance",
+          "tensors"
+        ],
+        "properties": {
+          "componentId": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "tensors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTensor"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "descriptorVersion",
+          "modelName",
+          "architecture",
+          "support",
+          "readFailure",
+          "blocks",
+          "templates",
+          "nonBlock"
+        ],
+        "properties": {
+          "descriptorVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "architecture": {
+            "type": "string",
+            "nullable": true
+          },
+          "support": {
+            "type": "string"
+          },
+          "readFailure": {
+            "type": "string",
+            "nullable": true
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureBlock"
+            }
+          },
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplate"
+            }
+          },
+          "nonBlock": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureGroup"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "provenance",
+          "source",
+          "nodes",
+          "edges"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplateNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplateEdge"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplateEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTemplateNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "component"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabArchitectureTensor": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ggufName",
+          "hfName",
+          "shape",
+          "ggmlType",
+          "byteSize",
+          "valueRelation"
+        ],
+        "properties": {
+          "ggufName": {
+            "type": "string"
+          },
+          "hfName": {
+            "type": "string",
+            "nullable": true
+          },
+          "shape": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "ggmlType": {
+            "type": "string",
+            "nullable": true
+          },
+          "byteSize": {
+            "type": "integer",
+            "nullable": true
+          },
+          "valueRelation": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientServicesModelLabModelLabArmOutput": {
         "type": "object",
         "additionalProperties": false,
@@ -54297,7 +54581,8 @@
           "ModelLoaded",
           "InsufficientMemory",
           "ProcessNotConfirmedStopped",
-          "InvalidLayer"
+          "InvalidLayer",
+          "InvalidTraceLayers"
         ],
         "enum": [
           "UnsupportedPlatform",
@@ -54310,7 +54595,8 @@
           "ModelLoaded",
           "InsufficientMemory",
           "ProcessNotConfirmedStopped",
-          "InvalidLayer"
+          "InvalidLayer",
+          "InvalidTraceLayers"
         ]
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabSteeringArm": {

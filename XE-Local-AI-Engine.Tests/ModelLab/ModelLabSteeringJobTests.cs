@@ -209,6 +209,29 @@ public sealed class ModelLabSteeringJobTests
         AssertEx.Null(host.Gate.ExclusiveKind);
     }
 
+    /// <summary>The blob store now takes a full-depth trace; a vector keeps its own, smaller bound.</summary>
+    [Test]
+    public async Task AVectorPastItsOwnBound_IsNotKept_ThoughTheStoreTakesLargerTraces()
+    {
+        const int vectorBound = 256 * 1024;
+        using var process = new ScriptedProcess
+        {
+            VectorContent = new byte[vectorBound + 1]
+        };
+        var harness = new ScriptedHarness();
+        await using var host = await StartHostAsync(process, harness);
+        var start = await host.Service.StartExperimentAsync(Request(host), CancellationToken.None);
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.True(ModelLabTraceSpec.MaxTraceByteCap > vectorBound, "The store's bound is the trace's, not the vector's.");
+        AssertEx.Equal(ModelLabExperimentStatus.Failed, record.Status);
+        AssertEx.Contains(record.ErrorMessage!, "usable vector", StringComparison.Ordinal);
+        AssertEx.Null(record.TraceBlobId);
+        AssertEx.Equal(expected: 0, harness.BodiesRun);
+    }
+
     /// <summary>A vector there is dropped by llama-server with no error, so it would cost a derive and three loads to produce a second baseline.</summary>
     [Test]
     [Arguments(0)]

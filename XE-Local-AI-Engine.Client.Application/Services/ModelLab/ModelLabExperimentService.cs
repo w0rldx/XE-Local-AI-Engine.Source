@@ -35,8 +35,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
     private const string VectorFileName = "steer.gguf";
     private const string RandomVectorFileName = "random.gguf";
 
-    /// <summary>A trace outlives no reason to be larger than its cap, and a vector for any model that fits a card is smaller still.</summary>
-    private const int MaxBlobBytes = ModelLabTraceSpec.TraceByteCap;
+    /// <summary>One F32 value per hidden dimension: about 10 kB at a hidden size of 2560, so this bounds a vector for any model that fits a card.</summary>
+    private const int MaxVectorBytes = 256 * 1024;
 
     private readonly ModelLabArmRunner _arms;
     private readonly ManagedEncryptedBlobStore _blobs;
@@ -82,7 +82,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         ArgumentNullException.ThrowIfNull(supervisor);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _arms = arms;
-        _blobs = new ManagedEncryptedBlobStore(dataDirectory, keyHolder, "model-lab", "artifacts", "model_lab_artifact_blob", MaxBlobBytes, "Model Lab artifact");
+        _blobs = new ManagedEncryptedBlobStore(dataDirectory, keyHolder, "model-lab", "artifacts", "model_lab_artifact_blob",
+            ModelLabTraceSpec.MaxTraceByteCap, "Model Lab artifact");
         _dataDirectory = dataDirectory;
         _events = events;
         _gpuWorkGate = gpuWorkGate;
@@ -247,6 +248,14 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
 
         if (request.Steering is null)
         {
+            // The range depends on the checkpoint, and a layer past it would fail only after the model has loaded. The rest repeats the validator's bounds the cap relies on.
+            if (request.Layers is { } layers
+                && (layers.Count is 0 or > ModelLabTraceSpec.MaxTraceLayers || layers.Distinct().Count() != layers.Count || layers.Any(traced => traced < 0 || traced >= blockCount)))
+            {
+                return Refuse(ModelLabStartRefusal.InvalidTraceLayers, string.Create(CultureInfo.InvariantCulture,
+                    $"This checkpoint has blocks 0 to {blockCount - 1}. Choose distinct trace layers in that range."));
+            }
+
             return await AdmitAndStartAsync(request, artifact, preflight, layer: null, interpreter, scriptPath, services, ct);
         }
 
@@ -466,6 +475,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                 Interpreter = interpreter,
                 ScriptPath = scriptPath
             };
+            // Ascending, always: the script counts a token step when the first listed layer's hook fires.
+            var traced = request.Layers?.Order().ToArray() ?? ModelLabTraceSpec.LayersFor(preflight.CheckpointBlockCount ?? 0);
             var heldLease = lease;
             var heldReservation = reservation;
 #pragma warning disable CA2025 // The job owns all three holds from here; job below keeps this method from disposing them.
@@ -477,7 +488,8 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
                     Prompt = request.Prompt,
                     TracePath = Path.Combine(WorkDirectory(id), TraceFileName),
                     ResultPath = Path.Combine(WorkDirectory(id), ResultFileName),
-                    Layers = ModelLabTraceSpec.LayersFor(preflight.CheckpointBlockCount ?? 0)
+                    Layers = traced,
+                    TraceByteCap = ModelLabTraceSpec.TraceByteCapFor(traced.Count)
                 }, script);
 
             lock (_jobLock)
@@ -787,7 +799,7 @@ public sealed class ModelLabExperimentService : IHostedService, IModelLabActiveJ
         var vector = new FileInfo(job.VectorPath);
         var random = new FileInfo(job.RandomVectorPath);
         if (!result.Exists || !vector.Exists || !random.Exists
-            || result.Length > ModelLabTraceSpec.MaxResultBytes || vector.Length > MaxBlobBytes || random.Length > MaxBlobBytes)
+            || result.Length > ModelLabTraceSpec.MaxResultBytes || vector.Length > MaxVectorBytes || random.Length > MaxVectorBytes)
         {
             return null;
         }

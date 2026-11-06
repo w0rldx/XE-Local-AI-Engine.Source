@@ -1,6 +1,55 @@
 {
 	"pages": {
 		"modelLab": {
+			"architecture": {
+				"blockTraced": "Block {{index}}: {{kind}}, getraced",
+				"blockUntraceable": "Block {{index}}: {{kind}}, nicht tracebar",
+				"component": {
+					"attention": "Attention",
+					"embedding": "Embedding",
+					"ffn": "Feed-forward",
+					"mtp": "Multi-Token-Vorhersage",
+					"norm": "Norm",
+					"other": "Sonstiges",
+					"output": "Ausgabe",
+					"ssm": "Lineare Attention (SSM)"
+				},
+				"ggufName": "GGUF-Name",
+				"groups": "Tensorgruppen",
+				"hfName": "Hugging-Face-Name",
+				"inferredBadge": "Aus llama.cpp abgeleitet ({{source}})",
+				"kindUntraceable": "{{kind}} (nicht tracebar)",
+				"loadFailed": "Die Struktur des Modells konnte nicht gelesen werden.",
+				"noHfName": "Keiner",
+				"noOutput": "Diese Datei enthält keinen eigenen Ausgabe-Tensor; die Ausgabe nutzt möglicherweise die Embedding-Gewichte mit.",
+				"noTraceChosen": "Kein Trace",
+				"noTraces": "Für dieses Modell gibt es noch keinen fertigen Trace. Einen unter „Trace und Steering“ gestarteten Trace können Sie hier über die Blöcke legen.",
+				"notTraced": "Nicht getraced: Der gewählte Trace hat diesen Block nicht gemessen.",
+				"operations": "Operationen",
+				"overviewOnly": "Für die Architektur {{architecture}} wird kein Operationsgraph angezeigt, nur die aus der Datei gelesenen Tensorgruppen.",
+				"readBadge": "Aus der Datei gelesen",
+				"relation": {
+					"equal": "Dieselben Werte wie der Hugging-Face-Tensor",
+					"label": "Wertbeziehung",
+					"negExp": "Minus die Exponentialfunktion des Hugging-Face-Werts",
+					"notStated": "Nicht angegeben",
+					"plusOne": "Der Hugging-Face-Wert plus eins",
+					"quantized": "Aus den Hugging-Face-Werten quantisiert",
+					"reordered": "Value-Heads gegenüber dem Hugging-Face-Tensor umsortiert, die Werte stehen also in anderer Reihenfolge"
+				},
+				"shape": "Form (GGUF-Reihenfolge)",
+				"tab": "Architektur",
+				"templateHint": "Ein durchgezogener Knoten nutzt eine Tensorgruppe dieses Blocks; wenn Sie ihn wählen, wird diese Gruppe gewählt. Ein gestrichelter Knoten enthält keine Tensoren.",
+				"templateLabel": "Operationsgraph dieser Blockart",
+				"templateReadOnly": "Schreibgeschützter Graph. Wählen Sie eine Operation mit dem Zeiger, oder nutzen Sie die Tensorgruppen, um per Tastatur zu wählen.",
+				"trace": "Trace, der über die Blöcke gelegt wird",
+				"traceNote": "Am Hugging-Face-Checkpoint gemessen und über den Blockindex zugeordnet. Der Checkpoint wurde nur über die Form mit diesem GGUF gepaart.",
+				"traceSummary": "Mittlere Norm {{mean}}, höchstes p99 {{p99}}. Häufigste Top-Dimensionen: {{dimensions}}.",
+				"tracedBlocks": "Getracete Blöcke: {{blocks}} ({{traced}} von {{total}}).",
+				"tracedLegend": "Ein Punkt markiert einen getraceten Block.",
+				"unreadable": "Die Datei konnte nicht gelesen werden ({{reason}}), daher gibt es keine Struktur anzuzeigen.",
+				"untraceable": "Nicht tracebar: Dieser Block zur Multi-Token-Vorhersage hat keine Schicht im Hugging-Face-Checkpoint."
+			},
 			"compare": {
 				"modelA": "Modell A",
 				"modelB": "Modell B",
@@ -50,7 +99,7 @@
 				"start": "Steering-Lauf starten",
 				"tests": "Test-Prompts"
 			},
-			"subtitle": "Vergleiche zwei lokale Modelle mit einem Prompt, untersuche die Datei eines Modells oder trace und steuere einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
+			"subtitle": "Vergleichen Sie zwei lokale Modelle mit einem Prompt, untersuchen Sie die Datei oder die Architektur eines Modells, oder tracen und steuern Sie einen Checkpoint. Nur Traces und Steering-Läufe werden gespeichert.",
 			"title": "Model Lab",
 			"trace": {
 				"artifact": {
@@ -72,6 +121,12 @@
 				"gguf": "Installiertes GGUF",
 				"ggufHint": "Der Checkpoint wird über Embedding-Größe und Blockanzahl damit gepaart.",
 				"layerNorm": "Norm Schicht {{index}} ({{kind}})",
+				"layerOption": "Block {{index}}",
+				"layers": "Zu tracende Blöcke",
+				"layersAll": "Alle Blöcke",
+				"layersClear": "Leeren",
+				"layersCost": "Jeder getracete Block kostet Generierungszeit: Bei getesteten Modellen kamen für drei Blöcke etwa 9 % hinzu, für alle Blöcke etwa 60 %.",
+				"layersDefault": "Keine gewählt: Die Blöcke {{layers}} werden getraced.",
 				"listFailed": "Die Experimente konnten nicht geladen werden.",
 				"loadFailed": "Das Experiment konnte nicht geladen werden.",
 				"measured": "Gemessen",
@@ -96,7 +151,7 @@
 				"savedFailed": "Die Checkpoints auf diesem Node konnten nicht gelesen werden.",
 				"savedHint": "Bereits heruntergeladen, wird daher ohne Verbindung zu Hugging Face geprüft und getraced.",
 				"scope": "Der Trace lädt den Checkpoint in voller Präzision auf die GPU und braucht daher dessen Gewichte plus etwa 2 GB Kartenspeicher. Ein größeres Modell wird abgelehnt, bevor etwas heruntergeladen wird, egal wie es für den Chat quantisiert ist.",
-				"spec": "Drei Schichten über den Stapel verteilt, bis zu 128 Tokens, greedy. Der Trace ist in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",
+				"spec": "Bis zu 128 Tokens, greedy. Der Trace ist je nach Anzahl der Blöcke in der Größe begrenzt und wird mit Prompt und Ausgabe verschlüsselt auf diesem Node gespeichert.",
 				"start": "Trace starten",
 				"startFailed": "Das Experiment konnte nicht starten.",
 				"status": {

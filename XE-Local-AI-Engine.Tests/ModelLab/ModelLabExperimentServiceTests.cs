@@ -83,7 +83,7 @@ public sealed class ModelLabExperimentServiceTests
     }
 
     [Test]
-    public async Task TheJobFile_CarriesTheFixedSpec_NotAnythingFromTheRequest()
+    public async Task TheJobFile_CarriesTheFixedSpec_AndTheQuarterPoints_WhenTheRequestNamesNoLayers()
     {
         using var process = new ScriptedProcess();
         await using var host = await LabHost.StartAsync(process);
@@ -95,7 +95,7 @@ public sealed class ModelLabExperimentServiceTests
         var root = job.RootElement;
         AssertEx.Equal(ModelLabTraceSpec.ContractVersion, root.GetProperty("contractVersion").GetInt32());
         AssertEx.Equal(ModelLabTraceSpec.MaxNewTokens, root.GetProperty("maxNewTokens").GetInt32());
-        AssertEx.Equal(ModelLabTraceSpec.TraceByteCap, root.GetProperty("traceByteCap").GetInt32());
+        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(3), root.GetProperty("traceByteCap").GetInt32());
         AssertEx.Equal("[6,12,18]", root.GetProperty("layers").GetRawText());
         AssertEx.Equal(Prompt, root.GetProperty("prompt").GetString());
         AssertEx.Equal("modellab.py", Path.GetFileName(process.Request!.Arguments[0]));
@@ -161,7 +161,7 @@ public sealed class ModelLabExperimentServiceTests
     {
         using var process = new ScriptedProcess
         {
-            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCap + 1)
+            TraceContent = new string('x', ModelLabTraceSpec.TraceByteCapFor(3) + 1)
         };
         await using var host = await LabHost.StartAsync(process);
         var start = await host.Service.StartExperimentAsync(host.Request(), CancellationToken.None);
@@ -175,6 +175,143 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.True(record.ErrorMessage!.Contains("byte cap", StringComparison.Ordinal), record.ErrorMessage);
         AssertEx.Null(record.TraceBlobId);
         AssertEx.False(Directory.Exists(Path.Combine(host.DataRoot, "model-lab", "artifacts", id.ToString("N"))), "Nothing over the cap reaches the store.");
+    }
+
+    /// <summary>Ascending because the script counts a token step at the first listed layer's hook: an earlier block listed later would be filed a step behind.</summary>
+    [Test]
+    public async Task TheRequestsLayers_ReachTheJobAscending_WithACapForTheirCount()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+
+        var start = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            Layers = [18, 0, 15, 23]
+        }, CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+
+        using (var job = JsonDocument.Parse(process.ReadJobFile()))
+        {
+            AssertEx.Equal("[0,15,18,23]", job.RootElement.GetProperty("layers").GetRawText());
+            AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(4), job.RootElement.GetProperty("traceByteCap").GetInt32());
+        }
+
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+        AssertEx.True(start.ExperimentId.HasValue);
+    }
+
+    /// <summary>Every block of the 24: the store must keep what the scaled cap allows, which is far past the three-layer cap, and nothing past it.</summary>
+    [Test]
+    [Arguments(0, ModelLabExperimentStatus.Succeeded)]
+    [Arguments(1, ModelLabExperimentStatus.Failed)]
+    public async Task AFullDepthTrace_IsKeptUpToItsScaledCap_AndNotPastIt(int bytesOverCap, ModelLabExperimentStatus expected)
+    {
+        var cap = ModelLabTraceSpec.TraceByteCapFor(24);
+        using var process = new ScriptedProcess
+        {
+            TraceContent = new string('x', cap + bytesOverCap)
+        };
+        await using var host = await LabHost.StartAsync(process);
+
+        var start = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            Layers = [.. Enumerable.Range(0, 24)]
+        }, CancellationToken.None);
+        await process.Spawned.WaitAsync(TestBudgets.Contended);
+        using (var job = JsonDocument.Parse(process.ReadJobFile()))
+        {
+            AssertEx.Equal(cap, job.RootElement.GetProperty("traceByteCap").GetInt32());
+        }
+
+        process.Finish(CompleteRun, exitCode: 0);
+        await host.Service.InFlight!.WaitAsync(TestBudgets.Contended);
+
+        var record = AssertEx.NotNull(await host.Service.GetAsync(start.ExperimentId!.Value, CancellationToken.None));
+        AssertEx.Equal(expected, record.Status, record.ErrorMessage ?? "no error");
+        AssertEx.Equal(bytesOverCap == 0 ? (long)cap : null, record.TraceByteCount);
+    }
+
+    [Test]
+    [Arguments(24)]
+    [Arguments(99)]
+    public async Task ATraceLayerPastTheCheckpointsBlocks_IsRefusedBeforeTheGate(int pastTheEnd)
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+
+        var start = await host.Service.StartExperimentAsync(host.Request() with
+        {
+            Layers = [3, pastTheEnd]
+        }, CancellationToken.None);
+
+        AssertEx.Equal(ModelLabStartRefusal.InvalidTraceLayers, start.Refusal!.Value);
+        AssertEx.Contains(start.RefusalMessage!, "blocks 0 to 23", StringComparison.Ordinal);
+        AssertEx.Null(process.Request);
+        AssertEx.Null(host.Gate.ExclusiveKind);
+        AssertEx.Equal(expected: 0, (await host.Service.ListAsync(CancellationToken.None)).Count);
+    }
+
+    [Test]
+    public async Task TheStartRoute_RefusesTraceLayersTheValidatorBounds()
+    {
+        using var process = new ScriptedProcess();
+        await using var host = await LabHost.StartAsync(process);
+        using var client = host.Factory.CreateClient();
+
+        foreach (var body in new object[]
+                 {
+                     TraceBody(host, Array.Empty<int>()),
+                     TraceBody(host, [3, 3]),
+                     TraceBody(host, [-1, 3]),
+                     TraceBody(host, [.. Enumerable.Range(0, ModelLabTraceSpec.MaxTraceLayers + 1)]),
+                     new
+                     {
+                         baseArtifactId = host.Request().BaseArtifactId,
+                         installedModelName = Gguf,
+                         prompt = Prompt,
+                         licenseConfirmed = true,
+                         layers = new[]
+                         {
+                             3
+                         },
+                         steering = new
+                         {
+                             positivePrompts = new[]
+                             {
+                                 "a"
+                             },
+                             negativePrompts = new[]
+                             {
+                                 "b"
+                             }
+                         }
+                     }
+                 })
+        {
+            using var request = host.Authorized(HttpMethod.Post, "/api/local/v1/model-lab/experiments");
+            request.Content = JsonContent.Create(body);
+            using var response = await client.SendAsync(request);
+            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, JsonSerializer.Serialize(body));
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            AssertEx.False(string.IsNullOrWhiteSpace(problem.RootElement.GetProperty("errors")[0].GetProperty("reason").GetString()));
+        }
+
+        AssertEx.Null(process.Request);
+    }
+
+    [Test]
+    public void TheTraceCap_ScalesWithTheLayerCount_AndNeverDropsBelowTheThreeLayerCap()
+    {
+        const int threeLayerCap = 256 * 1024;
+        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(1));
+        AssertEx.Equal(threeLayerCap, ModelLabTraceSpec.TraceByteCapFor(3), "Four times 3 x 128 x 162 bytes is a little under it.");
+        AssertEx.Equal((24 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(24));
+        AssertEx.Equal((32 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(32));
+        AssertEx.Equal((64 * 128 * 162 * 4) + 160, ModelLabTraceSpec.TraceByteCapFor(64));
+        AssertEx.Equal(ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers), ModelLabTraceSpec.MaxTraceByteCap);
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(0));
+        AssertEx.Throws<ArgumentOutOfRangeException>(static () => ModelLabTraceSpec.TraceByteCapFor(ModelLabTraceSpec.MaxTraceLayers + 1));
     }
 
     [Test]
@@ -1054,6 +1191,16 @@ public sealed class ModelLabExperimentServiceTests
         AssertEx.Equal("hi", read.Text);
         AssertEx.Null(ModelLabTraceSpec.ReadResultOrNull("{not json}"u8.ToArray()));
     }
+
+    private static object TraceBody(LabHost host, int[] layers) =>
+        new
+        {
+            baseArtifactId = host.Request().BaseArtifactId,
+            installedModelName = Gguf,
+            prompt = Prompt,
+            licenseConfirmed = true,
+            layers
+        };
 
     private static BaseCheckpointManifest Manifest(string repoId, long weightBytes) =>
         new()

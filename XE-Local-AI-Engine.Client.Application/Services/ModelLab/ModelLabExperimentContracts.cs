@@ -39,7 +39,8 @@ public sealed record ModelLabTraceJobV1
 
     public int MaxNewTokens { get; init; } = ModelLabTraceSpec.MaxNewTokens;
 
-    public int TraceByteCap { get; init; } = ModelLabTraceSpec.TraceByteCap;
+    /// <summary><see cref="ModelLabTraceSpec.TraceByteCapFor" /> of the layer count.</summary>
+    public required int TraceByteCap { get; init; }
 
     public int Seed { get; init; } = ModelLabTraceSpec.Seed;
 }
@@ -81,6 +82,9 @@ public sealed record ModelLabExperimentRequest
 
     /// <summary>Makes this a steering job: derive a vector, then run baseline, vector and random control. Null for a trace.</summary>
     public ModelLabSteeringRequest? Steering { get; init; }
+
+    /// <summary>The blocks a trace records, in any order. Null for <see cref="ModelLabTraceSpec.LayersFor" />; a steering job has its own layer.</summary>
+    public IReadOnlyList<int>? Layers { get; init; }
 }
 
 /// <summary>A steering job's inputs. The arm's prompts are the request's <c>prompt</c> and then <see cref="AdditionalTestPrompts" />.</summary>
@@ -112,7 +116,8 @@ public enum ModelLabStartRefusal
     ModelLoaded,
     InsufficientMemory,
     ProcessNotConfirmedStopped,
-    InvalidLayer
+    InvalidLayer,
+    InvalidTraceLayers
 }
 
 public sealed record ModelLabStart
