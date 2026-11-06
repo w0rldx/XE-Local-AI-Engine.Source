@@ -916,6 +916,12 @@ diff of the two net10.0 sets showed `Microsoft.Agents.AI.Workflows` and `.Abstra
 (version strings only), with `Microsoft.Agents.AI`'s single break being PR #7671 (`file_access_read_lines`;
 `AgentFileStore.SearchAsync` abstract→virtual, `AgentFileSkillResource` ctor gained an internal-typed parameter); all
 four workflow-backbone axes unchanged, so the ruling stands at 1.21.0.
+Re-run for 1.26.0 → 1.27.0 on 2026-11-06: the three named classes passed (the whole `AI.Agent.Tests` project with
+them); the nuspec dependency sets are identical apart from the trio's own version; a decompiled public-surface diff of
+the net10.0 assemblies showed `.Abstractions` identical, `.Workflows` adding one Magentic constant
+(`AwaitingPlanReviewStateKey`), and `Microsoft.Agents.AI` making `PerServiceCallChatHistoryPersistingChatClient`
+public with a non-public constructor plus a `LocalHistoryConversationId` constant, none used here. `WorkflowBuilder`,
+`Workflow` and the internal checkpoint types are untouched, so the four axes and the ruling stand at 1.27.0.
 
 ### `Microsoft.Extensions.AI.OpenAI` and the plain `OpenAI` SDK move together, and NuGet will not tell you
 

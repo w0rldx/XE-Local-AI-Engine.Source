@@ -82,49 +82,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/charts@9.7.3",
+			"id": "frontend:@mantine/charts@9.7.4",
 			"name": "@mantine/charts",
-			"version": "9.7.3",
+			"version": "9.7.4",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/colors-generator@9.7.3",
+			"id": "frontend:@mantine/colors-generator@9.7.4",
 			"name": "@mantine/colors-generator",
-			"version": "9.7.3",
+			"version": "9.7.4",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/core@9.7.3",
+			"id": "frontend:@mantine/core@9.7.4",
 			"name": "@mantine/core",
-			"version": "9.7.3",
+			"version": "9.7.4",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/hooks@9.7.3",
+			"id": "frontend:@mantine/hooks@9.7.4",
 			"name": "@mantine/hooks",
-			"version": "9.7.3",
+			"version": "9.7.4",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/notifications@9.7.3",
+			"id": "frontend:@mantine/notifications@9.7.4",
 			"name": "@mantine/notifications",
-			"version": "9.7.3",
+			"version": "9.7.4",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/store@9.7.3",
+			"id": "frontend:@mantine/store@9.7.4",
 			"name": "@mantine/store",
-			"version": "9.7.3",
+			"version": "9.7.4",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
@@ -146,17 +146,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/types@2.1.7",
+			"id": "frontend:@rrweb/types@2.2.0",
 			"name": "@rrweb/types",
-			"version": "2.1.7",
+			"version": "2.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/types#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/utils@2.1.7",
+			"id": "frontend:@rrweb/utils@2.2.0",
 			"name": "@rrweb/utils",
-			"version": "2.1.7",
+			"version": "2.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/utils#readme",
 			"source": "frontend"
@@ -1489,17 +1489,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:i18next@26.5.6",
+			"id": "frontend:i18next@26.5.12",
 			"name": "i18next",
-			"version": "26.5.6",
+			"version": "26.5.12",
 			"license": "MIT",
 			"homepageUrl": "https://www.i18next.com",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:i18next-browser-languagedetector@8.2.1",
+			"id": "frontend:i18next-browser-languagedetector@8.2.4",
 			"name": "i18next-browser-languagedetector",
-			"version": "8.2.1",
+			"version": "8.2.4",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/i18next-browser-languageDetector",
 			"source": "frontend"
@@ -2001,25 +2001,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.26.0",
+			"id": "backend:Microsoft.Agents.AI@1.27.0",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.26.0",
+			"version": "1.27.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.26.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.27.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.26.0",
+			"version": "1.27.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.26.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.27.0",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.26.0",
+			"version": "1.27.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -3233,9 +3233,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-i18next@17.1.4",
+			"id": "frontend:react-i18next@17.1.9",
 			"name": "react-i18next",
-			"version": "17.1.4",
+			"version": "17.1.9",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/react-i18next",
 			"source": "frontend"
@@ -3417,25 +3417,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrdom@2.1.7",
+			"id": "frontend:rrdom@2.2.0",
 			"name": "rrdom",
-			"version": "2.1.7",
+			"version": "2.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrdom#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb@2.1.7",
+			"id": "frontend:rrweb@2.2.0",
 			"name": "rrweb",
-			"version": "2.1.7",
+			"version": "2.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb-snapshot@2.1.7",
+			"id": "frontend:rrweb-snapshot@2.2.0",
 			"name": "rrweb-snapshot",
-			"version": "2.1.7",
+			"version": "2.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrweb-snapshot#readme",
 			"source": "frontend"
@@ -3585,19 +3585,19 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:seroval@1.6.8",
+			"id": "frontend:seroval@1.7.5",
 			"name": "seroval",
-			"version": "1.6.8",
+			"version": "1.7.5",
 			"license": "MIT",
-			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/seroval",
+			"homepageUrl": "https://seroval.vercel.app",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:seroval-plugins@1.6.8",
+			"id": "frontend:seroval-plugins@1.7.6",
 			"name": "seroval-plugins",
-			"version": "1.6.8",
+			"version": "1.7.6",
 			"license": "MIT",
-			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/plugins",
+			"homepageUrl": "https://seroval.vercel.app/docs/using-plugins",
 			"source": "frontend"
 		},
 		{

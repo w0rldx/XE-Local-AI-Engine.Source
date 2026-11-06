@@ -9,9 +9,9 @@ overrides:
   'dompurify@<3.4.17': '3.4.17'
   # source-map-js (via postcss) GHSA-68fv-2mgg-jv7q covers >=1.0.0 <1.2.2; 1.2.2 is the fixed patch.
   'source-map-js@>=1.0.0 <1.2.2': '1.2.2'
-  # seroval GHSA-p6vx-979v-rg4c covers >=0.12.0 <=1.6.0 (pulled at 1.5.x by solid-js 1.9.15 under the devtools panels); 1.6.8 is the fixed line.
-  'seroval@<1.6.2': '1.6.8'
-  'seroval-plugins@<1.6.2': '1.6.8'
+  # minimatch (dev-only, via eslint under react-doctor) GHSA-g3hv-75wg-m249 covers >=7.0.0 <11.0.1 and no eslint release
+  # accepts minimatch 11 yet (eslint 10.14.0 asks ^10.2.6); 11.0.3 is the newest fixed patch past the release-age hold.
+  'minimatch@>=7.0.0 <11.0.1': '11.0.3'
   # fast-uri GHSA-hrr3-gc8f-f4qj, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h and GHSA-333x-w4r6-6crp
   # cover <3.1.9 (dev-only, via ajv under stylelint and react-doctor); 3.1.9 is the fixed patch.
   'fast-uri@<3.1.9': '3.1.9'
