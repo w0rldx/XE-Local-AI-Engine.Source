@@ -1452,7 +1452,6 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             Substitute.For<IActiveCloudChatClientFactory>(),
             new FakeModelTrustResolver(),
             Substitute.For<IDevelopmentCommandProfileDetector>(),
-            Substitute.For<IDevelopmentProfileBackfillService>(),
             Substitute.For<IDevelopmentTemplateStore>(),
             Substitute.For<IDevWorkflowStore>(),
             StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(true).Build(),

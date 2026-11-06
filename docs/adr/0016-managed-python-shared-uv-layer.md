@@ -91,9 +91,9 @@ no layout change forces the multi-GB Training environment to reinstall. Both loc
   served (cached until a restart or repair retries) and status reads `Ready` with the failure as its reason, Training's
   precedent; without one the state is `Failed` as before. A crash between the renames is recovered under the
   provision lock at the next provision (a lone `venv.backup/` is renamed back). Repair uses the same path, so a failed
-  repair keeps the old venv. The legacy `compute-runtime/{uv,pythons,uv-cache}` go only after a successful adopt.
-  Ceiling: a venv of the pre-identity build (`installed-compute-lock.sha256`) has no record to serve it from, so an
-  offline first start after that upgrade reports `Failed`, but keeps the old tree for the next online attempt.
+  repair keeps the old venv. (Amended 2026-11-06: the sweep of the legacy `compute-runtime/{uv,pythons,uv-cache}` and
+  the pre-identity `installed-compute-lock.sha256` handling were removed before rc.3; such a venv now reads as an
+  incomplete provision, is rebuilt on next use, and the legacy directories stay on disk until deleted by hand.)
   Console-script shebangs in `venv/.venv/bin` still name the staging path after the rename; nothing uses them, since `run_python` execs `python -I -`.
   The disk layout (paths, record, identity, swap, recovery) lives in `ComputeRuntimeDirectory`; the gate, lease,
   cached runtime and status mapping stay in `ComputePythonEnvironment`. Training never force-reinstalls: its legacy dirs go only once the

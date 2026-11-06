@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 ///     the column to a BLOB, because a migration has no node key to encrypt with. The conversation must survive.
 /// </summary>
 /// <remarks>
-///     Leaving the titles would leave user content readable in a column treated as ciphertext;
-///     <c>NodeChatTitleEncryptionBackfillService</c> re-derives them from each first user message at next startup.
+///     Leaving the titles would leave user content readable in a column treated as ciphertext; the cleared titles stay
+///     NULL and the client shows those conversations as untitled.
 /// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class EncryptConversationTitleMigrationTests

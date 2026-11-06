@@ -4,7 +4,7 @@ using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 
 /// <summary>
-///     Vector-space helpers shared by the ingestion writer, the legacy-vector normalization backfill, the managed
+///     Vector-space helpers shared by the ingestion writer, the managed
 ///     cosine search, and the embedding rankers and deduplicator that compare raw vectors.
 /// </summary>
 /// <remarks>

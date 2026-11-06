@@ -38,15 +38,6 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     /// </remarks>
     private const int DerivedMaxRuntimeOverheadSeconds = 300;
 
-    /// <summary>
-    ///     The stored run-agent max-runtime <see cref="ResolveMaxRuntimeSecondsAsync" /> treats as unset.
-    /// </summary>
-    /// <remarks>
-    ///     A stored value equal to it is indistinguishable from an operator who typed 600, and no template pre-fills a
-    ///     max-runtime into a new schedule's form, so the resolver derives a ceiling instead — the rationale is there.
-    /// </remarks>
-    private const int LegacyRunAgentTemplateDefaultMaxRuntimeSeconds = 600;
-
     private readonly IScheduledJobDefinitionStore _definitionStore;
     private readonly ISchedulerEventPublisher _eventPublisher;
     private readonly ILogger<ScheduledJobManagementService> _logger;
@@ -786,17 +777,12 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
     /// </remarks>
     private async Task<int?> ResolveMaxRuntimeSecondsAsync(ScheduledJobDefinitionRecord record, CancellationToken cancellationToken)
     {
-        var isRunAgent = string.Equals(record.TemplateId, RunSavedAgentHandler.TemplateIdValue, StringComparison.Ordinal);
-
-        // A stored 600 on a run-agent schedule is ambiguous: it is what the withdrawn template default pre-filled, far likelier stale
-        // than a deliberate cap, so it is treated as unset, and the derived ceiling replaces it; that ceiling is never lower.
-        var isLegacyTemplateDefault = isRunAgent && record.MaxRuntimeSeconds == LegacyRunAgentTemplateDefaultMaxRuntimeSeconds;
-        if (record.MaxRuntimeSeconds is > 0 && !isLegacyTemplateDefault)
+        if (record.MaxRuntimeSeconds is > 0)
         {
             return record.MaxRuntimeSeconds;
         }
 
-        if (!isRunAgent)
+        if (!string.Equals(record.TemplateId, RunSavedAgentHandler.TemplateIdValue, StringComparison.Ordinal))
         {
             return null;
         }

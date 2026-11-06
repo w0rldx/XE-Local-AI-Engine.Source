@@ -158,11 +158,6 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         var installed = await _directory.ReadInstalledStateAsync(cancellationToken);
         if (installed is null)
         {
-            if (File.Exists(_directory.LegacyStatePath))
-            {
-                return Status(ManagedPythonEnvironmentState.UpdateRequired, ManagedPythonReasonCode.OlderBuild, "The compute runtime was provisioned by an older build and is rebuilt on next use.");
-            }
-
             // Another host mid-sync looks exactly like an interrupted or absent one, except that it holds the provision lock.
             if (await _directory.IsProvisionLockHeldElsewhereAsync())
             {
@@ -356,10 +351,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             {
                 _directory.DeleteVenvTrees();
                 File.Delete(_directory.StatePath);
-                File.Delete(_directory.LegacyStatePath);
                 BestEffortFile.TryDeleteDirectory(_directory.WorkDirectory);
-                // Nothing points into the pre-shared-store toolchain once the venv is gone.
-                _ = ManagedPythonToolchain.TryDeleteLegacyToolchain(_directory.CacheRoot);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -598,10 +590,6 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
 
         ComputeRuntimeDirectory.CreateOwnerOnlyDirectory(_directory.CacheRoot);
         await using var provisionLock = await AcquireProvisionLockAsync(_directory.ProvisionLockPath, cancellationToken);
-
-        // Before anything can run: an older build's scratch directory is state a new call must not inherit, and this is the
-        // last moment at which nothing has been offered yet. Warm and cold path both reach here, at most once per process.
-        SweepLegacyScratch();
         _directory.Recover();
 
         var expected = await _directory.ComputeExpectedIdentityAsync(cancellationToken);
@@ -613,7 +601,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             // Re-applied on the warm path too: a venv provisioned by an older build, or left writable by an interrupted run,
             // would otherwise stay writable for the life of the process. At most once per process — the runtime is cached above it.
             ComputeRuntimeDirectory.SetTreeWritable(venvDirectory, writable: false);
-            return Adopt(interpreter, _directory.VenvRoot);
+            return BuildRuntime(interpreter, _directory.VenvRoot);
         }
 
         _logger.LogInformation("Provisioning the compute Python runtime from the pinned lockfile.");
@@ -634,10 +622,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             Identity = expected,
             PythonInstallDirectory = _toolchain.PythonInstallDirectory
         });
-        File.Delete(_directory.LegacyStatePath);
         BestEffortFile.TryDeleteDirectory(_directory.WorkDirectory);
         ComputeRuntimeDirectory.SetTreeWritable(venvDirectory, writable: false);
-        return Adopt(interpreter, _directory.VenvRoot);
+        return BuildRuntime(interpreter, _directory.VenvRoot);
     }
 
     /// <summary>
@@ -723,17 +710,6 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         return ManagedPythonToolchain.AcquireExclusiveLockAsync(path, SyncTimeout + SyncTimeout, cancellationToken);
     }
 
-    /// <summary>The runtime for a proven venv, after dropping the pre-shared-store toolchain it no longer points into.</summary>
-    private ComputePythonRuntime Adopt(string interpreter, string venvRoot)
-    {
-        if (!ManagedPythonToolchain.TryDeleteLegacyToolchain(_directory.CacheRoot))
-        {
-            _logger.LogWarning("The compute runtime's legacy uv, pythons or uv-cache directory could not be removed; nothing uses it any more.");
-        }
-
-        return BuildRuntime(interpreter, venvRoot);
-    }
-
     /// <summary>
     ///     Names the interpreter and the two trees an isolated sandbox must bind for it to start.
     /// </summary>
@@ -751,35 +727,6 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             BaseInterpreterPath = WindowsBaseInterpreterOf(interpreter),
             ReadOnlyTrees = [venvRoot, _toolchain.PythonInstallDirectory]
         };
-    }
-
-    /// <summary>
-    ///     Removes the pre-jail scratch directory if this machine still has one.
-    /// </summary>
-    /// <remarks>
-    ///     Logged at Information because it is a one-off migration an operator may want to see explained, and
-    ///     best-effort because a compute runtime that works is worth more than a directory nothing writes to any more:
-    ///     a failure leaves stale files nothing reads rather than blocking the tool.
-    /// </remarks>
-    private void SweepLegacyScratch()
-    {
-        var legacy = _directory.LegacyScratchDirectory;
-        if (!Directory.Exists(legacy))
-        {
-            return;
-        }
-
-        try
-        {
-            Directory.Delete(legacy, recursive: true);
-            _logger.LogInformation(
-                "Removed the compute runtime's legacy scratch directory: script scratch now lives inside the per-call jail, and the old one is neither metered by the jail disk ceiling nor discarded when a call ends.");
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogWarning(exception,
-                "The compute runtime's legacy scratch directory could not be removed; it is no longer written to, but files an earlier build left there remain on disk.");
-        }
     }
 
     private void LogLine(string line)

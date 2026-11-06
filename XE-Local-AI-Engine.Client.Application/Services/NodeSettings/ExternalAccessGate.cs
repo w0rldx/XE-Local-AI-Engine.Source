@@ -8,8 +8,8 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     A stateless function over <see cref="INodeRuntimeSettings" /> and a <see cref="TimeProvider" />, needing no
 ///     interface, lifetime or registration. Both <see langword="null" /> and <c>ExternalAccessProfilePending</c> are UNDECIDED:
 ///     <see langword="null" /> means no administrator exists yet, so there is nobody to ask, and <c>pending</c> means an
-///     administrator exists and the first-run choice has not been made. After the boot backfill an upgraded node is
-///     always decided before the host accepts a request, so this wait is only ever paid on a fresh install.
+///     administrator exists and the first-run choice has not been made. A data directory from before the profile existed
+///     also stays null, and waits here until the operator answers the chooser the SPA shows at the next sign-in.
 /// </remarks>
 public static class ExternalAccessGate
 {

@@ -184,73 +184,6 @@ public sealed class WorkSessionAgentSeeder : IHostedService
     /// </remarks>
     private const string ClockToolName = "GetCurrentTime";
 
-    /// <summary>
-    ///     The spelling these personas shipped with before the registry's real name was checked.
-    /// </summary>
-    /// <remarks>
-    ///     Seeding is additive-only and returns early on an existing slug, so an upgraded install would otherwise
-    ///     keep the dead name — and lose the clock tool — for the life of the database.
-    /// </remarks>
-    private const string LegacyClockToolName = "get_current_time";
-
-    /// <summary>
-    ///     Renames the misspelt clock tool on a row that already exists, and touches nothing else on it.
-    /// </summary>
-    /// <remarks>
-    ///     Rebuilt from the STORED record rather than the seed input: an operator may have edited this persona, and
-    ///     re-seeding their row would be data loss dressed up as a repair.
-    /// </remarks>
-    private async Task RepairClockToolNameAsync(IAgentDefinitionStore store, string slug, CancellationToken cancellationToken)
-    {
-        if (await store.GetBySeedSlugAsync(slug, cancellationToken) is not { } existing
-            || !existing.AllowedToolNames.Contains(LegacyClockToolName, StringComparer.Ordinal))
-        {
-            return;
-        }
-
-        // Every key but the legacy one is copied as it stands, and the legacy one supplies a value only where the
-        // correct name has none: with both spellings present, enumeration order would otherwise pick the winner.
-        var approvals = new Dictionary<string, bool>(StringComparer.Ordinal);
-        foreach (var (name, requiresApproval) in existing.ToolApprovals.Where(static pair => !IsLegacyClockToolName(pair.Key)))
-        {
-            approvals[name] = requiresApproval;
-        }
-
-        if (existing.ToolApprovals.TryGetValue(LegacyClockToolName, out var legacyApproval))
-        {
-            _ = approvals.TryAdd(ClockToolName, legacyApproval);
-        }
-
-        var repaired = new AgentDefinitionInput
-        {
-            Name = existing.Name,
-            Description = existing.Description,
-            Instructions = existing.Instructions,
-            ModelProfile = existing.ModelProfile,
-            ReasoningEffort = existing.ReasoningEffort,
-            Kind = existing.Kind,
-            AllowedToolNames = [.. existing.AllowedToolNames.Select(Rename).Distinct(StringComparer.Ordinal)],
-            ToolApprovals = approvals,
-            OrchestrationTopologyJson = existing.OrchestrationTopologyJson,
-            PlaybookEnabled = existing.PlaybookEnabled,
-            AllowedSkillIds = existing.AllowedSkillIds,
-            DefaultTemporaryChat = existing.DefaultTemporaryChat,
-            MemoryExtractionEnabled = existing.MemoryExtractionEnabled,
-            DisableBaseScaffold = existing.DisableBaseScaffold,
-            GenerationMetadataJson = existing.GenerationMetadataJson,
-            DisableToolRelevanceFilter = existing.DisableToolRelevanceFilter
-        };
-
-        _ = await store.UpdateAsync(existing.Id, repaired, cancellationToken);
-        _logger.LogInformation("Repaired the clock tool name on the seeded agent definition {AgentDefinitionId} (slug {SeedSlug}).", existing.Id, slug);
-    }
-
-    private static bool IsLegacyClockToolName(string toolName) =>
-        string.Equals(toolName, LegacyClockToolName, StringComparison.Ordinal);
-
-    private static string Rename(string toolName) =>
-        IsLegacyClockToolName(toolName) ? ClockToolName : toolName;
-
     private static IReadOnlyDictionary<string, bool> BuildApprovals(IReadOnlyList<string> allowedToolNames)
     {
         var approvals = new Dictionary<string, bool>(StringComparer.Ordinal);
@@ -272,7 +205,6 @@ public sealed class WorkSessionAgentSeeder : IHostedService
     {
         if (seededSlugs.Contains(slug))
         {
-            await RepairClockToolNameAsync(store, slug, cancellationToken);
             return;
         }
 

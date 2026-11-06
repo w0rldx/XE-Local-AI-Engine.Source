@@ -917,10 +917,10 @@ public sealed record StoredNodeSettings
     /// </summary>
     /// <remarks>
     ///     Every gate reads the three booleans below; this member is read for exactly one purpose — telling a decided node from an undecided one.
-    ///     <see langword="null" /> means nobody has decided AND no administrator exists (a fresh boot), or an upgraded node not yet backfilled.
+    ///     <see langword="null" /> means nobody has decided: no administrator exists yet (a fresh boot), or a data directory predates the profile.
     ///     <see cref="ExternalAccessProfilePending" /> means an administrator exists and the choice has not been made, recommended/offline that a
     ///     preset is in force, and custom that the switches no longer match either preset. Both <see langword="null" /> and pending are UNDECIDED
-    ///     to the gated services; only <see langword="null" /> is backfillable.
+    ///     to the gated services, and the SPA asks a signed-in operator for either.
     /// </remarks>
     public string? ExternalAccessProfile { get; init; }
 
@@ -928,9 +928,8 @@ public sealed record StoredNodeSettings
     ///     Which navigation mode the operator chose: <see cref="UiModeSimple" /> or <see cref="UiModeAdvanced" />.
     /// </summary>
     /// <remarks>
-    ///     <see langword="null" /> means the question has not been answered, which is what the SPA's first-run step keys on;
-    ///     <c>UiModeBackfillService</c> stamps <see cref="UiModeAdvanced" /> at boot on a node that finished onboarding before
-    ///     this setting existed, so an upgraded node is never asked. PRESENTATION ONLY, and never a security boundary: it
+    ///     <see langword="null" /> means the question has not been answered, which is what the SPA's first-run step keys on,
+    ///     including on a data directory that predates the setting. PRESENTATION ONLY, and never a security boundary: it
     ///     decides which navigation entries are rendered and nothing else. Every route stays reachable by URL, no server gate
     ///     reads it, and the compile-time capability flags still decide what exists at all.
     /// </remarks>
@@ -1387,13 +1386,13 @@ public sealed record StoredNodeSettings
     /// <summary>
     ///     The node-wide sandbox security profile: <see cref="SandboxSecurityProfileLow" /> or <see cref="SandboxSecurityProfileHigh" /> once
     ///     chosen, <see cref="SandboxSecurityProfilePending" /> while an administrator exists and has not chosen, <see langword="null" /> when
-    ///     undecided and backfillable. Read per sandbox create; only the literal <c>high</c> is <c>high</c>, everything else reads as <c>low</c>.
+    ///     undecided. Read per sandbox create; only the literal <c>high</c> is <c>high</c>, everything else reads as <c>low</c>.
     /// </summary>
     /// <remarks>
     ///     A TIGHTENING switch stored as a node setting by ADR 0020, an exception to the configuration-only rule for this one field: it is
     ///     writable only through the Operator settings endpoint and is deliberately absent from <c>NodeSettingsAgenticPatch</c> and
     ///     <c>NodeSettingsAgenticView</c>, so no MCP tool or model can lower it. No configuration seed: a fresh node is asked at first run, an
-    ///     upgraded node is stamped <c>low</c> by <c>SandboxSecurityProfileBackfillService</c>. Stored as a string for
+    ///     older data directory keeps null and so <c>low</c>. Stored as a string for
     ///     <see cref="ContainerRuntimeSelection" />'s reason.
     /// </remarks>
     public string? SandboxSecurityProfile { get; init; }

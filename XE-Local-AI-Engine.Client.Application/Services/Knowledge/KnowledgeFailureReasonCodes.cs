@@ -11,9 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 /// </remarks>
 public static class KnowledgeFailureReasonCodes
 {
-    // Older rows carry the reader's exception type: "Extraction failed (<exception type>)."
-    private const string LegacyExtractionFailedPrefix = "Extraction failed (";
-
     private static readonly Dictionary<string, string> CodesByReason = new(StringComparer.Ordinal)
     {
         [KnowledgeIngestionService.ContentMissingReason] = "content-missing",
@@ -37,16 +34,6 @@ public static class KnowledgeFailureReasonCodes
     /// <summary>The code for <paramref name="reason" />, or <see langword="null" /> when it has none.</summary>
     public static string? CodeOf(string? reason)
     {
-        if (reason is null)
-        {
-            return null;
-        }
-
-        if (CodesByReason.TryGetValue(reason, out var code))
-        {
-            return code;
-        }
-
-        return reason.StartsWith(LegacyExtractionFailedPrefix, StringComparison.Ordinal) ? "unreadable-file" : null;
+        return reason is not null && CodesByReason.TryGetValue(reason, out var code) ? code : null;
     }
 }

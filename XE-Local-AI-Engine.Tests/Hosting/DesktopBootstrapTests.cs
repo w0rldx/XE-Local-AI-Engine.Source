@@ -8,8 +8,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Vault;
 using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
-using XE_Local_AI_Engine.Providers.HuggingFace;
-using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -187,62 +185,11 @@ public sealed class DesktopBootstrapTests : IDisposable
         using var temp = new TempDirectory();
         using var configuration = new ConfigurationManager();
 
-        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder, temp.ApplicationBaseDirectory);
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
 
         var options = new ImageModelStoreOptions();
         configuration.GetSection(ImageModelStoreOptions.SectionName).Bind(options);
         AssertEx.Equal(Path.Combine(temp.DataDirectory, "models", "images"), options.ModelsDirectory);
-    }
-
-    /// <summary>
-    ///     An install that already downloaded image models into the install-directory fallback keeps using it: the
-    ///     registry finds its manifest only there, and pointing the store elsewhere would hide every download.
-    /// </summary>
-    [Test]
-    public void EnsureLocalDataConfiguration_WithImageModelsOnlyInTheLegacyFolder_LeavesTheStoreOnIt()
-    {
-        using var temp = new TempDirectory();
-        using var configuration = new ConfigurationManager();
-        WriteImageManifest(LegacyImageModelsDirectory(temp));
-
-        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder, temp.ApplicationBaseDirectory);
-
-        AssertEx.Null(configuration[DesktopBootstrap.HuggingFaceImageModelsDirectoryKey]);
-    }
-
-    [Test]
-    public void EnsureLocalDataConfiguration_WithImageModelsInBothFolders_UsesTheDataFolder()
-    {
-        using var temp = new TempDirectory();
-        using var configuration = new ConfigurationManager();
-        WriteImageManifest(LegacyImageModelsDirectory(temp));
-        WriteImageManifest(Path.Combine(temp.DataDirectory, "models", "images"));
-
-        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder, temp.ApplicationBaseDirectory);
-
-        AssertEx.Equal(Path.Combine(temp.DataDirectory, "models", "images"),
-            configuration[DesktopBootstrap.HuggingFaceImageModelsDirectoryKey]);
-    }
-
-    /// <summary>The guard reads the registry's own manifest name; a rename on either side must turn this red.</summary>
-    [Test]
-    public void ImageModelManifestFileName_MatchesTheRegistrysManifest()
-    {
-        AssertEx.Equal(ImageModelRegistry.ManifestFileName, DesktopBootstrap.ImageModelManifestFileName);
-    }
-
-    /// <summary>The guard derives the legacy folder from the store's own fallback; a change to that must turn this red.</summary>
-    [Test]
-    public void ImageModelStoreFallback_IsTheFolderTheGuardChecks()
-    {
-        var services = new ServiceCollection();
-        services.AddHuggingFaceImageModelStore(new ConfigurationBuilder().Build());
-
-        var options = (ImageModelStoreOptions)AssertEx.NotNull(services
-                                                               .Single(descriptor => descriptor.ServiceType == typeof(ImageModelStoreOptions))
-                                                               .ImplementationInstance);
-        AssertEx.Equal(Path.Combine(AppContext.BaseDirectory, DesktopBootstrap.ModelsFolderName, DesktopBootstrap.ImageModelsFolderName),
-            options.ModelsDirectory);
     }
 
     [Test]
@@ -256,20 +203,9 @@ public sealed class DesktopBootstrapTests : IDisposable
             [DesktopBootstrap.HuggingFaceImageModelsDirectoryKey] = explicitDirectory
         });
 
-        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder, temp.ApplicationBaseDirectory);
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
 
         AssertEx.Equal(explicitDirectory, configuration[DesktopBootstrap.HuggingFaceImageModelsDirectoryKey]);
-    }
-
-    private static string LegacyImageModelsDirectory(TempDirectory temp)
-    {
-        return Path.Combine(temp.ApplicationBaseDirectory, "models", "images");
-    }
-
-    private static void WriteImageManifest(string directory)
-    {
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, "image-models.json"), "{\"models\":[]}");
     }
 
     [Test]
@@ -553,9 +489,6 @@ public sealed class DesktopBootstrapTests : IDisposable
         }
 
         public string DataDirectory => Path.Combine(_root, DesktopBootstrap.ApplicationDataFolderName);
-
-        /// <summary>Stands in for the install directory, so no test writes under the test host's own.</summary>
-        public string ApplicationBaseDirectory => Path.Combine(_root, "app");
 
         public void Dispose()
         {

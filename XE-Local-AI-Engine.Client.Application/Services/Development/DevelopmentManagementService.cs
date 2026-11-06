@@ -93,7 +93,6 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
 
     private readonly IActiveCloudChatClientFactory _cloudFactory;
     private readonly IModelTrustResolver _modelTrustResolver;
-    private readonly IDevelopmentProfileBackfillService _profileBackfill;
     private readonly IDevelopmentCommandProfileDetector _profileDetector;
     private readonly IDevelopmentRepositoryBindingService _repositoryBindings;
     private readonly IDevelopmentStore _store;
@@ -122,7 +121,6 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         IActiveCloudChatClientFactory cloudFactory,
         IModelTrustResolver modelTrustResolver,
         IDevelopmentCommandProfileDetector profileDetector,
-        IDevelopmentProfileBackfillService profileBackfill,
         IDevelopmentTemplateStore templateStore,
         IDevWorkflowStore workflows,
         INodeRuntimeSettings runtimeSettings,
@@ -141,8 +139,6 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         _cloudFactory = cloudFactory;
         ArgumentNullException.ThrowIfNull(modelTrustResolver);
         _modelTrustResolver = modelTrustResolver;
-        ArgumentNullException.ThrowIfNull(profileBackfill);
-        _profileBackfill = profileBackfill;
         ArgumentNullException.ThrowIfNull(profileDetector);
         _profileDetector = profileDetector;
         ArgumentNullException.ThrowIfNull(repositoryBindings);
@@ -273,10 +269,6 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     public async Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         var project = await _store.GetProjectAsync(projectId, cancellationToken);
-
-        // Legacy projects predate the profile column. Filling it here, rather than only at startup, means a repository
-        // that was offline at boot becomes usable as soon as it is back — no restart. A no-op once the profile exists.
-        project = await _profileBackfill.EnsureAsync(project, cancellationToken);
         var tasks = await _store.ListTasksAsync(projectId, cancellationToken);
 
         // ONE query for every task's workflow pointer, not one per task: this read always has the whole task list, so

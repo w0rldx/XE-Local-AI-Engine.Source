@@ -35,7 +35,9 @@ degrade" for every axis has no setting for it and no way to see, before choosing
 
 The first-run chain already has the shape of a decision made once: `/setup`, `/vault-setup`, `/external-access`,
 `/ui-mode-setup`, each gated on a server-stamped discriminator, with a startup backfill so an upgraded node is never
-asked a question it already answered. The external-access preset is the template.
+asked a question it already answered. The external-access preset is the template. (Amended 2026-11-06: those startup
+backfills were removed with the other pre-release backfills; a data directory that predates the external-access or
+interface-mode step is now asked it at the next sign-in, and a null sandbox profile reads as `low`, see point 8.)
 
 ## Decision
 
@@ -43,7 +45,8 @@ asked a question it already answered. The external-access preset is the template
    `pending`. `null` means undecided and backfillable. `pending` means an administrator exists and the operator has not
    chosen yet; only the engine writes it, and the save validator rejects it. `NodeSettingsStore` folds an unknown value
    to `pending`, as it does for the external-access profile. There is no configuration seed: a fresh node is asked, an
-   upgraded node is backfilled.
+   upgraded node is backfilled. (Amended 2026-11-06: no backfill runs any more; `null` now means only a data directory
+   whose setup predates this decision, read as `low` without being asked, see point 8.)
 2. **Effective profile.** `high` only when the stored literal is `high`. Every other value, including `null` and
    `pending`, is `low`, so a node that has not chosen behaves exactly as before.
 3. **One rule, shared.** `SandboxSecurityProfilePolicy` computes the preconditions from the workload's requirements, the
@@ -84,13 +87,11 @@ asked a question it already answered. The external-access preset is the template
    `pending`. The route guard redirects to `/sandbox-profile-setup` when the profile is `pending`, after the
    external-access check and before the interface-mode check. The chooser offers `low` and `high`, preselects neither,
    has no skip control, and recommends `high` only when `HighProfileRefusals` is empty, otherwise `low`.
-8. **Upgrade.** `SandboxSecurityProfileBackfillService` stamps `low` when the field is null, an administrator exists and
-   the external-access profile is not `pending`. That is the discriminator `UiModeBackfillService` uses, so the three
-   backfills are order-independent. A fresh install is never in that state: setup stamps both profiles `pending` in one
-   write, so a restart between the two answers keeps the sandbox profile `pending` and the operator is still asked. The
-   null-with-a-decided-external-access state exists only on a node whose setup ran on a build before this decision and
-   that was upgraded between the two answers; it is not asked, runs under `low` (null reads as `low`) and is stamped `low`
-   at its next boot.
+8. **Upgrade.** A null profile reads as `low`. A fresh install never holds null: setup stamps both profiles `pending`
+   in one write, so a restart between the two answers keeps the sandbox profile `pending` and the operator is still
+   asked. Only a data directory whose setup ran on a build before this decision holds null; it is not asked and runs
+   under `low`. (Amended 2026-11-06: the boot backfill that used to stamp `low` on such a node was removed with the
+   other pre-release backfills; the effective profile is the same.)
 9. **Operator-only.** The field is written only through the Operator settings endpoint. It is absent from the agentic
    patch, the agentic view and the node-admin MCP tool arguments, and a test asserts that absence. It is listed in the
    node-info report. Lowering it (`high` to `low`) asks for confirmation in the save flow.

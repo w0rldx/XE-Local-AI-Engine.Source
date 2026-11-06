@@ -75,10 +75,6 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();
 
-        // Process-wide latch flipped by the vector-normalization backfill: once every stored vector is unit length the scoped search
-        // may score by dot product instead of full cosine. Singleton so every search sees one latch; false holds the correct cosine path.
-        builder.Services.AddSingleton<IKnowledgeVectorNormalizationState, KnowledgeVectorNormalizationState>();
-
         // Bounded, RAM-only, TTL'd query-embedding cache (keyed by resolved model + query hash). Singleton so one cache
         // serves every scoped search; lets a repeated query skip the embedding round trip.
         builder.Services.AddSingleton<IKnowledgeQueryEmbeddingCache, KnowledgeQueryEmbeddingCache>();
@@ -100,10 +96,6 @@ internal static class AddNodeKnowledgeBaseExtensions
         // drains the SAME instance the endpoint enqueues onto.
         builder.Services.AddSingleton<KnowledgeIngestionDispatcher>();
         builder.Services.AddSingleton<IKnowledgeIngestionDispatcher>(sp => sp.GetRequiredService<KnowledgeIngestionDispatcher>());
-
-        // One-shot startup backfill of the embedding pin for a corpus indexed before the pin existed. Registered ahead of the
-        // ingestion worker so it usually runs first; the ingestion commit pins through the same write-once path either way.
-        builder.Services.AddHostedService<KnowledgeEmbeddingModelPinBackfill>();
 
         // Background worker: drains the queue with SemaphoreSlim-bounded concurrency, a fresh scope per document.
         builder.Services.AddHostedService<KnowledgeIngestionWorker>();

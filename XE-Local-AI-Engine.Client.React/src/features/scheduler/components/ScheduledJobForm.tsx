@@ -40,8 +40,8 @@ interface ScheduledJobFormProps {
 
 // The one template whose blank max-runtime is derived instead of falling back to the node default: the backend's
 // ScheduledJobManagementService.ResolveMaxRuntimeSecondsAsync derives 2 × the node "Maximum message request timeout"
-// plus 5 minutes of overhead for it, and treats a stored 600 (the removed template default) as blank. Only the help
-// copy depends on this, so a literal here is cheaper than plumbing the id through the template DTO.
+// plus 5 minutes of overhead for it. Only the help copy depends on this, so a literal here is cheaper than plumbing
+// the id through the template DTO.
 const runAgentTemplateId = "run-agent";
 
 // Shallow dirty check: compare each top-level key of current values to initialValues.
@@ -128,8 +128,9 @@ export function ScheduledJobForm({
 				templateId: value,
 				scheduleKind: template?.defaultScheduleKind ?? current.scheduleKind,
 				misfirePolicy: template?.defaultMisfirePolicy ?? current.misfirePolicy,
-				maxRuntimeSeconds:
-					template?.defaultMaxRuntimeSeconds != null ? String(template.defaultMaxRuntimeSeconds) : current.maxRuntimeSeconds,
+				// A template without a default clears the field rather than keeping the previous template's limit: a
+				// kept value would be saved as an explicit ceiling (a run-agent job would lose its derived one).
+				maxRuntimeSeconds: template?.defaultMaxRuntimeSeconds != null ? String(template.defaultMaxRuntimeSeconds) : "",
 				parameters: template?.defaultParameters ?? current.parameters,
 			}));
 		},
@@ -267,7 +268,7 @@ export function ScheduledJobForm({
 					values.templateId === runAgentTemplateId
 						? t(
 								"pages.scheduler.form.maxRuntimeSeconds.descriptionRunAgent",
-								"Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes). A value of 600 is treated as blank.",
+								"Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes).",
 							)
 						: t("pages.scheduler.form.maxRuntimeSeconds.description", "Leave blank to use the node default.")
 				}

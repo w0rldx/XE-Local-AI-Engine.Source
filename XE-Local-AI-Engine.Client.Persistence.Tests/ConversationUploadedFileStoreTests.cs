@@ -358,25 +358,6 @@ public sealed class ConversationUploadedFileStoreTests : IAsyncDisposable
     }
 
     [Test]
-    public async Task ReadExtractedMarkdownAsync_ReadsLegacyCompanionName()
-    {
-        var (store, conversationId, uploadRoot, keyHolder) = await CreateConversationAsync("legacy-md");
-        var file = await AddSampleFileAsync(store, conversationId, "legacy.txt");
-        var directory = ConversationDirectory(uploadRoot, conversationId);
-        File.Delete(Path.Combine(directory, "extracted-" + file.FileId.ToString("D") + ".md"));
-
-        // Exactly what the pre-prefix store wrote: the file_md blob at "<fileId>.md" next to the "<fileId>.txt" bytes.
-        const string legacyMarkdown = "# Written by the old store";
-        var legacyBlob = new UploadedFileBlobProtector(keyHolder).Encrypt(conversationId, file.FileId, UploadedFileBlobProtector.FileMarkdownColumn,
-            Encoding.UTF8.GetBytes(legacyMarkdown));
-        await File.WriteAllBytesAsync(Path.Combine(directory, file.FileId.ToString("D") + ".md"), legacyBlob);
-
-        AssertEx.Equal(legacyMarkdown, await store.ReadExtractedMarkdownAsync(conversationId, file.FileId, CancellationToken.None));
-        var bytes = await store.ReadBytesAsync(conversationId, file.FileId, CancellationToken.None);
-        AssertEx.True(bytes!.Value.Span.SequenceEqual(Encoding.UTF8.GetBytes("body-of-legacy.txt")), "The .txt bytes blob wins over the legacy companion.");
-    }
-
-    [Test]
     public async Task DeleteAsync_RemovesBytesAndMarkdownCompanion()
     {
         var (store, conversationId, uploadRoot, _) = await CreateConversationAsync("delete-md");

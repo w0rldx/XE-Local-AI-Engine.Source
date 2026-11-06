@@ -248,7 +248,7 @@ a second body emitter), and assert the whole content-type with `RequestBodyTooLa
 **Rule:** `SqlQueryRaw<T>` on an unmapped type binds columns to PROPERTY names; alias every column
 (`SELECT graph_json AS GraphJson, ...`). A caller that swallows a read failure logs it at Error with the exception
 type. **Prevents:** a run-time throw, or a silent zero-row answer that looks like "nothing to read". **Authority:**
-`CanvasWorkflowImport.ReadAsync`; `NodeChatTitleEncryptionBackfillService`.
+`CanvasWorkflowImport.ReadAsync`.
 [evidence](../agent-knowledge-evidence.md#an-ef-unmapped-type-raw-sql-query-must-alias-every-column-or-it-binds-nothing)
 
 ### `signalr:check` only diffs hub route strings, never method signatures

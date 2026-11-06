@@ -223,9 +223,8 @@ partial name does not change between attempts, the downloader's `Range` resume w
 | Completed download | the partial becomes the staged file; the cursors are deleted | n/a |
 | Failure during the commit, after `PrepareAsync` returned | the staged files are deleted | byte 0 |
 
-Partials from the older per-operation layout (`<file>.gguf.<operation>.part.part` and its `.ranges.part`) are carried
-over on the next start of the same model: the newest one is renamed to the stable name and resumed, the rest are deleted.
-The startup `GgufAcquisitionArtifactStartupReaper` deletes any `<file>.gguf.…part` leftover whose `<file>.gguf` already
+Partials from the older per-operation layout (`<file>.gguf.<operation>.part.part`) are no longer adopted: that model
+downloads from byte 0, and the reaper below reclaims the old files. The startup `GgufAcquisitionArtifactStartupReaper` deletes any `<file>.gguf.…part` leftover whose `<file>.gguf` already
 exists, and any other `*.part` untouched for 24 hours. So a resumable partial survives a restart for a day.
 
 Beside the partial, `PrepareAsync` writes `<file>.gguf.intent.part`, which names the model and its size, because the

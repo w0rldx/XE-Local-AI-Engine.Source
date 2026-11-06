@@ -62,7 +62,6 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
                 return null;
             }
 
-            // Shape-detect before any destructive catch so a liftable legacy payload is never deleted.
             try
             {
                 return ParseConfigPayload(payload);
@@ -187,61 +186,14 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
                    ?? throw new JsonException("Stored cloud provider config could not be deserialized.");
         }
 
-        // Legacy v1 shape: a flat { providerName, endpoint, apiKey, deploymentName } credential blob.
-        if (HasProperty(root, "deploymentName") || HasProperty(root, "apiKey") || HasProperty(root, "endpoint"))
-        {
-            return LiftLegacyV1(root);
-        }
-
-        throw new JsonException("Stored cloud provider config shape was not recognized.");
-    }
-
-    private static StoredCloudProviderConfig LiftLegacyV1(JsonElement root)
-    {
-        var providerName = GetString(root, "providerName") ?? CloudProviderOptions.ProviderAzureFoundry;
-        var endpoint = GetString(root, "endpoint") ?? string.Empty;
-        var apiKey = GetString(root, "apiKey");
-        var deploymentName = GetString(root, "deploymentName") ?? string.Empty;
-
-        return new StoredCloudProviderConfig
-        {
-            SchemaVersion = 2,
-            ProviderName = providerName,
-            AzureFoundry = new StoredAzureFoundryConnection
-            {
-                Endpoint = endpoint,
-                AuthMode = AzureFoundryAuthMode.ApiKey,
-                ApiKey = apiKey,
-                Models =
-                [
-                    new StoredAzureFoundryModel
-                    {
-                        DeploymentName = deploymentName,
-                        DisplayLabel = deploymentName,
-                    },
-                ],
-            },
-        };
+        // Anything else, including the pre-release flat v1 blob, is moved aside by the caller: the operator re-enters the connection.
+        throw new JsonException("Stored cloud provider config shape was not recognized; re-enter the cloud connection.");
     }
 
     private static bool HasProperty(JsonElement element, string propertyName)
     {
         return element.EnumerateObject()
                       .Any(property => string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string? GetString(JsonElement element, string propertyName)
-    {
-        foreach (var property in element.EnumerateObject())
-        {
-            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase)
-                && property.Value.ValueKind == JsonValueKind.String)
-            {
-                return property.Value.GetString();
-            }
-        }
-
-        return null;
     }
 
     private static void ValidateConfig(StoredCloudProviderConfig config)

@@ -304,39 +304,6 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
-    public void LegacyPreProvenancePredicate_RequiresExactNormalizedCachePath()
-    {
-        var cacheRoot = Path.Combine(Path.GetTempPath(), "source-build-predicate-root");
-        var expected = Path.Combine(cacheRoot, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin");
-        var exact = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", new string('a', 64), GpuVariant.Cuda,
-            DateTimeOffset.UtcNow, Path.Combine(expected, "..", "bin"));
-        var deceptive = exact with
-        {
-            SourceBuildPath = Path.Combine(cacheRoot, "outside", "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin")
-        };
-
-        AssertEx.True(exact.IsLegacyPinnedCuda(cacheRoot));
-        AssertEx.False(deceptive.IsLegacyPinnedCuda(cacheRoot));
-    }
-
-    [Test]
-    public void LegacyPredicate_CustomSelectionUsingOfficialRepository_IsNotLegacy()
-    {
-        var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
-            "source",
-            new string('a', 64),
-            GpuVariant.Cuda,
-            DateTimeOffset.UtcNow,
-            "/cache/llama.cpp/source-build/active/build/bin",
-            LlamaCppSourceBuildRequestValidation.OfficialRepository,
-            LlamaCppReleasePins.PinnedSourceCommitSha,
-            LlamaCppSourceRevisionMode.EnginePinned,
-            SourceSelection: LlamaCppSourceSelection.Custom);
-
-        AssertEx.False(state.IsLegacyPinnedCuda("/cache"));
-    }
-
-    [Test]
     public async Task Selector_ActiveCpuSource_ReturnsCpuWithoutVendorOverride()
     {
         var signal = new CudaManagedBuildSignal();

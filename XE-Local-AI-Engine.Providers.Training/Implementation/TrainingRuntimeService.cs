@@ -104,7 +104,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         _installed = _stateStore.ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
 #pragma warning restore MA0045
         _phase = _installed is not null ? TrainingRuntimePhase.Ready : TrainingRuntimePhase.Idle;
-        SweepLegacyToolchain();
     }
 
     private string WorkDirectory => Path.Combine(_cacheRoot, ".work");
@@ -275,9 +274,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             BestEffortFile.TryDeleteDirectory(WorkDirectory);
             _stateStore.Delete();
 
-            // No environment is left to point into the pre-shared-store toolchain. The shared store itself is never touched.
-            _ = ManagedPythonToolchain.TryDeleteLegacyToolchain(_cacheRoot);
-
             lock (_stateLock)
             {
                 _installed = null;
@@ -331,11 +327,10 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     /// <remarks>
     ///     A <c>.staging</c> venv is by definition unadopted and the work tree holds nothing durable, so both go
     ///     unconditionally; a <c>.backup</c> present without an <c>active</c> means the swap died between the two
-    ///     moves, so that backup is restored rather than discarded. It also retries the legacy-toolchain sweep.
+    ///     moves, so that backup is restored rather than discarded.
     /// </remarks>
     internal void Recover()
     {
-        SweepLegacyToolchain();
         BestEffortFile.TryDeleteDirectory(WorkDirectory);
         BestEffortFile.TryDeleteDirectory(TrainingRuntimeLayout.StagingVenv(_cacheRoot));
 
@@ -449,9 +444,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 await RollbackAdoptAsync(parked, swapped, previousState, staging, active, backup).ConfigureAwait(false);
                 throw;
             }
-
-            // Strictly after Ready and outside the rollback boundary: a failed delete must never cost the adopted runtime.
-            SweepLegacyToolchain();
         }
         catch (OperationCanceledException)
         {
@@ -543,67 +535,6 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         }
 
         await SetTerminalAsync(TrainingRuntimePhase.Failed, sanitizedError, installed: null).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    ///     Deletes the pre-shared-store <c>uv</c>, <c>pythons</c> and <c>uv-cache</c> under the cache root once the active
-    ///     venv no longer runs on them. Idempotent, best-effort, never throws.
-    /// </summary>
-    /// <remarks>
-    ///     The only evidence trusted is positive: the active venv's <c>pyvenv.cfg</c> <c>home</c> lies under the shared
-    ///     store (uv writes <c>UV_PYTHON_INSTALL_DIR</c> verbatim there). Anything else — no venv, no <c>home</c>, a legacy
-    ///     one — leaves the legacy dirs alone: a runtime built before the store keeps working until a reinstall or remove.
-    /// </remarks>
-    internal void SweepLegacyToolchain()
-    {
-        try
-        {
-            // An unresolved .backup may be the runtime Recover() restores, and it may still run on the legacy CPython.
-            if (!ManagedPythonToolchain.HasLegacyToolchain(_cacheRoot) || Directory.Exists(TrainingRuntimeLayout.BackupVenv(_cacheRoot)))
-            {
-                return;
-            }
-
-            var home = ReadVenvHome(TrainingRuntimeLayout.ActiveVenv(_cacheRoot));
-            if (home is null || !PathContainment.IsUnderRoot(home, _toolchain.PythonInstallDirectory))
-            {
-                return;
-            }
-
-            if (ManagedPythonToolchain.TryDeleteLegacyToolchain(_cacheRoot))
-            {
-                _logger.LogInformation("Removed the training runtime's legacy uv toolchain; the runtime now uses the shared toolchain store.");
-            }
-            else
-            {
-                _logger.LogWarning("The training runtime's legacy uv toolchain could not be fully removed; nothing uses it any more.");
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogWarning(exception, "Checking the training runtime's legacy uv toolchain failed; it stays on disk.");
-        }
-    }
-
-    private static string? ReadVenvHome(string venvDirectory)
-    {
-        var config = Path.Combine(venvDirectory, ".venv", "pyvenv.cfg");
-        if (!File.Exists(config))
-        {
-            return null;
-        }
-
-        foreach (var line in File.ReadLines(config))
-        {
-            var separator = line.IndexOf('=', StringComparison.Ordinal);
-            if (separator > 0 && string.Equals(line[..separator].Trim(), "home", StringComparison.Ordinal))
-            {
-                var value = line[(separator + 1)..].Trim();
-                return value.Length > 0 && Path.IsPathFullyQualified(value) ? value : null;
-            }
-        }
-
-        return null;
     }
 
     private InstalledTrainingRuntimeState? ReadInstalledState()

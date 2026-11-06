@@ -379,7 +379,6 @@ public sealed class DevelopmentManagementServiceTests
             Substitute.For<IActiveCloudChatClientFactory>(),
             modelTrustResolver ?? new FakeModelTrustResolver(),
             new GenericGitDetector(),
-            ProfileBackfill(),
 
             // No materialization for these projects: they are registered repositories, not template-created ones, so
             // the profile carries no template id.
@@ -392,15 +391,6 @@ public sealed class DevelopmentManagementServiceTests
             StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(true).Build(),
             TimeProvider.System,
             NullLogger<DevelopmentManagementService>.Instance);
-
-    /// <summary>Backfill is a no-op here: every project these tests build already carries a profile.</summary>
-    private static IDevelopmentProfileBackfillService ProfileBackfill()
-    {
-        var backfill = Substitute.For<IDevelopmentProfileBackfillService>();
-        backfill.EnsureAsync(Arg.Any<DevelopmentProjectSnapshot>(), Arg.Any<CancellationToken>())
-                .Returns(call => call.Arg<DevelopmentProjectSnapshot>());
-        return backfill;
-    }
 
     private static IDevelopmentRepositoryBindingService RepositoryBindings(Guid selectedFolderId)
     {

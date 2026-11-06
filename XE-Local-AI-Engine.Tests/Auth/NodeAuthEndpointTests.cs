@@ -516,8 +516,7 @@ public sealed class NodeAuthEndpointTests
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
     }
 
-    // The sandbox security profile is stamped in the same write (ADR 0020): "pending" is what routes the operator to the chooser, and it
-    // keeps the boot backfill, which would decide "low", away from a node whose operator is about to choose.
+    // The sandbox security profile is stamped in the same write (ADR 0020): "pending" is what routes the operator to the chooser.
     [Test]
     public async Task Setup_WhenItSucceeds_MarksTheSandboxSecurityProfilePending()
     {
@@ -534,7 +533,7 @@ public sealed class NodeAuthEndpointTests
     // The write-before-commit ordering, from the failure side: the profile write lands, the operation is cancelled, and the identity
     // transaction never commits. The orphan this leaves is the harmless one — a pending profile with no administrator —
     // and both halves are asserted, because the whole point of writing before the commit is that the OTHER orphan
-    // ("administrator exists, profile null", which the boot backfill would decide as recommended) is unreachable.
+    // ("administrator exists, profile null", indistinguishable from a data directory that predates the profile) is unreachable.
     [Test]
     public async Task Setup_WhenCancelledBetweenTheTwoWrites_LeavesSetupRequiredWithAPendingProfile()
     {

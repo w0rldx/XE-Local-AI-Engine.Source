@@ -10,24 +10,25 @@ export const Route = createFileRoute("/_layout")({
 		await ensureAuthenticated(location);
 
 		// The only place a typed-URL bypass of the first-run profile choice can be caught. `ensureQueryData` shares the
-		// router's QueryClient, so this is one request per session rather than per navigation.
+		// router's QueryClient, so this is one request per session rather than per navigation. A null profile behind a
+		// signed-in session is a data directory from before the profile existed (no boot backfill stamps it any more), so
+		// it is asked exactly like "pending".
 		try {
 			const settings = await context.queryClient.ensureQueryData(getNodeSettingsOptions());
-			if (settings.externalAccessProfile === "pending") {
+			if (settings.externalAccessProfile === "pending" || settings.externalAccessProfile == null) {
 				throw redirect({ to: "/external-access" });
 			}
 
 			// The sandbox security profile is the second question: a security decision, so it comes before the interface
-			// mode. "pending" is stamped for a fresh node only; SandboxSecurityProfileBackfillService gives an upgraded node
-			// a real profile before Kestrel accepts a request, so it never lands here.
+			// mode. "pending" is stamped for a fresh node only; a null profile from an older data directory reads as low,
+			// the behavior it always had, so it is not asked.
 			if (settings.sandboxSecurityProfile === "pending") {
 				throw redirect({ to: "/sandbox-profile-setup" });
 			}
 
 			// The same typed-URL catch for the LAST step. Order is load-bearing: the two checks above run first, so a
-			// fresh install answers the questions in sequence and cannot bounce between them. An upgraded node
-			// never reaches this branch — UiModeBackfillService stamps "advanced" before Kestrel accepts a request — so a
-			// null mode here really does mean "nobody has been asked yet".
+			// fresh install answers the questions in sequence and cannot bounce between them. A null mode means nobody
+			// has been asked yet, including an older data directory that predates the setting.
 			if (settings.uiMode === null || settings.uiMode === undefined) {
 				throw redirect({ to: "/ui-mode-setup" });
 			}

@@ -451,41 +451,6 @@ public sealed class GgufDownloadTransactionTests
         AssertEx.True(File.Exists(partPath + ".ranges.part"), "the resume cursors must survive a cancellation nobody requested");
     }
 
-    [Test]
-    public async Task PrepareAndCommit_LegacyDoubleSuffixedPartials_NewestResumesAndNoPartialOutlivesTheCompletedDownload()
-    {
-        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
-        var options = Infra.Options(dir.Path);
-        const int prefix = 6;
-        var destination = Destination(withProjector: false);
-        var finalPath = dir.FilePath(destination.RelativeGgufPath);
-        // Two attempts from the per-operation layout: an older abandoned one and the newest, which holds a vouched-for prefix.
-        var olderPart = finalPath + ".11111111111111111111111111111111.part.part";
-        var newestPart = finalPath + ".22222222222222222222222222222222.part.part";
-        await File.WriteAllBytesAsync(olderPart, WeightBytes[..3]);
-        await File.WriteAllTextAsync(olderPart + ".ranges.part", "stale");
-        File.SetLastWriteTimeUtc(olderPart, DateTime.UtcNow - TimeSpan.FromHours(1));
-        await File.WriteAllBytesAsync(newestPart, WeightBytes[..prefix]);
-        await File.WriteAllTextAsync(newestPart + ".ranges.part",
-            string.Create(CultureInfo.InvariantCulture, $"2 {WeightBytes.Length} {Infra.Revision} {prefix}"));
-        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => Resumed(WeightBytes, prefix));
-        using var http = new HttpClient(handler);
-        using var registry = Infra.Registry(options);
-        var transaction = Transaction(http, Discovery(includeProjector: false), registry, options);
-        var source = await transaction.ResolveAsync(new GgufModelRequest
-        {
-            RepoId = Infra.RepoId,
-            Quant = Infra.Quant
-        }, CancellationToken.None);
-
-        var prepared = await transaction.PrepareAsync(source, destination, progress: null, CancellationToken.None);
-        var receipt = await transaction.CommitAsync(prepared, CancellationToken.None);
-
-        AssertEx.Contains(handler.Requests[0].Range, prefix.ToString(CultureInfo.InvariantCulture) + "-");
-        AssertEx.Equal(Sha(WeightBytes), Sha(await File.ReadAllBytesAsync(receipt.FinalGgufPath)));
-        AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
-    }
-
     private static HuggingFaceGgufDownloadTransaction Transaction(HttpClient http,
         IHuggingFaceGgufDiscovery discovery,
         GgufModelRegistry registry,

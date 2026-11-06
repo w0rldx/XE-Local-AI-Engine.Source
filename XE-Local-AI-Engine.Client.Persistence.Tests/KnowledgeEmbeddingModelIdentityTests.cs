@@ -144,6 +144,42 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, freshId));
     }
 
+    /// <summary>
+    ///     Un-normalized vectors sit in the state the AddKnowledgeVectorIdentity migration left (legacy identity, width 0);
+    ///     that state alone must show the document stale and queue it for reindex.
+    /// </summary>
+    [Test]
+    public async Task ADocumentAtTheVectorIdentityMigrationState_IsFlaggedStaleAndQueuedForReindex()
+    {
+        var databasePath = GetDatabasePath("catalog-unnormalized-legacy.sqlite");
+        var legacyId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, legacyId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed);
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE knowledge_documents SET vector_identity = $identity, vector_dim = 0 WHERE document_id = $id;";
+            command.Parameters.AddWithValue("$identity", KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+            command.Parameters.AddWithValue("$id", legacyId);
+            _ = await command.ExecuteNonQueryAsync();
+        }
+
+        IReadOnlyList<KnowledgeDocumentSummary> documents;
+        IReadOnlyList<Guid> reset;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            var catalog = CreateCatalogService(context);
+            documents = await catalog.ListAsync(CancellationToken.None);
+            reset = await catalog.ResetStaleDocumentsToPendingAsync(CancellationToken.None);
+        }
+
+        AssertEx.True(documents.Single(document => document.DocumentId == legacyId).StaleModel, "The operator must see the document as stale.");
+        AssertEx.Equal(legacyId, reset.Single());
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), await ReadStatusAsync(databasePath, legacyId));
+    }
+
     [Test]
     public async Task ResetStaleDocumentsToPendingAsync_ResetsLegacyParserAndChunkerDuringProviderOutage()
     {

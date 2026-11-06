@@ -300,7 +300,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
         _searchContexts.Add(context);
 
         var optionsWrapper = Options.Create(options);
-        var vectorSearch = new ManagedCosineVectorSearch(context, new KnowledgeVectorNormalizationState());
+        var vectorSearch = new ManagedCosineVectorSearch(context);
         return new KnowledgeSearchService(context,
             providerResolver,
             new EmbeddingModelResolver(optionsWrapper, new FakeNodeSettingsStore(new StoredNodeSettings())),

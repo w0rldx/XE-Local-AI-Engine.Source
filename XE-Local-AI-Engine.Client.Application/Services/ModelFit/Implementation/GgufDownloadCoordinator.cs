@@ -136,7 +136,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         await using (reservation)
         {
             var totalBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
-            if (reservation.Disposition is GgufAcquisitionDisposition.VerifiedInstalled or GgufAcquisitionDisposition.VerifiedLegacyInstalled)
+            if (reservation.Disposition is GgufAcquisitionDisposition.VerifiedInstalled)
             {
                 var completed = await CompleteVerifiedInstalledAsync(reservation.Identity.CanonicalModelName,
                     totalBytes,

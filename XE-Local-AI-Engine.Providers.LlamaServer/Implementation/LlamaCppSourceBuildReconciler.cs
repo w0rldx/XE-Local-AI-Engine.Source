@@ -16,20 +16,17 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 internal sealed partial class LlamaCppSourceBuildReconciler
 {
     private readonly IActiveSourceBuildSignal _activeSignal;
-    private readonly string _cacheRoot;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILogger _logger;
     private readonly string _sourceBuildRoot;
 
     internal LlamaCppSourceBuildReconciler(IInstalledRuntimeStore installedRuntimeStore,
         IActiveSourceBuildSignal activeSignal,
-        string cacheRoot,
         string sourceBuildRoot,
         ILogger logger)
     {
         _installedRuntimeStore = installedRuntimeStore;
         _activeSignal = activeSignal;
-        _cacheRoot = cacheRoot;
         _sourceBuildRoot = sourceBuildRoot;
         _logger = logger;
     }
@@ -44,21 +41,6 @@ internal sealed partial class LlamaCppSourceBuildReconciler
         var backup = Path.Combine(_sourceBuildRoot, ".backup");
         var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         var sourceRecord = installed?.SourceBuildPath is { Length: > 0 };
-
-        if (!Directory.Exists(active) && !Directory.Exists(backup) && IsPreProvenanceLegacyRecord(installed))
-        {
-            if (await ValidateLegacyRecordAsync(installed!, ct).ConfigureAwait(false))
-            {
-                await WarnIfBackendNotLiveAsync(installed!.SourceBuildPath!, GpuVariant.Cuda, ct).ConfigureAwait(false);
-                _activeSignal.SetActive(GpuVariant.Cuda);
-                return;
-            }
-
-            await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
-            _activeSignal.Clear();
-            return;
-        }
-
         var canonicalActiveBin = Path.Combine(active, "build", "bin");
         var recordTargetsActive = sourceRecord && PathsEqual(installed!.SourceBuildPath!, canonicalActiveBin);
         var activeMatches = recordTargetsActive && await TreeMatchesRecordAsync(active, installed!, ct).ConfigureAwait(false);
@@ -245,12 +227,6 @@ internal sealed partial class LlamaCppSourceBuildReconciler
         }
     }
 
-    private bool IsPreProvenanceLegacyRecord(InstalledRuntimeState? state)
-    {
-        return state is { SourceRepository: null, SourceCommit: null, SourceRevisionMode: null, SourceRequestedCommit: null, SourceSelection: null }
-               && state.IsLegacyPinnedCuda(_cacheRoot);
-    }
-
     private static bool PathsEqual(string left, string right)
     {
         try
@@ -262,30 +238,6 @@ internal sealed partial class LlamaCppSourceBuildReconciler
         {
             return false;
         }
-    }
-
-    private static async Task<bool> ValidateLegacyRecordAsync(InstalledRuntimeState state, CancellationToken ct)
-    {
-        var server = Path.Combine(state.SourceBuildPath!, LlamaCppSourceBuildService.ManagedServerFileName);
-        var fitHelper = Path.Combine(state.SourceBuildPath!, LlamaCppSourceBuildService.ManagedFitParamsFileName);
-        if (!File.Exists(server)
-            || new FileInfo(server).LinkTarget is not null
-            || !File.Exists(fitHelper)
-            || new FileInfo(fitHelper).LinkTarget is not null)
-        {
-            return false;
-        }
-
-        try
-        {
-            LlamaCppSourceBuildService.ValidateTreeLinks(state.SourceBuildPath!, "built runtime");
-        }
-        catch (LlamaRuntimeException)
-        {
-            return false;
-        }
-
-        return await FileSha256.MatchesAsync(server, state.Sha256, ct).ConfigureAwait(false);
     }
 
     private static async Task<bool> ValidateBinaryBackendAsync(string server, GpuVariant variant, CancellationToken ct)

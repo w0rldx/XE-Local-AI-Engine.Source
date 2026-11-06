@@ -99,7 +99,6 @@ XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentMigrationTest
 XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentPersistenceTestSupport.cs|run|2
 XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentPersistenceTestSupport.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentPersistenceTests.cs|summary|2
-XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentProfileBackfillTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/Development/DevelopmentReworkEdgeTests.cs|summary|16
 XE-Local-AI-Engine.Client.Persistence.Tests/ExternalApps/ExternalAppEncryptionTests.cs|run|2
 XE-Local-AI-Engine.Client.Persistence.Tests/ExternalApps/ExternalAppEncryptionTests.cs|summary|1
@@ -139,7 +138,7 @@ XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeSearchBatchingTests.cs|run|
 XE-Local-AI-Engine.Client.Persistence.Tests/KnowledgeSearchBatchingTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/NodeSchedulerRegistrationTests.cs|run|3
 XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/NodeSchedulerRegistrationTests.cs|summary|1
-XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/ScheduledJobManagementServiceTests.cs|run|7
+XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/ScheduledJobManagementServiceTests.cs|run|6
 XE-Local-AI-Engine.Client.Persistence.Tests/SqliteFileProbe.cs|block|1
 XE-Local-AI-Engine.Client.Persistence.Tests/SqliteFileProbe.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/Testing/MigratedDatabaseTemplate.cs|block|1
@@ -406,7 +405,7 @@ XE-Local-AI-Engine.Tests/Chat/NodeChatEnvelopeTransactionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatHubTests.cs|run|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatHubTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatInvocationPumpRunEnvelopeTests.cs|run|7
-XE-Local-AI-Engine.Tests/Chat/NodeChatPersistenceServiceTests.cs|run|11
+XE-Local-AI-Engine.Tests/Chat/NodeChatPersistenceServiceTests.cs|run|5
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Chat/NodeChatRegenerationServiceTests.cs|run|18
@@ -788,8 +787,6 @@ XE-Local-AI-Engine.Tests/HealthChecks/NodeSqliteHealthCheckTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Hosting/DesktopBootstrapTests.cs|run|3
 XE-Local-AI-Engine.Tests/Hosting/DesktopBootstrapTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hosting/DesktopLaunchTests.cs|run|2
-XE-Local-AI-Engine.Tests/Hosting/ExternalAccessProfileBackfillTests.cs|run|3
-XE-Local-AI-Engine.Tests/Hosting/ExternalAccessProfileBackfillTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hosting/FirstRunModelProvisioningServiceTests.cs|run|3
 XE-Local-AI-Engine.Tests/Hosting/FirstRunModelProvisioningServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hosting/LoopbackBindGuardTests.cs|run|1
@@ -802,8 +799,6 @@ XE-Local-AI-Engine.Tests/Hosting/SignalRProxyPathDriftTests.cs|block|1
 XE-Local-AI-Engine.Tests/Hosting/SignalRProxyPathDriftTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hosting/SingleInstanceLeaseTests.cs|run|1
 XE-Local-AI-Engine.Tests/Hosting/SingleInstanceLeaseTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Hosting/UiModeBackfillTests.cs|run|2
-XE-Local-AI-Engine.Tests/Hosting/UiModeBackfillTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hubs/BenchmarkRunEventBufferTests.cs|run|2
 XE-Local-AI-Engine.Tests/Hubs/ExternalAppHubTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Hubs/GraphWorkflowRunHubTests.cs|run|1
@@ -946,7 +941,7 @@ XE-Local-AI-Engine.Tests/NodeSettings/NodeSettingsAdministrationServiceTests.cs|
 XE-Local-AI-Engine.Tests/NodeSettings/NodeSettingsAdministrationServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/NodeSettings/NodeSettingsEndpointTests.cs|run|6
 XE-Local-AI-Engine.Tests/NodeSettings/NodeSettingsEndpointTests.cs|summary|1
-XE-Local-AI-Engine.Tests/NodeSettings/StoredNodeSettingsNormalizeTests.cs|run|8
+XE-Local-AI-Engine.Tests/NodeSettings/StoredNodeSettingsNormalizeTests.cs|run|7
 XE-Local-AI-Engine.Tests/NodeSettings/StoredNodeSettingsNormalizeTests.cs|summary|1
 XE-Local-AI-Engine.Tests/NodeSettings/ToolCapableModelRegistrarTests.cs|run|3
 XE-Local-AI-Engine.Tests/Options/AnnotatedOptionsBoundsTests.cs|run|2
@@ -1197,7 +1192,7 @@ XE-Local-AI-Engine.Tests/Validation/RuntimePackageValidatorTests.cs|run|2
 XE-Local-AI-Engine.Tests/WorkSessions/ConversationStepContextBoundTests.cs|run|8
 XE-Local-AI-Engine.Tests/WorkSessions/ConversationStepContextBoundTests.cs|summary|2
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionAgentSeederTests.cs|run|1
-XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionAgentSeederTests.cs|summary|3
+XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionAgentSeederTests.cs|summary|1
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionCheckpointTests.cs|run|2
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionCheckpointTests.cs|summary|1
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionStateBlockTests.cs|run|3

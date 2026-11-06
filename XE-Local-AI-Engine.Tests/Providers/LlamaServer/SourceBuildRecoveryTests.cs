@@ -358,27 +358,6 @@ public sealed class SourceBuildRecoveryTests
         AssertEx.Equal(GpuVariant.Cpu, signal.ActiveVariant);
     }
 
-    [Test]
-    [RunOn(OS.Linux)]
-    public async Task Recover_PreProvenanceLegacyCuda_PreservesValidatedRecord()
-    {
-        using var temp = new TempDirectory();
-        using var store = new InstalledRuntimeStore(temp.Path);
-        var bin = Path.Combine(temp.Path, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin");
-        var server = WriteServer(bin, GpuVariant.Cuda);
-        var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
-        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "(source-build:cuda)", sha, GpuVariant.Cuda,
-            DateTimeOffset.UtcNow, bin), CancellationToken.None);
-        var signal = new CudaManagedBuildSignal();
-        using var service = CreateService(temp.Path, store, signal);
-
-        await service.RecoverAsync(CancellationToken.None);
-
-        AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
-        AssertEx.Equal(GpuVariant.Cuda, signal.ActiveVariant);
-        AssertEx.True(File.Exists(server));
-    }
-
     /// <summary>
     ///     A record naming a DIFFERENT directory says nothing about the active tree, so reconciliation must leave the
     ///     tree (and the record) alone. Deleting it treated "the record does not describe this tree" as "this tree is

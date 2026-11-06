@@ -23,9 +23,6 @@ public sealed class ManagedPythonToolchain
     // How often a caller queued behind another holder of an exclusive lock file retries it.
     private static readonly TimeSpan LockPollInterval = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>The directory names a pre-shared-store feature root kept its own toolchain under.</summary>
-    private static readonly string[] LegacyDirectoryNames = ["uv", "pythons", "uv-cache"];
-
     /// <param name="root">The store root; tests pin a temp directory, production uses <see cref="Default" />.</param>
     public ManagedPythonToolchain(string root)
     {
@@ -104,32 +101,6 @@ public sealed class ManagedPythonToolchain
         return new ManagedPythonToolchain(Path.Combine(RuntimeCacheDirectory.Resolve(), "python"));
     }
 
-    /// <summary>True when a feature root still holds any of its pre-shared-store <c>uv</c>, <c>pythons</c> or <c>uv-cache</c>.</summary>
-    public static bool HasLegacyToolchain(string featureRoot)
-    {
-        return LegacyDirectoryNames.Any(name => Directory.Exists(Path.Combine(featureRoot, name)));
-    }
-
-    /// <summary>
-    ///     Deletes a feature root's legacy <c>uv</c>, <c>pythons</c> and <c>uv-cache</c>, best-effort; false when any
-    ///     of them is still on disk afterwards.
-    /// </summary>
-    /// <remarks>
-    ///     The caller must already know no environment of that feature points into them. A tree that refuses the delete
-    ///     gets its directory write bits restored once and is retried: unlinking needs write permission on the parent.
-    /// </remarks>
-    public static bool TryDeleteLegacyToolchain(string featureRoot)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(featureRoot);
-        var removed = true;
-        foreach (var name in LegacyDirectoryNames)
-        {
-            removed &= TryDeleteTree(Path.Combine(featureRoot, name));
-        }
-
-        return removed;
-    }
-
     /// <summary>
     ///     Takes an exclusive, cross-process lock on <paramref name="path" />: <c>FileShare.None</c> is an exclusive
     ///     <c>flock(2)</c> on Unix, released when the returned handle is disposed or the process dies.
@@ -169,53 +140,5 @@ public sealed class ManagedPythonToolchain
     private static bool WindowsLongPathsEnabled()
     {
         return Registry.GetValue(@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem", "LongPathsEnabled", 0) is 1;
-    }
-
-    private static bool TryDeleteTree(string path)
-    {
-        for (var attempt = 0; attempt < 2; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(path))
-                {
-                    Directory.Delete(path, recursive: true);
-                }
-
-                return true;
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                if (attempt == 0)
-                {
-                    RestoreDirectoryWriteBits(path);
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private static void RestoreDirectoryWriteBits(string root)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        try
-        {
-            var directories = new DirectoryInfo(root).EnumerateDirectories("*", SearchOption.AllDirectories)
-                                                     .Append(new DirectoryInfo(root))
-                                                     .Where(static directory => directory.LinkTarget is null);
-            foreach (var directory in directories)
-            {
-                directory.UnixFileMode |= UnixFileMode.UserWrite;
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The retry reports the failure; a tree that cannot even be walked stays on disk.
-        }
     }
 }

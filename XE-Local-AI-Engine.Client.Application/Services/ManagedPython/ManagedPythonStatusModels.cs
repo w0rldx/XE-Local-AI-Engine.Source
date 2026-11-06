@@ -57,9 +57,6 @@ public enum ManagedPythonReasonCode
     /// <summary>The compute runtime is out of date and is rebuilt on next use.</summary>
     UpdateRequired,
 
-    /// <summary>An older build provisioned the compute runtime; it is rebuilt on next use.</summary>
-    OlderBuild,
-
     /// <summary>Training runs on Linux x64 only.</summary>
     TrainingPlatformUnsupported,
 

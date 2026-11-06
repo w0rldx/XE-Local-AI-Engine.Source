@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
 import type { ScheduledJobFormValues, ScheduledJobTemplate } from "@/features/scheduler/models/SchedulerModels";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -67,34 +67,6 @@ function emptyValues(): ScheduledJobFormValues {
 	};
 }
 
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-}
-
 function renderForm(props: Partial<Parameters<typeof ScheduledJobForm>[0]> = {}) {
 	const onSubmit = vi.fn();
 	const onCancel = vi.fn();
@@ -120,6 +92,19 @@ function renderForm(props: Partial<Parameters<typeof ScheduledJobForm>[0]> = {})
 // to trigger internal Zod validation — same path the footer Save button uses.
 function submitViaHandle(ref: React.RefObject<ScheduledJobFormHandle | null>) {
 	ref.current?.submit();
+}
+
+async function chooseTemplate(name: string): Promise<void> {
+	const select = screen.getByTestId("scheduler-form-template");
+	fireEvent.click(select);
+	const listbox = await waitFor(() => {
+		const element = document.getElementById(select.getAttribute("aria-controls") ?? "");
+		if (element === null) {
+			throw new Error("the template dropdown is not open yet");
+		}
+		return element;
+	});
+	fireEvent.click(await within(listbox).findByRole("option", { name, hidden: true }));
 }
 
 describe("ScheduledJobForm", () => {
@@ -205,6 +190,24 @@ describe("ScheduledJobForm", () => {
 
 		expect(screen.getByText("Leave blank to use the node default.")).toBeTruthy();
 		expect(screen.queryByText(/derive the limit from the node's maximum message request timeout/)).toBeNull();
+	});
+
+	// A template without a max-runtime default must clear the field: a value kept from the previous template would be
+	// saved as an explicit limit and bypass the run-agent derived ceiling.
+	it("clears the max runtime when switching to a template without a default", async () => {
+		const { onSubmit, ref } = renderForm({
+			initialValues: { ...emptyValues(), displayName: "Nightly agent", cronExpression: "0 0 3 * * ?" },
+		});
+		const maxRuntime = screen.getByTestId("scheduler-form-max-runtime") as HTMLInputElement;
+
+		await chooseTemplate("Cleanup");
+		await waitFor(() => expect(maxRuntime.value).toBe("60"));
+
+		await chooseTemplate("Run agent");
+		await waitFor(() => expect(maxRuntime.value).toBe(""));
+
+		submitViaHandle(ref);
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ templateId: "run-agent", maxRuntimeSeconds: "" }));
 	});
 
 	it("disables the template picker when editing", () => {

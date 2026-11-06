@@ -95,19 +95,9 @@ public sealed class GgufAcquisitionStateProbe
             return GgufAcquisitionDisposition.Conflict;
         }
 
-        if (snapshot.Origin == LocalModelOrigin.HuggingFace && HasCurrentAcquisitionMembers(snapshot, identity))
-        {
-            return GgufAcquisitionDisposition.VerifiedInstalled;
-        }
-
-        if (snapshot.Origin is null
-            && snapshot.Members.All(static member => member.Role != InstalledModelPhysicalMemberRole.Sidecar)
-            && HasExpectedLegacyContentShape(snapshot, identity))
-        {
-            return GgufAcquisitionDisposition.VerifiedLegacyInstalled;
-        }
-
-        return GgufAcquisitionDisposition.Conflict;
+        return snapshot.Origin == LocalModelOrigin.HuggingFace && HasCurrentAcquisitionMembers(snapshot, identity)
+            ? GgufAcquisitionDisposition.VerifiedInstalled
+            : GgufAcquisitionDisposition.Conflict;
     }
 
     private static bool MatchesResolvedDownload(InstalledModelSnapshot snapshot,
@@ -191,13 +181,6 @@ public sealed class GgufAcquisitionStateProbe
         return identity.ProjectorRelativePath is null
             ? projectors.Length == 0
             : projectors.Length == 1 && PathsEqual(projectors[0].RelativePath, identity.ProjectorRelativePath);
-    }
-
-    private static bool HasExpectedLegacyContentShape(InstalledModelSnapshot snapshot, ResolvedGgufAcquisitionIdentity identity)
-    {
-        var weights = snapshot.Members.Count(static member => member.Role == InstalledModelPhysicalMemberRole.Weight);
-        var projectors = snapshot.Members.Count(static member => member.Role == InstalledModelPhysicalMemberRole.Projector);
-        return weights == 1 && projectors == (identity.ProjectorRelativePath is null ? 0 : 1);
     }
 
     private static bool HasMember(InstalledModelSnapshot snapshot, InstalledModelPhysicalMemberRole role, string path) =>

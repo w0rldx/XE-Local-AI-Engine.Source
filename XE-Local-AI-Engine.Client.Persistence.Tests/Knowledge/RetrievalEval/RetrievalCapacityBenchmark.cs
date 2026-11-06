@@ -479,7 +479,7 @@ internal static class RetrievalCapacityBenchmark
         var connection = context.Database.GetDbConnection();
         await OpenAsync(connection, cancellationToken);
         var ftsSearch = new FtsSearch(context);
-        var vectorSearch = new ManagedCosineVectorSearch(context, new CompletedNormalizationState());
+        var vectorSearch = new ManagedCosineVectorSearch(context);
         var fusion = new ReciprocalRankFusion();
         var ftsSamples = new List<double>();
         var vectorSamples = new List<double>();
@@ -927,15 +927,6 @@ internal static class RetrievalCapacityBenchmark
             using var process = Process.GetCurrentProcess();
             SampledWorkingSetHighWaterBytes = Math.Max(SampledWorkingSetHighWaterBytes, process.WorkingSet64);
             SampledManagedHeapHighWaterBytes = Math.Max(SampledManagedHeapHighWaterBytes, GC.GetTotalMemory(forceFullCollection: false));
-        }
-    }
-
-    private sealed class CompletedNormalizationState : IKnowledgeVectorNormalizationState
-    {
-        public bool IsComplete => true;
-
-        public void MarkComplete()
-        {
         }
     }
 

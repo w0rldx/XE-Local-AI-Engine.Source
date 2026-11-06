@@ -209,8 +209,7 @@ A `DbContext` outside `Client.Persistence` is legitimate only where the code cre
 infrastructure reasons rather than doing domain work: the **composition root** (DI registration, ASP.NET
 Identity's `AddEntityFrameworkStores<T>` generic argument), the **health check**, the **migration bootstrap**, the
 **retention sweeper**, and the **database-maintenance jobs** whose subject is the file or the schema itself
-(backup, migration recovery, the encryption backfills, the downgrade safety check). Every other holder is
-migration debt.
+(backup, migration recovery, the downgrade safety check). Every other holder is migration debt.
 
 The **chat persistence path** is legitimate too, by an operator decision of 2026-09-21 rather than by the rule
 above: `NodeChatPersistenceWriter` already is the store seam — it owns the scope that resolves the context and

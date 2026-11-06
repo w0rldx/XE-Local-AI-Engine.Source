@@ -27,9 +27,10 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
     }
 
     [Test]
-    public async Task LoadConfigAsync_WhenLegacyV1Payload_LiftsToOneModelConnection_AndDoesNotDeleteFile()
+    public async Task LoadConfigAsync_WhenPreReleaseV1Payload_ReturnsNullAndMovesTheFileAside()
     {
-        // A pre-existing flat single-deployment blob must be lifted, not silently dropped or deleted.
+        // The flat single-deployment blob is no longer lifted: the connection reads as unconfigured so the operator
+        // re-enters it, and the old file is kept beside it rather than deleted.
         Directory.CreateDirectory(_contentRootPath);
         var legacy = JsonSerializer.SerializeToUtf8Bytes(new
             {
@@ -44,13 +45,9 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
 
         var config = await store.LoadConfigAsync();
 
-        var connection = AssertEx.NotNull(config?.AzureFoundry);
-        AssertEx.Equal("https://example.openai.azure.com/", connection.Endpoint);
-        AssertEx.Equal(AzureFoundryAuthMode.ApiKey, connection.AuthMode);
-        AssertEx.Equal("legacy-key", connection.ApiKey);
-        AssertEx.Equal("gpt-4o", connection.Models.Single().DeploymentName);
-        AssertEx.Equal(AzureFoundryApiSurface.AzureDeployments, connection.ApiSurface);
-        AssertEx.True(File.Exists(GetCredentialsPath()), "a liftable legacy payload must NOT be deleted");
+        AssertEx.Null(config);
+        AssertEx.False(File.Exists(GetCredentialsPath()));
+        AssertEx.Equal(expected: 1, Directory.GetFiles(_contentRootPath, Path.GetFileName(GetCredentialsPath()) + ".unreadable-*").Length);
     }
 
     [Test]

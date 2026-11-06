@@ -11,7 +11,6 @@ public sealed class KnowledgeFailureReasonCodesTests
 {
     [Test]
     [Arguments(DocumentTextExtractor.UnreadableReason, "unreadable-file")]
-    [Arguments("Extraction failed (FileFormatException).", "unreadable-file")]
     [Arguments(KnowledgeIngestionService.TimedOutReason, "timed-out")]
     [Arguments(KnowledgeChunkEmbedder.EmbeddingUnavailableReason, "embedding-unavailable")]
     [Arguments(KnowledgeDocumentCatalogService.InterruptedRepeatedlyReason, "interrupted-repeatedly")]

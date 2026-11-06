@@ -49,7 +49,7 @@ needed for that part.
   ReadConversationRowAsync`, `TouchConversationAsync`, every by-id command in `NodeChatConversationCommands`),
   retention/purge (deliberately unfiltered, so a closed session's transcript still ages out —
   `NodeRetentionStore.ListExpiredConversationCandidatesAsync`, `ConversationFootprintPurge.DeleteAsync`,
-  `ConversationRetentionPurge`'s by-id eligibility re-check, `RetentionSweeperService`), and the one-shot `NodeChatTitleEncryptionBackfillService`. As of this verification the
+  `ConversationRetentionPurge`'s by-id eligibility re-check, `RetentionSweeperService`). As of this verification the
   repository has **no conversation export feature and no conversation search feature** — a grep for `FROM
   conversations` outside those already-accounted-for files and the two chat-list queries returns nothing else. If
   either is ever added, it must filter on `Kind` the same way the chat list does, or this leak reopens on that

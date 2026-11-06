@@ -104,7 +104,6 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
         _reconciler = new LlamaCppSourceBuildReconciler(installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore)),
             activeSignal ?? throw new ArgumentNullException(nameof(activeSignal)),
-            cacheRoot,
             SourceBuildRoot,
             _logger);
     }

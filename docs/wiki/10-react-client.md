@@ -167,9 +167,8 @@ never invalidating, because an invalidation would leave the layout guard reading
 `uiMode` (`simple` | `advanced`, `null` = not answered) is a presentation setting stored in `node-settings.json`
 alongside the external-access members. It **hides navigation entries and nothing else**: every route stays reachable by
 its own address, no server gate reads it, and the compile-time capability flags above still decide what exists at all
-(see [Security & Privacy](12-security-and-privacy.md) §3.2). `UiModeBackfillService` stamps `advanced` at boot on any
-node whose operator is already past the external-access step, so an upgraded install keeps exactly the navigation it
-had and is never asked. The chooser preselects Simple; Continue saves it explicitly.
+(see [Security & Privacy](12-security-and-privacy.md) §3.2). A data directory that predates the setting reads it as
+null and is asked like a fresh install. The chooser preselects Simple; Continue saves it explicitly.
 
 The filtering is two composed gates, not one. `NavigationMenuData.ts` still computes `navigationLinks` **once at
 module-eval time** from the compile-time capabilities; `filterNavigationLinksByUiMode(links, uiMode)` is a second pure

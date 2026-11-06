@@ -291,18 +291,15 @@ public sealed class TrainingRuntimeServiceTests
 
     [Test]
     [RunOn(OS.Linux)]
-    public async Task Remove_AlsoDeletesTheLegacyToolchain_ButNeverTheSharedStore()
+    public async Task Remove_NeverDeletesFromTheSharedStore()
     {
         using var harness = new Harness(SucceedingRunner());
         _ = await harness.Service.InstallAsync(CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
-        // Seeded after the install, as a legacy toolchain the post-install sweep did not see.
-        SeedLegacyToolchain(harness.CacheRoot);
         var storeFiles = Directory.GetFiles(harness.Toolchain.Root, "*", SearchOption.AllDirectories);
 
         AssertEx.True(await harness.Service.RemoveAsync(CancellationToken.None));
 
-        AssertEx.False(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot), "Remove leaves no toolchain of its own behind.");
         AssertEx.NotEmpty(storeFiles);
         AssertEx.True(storeFiles.All(File.Exists), "The shared store is machine-global; a feature remove never deletes from it.");
         AssertEx.Empty(harness.Runner.Invocations.Skip(2), "Remove provisions nothing.");
@@ -310,10 +307,9 @@ public sealed class TrainingRuntimeServiceTests
 
     [Test]
     [RunOn(OS.Linux)]
-    public async Task Install_ProvisionsAgainstTheSharedStore_ThenSweepsTheLegacyToolchain()
+    public async Task Install_ProvisionsAgainstTheSharedStore()
     {
         using var harness = new Harness(SucceedingRunner());
-        SeedLegacyToolchain(harness.CacheRoot);
 
         _ = await harness.Service.InstallAsync(CancellationToken.None);
         await harness.Service.DrainAsync(CancellationToken.None);
@@ -324,98 +320,13 @@ public sealed class TrainingRuntimeServiceTests
         AssertEx.Equal(harness.Toolchain.CacheDirectory, sync.Environment["UV_CACHE_DIR"]);
         AssertEx.True(sync.File.StartsWith(Path.Combine(harness.Toolchain.Root, "uv") + Path.DirectorySeparatorChar, StringComparison.Ordinal),
             "The uv binary comes from the shared store.");
-        AssertEx.False(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot),
-            "Once the adopted venv runs on the shared store, the feature's own toolchain is dead weight.");
     }
 
     [Test]
     [RunOn(OS.Linux)]
-    public void LegacyRuntime_KeepsItsToolchain_AcrossRestartAndRecover()
+    public async Task Install_WhenTheAdoptFails_RestoresThePreviousRuntime()
     {
         using var harness = new Harness(SucceedingRunner());
-        SeedLegacyToolchain(harness.CacheRoot);
-
-        // No active venv at all: nothing proves the legacy toolchain unused, so the startup sweep must leave it.
-        // (Not disposed early: a harness's Dispose deletes the root it shares with its restarts.)
-        using var empty = harness.Restart();
-        AssertEx.True(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot));
-
-        WriteVenv(TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot), Path.Combine(harness.CacheRoot, "pythons"));
-        using var restarted = harness.Restart();
-        restarted.Service.Recover();
-
-        foreach (var name in new[]
-                 {
-                     "uv",
-                     "pythons",
-                     "uv-cache"
-                 })
-        {
-            AssertEx.True(File.Exists(Path.Combine(harness.CacheRoot, name, "nested", "marker")),
-                $"An installed runtime built before the shared store still runs on its own {name}.");
-        }
-    }
-
-    [Test]
-    [RunOn(OS.Linux)]
-    public void Startup_SweepsALegacyToolchainAnInterruptedInstallLeftBehind()
-    {
-        // The state an install that died between adopt and sweep leaves: the active venv already on the shared store.
-        using var harness = new Harness(SucceedingRunner());
-        SeedLegacyToolchain(harness.CacheRoot);
-        WriteVenv(TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot), harness.Toolchain.PythonInstallDirectory);
-
-        using var restarted = harness.Restart();
-
-        AssertEx.False(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot));
-    }
-
-    /// <summary>
-    ///     Only a venv whose interpreter home lies strictly beneath the shared store proves the legacy toolchain unused:
-    ///     the store's own directory, a directory sharing its name as a prefix, and a home no parser accepts prove nothing.
-    /// </summary>
-    [Test]
-    [RunOn(OS.Linux)]
-    [Arguments("")]
-    [Arguments("/")]
-    [Arguments("-other/cpython/bin")]
-    [Arguments("/\0invalid")]
-    public void Startup_WhenTheVenvHomeIsNotBeneathTheSharedStore_LeavesTheLegacyToolchainAlone(string suffix)
-    {
-        using var harness = new Harness(SucceedingRunner());
-        SeedLegacyToolchain(harness.CacheRoot);
-        var active = TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot);
-        WriteVenv(active, pythonInstallDirectory: null);
-        File.WriteAllText(Path.Combine(active, ".venv", "pyvenv.cfg"), $"home = {harness.Toolchain.PythonInstallDirectory}{suffix}\n");
-
-        using var restarted = harness.Restart();
-
-        AssertEx.True(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot), "nothing proved the legacy toolchain unused");
-        AssertEx.True(File.Exists(Path.Combine(harness.CacheRoot, "pythons", "nested", "marker")));
-    }
-
-    [Test]
-    [RunOn(OS.Linux)]
-    public void Startup_WithAnUnresolvedBackup_LeavesTheLegacyToolchainAlone()
-    {
-        // Active already on the store, but a parked backup (a swap interrupted mid-way) may be the runtime Recover() restores.
-        using var harness = new Harness(SucceedingRunner());
-        SeedLegacyToolchain(harness.CacheRoot);
-        WriteVenv(TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot), harness.Toolchain.PythonInstallDirectory);
-        WriteVenv(TrainingRuntimeLayout.BackupVenv(harness.CacheRoot), Path.Combine(harness.CacheRoot, "pythons"));
-
-        using var restarted = harness.Restart();
-
-        AssertEx.True(ManagedPythonToolchain.HasLegacyToolchain(harness.CacheRoot), "no sweep while a backup is unresolved");
-        AssertEx.True(File.Exists(Path.Combine(harness.CacheRoot, "pythons", "nested", "marker")));
-    }
-
-    [Test]
-    [RunOn(OS.Linux)]
-    public async Task Install_WhenTheAdoptFails_KeepsTheLegacyToolchainThePreviousRuntimeRunsOn()
-    {
-        using var harness = new Harness(SucceedingRunner());
-        SeedLegacyToolchain(harness.CacheRoot);
         var active = TrainingRuntimeLayout.ActiveVenv(harness.CacheRoot);
         WriteVenv(active, Path.Combine(harness.CacheRoot, "pythons"));
 
@@ -438,8 +349,6 @@ public sealed class TrainingRuntimeServiceTests
 
         AssertEx.NotNull(breaking.Service.GetStatus().SanitizedError, "The adopt must have failed for this test to mean anything.");
         AssertEx.True(File.Exists(Path.Combine(active, ".venv", "pyvenv.cfg")), "The rollback restored the legacy runtime.");
-        AssertEx.True(File.Exists(Path.Combine(harness.CacheRoot, "pythons", "nested", "marker")),
-            "The restored runtime still runs on the legacy CPython; deleting it inside the rollback would leave no runtime.");
     }
 
     [Test]

@@ -27,12 +27,9 @@ XE_Local_AI_Engine.Client.Services.Chat.Implementation.RetentionSweeperService|p
 
 # ---------------------------------------------------------------- permanent: maintenance jobs
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.KnowledgeDowngradeSafetyService|permanent|Maintenance: version-checks and VACUUM INTOs the file itself over its own read-only connection, below the entity layer a store exposes.
-XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatContentEncryptionBackfillService|permanent|Maintenance backfill: rewrites legacy plaintext message rows to ciphertext, a one-time schema-wide sweep rather than a feature query.
-XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatTitleEncryptionBackfillService|permanent|Maintenance backfill: rewrites legacy plaintext conversation titles to ciphertext.
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeDbBackupService|permanent|Maintenance backup: VACUUM INTO over the live database file, an operation on the file rather than on any entity.
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeSqliteHealthCheck|permanent|Health check: probes that the connection behind the context is alive. Its subject IS the context, so a store between them would hide what it checks.
 XE_Local_AI_Engine.Client.Services.Knowledge.Implementation.KnowledgeBlobOrphanSweeper|permanent|One-shot startup sweep reclaiming document blobs whose row is gone, the knowledge counterpart of the retention sweeper's orphaned-upload resweep; its only query is an existence probe.
-XE_Local_AI_Engine.Client.Services.Knowledge.Implementation.KnowledgeVectorNormalizationBackfillService|permanent|One-time vector-normalization backfill, recording completion in the same chat_maintenance_state marker table the content-encryption backfill uses.
 
 # ---------------------------------------------------------------- permanent: chat persistence
 # Operator decision 2026-09-21. NodeChatPersistenceWriter already IS the store seam: it owns the scope that

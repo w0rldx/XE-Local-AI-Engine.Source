@@ -7702,7 +7702,6 @@
 					"IncompleteProvision": "Eine unterbrochene Einrichtung hat eine unvollständige Rechen-Laufzeit hinterlassen.",
 					"InterpreterMissing": "Der Python-Interpreter der Rechen-Laufzeit fehlt.",
 					"LockfileMissing": "Die festgelegte Lock-Datei der Rechen-Laufzeit fehlt in dieser Installation.",
-					"OlderBuild": "Die Rechen-Laufzeit wurde von einem älteren Build eingerichtet und wird bei der nächsten Verwendung neu aufgebaut.",
 					"PlatformUnsupported": "Das Python-Rechen-Tool ist nur unter Linux x64 und Windows x64 verfügbar.",
 					"Provisioning": "Die Rechen-Laufzeit wird eingerichtet.",
 					"RecordUnreadable": "Der Zustandsdatensatz der Rechen-Laufzeit ist nicht lesbar.",
@@ -8019,7 +8018,7 @@
 				},
 				"maxRuntimeSeconds": {
 					"description": "Leer lassen, um den Standardwert des Nodes zu verwenden.",
-					"descriptionRunAgent": "Leer lassen, um das Limit aus dem maximalen Nachrichtenanfrage-Timeout des Nodes abzuleiten (2× das Timeout plus 5 Minuten). Der Wert 600 wird wie „leer“ behandelt.",
+					"descriptionRunAgent": "Leer lassen, um das Limit aus dem maximalen Nachrichtenanfrage-Timeout des Nodes abzuleiten (2× das Timeout plus 5 Minuten).",
 					"label": "Maximale Laufzeit (Sekunden)"
 				},
 				"misfirePolicy": {

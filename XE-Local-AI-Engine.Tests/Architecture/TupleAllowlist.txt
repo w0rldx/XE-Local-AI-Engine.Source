@@ -280,7 +280,6 @@ XE-Local-AI-Engine.Tests/Transcription/ProcessAudioCaptureTests.cs|3
 XE-Local-AI-Engine.Tests/Transcription/RecordedWhisperTranscriber.cs|3
 XE-Local-AI-Engine.Tests/Transcription/TranscriptionTestDoubles.cs|2
 XE-Local-AI-Engine.Tests/WorkSessions/ConversationStepContextBoundTests.cs|12
-XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionAgentSeederTests.cs|4
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionCheckpointTests.cs|2
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionCloudEgressTests.cs|1
 XE-Local-AI-Engine.Tests/WorkSessions/WorkSessionServiceTests.cs|5

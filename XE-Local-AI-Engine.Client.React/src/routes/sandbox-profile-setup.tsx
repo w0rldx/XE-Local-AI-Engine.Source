@@ -37,12 +37,12 @@ export const Route = createFileRoute("/sandbox-profile-setup")({
 		}
 
 		// The earlier step first: a node still answering external access must not be asked this question out of order.
-		if (settings.externalAccessProfile === "pending") {
+		if (settings.externalAccessProfile === "pending" || settings.externalAccessProfile == null) {
 			throw redirect({ to: "/external-access" });
 		}
 
-		// "pending" is the discriminator, as for external access: the server stamps it for a fresh node and the boot
-		// backfill gives every upgraded node a real profile. Anything else means the question is answered.
+		// "pending" is the discriminator: the server stamps it for a fresh node. A null profile from an older data
+		// directory reads as low, the behavior it always had, so anything other than "pending" means it is answered.
 		if (settings.sandboxSecurityProfile !== "pending") {
 			throw redirect({ to: "/" });
 		}

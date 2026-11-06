@@ -68,14 +68,12 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
     [Test]
     [RunOn(OS.Linux)]
     [UnsupportedOSPlatform("windows")]
-    public async Task Provision_OnALegacyVenv_DeletesIt_RebuildsOnTheSharedStore_AndBindsItsPythons()
+    public async Task Provision_OnAVenvWithoutARecord_ReplacesIt_RebuildsOnTheSharedStore_AndBindsItsPythons()
     {
-        // A pre-shared-store install: lock-digest-only state, a read-only venv linked into compute-runtime/pythons.
-        SeedLegacyToolchain(CacheRoot);
+        // A venv with no state record (an older build or an interrupted provision), read-only and linked into another CPython.
         WriteVenv(Path.Combine(CacheRoot, "venv"), Path.Combine(CacheRoot, "pythons"));
         var staleMarker = Path.Combine(VenvRoot, "stale.marker");
         await File.WriteAllTextAsync(staleMarker, "built against the legacy CPython");
-        await File.WriteAllTextAsync(Path.Combine(CacheRoot, "installed-compute-lock.sha256"), "0123");
         File.SetUnixFileMode(VenvRoot, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
         var stagingHadAVenv = true;
@@ -115,7 +113,6 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         AssertEx.Equal(2, runtime.ReadOnlyTrees.Count);
         AssertEx.Equal(VenvRoot, runtime.ReadOnlyTrees[0]);
         AssertEx.Equal(Toolchain.PythonInstallDirectory, runtime.ReadOnlyTrees[1]);
-        AssertEx.False(ManagedPythonToolchain.HasLegacyToolchain(CacheRoot), "nothing points into compute-runtime/{uv,pythons,uv-cache} any more");
         AssertEx.Equal(UnixFileMode.None, File.GetUnixFileMode(VenvRoot) & UnixFileMode.UserWrite, "the rebuilt venv is locked down again");
     }
 
@@ -244,20 +241,6 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
         _ = await upgraded.GetRuntimeAsync();
         AssertEx.Equal(1, UvSyncs(runner), "the mismatch that status reports is the one the provision acts on");
         AssertEx.Equal(ManagedPythonEnvironmentState.Ready, (await upgraded.ReadStatusAsync(CancellationToken.None)).State);
-    }
-
-    [Test]
-    [RunOn(OS.Linux)]
-    public async Task Status_OnTheLockDigestOnlyRecordOfAnOlderBuild_IsUpdateRequired()
-    {
-        WriteVenv(Path.Combine(CacheRoot, "venv"), Toolchain.PythonInstallDirectory);
-        await File.WriteAllTextAsync(Path.Combine(CacheRoot, "installed-compute-lock.sha256"), "0123");
-        using var environment = Create(SucceedingRunner());
-
-        var status = await environment.ReadStatusAsync(CancellationToken.None);
-
-        AssertEx.Equal(ManagedPythonEnvironmentState.UpdateRequired, status.State);
-        AssertEx.NotNull(status.Reason);
     }
 
     [Test]

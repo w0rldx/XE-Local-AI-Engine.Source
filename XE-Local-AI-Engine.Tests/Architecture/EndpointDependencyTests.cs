@@ -88,7 +88,7 @@ public sealed class EndpointDependencyTests
     /// <summary>
     ///     The floor on the rest of the host: the hosted services, the hub-side event publishers and relays, the
     ///     exception handlers, the authentication handlers, the app-update and proxy services, the desktop lifecycle,
-    ///     the boot backfills. Forty when measured.
+    ///     the boot seeders. Forty when measured.
     /// </summary>
     private const int HostFloor = 30;
 

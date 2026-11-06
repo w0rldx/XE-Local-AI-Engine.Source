@@ -159,12 +159,10 @@ the compute tool both provision against; only the **environments** stay in their
   complete `uv/<version>` is still adopted, never replaced, and only a tree without the executable is renamed aside
   and deleted. Replacing a complete tree was the root cause of the compute live suite's cold-start failures (ADR 0016).
 - **Legacy toolchain.** Before the store, `training-runtime/` held its own `uv/`, `pythons/` and `uv-cache/`. An
-  installed runtime built then keeps running against them — no forced reinstall. The next **install** provisions
-  against the store; `TrainingRuntimeService.SweepLegacyToolchain` deletes the three legacy dirs only when the
-  active venv's `pyvenv.cfg` `home` lies under `python/pythons` (positive evidence; no venv or no `home` keeps them).
-  It runs after `Ready`, outside the adopt rollback boundary, and again from the constructor and `Recover()`, which
-  covers a crash between adopt and sweep. **Remove** deletes `VenvRoot`, `.work` and the legacy dirs; it provisions
-  nothing and never touches the store.
+  installed runtime built then keeps running against them; the next **install** provisions against the store. Nothing
+  deletes those three directories any more (the sweep was removed before rc.3): after a reinstall they are dead weight
+  an operator may delete by hand. **Remove** deletes `VenvRoot` and `.work`; it provisions nothing and never touches
+  the store.
 - **The Managed Python status row.** `GET python/status` ([API](09-api-and-hubs.md), ADR 0016 §4) reports Training as
   the `training` environment, derived from `GetStatus()` without any format change to `installed-training-runtime.json`:
   a running install or remove is `Provisioning`, phase `Failed` is `Failed` with the sanitized error, nothing installed

@@ -681,8 +681,8 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Test]
     public async Task Normalize_KeepsThePendingExternalAccessProfile()
     {
-        // "pending" is engine-written at first-run setup, so it must SURVIVE a load: nulling it here would re-arm the
-        // boot backfill and decide "recommended" for an operator who has not chosen yet.
+        // "pending" is engine-written at first-run setup, so it must SURVIVE a load: nulling it here would make a fresh
+        // node look like a data directory that predates the profile.
         await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"pending\" }");
 
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, (await LoadAsync()).ExternalAccessProfile);
@@ -692,8 +692,8 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     public async Task Normalize_MapsAnUnknownExternalAccessProfileToPending()
     {
         // Somebody wrote a profile, just not one this engine recognizes, so the node is ASKED AGAIN rather than answered
-        // for: "pending" keeps the gated services waiting, keeps the switches beside it, and — unlike null — is a
-        // non-null profile the boot backfill leaves alone instead of stamping "recommended" over an operator's opt-outs.
+        // for: "pending" keeps the gated services waiting, keeps the switches beside it, and is a non-null
+        // profile, so nothing reads it as a data directory that predates the profile.
         await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"airgapped\" }");
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, (await LoadAsync()).ExternalAccessProfile);
 
@@ -1002,7 +1002,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Test]
     public async Task OldFileMissingTheUiMode_LoadsToNull_WithoutThrowing()
     {
-        // Null is what the boot backfill and the SPA's first-run step both key on, so an upgraded node's file — which
+        // Null is what the SPA's first-run step keys on, so an upgraded node's file — which
         // predates the member entirely — must deserialize to null rather than to a spurious "simple".
         await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
 
@@ -1039,7 +1039,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     {
         // The save writes a temp sibling and renames it over the target, so a crash between the two leaves a leftover
         // temp file and an INTACT target. Plant exactly that state and prove the stored Offline choice survives: a
-        // truncate-then-write save would instead have reverted the node to "undecided" and re-armed the boot backfill.
+        // truncate-then-write save would instead have reverted the node to "undecided".
         using (var store = NewStore())
         {
             await store.SaveAsync(new StoredNodeSettings
@@ -1131,9 +1131,7 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     public async Task UpdateAsync_WhenTheFileIsUnreadable_ThrowsAndLeavesTheFileByteIdentical()
     {
         // UpdateAsync loads-mutates-saves. Loading TOLERANTLY here would mutate a default record and write it back as
-        // valid, so a startup writer would "heal" the corruption into a settings file with a null profile — which the
-        // boot backfill then decides "recommended" from, silently re-enabling the outbound checks an operator turned
-        // off. Byte-compare, so "left untouched" is proved rather than asserted.
+        // valid, so a startup writer would "heal" the corruption into a settings file with a null profile, discarding the outbound choice an operator made. Byte-compare, so "left untouched" is proved rather than asserted.
         await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"offli");
         var path = Path.Combine(_root, "node-settings.json");
         var before = await File.ReadAllBytesAsync(path);

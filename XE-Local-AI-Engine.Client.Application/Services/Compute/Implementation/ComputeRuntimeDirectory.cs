@@ -14,22 +14,10 @@ internal sealed class ComputeRuntimeDirectory
     internal const string ProjectFileName = "pyproject.toml";
     internal const string LockfileName = "uv.lock";
     private const string StateFileName = "installed-compute-runtime.json";
-    private const string LegacyStateFileName = "installed-compute-lock.sha256";
     private const string ProvisionLockFileName = ".provision.lock";
 
     /// <summary>Bump when the environment's shape changes without its lockfile changing; a mismatch rebuilds the venv.</summary>
     private const int ProfileRevision = 1;
-
-    /// <summary>
-    ///     The script scratch directory of the PRE-JAIL layout.
-    /// </summary>
-    /// <remarks>
-    ///     It sat beside the venv under the compute cache root, which is space the jail-occupancy watchdog never walked
-    ///     and which one call could read out of the next. Both holes are closed — the scratch is inside the
-    ///     per-invocation jail — but a machine that ran an older build still has the directory, with whatever those calls
-    ///     left in it, so it is swept once before the tool can run.
-    /// </remarks>
-    private const string LegacyScratchDirectoryName = "scratch";
 
     /// <summary>The name the shipped compute project files are linked under in the publish output (see the Client csproj).</summary>
     private const string PublishedScriptsDirectoryName = "compute-scripts";
@@ -67,10 +55,6 @@ internal sealed class ComputeRuntimeDirectory
     public string WorkDirectory => Path.Combine(CacheRoot, ".work");
 
     public string ProvisionLockPath => Path.Combine(CacheRoot, ProvisionLockFileName);
-
-    public string LegacyStatePath => Path.Combine(CacheRoot, LegacyStateFileName);
-
-    public string LegacyScratchDirectory => Path.Combine(CacheRoot, LegacyScratchDirectoryName);
 
     public string ProjectPath => Path.Combine(_scriptsDirectory, ProjectFileName);
 

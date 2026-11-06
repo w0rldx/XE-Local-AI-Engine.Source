@@ -12,8 +12,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         {
             // Clear all existing plaintext titles before altering the column to BLOB.
             // Titles cannot be encrypted inside a migration (no access to the node key), so existing plaintext values
-            // are NULLed here. A startup backfill service (NodeChatTitleEncryptionBackfillService) re-derives and
-            // re-encrypts each title from the conversation's first user-message content immediately after startup.
+            // are NULLed here and stay NULL (the client shows them as untitled); no startup backfill re-derives them.
             migrationBuilder.Sql("UPDATE conversations SET title = NULL;");
 
             migrationBuilder.AlterColumn<byte[]>(

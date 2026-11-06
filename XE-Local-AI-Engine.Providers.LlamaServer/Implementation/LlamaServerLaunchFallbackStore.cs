@@ -96,51 +96,25 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
     private static string PairKey(GpuVariant variant, string kvCacheType) =>
         string.Concat(variant.ToString(), ":", (kvCacheType ?? string.Empty).Trim());
 
-    /// <summary>Loads the snapshot once, dropping any legacy un-keyed entries from the file on that first read.</summary>
-    /// <remarks>Callers already hold <see cref="_lock" />, which is what makes the one-time rewrite safe.</remarks>
+    /// <summary>Loads the snapshot once.</summary>
+    /// <remarks>Callers already hold <see cref="_lock" />.</remarks>
     private async Task<HashSet<string>> EnsureLoadedAsync(CancellationToken ct)
     {
-        if (_disabled is { } cached)
-        {
-            return cached;
-        }
-
-        var (disabled, hadLegacy) = await LoadAsync(ct).ConfigureAwait(false);
-        _disabled = disabled;
-        if (hadLegacy)
-        {
-            try
-            {
-                await PersistAsync(disabled, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // An unwritable cache root must not fault a spawn: the snapshot above is already clean, and the next
-                // process start repeats the drop.
-            }
-        }
-
-        return disabled;
+        return _disabled ??= await LoadAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task<LoadedState> LoadAsync(CancellationToken ct)
+    private async Task<HashSet<string>> LoadAsync(CancellationToken ct)
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var hadLegacy = false;
         if (!File.Exists(_statePath))
         {
-            return new LoadedState(set, hadLegacy);
+            return set;
         }
 
         try
         {
             await using var stream = OpenStateForRead(_statePath);
             var state = await JsonSerializer.DeserializeAsync<LlamaServerLaunchFallbackState>(stream, SerializerOptions, ct).ConfigureAwait(false);
-
-            // Legacy, backend-only entries carry no KV type, so they cannot say which config failed: they are ignored and the file rewritten without them, rather
-            // than read as "every KV type on this backend", which made the node's KV-cache-type setting inert on any host that recorded one.
-            hadLegacy = state?.DisabledOptimizedVariants is { Count: > 0 };
-
             if (state?.DisabledOptimizedConfigs is { } configs)
             {
                 foreach (var key in configs.Where(static key => !string.IsNullOrWhiteSpace(key)))
@@ -158,11 +132,8 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             // Unreadable → treat as nothing disabled.
         }
 
-        return new LoadedState(set, hadLegacy);
+        return set;
     }
-
-    /// <summary>The disabled config keys read from the file, and whether it also held legacy un-keyed entries.</summary>
-    private readonly record struct LoadedState(HashSet<string> Disabled, bool HadLegacy);
 
     /// <summary>
     ///     Opens the state file for reading the way every reader must: shared with writers and deleters, not just with
@@ -201,11 +172,10 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         // simplified: a lock this process could not acquire — a sibling holding it past the retry budget, or an unwritable cache root — degrades to the in-process lock
         // alone, the old ceiling, where a sibling write landing inside that window is lost. Accepted: it costs one failed spawn that re-records the verdict.
         await using var crossProcessLock = await AcquireWriteLockOrNullAsync(ct).ConfigureAwait(false);
-        var (onDisk, _) = await LoadAsync(ct).ConfigureAwait(false);
-        disabled.UnionWith(onDisk);
+        disabled.UnionWith(await LoadAsync(ct).ConfigureAwait(false));
 
-        // Every entry is a "{Variant}:{kvType}" pair; the legacy list is always written empty.
-        var state = new LlamaServerLaunchFallbackState([], [.. disabled]);
+        // Every entry is a "{Variant}:{kvType}" pair.
+        var state = new LlamaServerLaunchFallbackState([.. disabled]);
         var tempPath = _statePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {

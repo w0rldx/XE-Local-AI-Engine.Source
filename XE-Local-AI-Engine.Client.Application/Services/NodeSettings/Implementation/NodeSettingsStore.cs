@@ -164,7 +164,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     ///     A missing file is the DEFAULT record (a legacy install that never saved, not an error), a readable file is
     ///     the normalized record, and a present but unreadable file is <see langword="null" />. Callers must not
     ///     conflate the last two — the difference between "no value yet" and "I cannot read the value" is what stops
-    ///     the boot backfill deciding an external-access posture on the strength of a corrupt file.
+    ///     a caller deciding a setting on the strength of a corrupt file.
     /// </remarks>
     private async Task<StoredNodeSettings?> ReadUnlockedAsync(CancellationToken cancellationToken)
     {
@@ -558,14 +558,14 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     Blank or absent is the LEGACY install — nobody ever wrote a profile — so it stays <see langword="null" />
-    ///     and the boot backfill may stamp it.
+    ///     Blank or absent means nobody ever wrote a profile, so it stays <see langword="null" />: undecided, and the SPA asks
+    ///     a signed-in operator exactly as it asks for <c>pending</c>.
     /// </summary>
     /// <remarks>
     ///     A non-blank string the engine does not recognize is the opposite case: somebody wrote a profile, just not one this engine
     ///     knows, so the node is ASKED AGAIN rather than answered for — it loads as
-    ///     <see cref="StoredNodeSettings.ExternalAccessProfilePending" />. The gated services wait on <c>pending</c>, the backfill leaves
-    ///     any non-null profile alone, the three switches beside it are kept exactly as they are, and the SPA shows the profile chooser
+    ///     <see cref="StoredNodeSettings.ExternalAccessProfilePending" />. The gated services wait on <c>pending</c>, the three
+    ///     switches beside it are kept exactly as they are, and the SPA shows the profile chooser
     ///     to the administrator at the next login. The comparison is ordinal, so <c>"Offline"</c> is unrecognised and <c>"  offline  "</c> is not.
     /// </remarks>
     private static string? NormalizeExternalAccessProfile(string? value)
@@ -581,13 +581,13 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     The external-access profile's rule, for the external-access profile's reason: blank stays <see langword="null" /> (undecided and
-    ///     backfillable), an unrecognised non-blank value loads as <see cref="StoredNodeSettings.SandboxSecurityProfilePending" /> so the
+    ///     The external-access profile's rule, for the external-access profile's reason: blank stays <see langword="null" /> (reads as
+    ///     <c>low</c>), an unrecognised non-blank value loads as <see cref="StoredNodeSettings.SandboxSecurityProfilePending" /> so the
     ///     operator is ASKED AGAIN rather than answered for.
     /// </summary>
     /// <remarks>
     ///     Folding junk to <c>low</c> would silently lower a node whose operator wrote something; folding it to <c>high</c> would refuse
-    ///     work nobody chose to refuse. <c>pending</c> reads as <c>low</c> until the chooser is answered, and the backfill leaves it alone.
+    ///     work nobody chose to refuse. <c>pending</c> reads as <c>low</c> until the chooser is answered.
     ///     Ordinal, so <c>"High"</c> is unrecognised and <c>"  high  "</c> is not.
     /// </remarks>
     private static string? NormalizeSandboxSecurityProfile(string? value)
@@ -610,8 +610,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     ///     The mode is presentation only, so a junk value costs nothing to answer for — the reader re-seeds
     ///     <see cref="StoredNodeSettings.DefaultUiMode" /> and the navigation looks exactly as it did before the setting existed. The
     ///     comparison is ordinal, so <c>"Simple"</c> is unrecognised and <c>"  simple  "</c> is not. The cost of the null fallback is
-    ///     that a hand-edited junk value makes the node look like one that never answered and the boot backfill may then stamp
-    ///     <c>advanced</c> over it — the same value the reader would have used anyway.
+    ///     that a hand-edited junk value makes the node look like one that never answered, so the SPA asks for the mode again.
     /// </remarks>
     private static string? NormalizeUiMode(string? value)
     {

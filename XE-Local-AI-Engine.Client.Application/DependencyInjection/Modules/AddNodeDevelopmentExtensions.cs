@@ -61,7 +61,6 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.AddScoped<IDevelopmentTemplateStore, DevelopmentTemplateStore>();
         builder.Services.AddScoped<IDevelopmentTemplateService, DevelopmentTemplateService>();
         builder.Services.AddSingleton<IDevelopmentCommandProfileDetector, DevelopmentCommandProfileDetector>();
-        builder.Services.AddScoped<IDevelopmentProfileBackfillService, DevelopmentProfileBackfillService>();
         builder.Services.AddSingleton<DevelopmentCloudContextCatalog>();
         builder.Services.AddSingleton<IDevelopmentCloudContextCatalog>(static services => services.GetRequiredService<DevelopmentCloudContextCatalog>());
         builder.Services.AddSingleton<IDevelopmentCloudContextBuilder, DevelopmentCloudContextBuilder>();

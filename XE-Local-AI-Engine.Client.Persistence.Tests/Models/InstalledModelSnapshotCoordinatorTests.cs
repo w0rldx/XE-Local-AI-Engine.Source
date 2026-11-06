@@ -117,7 +117,7 @@ public sealed class InstalledModelSnapshotCoordinatorTests
     }
 
     [Test]
-    public async Task StateProbe_DerivesCurrentAndLegacyInstalledOnlyFromVerifiedLeaseFacts()
+    public async Task StateProbe_DerivesCurrentInstalledFromVerifiedLeaseFacts_AndAPreSidecarInstallConflicts()
     {
         var identity = CreateIdentity();
         var current = CreateCurrentFixture();
@@ -137,7 +137,8 @@ public sealed class InstalledModelSnapshotCoordinatorTests
         var legacyCoordinator = new InstalledModelSnapshotCoordinator(new KeyedCompositeLockDomain(), legacy.Store, map);
         await using var legacyLease = await legacyCoordinator.AcquireMutationAsync(CreateRequest(identity));
         var legacyState = await probe.ProbeAsync(intent, identity, legacyLease, CancellationToken.None);
-        AssertEx.Equal(GgufAcquisitionDisposition.VerifiedLegacyInstalled, legacyState.Disposition);
+        // A download installed before the metadata sidecar is no longer adopted: the operator removes it and downloads again.
+        AssertEx.Equal(GgufAcquisitionDisposition.Conflict, legacyState.Disposition);
     }
 
     [Test]

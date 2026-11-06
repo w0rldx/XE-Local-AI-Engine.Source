@@ -18,18 +18,16 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 ///     Vectors are never compared across models. Each <c>float32</c> BLOB, in the platform's native byte order, is
 ///     reinterpreted as a <see cref="ReadOnlySpan{Single}" /> over one reused pooled buffer, so no row allocates, and the
 ///     top-k lives in a bounded min-heap rather than a full corpus sort; only the scalar score and identifiers are kept,
-///     never the vectors. Scoring follows <see cref="IKnowledgeVectorNormalizationState" />: a plain dot product once
-///     every stored vector is known normalized, scale-invariant cosine until then. Scoped to the request db context.
+///     never the vectors. Scoring is a dot product against the normalized query: <c>KnowledgeIndexWriter</c> stores every
+///     vector normalized, and older rows carry the <c>legacy:unversioned</c> identity the filter never matches.
 /// </remarks>
 public sealed class ManagedCosineVectorSearch : IVectorSearch
 {
     private readonly NodeChatDbContext _dbContext;
-    private readonly IKnowledgeVectorNormalizationState _normalizationState;
 
-    public ManagedCosineVectorSearch(NodeChatDbContext dbContext, IKnowledgeVectorNormalizationState normalizationState)
+    public ManagedCosineVectorSearch(NodeChatDbContext dbContext)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-        _normalizationState = normalizationState ?? throw new ArgumentNullException(nameof(normalizationState));
     }
 
     public async Task<IReadOnlyList<VectorSearchHit>> SearchAsync(ReadOnlyMemory<float> queryVector,
@@ -95,29 +93,20 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
             return [];
         }
 
-        // Dot-product fast path once all stored vectors are known-normalized: normalize the query ONCE, then one dot pass
-        // per candidate. A zero-magnitude query has no direction, so mirror cosine's all-NaN, empty result and return none.
-        var useDot = _normalizationState.IsComplete;
-        float[]? normalizedQueryBuffer = null;
-        var scoringQuery = queryVector;
-        if (useDot)
+        // Normalize the query ONCE, then one dot pass per candidate. A zero-magnitude query has no direction, so mirror
+        // cosine's all-NaN, empty result and return none.
+        var normalizedQueryBuffer = ArrayPool<float>.Shared.Rent(queryVector.Length);
+        var normalizedQuery = normalizedQueryBuffer.AsSpan(0, queryVector.Length);
+        queryVector.Span.CopyTo(normalizedQuery);
+        if (!KnowledgeVectorMath.NormalizeInPlace(normalizedQuery))
         {
-            normalizedQueryBuffer = ArrayPool<float>.Shared.Rent(queryVector.Length);
-            var normalizedQuery = normalizedQueryBuffer.AsSpan(0, queryVector.Length);
-            queryVector.Span.CopyTo(normalizedQuery);
-            if (!KnowledgeVectorMath.NormalizeInPlace(normalizedQuery))
-            {
-                ArrayPool<float>.Shared.Return(normalizedQueryBuffer);
-                return [];
-            }
-
-            scoringQuery = normalizedQueryBuffer.AsMemory(0, queryVector.Length);
+            ArrayPool<float>.Shared.Return(normalizedQueryBuffer);
+            return [];
         }
 
         try
         {
-            return await ScanAsync(scoringQuery,
-                useDot,
+            return await ScanAsync(normalizedQueryBuffer.AsMemory(0, queryVector.Length),
                 embeddingModel,
                 vectorIdentity,
                 vectorDimension,
@@ -128,15 +117,11 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         }
         finally
         {
-            if (normalizedQueryBuffer is not null)
-            {
-                ArrayPool<float>.Shared.Return(normalizedQueryBuffer);
-            }
+            ArrayPool<float>.Shared.Return(normalizedQueryBuffer);
         }
     }
 
     private async Task<IReadOnlyList<VectorSearchHit>> ScanAsync(ReadOnlyMemory<float> scoringQuery,
-        bool useDot,
         string embeddingModel,
         string vectorIdentity,
         int vectorDimension,
@@ -209,27 +194,14 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                     continue;
                 }
 
-                float score;
-                if (useDot)
+                // Every stored vector is normalized EXCEPT a zero-magnitude one, which has no direction and stays zero;
+                // cosine would yield NaN and skip it, so skip it too rather than scoring a false 0. The scan is ~free.
+                if (IsZeroVector(candidate))
                 {
-                    // Every stored vector is normalized here EXCEPT a zero-magnitude one, which has no direction and stays
-                    // zero; cosine yields NaN and skips it, so skip it too rather than scoring a false 0. The scan is ~free.
-                    if (IsZeroVector(candidate))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    score = TensorPrimitives.Dot(scoringQuery.Span, candidate);
-                }
-                else
-                {
-                    score = TensorPrimitives.CosineSimilarity(scoringQuery.Span, candidate);
-                    if (float.IsNaN(score))
-                    {
-                        // CosineSimilarity returns NaN for a zero-magnitude vector; treat as no overlap.
-                        continue;
-                    }
-                }
+                var score = TensorPrimitives.Dot(scoringQuery.Span, candidate);
 
                 // Materialize the id strings and Guids only for rows that actually enter the heap: once it is full most
                 // scanned rows lose to the worst kept hit, so skipping their id reads saves two allocs and two parses each.

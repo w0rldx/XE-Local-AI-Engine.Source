@@ -90,8 +90,7 @@ public sealed class NodeAuthService : INodeAuthService
     ///     The settings file cannot join the identity transaction, so one of the two writes has to be the orphanable one. Writing the profile
     ///     FIRST makes the orphan "profile pending, no administrator", which is inert: setup fails and is retryable, the gated services keep
     ///     waiting because there is no operator to ask, and the retry lands on the same null guard. Writing after the commit would instead
-    ///     leave "administrator exists, profile null" reachable — the one state the boot backfill decides as "recommended", which would start
-    ///     outbound checks the operator was never asked about.
+    ///     leave "administrator exists, profile null" reachable, a state the gated services cannot tell from a fresh boot with nobody to ask.
     /// </remarks>
     public async Task<NodeSetupResult> SetupAsync(string email, string password, CancellationToken cancellationToken)
     {

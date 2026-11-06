@@ -1204,11 +1204,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     [Test]
-    public async Task CreateJobAsync_ForRunAgentWithTheRemovedTemplateDefault_TreatsItAsUnsetAndDerivesTheCeiling()
+    public async Task CreateJobAsync_ForRunAgentWithA600SecondCeiling_HonorsItLikeAnyOperatorValue()
     {
-        // Stored run-agent schedules carry exactly 600 s from a form pre-fill, which is indistinguishable from an
-        // operator typing 600. Honoring it would leave those schedules capped below the node timeout, so 600 on THIS
-        // template reads as unset.
+        // 600 is no longer read as the withdrawn form pre-fill: on run-agent it is an operator value like any other.
         var dbPath = GetDatabasePath("create-runagent-legacy-maxruntime.sqlite");
         await MigrateAsync(dbPath);
 
@@ -1222,18 +1220,17 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             parameters: ValidRunAgentParameters,
             displayName: "Legacy ceiling",
             maxRuntimeSeconds: 600));
-        // The same 600 on ANOTHER template is a plain operator value and must survive untouched.
         var otherTemplate = await service.CreateJobAsync(ValidCronInput(displayName: "Echo ceiling", maxRuntimeSeconds: 600));
 
         var legacyDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(legacy.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
-        AssertEx.Equal("1500000",
+        AssertEx.Equal("600000",
             legacyDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
-            "A stored 600 on run-agent is the removed template default and must be re-derived from the node timeout.");
+            "A stored 600 on run-agent is authoritative, not re-derived from the node timeout.");
 
         var otherDetail = AssertEx.NotNull(await scheduler.GetJobDetail(new JobKey(otherTemplate.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None));
         AssertEx.Equal("600000",
             otherDetail.JobDataMap.GetString(SchedulerJobKeys.MaxRuntimeMillisecondsKey),
-            "The legacy-default carve-out belongs to the run-agent template alone.");
+            "An operator value on any other template is authoritative too.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None);
     }

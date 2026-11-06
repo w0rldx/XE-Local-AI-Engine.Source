@@ -48,7 +48,6 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
-using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -522,24 +521,6 @@ public static class ConfigureServices
         // Idempotent by slug and registered unconditionally, but the seeder skips when Compute:Enabled is false, so the gate reads the validated ComputeOptions rather than raw configuration.
         builder.Services.AddHostedService<MathematicianAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
-        // Encrypts legacy plaintext message rows (content + metadata_json) into the read-both at-rest envelope. Batched, transactional, resumable and
-        // idempotent. Before the title backfill so titles re-derive from migrated rows where possible; both are read-both, so order is not required.
-        builder.Services.AddHostedService<NodeChatContentEncryptionBackfillService>();
-        // One-time L2-normalization of legacy chunk vectors so cosine search scores by dot product: batched, transactional, resumable, idempotent, marker-tracked in chat_maintenance_state.
-        // Client host only, never the shared KB module, so it cannot race a test host's fixtures: search stays on the cosine path until it completes, then flips IKnowledgeVectorNormalizationState.
-        builder.Services.AddHostedService<KnowledgeVectorNormalizationBackfillService>();
-        // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
-        // (migrations cannot access the node key; this service runs once per startup and is idempotent).
-        builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();
-        // Upgrade backfill for the external-access profile, stamping "recommended" on a node that completed setup but predates the profile. Idempotent,
-        // node-local, not desktop-gated, and in StartAsync so the decision is durable before Kestrel accepts a request.
-        builder.Services.AddHostedService<ExternalAccessProfileBackfillService>();
-        // Upgrade backfill for the navigation mode, in StartAsync for the same reason. Its discriminator is the STORED external-access profile, not the
-        // service above's output, so it does not depend on running after it.
-        builder.Services.AddHostedService<UiModeBackfillService>();
-        // Upgrade backfill for the sandbox security profile (ADR 0020), stamping "low" on a node past onboarding. Same discriminator as the
-        // mode backfill above, so it is order-independent of both services before it.
-        builder.Services.AddHostedService<SandboxSecurityProfileBackfillService>();
         // Desktop-only first-run model provisioning: installs and selects a small node-local GGUF through the bundled llama.cpp runtime, so a fresh
         // double-click install can chat out of the box. Offline-tolerant; headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();

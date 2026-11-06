@@ -22,6 +22,47 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
 
+> **Breaking (pre-release): the upgrade backfills and legacy-format readers for older data directories are removed.**
+> A data directory written before each change below now gets the visible behavior listed instead of a silent repair;
+> re-create the data directory if that is not acceptable.
+> - Chat rows an older build stored as plaintext stay readable but are no longer re-encrypted on disk. Re-create the
+>   data directory to get a fully encrypted store.
+> - Any conversation without a title now stays untitled: one created through the API or MCP without a title, one
+>   renamed to blank, or one whose title the title-encryption migration cleared. Its title is no longer re-derived at
+>   restart.
+> - A node set up before the external-access profile existed is asked to choose it at the next sign-in, and one set up
+>   before the interface mode existed is asked for the mode. Until the profile is chosen, the three automatic outbound
+>   checks wait: the app-update check, the llama.cpp update check and the desktop first-run model download.
+>   Operator-started downloads, web access, cloud chat and llama.cpp runtime acquisition run as before. A null sandbox
+>   profile keeps reading as `low`.
+> - The knowledge-base embedding pin lives in `node-settings.json` and is no longer restored at startup. A corpus
+>   indexed before the pin existed, or one whose settings file was reset or deleted, stays unpinned until the next index
+>   commit pins it; a search that resolves another embedder meanwhile reports "embedder changed".
+> - Knowledge-base vectors written before ingest-time normalization are no longer normalized at startup, and vector search
+>   always scores by dot product. Those vectors already carried the `legacy:unversioned` identity, so search never scores
+>   them: their documents show as stale until reindexed, as they already did.
+> - A Development project created before command profiles existed is not given one any more: its runs fail with "The
+>   Development project has no command profile. Re-register the repository", so create the project again.
+> - A flat, pre-v2 cloud-connection file is moved aside as unreadable: re-enter the cloud connection.
+> - The compute runtime provisioned by an older build reads as an incomplete provision and is rebuilt on next use. The
+>   pre-store `uv`, `pythons` and `uv-cache` directories under the compute and training runtime folders, and the
+>   compute runtime's old `scratch` directory, are no longer deleted: remove them by hand.
+> - An interrupted model download from the older per-operation partial layout restarts from byte 0 (the old partials
+>   are reaped after a day). A model downloaded before the metadata sidecar existed answers "conflict" to a new download
+>   of the same model: delete it, then download again.
+> - On desktop, image models that exist only in the old install-directory folder are no longer used: download them
+>   again.
+> - An extracted-text cache an older build wrote as `<fileId>.md` is no longer read: such an attachment is reported as
+>   not sent. Upload the file again.
+> - A knowledge document that failed with the old "Extraction failed (…)" text shows that text untranslated.
+> - A run-agent schedule that still stores a 600-second maximum runtime is now held to 600 seconds; clear the field to
+>   derive the limit from the node's request timeout.
+> - The seeded work-session personas keep the misspelt `get_current_time` clock tool if an older build seeded them:
+>   delete the persona to have it re-seeded, or add the clock tool by hand.
+> - A pre-provenance managed CUDA build record is no longer re-validated at startup; it is kept like any record outside
+>   the managed source-build tree. A launch-fallback file's old backend-only entries are ignored, as before, but no
+>   longer rewritten.
+
 > **Breaking (pre-release): the Ollama runtime and its model list are removed.** llama.cpp is the node's local chat and
 > embedding runtime. Models held by that runtime can no longer be used through this engine, and their files are left
 > untouched: download or import a GGUF to replace them.
@@ -230,8 +271,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   confirmation when lowering. Under `high`, every containment axis a workload declares it prefers (egress denial, a
   stable filesystem boundary, resource ceilings) becomes a precondition and is refused fail-closed, naming the profile.
   The Development isolation table now shows what is required and whether it is satisfied. The execution-previews switch
-  moves into the same section. Upgraded nodes are set to `low`. The setting is Operator-only and absent from every
-  agentic surface. On Windows, and on Linux without a systemd user scope, `high` refuses every executing workload.
+  moves into the same section. Upgraded nodes read as `low` without being asked. The setting is Operator-only and
+  absent from every agentic surface. On Windows, and on Linux without a systemd user scope, `high` refuses every
+  executing workload.
   [ADR 0020](docs/adr/0020-sandbox-security-profile.md).
 - **Node database backups** — the operator can list the node's database snapshots, take one on demand, and restore
   one through `node/backups`. A restore checks the snapshot, stops the node, and is applied at the next start before

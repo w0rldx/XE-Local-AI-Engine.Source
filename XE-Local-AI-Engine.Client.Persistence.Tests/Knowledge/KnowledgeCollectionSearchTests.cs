@@ -83,7 +83,7 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         await SeedVectorAsync(databasePath, documentB, chunkB, [1f, 0f, 0f, 0f]);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var search = new ManagedCosineVectorSearch(context, new KnowledgeVectorNormalizationState());
+        var search = new ManagedCosineVectorSearch(context);
         var query = new float[]
         {
             1f,
@@ -341,7 +341,10 @@ public sealed class KnowledgeCollectionSearchTests : IDisposable
         command.Parameters.AddWithValue("$chunk", chunkId);
         command.Parameters.AddWithValue("$document", documentId);
         command.Parameters.AddWithValue("$dim", vector.Length);
-        command.Parameters.AddWithValue("$embedding", MemoryMarshal.AsBytes<float>(vector).ToArray());
+        // Stored the way KnowledgeIndexWriter stores it: L2-normalized, which the dot-product search relies on.
+        var embedding = MemoryMarshal.AsBytes<float>(vector).ToArray();
+        _ = KnowledgeVectorMath.NormalizeBytesInPlace(embedding);
+        command.Parameters.AddWithValue("$embedding", embedding);
         command.Parameters.AddWithValue("$model", EmbeddingModel);
         command.Parameters.AddWithValue("$identity", VectorIdentity);
         _ = await command.ExecuteNonQueryAsync();

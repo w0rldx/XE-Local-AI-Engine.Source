@@ -624,19 +624,6 @@ public interface IDevelopmentStore
         long expectedVersion,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    ///     Writes a command profile onto a project created before the profile column existed, and bumps its
-    ///     configuration version so the change is visible to anything tracking project configuration.
-    /// </summary>
-    /// <remarks>
-    ///     Only ever fills a null. A project that already carries a profile is returned untouched, because that
-    ///     profile is the operator-confirmed agreement for the life of the project and a backfill must never be able
-    ///     to replace it — including when two backfill passes race.
-    /// </remarks>
-    Task<DevelopmentProjectSnapshot> BackfillCommandProfileAsync(Guid projectId,
-        string commandProfileJson,
-        CancellationToken cancellationToken = default);
-
     Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<DevelopmentTaskSnapshot> GetTaskAsync(Guid taskId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(Guid taskId, CancellationToken cancellationToken = default);

@@ -270,38 +270,6 @@ public sealed partial class DevelopmentStore
         return ProjectSnapshot(project);
     }
 
-    public async Task<DevelopmentProjectSnapshot> BackfillCommandProfileAsync(Guid projectId,
-        string commandProfileJson,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureNotBlank(commandProfileJson, nameof(commandProfileJson));
-        var project = await _dbContext.DevelopmentProjects
-                                      .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
-                      ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
-
-        // Fill-only. An existing profile is the operator-confirmed agreement for the life of the project, so a backfill pass must return it untouched rather than
-        // replace it — this is what makes a second pass, or two racing passes, harmless.
-        if (!string.IsNullOrWhiteSpace(project.CommandProfileJson))
-        {
-            return ProjectSnapshot(project);
-        }
-
-        project.CommandProfileJson = commandProfileJson;
-        project.ConfigurationVersion++;
-        project.UpdatedAtUtc = Now();
-        project.Version++;
-        try
-        {
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException exception)
-        {
-            throw new DevelopmentConcurrencyException("The Development project changed before its command profile could be backfilled.", exception);
-        }
-
-        return ProjectSnapshot(project);
-    }
-
     public async Task<DevelopmentTaskSnapshot> GetTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
     {
         var task = await _dbContext.DevelopmentTasks.AsNoTracking()

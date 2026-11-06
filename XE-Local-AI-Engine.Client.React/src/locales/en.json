@@ -7702,7 +7702,6 @@
 					"IncompleteProvision": "An interrupted provision left an incomplete compute runtime.",
 					"InterpreterMissing": "The compute runtime's Python interpreter is missing.",
 					"LockfileMissing": "The pinned compute runtime lockfile is missing from this installation.",
-					"OlderBuild": "The compute runtime was provisioned by an older build and is rebuilt on next use.",
 					"PlatformUnsupported": "The Python compute tool is available on Linux x64 and Windows x64 only.",
 					"Provisioning": "The compute runtime is being provisioned.",
 					"RecordUnreadable": "The compute runtime's state record is unreadable.",
@@ -8019,7 +8018,7 @@
 				},
 				"maxRuntimeSeconds": {
 					"description": "Leave blank to use the node default.",
-					"descriptionRunAgent": "Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes). A value of 600 is treated as blank.",
+					"descriptionRunAgent": "Leave blank to derive the limit from the node's maximum message request timeout (2× the timeout plus 5 minutes).",
 					"label": "Max runtime (seconds)"
 				},
 				"misfirePolicy": {

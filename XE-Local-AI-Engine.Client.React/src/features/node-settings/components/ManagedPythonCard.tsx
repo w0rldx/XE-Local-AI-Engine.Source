@@ -55,7 +55,6 @@ const translatedReasonCodes = new Set([
 	"RecordUnreadable",
 	"IncompleteProvision",
 	"UpdateRequired",
-	"OlderBuild",
 	"TrainingPlatformUnsupported",
 	"TrainingInstalling",
 	"TrainingRemoving",

@@ -14,10 +14,11 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 ///     scores each against the query, and keeps the top-k in a bounded heap.
 /// </summary>
 /// <remarks>
-///     On the real runtime SQLite connection it returns the IDENTICAL ranking (ids, order, scores within 1e-5) as a
-///     naive reference cosine on both the cosine and the dot-product (post-backfill) paths, including legacy
-///     unnormalized rows, top-k boundaries, ties, zero vectors and cancellation. Foreign keys are enforced, so every
-///     vector row is seeded with its parent document and chunk: an orphan vector row cannot occur in production.
+///     On the real runtime SQLite connection its dot product over vectors stored the way <c>KnowledgeIndexWriter</c>
+///     stores them (L2-normalized) returns the IDENTICAL ranking (ids, order, scores within 1e-5) as a naive reference
+///     cosine over the raw vectors, including top-k boundaries, ties, zero vectors and cancellation; an un-normalized
+///     legacy row is never scored. Foreign keys are enforced, so every vector row is seeded with its parent document
+///     and chunk: an orphan vector row cannot occur in production.
 /// </remarks>
 [Category(TestCategories.Integration)]
 public sealed class ManagedCosineVectorSearchTests : IDisposable
@@ -49,7 +50,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f));
         }
 
-        var hits = await RunSearchAsync(databasePath, normalized: false, new[]
+        var hits = await RunSearchAsync(databasePath, new[]
         {
             1f,
             0f,
@@ -75,7 +76,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(1f, 0f, 0f));
         }
 
-        var hits = await RunSearchAsync(databasePath, normalized: false, new[]
+        var hits = await RunSearchAsync(databasePath, new[]
         {
             1f,
             0f,
@@ -87,22 +88,24 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     }
 
     [Test]
-    public async Task SearchAsync_WhenStoredVectorIdentityDiffersAtTheSameWidth_ExcludesIt()
+    public async Task SearchAsync_LegacyUnnormalizedVector_IsNeverScored()
     {
+        // Un-normalized rows predate ingest-time normalization, so the vector-identity migration stamped them legacy:unversioned:
+        // the identity filter keeps them out of the dot product (their documents read stale: KnowledgeEmbeddingModelIdentityTests).
         var databasePath = GetDatabasePath("cosine-identity-mismatch.sqlite");
         await MigrateAsync(databasePath);
 
         await using (var connection = await OpenConnectionAsync(databasePath))
         {
             var chunkId = Guid.NewGuid();
-            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f));
+            await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(3f, 0f, 0f, 0f), normalize: false);
             await using var update = connection.CreateCommand();
             update.CommandText = "UPDATE knowledge_chunk_vectors SET vector_identity = 'legacy:unversioned' WHERE chunk_id = $id;";
             update.Parameters.AddWithValue("$id", chunkId);
             _ = await update.ExecuteNonQueryAsync();
         }
 
-        var hits = await RunSearchAsync(databasePath, normalized: false, new[]
+        var hits = await RunSearchAsync(databasePath, new[]
         {
             1f,
             0f,
@@ -114,33 +117,16 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     }
 
     [Test]
-    public async Task SearchAsync_CosinePath_MatchesNaiveReferenceRankingOnDeterministicCorpus()
+    public async Task SearchAsync_MatchesNaiveCosineReferenceRankingOnDeterministicCorpus()
     {
         var databasePath = GetDatabasePath("cosine-equivalence.sqlite");
         var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 200, dimension: 16, seed: 1234);
         var query = DeterministicVector(new Random(9999), dimension: 16);
 
-        // Cosine path (state not complete): must equal the naive full-sort reference exactly.
-        var hits = await RunSearchAsync(databasePath, normalized: false, query, limit: 10);
+        // The dot product over normalized stored vectors must equal the naive full-sort cosine over the raw ones.
+        var hits = await RunSearchAsync(databasePath, query, limit: 10);
 
         AssertRankingMatches(ReferenceCosineTopK(corpus, query, limit: 10), hits);
-    }
-
-    [Test]
-    public async Task SearchAsync_DotPathAfterMigration_MatchesReferenceOnLegacyUnnormalizedCorpus()
-    {
-        var databasePath = GetDatabasePath("dot-equivalence.sqlite");
-        // Seed LEGACY unnormalized vectors, capture the reference ranking over them, THEN normalize in place and search on
-        // the dot-product path — the ranking must be byte-for-rank identical to the pre-migration reference.
-        var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 200, dimension: 16, seed: 4242);
-        var query = DeterministicVector(new Random(1357), dimension: 16);
-        var reference = ReferenceCosineTopK(corpus, query, limit: 10);
-
-        await NormalizeInPlaceAsync(databasePath);
-
-        var hits = await RunSearchAsync(databasePath, normalized: true, query, limit: 10);
-
-        AssertRankingMatches(reference, hits);
     }
 
     [Test]
@@ -149,13 +135,12 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         var databasePath = GetDatabasePath("topk-boundaries.sqlite");
         var corpus = await SeedDeterministicCorpusAsync(databasePath, count: 12, dimension: 8, seed: 77);
         var query = DeterministicVector(new Random(5), dimension: 8);
-        await NormalizeInPlaceAsync(databasePath);
 
         // K == N and K > N both return every candidate in full-sort order.
-        var atCount = await RunSearchAsync(databasePath, normalized: true, query, limit: 12);
+        var atCount = await RunSearchAsync(databasePath, query, limit: 12);
         AssertRankingMatches(ReferenceCosineTopK(corpus, query, limit: 12), atCount);
 
-        var overCount = await RunSearchAsync(databasePath, normalized: true, query, limit: 50);
+        var overCount = await RunSearchAsync(databasePath, query, limit: 50);
         AssertRankingMatches(ReferenceCosineTopK(corpus, query, limit: 50), overCount);
         AssertEx.Equal(expected: 12, overCount.Count);
     }
@@ -185,8 +170,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, weakId, Guid.NewGuid(), FloatBytes(0.1f, 1f, 0f, 0f));
         }
 
-        await NormalizeInPlaceAsync(databasePath);
-        var hits = await RunSearchAsync(databasePath, normalized: true, new[]
+        var hits = await RunSearchAsync(databasePath, new[]
         {
             1f,
             0f,
@@ -200,7 +184,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     }
 
     [Test]
-    public async Task SearchAsync_ZeroVector_IsExcluded_OnBothPaths()
+    public async Task SearchAsync_ZeroVector_IsExcluded()
     {
         var databasePath = GetDatabasePath("zero-vector.sqlite");
         await MigrateAsync(databasePath);
@@ -213,31 +197,20 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, realId, Guid.NewGuid(), FloatBytes(0.2f, 0.9f, 0.1f, 0f));
         }
 
-        // Cosine path: a zero-magnitude vector scores NaN and is skipped.
-        var cosineHits = await RunSearchAsync(databasePath, normalized: false, new[]
+        // Normalization leaves a zero vector exactly zero; the dot product must skip it (as cosine's NaN would), not score a false 0.
+        var dotHits = await RunSearchAsync(databasePath, new[]
         {
             1f,
             0f,
             0f,
             0f
         }, limit: 10);
-        AssertEx.True(cosineHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded on the cosine path.");
-
-        // After migration the zero vector stays exactly zero; the dot path must skip it too (not score it a false 0).
-        await NormalizeInPlaceAsync(databasePath);
-        var dotHits = await RunSearchAsync(databasePath, normalized: true, new[]
-        {
-            1f,
-            0f,
-            0f,
-            0f
-        }, limit: 10);
-        AssertEx.True(dotHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded on the dot path too.");
+        AssertEx.True(dotHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded.");
         AssertEx.True(dotHits.Any(hit => hit.ChunkId == realId), "The real vector should still be returned.");
     }
 
     [Test]
-    public async Task SearchAsync_WhenQueryVectorIsZero_ReturnsEmptyOnDotPath()
+    public async Task SearchAsync_WhenQueryVectorIsZero_ReturnsEmpty()
     {
         var databasePath = GetDatabasePath("zero-query.sqlite");
         await MigrateAsync(databasePath);
@@ -246,11 +219,10 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(0.2f, 0.9f, 0.1f, 0f));
         }
 
-        await NormalizeInPlaceAsync(databasePath);
 
         // A zero-magnitude query has no direction — cosine would be NaN for every candidate (an empty result); the dot
         // path mirrors that by returning nothing rather than scoring everything 0.
-        var hits = await RunSearchAsync(databasePath, normalized: true, new[]
+        var hits = await RunSearchAsync(databasePath, new[]
         {
             0f,
             0f,
@@ -267,7 +239,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         await SeedDeterministicCorpusAsync(databasePath, count: 20, dimension: 8, seed: 3);
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var search = new ManagedCosineVectorSearch(context, CompleteState());
+        var search = new ManagedCosineVectorSearch(context);
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -292,10 +264,10 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
     }
 
 
-    private async Task<IReadOnlyList<VectorSearchHit>> RunSearchAsync(string databasePath, bool normalized, float[] query, int limit)
+    private async Task<IReadOnlyList<VectorSearchHit>> RunSearchAsync(string databasePath, float[] query, int limit)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        var search = new ManagedCosineVectorSearch(context, normalized ? CompleteState() : new KnowledgeVectorNormalizationState());
+        var search = new ManagedCosineVectorSearch(context);
         return await search.SearchAsync(query,
             EmbeddingModel,
             NativeIdentity(query.Length),
@@ -303,13 +275,6 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             limit,
             documentId: null,
             CancellationToken.None);
-    }
-
-    private static IKnowledgeVectorNormalizationState CompleteState()
-    {
-        var state = new KnowledgeVectorNormalizationState();
-        state.MarkComplete();
-        return state;
     }
 
     private static async Task<List<(Guid ChunkId, float[] Vector)>> SeedDeterministicCorpusAsync(string databasePath, int count, int dimension, int seed)
@@ -330,13 +295,6 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
 
         await transaction.CommitAsync();
         return corpus;
-    }
-
-    // Runs the real normalization backfill core against the stored rows, in place.
-    private static async Task NormalizeInPlaceAsync(string databasePath)
-    {
-        await using var connection = await OpenConnectionAsync(databasePath);
-        _ = await KnowledgeVectorNormalizationBackfillService.NormalizeVectorsAsync(connection, batchSize: 64, CancellationToken.None);
     }
 
     // Naive reference: cosine over the RAW stored vectors, skip zero-magnitude (NaN), order by score desc with a stable
@@ -412,8 +370,19 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
-    private static async Task InsertVectorAsync(SqliteConnection connection, Guid chunkId, Guid documentId, byte[] embedding, DbTransaction? transaction = null)
+    // Stores the vector the way KnowledgeIndexWriter does (L2-normalized) unless a test needs a raw legacy row.
+    private static async Task InsertVectorAsync(SqliteConnection connection,
+        Guid chunkId,
+        Guid documentId,
+        byte[] embedding,
+        DbTransaction? transaction = null,
+        bool normalize = true)
     {
+        if (normalize)
+        {
+            _ = KnowledgeVectorMath.NormalizeBytesInPlace(embedding);
+        }
+
         await KnowledgeVectorParents.EnsureAsync(connection, chunkId, documentId, transaction);
 
         await using var command = connection.CreateCommand();

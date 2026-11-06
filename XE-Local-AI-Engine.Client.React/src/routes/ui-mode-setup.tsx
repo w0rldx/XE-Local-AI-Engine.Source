@@ -36,9 +36,8 @@ export const Route = createFileRoute("/ui-mode-setup")({
 			return;
 		}
 
-		// Null is the discriminator here, unlike the external-access route's "pending": nothing stamps a placeholder mode,
-		// and the boot backfill has already given every node that finished onboarding a real value. So an operator who
-		// types this URL after deciding is sent home rather than asked twice.
+		// Null is the discriminator here, unlike the external-access route's "pending": nothing stamps a placeholder mode.
+		// So an operator who types this URL after deciding is sent home rather than asked twice.
 		if (settings.uiMode !== null && settings.uiMode !== undefined) {
 			throw redirect({ to: "/" });
 		}

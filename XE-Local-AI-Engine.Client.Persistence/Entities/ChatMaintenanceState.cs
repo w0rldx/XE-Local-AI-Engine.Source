@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Durable node-local key/value flags for one-shot database maintenance that must survive a restart — currently
-///     the content-encryption backfill's "plaintext residue reclamation still owed" marker.
+///     Durable node-local key/value flags for one-shot database maintenance that must survive a restart. Nothing writes
+///     one today; the table stays because dropping it needs a migration.
 /// </summary>
 /// <remarks>
 ///     Not encrypted: a task name and a presence flag are not secrets. Kept as its own tiny table so a maintenance

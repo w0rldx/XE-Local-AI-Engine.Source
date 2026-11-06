@@ -131,11 +131,6 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
             ProjectorPart = finalProjectorPath is null ? null : PartPathFor(finalProjectorPath),
             Intent = IntentPathFor(finalWeightPath)
         };
-        AdoptLegacyPartials(finalWeightPath);
-        if (finalProjectorPath is not null)
-        {
-            AdoptLegacyPartials(finalProjectorPath);
-        }
 
         var weightVerified = false;
         var projectorVerified = false;
@@ -625,59 +620,6 @@ internal sealed class HuggingFaceGgufDownloadTransaction : IGgufDownloadTransact
         return Directory.EnumerateFiles(Path.GetDirectoryName(finalPath)!, prefix + "*" + HfDownloadClient.PartSuffix, SearchOption.TopDirectoryOnly)
                         .Select(static path => Path.GetFileName(path))
                         .Any(name => Guid.TryParseExact(name[prefix.Length..^HfDownloadClient.PartSuffix.Length], "N", out _));
-    }
-
-    /// <summary>
-    ///     Carries partials from the per-operation layout (<c>&lt;final&gt;.&lt;operation&gt;.part.part</c> plus its
-    ///     <c>.ranges.part</c> cursors) over to the stable name: the newest is renamed so it resumes, the rest are deleted.
-    /// </summary>
-    /// <remarks>
-    ///     Nothing writes that layout any more, so no running operation can own one of these files.
-    /// </remarks>
-    private static void AdoptLegacyPartials(string finalPath)
-    {
-        var directory = Path.GetDirectoryName(finalPath);
-        if (directory is null || !Directory.Exists(directory))
-        {
-            return;
-        }
-
-        try
-        {
-            AdoptLegacyPartials(directory, finalPath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: a partial that cannot be carried over only costs a fresh download; the startup reaper reclaims it.
-        }
-    }
-
-    private static void AdoptLegacyPartials(string directory, string finalPath)
-    {
-        var partPath = PartPathFor(finalPath);
-        var legacy = Directory.EnumerateFiles(directory, Path.GetFileName(finalPath) + ".*" + HfDownloadClient.PartSuffix + HfDownloadClient.PartSuffix)
-                              .OrderByDescending(File.GetLastWriteTimeUtc)
-                              .ToList();
-        foreach (var file in legacy)
-        {
-            var cursors = file + HfDownloadClient.RangeSidecarSuffix;
-            if (!File.Exists(partPath))
-            {
-                // Cursors beside the stable name without a partial describe bytes that are gone; the adopted file's own
-                // cursors (or none, which the client treats as "refetch") replace them.
-                File.Delete(partPath + HfDownloadClient.RangeSidecarSuffix);
-                if (File.Exists(cursors))
-                {
-                    File.Move(cursors, partPath + HfDownloadClient.RangeSidecarSuffix);
-                }
-
-                File.Move(file, partPath);
-                continue;
-            }
-
-            File.Delete(cursors);
-            File.Delete(file);
-        }
     }
 
     private static GgufRepoFile ResolveFile(IReadOnlyList<GgufRepoFile> files, GgufModelRequest request, string defaultQuant)

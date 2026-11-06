@@ -113,7 +113,7 @@ the browser E2E host.
 
 ### An E2E run rewrites the checkout's node settings
 
-**Rule:** prepare a model-matrix or lab node only AFTER any Playwright E2E run in the same checkout, or run the two in different worktrees. The E2E suite's in-process host uses the checkout's Client project directory as content root, which `NodeDataDirectory` treats as the node root, so it rewrites `XE-Local-AI-Engine.Client/node-settings.json`: an `offline` external-access profile prepared for the matrix was gone after an E2E run and `ExternalAccessProfileBackfillService` stamped `recommended`. The mechanism is unconfirmed; the effect is confirmed. **Prevents:** `scripts/run-model-matrix-local.sh` exiting 2 on its prerequisite "the node's external-access profile must be `offline` … it is 'recommended'" after an unrelated E2E run. **Authority:** `NodeDataDirectory`, `ExternalAccessProfileBackfillService`, the matrix runner's prerequisite check.
+**Rule:** prepare a model-matrix or lab node only AFTER any Playwright E2E run in the same checkout, or run the two in different worktrees. The E2E suite's in-process host uses the checkout's Client project directory as content root, which `NodeDataDirectory` treats as the node root, so it rewrites `XE-Local-AI-Engine.Client/node-settings.json`: an `offline` external-access profile prepared for the matrix was gone after an E2E run. The mechanism is unconfirmed; the effect is confirmed. **Prevents:** `scripts/run-model-matrix-local.sh` exiting 2 on its prerequisite "the node's external-access profile must be `offline` … it is 'recommended'" after an unrelated E2E run. **Authority:** `NodeDataDirectory`, the matrix runner's prerequisite check.
 
 ## Stale beliefs
 

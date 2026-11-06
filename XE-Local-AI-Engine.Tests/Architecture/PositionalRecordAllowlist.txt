@@ -67,8 +67,6 @@ XE-Local-AI-Engine.Client.Application/Services/Memory/Implementation/DefaultMemo
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/IModelCatalogCacheStore.cs|StoredModelCatalogCache
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/Catalog/ModelCatalogContracts.cs|ModelCatalogDocument
 XE-Local-AI-Engine.Client.Application/Services/Models/Implementation/LocalModelDeletionCoordinator.cs|DeletionJournal
-XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeChatContentEncryptionBackfillService.cs|LegacyMessageRow
-XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeChatTitleEncryptionBackfillService.cs|MessageIdAndContent
 XE-Local-AI-Engine.Client.Application/Services/Training/BaseArtifacts/BaseArtifactContracts.cs|BaseArtifactFileView
 XE-Local-AI-Engine.Client.Application/Services/Training/BaseArtifacts/BaseArtifactContracts.cs|BaseArtifactLicenseView
 XE-Local-AI-Engine.Client.Application/Services/Training/Datasets/DatasetContracts.cs|ToolMockVerificationV1
@@ -105,7 +103,6 @@ XE-Local-AI-Engine.Tests/Auth/NodeAuthEndpointTests.cs|AuthTokenResponse
 XE-Local-AI-Engine.Tests/Auth/NodeAuthPasswordResetTests.cs|AccessTokenBody
 XE-Local-AI-Engine.Tests/Auth/NodeChangePasswordEndpointTests.cs|AccessTokenBody
 XE-Local-AI-Engine.Tests/Chat/NodeChatReadOnlyEndpointTests.cs|ConflictProblemBody
-XE-Local-AI-Engine.Tests/Chat/NodeChatTitleEncryptionBackfillQueryTests.cs|MessageIdAndContent
 XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|GeneratedIntegrationApiKeyBody
 XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|IntegrationApiKeyListBody
 XE-Local-AI-Engine.Tests/Endpoints/Integrations/V1/IntegrationEndpointPayloads.cs|IntegrationTriggerBody
@@ -227,7 +224,6 @@ XE-Local-AI-Engine.Client.Application/Services/DocumentIngestion/Implementation/
 XE-Local-AI-Engine.Client.Application/Services/DocumentIngestion/Extraction/HtmlDocumentReader.cs|ParsedTag
 XE-Local-AI-Engine.Client.Application/Services/Invocation/Implementation/InvocationFailureClassifier.cs|FailureClassification
 XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeSearchService.cs|QueryEmbedding
-XE-Local-AI-Engine.Client.Application/Services/Knowledge/Implementation/KnowledgeVectorNormalizationBackfillService.cs|EmbeddingRow
 XE-Local-AI-Engine.Client.Application/Services/Mcp/Implementation/McpServerConnectionManager.cs|ConnectResult
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/GgufFileSelector.cs|SelectedGgufFile
 XE-Local-AI-Engine.Client.Application/Services/ModelFit/LlamaCppRuntimeRemovalOutcome.cs|LlamaCppRuntimeRemovalOutcome

@@ -192,6 +192,12 @@ describe("route guards for the first-run external-access and interface-mode choi
 		await expect(runExternalAccessGuard(clientWith("pending"))).resolves.toBeUndefined();
 	});
 
+	it("asks the external-access question when an older data directory carries no profile at all", async () => {
+		// No boot backfill stamps a profile any more, so a signed-in node with a null profile is asked like "pending".
+		expect(await guardOutcome(runLayoutGuard(clientWith(null)))).toBe("/external-access");
+		await expect(runExternalAccessGuard(clientWith(null))).resolves.toBeUndefined();
+	});
+
 	it("sends an unauthenticated visitor of the external-access route to login", async () => {
 		useNodeAuthStore.getState().actions.clear();
 		restoreMock.mockResolvedValue("unauthenticated");

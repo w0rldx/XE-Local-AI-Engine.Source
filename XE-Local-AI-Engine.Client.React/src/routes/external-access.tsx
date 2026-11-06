@@ -36,9 +36,9 @@ export const Route = createFileRoute("/external-access")({
 			return;
 		}
 
-		// "pending" is the discriminator, never null: the server stamps it the moment an administrator is persisted, so
-		// null means "no admin at all" and is not this route's business.
-		if (settings.externalAccessProfile !== "pending") {
+		// The server stamps "pending" the moment an administrator is persisted. Null behind a signed-in session is a data
+		// directory from before the profile existed, which the layout sends here too, so both are asked.
+		if (settings.externalAccessProfile !== "pending" && settings.externalAccessProfile != null) {
 			throw redirect({ to: "/" });
 		}
 	},

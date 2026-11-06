@@ -542,39 +542,6 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
-    ///     Idempotently upgrades a stored message content blob to the encrypted envelope: an already-enveloped blob is
-    ///     returned unchanged, a legacy plaintext blob is encrypted.
-    /// </summary>
-    /// <remarks>
-    ///     A legacy plaintext blob's bytes are themselves the plaintext. Used by the content-encryption migration, so a
-    ///     re-run never re-encrypts an already-migrated row.
-    /// </remarks>
-    public byte[] EnsureMessageContentEncrypted(byte[] stored, Guid conversationId, Guid messageId)
-    {
-        ArgumentNullException.ThrowIfNull(stored);
-
-        return NodeChatContentProtection.IsProtected(stored)
-            ? stored
-            : NodeChatContentProtection.Protect(stored, NodeEncryptionKey.Span, conversationId, messageId, "content");
-    }
-
-    /// <summary>
-    ///     Idempotently upgrades a stored <c>metadata_json</c> blob to the encrypted envelope, mirroring
-    ///     <see cref="EnsureMessageContentEncrypted" />. Null (no metadata) stays null.
-    /// </summary>
-    public byte[]? EnsureMessageMetadataEncrypted(byte[]? stored, Guid conversationId, Guid messageId)
-    {
-        if (stored is null)
-        {
-            return null;
-        }
-
-        return NodeChatContentProtection.IsProtected(stored)
-            ? stored
-            : NodeChatContentProtection.Protect(stored, NodeEncryptionKey.Span, conversationId, messageId, "metadata_json");
-    }
-
-    /// <summary>
     ///     Encrypts an uploaded file's display name for raw-SQL persistence by the conversation file store.
     /// </summary>
     /// <remarks>
