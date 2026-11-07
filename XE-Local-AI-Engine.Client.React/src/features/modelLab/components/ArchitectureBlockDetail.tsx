@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { blockKindLabels } from "@/core/models/inspect/GgufInspectInsights";
 import { ArchitectureBlockTrace } from "@/features/modelLab/components/ArchitectureBlockTrace";
+import { ArchitecturePyTorchPanel } from "@/features/modelLab/components/ArchitecturePyTorchPanel";
 import { ArchitectureTemplateGraph } from "@/features/modelLab/components/ArchitectureTemplateGraph";
 import { ArchitectureTensorDetails } from "@/features/modelLab/components/ArchitectureTensorDetails";
 import { ArchitectureTensorGroups } from "@/features/modelLab/components/ArchitectureTensorGroups";
@@ -14,11 +15,16 @@ import {
 	architectureBlockKind,
 	type BlockTraceSummary,
 	componentIdFor,
+	componentLabel,
 } from "@/features/modelLab/models/ModelLabArchitecture";
+import type { PyTorchCodeTarget } from "@/features/modelLab/models/ModelLabPyTorch";
 
 interface ArchitectureBlockDetailProps {
-	// Undefined for the tensors outside every block.
+	modelName: string;
+	suggestedBaseRepo: string | null;
+	// Undefined for the tensors outside every block: then `outside` names which end of the model they are.
 	block: ArchitectureBlock | undefined;
+	outside: "embedding" | "output";
 	groups: ArchitectureGroup[];
 	// Undefined when this support level or block kind has none: no graph is ever drawn without one.
 	template: ArchitectureTemplate | undefined;
@@ -31,15 +37,25 @@ const inferredBadgeStyles = {
 } as const;
 
 // One block: what the file holds (read) and, apart from it, the operation order llama.cpp runs over it (inferred).
-export function ArchitectureBlockDetail({ block, groups, template, traceSummaries }: ArchitectureBlockDetailProps) {
+export function ArchitectureBlockDetail({
+	modelName,
+	suggestedBaseRepo,
+	block,
+	outside,
+	groups,
+	template,
+	traceSummaries,
+}: ArchitectureBlockDetailProps) {
 	const { t } = useTranslation();
 	const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
 	const [selectedTensorName, setSelectedTensorName] = useState<string | null>(null);
+	const [codeTarget, setCodeTarget] = useState<PyTorchCodeTarget | null>(null);
 	const selectedTensor = groups.flatMap((group) => group.tensors).find((tensor) => tensor.ggufName === selectedTensorName);
 	const selectedGroup = groups.find((group) => group.componentId === selectedComponentId);
 	const selectGroup = (componentId: string): void => {
 		setSelectedComponentId(componentId);
 		setSelectedTensorName(null);
+		setCodeTarget({ kind: "component", componentId });
 	};
 
 	return (
@@ -47,7 +63,7 @@ export function ArchitectureBlockDetail({ block, groups, template, traceSummarie
 			<Stack gap="sm">
 				<Text fw={600}>
 					{block === undefined
-						? t("pages.models.inspect.nonBlock", "Outside blocks")
+						? componentLabel(t, outside)
 						: t("pages.models.inspect.blockCell", "Block {{index}}: {{kind}}", {
 								index: block.index,
 								kind: blockKindLabels(t)[architectureBlockKind(block.kind)],
@@ -73,6 +89,7 @@ export function ArchitectureBlockDetail({ block, groups, template, traceSummarie
 					onSelectTensor={(componentId, ggufName) => {
 						setSelectedComponentId(componentId);
 						setSelectedTensorName(ggufName);
+						setCodeTarget({ kind: "component", componentId });
 					}}
 				/>
 				{selectedTensor && <ArchitectureTensorDetails tensor={selectedTensor} />}
@@ -103,6 +120,13 @@ export function ArchitectureBlockDetail({ block, groups, template, traceSummarie
 						/>
 					</>
 				)}
+				<ArchitecturePyTorchPanel
+					modelName={modelName}
+					suggestedBaseRepo={suggestedBaseRepo}
+					block={block}
+					target={codeTarget}
+					onTarget={setCodeTarget}
+				/>
 			</Stack>
 		</Paper>
 	);

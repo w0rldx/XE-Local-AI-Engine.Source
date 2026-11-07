@@ -52,6 +52,9 @@ import type {
 	BrowseImageRepositoriesData,
 	BrowseImageRepositoriesErrors,
 	BrowseImageRepositoriesResponses,
+	BuildModelLabPyTorchIndexData,
+	BuildModelLabPyTorchIndexErrors,
+	BuildModelLabPyTorchIndexResponses,
 	CancelBaseArtifactData,
 	CancelBaseArtifactErrors,
 	CancelBaseArtifactResponses,
@@ -673,6 +676,12 @@ import type {
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceErrors,
 	GetModelLabExperimentTraceResponses,
+	GetModelLabPyTorchIndexData,
+	GetModelLabPyTorchIndexErrors,
+	GetModelLabPyTorchIndexResponses,
+	GetModelLabPyTorchSourceData,
+	GetModelLabPyTorchSourceErrors,
+	GetModelLabPyTorchSourceResponses,
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsErrors,
 	GetModelLaunchArgumentsResponses,
@@ -1496,6 +1505,7 @@ import {
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesResponse,
 	zBrowseImageRepositoriesResponse,
+	zBuildModelLabPyTorchIndexResponse,
 	zCancelBaseArtifactResponse,
 	zCancelBenchmarkRunResponse,
 	zCancelDevelopmentAttemptResponse,
@@ -1700,6 +1710,8 @@ import {
 	zGetModelLabArchitectureResponse,
 	zGetModelLabExperimentResponse,
 	zGetModelLabExperimentTraceResponse,
+	zGetModelLabPyTorchIndexResponse,
+	zGetModelLabPyTorchSourceResponse,
 	zGetModelLaunchArgumentsResponse,
 	zGetNodeChatContextEstimateResponse,
 	zGetNodeChatConversationContextStateResponse,
@@ -9875,6 +9887,54 @@ export const getModelLabArchitecture = <ThrowOnError extends boolean = true>(
 		...options,
 	});
 
+export const getModelLabPyTorchIndex = <ThrowOnError extends boolean = true>(
+	options: Options<GetModelLabPyTorchIndexData, ThrowOnError>,
+): RequestResult<GetModelLabPyTorchIndexResponses, GetModelLabPyTorchIndexErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetModelLabPyTorchIndexResponses, GetModelLabPyTorchIndexErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabPyTorchIndexResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/architecture/{modelName}/pytorch",
+		...options,
+	});
+
+export const buildModelLabPyTorchIndex = <ThrowOnError extends boolean = true>(
+	options: Options<BuildModelLabPyTorchIndexData, ThrowOnError>,
+): RequestResult<BuildModelLabPyTorchIndexResponses, BuildModelLabPyTorchIndexErrors, ThrowOnError> =>
+	(options.client ?? client).post<BuildModelLabPyTorchIndexResponses, BuildModelLabPyTorchIndexErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zBuildModelLabPyTorchIndexResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/architecture/{modelName}/pytorch",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const startModelLabCheckpointDownload = <ThrowOnError extends boolean = true>(
 	options: Options<StartModelLabCheckpointDownloadData, ThrowOnError>,
 ): RequestResult<StartModelLabCheckpointDownloadResponses, StartModelLabCheckpointDownloadErrors, ThrowOnError> =>
@@ -10057,6 +10117,28 @@ export const getModelLabExperimentTrace = <ThrowOnError extends boolean = true>(
 			},
 		],
 		url: "/api/local/v1/model-lab/experiments/{experimentId}/trace",
+		...options,
+	});
+
+export const getModelLabPyTorchSource = <ThrowOnError extends boolean = true>(
+	options?: Options<GetModelLabPyTorchSourceData, ThrowOnError>,
+): RequestResult<GetModelLabPyTorchSourceResponses, GetModelLabPyTorchSourceErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetModelLabPyTorchSourceResponses, GetModelLabPyTorchSourceErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelLabPyTorchSourceResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/model-lab/pytorch-source",
 		...options,
 	});
 

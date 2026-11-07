@@ -70,7 +70,8 @@ internal static class Qwen35TensorFixture
     }
 
     public static GgufTensorInspection Inspection(string? architecture, IEnumerable<GgufTensorInfo> tensors,
-        GgufTensorReadFailure failure = GgufTensorReadFailure.None, long? ssmGroupCount = null, long? ssmTimeStepRank = null)
+        GgufTensorReadFailure failure = GgufTensorReadFailure.None, long? ssmGroupCount = null, long? ssmTimeStepRank = null,
+        string? sourceRepoUrl = null, string? baseModelRepoUrl = null)
     {
         var list = tensors.ToList();
         return new GgufTensorInspection
@@ -79,6 +80,8 @@ internal static class Qwen35TensorFixture
             Version = 3,
             Architecture = architecture,
             ModelName = null,
+            SourceRepoUrl = sourceRepoUrl,
+            BaseModelRepoUrl = baseModelRepoUrl,
             ParamCount = null,
             FileType = null,
             BlockCount = null,

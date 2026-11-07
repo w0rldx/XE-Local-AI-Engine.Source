@@ -83,7 +83,8 @@ monaco.editor.defineTheme("xe-dark", {
 	base: "vs-dark",
 	inherit: true,
 	rules: diffRules("85E89D", "FDAEB7", "79B8FF"),
-	colors: {},
+	// The dark default (#ffffff0b) leaves a `highlightLines` range all but invisible.
+	colors: { "editor.rangeHighlightBackground": "#ffffff26" },
 });
 
 export { monaco };

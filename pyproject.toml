@@ -77,7 +77,7 @@ python-version = "3.14"
 # which only exists inside the 7 GB provisioned runtime venv, never in this dev venv. Those
 # imports resolve to Any; everything pure-python (trainlib, exportlib, protocol code, scripts/**)
 # is fully checked.
-replace-imports-with-any = ["unsloth", "unsloth.*", "torch", "torch.*", "transformers", "trl", "datasets"]
+replace-imports-with-any = ["unsloth", "unsloth.*", "torch", "torch.*", "transformers", "transformers.*", "trl", "datasets"]
 
 [tool.pytest.ini_options]
 testpaths = [

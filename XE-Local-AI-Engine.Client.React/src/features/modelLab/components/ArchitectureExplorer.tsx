@@ -18,6 +18,7 @@ import { ModelPickerNotice } from "@/features/modelLab/components/ModelPickerNot
 import {
 	type ArchitectureSelection,
 	formatBlockRanges,
+	outsideGroups,
 	promptExcerpt,
 	summarizeTraceByBlock,
 } from "@/features/modelLab/models/ModelLabArchitecture";
@@ -142,7 +143,8 @@ export function ArchitectureExplorer() {
 				<>
 					<ArchitectureOverview
 						blocks={data.blocks}
-						hasOutput={data.nonBlock.some((group) => group.component === "output")}
+						hasOutputGroup={outsideGroups(data.nonBlock, "output").length > 0}
+						hasOutputTensor={data.nonBlock.some((group) => group.component === "output")}
 						selection={selection}
 						tracedBlocks={traceSummaries ? new Set(traceSummaries.keys()) : null}
 						onSelect={setSelection}
@@ -150,8 +152,11 @@ export function ArchitectureExplorer() {
 					{selection !== null && (
 						<ArchitectureBlockDetail
 							key={selection}
+							modelName={data.modelName}
+							suggestedBaseRepo={data.suggestedBaseRepo}
 							block={block}
-							groups={block?.groups ?? data.nonBlock}
+							outside={selection === "output" ? "output" : "embedding"}
+							groups={block?.groups ?? outsideGroups(data.nonBlock, selection === "output" ? "output" : "embedding")}
 							template={template}
 							traceSummaries={traceSummaries}
 						/>

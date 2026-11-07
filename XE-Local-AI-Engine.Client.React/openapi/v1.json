@@ -18863,6 +18863,141 @@
         ]
       }
     },
+    "/api/local/v1/model-lab/architecture/{modelName}/pytorch": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabPyTorchIndex",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchIndexResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "buildModelLabPyTorchIndex",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "BuildModelLabPyTorchIndexRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1BuildModelLabPyTorchIndexRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchIndexResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-lab/checkpoint-download": {
       "post": {
         "tags": [
@@ -19267,6 +19402,78 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-lab/pytorch-source": {
+      "get": {
+        "tags": [
+          "Model-Lab"
+        ],
+        "operationId": "getModelLabPyTorchSource",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "index",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchSourceFile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse"
                 }
               }
             }
@@ -45714,7 +45921,36 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1BuildModelLabPyTorchIndexRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "repoId": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelLabV1GetModelLabArchitectureRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1GetModelLabPyTorchSourceRequest": {
         "type": "object",
         "additionalProperties": false
       },
@@ -46003,6 +46239,22 @@
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchRefusal"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsModelLabV1ModelLabStartBlockedResponse": {
         "type": "object",
@@ -54339,6 +54591,7 @@
           "architecture",
           "support",
           "readFailure",
+          "suggestedBaseRepo",
           "blocks",
           "templates",
           "nonBlock"
@@ -54359,6 +54612,10 @@
             "type": "string"
           },
           "readFailure": {
+            "type": "string",
+            "nullable": true
+          },
+          "suggestedBaseRepo": {
             "type": "string",
             "nullable": true
           },
@@ -54553,6 +54810,389 @@
           "DownloadRejected",
           "UnsupportedModelType"
         ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchBlock": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "path": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "layerType": {
+            "type": "string",
+            "nullable": true
+          },
+          "graphId": {
+            "type": "string",
+            "nullable": true
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchModule"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchComponentLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "componentId",
+          "modulePaths"
+        ],
+        "properties": {
+          "componentId": {
+            "type": "string"
+          },
+          "modulePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchConfigSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "baseArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchFile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchGraph": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "graphId": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchGraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchGraphNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "modulePath": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string",
+            "nullable": true
+          },
+          "line": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "opCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchIndex": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transformersVersion": {
+            "type": "string"
+          },
+          "torchVersion": {
+            "type": "string"
+          },
+          "modelType": {
+            "type": "string"
+          },
+          "textModelType": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelClass": {
+            "type": "string"
+          },
+          "declaredArchitectures": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockPath": {
+            "type": "string"
+          },
+          "exportMode": {
+            "type": "string"
+          },
+          "anchoredLines": {
+            "type": "boolean"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchBlock"
+            }
+          },
+          "outside": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchModule"
+            }
+          },
+          "outsideGraphId": {
+            "type": "string",
+            "nullable": true
+          },
+          "graphs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchGraph"
+            }
+          },
+          "exportError": {
+            "type": "string",
+            "nullable": true
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchFile"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchIndexResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "indexId",
+          "modelName",
+          "source",
+          "index",
+          "join"
+        ],
+        "properties": {
+          "indexId": {
+            "type": "string"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchConfigSource"
+          },
+          "index": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchIndex"
+          },
+          "join": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchJoin"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchJoin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "blocksJoined",
+          "reason",
+          "ggufTrunkBlockCount",
+          "pyTorchBlockCount",
+          "components",
+          "tensors"
+        ],
+        "properties": {
+          "blocksJoined": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "ggufTrunkBlockCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pyTorchBlockCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchComponentLink"
+            }
+          },
+          "tensors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchTensorLink"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchModule": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string",
+            "nullable": true
+          },
+          "classStart": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "classEnd": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "forwardLine": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchRefusal": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "UnsupportedPlatform",
+          "RuntimeUnavailable",
+          "CheckpointNotFound",
+          "CheckpointNotReady",
+          "ConfigMissing",
+          "ConfigTooLarge",
+          "ConfigUnreadable",
+          "RemoteCode",
+          "UnsupportedModelType",
+          "NoBlocks",
+          "ResultTooLarge",
+          "RepoUnreachable",
+          "RepoGated",
+          "Busy",
+          "IndexFailed",
+          "SourceNotInIndex",
+          "SourceChanged",
+          "SourceTooLarge"
+        ],
+        "enum": [
+          "UnsupportedPlatform",
+          "RuntimeUnavailable",
+          "CheckpointNotFound",
+          "CheckpointNotReady",
+          "ConfigMissing",
+          "ConfigTooLarge",
+          "ConfigUnreadable",
+          "RemoteCode",
+          "UnsupportedModelType",
+          "NoBlocks",
+          "ResultTooLarge",
+          "RepoUnreachable",
+          "RepoGated",
+          "Busy",
+          "IndexFailed",
+          "SourceNotInIndex",
+          "SourceChanged",
+          "SourceTooLarge"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchSourceFile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "sha256",
+          "text"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesModelLabModelLabPyTorchTensorLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ggufName",
+          "modulePath"
+        ],
+        "properties": {
+          "ggufName": {
+            "type": "string"
+          },
+          "modulePath": {
+            "type": "string"
+          }
+        }
       },
       "XE_Local_AI_EngineClientServicesModelLabModelLabResultToken": {
         "type": "object",

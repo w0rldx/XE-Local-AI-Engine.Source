@@ -38,6 +38,8 @@ export default function MonacoCodeEditor({
 	onChange,
 	height = 320,
 	wordWrap = false,
+	highlightLines,
+	revealLine,
 	"aria-label": ariaLabel,
 	"data-testid": testId,
 }: CodeEditorProps) {
@@ -126,6 +128,27 @@ export default function MonacoCodeEditor({
 			...(inspect ? INSPECT_OPTIONS : {}),
 		});
 	}, [readOnly, wordWrap, ariaLabel, inspect]);
+
+	// After the value effect above, so a new document is in the model before its lines are marked and revealed.
+	const highlightKey = JSON.stringify(highlightLines ?? []);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the ranges' content, and re-run for a new document.
+	useEffect(() => {
+		const editor = editorRef.current;
+		if (editor === null || (highlightLines === undefined && revealLine === undefined)) {
+			return;
+		}
+		// `rangeHighlight` is Monaco's own class for a highlighted range (go to line, find), styled by the theme.
+		const decorations = editor.createDecorationsCollection(
+			(highlightLines ?? []).map((range) => ({
+				range: new monaco.Range(range.start, 1, range.end, 1),
+				options: { isWholeLine: true, className: "rangeHighlight" },
+			})),
+		);
+		if (revealLine !== undefined) {
+			editor.revealLineInCenter(revealLine);
+		}
+		return () => decorations.clear();
+	}, [highlightKey, revealLine, value]);
 
 	useEffect(() => {
 		monaco.editor.setTheme(colorScheme === "dark" ? "xe-dark" : "xe-light");

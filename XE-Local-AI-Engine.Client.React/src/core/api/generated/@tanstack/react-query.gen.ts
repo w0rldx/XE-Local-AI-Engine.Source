@@ -25,6 +25,7 @@ import {
 	branchNodeChatConversation,
 	browseGgufRepositories,
 	browseImageRepositories,
+	buildModelLabPyTorchIndex,
 	cancelBaseArtifact,
 	cancelBenchmarkRun,
 	cancelDevelopmentAttempt,
@@ -232,6 +233,8 @@ import {
 	getModelLabArchitecture,
 	getModelLabExperiment,
 	getModelLabExperimentTrace,
+	getModelLabPyTorchIndex,
+	getModelLabPyTorchSource,
 	getModelLaunchArguments,
 	getNodeChatContextEstimate,
 	getNodeChatConversation,
@@ -541,6 +544,9 @@ import type {
 	BrowseGgufRepositoriesResponse,
 	BrowseImageRepositoriesData,
 	BrowseImageRepositoriesResponse,
+	BuildModelLabPyTorchIndexData,
+	BuildModelLabPyTorchIndexError,
+	BuildModelLabPyTorchIndexResponse,
 	CancelBaseArtifactData,
 	CancelBaseArtifactError,
 	CancelBaseArtifactResponse,
@@ -1056,6 +1062,12 @@ import type {
 	GetModelLabExperimentTraceData,
 	GetModelLabExperimentTraceError,
 	GetModelLabExperimentTraceResponse,
+	GetModelLabPyTorchIndexData,
+	GetModelLabPyTorchIndexError,
+	GetModelLabPyTorchIndexResponse,
+	GetModelLabPyTorchSourceData,
+	GetModelLabPyTorchSourceError,
+	GetModelLabPyTorchSourceResponse,
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsError,
 	GetModelLaunchArgumentsResponse,
@@ -9643,6 +9655,52 @@ export const getModelLabArchitectureOptions = (options: Options<GetModelLabArchi
 		queryKey: getModelLabArchitectureQueryKey(options),
 	});
 
+export const getModelLabPyTorchIndexQueryKey = (options: Options<GetModelLabPyTorchIndexData>) =>
+	createQueryKey("getModelLabPyTorchIndex", options, false, ["Model-Lab"]);
+
+export const getModelLabPyTorchIndexOptions = (options: Options<GetModelLabPyTorchIndexData>) =>
+	queryOptions<
+		GetModelLabPyTorchIndexResponse,
+		AxiosError<GetModelLabPyTorchIndexError>,
+		GetModelLabPyTorchIndexResponse,
+		ReturnType<typeof getModelLabPyTorchIndexQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabPyTorchIndex({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabPyTorchIndexQueryKey(options),
+	});
+
+export const buildModelLabPyTorchIndexMutation = (
+	options?: Partial<Options<BuildModelLabPyTorchIndexData>>,
+): UseMutationOptions<
+	BuildModelLabPyTorchIndexResponse,
+	AxiosError<BuildModelLabPyTorchIndexError>,
+	Options<BuildModelLabPyTorchIndexData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		BuildModelLabPyTorchIndexResponse,
+		AxiosError<BuildModelLabPyTorchIndexError>,
+		Options<BuildModelLabPyTorchIndexData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await buildModelLabPyTorchIndex({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const startModelLabCheckpointDownloadMutation = (
 	options?: Partial<Options<StartModelLabCheckpointDownloadData>>,
 ): UseMutationOptions<
@@ -9819,6 +9877,28 @@ export const getModelLabExperimentTraceOptions = (options: Options<GetModelLabEx
 			return data;
 		},
 		queryKey: getModelLabExperimentTraceQueryKey(options),
+	});
+
+export const getModelLabPyTorchSourceQueryKey = (options?: Options<GetModelLabPyTorchSourceData>) =>
+	createQueryKey("getModelLabPyTorchSource", options, false, ["Model-Lab"]);
+
+export const getModelLabPyTorchSourceOptions = (options?: Options<GetModelLabPyTorchSourceData>) =>
+	queryOptions<
+		GetModelLabPyTorchSourceResponse,
+		AxiosError<GetModelLabPyTorchSourceError>,
+		GetModelLabPyTorchSourceResponse,
+		ReturnType<typeof getModelLabPyTorchSourceQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelLabPyTorchSource({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelLabPyTorchSourceQueryKey(options),
 	});
 
 export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) =>

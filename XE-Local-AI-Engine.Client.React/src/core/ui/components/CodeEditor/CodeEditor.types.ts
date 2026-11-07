@@ -14,6 +14,10 @@ export interface CodeEditorProps {
 	 * plain-text fallback that would hide exactly those characters.
 	 */
 	readonly inspect?: boolean;
+	/** 1-based, inclusive line ranges drawn as highlighted whole lines. The plain-text fallback ignores them. */
+	readonly highlightLines?: readonly { readonly start: number; readonly end: number }[];
+	/** 1-based line scrolled to the middle of the view whenever it (or the document) changes. */
+	readonly revealLine?: number;
 	readonly "aria-label"?: string;
 	readonly "data-testid"?: string;
 }

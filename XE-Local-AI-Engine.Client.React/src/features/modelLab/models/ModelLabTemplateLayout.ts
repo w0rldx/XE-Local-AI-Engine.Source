@@ -1,23 +1,28 @@
-// A layered top-to-bottom DAG layout for a block template. Pure: no React, no React Flow, no dependency.
+// A layered top-to-bottom DAG layout for a block template or a block's PyTorch graph. Pure: no React, no React Flow, no
+// dependency.
 //
 // A COPY of `graphWorkflows/models/GraphWorkflowLayout.ts` (features never import each other, see `no-cross-feature`),
 // trimmed to positions only and turned on its side, because a block reads from its input down to its output. The
-// ranking, the single barycenter pass and the cycle guard are the original's.
+// ranking and the single barycenter pass are the original's.
 //
 // rank(n)     = 0 with no inbound edge, else 1 + max(rank(pred)), longest path in Kahn order
 // orderInRank = ONE barycenter pass over predecessor orders, ties broken by id
-// x = indexInRank * 220, y = rank * 90
+// x = (orderInRank mod maxNodesPerRow) * 220, y = row * 90: a rank wider than maxNodesPerRow wraps onto rows of its own
 
 const NODE_SPACING_X = 220;
-const RANK_SPACING_Y = 90;
+export const RANK_SPACING_Y = 90;
+
+// Four 200 px nodes fit a desktop canvas at full zoom; a wider rank would open as a strip too wide to read.
+export const maxNodesPerRow = 4;
 
 interface LayoutEdge {
 	readonly from: string;
 	readonly to: string;
 }
 
-// A graph that cannot drain is cyclic: what is left is parked one rank past everything that drained, so every node is
-// placed once and the layout terminates. Templates are static server data and acyclic, but a hang is the worse failure.
+// A PyTorch graph groups ops by source line, so a line that runs twice makes a cycle. When the queue drains early, the
+// first node left in input order is released as if its remaining inputs had drained: a cycle costs its back edges, not
+// a rank holding everything that was left. Every node is placed once and the layout terminates.
 function rankNodes(ids: readonly string[], edges: readonly LayoutEdge[]): Map<string, number> {
 	const ranks = new Map<string, number>(ids.map((id) => [id, 0]));
 	const successors = new Map<string, string[]>();
@@ -28,25 +33,25 @@ function rankNodes(ids: readonly string[], edges: readonly LayoutEdge[]): Map<st
 	}
 
 	const queue = ids.filter((id) => (inDegree.get(id) ?? 0) === 0);
-	const drained = new Set<string>();
-	for (let cursor = 0; cursor < queue.length; cursor += 1) {
+	const queued = new Set(queue);
+	for (let cursor = 0; queued.size < ranks.size || cursor < queue.length; cursor += 1) {
+		if (cursor === queue.length) {
+			const released = ids.find((id) => !queued.has(id)) ?? "";
+			queue.push(released);
+			queued.add(released);
+		}
 		const id = queue[cursor] ?? "";
-		drained.add(id);
 		for (const next of successors.get(id) ?? []) {
+			// A back edge into a node already placed.
+			if (queued.has(next)) {
+				continue;
+			}
 			ranks.set(next, Math.max(ranks.get(next) ?? 0, (ranks.get(id) ?? 0) + 1));
 			const remaining = (inDegree.get(next) ?? 0) - 1;
 			inDegree.set(next, remaining);
 			if (remaining === 0) {
 				queue.push(next);
-			}
-		}
-	}
-
-	if (drained.size < ids.length) {
-		const maxDrainedRank = ids.reduce((highest, id) => (drained.has(id) ? Math.max(highest, ranks.get(id) ?? 0) : highest), -1);
-		for (const id of ids) {
-			if (!drained.has(id)) {
-				ranks.set(id, maxDrainedRank + 1);
+				queued.add(next);
 			}
 		}
 	}
@@ -54,17 +59,20 @@ function rankNodes(ids: readonly string[], edges: readonly LayoutEdge[]): Map<st
 }
 
 export function layoutTemplate(ids: readonly string[], edges: readonly LayoutEdge[]): Map<string, { x: number; y: number }> {
-	const ranks = rankNodes(ids, edges);
+	const known = new Set(ids);
+	const knownEdges = edges.filter((edge) => known.has(edge.from) && known.has(edge.to));
+	const ranks = rankNodes([...known], knownEdges);
 	const predecessors = new Map<string, string[]>();
-	for (const edge of edges) {
+	for (const edge of knownEdges) {
 		predecessors.set(edge.to, [...(predecessors.get(edge.to) ?? []), edge.from]);
 	}
 
-	const rankCount = ids.reduce((highest, id) => Math.max(highest, ranks.get(id) ?? 0), -1) + 1;
+	const rankCount = Math.max(-1, ...ranks.values()) + 1;
 	const positions = new Map<string, { x: number; y: number }>();
 	const orderById = new Map<string, number>();
+	let row = 0;
 	for (let rank = 0; rank < rankCount; rank += 1) {
-		const inRank = ids.filter((id) => ranks.get(id) === rank);
+		const inRank = [...known].filter((id) => ranks.get(id) === rank);
 		const barycenters = new Map<string, number>(
 			inRank.map((id) => {
 				const orders = (predecessors.get(id) ?? []).flatMap((from) => {
@@ -87,8 +95,12 @@ export function layoutTemplate(ids: readonly string[], edges: readonly LayoutEdg
 		});
 		for (const [indexInRank, id] of ordered.entries()) {
 			orderById.set(id, indexInRank);
-			positions.set(id, { x: indexInRank * NODE_SPACING_X, y: rank * RANK_SPACING_Y });
+			positions.set(id, {
+				x: (indexInRank % maxNodesPerRow) * NODE_SPACING_X,
+				y: (row + Math.floor(indexInRank / maxNodesPerRow)) * RANK_SPACING_Y,
+			});
 		}
+		row += Math.ceil(ordered.length / maxNodesPerRow);
 	}
 	return positions;
 }

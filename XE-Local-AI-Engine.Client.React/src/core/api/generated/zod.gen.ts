@@ -5267,7 +5267,16 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeReque
 	variant: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelLabV1BuildModelLabPyTorchIndexRequest = z.object({
+	source: z.string().nullish(),
+	baseArtifactId: z.guid().nullish(),
+	repoId: z.string().nullish(),
+	revision: z.string().min(0).max(100).nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelLabV1GetModelLabArchitectureRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1GetModelLabPyTorchSourceRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest = z.object({
 	repoId: z.string(),
@@ -7975,6 +7984,7 @@ export const zXeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse 
 	architecture: z.string().nullable(),
 	support: z.string(),
 	readFailure: z.string().nullable(),
+	suggestedBaseRepo: z.string().nullable(),
 	blocks: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock),
 	templates: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate),
 	nonBlock: z.array(zXeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup),
@@ -8044,6 +8054,158 @@ export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownload
 	preflight: zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointPreflightResponse,
 	baseArtifactId: z.guid().nullable(),
 	artifactStatus: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchComponentLink = z.object({
+	componentId: z.string(),
+	modulePaths: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchConfigSource = z.object({
+	kind: z.string().optional(),
+	repoId: z.string().optional(),
+	revision: z.string().optional(),
+	baseArtifactId: z.guid().nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchFile = z.object({
+	file: z.string().optional(),
+	sha256: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchGraphNode = z.object({
+	id: z.string().optional(),
+	modulePath: z.string().optional(),
+	file: z.string().nullish(),
+	line: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	opCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	label: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchGraph = z.object({
+	graphId: z.string().optional(),
+	nodes: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchGraphNode).optional(),
+	edges: z.array(z.array(z.string())).optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchModule = z.object({
+	path: z.string().optional(),
+	class: z.string().optional(),
+	file: z.string().nullish(),
+	classStart: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	classEnd: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	forwardLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchBlock = z.object({
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	path: z.string().optional(),
+	class: z.string().optional(),
+	layerType: z.string().nullish(),
+	graphId: z.string().nullish(),
+	modules: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchModule).optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchIndex = z.object({
+	transformersVersion: z.string().optional(),
+	torchVersion: z.string().optional(),
+	modelType: z.string().optional(),
+	textModelType: z.string().nullish(),
+	modelClass: z.string().optional(),
+	declaredArchitectures: z.array(z.string()).nullish(),
+	blockPath: z.string().optional(),
+	exportMode: z.string().optional(),
+	anchoredLines: z.boolean().optional(),
+	blocks: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchBlock).optional(),
+	outside: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchModule).optional(),
+	outsideGraphId: z.string().nullish(),
+	graphs: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchGraph).optional(),
+	exportError: z.string().nullish(),
+	files: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchFile).optional(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchRefusal = z.enum([
+	"UnsupportedPlatform",
+	"RuntimeUnavailable",
+	"CheckpointNotFound",
+	"CheckpointNotReady",
+	"ConfigMissing",
+	"ConfigTooLarge",
+	"ConfigUnreadable",
+	"RemoteCode",
+	"UnsupportedModelType",
+	"NoBlocks",
+	"ResultTooLarge",
+	"RepoUnreachable",
+	"RepoGated",
+	"Busy",
+	"IndexFailed",
+	"SourceNotInIndex",
+	"SourceChanged",
+	"SourceTooLarge",
+]);
+
+export const zXeLocalAiEngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse = z.object({
+	reason: zXeLocalAiEngineClientServicesModelLabModelLabPyTorchRefusal,
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchSourceFile = z.object({
+	file: z.string(),
+	sha256: z.string(),
+	text: z.string(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchTensorLink = z.object({
+	ggufName: z.string(),
+	modulePath: z.string(),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchJoin = z.object({
+	blocksJoined: z.boolean(),
+	reason: z.string().nullable(),
+	ggufTrunkBlockCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	pyTorchBlockCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	components: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchComponentLink),
+	tensors: z.array(zXeLocalAiEngineClientServicesModelLabModelLabPyTorchTensorLink),
+});
+
+export const zXeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse = z.object({
+	indexId: z.string(),
+	modelName: z.string(),
+	source: zXeLocalAiEngineClientServicesModelLabModelLabPyTorchConfigSource,
+	index: zXeLocalAiEngineClientServicesModelLabModelLabPyTorchIndex,
+	join: zXeLocalAiEngineClientServicesModelLabModelLabPyTorchJoin,
 });
 
 export const zXeLocalAiEngineClientServicesModelLabModelLabResultToken = z.object({
@@ -13242,6 +13404,26 @@ export const zGetModelLabArchitecturePath = z.object({
  */
 export const zGetModelLabArchitectureResponse = zXeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse;
 
+export const zGetModelLabPyTorchIndexPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabPyTorchIndexResponse = zXeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse;
+
+export const zBuildModelLabPyTorchIndexBody = zXeLocalAiEngineClientEndpointsModelLabV1BuildModelLabPyTorchIndexRequest;
+
+export const zBuildModelLabPyTorchIndexPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zBuildModelLabPyTorchIndexResponse = zXeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse;
+
 export const zStartModelLabCheckpointDownloadBody = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest;
 
 /**
@@ -13299,6 +13481,16 @@ export const zGetModelLabExperimentTracePath = z.object({
  * Success
  */
 export const zGetModelLabExperimentTraceResponse = zXeLocalAiEngineClientEndpointsModelLabV1ModelLabTraceResponse;
+
+export const zGetModelLabPyTorchSourceQuery = z.object({
+	file: z.string().nullish(),
+	index: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetModelLabPyTorchSourceResponse = zXeLocalAiEngineClientServicesModelLabModelLabPyTorchSourceFile;
 
 /**
  * Success

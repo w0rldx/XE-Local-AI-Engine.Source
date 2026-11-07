@@ -76,6 +76,22 @@ public sealed class GgufTensorBlockReaderTests
     }
 
     [Test]
+    public async Task Read_SourceAndBaseModelRepoUrls_AreRead_AndNullWhenAbsent()
+    {
+        var declared = await ReadAsync(BaseHeader()
+                                       .WithString("general.source.repo_url", "https://huggingface.co/Qwen/Qwen3.5-0.8B")
+                                       .WithString("general.base_model.0.repo_url", "https://huggingface.co/Qwen/Qwen3.5-0.8B-Base")
+                                       .WithTensor("blk.0.attn_norm.weight", [256], F32, offset: 0)
+                                       .Build());
+        var absent = await ReadAsync(BaseHeader().WithTensor("blk.0.attn_norm.weight", [256], F32, offset: 0).Build());
+
+        AssertEx.Equal("https://huggingface.co/Qwen/Qwen3.5-0.8B", declared.SourceRepoUrl!);
+        AssertEx.Equal("https://huggingface.co/Qwen/Qwen3.5-0.8B-Base", declared.BaseModelRepoUrl!);
+        AssertEx.Null(absent.SourceRepoUrl);
+        AssertEx.Null(absent.BaseModelRepoUrl);
+    }
+
+    [Test]
     public async Task Read_TruncatedTensorBlock_ReturnsTruncatedFailure()
     {
         var bytes = BaseHeader()

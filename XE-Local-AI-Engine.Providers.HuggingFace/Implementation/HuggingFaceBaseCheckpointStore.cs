@@ -188,6 +188,51 @@ internal sealed class HuggingFaceBaseCheckpointStore : IBaseCheckpointStore
         };
     }
 
+    /// <inheritdoc />
+    public async Task<BaseCheckpointManifest> FetchConfigAsync(string repoId, string? revision, string destinationDirectory, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
+
+        var detail = await _hubClient.GetRepoAsync(repoId, revision, ct).ConfigureAwait(false)
+                     ?? throw new BaseCheckpointConfigException(BaseCheckpointConfigFailure.Unreachable, $"{repoId} could not be read from Hugging Face.");
+        if (string.IsNullOrWhiteSpace(detail.Revision))
+        {
+            throw new BaseCheckpointConfigException(BaseCheckpointConfigFailure.Unreachable, $"Hugging Face did not report a commit for {repoId}, so its config cannot be pinned.");
+        }
+
+        var config = detail.Files.FirstOrDefault(static file => string.Equals(file.FileName, "config.json", StringComparison.Ordinal))
+                     ?? throw new BaseCheckpointConfigException(BaseCheckpointConfigFailure.ConfigMissing, $"{repoId} has no config.json.");
+
+        // An unsized file has no bound the transfer could be held to.
+        if (config.SizeBytes is <= 0 or > BaseCheckpointConfigException.MaxConfigBytes)
+        {
+            throw new BaseCheckpointConfigException(BaseCheckpointConfigFailure.ConfigTooLarge,
+                $"The config.json of {repoId} is over 1 MiB or of unknown size, so it is not fetched.");
+        }
+
+        return await DownloadAsync(new BaseCheckpointManifest
+            {
+                RepoId = detail.RepoId,
+                Revision = detail.Revision,
+                Files =
+                [
+                    new BaseCheckpointFile
+                    {
+                        Role = BaseCheckpointFileRole.Config,
+                        FileName = config.FileName,
+                        SizeBytes = config.SizeBytes,
+                        Sha256 = config.Sha256
+                    }
+                ],
+                TotalBytes = config.SizeBytes,
+                License = detail.License,
+                IsGated = detail.IsGated
+            },
+            destinationDirectory,
+            progress: null,
+            ct).ConfigureAwait(false);
+    }
+
     /// <summary>
     ///     Decides what a repo file is for, or <see langword="null" /> when fine-tuning does not need it.
     /// </summary>

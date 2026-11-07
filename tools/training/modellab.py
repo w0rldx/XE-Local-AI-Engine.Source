@@ -1,14 +1,15 @@
 """Model Lab: reads chosen layers of a local safetensors checkpoint with forward hooks that change no value.
 
-Two kinds of ``job.json``. A trace (``ModelLabTraceJobV1`` on the C# side) records statistics while generating; the
+Three kinds of ``job.json``. A trace (``ModelLabTraceJobV1`` on the C# side) records statistics while generating; the
 host fixes the layers, token count and byte cap. A steering job (``ModelLabSteeringJobV1``) derives a control vector
-from two contrasting prompt sets and writes it with a random one of the same norm. Nothing in a job can name code to
-run. Offline, no remote code, no unsloth.
+from two contrasting prompt sets and writes it with a random one of the same norm. A source job
+(``ModelLabSourceJobV1``) indexes the PyTorch code of a model from its config.json alone, on the meta device: no
+weights, no GPU. Nothing in a job can name code to run. Offline, no remote code, no unsloth.
 
 The protocol is the trainer's JSON-lines shape with its own contract version, on stdout:
 
-    {"event": "handshake", "contractVersion": 2, ...versions}
-    {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "saving"}
+    {"event": "handshake", "contractVersion": 3, ...versions}
+    {"event": "phase",     "phase": "loading" | "tracing" | "deriving" | "exporting" | "saving"}
     {"event": "progress",  "step", "totalSteps", "vramBytes"}    a token, or a contrast prompt
     {"event": "heartbeat", "phase"}          until the first progress, and while saving; progress proves life between
     {"event": "done",      "cancelled": bool}
@@ -18,7 +19,11 @@ Exit status: 0 on success, 3 on a cooperative SIGTERM stop, 1 on any error.
 """
 
 import argparse
+import functools
+import hashlib
+import inspect
 import json
+import linecache
 import os
 import platform
 import signal
@@ -32,15 +37,30 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, StoppingCriteria, 
 
 from modellablib import (
     CONTRACT_VERSION,
+    SOURCE_KIND,
     STEERING_KIND,
     CappedTraceWriter,
     JobError,
+    SourceRefusalError,
+    block_index_of,
     control_vector_bytes,
     describe_failure,
+    discover_block_path,
     heartbeat_counts,
     layer_kind,
+    layer_types_follow_cut,
+    named_files,
+    op_graphs,
+    op_location,
     out_of_range_layers,
+    read_raw_config,
+    register_anchors,
+    relative_source_file,
+    representatives,
+    sanitized_export_error,
     scaled_to_norm,
+    serialized_result,
+    source_file_path,
     steering_vector,
     trace_record,
     validate_job,
@@ -350,6 +370,202 @@ def derive(job, run):
     return False
 
 
+def _class_location(cls, relative):
+    """Where a module class is defined, or all None when it is not in the transformers or torch package."""
+    try:
+        if file := relative(inspect.getsourcefile(cls)):
+            lines, start = inspect.getsourcelines(cls)
+            forward = inspect.getsourcelines(cls.forward)[1] if "forward" in cls.__dict__ else None
+            return {"file": file, "classStart": start, "classEnd": start + len(lines) - 1, "forwardLine": forward}
+    except TypeError, OSError:
+        pass
+    return {"file": None, "classStart": None, "classEnd": None, "forwardLine": None}
+
+
+def _block_structure(layer_types, index, block):
+    """Blocks with the same key export the same graph."""
+    return (
+        layer_types[index] if layer_types else None,
+        tuple((name, type(module).__name__) for name, module in block.named_modules()),
+        tuple((name, tuple(parameter.shape), str(parameter.dtype)) for name, parameter in block.named_parameters()),
+    )
+
+
+def _cut_to_representatives(model, block_path, block_list, chosen, layer_types):
+    """Swaps in the chosen blocks (the originals, so each keeps its layer_idx) and patches the config to match.
+
+    False, with nothing changed, when layer_types cannot follow the cut: the export then runs at full depth.
+    """
+    decoder = model.config.get_text_config(decoder=True)
+    depth = decoder.num_hidden_layers
+    decoder.num_hidden_layers = len(chosen)
+    try:
+        if layer_types:
+            decoder.layer_types = [layer_types[i] for i in chosen]
+    except AttributeError:  # jamba and falcon_h1 derive layer_types through read-only properties
+        pass
+    if not layer_types_follow_cut(layer_types, chosen, getattr(decoder, "layer_types", None)):
+        decoder.num_hidden_layers = depth
+        try:
+            if layer_types:
+                decoder.layer_types = layer_types
+        except AttributeError:
+            pass
+        return False
+    parent, _, attribute = block_path.rpartition(".")
+    setattr(model.get_submodule(parent), attribute, torch.nn.ModuleList([block_list[i] for i in chosen]))
+    return True
+
+
+def _anchor_modeling_functions(model):
+    """Export records only frames named forward; anchoring keeps lines inside the modeling file's free functions."""
+    modeling = sys.modules[type(model).__module__]
+    functions = [
+        inspect.unwrap(value)  # hub-kernel decorators wrap the reference function
+        for value in vars(modeling).values()
+        if inspect.isfunction(value) and value.__module__ == modeling.__name__
+    ]
+    try:  # a private torch hook: gone or changed means call-site lines
+        from torch.fx.proxy import _register_stack_trace_anchor as register
+    except ImportError:
+        register = None
+    return register_anchors(register, functions)
+
+
+def _sha256(path):
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+
+def source(job, run):
+    """Indexes a model's PyTorch module tree and op graph from its config.json, on the meta device. No torch.cuda."""
+    run.enter("loading")
+    directory = job["configDirectory"]
+    raw = read_raw_config(directory)  # the remote-code refusal, before transformers sees the directory
+    from transformers import AutoConfig
+    from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
+    from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+
+    unsupported = SourceRefusalError(
+        "unsupported_model_type", "The installed transformers has no causal-LM model for it."
+    )
+    model_type = raw.get("model_type")
+    if not isinstance(model_type, str) or model_type not in CONFIG_MAPPING_NAMES:
+        raise unsupported
+    # A local directory fixed by the host, offline, so there is no revision to pin.
+    config = AutoConfig.from_pretrained(directory, local_files_only=True, trust_remote_code=False)  # nosec B615
+    text_config = config.get_text_config(decoder=True)
+    # A multimodal config whose own type has no causal-LM class builds its text model.
+    build_config = config if config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES else text_config
+    if build_config.model_type not in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES:
+        raise unsupported
+    layer_types = list(getattr(build_config.get_text_config(decoder=True), "layer_types", None) or [])
+    with torch.device("meta"):
+        model = AutoModelForCausalLM.from_config(build_config, trust_remote_code=False).eval()
+
+    block_path = discover_block_path(
+        [
+            (name, len(module))
+            for name, module in model.named_modules()
+            if isinstance(module, torch.nn.ModuleList)
+            and len(module)
+            and all(next(item.children(), None) is not None for item in module)
+        ]
+    )
+    if block_path is None:
+        raise SourceRefusalError("no_blocks", "The model has no list of repeated blocks.")
+    block_list = model.get_submodule(block_path)
+
+    roots = (os.path.dirname(transformers.__file__), os.path.dirname(torch.__file__))
+    relative = functools.cache(lambda path: relative_source_file(path, *roots))
+    located = {}
+    blocks = [
+        {
+            "index": index,
+            "path": f"{block_path}.{index}",
+            "class": type(block).__name__,
+            "layerType": layer_types[index] if index < len(layer_types) else None,
+            "graphId": None,
+            "modules": [],
+        }
+        for index, block in enumerate(block_list)
+    ]
+    outside = []
+    for name, module in model.named_modules():
+        if not name:
+            continue
+        cls = type(module)
+        if cls not in located:
+            located[cls] = _class_location(cls, relative)
+        index = block_index_of(name, block_path)
+        (outside if index is None else blocks[index]["modules"]).append(
+            {"path": name, "class": cls.__name__, **located[cls]}
+        )
+
+    run.enter("exporting")
+    chosen, position_of = representatives(
+        [_block_structure(layer_types, index, block) for index, block in enumerate(block_list)]
+    )
+    representative = _cut_to_representatives(model, block_path, block_list, chosen, layer_types)
+    if not representative:
+        position_of = list(range(len(block_list)))
+    anchored = _anchor_modeling_functions(model)
+
+    graphs, graph_of, export_error = [], {}, None
+    try:
+        ids = torch.zeros((1, 8), dtype=torch.long, device="meta")
+        program = torch.export.export(model, (ids,), kwargs={"use_cache": False}, strict=False)
+    except Exception as error:  # degrades to the module index, with the reason
+        export_error = sanitized_export_error(error)
+    else:
+        calls = [node for node in program.graph.nodes if node.op == "call_function"]
+        position = {node: slot for slot, node in enumerate(calls)}
+        ops = []
+        for node in calls:
+            file, line = op_location(node.meta.get("stack_trace"), relative)
+            stack = node.meta.get("nn_module_stack") or {}
+            target = str(node.target)
+            ops.append(
+                {
+                    "path": list(stack.values())[-1][0] if stack else "",
+                    "file": file,
+                    "line": line,
+                    "op": target.split(".")[1] if "." in target else target,
+                    "inputs": [position[source] for source in node.all_input_nodes if source in position],
+                }
+            )
+        graphs, graph_of = op_graphs(
+            ops, block_path, lambda file, line: linecache.getline(source_file_path(file, *roots), line)
+        )
+    for block in blocks:
+        block["graphId"] = graph_of.get(position_of[block["index"]])
+
+    run.enter("saving")
+    result = {
+        "transformersVersion": transformers.__version__,
+        "torchVersion": torch.__version__,
+        "modelType": config.model_type,
+        "textModelType": text_config.model_type if text_config is not config else None,
+        "modelClass": type(model).__name__,
+        "blockPath": block_path,
+        "exportMode": "representative" if representative else "full",
+        "anchoredLines": anchored,
+        "blocks": blocks,
+        "outside": outside,
+        "outsideGraphId": graph_of.get(None),
+        "graphs": graphs,
+        "exportError": export_error,
+        "files": [
+            {"file": file, "sha256": _sha256(source_file_path(file, *roots))}
+            for file in named_files(blocks, outside, graphs)
+        ],
+    }
+    blob = serialized_result(result, job["maxResultBytes"])
+    with open(job["resultPath"], "wb") as handle:
+        handle.write(blob)
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -364,9 +580,13 @@ def main():
     try:
         with open(arguments.config, encoding="utf-8") as handle:
             job = validate_job(json.load(handle))
-        cancelled = derive(job, run) if job["kind"] == STEERING_KIND else trace(job, run)
+        run_job = {STEERING_KIND: derive, SOURCE_KIND: source}.get(job["kind"], trace)
+        cancelled = run_job(job, run)
     except JobError as error:
         emit("error", category="contract", message=str(error))
+        return 1
+    except SourceRefusalError as error:
+        emit("error", category=error.category, message=str(error))
         return 1
     except torch.cuda.OutOfMemoryError:
         emit("error", category="out-of-memory", message="The GPU ran out of memory during the job.")

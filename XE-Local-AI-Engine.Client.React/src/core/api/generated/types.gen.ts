@@ -5118,7 +5118,18 @@ export type XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest
 	variant?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsModelLabV1BuildModelLabPyTorchIndexRequest = {
+	source?: string | null;
+	baseArtifactId?: string | null;
+	repoId?: string | null;
+	revision?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsModelLabV1GetModelLabArchitectureRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1GetModelLabPyTorchSourceRequest = {
 	[key: string]: never;
 };
 
@@ -5187,6 +5198,11 @@ export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentResponse =
 
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabExperimentRouteRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse = {
+	reason: XeLocalAiEngineClientServicesModelLabModelLabPyTorchRefusal;
+	message: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelLabV1ModelLabStartBlockedResponse = {
@@ -7422,6 +7438,7 @@ export type XeLocalAiEngineClientServicesModelLabModelLabArchitectureResponse = 
 	architecture: string | null;
 	support: string;
 	readFailure: string | null;
+	suggestedBaseRepo: string | null;
 	blocks: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureBlock>;
 	templates: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureTemplate>;
 	nonBlock: Array<XeLocalAiEngineClientServicesModelLabModelLabArchitectureGroup>;
@@ -7476,6 +7493,122 @@ export type XeLocalAiEngineClientServicesModelLabModelLabCheckpointRefusal =
 	| "LicenseNotConfirmed"
 	| "DownloadRejected"
 	| "UnsupportedModelType";
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchBlock = {
+	index?: number;
+	path?: string;
+	class?: string;
+	layerType?: string | null;
+	graphId?: string | null;
+	modules?: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchModule>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchComponentLink = {
+	componentId: string;
+	modulePaths: Array<string>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchConfigSource = {
+	kind?: string;
+	repoId?: string;
+	revision?: string;
+	baseArtifactId?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchFile = {
+	file?: string;
+	sha256?: string;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchGraph = {
+	graphId?: string;
+	nodes?: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchGraphNode>;
+	edges?: Array<Array<string>>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchGraphNode = {
+	id?: string;
+	modulePath?: string;
+	file?: string | null;
+	line?: number | null;
+	opCount?: number;
+	label?: string;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchIndex = {
+	transformersVersion?: string;
+	torchVersion?: string;
+	modelType?: string;
+	textModelType?: string | null;
+	modelClass?: string;
+	declaredArchitectures?: Array<string> | null;
+	blockPath?: string;
+	exportMode?: string;
+	anchoredLines?: boolean;
+	blocks?: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchBlock>;
+	outside?: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchModule>;
+	outsideGraphId?: string | null;
+	graphs?: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchGraph>;
+	exportError?: string | null;
+	files?: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchFile>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse = {
+	indexId: string;
+	modelName: string;
+	source: XeLocalAiEngineClientServicesModelLabModelLabPyTorchConfigSource;
+	index: XeLocalAiEngineClientServicesModelLabModelLabPyTorchIndex;
+	join: XeLocalAiEngineClientServicesModelLabModelLabPyTorchJoin;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchJoin = {
+	blocksJoined: boolean;
+	reason: string | null;
+	ggufTrunkBlockCount: number;
+	pyTorchBlockCount: number;
+	components: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchComponentLink>;
+	tensors: Array<XeLocalAiEngineClientServicesModelLabModelLabPyTorchTensorLink>;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchModule = {
+	path?: string;
+	class?: string;
+	file?: string | null;
+	classStart?: number | null;
+	classEnd?: number | null;
+	forwardLine?: number | null;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchRefusal =
+	| "UnsupportedPlatform"
+	| "RuntimeUnavailable"
+	| "CheckpointNotFound"
+	| "CheckpointNotReady"
+	| "ConfigMissing"
+	| "ConfigTooLarge"
+	| "ConfigUnreadable"
+	| "RemoteCode"
+	| "UnsupportedModelType"
+	| "NoBlocks"
+	| "ResultTooLarge"
+	| "RepoUnreachable"
+	| "RepoGated"
+	| "Busy"
+	| "IndexFailed"
+	| "SourceNotInIndex"
+	| "SourceChanged"
+	| "SourceTooLarge";
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchSourceFile = {
+	file: string;
+	sha256: string;
+	text: string;
+};
+
+export type XeLocalAiEngineClientServicesModelLabModelLabPyTorchTensorLink = {
+	ggufName: string;
+	modulePath: string;
+};
 
 export type XeLocalAiEngineClientServicesModelLabModelLabResultToken = {
 	id?: number;
@@ -18681,6 +18814,85 @@ export type GetModelLabArchitectureResponses = {
 
 export type GetModelLabArchitectureResponse = GetModelLabArchitectureResponses[keyof GetModelLabArchitectureResponses];
 
+export type GetModelLabPyTorchIndexData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/architecture/{modelName}/pytorch";
+};
+
+export type GetModelLabPyTorchIndexErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetModelLabPyTorchIndexError = GetModelLabPyTorchIndexErrors[keyof GetModelLabPyTorchIndexErrors];
+
+export type GetModelLabPyTorchIndexResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse;
+};
+
+export type GetModelLabPyTorchIndexResponse = GetModelLabPyTorchIndexResponses[keyof GetModelLabPyTorchIndexResponses];
+
+export type BuildModelLabPyTorchIndexData = {
+	body: XeLocalAiEngineClientEndpointsModelLabV1BuildModelLabPyTorchIndexRequest;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-lab/architecture/{modelName}/pytorch";
+};
+
+export type BuildModelLabPyTorchIndexErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse;
+};
+
+export type BuildModelLabPyTorchIndexError = BuildModelLabPyTorchIndexErrors[keyof BuildModelLabPyTorchIndexErrors];
+
+export type BuildModelLabPyTorchIndexResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesModelLabModelLabPyTorchIndexResponse;
+};
+
+export type BuildModelLabPyTorchIndexResponse = BuildModelLabPyTorchIndexResponses[keyof BuildModelLabPyTorchIndexResponses];
+
 export type StartModelLabCheckpointDownloadData = {
 	body: XeLocalAiEngineClientEndpointsModelLabV1ModelLabCheckpointDownloadRequest;
 	path?: never;
@@ -18950,6 +19162,43 @@ export type GetModelLabExperimentTraceResponses = {
 };
 
 export type GetModelLabExperimentTraceResponse = GetModelLabExperimentTraceResponses[keyof GetModelLabExperimentTraceResponses];
+
+export type GetModelLabPyTorchSourceData = {
+	body?: never;
+	path?: never;
+	query?: {
+		file?: string | null;
+		index?: string | null;
+	};
+	url: "/api/local/v1/model-lab/pytorch-source";
+};
+
+export type GetModelLabPyTorchSourceErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsModelLabV1ModelLabPyTorchBlockedResponse;
+};
+
+export type GetModelLabPyTorchSourceError = GetModelLabPyTorchSourceErrors[keyof GetModelLabPyTorchSourceErrors];
+
+export type GetModelLabPyTorchSourceResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientServicesModelLabModelLabPyTorchSourceFile;
+};
+
+export type GetModelLabPyTorchSourceResponse = GetModelLabPyTorchSourceResponses[keyof GetModelLabPyTorchSourceResponses];
 
 export type ListLocalModelsData = {
 	body?: never;

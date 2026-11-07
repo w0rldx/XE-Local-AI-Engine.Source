@@ -26,6 +26,9 @@ const editorMock = vi.hoisted(() => {
 			return { dispose: vi.fn() };
 		}),
 		dispose: vi.fn(),
+		decorations: { clear: vi.fn() },
+		createDecorationsCollection: vi.fn((_decorations: unknown[]) => instance.decorations),
+		revealLineInCenter: vi.fn(),
 	};
 	return {
 		instance,
@@ -51,6 +54,9 @@ const editorMock = vi.hoisted(() => {
 vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
 	monaco: {
 		editor: { create: editorMock.create, setModelLanguage: editorMock.setModelLanguage, setTheme: editorMock.setTheme },
+		Range: function Range(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number) {
+			return { startLineNumber, startColumn, endLineNumber, endColumn };
+		},
 	},
 }));
 
@@ -154,6 +160,53 @@ describe("CodeEditor", () => {
 		rerender(<CodeEditor value="replaced" data-testid="editor" onChange={vi.fn()} />);
 
 		expect(editorMock.instance.setValue).toHaveBeenCalledWith("replaced");
+	});
+
+	it("marks the highlighted lines as whole-line ranges and reveals the requested line, replacing both on change", async () => {
+		const { rerender } = renderEditor(
+			<CodeEditor
+				value="a\nb\nc\nd"
+				readOnly={true}
+				highlightLines={[{ start: 2, end: 3 }]}
+				revealLine={2}
+				data-testid="viewer"
+			/>,
+		);
+		await screen.findByTestId("viewer");
+
+		expect(editorMock.instance.createDecorationsCollection).toHaveBeenCalledWith([
+			{
+				range: { startLineNumber: 2, startColumn: 1, endLineNumber: 3, endColumn: 1 },
+				options: { isWholeLine: true, className: "rangeHighlight" },
+			},
+		]);
+		expect(editorMock.instance.revealLineInCenter).toHaveBeenLastCalledWith(2);
+
+		rerender(
+			<CodeEditor
+				value="a\nb\nc\nd"
+				readOnly={true}
+				highlightLines={[{ start: 4, end: 4 }]}
+				revealLine={4}
+				data-testid="viewer"
+			/>,
+		);
+
+		// The old range is cleared before the new one is drawn, so only one highlight is ever on screen.
+		expect(editorMock.instance.decorations.clear).toHaveBeenCalledTimes(1);
+		expect(editorMock.instance.createDecorationsCollection).toHaveBeenLastCalledWith([
+			expect.objectContaining({ range: { startLineNumber: 4, startColumn: 1, endLineNumber: 4, endColumn: 1 } }),
+		]);
+		expect(editorMock.instance.revealLineInCenter).toHaveBeenLastCalledWith(4);
+		expect(editorMock.create).toHaveBeenCalledTimes(1);
+	});
+
+	it("draws no highlight and reveals nothing by default", async () => {
+		renderEditor(<CodeEditor value="a" readOnly={true} data-testid="viewer" />);
+		await screen.findByTestId("viewer");
+
+		expect(editorMock.instance.createDecorationsCollection).not.toHaveBeenCalled();
+		expect(editorMock.instance.revealLineInCenter).not.toHaveBeenCalled();
 	});
 
 	it("inspect mode forces read-only and renders whitespace, control characters and invisible or ambiguous Unicode", async () => {

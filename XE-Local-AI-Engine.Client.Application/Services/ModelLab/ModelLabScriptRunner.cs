@@ -136,6 +136,7 @@ internal sealed class ModelLabScriptRunner
                 break;
             case TrainingStdioEventKind.Error:
                 state.ErrorMessage = parsed.Message ?? parsed.Category;
+                state.ErrorCategory = parsed.Category;
                 break;
             case TrainingStdioEventKind.Heartbeat:
             case TrainingStdioEventKind.Artifact:
@@ -201,6 +202,9 @@ internal sealed class ModelLabScriptRunner
         public bool ScriptCancelled { get; set; }
 
         public string? ErrorMessage { get; set; }
+
+        /// <summary>The error event's <c>category</c>: the stable code a source job's refusal is mapped from.</summary>
+        public string? ErrorCategory { get; set; }
 
         public void KeepOutput(string line)
         {

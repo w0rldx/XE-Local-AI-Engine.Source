@@ -7,7 +7,7 @@ using System.Text.Json;
 public static class ModelLabTraceSpec
 {
     /// <summary>Separate from the trainer's: the two scripts change independently. Pinned by <c>modellablib.CONTRACT_VERSION</c>.</summary>
-    public const int ContractVersion = 2;
+    public const int ContractVersion = 3;
 
     public const int MaxNewTokens = 128;
 

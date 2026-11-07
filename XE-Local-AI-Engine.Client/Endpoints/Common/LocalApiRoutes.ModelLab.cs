@@ -21,5 +21,11 @@ public static partial class LocalApiRoutes
 
         // An installed GGUF's blocks and tensors by component, from the header alone: no model load.
         public const string Architecture = "model-lab/architecture/{modelName}";
+
+        // The model's PyTorch module tree and op graphs, joined to that descriptor: POST builds it (or answers from the cache), GET reads the last one.
+        public const string ArchitecturePyTorch = "model-lab/architecture/{modelName}/pytorch";
+
+        // One source file an index names, from the installed runtime's packages and only while its hash matches the index.
+        public const string PyTorchSource = "model-lab/pytorch-source";
     }
 }

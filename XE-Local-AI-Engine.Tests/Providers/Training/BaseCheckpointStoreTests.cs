@@ -264,6 +264,88 @@ public sealed class BaseCheckpointStoreTests : IDisposable
             $"Every Hub read must target the requested revision; saw {string.Join(", ", requestedUrls)}.");
     }
 
+    /// <summary>A GGUF-only repo still has the config that describes the model: the config-only fetch needs no weights and transfers nothing else.</summary>
+    [Test]
+    public async Task FetchConfig_OnARepoWithoutSafetensors_DownloadsOnlyTheConfig_AtTheResolvedCommit()
+    {
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = Encoding.UTF8.GetBytes("{\"model_type\":\"qwen3_5\"}"),
+            ["model-Q4_K_M.gguf"] = Encoding.UTF8.GetBytes("quantized")
+        };
+        var requestedUrls = new List<string>();
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
+        {
+            requestedUrls.Add(request.RequestUri!.AbsolutePath);
+            var bytes = payloads[request.RequestUri.Segments[^1].Trim('/')];
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(bytes)
+            };
+            response.Headers.TryAddWithoutValidation("X-Linked-Etag", $"\"{Sha256Of(bytes)}\"");
+            return response;
+        });
+        var store = Store(handler, HubDetail(QuantRepo, payloads, license: "apache-2.0", revision: "config-commit"));
+
+        var fetched = await store.FetchConfigAsync(QuantRepo, "main", Path.Combine(_root, "config"), CancellationToken.None);
+
+        AssertEx.Equal("config-commit", fetched.Revision);
+        var file = fetched.Files.Single();
+        AssertEx.Equal("config.json", file.FileName);
+        AssertEx.Equal("{\"model_type\":\"qwen3_5\"}", await File.ReadAllTextAsync(file.LocalPath));
+        AssertEx.Equal("/" + QuantRepo + "/resolve/config-commit/config.json", requestedUrls.Single());
+    }
+
+    [Test]
+    public async Task FetchConfig_OverOneMebibyte_IsRefused_BeforeAnyTransfer()
+    {
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = new byte[BaseCheckpointConfigException.MaxConfigBytes + 1]
+        };
+        using var handler = FileHandler(payloads);
+        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: "sha"));
+
+        var refusal = await AssertEx.ThrowsAsync<BaseCheckpointConfigException>(() => store.FetchConfigAsync(BaseRepo, revision: null, Path.Combine(_root, "big"), CancellationToken.None));
+
+        AssertEx.Equal(BaseCheckpointConfigFailure.ConfigTooLarge, refusal.Failure);
+        AssertEx.Empty(handler.Requests);
+    }
+
+    [Test]
+    public async Task FetchConfig_OnAnUnknownRepo_OrOneWithoutAConfig_IsRefused()
+    {
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["README.md"] = Encoding.UTF8.GetBytes("no config")
+        };
+        using var handler = FileHandler(payloads);
+        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, revision: "sha"));
+
+        var missing = await AssertEx.ThrowsAsync<BaseCheckpointConfigException>(() => store.FetchConfigAsync(BaseRepo, revision: null, Path.Combine(_root, "none"), CancellationToken.None));
+        var unknown = await AssertEx.ThrowsAsync<BaseCheckpointConfigException>(() => store.FetchConfigAsync("someone/Unknown", revision: null, Path.Combine(_root, "unknown"), CancellationToken.None));
+
+        AssertEx.Equal(BaseCheckpointConfigFailure.ConfigMissing, missing.Failure);
+        AssertEx.Equal(BaseCheckpointConfigFailure.Unreachable, unknown.Failure);
+        AssertEx.Empty(handler.Requests);
+    }
+
+    /// <summary>The Hub lists a gated repo's files to anyone; its config is what an account without access cannot read.</summary>
+    [Test]
+    public async Task FetchConfig_OnAGatedRepoWithoutAccess_FailsAsGated()
+    {
+        var payloads = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["config.json"] = Encoding.UTF8.GetBytes("{}")
+        };
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        var store = Store(handler, HubDetail(BaseRepo, payloads, license: null, gated: "manual", revision: "sha"));
+
+        var failure = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.FetchConfigAsync(BaseRepo, revision: null, Path.Combine(_root, "gated"), CancellationToken.None));
+
+        AssertEx.True(failure.Reason is HuggingFaceDownloadFailure.Gated or HuggingFaceDownloadFailure.Unauthorized, failure.Reason.ToString());
+    }
+
     [Test]
     public void ClassifyFile_SelectsOnlyWhatFineTuningNeeds()
     {

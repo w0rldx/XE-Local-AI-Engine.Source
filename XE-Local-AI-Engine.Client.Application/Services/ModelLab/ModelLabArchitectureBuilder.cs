@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelLab;
 
 using System.Globalization;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>Turns a GGUF header inspection into the architecture descriptor; <c>qwen35</c> is the one detailed architecture.</summary>
@@ -39,6 +40,7 @@ public static class ModelLabArchitectureBuilder
                 Architecture = inspection.Architecture,
                 Support = "unreadable",
                 ReadFailure = string.Concat(char.ToLowerInvariant(failure[0]).ToString(), failure[1..]),
+                SuggestedBaseRepo = SuggestedBaseRepo(inspection),
                 Blocks = [],
                 Templates = [],
                 NonBlock = []
@@ -76,10 +78,35 @@ public static class ModelLabArchitectureBuilder
             Architecture = inspection.Architecture,
             Support = detailed ? "detailed" : "overview",
             ReadFailure = null,
+            SuggestedBaseRepo = SuggestedBaseRepo(inspection),
             Blocks = blocks,
             Templates = detailed ? ModelLabQwen35Architecture.TemplatesFor(blocks.Select(static block => block.Kind)) : [],
             NonBlock = NonBlockGroups(nonBlockTensors, detailed)
         };
+    }
+
+    /// <summary>The source repo, else the first base model, when its URL is exactly <c>https://huggingface.co/owner/name</c>.</summary>
+    internal static string? SuggestedBaseRepo(GgufTensorInspection inspection) =>
+        RepoIdOrNull(inspection.SourceRepoUrl) ?? RepoIdOrNull(inspection.BaseModelRepoUrl);
+
+    private static string? RepoIdOrNull(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, "huggingface.co", StringComparison.OrdinalIgnoreCase)
+            || !uri.IsDefaultPort
+            || uri.Query.Length > 0
+            || uri.Fragment.Length > 0
+            || uri.UserInfo.Length > 0)
+        {
+            return null;
+        }
+
+        // A dataset or a space has the same two-segment shape under its own prefix, and is no model.
+        var repoId = uri.AbsolutePath.Trim('/');
+        return HuggingFaceRepoId.IsValid(repoId) && !repoId.StartsWith("datasets/", StringComparison.Ordinal) && !repoId.StartsWith("spaces/", StringComparison.Ordinal)
+            ? repoId
+            : null;
     }
 
     // First match wins: an MTP block also carries full attention, and a linear block also carries attn_qkv, which

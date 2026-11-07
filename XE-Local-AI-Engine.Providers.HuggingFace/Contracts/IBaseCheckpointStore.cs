@@ -81,6 +81,52 @@ public interface IBaseCheckpointStore
         string destinationDirectory,
         IProgress<PullProgress>? progress,
         CancellationToken ct);
+
+    /// <summary>
+    ///     Resolves <paramref name="repoId" /> to its commit and downloads only its <c>config.json</c> into
+    ///     <paramref name="destinationDirectory" />. Unlike <see cref="ResolveAsync" /> it needs no safetensors.
+    /// </summary>
+    /// <returns>A manifest naming the resolved commit, with the one config file and its local path.</returns>
+    /// <exception cref="BaseCheckpointConfigException">The repo could not be read, has no config, or its config is over <see cref="BaseCheckpointConfigException.MaxConfigBytes" />.</exception>
+    /// <exception cref="XE_Local_AI_Engine.Providers.Abstractions.Gguf.HuggingFaceDownloadException">The transfer failed; a gated repo without access lands here.</exception>
+    Task<BaseCheckpointManifest> FetchConfigAsync(string repoId, string? revision, string destinationDirectory, CancellationToken ct);
+}
+
+/// <summary>Why <see cref="IBaseCheckpointStore.FetchConfigAsync" /> refused before any transfer.</summary>
+public enum BaseCheckpointConfigFailure
+{
+    Unreachable,
+    ConfigMissing,
+    ConfigTooLarge
+}
+
+/// <summary>A config-only fetch refused before any transfer. The message is operator-facing.</summary>
+public sealed class BaseCheckpointConfigException : Exception
+{
+    /// <summary>A <c>config.json</c> describes a model's shape; anything larger is not one.</summary>
+    public const long MaxConfigBytes = 1024 * 1024;
+
+    public BaseCheckpointConfigException()
+    {
+    }
+
+    public BaseCheckpointConfigException(string message)
+        : base(message)
+    {
+    }
+
+    public BaseCheckpointConfigException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    public BaseCheckpointConfigException(BaseCheckpointConfigFailure failure, string message)
+        : base(message)
+    {
+        Failure = failure;
+    }
+
+    public BaseCheckpointConfigFailure Failure { get; }
 }
 
 /// <summary>The selected repository cannot be fine-tuned from. The message is operator-facing.</summary>

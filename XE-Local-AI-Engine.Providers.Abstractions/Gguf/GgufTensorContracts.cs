@@ -71,6 +71,12 @@ public sealed class GgufTensorInspection
     /// </summary>
     public long? SteerableBlockCount => BlockCount - (NextnPredictLayers ?? 0);
 
+    /// <summary><c>general.source.repo_url</c>: where the converter read the checkpoint from, or <see langword="null" /> when absent.</summary>
+    public string? SourceRepoUrl { get; init; }
+
+    /// <summary><c>general.base_model.0.repo_url</c>: the first model this one was derived from, or <see langword="null" /> when absent.</summary>
+    public string? BaseModelRepoUrl { get; init; }
+
     /// <summary>Linear-attention key heads (<c>{arch}.ssm.group_count</c>), or <see langword="null" /> when absent.</summary>
     public long? SsmGroupCount { get; init; }
 

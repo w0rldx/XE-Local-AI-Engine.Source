@@ -299,6 +299,8 @@ internal static class GgufTensorBlockReader
             Version = version,
             Architecture = header.Architecture,
             ModelName = values.TryGetValue("general.name", out var name) ? name as string : null,
+            SourceRepoUrl = values.TryGetValue("general.source.repo_url", out var source) ? source as string : null,
+            BaseModelRepoUrl = values.TryGetValue("general.base_model.0.repo_url", out var baseModel) ? baseModel as string : null,
             ParamCount = header.ParamCount ?? (failure == GgufTensorReadFailure.None ? SumElements(tensors) : null),
             FileType = values.TryGetValue("general.file_type", out var fileType) && fileType is long number
                 ? GgufQuantDetector.FileTypeNames.GetValueOrDefault(number, header.QuantType)

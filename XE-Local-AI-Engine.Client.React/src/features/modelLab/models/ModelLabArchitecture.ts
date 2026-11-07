@@ -11,8 +11,15 @@ import { type BlockKind, blockKindColors } from "@/core/models/inspect/GgufInspe
 
 export type { ArchitectureBlock, ArchitectureGroup, ArchitectureTemplate, ArchitectureTensor };
 
-// The overview's selection: a block by its index, or the tensors outside every block.
-export type ArchitectureSelection = number | "outside";
+// The overview's selection: a block by its index, or the tensors before or after every block.
+export type ArchitectureSelection = number | "embedding" | "output";
+
+const outputComponentIds = new Set(["output_norm", "output"]);
+
+// Output is the final norm and the output head; Embedding is everything else outside the blocks.
+export function outsideGroups(nonBlock: readonly ArchitectureGroup[], end: "embedding" | "output"): ArchitectureGroup[] {
+	return nonBlock.filter((group) => outputComponentIds.has(group.componentId) === (end === "output"));
+}
 
 export interface BlockTraceSummary {
 	// Mean of the residual's norm over the traced tokens; null when no token kept a finite one.

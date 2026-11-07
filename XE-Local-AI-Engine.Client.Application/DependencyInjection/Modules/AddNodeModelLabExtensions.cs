@@ -38,6 +38,9 @@ internal static class AddNodeModelLabExtensions
         builder.Services.AddSingleton<ModelLabArmRunner>();
         builder.Services.AddSingleton<ModelLabExperimentService>();
         builder.Services.AddSingleton<IModelLabActiveJob>(static provider => provider.GetRequiredService<ModelLabExperimentService>());
+
+        // A singleton for its single-flight flag. Its jobs run inside the request and share the work root the startup reaper sweeps.
+        builder.Services.AddSingleton<ModelLabPyTorchSourceService>();
         builder.Services.AddHostedService<ModelLabStartupReaper>();
         builder.Services.AddHostedService(static provider => provider.GetRequiredService<ModelLabExperimentService>());
         return builder;

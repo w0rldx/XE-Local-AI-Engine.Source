@@ -216,6 +216,47 @@ public sealed class ModelLabArchitectureBuilderTests
         AssertEx.Empty(descriptor.NonBlock);
     }
 
+    [Test]
+    [Arguments("https://huggingface.co/Qwen/Qwen3.5-0.8B", null, "Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://huggingface.co/Qwen/Qwen3.5-0.8B/", null, "Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://HuggingFace.co/Qwen/Qwen3.5-0.8B", null, "Qwen/Qwen3.5-0.8B")]
+    [Arguments(null, "https://huggingface.co/Qwen/Qwen3.8-27B", "Qwen/Qwen3.8-27B")]
+    [Arguments("https://huggingface.co/unsloth/Qwen3.5-0.8B", "https://huggingface.co/Qwen/Qwen3.5-0.8B", "unsloth/Qwen3.5-0.8B")]
+    [Arguments("not a url", "https://huggingface.co/Qwen/Qwen3.5-0.8B", "Qwen/Qwen3.5-0.8B")]
+    public void SuggestedBaseRepo_IsTheSourceRepo_ElseTheFirstBaseModel(string? source, string? baseModel, string expected)
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Inspection("qwen35", [], sourceRepoUrl: source, baseModelRepoUrl: baseModel));
+
+        AssertEx.Equal(expected, descriptor.SuggestedBaseRepo!);
+    }
+
+    /// <summary>Only <c>https://huggingface.co/owner/name</c> is a prefill: a mirror, a path below the repo or a dataset names no model repo to fetch.</summary>
+    [Test]
+    [Arguments("http://huggingface.co/Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://hf-mirror.com/Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://huggingface.co.evil.example/Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://huggingface.co/Qwen/Qwen3.5-0.8B/tree/main")]
+    [Arguments("https://huggingface.co/Qwen")]
+    [Arguments("https://huggingface.co/Qwen/Qwen3.5-0.8B?x=1")]
+    [Arguments("https://huggingface.co:8443/Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://user@huggingface.co/Qwen/Qwen3.5-0.8B")]
+    [Arguments("https://huggingface.co/datasets/owner")]
+    [Arguments("https://huggingface.co/Qwen/..")]
+    [Arguments("Qwen/Qwen3.5-0.8B")]
+    [Arguments("")]
+    public void SuggestedBaseRepo_IsNull_ForAnyOtherUrl(string url)
+    {
+        var descriptor = ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Inspection("qwen35", [], sourceRepoUrl: url, baseModelRepoUrl: url));
+
+        AssertEx.Null(descriptor.SuggestedBaseRepo);
+    }
+
+    [Test]
+    public void SuggestedBaseRepo_IsNull_WhenTheHeaderNamesNoRepo()
+    {
+        AssertEx.Null(ModelLabArchitectureBuilder.Build(ModelName, Qwen35TensorFixture.Qwen35_0_8B()).SuggestedBaseRepo);
+    }
+
     private static IEnumerable<ModelLabArchitectureTensor> AllTensors(ModelLabArchitectureResponse descriptor) =>
         descriptor.Blocks.SelectMany(static block => block.Groups).Concat(descriptor.NonBlock).SelectMany(static group => group.Tensors);
 }

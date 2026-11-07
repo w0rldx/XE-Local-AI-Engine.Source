@@ -7,7 +7,7 @@ import {
 	promptExcerpt,
 	summarizeTraceByBlock,
 } from "@/features/modelLab/models/ModelLabArchitecture";
-import { layoutTemplate } from "@/features/modelLab/models/ModelLabTemplateLayout";
+import { layoutTemplate, maxNodesPerRow } from "@/features/modelLab/models/ModelLabTemplateLayout";
 
 describe("summarizeTraceByBlock", () => {
 	it("averages finite norms, takes the highest p99 and ranks top dimensions by how often they appear", () => {
@@ -72,5 +72,41 @@ describe("layoutTemplate", () => {
 		expect(positions.get("in")?.y).toBe(0);
 		expect(positions.get("add")?.y).toBeGreaterThan(positions.get("attn")?.y ?? Number.POSITIVE_INFINITY);
 		expect(positions.size).toBe(5);
+	});
+
+	it("wraps a rank wider than a row onto rows of its own, with no two nodes on one spot", () => {
+		const roots = Array.from({ length: 30 }, (_, index) => `op${String(index).padStart(2, "0")}`);
+		const positions = layoutTemplate(
+			[...roots, "sum"],
+			roots.map((from) => ({ from, to: "sum" })),
+		);
+
+		const perRow = new Map<number | undefined, number>();
+		for (const id of roots) {
+			const y = positions.get(id)?.y;
+			perRow.set(y, (perRow.get(y) ?? 0) + 1);
+		}
+		expect(perRow.size).toBe(Math.ceil(30 / maxNodesPerRow));
+		expect(Math.max(...perRow.values())).toBe(maxNodesPerRow);
+		expect(new Set([...positions.values()].map((point) => `${point.x},${point.y}`)).size).toBe(31);
+		// The sink sits below every row of its inputs.
+		expect(positions.get("sum")?.y).toBeGreaterThan(Math.max(...roots.map((id) => positions.get(id)?.y ?? 0)));
+	});
+
+	it("breaks a cycle at one back edge instead of parking all that is left on one rank", () => {
+		// b -> c -> d -> b runs twice, as a source line grouped from two calls does.
+		const positions = layoutTemplate(
+			["a", "b", "c", "d", "e"],
+			[
+				{ from: "a", to: "b" },
+				{ from: "b", to: "c" },
+				{ from: "c", to: "d" },
+				{ from: "d", to: "b" },
+				{ from: "d", to: "e" },
+			],
+		);
+
+		const rows = ["a", "b", "c", "d", "e"].map((id) => positions.get(id)?.y);
+		expect(rows).toEqual([0, 90, 180, 270, 360]);
 	});
 });

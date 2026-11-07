@@ -19,6 +19,10 @@ public sealed record ModelLabArchitectureResponse
     /// <summary>Why the GGUF read stopped (<c>unreadable</c>, <c>unsupportedVersion</c>, <c>truncated</c>, <c>malformed</c>), or null.</summary>
     public required string? ReadFailure { get; init; }
 
+    /// <summary>The <c>owner/name</c> of the header's source repo, else its first base model, when that URL is exactly <c>https://huggingface.co/owner/name</c>.</summary>
+    /// <remarks>A prefill for the config-only fetch, never trusted as a pairing.</remarks>
+    public required string? SuggestedBaseRepo { get; init; }
+
     /// <summary>One entry per <c>blk.N</c> index in ascending order; empty when the file was unreadable.</summary>
     public required IReadOnlyList<ModelLabArchitectureBlock> Blocks { get; init; }
 

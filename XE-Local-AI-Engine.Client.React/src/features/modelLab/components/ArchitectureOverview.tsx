@@ -11,8 +11,10 @@ import {
 
 interface ArchitectureOverviewProps {
 	blocks: ArchitectureBlock[];
-	// False when the file holds no `output` tensor of its own, so there is no Output entry to open.
-	hasOutput: boolean;
+	// True when the file holds an output norm or an output tensor, so there is an Output entry to open.
+	hasOutputGroup: boolean;
+	// False when the file holds no `output` tensor of its own: the output may share the embedding weights.
+	hasOutputTensor: boolean;
 	selection: ArchitectureSelection | null;
 	// The blocks the chosen trace measured; null when no trace is chosen.
 	tracedBlocks: ReadonlySet<number> | null;
@@ -22,7 +24,14 @@ interface ArchitectureOverviewProps {
 const selectedOutline = "2px solid var(--mantine-color-text)";
 
 // Embedding, then every block in file order, then the output: each block a button, so the strip is the keyboard path too.
-export function ArchitectureOverview({ blocks, hasOutput, selection, tracedBlocks, onSelect }: ArchitectureOverviewProps) {
+export function ArchitectureOverview({
+	blocks,
+	hasOutputGroup,
+	hasOutputTensor,
+	selection,
+	tracedBlocks,
+	onSelect,
+}: ArchitectureOverviewProps) {
 	const { t } = useTranslation();
 	const labels = blockKindLabels(t);
 	const cellLabel = (block: ArchitectureBlock): string => {
@@ -37,12 +46,12 @@ export function ArchitectureOverview({ blocks, hasOutput, selection, tracedBlock
 	const kinds = (Object.keys(blockKindColors) as BlockKind[]).filter((kind) =>
 		blocks.some((block) => architectureBlockKind(block.kind) === kind),
 	);
-	const outside = (label: string) => (
+	const outside = (end: "embedding" | "output", label: string) => (
 		<Button
-			variant={selection === "outside" ? "filled" : "default"}
+			variant={selection === end ? "filled" : "default"}
 			size="compact-xs"
-			aria-pressed={selection === "outside"}
-			onClick={() => onSelect("outside")}
+			aria-pressed={selection === end}
+			onClick={() => onSelect(end)}
 		>
 			{label}
 		</Button>
@@ -51,7 +60,7 @@ export function ArchitectureOverview({ blocks, hasOutput, selection, tracedBlock
 	return (
 		<Stack gap="xs" data-testid="model-lab-architecture-overview">
 			<Group gap={4} align="center">
-				{outside(t("pages.modelLab.architecture.component.embedding", "Embedding"))}
+				{outside("embedding", t("pages.modelLab.architecture.component.embedding", "Embedding"))}
 				<IconArrowRight size={14} aria-hidden="true" />
 				{blocks.map((block) => {
 					const kind = architectureBlockKind(block.kind);
@@ -90,14 +99,14 @@ export function ArchitectureOverview({ blocks, hasOutput, selection, tracedBlock
 						</UnstyledButton>
 					);
 				})}
-				{hasOutput && (
+				{hasOutputGroup && (
 					<>
 						<IconArrowRight size={14} aria-hidden="true" />
-						{outside(t("pages.modelLab.architecture.component.output", "Output"))}
+						{outside("output", t("pages.modelLab.architecture.component.output", "Output"))}
 					</>
 				)}
 			</Group>
-			{!hasOutput && (
+			{!hasOutputTensor && (
 				<Text size="xs" c="dimmed" data-testid="model-lab-architecture-no-output">
 					{t(
 						"pages.modelLab.architecture.noOutput",
