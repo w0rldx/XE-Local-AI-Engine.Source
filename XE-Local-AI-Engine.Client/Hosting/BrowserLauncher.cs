@@ -56,7 +56,10 @@ internal static class BrowserLauncher
         var (fileName, arguments) = BuildOpenCommand(url, isWindows);
         var startInfo = new ProcessStartInfo(fileName, arguments)
         {
-            UseShellExecute = false
+            UseShellExecute = false,
+            // An AppImage's working directory is its private mount, from which WSL cannot start the Windows program that
+            // xdg-open delegates to ("rundll32.exe: Invalid argument").
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
         };
 
         try

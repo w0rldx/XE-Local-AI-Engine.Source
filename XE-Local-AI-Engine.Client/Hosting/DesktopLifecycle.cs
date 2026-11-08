@@ -205,6 +205,11 @@ internal sealed class DesktopLifecycle : IDisposable
             {
                 DesktopReadyPublisher.Publish(_dataDirectory, url, _version, _timeProvider, _standardOutput, _logger);
             }
+
+            if (!_suppressBrowser)
+            {
+                DesktopReadyPublisher.WriteBrowserBanner(url, _standardOutput);
+            }
         }
         catch (Exception exception)
         {

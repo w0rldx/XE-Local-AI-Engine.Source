@@ -48,6 +48,44 @@ public sealed class DesktopLifecycleReadyTests
         }
     }
 
+    [Test]
+    public void ApplicationStarted_InBrowserMode_PrintsTheUrlBannerAfterTheReadyLine()
+    {
+        var dataDirectory = Path.Combine(Path.GetTempPath(), "xe-ready-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDirectory);
+        using var output = new StringWriter();
+        using var lifetime = new FakeLifetime();
+        using var server = new FakeServer();
+        try
+        {
+            using var lifecycle = new DesktopLifecycle(lifetime,
+                server,
+                NullLogger<DesktopLifecycle>.Instance,
+                TimeProvider.System,
+                dataDirectory,
+                static () => "http://127.0.0.1:41234/",
+                suppressBrowser: false,
+                version: "1.2.3",
+                standardOutput: output);
+            lifecycle.Activate();
+            lifetime.SignalStarted();
+
+            var expected = string.Join(Environment.NewLine,
+                $"XE_READY=1 XE_VERSION=1.2.3 XE_URL=http://127.0.0.1:41234 XE_MCP_URL=http://127.0.0.1:41234/api/local/v1/mcp/server XE_DATA_DIR={dataDirectory}",
+                string.Empty,
+                "  XE Local AI Engine is ready",
+                "  Open in your browser: http://127.0.0.1:41234/",
+                "  Press Ctrl+C to stop",
+                string.Empty,
+                string.Empty);
+            AssertEx.Equal(expected, output.ToString());
+        }
+        finally
+        {
+            Directory.Delete(dataDirectory, recursive: true);
+        }
+    }
+
     private sealed class FakeLifetime : IHostApplicationLifetime, IDisposable
     {
         private readonly CancellationTokenSource _started = new();

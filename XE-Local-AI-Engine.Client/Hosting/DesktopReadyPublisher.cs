@@ -36,4 +36,22 @@ internal static class DesktopReadyPublisher
         standardOutput.WriteLine($"XE_READY=1 XE_VERSION={version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={dataDirectory}");
 #pragma warning restore MA0045
     }
+
+    /// <summary>
+    ///     Tells the person at the terminal where a browser-mode engine is listening. Separate from the machine-read
+    ///     <c>XE_READY</c> line, whose exact bytes are a contract.
+    /// </summary>
+    internal static void WriteBrowserBanner(string url, TextWriter standardOutput)
+    {
+        ArgumentNullException.ThrowIfNull(standardOutput);
+        var banner = string.Join(Environment.NewLine,
+            string.Empty,
+            "  XE Local AI Engine is ready",
+            $"  Open in your browser: {url}",
+            "  Press Ctrl+C to stop",
+            string.Empty);
+#pragma warning disable MA0045 // Called from the synchronous ApplicationStarted callback.
+        standardOutput.WriteLine(banner);
+#pragma warning restore MA0045
+    }
 }

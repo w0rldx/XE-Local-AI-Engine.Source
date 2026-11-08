@@ -300,6 +300,16 @@ public sealed class DesktopLaunchTests
     }
 
     [Test]
+    public void BrowserLaunch_StartsFromTheUserProfile_NotTheInheritedAppImageMount()
+    {
+        ProcessStartInfo? captured = null;
+
+        BrowserLauncher.OpenBrowser("http://127.0.0.1:5005/", isWindows: false, NullLogger.Instance, startInfo => captured = startInfo);
+
+        AssertEx.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), AssertEx.NotNull(captured).WorkingDirectory);
+    }
+
+    [Test]
     public void LoopbackUrlResolver_ParsesServerAddressesFeature()
     {
         var feature = new FakeServerAddressesFeature();
