@@ -768,6 +768,12 @@ jobs:
       - name: Check generated OpenAPI client is up to date
         run: pnpm run openapi:check
 
+      # Breaking-change gate: compare the committed spec with the committed release baseline
+      # (openapi/v1.baseline.json); a removal or a newly required input fails unless listed with a reason in
+      # openapi/breaking-acknowledged.json. Both are committed files, so the default shallow checkout suffices.
+      - name: Check OpenAPI contract has no unacknowledged breaking change
+        run: pnpm run openapi:breaking
+
       # License-drift gate: fail the build if a production dependency's license is not on
       # the allowlist, or if the committed license manifest is stale. Same deterministic, host-free
       # pattern as the OpenAPI drift gate above. `pnpm run licenses:check` (not `pnpm licenses`,
@@ -775,7 +781,7 @@ jobs:
       - name: Check dependency licenses
         run: pnpm run licenses:check
 
-      # `acceptance` = `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`, the
+      # `acceptance` = `openapi:breaking` → `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`, the
       # static checks once. `validate` is a superset of `lint`: tsc --noEmit + biome + stylelint,
       # then the knip dead-code baseline, the SignalR proxy/hub-registration sync check (reads
       # Program.cs from this checkout — no running backend) and the dependency-cruiser baseline.

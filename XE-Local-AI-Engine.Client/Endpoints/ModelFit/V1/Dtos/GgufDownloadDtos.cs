@@ -210,6 +210,18 @@ public sealed class GgufDownloadStatusResponse
     public DateTimeOffset? StartedAtUtc { get; init; }
 
     public DateTimeOffset? UpdatedAtUtc { get; init; }
+
+    /// <summary>The start request's <c>fileName</c>, so a retry replays it; <c>null</c> when it named none.</summary>
+    public string? FileName { get; init; }
+
+    /// <summary>The start request's <c>revision</c>, so a retry replays it; <c>null</c> when it named none.</summary>
+    public string? Revision { get; init; }
+
+    /// <summary>
+    ///     The start request's <c>includeProjector</c>; <c>null</c> when the node does not know the request (a row recorded
+    ///     after a restart), so none of the three options can be replayed.
+    /// </summary>
+    public bool? IncludeProjector { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/gguf/downloads</c>.</summary>

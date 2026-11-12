@@ -4748,6 +4748,9 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse
 	errorCode: z.string().nullish(),
 	startedAtUtc: z.iso.datetime({ offset: true }).nullish(),
 	updatedAtUtc: z.iso.datetime({ offset: true }).nullish(),
+	fileName: z.string().nullish(),
+	revision: z.string().nullish(),
+	includeProjector: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufImportCapabilityResponse = z.object({

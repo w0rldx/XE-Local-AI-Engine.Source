@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
@@ -31,26 +32,9 @@ public sealed class GetGgufDownloadsEndpoint : EndpointWithoutRequest<ListGgufDo
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var statuses = _downloadCoordinator.ListStatuses();
-        var items = statuses
-                    .Select(s => new GgufDownloadStatusResponse
-                    {
-                        OperationId = s.OperationId,
-                        OperationKind = s.OperationKind,
-                        ModelName = s.ModelName,
-                        Phase = s.Phase.ToString(),
-                        CompletedBytes = s.CompletedBytes,
-                        TotalBytes = s.TotalBytes,
-                        SanitizedError = s.SanitizedError,
-                        ErrorCode = s.ErrorCode,
-                        StartedAtUtc = s.StartedAtUtc,
-                        UpdatedAtUtc = s.UpdatedAtUtc
-                    })
-                    .ToList();
-
         await Send.OkAsync(new ListGgufDownloadsResponse
         {
-            Items = items
+            Items = _downloadCoordinator.ListStatuses().Select(GgufDownloadStatusMapper.Map).ToList()
         }, ct);
     }
 }

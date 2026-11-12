@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -64,6 +65,46 @@ public sealed class GgufDownloadOperationStatusEndpointTests
     }
 
     [Test]
+    public async Task EveryDownloadRoute_CarriesTheStartRequestOptions_SoARetryCanReplayThem()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var registry = factory.Services.GetRequiredService<IGgufAcquisitionOperationRegistry>();
+        var registration = registry.Start(GgufAcquisitionOperationKind.Download,
+            "options-route-test-model",
+            downloadRequest: new GgufModelRequest
+            {
+                RepoId = "org/options-route-test-model",
+                FileName = "sub/model-Q5_K_M.gguf",
+                Revision = "pinned-branch",
+                IncludeProjector = false
+            });
+        var operationId = registration.Status.OperationId;
+
+        using var listRequest = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/gguf/downloads");
+        factory.AddNodeBearerToken(listRequest);
+        using var listResponse = await client.SendAsync(listRequest);
+        AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        using var listDoc = JsonDocument.Parse(await listResponse.Content.ReadAsStringAsync());
+        var listed = listDoc.RootElement.GetProperty("items")
+                            .EnumerateArray()
+                            .Single(item => item.GetProperty("operationId").GetGuid() == operationId);
+
+        foreach (var row in new[]
+                 {
+                     listed,
+                     await GetRowAsync(client, factory, $"{ApiPrefix}/model-fit/gguf/downloads/options-route-test-model"),
+                     await GetRowAsync(client, factory, $"{ApiPrefix}/model-fit/gguf/downloads/operations/{operationId}")
+                 })
+        {
+            AssertEx.Equal("sub/model-Q5_K_M.gguf", row.GetProperty("fileName").GetString());
+            AssertEx.Equal("pinned-branch", row.GetProperty("revision").GetString());
+            AssertEx.False(row.GetProperty("includeProjector").GetBoolean());
+        }
+    }
+
+    [Test]
     public async Task ForAnImportOperationId_ReturnsNotFound()
     {
         var factory = Factory;
@@ -97,5 +138,15 @@ public sealed class GgufDownloadOperationStatusEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static async Task<JsonElement> GetRowAsync(HttpClient client, TestServerWebAppFactory factory, string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.Clone();
     }
 }

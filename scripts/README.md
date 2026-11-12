@@ -25,6 +25,7 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 - [`lint-release-scripts.sh`](lint-release-scripts.sh) — static analysis for the release-critical shell + PowerShell scripts.
 - [`merge-cobertura.py`](merge-cobertura.py) — Merge Cobertura line coverage without double-counting repeated source lines.
 - [`model-matrix-driver.py`](model-matrix-driver.py) — Driver for scripts/run-model-matrix-local.sh: pinned models, scenario checks against a running dev host, the verdict.
+- [`openapi-breaking-check.py`](openapi-breaking-check.py) — Fail when the committed OpenAPI contract loses something a client could depend on, unless acknowledged.
 - [`openapi-live-check.sh`](openapi-live-check.sh) — Compare the committed frontend client with a freshly started desktop backend.
 - [`python-validation.sh`](python-validation.sh) — repo Python quality gate (ruff / pyrefly / pytest / bandit)
 - [`read-release-version.py`](read-release-version.py) — Read and validate the application version from the canonical release manifest.
@@ -49,7 +50,7 @@ Stopping a dev host safely: [README-dev-stop.md](README-dev-stop.md).
 
 - [`compliance/`](compliance/) — Holds `bundle_input_evidence.py`, `capture_bundle_inputs.targets`, `create_bundle_input_manifest.py`, `generate_backend_license_corpus.py`, `nuget-license-overrides.json`, `reconcile_payload_spdx.py` and more.
 - [`lab/`](lab/) — Holds `profiles/`.
-- [`lib/`](lib/) — Holds `build-lock-common.sh`, `git-env.sh`, `test-sizing.sh`.
+- [`lib/`](lib/) — Holds `build-lock-common.sh`, `discover-llama-server.sh`, `git-env.sh`, `smoke-ledger.sh`, `test-sizing.sh`.
 - [`model-matrix/`](model-matrix/) — Holds `models.json`.
 - [`performance/`](performance/) — Holds `capture_inference_evidence.py`, `capture_windows_vram.ps1`, `inference_evidence/`, `run_scheduling_grid.py`, `tests/`.
 - [`release/`](release/) — Holds `dev-build-identity.py`, `verify-release-authority.py`, `verify-release-envelope.py`.

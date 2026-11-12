@@ -9,6 +9,7 @@ const { scripts } = JSON.parse(readFileSync(new URL("../package.json", import.me
 const stages = [
 	"node:check",
 	"licenses:check",
+	"openapi:breaking",
 	"lint",
 	"knip",
 	"signalr:check",

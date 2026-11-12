@@ -37,4 +37,10 @@ internal sealed class GgufDownloadStatusHubMessage
     public required string? ErrorCode { get; init; }
 
     public required DateTimeOffset? UpdatedAtUtc { get; init; }
+
+    public required string? FileName { get; init; }
+
+    public required string? Revision { get; init; }
+
+    public required bool? IncludeProjector { get; init; }
 }

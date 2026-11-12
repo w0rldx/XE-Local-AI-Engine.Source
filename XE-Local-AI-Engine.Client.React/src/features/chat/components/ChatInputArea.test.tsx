@@ -253,6 +253,15 @@ describe("ChatInputArea image attachment gate", () => {
 		expect(fileInput?.getAttribute("accept")).toContain("image/*");
 	});
 
+	it("offers the code and config files the server extracts in the file picker", () => {
+		const { container } = renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} onUploadFiles={vi.fn()} />,
+		);
+
+		const accepted = container.querySelector('input[type="file"]')?.getAttribute("accept")?.split(",") ?? [];
+		expect(accepted).toEqual(expect.arrayContaining([".py", ".cs", ".ts", ".yaml", ".toml", ".pdf", ".docx"]));
+	});
+
 	// The paperclip ActionIcon is the labeled control; the input behind it is display:none and only opens the OS
 	// picker, so it belongs out of the accessibility tree rather than in it as a nameless file field.
 	it("keeps the hidden file input out of the accessibility tree", () => {

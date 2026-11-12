@@ -6,6 +6,7 @@ import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
+import { HubConnectionStatusChip } from "@/core/layout/components/HubConnectionStatusChip/HubConnectionStatusChip";
 import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar";
 import type { IMobileNavigationDrawerActions } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar.types";
 import { isDesktopShell } from "@/core/layout/constants/LayoutBreakpoints";
@@ -51,6 +52,7 @@ export function HeaderBar({ headerStatus, headerIndicator, headerActions, drawer
 				{/* min-w-0 + overflow-hidden: when the header crowds, the gauge gives way, never the cluster with Logout. */}
 				<div className="flex-grow min-w-0 overflow-hidden flex flex-row items-center justify-start gap-2">
 					{headerIndicator}
+					<HubConnectionStatusChip />
 					{/* Desktop shell only, like the right cluster; the widget gates itself on capability and session. */}
 					{isDesktop ? headerStatus : null}
 				</div>

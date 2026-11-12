@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import type { ChatConversationModel, ChatMessageModel, ChatStreamingState } from "@/features/chat/models/ChatModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
@@ -332,5 +333,75 @@ describe("ChatMessageList virtualization threshold", () => {
 		// under test is windowing itself: strictly fewer mounted rows than the 60 in the thread.
 		const mounted = container.querySelectorAll("[data-testid=chat-message-list-virtual] > [data-index]").length;
 		expect(mounted).toBeLessThan(60);
+	});
+});
+
+describe("ChatMessageList Continue after a cut-off answer", () => {
+	beforeEach(() => {
+		Element.prototype.scrollIntoView = vi.fn();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	function cutOffAnswer(id: string, sortOrder: number): ChatMessageModel {
+		return {
+			id,
+			conversationId: "conversation-1",
+			role: "assistant",
+			content: "A long answer that",
+			status: "completed",
+			createdAt: "2026-06-04T00:00:02.000Z",
+			sortOrder,
+			parts: [
+				{ kind: "text", id: `${id}:1`, sequence: 1, text: "A long answer that" },
+				{
+					kind: "notice",
+					id: `${id}:2`,
+					sequence: 2,
+					noticeKind: "OutputLimitReached",
+					text: "The answer stopped at the length limit before the model finished.",
+				},
+			],
+		};
+	}
+
+	it("offers Continue on the latest turn only", () => {
+		const convo = conversation([
+			userMessage(),
+			cutOffAnswer("assistant-1", 2),
+			userMessage({ id: "user-2", sortOrder: 3 }),
+			cutOffAnswer("assistant-2", 4),
+		]);
+
+		renderWithProviders(
+			<ChatNoticeContinueContext value={vi.fn()}>
+				<ChatMessageList conversation={convo} />
+			</ChatNoticeContinueContext>,
+		);
+
+		expect(screen.getAllByTestId("chat-notice-row")).toHaveLength(2);
+		expect(screen.getAllByRole("button", { name: "Continue" })).toHaveLength(1);
+		expect(screen.getByTestId("chat-message-assistant-2").contains(screen.getByTestId("chat-notice-continue"))).toBe(true);
+	});
+
+	it("hides Continue while a turn is streaming", () => {
+		const convo = conversation([userMessage(), cutOffAnswer("assistant-1", 2)]);
+		const streamingMessage: ChatStreamingState = {
+			conversationId: "conversation-1",
+			messageId: "assistant-2",
+			content: "",
+			isActive: true,
+		};
+
+		renderWithProviders(
+			<ChatNoticeContinueContext value={vi.fn()}>
+				<ChatMessageList conversation={convo} streamingMessage={streamingMessage} />
+			</ChatNoticeContinueContext>,
+		);
+
+		expect(screen.getByTestId("chat-notice-row")).toBeTruthy();
+		expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
 	});
 });

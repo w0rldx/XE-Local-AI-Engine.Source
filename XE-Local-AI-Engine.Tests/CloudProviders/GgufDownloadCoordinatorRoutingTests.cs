@@ -93,6 +93,69 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     }
 
     [Test]
+    public async Task FailedDownload_KeepsItsStartRequestOptionsOnTheRow_SoARetryCanReplayThem()
+    {
+        var coordinator = BuildCoordinator(new ProvisioningDownloadTransaction
+        {
+            FailDownload = true
+        }, new InMemoryCoordinatedModelProviderMapStore());
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest
+        {
+            RepoId = Repo,
+            FileName = "model-Q4_K_M.gguf",
+            Revision = "pinned-branch",
+            IncludeProjector = false
+        }, CancellationToken.None);
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
+
+        foreach (var row in new[] { coordinator.GetStatus(ticket.ModelName), coordinator.GetStatus(ticket.OperationId), coordinator.ListStatuses().Single() }
+                     .Select(static row => AssertEx.NotNull(row)))
+        {
+            AssertEx.Equal("model-Q4_K_M.gguf", row.FileName);
+            AssertEx.Equal("pinned-branch", row.Revision);
+            AssertEx.Equal(false, row.IncludeProjector);
+        }
+    }
+
+    [Test]
+    public async Task InterruptedRow_CarriesNoStartRequestOptions_AndTheRestartedDownloadCarriesItsOwn()
+    {
+        var store = new ProvisioningDownloadTransaction
+        {
+            FailDownload = true,
+            Interrupted =
+            [
+                new InterruptedGgufDownload
+                {
+                    ModelName = GgufModelName.Format(Repo, Quant),
+                    TotalBytes = 42
+                }
+            ]
+        };
+        var coordinator = BuildCoordinator(store, new InMemoryCoordinatedModelProviderMapStore());
+
+        // Nothing on disk records the original request (the intent file keeps the model name and size only), so the
+        // row must not claim a projector choice the operator never made.
+        var interrupted = AssertEx.NotNull(coordinator.ListStatuses().SingleOrDefault());
+        AssertEx.Null(interrupted.FileName);
+        AssertEx.Null(interrupted.Revision);
+        AssertEx.Null(interrupted.IncludeProjector);
+
+        var ticket = await coordinator.StartAsync(new GgufModelRequest
+        {
+            RepoId = Repo,
+            Quant = Quant,
+            IncludeProjector = false
+        }, CancellationToken.None);
+        await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
+
+        var restarted = coordinator.ListStatuses().Single();
+        AssertEx.Equal(ticket.OperationId, restarted.OperationId);
+        AssertEx.Equal(false, restarted.IncludeProjector);
+    }
+
+    [Test]
     public async Task FailedDownload_WritesNoMapRow()
     {
         var mapStore = new InMemoryCoordinatedModelProviderMapStore();

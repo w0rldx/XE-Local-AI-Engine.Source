@@ -31,7 +31,9 @@ guessing.
 What an outside client can rely on from 1.0. The binding text is in the wiki; this is the summary.
 
 - **HTTP API.** `/api/local/v1` is additive-only within 1.x: new routes and new optional request or response fields
-  may appear. Removing, renaming or retyping a route or field waits for the next major version.
+  may appear. Removing, renaming or retyping a route or field waits for the next major version. A check in every
+  build enforces this: it compares the contract with a baseline refreshed at each release and fails when a route or
+  field disappears, or a new input becomes required, without an acknowledged reason.
   [Rule](../../wiki/09-api-and-hubs.md#1-the-inbound-http-api-fastendpoints)
 - **SignalR hubs.** Hub paths, event names and the wire records follow the same rule.
   [Rule](../../wiki/09-api-and-hubs.md#2-signalr-hubs-inbound-browser--node)

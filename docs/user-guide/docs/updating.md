@@ -108,6 +108,11 @@ is migrated again on the next start, so report the failure before retrying.
 Back up the complete data directory first. Database migrations are normally forward-only, and an older binary may not
 understand a database already migrated by a newer one.
 
+An older version therefore refuses to start on such a database: it exits with code 9 and names the migration it does not
+know, without changing the file. Either run the newer version again, or restore a snapshot taken before the upgrade
+by hand, with the steps above but choosing that snapshot rather than the newest one: the older version does not start,
+so it cannot stage a restore from the **Diagnostics** page. Anything written since that snapshot is lost.
+
 ### Restoring a database snapshot
 
 The node keeps snapshots of its database in the `backups` folder of the data directory. One is taken automatically

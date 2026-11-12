@@ -81,6 +81,8 @@ interface HubEntry {
 	restartTimer?: ReturnType<typeof setTimeout>;
 	/** Pending deferred-stop timer while the entry lingers at refcount zero (see STOP_LINGER_MS). */
 	lingerTimer?: ReturnType<typeof setTimeout>;
+	/** The connection dropped after connecting and has not come back (reconnecting, or closed until a restart connects). */
+	lost: boolean;
 }
 
 // How long a connection lingers after its LAST subscriber releases before it is stopped. Navigation unmounts one
@@ -97,6 +99,46 @@ const RESTART_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 
 // One entry per hub path, created lazily on first acquire and deleted when the last subscriber releases.
 const entries = new Map<string, HubEntry>();
+
+// Hub paths that dropped after connecting and have not come back while a subscriber still holds them; read by the
+// shell's one reconnecting chip. A first connect, a feature-off hub and a release-driven stop never land here.
+const degradedHubs = new Set<string>();
+const degradedListeners = new Set<() => void>();
+
+function setHubDegraded(hubPath: string, degraded: boolean): void {
+	if (degradedHubs.has(hubPath) === degraded) {
+		return;
+	}
+	if (degraded) {
+		degradedHubs.add(hubPath);
+	} else {
+		degradedHubs.delete(hubPath);
+	}
+	for (const listener of degradedListeners) {
+		listener();
+	}
+}
+
+// Every flag write goes through here. Only the entry the registry still holds speaks for its path, so a discarded
+// connection's late close or reconnect never clears its successor's outage; an unheld hub's outage is not the page's.
+function syncHubDegraded(hubPath: string, entry: HubEntry): void {
+	if (entries.get(hubPath) === entry) {
+		setHubDegraded(hubPath, entry.lost && entry.refCount > 0);
+	}
+}
+
+/** Subscribe to changes of {@link hasDegradedHub}; shaped for `useSyncExternalStore`. */
+export function subscribeDegradedHubs(listener: () => void): () => void {
+	degradedListeners.add(listener);
+	return () => {
+		degradedListeners.delete(listener);
+	};
+}
+
+/** Whether any held shared hub is reconnecting, or closed and waiting for the manager's restart. */
+export function hasDegradedHub(): boolean {
+	return degradedHubs.size > 0;
+}
 
 function buildEntry(hubPath: string): HubEntry {
 	const connection = new HubConnectionBuilder()
@@ -115,12 +157,16 @@ function buildEntry(hubPath: string): HubEntry {
 	// onreconnecting / onclose callback, so per-handle callbacks live in these sets (added on registration, dropped on
 	// release) and are dispatched from here.
 	connection.onreconnected((connectionId) => {
+		entry.lost = false;
+		syncHubDegraded(hubPath, entry);
 		for (const callback of reconnectedCallbacks) {
 			callback(connectionId ?? undefined);
 		}
 	});
 	connection.onreconnecting((error) => {
 		markHubConnectionLost();
+		entry.lost = true;
+		syncHubDegraded(hubPath, entry);
 		for (const callback of reconnectingCallbacks) {
 			callback(error);
 		}
@@ -136,9 +182,13 @@ function buildEntry(hubPath: string): HubEntry {
 		startPromise: Promise.resolve(),
 		starting: false,
 		restartAttempt: 0,
+		lost: false,
 	};
 	connection.onclose((error) => {
 		markHubConnectionLost();
+		// The last release's stop also closes: with no lease left (or the entry discarded) that is not an outage.
+		entry.lost = true;
+		syncHubDegraded(hubPath, entry);
 		for (const callback of closedCallbacks) {
 			callback(error);
 		}
@@ -163,6 +213,8 @@ function startEntry(hubPath: string, entry: HubEntry, isRestart: boolean): void 
 		.then(
 			() => {
 				entry.restartAttempt = 0;
+				entry.lost = false;
+				syncHubDegraded(hubPath, entry);
 				if (isRestart) {
 					for (const callback of entry.reconnectedCallbacks) {
 						callback(entry.connection.connectionId ?? undefined);
@@ -172,8 +224,12 @@ function startEntry(hubPath: string, entry: HubEntry, isRestart: boolean): void 
 			(error: unknown) => {
 				console.warn(`shared signalr hub "${hubPath}" failed to start`, error);
 				// A 404 from negotiate means the hub's feature is off for this process: retrying cannot succeed, so stop here
-				// as if the retry policy gave up. A later acquire after the lease is released tries once more.
-				if (!isFeatureOffStart(error)) {
+				// as if the retry policy gave up. A later acquire after the lease is released tries once more. Nothing is
+				// reconnecting any more, so an earlier drop no longer counts as an outage.
+				if (isFeatureOffStart(error)) {
+					entry.lost = false;
+					syncHubDegraded(hubPath, entry);
+				} else {
 					scheduleRestart(hubPath, entry);
 				}
 			},
@@ -221,6 +277,8 @@ function releaseEntry(hubPath: string, entry: HubEntry): void {
 	if (entry.refCount > 0) {
 		return;
 	}
+	// Nobody is waiting on this hub any more, so its outage is no longer the page's.
+	syncHubDegraded(hubPath, entry);
 	// Last subscriber gone. Linger before stopping (STOP_LINGER_MS) so a navigation that unmounts this page's
 	// subscriber just before the next page acquires reuses the live connection, then defer the actual stop until the
 	// start promise settles so we never abort an in-flight negotiation (the StrictMode acquire -> release -> acquire
@@ -253,6 +311,8 @@ export function acquireHubConnection(hubPath: string): SharedHubHandle {
 		entries.set(hubPath, entry);
 	}
 	entry.refCount += 1;
+	// The last release cleared the flag; a re-acquire of a hub still reconnecting (or closed) waits on that outage again.
+	syncHubDegraded(hubPath, entry);
 	// A re-acquire during the linger window keeps the live connection: cancel the pending stop. (Even un-canceled,
 	// the deferred stop's refcount re-check would no-op — clearing just avoids the dangling timer.)
 	if (entry.lingerTimer !== undefined) {
@@ -323,4 +383,5 @@ export function resetSharedHubConnectionsForTest(): void {
 		}
 	}
 	entries.clear();
+	degradedHubs.clear();
 }

@@ -26,6 +26,11 @@ export interface GgufAcquisitionStatus {
 	readonly updatedAtUtc: string | null | undefined;
 	readonly errorCode: string | null | undefined;
 	readonly sanitizedMessage: string | null | undefined;
+	// A download's start-request options, so a retry replays them. `includeProjector` is null when the node does not
+	// know the request (an import, or a row recorded after a restart): then none of the three can be replayed.
+	readonly fileName?: string | null;
+	readonly revision?: string | null;
+	readonly includeProjector?: boolean | null;
 }
 
 type AcquisitionWireStatus =
@@ -68,6 +73,9 @@ export function toGgufAcquisitionStatus(raw: Partial<AcquisitionWireStatus>): Gg
 		updatedAtUtc: raw.updatedAtUtc,
 		errorCode: raw.errorCode,
 		sanitizedMessage: "sanitizedMessage" in raw ? raw.sanitizedMessage : "sanitizedError" in raw ? raw.sanitizedError : undefined,
+		fileName: "fileName" in raw ? raw.fileName : undefined,
+		revision: "revision" in raw ? raw.revision : undefined,
+		includeProjector: "includeProjector" in raw ? raw.includeProjector : undefined,
 	};
 }
 

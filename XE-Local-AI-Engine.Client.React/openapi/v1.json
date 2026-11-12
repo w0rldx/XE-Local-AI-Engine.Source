@@ -44280,6 +44280,18 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
+            "nullable": true
+          },
+          "includeProjector": {
+            "type": "boolean",
+            "nullable": true
           }
         }
       },

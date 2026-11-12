@@ -381,6 +381,39 @@ describe("Chat workflow mode", () => {
 		expect(screen.queryByText(/GraphWorkflowRunLiveInConversation/)).toBeNull();
 	});
 
+	it("offers Continue after a cut-off answer in normal mode but not once a workflow is picked", async () => {
+		const cutOff = {
+			id: graphWorkflowTestGuid(93),
+			conversationId,
+			role: "assistant" as const,
+			content: "A long answer that",
+			status: "completed" as const,
+			createdAt: "2026-09-23T00:00:02.000Z",
+			sortOrder: 2,
+			parts: [
+				{ kind: "text" as const, id: "cut:1", sequence: 1, text: "A long answer that" },
+				{
+					kind: "notice" as const,
+					id: "cut:2",
+					sequence: 2,
+					noticeKind: "OutputLimitReached",
+					text: "The answer stopped at the length limit before the model finished.",
+				},
+			],
+		};
+		adapter.getConversation.mockResolvedValue(conversation({ messages: [userTurn, cutOff] }));
+		adapter.listConversations.mockResolvedValue({ conversations: [conversation({ messages: [userTurn, cutOff] })] });
+		server.use(runsRoute([]));
+		const bodies = messagesRoute();
+		renderChat();
+
+		expect(await screen.findByTestId("chat-notice-continue")).toBeTruthy();
+		await pickWorkflow();
+
+		await waitFor(() => expect(screen.queryByTestId("chat-notice-continue")).toBeNull());
+		expect(bodies).toHaveLength(0);
+	});
+
 	it("asks before starting a finished workflow again, then resends with confirmRerun", async () => {
 		server.use(runsRoute([]));
 		const bodies = messagesRoute(conflict("GraphWorkflowRerunConfirmationRequired"));

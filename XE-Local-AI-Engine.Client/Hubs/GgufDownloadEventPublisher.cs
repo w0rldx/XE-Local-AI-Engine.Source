@@ -39,7 +39,10 @@ internal sealed class GgufDownloadEventPublisher : IGgufDownloadEventPublisher
             OperationId = status.OperationId,
             OperationKind = status.OperationKind.ToString(),
             ErrorCode = status.ErrorCode,
-            UpdatedAtUtc = status.UpdatedAtUtc
+            UpdatedAtUtc = status.UpdatedAtUtc,
+            FileName = status.DownloadRequest?.FileName,
+            Revision = status.DownloadRequest?.Revision,
+            IncludeProjector = status.DownloadRequest?.IncludeProjector
         };
     }
 }

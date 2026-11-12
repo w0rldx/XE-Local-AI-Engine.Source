@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
@@ -49,19 +50,6 @@ public sealed class GetGgufDownloadStatusEndpoint : Endpoint<GetGgufDownloadStat
             return;
         }
 
-        await Send.OkAsync(new GgufDownloadStatusResponse
-            {
-                OperationId = status.OperationId,
-                OperationKind = status.OperationKind,
-                ModelName = status.ModelName,
-                Phase = status.Phase.ToString(),
-                CompletedBytes = status.CompletedBytes,
-                TotalBytes = status.TotalBytes,
-                SanitizedError = status.SanitizedError,
-                ErrorCode = status.ErrorCode,
-                StartedAtUtc = status.StartedAtUtc,
-                UpdatedAtUtc = status.UpdatedAtUtc
-            },
-            ct);
+        await Send.OkAsync(GgufDownloadStatusMapper.Map(status), ct);
     }
 }

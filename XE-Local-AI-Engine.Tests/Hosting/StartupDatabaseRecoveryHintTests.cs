@@ -19,6 +19,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class StartupDatabaseRecoveryHintTests : IDisposable
 {
+    private static readonly string[] LiveNodeState = ["node-settings.json", "cloud-credentials.enc"];
+
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-recovery-hint-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -42,6 +44,66 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         // What a sync-tool conflict copy or a torn copy leaves behind: a file SQLite rejects with SQLITE_NOTADB.
         var databasePath = Path.Combine(_rootPath, "node.sqlite");
         await File.WriteAllTextAsync(databasePath, new string('x', 4096));
+
+        using var standardError = new StringWriter();
+        var start = await StartHostAsync(databasePath, dataDirectory, standardError);
+        var output = standardError.ToString();
+
+        AssertEx.Null(start.App, output);
+        AssertEx.Equal(expected: 9, start.ExitCode, output);
+        AssertEx.True(output.Contains("is damaged or is not a SQLite database", StringComparison.Ordinal), output);
+        AssertEx.True(output.Contains("node.sqlite.broken", StringComparison.Ordinal), output);
+        AssertEx.True(output.Contains(newestSnapshot, StringComparison.Ordinal), output);
+        foreach (var artifact in LiveNodeState)
+        {
+            AssertEx.True(File.Exists(Path.Combine(_rootPath, "content", artifact)), $"Startup moved {artifact} out of the content root.");
+        }
+    }
+
+    [Test]
+    public async Task DatabaseMigratedByANewerVersion_IsRefusedBeforeAnySnapshotOrMigration_WithTheDowngradeHint()
+    {
+        var dataDirectory = Path.Combine(_rootPath, "node");
+        var backupDirectory = Path.Combine(dataDirectory, "backups");
+        Directory.CreateDirectory(backupDirectory);
+        var olderSnapshot = Path.Combine(backupDirectory, "node-chat-20260101T000000000Z.sqlite");
+        await File.WriteAllTextAsync(olderSnapshot, "older than the data");
+
+        // Only the history a newer build left: without the guard this version would migrate over it and start.
+        const string futureMigration = "20991231000000_FromANewerBuild";
+        var databasePath = Path.Combine(_rootPath, "node.sqlite");
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE \"__EFMigrationsHistory\" (\"MigrationId\" TEXT NOT NULL PRIMARY KEY, \"ProductVersion\" TEXT NOT NULL); "
+                                  + "INSERT INTO \"__EFMigrationsHistory\" VALUES ('" + futureMigration + "', '99.0.0');";
+            await command.ExecuteNonQueryAsync();
+            SqliteConnection.ClearPool(connection);
+        }
+
+        var before = await File.ReadAllBytesAsync(databasePath);
+
+        using var standardError = new StringWriter();
+        var start = await StartHostAsync(databasePath, dataDirectory, standardError);
+        var output = standardError.ToString();
+
+        AssertEx.Null(start.App, output);
+        AssertEx.Equal(Program.DatabaseMigrationFailedExitCode, start.ExitCode, output);
+        AssertEx.True(output.Contains(Program.DescribeDatabaseDowngrade(databasePath, futureMigration), StringComparison.Ordinal), output);
+        AssertEx.True(output.Contains(futureMigration, StringComparison.Ordinal) && output.Contains("before the upgrade", StringComparison.Ordinal), output);
+        // The refused binary never starts, so it cannot stage a restore: the hint must spell out the copy by hand.
+        AssertEx.True(output.Contains("cannot stage a restore", StringComparison.Ordinal), output);
+        AssertEx.True(output.Contains($"delete '{databasePath}-wal' and '{databasePath}-shm'", StringComparison.Ordinal), output);
+        AssertEx.True(output.Contains($"to '{databasePath}'.", StringComparison.Ordinal), output);
+        AssertEx.False(output.Contains(olderSnapshot, StringComparison.Ordinal), "A snapshot older than the data must not be offered blindly.");
+        var after = await File.ReadAllBytesAsync(databasePath);
+        AssertEx.True(before.AsSpan().SequenceEqual(after), "The refused database must be left byte for byte.");
+        AssertEx.Equal(1, Directory.GetFiles(backupDirectory).Length, "No pre-migration snapshot may be taken of a refused database.");
+    }
+
+    private async Task<ProgramStartResult> StartHostAsync(string databasePath, string dataDirectory, TextWriter standardError)
+    {
         var webRoot = Path.Combine(_rootPath, "wwwroot");
         Directory.CreateDirectory(webRoot);
 
@@ -54,18 +116,15 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
             File.Copy(settings, Path.Combine(contentRoot, Path.GetFileName(settings)));
         }
 
-        string[] liveNodeState = ["node-settings.json", "cloud-credentials.enc"];
-        foreach (var artifact in liveNodeState)
+        foreach (var artifact in LiveNodeState)
         {
             await File.WriteAllTextAsync(Path.Combine(contentRoot, artifact), "sentinel");
         }
 
-        using var standardError = new StringWriter();
-        ProgramStartResult start;
         await TestServerWebAppFactory.HostStartupLock.WaitAsync();
         try
         {
-            start = await Program.CreateAppAsync([], new ProgramAppCustomization
+            return await Program.CreateAppAsync([], new ProgramAppCustomization
             {
                 ContentRootPath = contentRoot,
                 WebRootPath = webRoot,
@@ -91,17 +150,6 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         finally
         {
             TestServerWebAppFactory.HostStartupLock.Release();
-        }
-
-        var output = standardError.ToString();
-        AssertEx.Null(start.App, output);
-        AssertEx.Equal(expected: 9, start.ExitCode, output);
-        AssertEx.True(output.Contains("is damaged or is not a SQLite database", StringComparison.Ordinal), output);
-        AssertEx.True(output.Contains("node.sqlite.broken", StringComparison.Ordinal), output);
-        AssertEx.True(output.Contains(newestSnapshot, StringComparison.Ordinal), output);
-        foreach (var artifact in liveNodeState)
-        {
-            AssertEx.True(File.Exists(Path.Combine(contentRoot, artifact)), $"Startup moved {artifact} out of the content root.");
         }
     }
 

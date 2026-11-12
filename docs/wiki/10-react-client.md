@@ -59,7 +59,9 @@ those durations. A test rendering through `renderWithProviders` has no provider 
 `config/bundle-budget.json`: `applicationJavaScriptBytes` for everything every user downloads, and
 `lazyEditorJavaScriptBytes` for the Monaco chunks, measured separately so one large lazy vendor chunk cannot mask
 growth in the app bundle. `lazySceneViewerJavaScriptBytes` covers `three`, and `lazyModelLabJavaScriptBytes` the
-`model-lab-*` route chunk plus `ModelInspectPanel-*`, which the model details dialog imports lazily too. A lazy pattern
+`model-lab-*` route chunk plus `ModelInspectPanel-*`, which the model details dialog imports lazily too.
+`lazyMathJavaScriptBytes` covers `ChatMathPlugins-*` (KaTeX, remark-math, rehype-katex), which `ChatMarkdown` loads
+only when a message first contains math. A lazy pattern
 matches the chunk's file name, so a helper those chunks share with another route stays in its own chunk under the app budget. It also fails when `dist/index.html` loads or modulepreloads a lazy asset, because a
 `codeSplitting` group that captures a module the app shell imports (Vite's preload helper once) makes every page
 download the editor while the separate budget still reports it as lazy.
@@ -335,6 +337,7 @@ Two properties a maintainer must preserve:
 
 - **Handlers stay per-subscriber.** The manager owns only the connection *lifetime*; each hook still calls `connection.on(...)` in its effect and `connection.off(...)` with the **same handler reference** on cleanup. SignalR fans a client method out to every registered handler, so concurrent subscribers to one hub do not steal each other's events.
 - **StrictMode / fast-remount safety.** The stop is deferred until the start promise settles *and* re-checks the refcount, so an acquire → release → acquire flip (React's double-invoke, or a quick navigate-back) never aborts an in-flight negotiation nor tears down a connection a new subscriber has already taken over.
+- **Reconnecting chip.** The manager also keeps the set of held hubs that dropped after connecting (reconnecting, or closed and waiting for its restart); `core/layout/components/HubConnectionStatusChip` reads it (`hasDegradedHub`) and shows one header chip on every page after a short blip delay. A first connect, a feature-off hub and the last release's stop never count; a restart that finds the feature off ends an earlier drop's outage. The chat hub runs on `NodeChatConnection`, outside the manager, and keeps its own `ChatConnectionStatusChip`.
 
 `accessTokenFactory` reads the *current* store token on the initial negotiate and on every automatic reconnect, so a long-lived shared connection re-authenticates across reconnects; on logout the holding pages unmount, the refcount drops to zero and the connection stops. Documented parity gap: unlike `NodeChatConnection`, this factory does **not** proactively refresh a near-expiry token — neither did the per-mount hooks it replaced.
 

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatNoticeRow } from "@/core/chat/components/ChatNoticeRow";
+import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
 import type { ChatNoticePart } from "@/core/models/ChatMessageParts";
 import de from "@/locales/de.json";
 import { nonEnglishLocales } from "@/test/Locales";
@@ -416,5 +417,32 @@ describe("ChatNoticeRow", () => {
 
 		expect(screen.getByText("A new kind of notice.")).toBeTruthy();
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("SomethingNew");
+	});
+
+	it("offers Continue on a cut-off answer when the page provides it, and sends through it", () => {
+		const onContinue = vi.fn();
+		renderWithProviders(
+			<ChatNoticeContinueContext value={onContinue}>
+				<ChatNoticeRow part={noticePart({ noticeKind: "OutputLimitReached", text: "The answer stopped." })} />
+			</ChatNoticeContinueContext>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+		expect(onContinue).toHaveBeenCalledTimes(1);
+	});
+
+	it("hides Continue without a provided callback and on every other notice kind", () => {
+		renderWithProviders(
+			<>
+				<ChatNoticeRow part={noticePart({ noticeKind: "OutputLimitReached", text: "The answer stopped." })} />
+				<ChatNoticeContinueContext value={vi.fn()}>
+					<ChatNoticeRow part={noticePart({ noticeKind: "AnswerIncomplete", text: "Maybe incomplete." })} />
+				</ChatNoticeContinueContext>
+			</>,
+		);
+
+		expect(screen.getAllByTestId("chat-notice-row")).toHaveLength(2);
+		expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
 	});
 });

@@ -152,7 +152,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 };
             }
 
-            var registration = _operations.Start(GgufAcquisitionOperationKind.Download, reservation.Identity.CanonicalModelName, totalBytes);
+            var registration = _operations.Start(GgufAcquisitionOperationKind.Download, reservation.Identity.CanonicalModelName, totalBytes, request);
             if (registration.AlreadyInFlight)
             {
                 return new GgufDownloadTicket
@@ -646,7 +646,10 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             OperationKind = status.OperationKind.ToString(),
             StartedAtUtc = status.StartedAtUtc,
             UpdatedAtUtc = status.UpdatedAtUtc,
-            ErrorCode = status.ErrorCode
+            ErrorCode = status.ErrorCode,
+            FileName = status.DownloadRequest?.FileName,
+            Revision = status.DownloadRequest?.Revision,
+            IncludeProjector = status.DownloadRequest?.IncludeProjector
         };
     }
 

@@ -1,11 +1,12 @@
 import { Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Fragment, type ReactNode, useMemo, useRef } from "react";
+import { type ReactNode, use, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { ChatMessageRow } from "@/features/chat/components/ChatMessageList/ChatMessageRow";
 import { useStickToBottomScroll } from "@/core/ui/hooks/useStickToBottomScroll";
+import { ChatMessageRow } from "@/features/chat/components/ChatMessageList/ChatMessageRow";
 import type { ListRow } from "@/features/chat/models/ChatMessageListRow";
 import type {
 	ChatConversationModel,
@@ -208,6 +209,10 @@ export function ChatMessageList({
 		renderAfterMessage,
 		showTurnThroughput,
 	};
+	// Continue applies to the latest turn only, and never while a turn streams; every other row gets none.
+	const onContinue = use(ChatNoticeContinueContext);
+	const continueFor = (index: number) =>
+		index === rows.length - 1 && rows[index]?.kind === "group" && !isStreamingActive ? onContinue : undefined;
 
 	return (
 		<ScrollArea type="auto" scrollbarSize={8} offsetScrollbars="y" viewportRef={viewportRef} style={{ flex: 1, minHeight: 0 }}>
@@ -231,17 +236,19 @@ export function ChatMessageList({
 									paddingBottom: VIRTUAL_ROW_GAP_PX,
 								}}
 							>
-								<ChatMessageRow row={row} {...rowContext} />
+								<ChatNoticeContinueContext value={continueFor(virtualRow.index)}>
+									<ChatMessageRow row={row} {...rowContext} />
+								</ChatNoticeContinueContext>
 							</div>
 						);
 					})}
 				</div>
 			) : (
 				<Stack gap="sm">
-					{rows.map((row) => (
-						<Fragment key={row.key}>
+					{rows.map((row, index) => (
+						<ChatNoticeContinueContext key={row.key} value={continueFor(index)}>
 							<ChatMessageRow row={row} {...rowContext} />
-						</Fragment>
+						</ChatNoticeContinueContext>
 					))}
 				</Stack>
 			)}

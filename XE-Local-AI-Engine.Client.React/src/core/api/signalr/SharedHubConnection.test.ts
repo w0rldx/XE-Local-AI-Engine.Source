@@ -133,7 +133,12 @@ vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
 const refreshNodeAuthToken = vi.hoisted(() => vi.fn());
 vi.mock("@/core/auth/api/NodeAuthApi", () => ({ refreshNodeAuthToken }));
 
-import { acquireHubConnection, resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
+import {
+	acquireHubConnection,
+	hasDegradedHub,
+	resetSharedHubConnectionsForTest,
+	subscribeDegradedHubs,
+} from "@/core/api/signalr/SharedHubConnection";
 
 // Drain the promise microtask queue (start().catch().finally() chains) under fake timers — advancing by 0 fires no
 // timer but yields so pending microtasks settle.
@@ -481,5 +486,126 @@ describe("acquireHubConnection", () => {
 		second.release();
 		await advancePastLinger();
 		expect(connection?.stop).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("degraded hub tracking", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		resetSharedHubConnectionsForTest();
+		hoisted.builtConnections.length = 0;
+	});
+
+	afterEach(() => {
+		resetSharedHubConnectionsForTest();
+		vi.useRealTimers();
+	});
+
+	async function acquireConnected(hubPath = HUB) {
+		const handle = acquireHubConnection(hubPath);
+		const connection = hoisted.builtConnections.at(-1);
+		connection?.resolveStart();
+		await flushMicrotasks();
+		return { handle, connection };
+	}
+
+	it("is degraded while a held hub reconnects and healthy once it is back", async () => {
+		const listener = vi.fn();
+		const unsubscribe = subscribeDegradedHubs(listener);
+		const { connection } = await acquireConnected();
+		expect(hasDegradedHub()).toBe(false);
+
+		connection?.reconnectingFanout?.(new Error("socket dropped"));
+		expect(hasDegradedHub()).toBe(true);
+		connection?.reconnectedFanout?.("new-id");
+		expect(hasDegradedHub()).toBe(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+		unsubscribe();
+	});
+
+	it("stays degraded after the retry policy gives up until the manager's restart connects", async () => {
+		const { connection } = await acquireConnected();
+		if (connection) {
+			connection.state = "Disconnected";
+		}
+
+		connection?.closedFanout?.(new Error("gave up"));
+		expect(hasDegradedHub()).toBe(true);
+		await vi.advanceTimersByTimeAsync(1_000);
+		await flushMicrotasks();
+		expect(hasDegradedHub()).toBe(false);
+	});
+
+	it("clears the outage when the manager's restart finds the hub's feature off", async () => {
+		const { connection } = await acquireConnected();
+		if (connection) {
+			connection.state = "Disconnected";
+		}
+		connection?.start.mockRejectedValueOnce(Object.assign(new Error("negotiate 404"), { statusCode: 404 }));
+
+		connection?.closedFanout?.(new Error("gave up"));
+		expect(hasDegradedHub()).toBe(true);
+		await vi.advanceTimersByTimeAsync(1_000);
+		await flushMicrotasks();
+
+		expect(connection?.start).toHaveBeenCalledTimes(2);
+		expect(hasDegradedHub()).toBe(false);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it("does not count a first connect, a failed first start or the last release's stop", async () => {
+		hoisted.rejectNextStart();
+		const failing = acquireHubConnection("hub/failing");
+		await flushMicrotasks();
+		expect(hasDegradedHub()).toBe(false);
+		failing.release();
+
+		const { handle, connection } = await acquireConnected();
+		handle.release();
+		await advancePastLinger();
+		expect(connection?.stop).toHaveBeenCalledTimes(1);
+		connection?.closedFanout?.();
+		expect(hasDegradedHub()).toBe(false);
+	});
+
+	it("drops a hub's outage once its last subscriber releases it", async () => {
+		const { handle, connection } = await acquireConnected();
+		connection?.reconnectingFanout?.();
+		expect(hasDegradedHub()).toBe(true);
+
+		handle.release();
+		expect(hasDegradedHub()).toBe(false);
+	});
+
+	it("never lets a discarded connection's late events clear its successor's outage", async () => {
+		const first = await acquireConnected();
+		first.handle.release();
+		await advancePastLinger();
+		expect(first.connection?.stop).toHaveBeenCalledTimes(1);
+
+		const second = await acquireConnected();
+		expect(second.connection).not.toBe(first.connection);
+		second.connection?.reconnectingFanout?.(new Error("socket dropped"));
+		expect(hasDegradedHub()).toBe(true);
+
+		first.connection?.closedFanout?.();
+		first.connection?.reconnectedFanout?.("stale-id");
+		first.connection?.reconnectingFanout?.();
+		expect(hasDegradedHub()).toBe(true);
+	});
+
+	it("flags a hub again when it is re-acquired while still reconnecting", async () => {
+		const { handle, connection } = await acquireConnected();
+		if (connection) {
+			connection.state = "Reconnecting";
+		}
+		connection?.reconnectingFanout?.(new Error("socket dropped"));
+		handle.release();
+		expect(hasDegradedHub()).toBe(false);
+
+		acquireHubConnection(HUB);
+		expect(hasDegradedHub()).toBe(true);
+		connection?.reconnectedFanout?.("new-id");
+		expect(hasDegradedHub()).toBe(false);
 	});
 });

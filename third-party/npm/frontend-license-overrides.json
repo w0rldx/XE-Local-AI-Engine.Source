@@ -34,6 +34,28 @@
         }
       ]
     },
+    "pkg:npm/rehype-katex@7.0.1": {
+      "license": "MIT",
+      "basis": "The exact release tag resolves to the pinned source commit and its repository license; the npm tarball omits the license file.",
+      "files": [
+        {
+          "path": "third-party/npm/rehype-katex-7.0.1-LICENSE.txt",
+          "sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
+          "source": "https://raw.githubusercontent.com/remarkjs/remark-math/88a9497e1ede93b958237c85edbf5651faeca7af/license"
+        }
+      ]
+    },
+    "pkg:npm/remark-math@6.0.0": {
+      "license": "MIT",
+      "basis": "The exact release tag resolves to the pinned source commit and its repository license; the npm tarball omits the license file.",
+      "files": [
+        {
+          "path": "third-party/npm/remark-math-6.0.0-LICENSE.txt",
+          "sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
+          "source": "https://raw.githubusercontent.com/remarkjs/remark-math/d5d0660b150810a535bbb07eac6cc96a4510aa24/license"
+        }
+      ]
+    },
     "pkg:npm/rrweb@2.2.0": {
       "license": "MIT",
       "basis": "The signed npm provenance identifies the pinned upstream gitHead; the exact source license and npm metadata both declare MIT while the npm tarball omits the file.",

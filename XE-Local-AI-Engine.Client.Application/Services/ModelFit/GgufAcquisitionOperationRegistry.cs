@@ -2,10 +2,15 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IGgufAcquisitionOperationRegistry
 {
-    GgufAcquisitionRegistration Start(GgufAcquisitionOperationKind operationKind, string modelName, long? totalBytes = null);
+    GgufAcquisitionRegistration Start(GgufAcquisitionOperationKind operationKind,
+        string modelName,
+        long? totalBytes = null,
+        GgufModelRequest? downloadRequest = null);
+
     bool Cancel(Guid operationId);
     bool CancelNewest(GgufAcquisitionOperationKind operationKind, string modelName);
     GgufAcquisitionStatus? GetStatus(Guid operationId);
@@ -61,7 +66,10 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
         _maxTerminalCount = maxTerminalCount;
     }
 
-    public GgufAcquisitionRegistration Start(GgufAcquisitionOperationKind operationKind, string modelName, long? totalBytes = null)
+    public GgufAcquisitionRegistration Start(GgufAcquisitionOperationKind operationKind,
+        string modelName,
+        long? totalBytes = null,
+        GgufModelRequest? downloadRequest = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         PruneTerminals();
@@ -96,7 +104,8 @@ public sealed class GgufAcquisitionOperationRegistry : IGgufAcquisitionOperation
                 StartedAtUtc = now,
                 UpdatedAtUtc = now,
                 ErrorCode = null,
-                SanitizedError = null
+                SanitizedError = null,
+                DownloadRequest = downloadRequest
             };
             _statuses[operationId] = status;
             _cancellations[operationId] = cancellation;

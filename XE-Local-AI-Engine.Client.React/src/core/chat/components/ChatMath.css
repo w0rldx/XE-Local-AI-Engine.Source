@@ -1,0 +1,5 @@
+/* A wide formula scrolls inside its bubble instead of overflowing it; loaded with the lazy math chunk. */
+
+.katex-display {
+	overflow: auto hidden;
+}

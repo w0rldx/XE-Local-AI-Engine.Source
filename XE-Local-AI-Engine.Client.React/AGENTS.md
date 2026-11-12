@@ -11,14 +11,15 @@ Run from this directory; `dotnet tool restore --tool-manifest ../dotnet-tools.js
 
 ```bash
 pnpm install --frozen-lockfile
-../scripts/with-build-lock.sh -- pnpm run acceptance   # licenses + validate + coverage + tooling tests + production bundle
+../scripts/with-build-lock.sh -- pnpm run acceptance   # licenses + OpenAPI breaking-change gate + validate + coverage + tooling tests + production bundle
 ```
 
 - Run `acceptance` under the build lock: vitest's timing assertions fail when a backend gate runs beside it.
   Its first step, `node:check` (`scripts/CheckNodeMajor.mjs`, whose header documents the override), fails on a Node
   major other than CI's `client-react` job. Its second, `licenses:check`, regenerates the license manifest (frontend
   and backend packages) and fails when it differs from the index, so a package bump anywhere in the repository reds
-  here as it does in CI; it needs the restored dotnet tools.
+  here as it does in CI; it needs the restored dotnet tools. Its third, `openapi:breaking`, runs
+  `python3 ../scripts/openapi-breaking-check.py` and needs `python3` on PATH (a shell with only `py` or `python` fails).
 - `acceptance` needs no network once packages are cached: `licenses:check` restores without the NuGet audit, so it
   works offline. The vulnerability audit stays outside it because it queries the registry on every run.
 - `pnpm run build` remains a checked standalone build (lint + production bundle). The acceptance gate runs lint

@@ -206,6 +206,9 @@ A recommendation row is actionable: the operator can download the model. `GgufDo
 - **`Cancel`** signals the in-flight token (cooperative — stops at the next await/byte boundary). A cancel abandons the
   download: the partial and its resume cursors are deleted, so the next start begins at byte 0.
 - **`GetStatus`** returns the latest sanitized `GgufDownloadStatus` (phase + completed/total bytes; **never** a path/URL/token).
+  The row also carries the start request's `fileName`, `revision` and `includeProjector` (kept on the registry row as
+  `GgufAcquisitionStatus.DownloadRequest`), on the REST rows and the hub push alike, so the Home card's "Retry download"
+  replays the failed download exactly. A null `includeProjector` means the node does not know the request.
 - On success it writes the `model_provider_map` row pointing the GGUF at the `llamacpp` provider (through a fresh DI scope, since the map store is scoped) — the **single production writer** that makes a downloaded GGUF reachable by the runtime. Best-effort: a map-write failure never marks the download Failed.
 
 ### Partial files, resume and cleanup
@@ -231,6 +234,8 @@ Beside the partial, `PrepareAsync` writes `<file>.gguf.intent.part`, which names
 partial's file name does not. It is deleted when the download is prepared or cancelled. On the first download start or
 read after a restart, `GgufDownloadCoordinator` lists each intent whose partial still exists as a `Failed` row with error
 code `Interrupted` and the neutral reason "This download did not finish", so the operator can see the download and start it again. The startup reaper ages an intent by its partial, so a download that ran longer than a day before the restart keeps its row.
+The intent does not record the start request, so an `Interrupted` row has null `fileName`, `revision` and
+`includeProjector`; the Home card then links to the Models page instead of retrying with guessed defaults.
 
 ### Weights-only installs (`includeProjector`)
 

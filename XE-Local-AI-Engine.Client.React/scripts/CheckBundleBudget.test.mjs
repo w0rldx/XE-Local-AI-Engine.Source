@@ -14,6 +14,7 @@ test("flags lazy editor, scene viewer and model lab assets that index.html loads
 		'<link rel="modulepreload" crossorigin href="/assets/three-Gh78.js">',
 		'<link rel="modulepreload" crossorigin href="/assets/model-lab-Kl12.js">',
 		'<link rel="modulepreload" crossorigin href="/assets/ModelInspectPanel-Mn34.js">',
+		'<link rel="modulepreload" crossorigin href="/assets/ChatMathPlugins-Op56.js">',
 		'<link rel="stylesheet" crossorigin href="/assets/index-Ij90.css">',
 	].join("\n");
 
@@ -22,8 +23,12 @@ test("flags lazy editor, scene viewer and model lab assets that index.html loads
 		"/assets/three-Gh78.js",
 		"/assets/model-lab-Kl12.js",
 		"/assets/ModelInspectPanel-Mn34.js",
+		"/assets/ChatMathPlugins-Op56.js",
 	]);
-	assert.deepEqual(findEagerlyLoadedLazyAssets(indexHtml.replace(/.*(monaco|three|model-lab|ModelInspect).*\n?/g, "")), []);
+	assert.deepEqual(
+		findEagerlyLoadedLazyAssets(indexHtml.replace(/.*(monaco|three|model-lab|ModelInspect|ChatMath).*\n?/g, "")),
+		[],
+	);
 });
 
 test("recursively measures all deployed js/mjs", (context) => {
@@ -44,6 +49,7 @@ test("recursively measures all deployed js/mjs", (context) => {
 	writeFileSync(join(root, "assets", "BenchmarkSceneViewer-Qr78St90.js"), "k".repeat(3));
 	writeFileSync(join(root, "assets", "model-lab-Uv12Wx34.js"), "l".repeat(60));
 	writeFileSync(join(root, "assets", "ModelInspectPanel-Yz56Ab78.js"), "m".repeat(5));
+	writeFileSync(join(root, "assets", "ChatMathPlugins-Cd90Ef12.js"), "n".repeat(70));
 
 	const measurements = measureJavaScriptAssets(root);
 
@@ -51,6 +57,7 @@ test("recursively measures all deployed js/mjs", (context) => {
 	assert.equal(measurements.lazyEditorJavaScriptBytes, 1207);
 	assert.equal(measurements.lazySceneViewerJavaScriptBytes, 503);
 	assert.equal(measurements.lazyModelLabJavaScriptBytes, 65);
+	assert.equal(measurements.lazyMathJavaScriptBytes, 70);
 	assert.deepEqual(evaluateBundleBudget(measurements, { applicationJavaScriptBytes: 149, lazyEditorJavaScriptBytes: 1207 }), [
 		{ name: "applicationJavaScriptBytes", limit: 149, actual: 150 },
 	]);

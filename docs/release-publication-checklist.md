@@ -49,6 +49,9 @@ installer, signing certificate, or signed stable artifact exists.
 - [ ] Confirm checksums, SBOM, license inventory, `LICENSE`, and `NOTICE` refer to those exact artifact bytes.
 - [ ] Confirm the release carries `openapi-v1.json`, byte-identical to the tagged
       `XE-Local-AI-Engine.Client.React/openapi/v1.json` and covered by the SPDX, manifest, and checksums.
+- [ ] Before tagging, run `python3 scripts/openapi-breaking-check.py --rebaseline` and commit the refreshed
+      `openapi/v1.baseline.json` with the emptied `openapi/breaking-acknowledged.json`. The first baseline was taken
+      from `develop` on 2026-11-12, not from `v1.0.0-rc.2`, so breaks since rc.2 were never acknowledged.
 - [ ] Preserve the authority-register result and release evidence with the release record.
 
 ## Target-OS and public-equivalent rehearsal

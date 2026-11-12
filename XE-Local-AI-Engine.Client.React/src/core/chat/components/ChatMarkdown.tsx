@@ -3,6 +3,7 @@ import { memo, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 
+import { normalizeMath, useMathPlugins } from "@/core/chat/components/ChatMath";
 import { markdownImageUrlTransform } from "@/core/chat/components/MarkdownImagePolicy";
 import { SafeMarkdownImage } from "@/core/chat/components/SafeMarkdownImage";
 import { StreamCaret } from "@/core/chat/components/StreamCaret";
@@ -64,6 +65,8 @@ const chatWordBreakOverrides: Partial<Components> = {
 	},
 };
 
+const gfmOnly = [remarkGfm];
+
 // The non-caret map has no content dependency at all, so it is built once for every chat bubble in the app.
 const staticChatComponents: Components = { ...markdownComponents, ...chatWordBreakOverrides };
 
@@ -101,17 +104,26 @@ interface ChatMarkdownProps {
 }
 
 export const ChatMarkdown = memo(function ChatMarkdown({ content, withCaret = false }: ChatMarkdownProps) {
+	// Math renders once its lazy chunk is in; until then (and for messages without math) the text renders as before.
+	const mathMarkdown = useMemo(() => normalizeMath(content), [content]);
+	const math = useMathPlugins(mathMarkdown.includes("$$"));
+	const markdown = math ? mathMarkdown : content;
 	// Memoize the component map so a re-render that changes neither content nor withCaret reuses it. With
 	// withCaret false this is the module-level staticChatComponents; the caret variant re-wraps it with a
 	// content-dependent `p`, so only that one renderer churns while the streaming text grows — every other
 	// entry, including `code`, keeps a stable identity across frames.
-	const components = useMemo(() => buildComponents(content, withCaret), [content, withCaret]);
+	const components = useMemo(() => buildComponents(markdown, withCaret), [markdown, withCaret]);
 	return (
 		// minWidth: 0 lets this shrink inside its flex-item bubble instead of forcing the bubble wider; overflowWrap
 		// is a fallback for elements without their own word-breaking style (headings, blockquotes, strong/em).
 		<div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-			<ReactMarkdown components={components} remarkPlugins={[remarkGfm]} urlTransform={markdownImageUrlTransform}>
-				{content}
+			<ReactMarkdown
+				components={components}
+				remarkPlugins={math ? [...gfmOnly, ...math.mathRemarkPlugins] : gfmOnly}
+				rehypePlugins={math?.mathRehypePlugins}
+				urlTransform={markdownImageUrlTransform}
+			>
+				{markdown}
 			</ReactMarkdown>
 		</div>
 	);

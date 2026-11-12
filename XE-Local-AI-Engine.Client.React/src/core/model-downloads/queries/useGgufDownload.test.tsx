@@ -393,6 +393,27 @@ describe("useActiveGgufDownloads", () => {
 		expect(status?.phase).toBe("Copying");
 	});
 
+	it("keeps a download row's start options, so a retry can replay them, and an import carries none", () => {
+		const download = toGgufAcquisitionStatus({
+			operationId: "download-op",
+			operationKind: "Download",
+			modelName: "org/repo:Q4_K_M",
+			phase: "Failed",
+			fileName: "repo-Q4_K_M.gguf",
+			revision: "pinned-branch",
+			includeProjector: false,
+		});
+		const imported = toGgufAcquisitionStatus({
+			operationId: "import-op",
+			operationKind: "Import",
+			modelName: "private:Q4_K_M",
+			phase: "Failed",
+		});
+
+		expect(download).toMatchObject({ fileName: "repo-Q4_K_M.gguf", revision: "pinned-branch", includeProjector: false });
+		expect(imported?.includeProjector).toBeUndefined();
+	});
+
 	it("an Interrupted row is replaced by a newer Start for that model", () => {
 		const now = Date.parse("2026-08-14T10:00:03Z");
 		const interrupted = { ...acquisitionStatus("interrupted-op", "Failed", "2026-08-14T10:00:00Z"), modelName: "Repo:Q4_K_M" };

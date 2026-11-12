@@ -1,5 +1,5 @@
 import { Button, Group, Loader, Progress, Stack, Text } from "@mantine/core";
-import { IconDownload, IconMessageCircle, IconPlayerPlay } from "@tabler/icons-react";
+import { IconDownload, IconMessageCircle, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,7 +7,11 @@ import { useTranslation } from "react-i18next";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { isTerminalAcquisitionPhase } from "@/core/model-downloads/models/GgufAcquisitionModels";
-import { useActiveGgufDownloads } from "@/core/model-downloads/queries/useGgufDownload";
+import {
+	type GgufDownloadStatus,
+	useActiveGgufDownloads,
+	useStartGgufDownload,
+} from "@/core/model-downloads/queries/useGgufDownload";
 import { hasAnyChatModel } from "@/core/models/ChatModelOptions";
 import { ButtonLink } from "@/core/ui/components/ButtonLink/ButtonLink";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -31,6 +35,29 @@ export function HomeWelcomeCard() {
 		? [...downloads.values()].find((download) => !isTerminalAcquisitionPhase(download.phase))
 		: undefined;
 	const setupPercent = setupDownload === undefined ? undefined : setupDownloadPercent(setupDownload);
+	// A failed download (the server keeps the row for a day, and records an interrupted one after a restart) is offered
+	// again under its `{repo}:{quant}` name and start options; the coordinator resumes the part already on disk. Of
+	// several, the newest.
+	const failedDownload =
+		needsModel && setupDownload === undefined
+			? [...downloads.values()]
+					.filter((download) => download.phase === "Failed")
+					.toSorted((a, b) => (Date.parse(b.updatedAtUtc ?? "") || 0) - (Date.parse(a.updatedAtUtc ?? "") || 0))[0]
+			: undefined;
+	const startDownload = useStartGgufDownload();
+	// Replays the row's own start options. A row without them (recorded after a restart) is never retried with guessed
+	// defaults: the projector choice is part of the installed identity, so the operator starts it again on the Models page.
+	const retryFailedDownload = (download: GgufDownloadStatus): void => {
+		const colon = download.modelName.lastIndexOf(":");
+		startDownload.mutate({
+			...(colon < 0
+				? { repoId: download.modelName }
+				: { repoId: download.modelName.slice(0, colon), quant: download.modelName.slice(colon + 1) }),
+			fileName: download.fileName ?? undefined,
+			revision: download.revision ?? undefined,
+			includeProjector: download.includeProjector ?? undefined,
+		});
+	};
 
 	const greeting = {
 		morning: t("pages.home.welcome.greeting.morning", "Good morning"),
@@ -58,6 +85,54 @@ export function HomeWelcomeCard() {
 						animated={setupPercent === undefined}
 						aria-label={t("pages.home.welcome.setup.title", "Setting up your first model…")}
 					/>
+				</Stack>
+			) : failedDownload !== undefined ? (
+				<Stack gap="xs" data-testid="home-setup-failed">
+					<Text fw={500}>
+						{t("pages.home.welcome.downloadFailedTitle", "{{model}} did not finish downloading.", {
+							model: failedDownload.modelName,
+						})}
+					</Text>
+					{failedDownload.sanitizedError ? (
+						<Text c="dimmed" size="sm" data-testid="home-setup-failed-reason">
+							{failedDownload.sanitizedError}
+						</Text>
+					) : null}
+					{startDownload.isError ? (
+						<Text c="red" size="sm" role="alert" data-testid="home-setup-retry-error">
+							{t(
+								"pages.home.welcome.downloadFailedRetryError",
+								"The download could not be started again. Try once more, or install a model from the Models page.",
+							)}
+						</Text>
+					) : null}
+					{failedDownload.includeProjector == null ? (
+						<>
+							<Text c="dimmed" size="sm" data-testid="home-setup-failed-restart">
+								{t("pages.home.welcome.downloadFailedRestart", "This download has to be started again from the Models page.")}
+							</Text>
+							<Group>
+								<ButtonLink
+									to={nodeRoutePaths.models}
+									leftSection={<IconDownload size={16} />}
+									data-testid="home-setup-open-models"
+								>
+									{t("pages.home.welcome.downloadFailedOpenModels", "Open the Models page")}
+								</ButtonLink>
+							</Group>
+						</>
+					) : (
+						<Group>
+							<Button
+								leftSection={<IconRefresh size={16} />}
+								loading={startDownload.isPending}
+								onClick={() => retryFailedDownload(failedDownload)}
+								data-testid="home-setup-retry"
+							>
+								{t("pages.home.welcome.downloadFailedRetry", "Retry download")}
+							</Button>
+						</Group>
+					)}
 				</Stack>
 			) : needsModel ? (
 				<Text c="dimmed" data-testid="home-no-model">
@@ -91,7 +166,7 @@ export function HomeWelcomeCard() {
 				{needsModel ? (
 					<ButtonLink
 						to={nodeRoutePaths.models}
-						variant={setupDownload === undefined ? "filled" : "light"}
+						variant={setupDownload === undefined && failedDownload === undefined ? "filled" : "light"}
 						leftSection={<IconDownload size={16} />}
 						data-testid="home-go-to-models"
 					>

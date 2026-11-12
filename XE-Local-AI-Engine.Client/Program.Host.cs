@@ -553,6 +553,17 @@ namespace XE_Local_AI_Engine.Client
         {
             try
             {
+                // Before any read, snapshot or migration: a database a newer binary migrated is refused, never run on (exit 9).
+                var databasePath = ResolveDatabasePath(app.Configuration, dataDirectory: null);
+                if (await NodeDbRestoreStaging.FindUnknownAppliedMigrationAsync(databasePath, CancellationToken.None) is { } unknownMigration)
+                {
+                    var hint = DescribeDatabaseDowngrade(databasePath, unknownMigration);
+                    Log.Fatal("{DatabaseRecoveryHint}", hint);
+                    await standardError.WriteLineAsync(hint);
+                    await Log.CloseAndFlushAsync();
+                    return false;
+                }
+
                 // Split around the migration pass on purpose, and written IMMEDIATELY after the node-chat pass. See
                 // docs/wiki/11-hosting-and-deployment.md ("The node host pipeline (`Program.cs`)").
                 var phaseStart = Stopwatch.GetTimestamp();

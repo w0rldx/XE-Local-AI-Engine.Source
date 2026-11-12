@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public enum GgufAcquisitionPhase
 {
@@ -36,6 +37,12 @@ public sealed record GgufAcquisitionStatus
     public required string? ErrorCode { get; init; }
 
     public required string? SanitizedError { get; init; }
+
+    /// <summary>
+    ///     The request a download was started with, so a retry can replay it; <see langword="null" /> for an import and for
+    ///     a row recorded after a restart, whose request nothing on disk keeps.
+    /// </summary>
+    public GgufModelRequest? DownloadRequest { get; init; }
 }
 
 public sealed class GgufAcquisitionRegistration

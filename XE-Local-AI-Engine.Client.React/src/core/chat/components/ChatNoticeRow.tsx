@@ -1,4 +1,4 @@
-import { Group, Text, ThemeIcon } from "@mantine/core";
+import { Button, Group, Text, ThemeIcon } from "@mantine/core";
 import {
 	IconArrowsExchange,
 	IconBolt,
@@ -18,9 +18,10 @@ import {
 	IconUserOff,
 	IconUsersGroup,
 } from "@tabler/icons-react";
-import { memo } from "react";
+import { memo, use } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
 import type { ChatNoticePart } from "@/core/models/ChatMessageParts";
 
 interface ChatNoticeRowProps {
@@ -198,6 +199,8 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 	const textKey = localizedNoticeKeys[part.text];
 	const text = textKey ? t(textKey, part.text) : part.text;
 	const detail = part.detail && !bareIdPattern.test(part.detail.trim()) ? part.detail : undefined;
+	const onContinue = use(ChatNoticeContinueContext);
+	const showContinue = onContinue !== undefined && part.noticeKind === "OutputLimitReached";
 
 	return (
 		<Group gap="xs" wrap="nowrap" align="center" data-testid="chat-notice-row" data-notice-kind={part.noticeKind}>
@@ -216,6 +219,11 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 					</>
 				) : null}
 			</Text>
+			{showContinue ? (
+				<Button size="compact-xs" variant="light" onClick={onContinue} data-testid="chat-notice-continue">
+					{t("chat.notices.outputLimitContinue")}
+				</Button>
+			) : null}
 		</Group>
 	);
 });

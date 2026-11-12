@@ -424,7 +424,10 @@ a turn whose window is unknown (cloud) is not capped. The default limit carries
 and `ProviderCallBudgetChatClient` keeps reserving only its floor: reserving it would have halved what the history may use.
 When an answer that produced text ends on `finish_reason: length` (the cap or the window), the turn carries an
 `OutputLimitReached` notice, "The answer stopped at the length limit before the model finished.", unless the variant
-is `off`. The SPA localizes that sentence. A remote model's stream (external, Azure Foundry, Codex) that ends cleanly
+is `off`. The SPA localizes that sentence; on the latest turn, while nothing streams, the composer could send and the
+conversation is not in (or not yet known to be out of) workflow mode, the notice carries a **Continue** button that sends its own localized label ("Continue", in German "Weiter") as an ordinary
+user message (`ChatNoticeContinueContext`,
+provided by `Chat.tsx`, narrowed to the last row by `ChatMessageList`). A remote model's stream (external, Azure Foundry, Codex) that ends cleanly
 with text and no finish reason for its final round carries an `AnswerIncomplete` notice whatever the variant, and one
 with neither text nor a finish reason (a gateway answering a stream with a whole JSON body reads as this) an
 `EmptyAnswer` notice naming the provider. The turn stays completed: the text is all there is. A local model is exempt,

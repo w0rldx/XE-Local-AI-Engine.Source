@@ -21,6 +21,87 @@ public sealed class NodeDbRestoreStagingTests : IDisposable
 
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> NoHistory = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
 
+    // The ids the last release tag (v1.0.0-rc.2) shipped, read once from its [Migration] attributes. Extend at each release;
+    // never shrink: a user database records them, and the downgrade guard refuses any id this binary no longer ships.
+    private static readonly string[] ReleasedChatMigrations =
+    [
+        "20260419152305_InitialNodeChatSchema",
+        "20260523133000_AddNodeMessageLifecycleColumns",
+        "20260526115619_AddNodeChatOrigin",
+        "20260526122101_AddNodeConversationPinArchive",
+        "20260527010918_AddNodeChatBranchVariantFeedback",
+        "20260528101854_AddNodeConversationSelectedPath",
+        "20260529173005_AddNodeSelectedFolders",
+        "20260530050246_AddAgentDefinitions",
+        "20260530080425_AddMcpServers",
+        "20260531061240_AddPlaybookActions",
+        "20260531082914_AddPlaybookActionAnalysisColumns",
+        "20260531105623_AddPlaybookEvalAndGoldenConversations",
+        "20260531133736_AddPlaybookActionEnabledAtUtc",
+        "20260601085538_AddGoldenConversationHarvestProvenance",
+        "20260601195214_AddSchedulerTables",
+        "20260602002831_AddModelClassifications",
+        "20260602105529_AddModelFitTables",
+        "20260602195614_AddAgentDefinitionSeedProvenance",
+        "20260606045854_AddAgentSkills",
+        "20260606151544_AddCanvasWorkflows",
+        "20260608093959_AddMessageAgentDefinitionId",
+        "20260610165152_EncryptConversationTitle",
+        "20260617222625_AddModelProviderMap",
+        "20260622215652_AddAdaptiveAgentMemory",
+        "20260626104651_AddConversationUploadedFiles",
+        "20260626234754_AddInferenceProfilesAndBenchmarkMetrics",
+        "20260701175538_AddKnowledgeBaseTables",
+        "20260701191341_AddImageRuntimeTables",
+        "20260710163634_AddAgentDefinitionBaseScaffoldOptOut",
+        "20260711002326_AddBenchmarkProfileRevisionBinding",
+        "20260713170221_RepairAndUniqueMessageSequence",
+        "20260713204544_AddChatMaintenanceState",
+        "20260714144229_AddAgentRunEnvelopeColumns",
+        "20260714161306_AddRunEnvelopeDurabilityColumns",
+        "20260718023348_DropApprovedUtilityImages",
+        "20260718143054_AddAgentExecutionLogProvider",
+        "20260721191435_AddDevelopmentModeFoundation",
+        "20260722192133_BindDevelopmentProjectsToSelectedFolders",
+        "20260726192021_AddLaunchPolicyFingerprintAndBenchmarkResources",
+        "20260726203016_AddKnowledgeVectorIdentity",
+        "20260728184839_AddDevelopmentCommandProfile",
+        "20260728200837_AddDevelopmentAttemptCommandProfile",
+        "20260728202003_AddDevelopmentTemplates",
+        "20260803153806_AddMcpServerApiKey",
+        "20260803163513_HashMcpServerApiKey",
+        "20260804215531_AddConversationCompactionSummary",
+        "20260804220941_AddAgentSkillImportProvenance",
+        "20260806181000_AddMcpAgentRunLedger",
+        "20260806201500_AddSelectedFolderRevocation",
+        "20260807130219_AddSlashCommands",
+        "20260807193324_AddCustomTools",
+        "20260811160811_AddLocalModelProxyApiKey",
+        "20260811161453_AddModelLaunchArguments",
+        "20260813121930_AddKnowledgeCollectionsAndProvenance",
+        "20260814090000_AddModelProviderMapRevision",
+        "20260814091525_AddBenchmarks",
+        "20260815002954_AddGenerationMetadata",
+        "20260815005024_AddTraining",
+        "20260815031430_AddTrainingRuns",
+        "20260815034444_AddTrainedModelOrigin",
+        "20260815052532_AddTrainingEvaluation",
+        "20260815171537_AddTrainingDatasetDefinitionSnapshot",
+        "20260816174029_AddBenchmarkRunLaunchReceipts",
+        "20260816200929_AddBenchmarkJudgePolicies",
+        "20260816211213_RemoveBenchmarkRunJudgeColumns",
+        "20260817124108_AddTrainingArtifactQuality",
+        "20260817131439_AddTrainingArtifactDiscardAudit",
+        "20260817133009_AddTrainingEvaluationExecutionProvenance",
+        "20260817140837_AddTrainingArtifactDiscardCleanupState",
+        "20260817201241_AddBenchmarkReadiness",
+        "20260819092826_AddConversationListIndex",
+        "20260822013858_AddMcpServerApiKeyScope",
+        "20260822041045_AddMcpAgenticRunAuthority"
+    ];
+
+    private static readonly string[] ReleasedIdentityMigrations = ["20260525075351_InitialNodeIdentitySchema", "20260624184036_AddTutorialState"];
+
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-restore-staging-" + Guid.NewGuid().ToString("N"));
 
     public NodeDbRestoreStagingTests()
@@ -430,6 +511,18 @@ public sealed class NodeDbRestoreStagingTests : IDisposable
         AssertEx.True(reason.Contains("20991231000000_FromANewerBuild", StringComparison.Ordinal), reason);
     }
 
+    [Test]
+    public void ShippedMigrationIds_StillContainEveryIdTheLastReleaseShipped()
+    {
+        var shipped = NodeDbRestoreStaging.ShippedMigrationIds;
+
+        // A squashed or renamed released migration would turn every user's database into an exit 9 at start.
+        var missingChat = ReleasedChatMigrations.Except(shipped[NodeDbRestoreStaging.ChatMigrationsHistoryTable]).ToArray();
+        var missingIdentity = ReleasedIdentityMigrations.Except(shipped[NodeIdentityDbContext.IdentityMigrationsHistoryTable]).ToArray();
+        AssertEx.Empty(missingChat, "Released chat migrations this binary no longer ships: " + string.Join(", ", missingChat));
+        AssertEx.Empty(missingIdentity, "Released identity migrations this binary no longer ships: " + string.Join(", ", missingIdentity));
+    }
+
     private async Task AssertUntouchedAsync(NodeDbRestoreApplyResult result)
     {
         AssertEx.False(result.Applied);
@@ -461,6 +554,44 @@ public sealed class NodeDbRestoreStagingTests : IDisposable
         {
             return false;
         }
+    }
+
+    [Test]
+    [Arguments(true, true, "20991231000000_FromANewerBuild", null, "20991231000000_FromANewerBuild")]
+    [Arguments(true, true, null, "20991231000000_FromANewerBuild", "20991231000000_FromANewerBuild")]
+    [Arguments(true, true, null, null, null)]
+    [Arguments(true, false, null, null, null)]
+    [Arguments(false, false, null, null, null)]
+    public async Task FindUnknownAppliedMigration_RefusesOnlyAnAppliedIdThisBinaryDoesNotShip(bool fileExists,
+        bool withHistory,
+        string? extraChatId,
+        string? extraIdentityId,
+        string? expected)
+    {
+        // Rows: unknown chat id, unknown identity id, every id known, a database with no history yet, no file at all.
+        if (fileExists)
+        {
+            var sql = "CREATE TABLE probe (value TEXT NOT NULL);";
+            if (withHistory)
+            {
+                sql += HistorySql(NodeDbRestoreStaging.ChatMigrationsHistoryTable, extraChatId)
+                       + HistorySql(NodeIdentityDbContext.IdentityMigrationsHistoryTable, extraIdentityId);
+            }
+
+            await ExecuteAsync(DatabasePath, sql);
+        }
+
+        var unknown = await NodeDbRestoreStaging.FindUnknownAppliedMigrationAsync(DatabasePath, CancellationToken.None);
+
+        AssertEx.Equal(expected, unknown);
+        AssertEx.Equal(fileExists, File.Exists(DatabasePath), "The check must never create the database.");
+    }
+
+    private static string HistorySql(string historyTable, string? extraId)
+    {
+        var ids = NodeDbRestoreStaging.ShippedMigrationIds[historyTable].Append(extraId).OfType<string>();
+        return $"CREATE TABLE \"{historyTable}\" (\"MigrationId\" TEXT NOT NULL PRIMARY KEY, \"ProductVersion\" TEXT NOT NULL);"
+               + string.Concat(ids.Select(id => $"INSERT INTO \"{historyTable}\" VALUES ('{id}', '10.0.0');"));
     }
 
     private static async Task CreateDatabaseAsync(string path, string value, string? futureMigrationId = null)

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -115,7 +116,14 @@ public sealed class ApplicationHubWireTests
             OperationKind = GgufAcquisitionOperationKind.Download,
             ErrorCode = null,
             StartedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(1758000000000),
-            UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(1758000000123)
+            UpdatedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(1758000000123),
+            DownloadRequest = new GgufModelRequest
+            {
+                RepoId = "unsloth/Qwen3-0.6B-GGUF",
+                FileName = "Qwen3-0.6B-Q4_K_M.gguf",
+                Revision = "main",
+                IncludeProjector = false
+            }
         });
         await publisher.PublishStatusAsync(new GgufAcquisitionStatus
         {
@@ -134,12 +142,14 @@ public sealed class ApplicationHubWireTests
         AssertEx.Equal("{\"type\":1,\"target\":\"ggufDownload.statusChanged\",\"arguments\":[{\"modelName\":\"unsloth/Qwen3-0.6B-GGUF\","
                        + "\"phase\":\"Downloading\",\"completedBytes\":1024,\"totalBytes\":4096,\"sanitizedError\":null,"
                        + "\"operationId\":\"11111111-1111-4111-8111-111111111111\",\"operationKind\":\"Download\",\"errorCode\":null,"
-                       + "\"updatedAtUtc\":\"2025-09-16T05:20:00.123+00:00\"}]}" + RecordSeparator,
+                       + "\"updatedAtUtc\":\"2025-09-16T05:20:00.123+00:00\",\"fileName\":\"Qwen3-0.6B-Q4_K_M.gguf\",\"revision\":\"main\","
+                       + "\"includeProjector\":false}]}" + RecordSeparator,
             WriteFrame(sent[0].Message));
         AssertEx.Equal("{\"type\":1,\"target\":\"ggufDownload.statusChanged\",\"arguments\":[{\"modelName\":\"local/import.gguf\","
                        + "\"phase\":\"Failed\",\"completedBytes\":null,\"totalBytes\":null,\"sanitizedError\":\"Import failed.\","
                        + "\"operationId\":\"22222222-2222-4222-8222-222222222222\",\"operationKind\":\"Import\",\"errorCode\":\"import-failed\","
-                       + "\"updatedAtUtc\":\"2025-09-16T05:20:00.456+00:00\"}]}" + RecordSeparator,
+                       + "\"updatedAtUtc\":\"2025-09-16T05:20:00.456+00:00\",\"fileName\":null,\"revision\":null,\"includeProjector\":null}]}"
+                       + RecordSeparator,
             WriteFrame(sent[1].Message));
     }
 

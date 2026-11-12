@@ -17,6 +17,7 @@ import { SlashCommandAutocomplete } from "@/features/chat/components/SlashComman
 import { useComposerToolbarHeight } from "@/features/chat/hooks/useComposerToolbarHeight";
 import { isFileDrag } from "@/features/chat/hooks/usePaneFileDrop";
 import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
+import { ATTACHMENT_ACCEPT } from "@/features/chat/models/AttachmentAccept";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import type { ChatWorkflowSlots, ContextUsageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
@@ -38,9 +39,6 @@ const EMPTY_ATTACHMENTS: readonly ChatAttachment[] = [];
 const EMPTY_PENDING_UPLOADS: readonly PendingAttachmentUpload[] = [];
 const EMPTY_COMMAND_OPTIONS: readonly ChatCommandOption[] = [];
 
-// File-picker hint for the OS dialog. The server's extractor allowlist is the source of truth (it rejects
-// anything unsupported); this only nudges the picker toward the common document/text/code formats we extract.
-const ATTACHMENT_ACCEPT = ".txt,.md,.markdown,.csv,.json,.log,.pdf,.docx,text/*,application/pdf";
 // Image accept hint, appended to ATTACHMENT_ACCEPT only when the active model is multimodal (vision-capable via a
 // local mmproj projector) — mirrors ATTACHMENT_ACCEPT's role as an OS-dialog nudge, not the authoritative allowlist.
 const IMAGE_ATTACHMENT_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,image/*";

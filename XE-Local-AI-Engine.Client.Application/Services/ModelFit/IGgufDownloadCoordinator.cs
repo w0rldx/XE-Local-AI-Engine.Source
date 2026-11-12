@@ -99,4 +99,13 @@ public sealed class GgufDownloadStatus
     public DateTimeOffset? UpdatedAtUtc { get; init; }
 
     public string? ErrorCode { get; init; }
+
+    /// <summary>The start request's file name, <see langword="null" /> when it named none or the request is unknown.</summary>
+    public string? FileName { get; init; }
+
+    /// <summary>The start request's revision, <see langword="null" /> when it named none or the request is unknown.</summary>
+    public string? Revision { get; init; }
+
+    /// <summary>The start request's projector choice; <see langword="null" /> only when the request is unknown (a row recorded after a restart).</summary>
+    public bool? IncludeProjector { get; init; }
 }

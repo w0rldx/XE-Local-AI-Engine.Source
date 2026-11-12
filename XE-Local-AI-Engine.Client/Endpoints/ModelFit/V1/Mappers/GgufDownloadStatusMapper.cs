@@ -16,6 +16,9 @@ internal static class GgufDownloadStatusMapper
             SanitizedError = status.SanitizedError,
             ErrorCode = status.ErrorCode,
             StartedAtUtc = status.StartedAtUtc,
-            UpdatedAtUtc = status.UpdatedAtUtc
+            UpdatedAtUtc = status.UpdatedAtUtc,
+            FileName = status.FileName,
+            Revision = status.Revision,
+            IncludeProjector = status.IncludeProjector
         };
 }

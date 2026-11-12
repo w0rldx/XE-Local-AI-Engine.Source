@@ -178,6 +178,7 @@
 			"knowledgeUnavailableText": "Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.",
 			"modelSubstituted": "Model substituted",
 			"orchestrationDegraded": "Orchestration not used",
+			"outputLimitContinue": "Continue",
 			"outputLimitReached": "Answer cut off",
 			"outputLimitReachedText": "The answer stopped at the length limit before the model finished.",
 			"playbookWithheld": "Playbook withheld",
@@ -204,6 +205,20 @@
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"reasoningMode": "Reasoning Mode",
+		"shortcuts": {
+			"keys": {
+				"ctrl": "Ctrl",
+				"enter": "Enter",
+				"esc": "Esc",
+				"shift": "Shift"
+			},
+			"newChat": "Start a new chat",
+			"newLine": "New line",
+			"send": "Send the message",
+			"showList": "Show this list",
+			"stop": "Stop the running answer",
+			"title": "Keyboard shortcuts"
+		},
 		"thinking": "thinking…",
 		"thoughts": "Thoughts",
 		"toolCall": {
@@ -359,6 +374,7 @@
 			}
 		},
 		"headerBar": {
+			"liveUpdatesReconnecting": "Live updates reconnecting…",
 			"logout": "Logout",
 			"openDrawer": "Open navigation"
 		},
@@ -5129,6 +5145,11 @@
 			},
 			"welcome": {
 				"continue": "Continue last chat",
+				"downloadFailedOpenModels": "Open the Models page",
+				"downloadFailedRestart": "This download has to be started again from the Models page.",
+				"downloadFailedRetry": "Retry download",
+				"downloadFailedRetryError": "The download could not be started again. Try once more, or install a model from the Models page.",
+				"downloadFailedTitle": "{{model}} did not finish downloading.",
 				"greeting": {
 					"afternoon": "Good afternoon",
 					"evening": "Good evening",

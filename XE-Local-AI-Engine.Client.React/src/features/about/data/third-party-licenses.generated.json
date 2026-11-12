@@ -418,6 +418,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:@types/katex@0.16.8",
+			"name": "@types/katex",
+			"version": "0.16.8",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/katex",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:@types/mdast@4.0.4",
 			"name": "@types/mdast",
 			"version": "4.0.4",
@@ -802,6 +810,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:commander@8.3.0",
+			"name": "commander",
+			"version": "8.3.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/tj/commander.js#readme",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:cookie-es@3.1.1",
 			"name": "cookie-es",
 			"version": "3.1.1",
@@ -1087,6 +1103,14 @@
 			"version": "1.0.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/es-shims/dunder-proto#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:entities@6.0.1",
+			"name": "entities",
+			"version": "6.0.1",
+			"license": "BSD-2-Clause",
+			"homepageUrl": "https://github.com/fb55/entities#readme",
 			"source": "frontend"
 		},
 		{
@@ -1409,6 +1433,38 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:hast-util-from-dom@5.0.1",
+			"name": "hast-util-from-dom",
+			"version": "5.0.1",
+			"license": "ISC",
+			"homepageUrl": "https://github.com/syntax-tree/hast-util-from-dom#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:hast-util-from-html@2.0.3",
+			"name": "hast-util-from-html",
+			"version": "2.0.3",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/syntax-tree/hast-util-from-html#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:hast-util-from-html-isomorphic@2.0.0",
+			"name": "hast-util-from-html-isomorphic",
+			"version": "2.0.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/syntax-tree/hast-util-from-html-isomorphic#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:hast-util-from-parse5@8.0.4",
+			"name": "hast-util-from-parse5",
+			"version": "8.0.4",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/syntax-tree/hast-util-from-parse5#readme",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:hast-util-parse-selector@4.0.0",
 			"name": "hast-util-parse-selector",
 			"version": "4.0.0",
@@ -1422,6 +1478,14 @@
 			"version": "2.3.6",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/syntax-tree/hast-util-to-jsx-runtime#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:hast-util-to-text@4.0.3",
+			"name": "hast-util-to-text",
+			"version": "4.0.3",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/syntax-tree/hast-util-to-text#readme",
 			"source": "frontend"
 		},
 		{
@@ -1601,6 +1665,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:katex@0.16.47",
+			"name": "katex",
+			"version": "0.16.47",
+			"license": "MIT",
+			"homepageUrl": "https://katex.org",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:longest-streak@3.1.0",
 			"name": "longest-streak",
 			"version": "3.1.0",
@@ -1710,6 +1782,14 @@
 			"version": "2.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/syntax-tree/mdast-util-gfm-task-list-item#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:mdast-util-math@3.0.0",
+			"name": "mdast-util-math",
+			"version": "3.0.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/syntax-tree/mdast-util-math#readme",
 			"source": "frontend"
 		},
 		{
@@ -1846,6 +1926,14 @@
 			"version": "2.1.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/micromark/micromark-extension-gfm-task-list-item#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:micromark-extension-math@3.1.0",
+			"name": "micromark-extension-math",
+			"version": "3.1.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/micromark/micromark-extension-math#readme",
 			"source": "frontend"
 		},
 		{
@@ -3089,6 +3177,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:parse5@7.3.0",
+			"name": "parse5",
+			"version": "7.3.0",
+			"license": "MIT",
+			"homepageUrl": "https://parse5.js.org",
+			"source": "frontend"
+		},
+		{
 			"id": "backend:PdfPig@0.1.16",
 			"name": "PdfPig",
 			"version": "0.1.16",
@@ -3361,6 +3457,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:rehype-katex@7.0.1",
+			"name": "rehype-katex",
+			"version": "7.0.1",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/remarkjs/remark-math/tree/main#readme",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:remark@15.0.1",
 			"name": "remark",
 			"version": "15.0.1",
@@ -3374,6 +3478,14 @@
 			"version": "4.0.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/remarkjs/remark-gfm#readme",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:remark-math@6.0.0",
+			"name": "remark-math",
+			"version": "6.0.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/remarkjs/remark-math/tree/main#readme",
 			"source": "frontend"
 		},
 		{
@@ -4009,6 +4121,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:unist-util-remove-position@5.0.0",
+			"name": "unist-util-remove-position",
+			"version": "5.0.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/syntax-tree/unist-util-remove-position#readme",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:unist-util-stringify-position@4.0.0",
 			"name": "unist-util-stringify-position",
 			"version": "4.0.0",
@@ -4096,6 +4216,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:vfile-location@5.0.3",
+			"name": "vfile-location",
+			"version": "5.0.3",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/vfile/vfile-location#readme",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:vfile-message@4.0.3",
 			"name": "vfile-message",
 			"version": "4.0.3",
@@ -4109,6 +4237,14 @@
 			"version": "37.3.6",
 			"license": "MIT AND ISC",
 			"homepageUrl": "https://commerce.nearform.com/open-source/victory",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:web-namespaces@2.0.1",
+			"name": "web-namespaces",
+			"version": "2.0.1",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/wooorm/web-namespaces#readme",
 			"source": "frontend"
 		},
 		{

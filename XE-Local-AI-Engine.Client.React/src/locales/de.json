@@ -178,6 +178,7 @@
 			"knowledgeUnavailableText": "Ihre Wissensdatenbank wurde für diese Nachricht nicht verwendet, weil kein Embedding-Modell installiert ist und Ihre Dokumente daher nicht indiziert werden konnten.",
 			"modelSubstituted": "Modell ersetzt",
 			"orchestrationDegraded": "Orchestrierung nicht verwendet",
+			"outputLimitContinue": "Weiter",
 			"outputLimitReached": "Antwort abgeschnitten",
 			"outputLimitReachedText": "Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
 			"playbookWithheld": "Playbook zurückgehalten",
@@ -204,6 +205,20 @@
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"reasoningMode": "Reasoning-Modus",
+		"shortcuts": {
+			"keys": {
+				"ctrl": "Strg",
+				"enter": "Eingabe",
+				"esc": "Esc",
+				"shift": "Umschalt"
+			},
+			"newChat": "Neuen Chat beginnen",
+			"newLine": "Neue Zeile",
+			"send": "Nachricht senden",
+			"showList": "Diese Liste anzeigen",
+			"stop": "Laufende Antwort stoppen",
+			"title": "Tastenkürzel"
+		},
 		"thinking": "denkt…",
 		"thoughts": "Gedanken",
 		"toolCall": {
@@ -359,6 +374,7 @@
 			}
 		},
 		"headerBar": {
+			"liveUpdatesReconnecting": "Live-Aktualisierung wird neu verbunden…",
 			"logout": "Abmelden",
 			"openDrawer": "Navigation öffnen"
 		},
@@ -5129,6 +5145,11 @@
 			},
 			"welcome": {
 				"continue": "Letzten Chat fortsetzen",
+				"downloadFailedOpenModels": "Seite „Modelle“ öffnen",
+				"downloadFailedRestart": "Dieser Download muss auf der Seite „Modelle“ neu gestartet werden.",
+				"downloadFailedRetry": "Download erneut starten",
+				"downloadFailedRetryError": "Der Download konnte nicht erneut gestartet werden. Versuchen Sie es noch einmal oder installieren Sie ein Modell auf der Seite „Modelle“.",
+				"downloadFailedTitle": "{{model}} wurde nicht vollständig heruntergeladen.",
 				"greeting": {
 					"afternoon": "Guten Tag",
 					"evening": "Guten Abend",

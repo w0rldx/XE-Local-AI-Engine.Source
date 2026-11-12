@@ -130,6 +130,38 @@ public static partial class NodeDbRestoreStaging
         }
     }
 
+    /// <summary>
+    ///     The first migration the live database's chat or identity history records that this binary does not ship, read over a
+    ///     read-only connection. Null when every one is known, the file is missing or no history table exists yet.
+    /// </summary>
+    public static async Task<string?> FindUnknownAppliedMigrationAsync(string databasePath, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(databasePath);
+        if (!File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        foreach (var history in ShippedMigrationIds)
+        {
+            var unknown = await FindUnknownMigrationAsync(connection, history.Key, history.Value, cancellationToken);
+            if (unknown is not null)
+            {
+                return unknown;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Writes the marker the next start applies; replaces an earlier marker.</summary>
     public static async Task WriteMarkerAsync(string backupDirectory, string snapshotName, DateTimeOffset requestedUtc, CancellationToken cancellationToken)
     {

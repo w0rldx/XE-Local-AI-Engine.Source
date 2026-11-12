@@ -24,6 +24,7 @@ const {
 	schedulerCapability,
 	activeDownloads,
 	activeOperations,
+	startDownload,
 } = vi.hoisted(() => ({
 	listModels: vi.fn(),
 	listConversations: vi.fn(),
@@ -36,6 +37,7 @@ const {
 	schedulerCapability: { current: true },
 	activeDownloads: { current: new Map<string, unknown>() },
 	activeOperations: { current: [] as ActiveOperation[] },
+	startDownload: { current: { mutate: vi.fn(), isPending: false, isError: false } },
 }));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
@@ -76,6 +78,7 @@ vi.mock("@/core/layout/hooks/useUiMode", () => ({ useUiMode: () => uiMode.curren
 // The download feed is the shared hub-backed hook, tested beside it; here it is the switch for the first-run state.
 vi.mock("@/core/model-downloads/queries/useGgufDownload", () => ({
 	useActiveGgufDownloads: () => activeDownloads.current,
+	useStartGgufDownload: () => startDownload.current,
 }));
 // The merged operations feed is tested beside it; here it decides whether the Activity card has rows.
 vi.mock("@/core/operations/hooks/useActiveOperations", () => ({
@@ -148,6 +151,7 @@ beforeEach(() => {
 	uiMode.current = "advanced";
 	activeDownloads.current = new Map();
 	activeOperations.current = [];
+	startDownload.current = { mutate: vi.fn(), isPending: false, isError: false };
 	listModels.mockResolvedValue({ items: [chatModel], isAvailable: true });
 	listConversations.mockResolvedValue({ items: [], maxMessageSizeKb: 64, maxUploadFileSizeMb: 10 });
 	usageSummary.mockResolvedValue(usage(3));
@@ -252,6 +256,137 @@ describe("Home welcome card", () => {
 
 		expect((await screen.findByTestId("home-setup-model")).textContent).toBe("qwen3.5-9b · 25%");
 		expect(screen.queryByTestId("home-no-model")).toBeNull();
+	});
+
+	it("shows a failed first-run download with its reason and retries the same repo and quant", async () => {
+		listModels.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([
+			[
+				"unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+				{
+					modelName: "unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+					phase: "Failed",
+					sanitizedError: "Download failed.",
+					includeProjector: true,
+				},
+			],
+		]);
+
+		renderHome();
+
+		expect((await screen.findByTestId("home-setup-failed")).textContent).toContain(
+			"unsloth/Qwen3.5-9B-GGUF:Q4_K_M did not finish downloading.",
+		);
+		expect(screen.getByTestId("home-setup-failed-reason").textContent).toBe("Download failed.");
+		expect(screen.queryByTestId("home-no-model")).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Retry download" }));
+		expect(startDownload.current.mutate).toHaveBeenCalledWith({
+			repoId: "unsloth/Qwen3.5-9B-GGUF",
+			quant: "Q4_K_M",
+			includeProjector: true,
+		});
+	});
+
+	it("retries a failed download with the file, revision and projector choice it was started with", async () => {
+		listModels.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([
+			[
+				"unsloth/Qwen3.5-9B-GGUF:UD-Q4_K_XL",
+				{
+					modelName: "unsloth/Qwen3.5-9B-GGUF:UD-Q4_K_XL",
+					phase: "Failed",
+					fileName: "Qwen3.5-9B-UD-Q4_K_XL.gguf",
+					revision: "pinned-branch",
+					includeProjector: false,
+				},
+			],
+		]);
+
+		renderHome();
+
+		fireEvent.click(await screen.findByRole("button", { name: "Retry download" }));
+		expect(startDownload.current.mutate).toHaveBeenCalledWith({
+			repoId: "unsloth/Qwen3.5-9B-GGUF",
+			quant: "UD-Q4_K_XL",
+			fileName: "Qwen3.5-9B-UD-Q4_K_XL.gguf",
+			revision: "pinned-branch",
+			includeProjector: false,
+		});
+	});
+
+	it("sends a download whose start options are unknown to the Models page instead of retrying it with defaults", async () => {
+		listModels.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([
+			[
+				"unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+				{
+					modelName: "unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+					phase: "Failed",
+					sanitizedError: "This download did not finish. Start it again to resume from the part already downloaded.",
+					includeProjector: null,
+				},
+			],
+		]);
+
+		renderHome();
+
+		expect((await screen.findByTestId("home-setup-failed-restart")).textContent).toBe(
+			"This download has to be started again from the Models page.",
+		);
+		const link = screen.getByRole("link", { name: "Open the Models page" });
+		expect(link.getAttribute("href")).toBe("/models");
+		expect(screen.queryByRole("button", { name: "Retry download" })).toBeNull();
+		expect(screen.queryByTestId("home-setup-retry")).toBeNull();
+		expect(startDownload.current.mutate).not.toHaveBeenCalled();
+	});
+
+	it("offers the most recently failed download when several failed", async () => {
+		listModels.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([
+			[
+				"org/old:Q8_0",
+				{ modelName: "org/old:Q8_0", phase: "Failed", updatedAtUtc: "2026-11-11T08:00:00Z", includeProjector: true },
+			],
+			[
+				"org/new:Q4_K_M",
+				{ modelName: "org/new:Q4_K_M", phase: "Failed", updatedAtUtc: "2026-11-11T09:30:00Z", includeProjector: true },
+			],
+			[
+				"org/mid:Q6_K",
+				{ modelName: "org/mid:Q6_K", phase: "Failed", updatedAtUtc: "2026-11-11T09:00:00Z", includeProjector: true },
+			],
+		]);
+
+		renderHome();
+
+		expect((await screen.findByTestId("home-setup-failed")).textContent).toContain("org/new:Q4_K_M did not finish downloading.");
+		fireEvent.click(screen.getByRole("button", { name: "Retry download" }));
+		expect(startDownload.current.mutate).toHaveBeenCalledWith({ repoId: "org/new", quant: "Q4_K_M", includeProjector: true });
+	});
+
+	it("says so when the retry could not be started", async () => {
+		listModels.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([
+			["org/repo:Q8_0", { modelName: "org/repo:Q8_0", phase: "Failed", includeProjector: true }],
+		]);
+		startDownload.current = { mutate: vi.fn(), isPending: false, isError: true };
+
+		renderHome();
+
+		expect((await screen.findByTestId("home-setup-retry-error")).textContent).toBe(
+			"The download could not be started again. Try once more, or install a model from the Models page.",
+		);
+		expect(screen.queryByTestId("home-setup-failed-reason")).toBeNull();
+	});
+
+	it("does not offer a cancelled download again", async () => {
+		listModels.mockResolvedValue({ items: [], isAvailable: true });
+		activeDownloads.current = new Map([["org/repo:Q8_0", { modelName: "org/repo:Q8_0", phase: "Cancelled" }]]);
+
+		renderHome();
+
+		expect(await screen.findByTestId("home-no-model")).toBeTruthy();
+		expect(screen.queryByTestId("home-setup-failed")).toBeNull();
 	});
 
 	it("offers chat, not the install hint, once an external chat model is registered", async () => {

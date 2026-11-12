@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { buildChatUiCapabilities } from "@/core/chat/models/ChatCapabilityGates";
+import { ChatNoticeContinueContext } from "@/core/chat/models/ChatNoticeContinueContext";
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
 import { useCommands } from "@/core/commands/queries/useCommands";
 import type { ChatScope } from "@/core/models/ChatScope";
@@ -14,6 +15,7 @@ import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatCon
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { ChatKeyboardShortcuts } from "@/features/chat/components/ChatKeyboardShortcuts";
 import { type ChatSetupDownload, chatNotice } from "@/features/chat/components/ChatNotice";
 import { useChatAgentSelection } from "@/features/chat/hooks/useChatAgentSelection";
 import { useChatConversationActions } from "@/features/chat/hooks/useChatConversationActions";
@@ -25,7 +27,7 @@ import { useChatRevisionSelection } from "@/features/chat/hooks/useChatRevisionS
 import { useChatStreamController } from "@/features/chat/hooks/useChatStreamController";
 import { inFlightAssistantMessageId } from "@/features/chat/models/ChatConversationDerivations";
 import { chatErrorMessage } from "@/features/chat/models/ChatErrorMessage";
-import type { ChatConversationListModel } from "@/features/chat/models/ChatModels";
+import type { ChatConversationListModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { effectiveAgent } from "@/features/chat/models/ChatTurnResolution";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
@@ -371,6 +373,52 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 		setStreamError,
 	});
 
+	const handleComposerSend = (content: string, effort: ReasoningEffort, model: string): void | Promise<void> => {
+		// The owner's supervisor is the single writer of invocations on a scoped conversation, so the
+		// composer posts through the override instead of starting a second, unsupervised turn. The
+		// returned promise is what defers ChatInputArea's draft clear until the post is accepted.
+		if (scope?.onSendOverride) {
+			return scope.onSendOverride(content);
+		}
+		// Workflow mode posts to the bound workflow and hands back the promise, so a refused send keeps the draft.
+		if (workflow.active) {
+			return workflow.send(content);
+		}
+		const normalSend = (): void => {
+			handleSend(content, effort, model).catch((error: unknown) => setStreamError(chatErrorMessage(error)));
+		};
+		// Not yet known whether this conversation is bound to a workflow: the send waits for that answer.
+		if (workflow.bindingUnresolved) {
+			return workflow.sendWhenResolved(content, normalSend);
+		}
+		normalSend();
+		return undefined;
+	};
+	const handleStop = (): void => {
+		if (scope?.onStopOverride) {
+			scope.onStopOverride();
+			return;
+		}
+		handleCancel().catch((error: unknown) => setStreamError(chatErrorMessage(error)));
+	};
+	// Continue after a cut-off answer is an ordinary send, offered only when the composer itself could send. Never in
+	// workflow mode (or while that is still unknown): there the label would become the workflow's input.
+	const canSendFollowUp =
+		!isSending &&
+		!isCreatingConversation &&
+		!isRemoteConversation &&
+		!selectedConversationIsLoading &&
+		scope?.composerDisabled !== true;
+	const handleContinue =
+		canSendFollowUp && !workflow.active && !workflow.bindingUnresolved
+			? () => {
+					// A rejected promise (a scoped post) has nothing to keep: there is no draft behind this button.
+					handleComposerSend(t("chat.notices.outputLimitContinue"), reasoningEffort, selectedModel)?.catch((error: unknown) =>
+						setStreamError(chatErrorMessage(error)),
+					);
+				}
+			: undefined;
+
 	// Only an actual error / remote-view-only condition surfaces a notice; the always-on informational banner
 	// was dropped. When undefined, ChatDisplayShell renders no alert.
 	const notice = chatNotice(
@@ -418,118 +466,98 @@ export function Chat({ scope, setupDownload }: { scope?: ChatScope; setupDownloa
 			{createConversationMutation.isError ? (
 				<InlineErrorAlert variant="light" mb="md" message={chatErrorMessage(createConversationMutation.error)} />
 			) : null}
-			<ChatDisplayShell
-				conversations={displayConversations}
-				selectedConversationId={selectedConversationId}
-				modelOptions={modelOptions}
-				cloudModelOptions={cloudModelOptions}
-				selectedModel={selectedModel}
-				reasoningEffort={reasoningEffort}
-				availableReasoningEfforts={availableReasoningEfforts}
-				activeModelToolCapable={activeModelToolCapable}
-				activeModelMultimodal={activeModelMultimodal}
-				toolsEnabled={toolsEnabled}
-				knowledgeBaseEnabled={knowledgeBaseEnabled}
-				knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
-				capabilities={chatUiCapabilities}
-				contextUsage={{
-					usedTokens: usedContextTokens,
-					maxTokens: effectiveMaxContextTokens,
-					isAuthoritative: usedContextTokens !== undefined,
-					modelLabel: contextModelLabel,
-					nodeLabel: t("pages.chat.contextUsage.localNode", "Local node"),
-					agentLabel: contextAgentLabel,
-					contextWindow,
-				}}
-				maxMessageSizeKb={maxMessageSizeKb}
-				streamingMessage={streamingMessage}
-				timelineEntries={timelineEntries}
-				disabledNotice={notice}
-				isLoadingMessages={isLoadingSelectedConversation}
-				messagesLoadFailed={selectedConversationLoadFailed}
-				messagesLoadErrorText={selectedConversationLoadFailed ? chatErrorMessage(selectedConversationError) : undefined}
-				onRetryLoadMessages={handleRetryLoadMessages}
-				inputStatus={{
-					isSending,
-					chatInputDisabled: isCreatingConversation || isRemoteConversation || scope?.composerDisabled === true,
-					// A scoped session pins the agent, and the agent pins the model — both selectors read-only.
-					// In workflow mode the workflow's nodes pick their own models and agents.
-					modelSelectorDisabled: isRemoteConversation || isScoped || workflow.active,
-					agentSelectorDisabled: isScoped || workflow.active,
-					sendDisabled: selectedConversationIsLoading || isRemoteConversation || scope?.composerDisabled === true,
-				}}
-				conversationSearchQuery={conversationSearchQuery}
-				showArchivedConversations={showArchivedConversations}
-				conversationListTruncated={isConversationListTruncated}
-				onShowAllConversations={showAllConversations}
-				mutatingConversationId={mutatingConversationId}
-				conversationListCollapsed={collapsed}
-				hideConversationList={isScoped}
-				isWorkSessionConversation={isScoped}
-				onSelectConversation={setRequestedConversationId}
-				onCreateConversation={handleCreateConversation}
-				onToggleConversationList={toggleSidebar}
-				onModelChange={setSelectedModel}
-				onReasoningEffortChange={setReasoningEffort}
-				onToggleTools={toggleTools}
-				onToggleKnowledgeBase={toggleKnowledgeBase}
-				agentControlsAvailable={agentControlsAvailable}
-				agentModeEnabled={agentModeEnabled}
-				conversationAgentBound={conversationAgentBound}
-				selectedAgentId={selectedAgentId}
-				agentOptions={agentOptions}
-				commandOptions={commandOptions}
-				onSelectAgent={handleSelectAgent}
-				attachments={attachments}
-				pendingUploads={pendingUploads}
-				onUploadFiles={handleUploadAttachments}
-				onRemoveAttachment={handleRemoveAttachment}
-				onSend={(content, effort, model) => {
-					// The owner's supervisor is the single writer of invocations on a scoped conversation, so the
-					// composer posts through the override instead of starting a second, unsupervised turn. The
-					// returned promise is what defers ChatInputArea's draft clear until the post is accepted.
-					if (scope?.onSendOverride) {
-						return scope.onSendOverride(content);
-					}
-					// Workflow mode posts to the bound workflow and hands back the promise, so a refused send keeps the draft.
-					if (workflow.active) {
-						return workflow.send(content);
-					}
-					const normalSend = (): void => {
-						handleSend(content, effort, model).catch((error: unknown) => setStreamError(chatErrorMessage(error)));
-					};
-					// Not yet known whether this conversation is bound to a workflow: the send waits for that answer.
-					if (workflow.bindingUnresolved) {
-						return workflow.sendWhenResolved(content, normalSend);
-					}
-					normalSend();
-					return undefined;
-				}}
-				onCancel={() => {
-					if (scope?.onStopOverride) {
-						scope.onStopOverride();
-						return;
-					}
-					handleCancel().catch((error: unknown) => setStreamError(chatErrorMessage(error)));
-				}}
-				onRegenerate={isScoped || isRemoteConversation ? undefined : handleRegenerate}
-				onConversationSearchChange={setConversationSearchQuery}
-				onToggleShowArchivedConversations={setShowArchivedConversations}
-				onRenameConversation={isScoped ? undefined : handleRenameConversation}
-				onToggleConversationPinned={isScoped ? undefined : handleToggleConversationPinned}
-				onToggleConversationArchived={isScoped ? undefined : handleToggleConversationArchived}
-				boundAgentMemoryEnabled={boundAgentMemoryEnabled}
-				onToggleConversationMemoryExcluded={handleToggleConversationMemoryExcluded}
-				onSetConversationPlain={isScoped || isRemoteConversation ? undefined : handleSetConversationPlain}
-				onDeleteConversation={isScoped ? undefined : handleDeleteConversation}
-				onBranchFromMessage={isScoped || isRemoteConversation ? undefined : handleBranch}
-				activeRevisionByGroup={activeRevisionByGroup}
-				onSelectRevision={handleSelectRevision}
-				feedbackByMessageId={feedbackByMessageId}
-				pendingFeedbackMessageId={pendingFeedbackMessageId}
-				onSubmitFeedback={isScoped || isRemoteConversation ? undefined : handleSubmitFeedback}
-				workflow={workflow.slots}
-			/>
+			{/* An owner page that embeds the chat keeps its keys: there Esc would pause the session or cancel the node's turn. */}
+			{isScoped ? null : (
+				<ChatKeyboardShortcuts onStop={isSending ? handleStop : undefined} onNewChat={handleCreateConversation} />
+			)}
+			<ChatNoticeContinueContext value={handleContinue}>
+				<ChatDisplayShell
+					conversations={displayConversations}
+					selectedConversationId={selectedConversationId}
+					modelOptions={modelOptions}
+					cloudModelOptions={cloudModelOptions}
+					selectedModel={selectedModel}
+					reasoningEffort={reasoningEffort}
+					availableReasoningEfforts={availableReasoningEfforts}
+					activeModelToolCapable={activeModelToolCapable}
+					activeModelMultimodal={activeModelMultimodal}
+					toolsEnabled={toolsEnabled}
+					knowledgeBaseEnabled={knowledgeBaseEnabled}
+					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
+					capabilities={chatUiCapabilities}
+					contextUsage={{
+						usedTokens: usedContextTokens,
+						maxTokens: effectiveMaxContextTokens,
+						isAuthoritative: usedContextTokens !== undefined,
+						modelLabel: contextModelLabel,
+						nodeLabel: t("pages.chat.contextUsage.localNode", "Local node"),
+						agentLabel: contextAgentLabel,
+						contextWindow,
+					}}
+					maxMessageSizeKb={maxMessageSizeKb}
+					streamingMessage={streamingMessage}
+					timelineEntries={timelineEntries}
+					disabledNotice={notice}
+					isLoadingMessages={isLoadingSelectedConversation}
+					messagesLoadFailed={selectedConversationLoadFailed}
+					messagesLoadErrorText={selectedConversationLoadFailed ? chatErrorMessage(selectedConversationError) : undefined}
+					onRetryLoadMessages={handleRetryLoadMessages}
+					inputStatus={{
+						isSending,
+						chatInputDisabled: isCreatingConversation || isRemoteConversation || scope?.composerDisabled === true,
+						// A scoped session pins the agent, and the agent pins the model — both selectors read-only.
+						// In workflow mode the workflow's nodes pick their own models and agents.
+						modelSelectorDisabled: isRemoteConversation || isScoped || workflow.active,
+						agentSelectorDisabled: isScoped || workflow.active,
+						sendDisabled: selectedConversationIsLoading || isRemoteConversation || scope?.composerDisabled === true,
+					}}
+					conversationSearchQuery={conversationSearchQuery}
+					showArchivedConversations={showArchivedConversations}
+					conversationListTruncated={isConversationListTruncated}
+					onShowAllConversations={showAllConversations}
+					mutatingConversationId={mutatingConversationId}
+					conversationListCollapsed={collapsed}
+					hideConversationList={isScoped}
+					isWorkSessionConversation={isScoped}
+					onSelectConversation={setRequestedConversationId}
+					onCreateConversation={handleCreateConversation}
+					onToggleConversationList={toggleSidebar}
+					onModelChange={setSelectedModel}
+					onReasoningEffortChange={setReasoningEffort}
+					onToggleTools={toggleTools}
+					onToggleKnowledgeBase={toggleKnowledgeBase}
+					agentControlsAvailable={agentControlsAvailable}
+					agentModeEnabled={agentModeEnabled}
+					conversationAgentBound={conversationAgentBound}
+					selectedAgentId={selectedAgentId}
+					agentOptions={agentOptions}
+					commandOptions={commandOptions}
+					onSelectAgent={handleSelectAgent}
+					attachments={attachments}
+					pendingUploads={pendingUploads}
+					onUploadFiles={handleUploadAttachments}
+					onRemoveAttachment={handleRemoveAttachment}
+					onSend={handleComposerSend}
+					onCancel={handleStop}
+					onRegenerate={isScoped || isRemoteConversation ? undefined : handleRegenerate}
+					onConversationSearchChange={setConversationSearchQuery}
+					onToggleShowArchivedConversations={setShowArchivedConversations}
+					onRenameConversation={isScoped ? undefined : handleRenameConversation}
+					onToggleConversationPinned={isScoped ? undefined : handleToggleConversationPinned}
+					onToggleConversationArchived={isScoped ? undefined : handleToggleConversationArchived}
+					boundAgentMemoryEnabled={boundAgentMemoryEnabled}
+					onToggleConversationMemoryExcluded={handleToggleConversationMemoryExcluded}
+					onSetConversationPlain={isScoped || isRemoteConversation ? undefined : handleSetConversationPlain}
+					onDeleteConversation={isScoped ? undefined : handleDeleteConversation}
+					onBranchFromMessage={isScoped || isRemoteConversation ? undefined : handleBranch}
+					activeRevisionByGroup={activeRevisionByGroup}
+					onSelectRevision={handleSelectRevision}
+					feedbackByMessageId={feedbackByMessageId}
+					pendingFeedbackMessageId={pendingFeedbackMessageId}
+					onSubmitFeedback={isScoped || isRemoteConversation ? undefined : handleSubmitFeedback}
+					workflow={workflow.slots}
+				/>
+			</ChatNoticeContinueContext>
 		</ChatFrame>
 	);
 }

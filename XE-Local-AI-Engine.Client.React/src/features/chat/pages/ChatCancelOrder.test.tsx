@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nodeChatQueryKeys } from "@/core/chat/queries/NodeChatQueryKeys";
+import type { ChatScope } from "@/core/models/ChatScope";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
@@ -106,14 +107,32 @@ function deltaEvent(): NodeChatStreamEventDto {
 	};
 }
 
-function renderChat(): { queryClient: QueryClient } {
+function renderChat(scope?: ChatScope): { queryClient: QueryClient } {
 	const confirmValue = { confirm: vi.fn().mockResolvedValue(true) };
 
 	return renderWithProviders(
 		<ConfirmContext.Provider value={confirmValue}>
-			<Chat />
+			<Chat scope={scope} />
 		</ConfirmContext.Provider>,
 	);
+}
+
+function liveTurnConversation(): ChatConversationModel {
+	return {
+		...conversation(),
+		messages: [
+			{
+				id: "assistant-1",
+				conversationId: "conversation-1",
+				requestId: "request-1",
+				role: "assistant",
+				content: "partial",
+				status: "streaming",
+				createdAt: "2026-05-24T00:00:00.000Z",
+				sortOrder: 1,
+			},
+		],
+	};
 }
 
 describe("Chat cancel ordering", () => {
@@ -213,6 +232,53 @@ describe("Chat cancel ordering", () => {
 				requestId: "request-1",
 			}),
 		);
+	});
+
+	it("stops a running answer on Esc through the same cancel path as Stop", async () => {
+		adapter.getConversation.mockResolvedValue({
+			...conversation(),
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: "conversation-1",
+					requestId: "request-1",
+					role: "assistant",
+					content: "partial",
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:00.000Z",
+					sortOrder: 1,
+				},
+			],
+		});
+
+		renderChat();
+
+		const button = await screen.findByTestId("chat-send-button");
+		await waitFor(() => expect(button.getAttribute("aria-label")).toBe("Stop"));
+		fireEvent.keyDown(document.body, { key: "Escape" });
+
+		await waitFor(() =>
+			expect(adapter.cancelMessage).toHaveBeenCalledWith({
+				conversationId: "conversation-1",
+				messageId: "assistant-1",
+				requestId: "request-1",
+			}),
+		);
+	});
+
+	it("leaves Esc to the owner page in a scoped chat, where Stop still reaches the owner's override", async () => {
+		adapter.getConversation.mockResolvedValue(liveTurnConversation());
+		const onStopOverride = vi.fn();
+
+		renderChat({ conversationId: "conversation-1", embedded: true, onStopOverride });
+
+		const button = await screen.findByTestId("chat-send-button");
+		await waitFor(() => expect(button.getAttribute("aria-label")).toBe("Stop"));
+		fireEvent.keyDown(document.body, { key: "Escape" });
+		expect(onStopOverride).not.toHaveBeenCalled();
+
+		fireEvent.click(button);
+		expect(onStopOverride).toHaveBeenCalledTimes(1);
 	});
 
 	it("re-reads a persisted live turn no local stream owns until it completes, then unblocks the composer", async () => {

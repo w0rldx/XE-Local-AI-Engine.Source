@@ -183,6 +183,13 @@ public sealed partial class Program
             : $"The node database '{databasePath}' could not be migrated. {restore}";
     }
 
+    /// <summary>The refusal for a database a newer engine migrated: this version cannot start, so a restore is a copy by hand.</summary>
+    internal static string DescribeDatabaseDowngrade(string databasePath, string unknownMigrationId) =>
+        $"The node database '{databasePath}' was written by a newer version of the engine (migration {unknownMigrationId} is unknown to this version), so this version will not open it. "
+        + "Run the newer version again, or restore by hand, since this version cannot stage a restore itself: "
+        + $"stop the node, delete '{databasePath}-wal' and '{databasePath}-shm' if present, then copy the 'node-chat-<time>.sqlite' snapshot taken before the upgrade, "
+        + $"from the backups folder of the node data directory, to '{databasePath}'. Anything written since that snapshot is lost.";
+
     /// <summary>
     ///     True when the migration pass failed on the database itself (a <see cref="DbException" /> in the chain), which exits 9.
     ///     A file error from canvas staging, invalid options or a DI failure surfacing there is not a database failure.

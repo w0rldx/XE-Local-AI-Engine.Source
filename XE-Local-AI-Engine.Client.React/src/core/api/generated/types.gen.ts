@@ -4685,6 +4685,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse =
 	errorCode?: string | null;
 	startedAtUtc?: string | null;
 	updatedAtUtc?: string | null;
+	fileName?: string | null;
+	revision?: string | null;
+	includeProjector?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GgufImportCapabilityResponse = {
