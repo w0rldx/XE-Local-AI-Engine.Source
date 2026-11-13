@@ -388,6 +388,9 @@ repomix-output.*
 .testagent/
 # Per-user AI agent configuration — kept local, not shared through the repository.
 .claude/
+.junie/
+.cortex/
+.hermes/
 .mcp.json
 **/.agents/**
 **/.junie/**
