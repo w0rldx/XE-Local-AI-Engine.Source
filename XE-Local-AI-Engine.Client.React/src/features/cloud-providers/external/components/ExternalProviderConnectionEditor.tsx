@@ -15,14 +15,12 @@ import { IconAlertTriangle, IconArrowBackUp, IconDeviceFloppy, IconTrash, IconX 
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CustomHeaderRows } from "@/core/ui/components/CustomHeaderRows/CustomHeaderRows";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { ExternalProviderModelFields } from "@/features/cloud-providers/external/components/ExternalProviderModelFields";
 import { ExternalProviderProbePanel } from "@/features/cloud-providers/external/components/ExternalProviderProbePanel";
-import {
-	type ExternalProviderFormAction,
-	type ExternalProviderProbeState,
-	nextExternalRowId,
+import type {
+	ExternalProviderFormAction,
+	ExternalProviderProbeState,
 } from "@/features/cloud-providers/external/models/ExternalProviderFormState";
 import {
 	type ExternalProviderFormErrors,
@@ -39,7 +37,6 @@ interface ExternalProviderConnectionEditorProps {
 	readonly values: ExternalProviderFormValues;
 	readonly visibleErrors: ExternalProviderFormErrors;
 	readonly modelRowIds: readonly string[];
-	readonly headerRowIds: readonly string[];
 	readonly probe: ExternalProviderProbeState | null;
 	readonly dispatch: Dispatch<ExternalProviderFormAction>;
 	readonly connection: {
@@ -63,13 +60,8 @@ const segmentedControlStyles = { label: { whiteSpace: "normal" as const } };
 
 export function ExternalProviderConnectionEditor(props: ExternalProviderConnectionEditorProps) {
 	const { t } = useTranslation();
-	const { values, visibleErrors, modelRowIds, headerRowIds, probe, dispatch, connection, status, template } = props;
-	const templateHint =
-		template === "gateway"
-			? t("pages.cloudProviders.templates.gateway.editorHint")
-			: template === "azureOpenAi"
-				? t("pages.cloudProviders.templates.azureOpenAi.editorHint")
-				: null;
+	const { values, visibleErrors, modelRowIds, probe, dispatch, connection, status, template } = props;
+	const templateHint = template === "azureOpenAi" ? t("pages.cloudProviders.templates.azureOpenAi.editorHint") : null;
 	const isActionPending = status.isSaving || status.isDeleting;
 
 	return (
@@ -283,30 +275,6 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 					) : null}
 				</Group>
 			)}
-
-			<Stack gap={4}>
-				<CustomHeaderRows
-					headers={values.headers}
-					rowIds={headerRowIds}
-					title={t("pages.externalProviders.editor.headersTitle", "Custom headers")}
-					description={t("pages.externalProviders.editor.headersDescription")}
-					namePlaceholder={
-						template === "gateway"
-							? t("pages.cloudProviders.templates.gateway.headerNamePlaceholder", "Header name from your gateway")
-							: t("pages.externalProviders.editor.headersNamePlaceholder", "X-Example-Project")
-					}
-					error={visibleErrors.headers}
-					testIdPrefix="external-provider"
-					onAdd={() => dispatch({ type: "addHeader", rowId: nextExternalRowId("external-header") })}
-					onRemove={(index) => dispatch({ type: "removeHeader", index })}
-					onChange={(index, field, value) => dispatch({ type: "setHeaderField", index, field, value })}
-					onToggleSecret={(index) => dispatch({ type: "toggleHeaderSecret", index })}
-					onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-				/>
-				<Text size="xs" c="dimmed">
-					{t("pages.externalProviders.editor.headersGatewayHint")}
-				</Text>
-			</Stack>
 
 			<TextInput
 				style={{ maxWidth: "16rem" }}

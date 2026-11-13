@@ -98,25 +98,9 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         var carriedStoredKey = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.ApiKey : null;
         var apiKey = string.IsNullOrWhiteSpace(query.ApiKey) ? carriedStoredKey : query.ApiKey;
 
-        // No rows at all means "use what is stored", like a blank key and on the same origin only; explicit rows take the
-        // per-name rule for secret values. The endpoint validator has already checked the rows.
-        var carriedStoredHeaders = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.Headers ?? [] : [];
-        var headers = query.Headers is null
-            ? carriedStoredHeaders
-            : ExternalProviderStore.MergeHeaders(ExternalProviderStore.NormalizeHeaders(query.Headers), stored, baseAddress.AbsoluteUri, isSave: false);
-
-        // A gateway may echo what it was sent; the credentials the probe sends are known here, so a detail carrying one is dropped.
-        string[] sentSecrets =
-        [
-            .. headers.Where(static header => header.IsSecret).Select(static header => header.Value).Append(apiKey)
-                      .OfType<string>()
-                      .Where(static value => !string.IsNullOrWhiteSpace(value))
-        ];
-        return await SendProbeAsync(baseAddress,
-            apiKey,
-            [.. headers.Select(static header => new KeyValuePair<string, string>(header.Name, header.Value ?? string.Empty))],
-            sentSecrets,
-            cancellationToken);
+        // A gateway may echo what it was sent; the key the probe sends is known here, so a detail carrying it is dropped.
+        string[] sentSecrets = string.IsNullOrWhiteSpace(apiKey) ? [] : [apiKey];
+        return await SendProbeAsync(baseAddress, apiKey, sentSecrets, cancellationToken);
     }
 
     private async Task<StoredExternalProviderConnection?> ResolveStoredConnectionAsync(string? connectionId, CancellationToken cancellationToken)
@@ -133,7 +117,6 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
 
     private async Task<ExternalProviderProbeResult> SendProbeAsync(Uri baseAddress,
         string? apiKey,
-        IReadOnlyList<KeyValuePair<string, string>> headers,
         IReadOnlyList<string> sentSecrets,
         CancellationToken cancellationToken)
     {
@@ -160,7 +143,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
                           };
             // The same pin chat and health use (ExternalOpenAiChatClient.Build, ExternalOpenAiModelProvider.ProbeConnectionAsync):
             // the probe reaches the reviewed base address and nothing else, structurally rather than by convention.
-            using var httpClient = new HttpClient(new CustomRequestHeadersHandler(headers, new ExternalEndpointGuardHandler(baseAddress, handler)), disposeHandler: true)
+            using var httpClient = new HttpClient(new ExternalEndpointGuardHandler(baseAddress, handler), disposeHandler: true)
             {
                 Timeout = Timeout.InfiniteTimeSpan
             };
@@ -186,7 +169,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         catch (Exception exception)
         {
             // Covers the probe deadline (a cancellation that is NOT the caller's) and every transport failure. The exception
-            // text is deliberately dropped from the RESULT — it embeds the address and can embed header material — but kept in the node's own log.
+            // text is deliberately dropped from the RESULT — it embeds the address — but kept in the node's own log.
             _logger.LogDebug(exception, "External provider probe could not reach the configured endpoint.");
             return new ExternalProviderProbeResult
             {
@@ -222,7 +205,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
-                return Answered($"The endpoint rejected the model listing with HTTP {status}. Check the API key or the connection's custom headers.{quoted}");
+                return Answered($"The endpoint rejected the model listing with HTTP {status}. Check the API key.{quoted}");
             }
 
             // A wrong base URL path: nothing is routed there. Some servers also 404 a missing listing, which is why the save stays allowed.

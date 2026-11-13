@@ -28,8 +28,6 @@ internal static class ExternalProviderConfigProjection
 
         var registrations = new List<ExternalProviderModelRegistration>();
         var keys = new Dictionary<string, string>(StringComparer.Ordinal);
-        var headers = new Dictionary<string, IReadOnlyList<KeyValuePair<string, string>>>(StringComparer.Ordinal);
-        var secretHeaderValues = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         foreach (var connection in config.Connections)
         {
             ExternalProviderConnectionDescriptor descriptor;
@@ -47,12 +45,6 @@ internal static class ExternalProviderConfigProjection
                 keys[descriptor.Id] = connection.ApiKey;
             }
 
-            if (connection.Headers.Count > 0)
-            {
-                headers[descriptor.Id] = [.. connection.Headers.Select(static header => new KeyValuePair<string, string>(header.Name, header.Value ?? string.Empty))];
-                secretHeaderValues[descriptor.Id] = [.. connection.Headers.Where(static header => header.IsSecret).Select(static header => header.Value).OfType<string>()];
-            }
-
             registrations.AddRange(connection.Models.Select(model =>
                 new ExternalProviderModelRegistration
                 {
@@ -64,21 +56,15 @@ internal static class ExternalProviderConfigProjection
         return new Projection
         {
             Registrations = registrations,
-            KeysByConnectionId = keys,
-            HeadersByConnectionId = headers,
-            SecretHeaderValuesByConnectionId = secretHeaderValues
+            KeysByConnectionId = keys
         };
     }
 
-    /// <summary>The projected registrations, API keys and custom headers; a class, so no generated ToString can print a secret.</summary>
+    /// <summary>The projected registrations and API keys; a class, so no generated ToString can print a secret.</summary>
     public sealed class Projection
     {
         public required IReadOnlyList<ExternalProviderModelRegistration> Registrations { get; init; }
 
         public required IReadOnlyDictionary<string, string> KeysByConnectionId { get; init; }
-
-        public required IReadOnlyDictionary<string, IReadOnlyList<KeyValuePair<string, string>>> HeadersByConnectionId { get; init; }
-
-        public required IReadOnlyDictionary<string, IReadOnlyList<string>> SecretHeaderValuesByConnectionId { get; init; }
     }
 }

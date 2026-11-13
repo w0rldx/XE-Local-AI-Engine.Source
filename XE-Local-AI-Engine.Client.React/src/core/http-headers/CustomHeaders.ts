@@ -14,14 +14,12 @@ export interface CustomHeaderError {
 	readonly index?: number;
 }
 
-// The wire shape both the Azure and the external-connection requests accept for a header row.
+// The wire shape the Azure Foundry request accepts for a header row.
 export interface CustomHeaderRequest {
 	name: string;
 	isSecret: boolean;
 	value?: string;
 }
-
-export const emptyCustomHeader: CustomHeaderDraft = { name: "", value: "", isSecret: false, hasStoredSecret: false };
 
 // Reserved header names (lower-cased for case-insensitive compare) that must never be operator-set: they would override
 // credentials or transport framing, or are content headers the .NET request-header collection refuses. Mirrors the
@@ -139,13 +137,8 @@ export function validateHeaders(headers: readonly CustomHeaderDraft[]): CustomHe
 	return undefined;
 }
 
-// True for a secret row left blank over a stored value: the request omits its value and the backend keeps the stored one.
-export function keepsStoredSecret(header: CustomHeaderDraft): boolean {
-	return header.isSecret && header.hasStoredSecret && header.value.trim().length === 0;
-}
-
 // Maps rows to the request. Blank-name rows are dropped; a blank secret value is omitted, which the backend reads as
-// "keep the stored value" (and refuses when nothing is stored, or when the endpoint moved to another origin).
+// "keep the stored value" (and refuses when nothing is stored).
 export function toHeaderRequests(headers: readonly CustomHeaderDraft[]): CustomHeaderRequest[] {
 	return headers.flatMap((header) => {
 		const name = header.name.trim();

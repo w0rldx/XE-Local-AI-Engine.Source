@@ -71,7 +71,7 @@ internal static class InvocationFailureClassifier
 
     // A provider or gateway HTTP 401, or a 403 whose code blames the credential. Fixed and path-free: only the sanitized body detail is appended, never the URL or credential.
     private const string ProviderAuthFailedMessage =
-        "The provider rejected the credentials. Replace the API key, bearer token or secret headers in the connection settings.";
+        "The provider rejected the credentials. Replace the API key or bearer token in the connection settings.";
 
     // A gateway 401 for an expired or refused bearer token: the token, not the whole connection, needs replacing.
     private const string ProviderTokenRejectedMessage =

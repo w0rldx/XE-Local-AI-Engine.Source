@@ -77,10 +77,7 @@ public sealed record StoredExternalProviderConnection
     /// <summary>The models the operator registered on this connection.</summary>
     public IReadOnlyList<StoredExternalProviderModel> Models { get; init; } = [];
 
-    /// <summary>The custom request headers sent with every request to this connection. Absent before schema 3, so it reads empty.</summary>
-    public IReadOnlyList<StoredExternalProviderHeader> Headers { get; init; } = [];
-
-    // The sealed-record PrintMembers signature is private; it redacts the key and the secret header values from ToString.
+    // The sealed-record PrintMembers signature is private; it redacts the key from ToString.
     private bool PrintMembers(StringBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -94,7 +91,6 @@ public sealed record StoredExternalProviderConnection
         builder.Append(", TimeoutSeconds = ").Append(TimeoutSeconds);
         builder.Append(", AllowInsecureHttp = ").Append(AllowInsecureHttp);
         builder.Append(", Models = ").Append(Models.Count);
-        builder.Append(", Headers = [").AppendJoin(", ", Headers).Append(']');
         return true;
     }
 }
@@ -149,9 +145,10 @@ public static class ExternalProviderStoreSchema
 {
     /// <summary>
     ///     The schema version this build writes. Version 2 made the model capability flags tri-state (a version-1 file is
-    ///     lifted on read); version 3 added custom headers, so an older build refuses a file that carries them.
+    ///     lifted on read); version 3 added per-connection custom headers, since removed.
     /// </summary>
     /// <remarks>
+    ///     A stored <c>headers</c> member is ignored on read and dropped by the next save, so the removal needs no bump.
     ///     Cloud grants added no version: an older build ignores them, which only withholds more. The API surface added
     ///     no version: an older build ignores it and sends Chat Completions, which fails loudly for a Responses-only model
     ///     and never widens what is sent.

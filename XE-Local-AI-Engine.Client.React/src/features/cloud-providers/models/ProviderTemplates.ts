@@ -1,10 +1,6 @@
-import { emptyCustomHeader } from "@/core/http-headers/CustomHeaders";
-import { emptyFormValues } from "@/features/cloud-providers/external/models/ExternalProviderFormState";
-import type { ExternalProviderFormValues } from "@/features/cloud-providers/external/models/ExternalProviderModel";
-
-// The three ways an `ext:` connection starts. They differ only in the form they pre-fill and the hints the editor
-// shows; every one saves through the same connection store.
-export type ExternalProviderTemplateId = "generic" | "gateway" | "azureOpenAi";
+// The two ways an `ext:` connection starts. They open the same empty form and differ only in the hints the editor
+// shows; both save through the same connection store.
+export type ExternalProviderTemplateId = "generic" | "azureOpenAi";
 
 export type ProviderTemplateId = ExternalProviderTemplateId | "azureFoundry" | "codex";
 
@@ -33,7 +29,7 @@ export function providerTemplateOptions(
 ): ProviderTemplateOption[] {
 	const options: ProviderTemplateOption[] = [];
 	if (capabilities.externalProviders) {
-		options.push({ id: "generic", blockedBy: null }, { id: "gateway", blockedBy: null }, { id: "azureOpenAi", blockedBy: null });
+		options.push({ id: "generic", blockedBy: null }, { id: "azureOpenAi", blockedBy: null });
 	}
 	if (capabilities.cloudSettings) {
 		options.push(
@@ -45,18 +41,10 @@ export function providerTemplateOptions(
 }
 
 export function isExternalProviderTemplate(id: ProviderTemplateId): id is ExternalProviderTemplateId {
-	return id === "generic" || id === "gateway" || id === "azureOpenAi";
+	return id === "generic" || id === "azureOpenAi";
 }
 
 // Placeholders only: the operator's host, path and resource name are never guessed into the form.
 export const externalTemplateBaseUrlPlaceholder: Partial<Record<ExternalProviderTemplateId, string>> = {
-	gateway: "https://<host>/…/openai/v1",
 	azureOpenAi: "https://<resource>.openai.azure.com/openai/v1",
 };
-
-/** The form a new connection opens with for a template. Every template starts declared Cloud, as the empty form does. */
-export function externalTemplateValues(id: ExternalProviderTemplateId): ExternalProviderFormValues {
-	// One non-secret project header row beside the bearer token, only a default: the operator fills in the value, and can
-	// rename or remove the row for a gateway that wants another header.
-	return id === "gateway" ? { ...emptyFormValues, headers: [{ ...emptyCustomHeader, name: "x-project-id" }] } : emptyFormValues;
-}

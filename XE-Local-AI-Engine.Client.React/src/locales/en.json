@@ -2696,17 +2696,11 @@
 					"label": "ChatGPT (Codex)",
 					"signedIn": "Already signed in. Open it in the list to sign out first."
 				},
-				"gateway": {
-					"description": "A company gateway in front of hosted models, with a bearer token and often a project header.",
-					"editorHint": "Enter the gateway's OpenAI v1 address, which usually ends in /openai/v1. Put the bearer token in the API key field: it is sent as \"Authorization: Bearer\". The header row below starts as x-project-id: enter the project id as its value, rename the row if the gateway uses another header, or remove it if the gateway needs none.",
-					"headerNamePlaceholder": "Header name from your gateway",
-					"label": "Enterprise AI gateway"
-				},
 				"generic": {
 					"description": "A hosted API, LM Studio, vLLM or llama-server on another machine.",
 					"label": "OpenAI-compatible endpoint"
 				},
-				"openAiCompatibleGroup": "OpenAI-compatible / gateway"
+				"openAiCompatibleGroup": "OpenAI-compatible"
 			},
 			"title": "Cloud providers"
 		},
@@ -3896,10 +3890,6 @@
 				"displayNameLabel": "Display name",
 				"displayNamePlaceholder": "Unsloth box",
 				"editTitle": "Edit connection",
-				"headersDescription": "Extra HTTP headers sent with every request to this connection, including Test connection. Mark a value secret to store it write-only.",
-				"headersGatewayHint": "Private AI gateways often expect a project or tenant header next to the token; ask the gateway's operator for its name and value.",
-				"headersNamePlaceholder": "X-Example-Project",
-				"headersTitle": "Custom headers",
 				"idHint": "Lowercase letters, digits and hyphens. It becomes part of every model id from this connection and cannot be changed later.",
 				"idImmutableHint": "The id is part of every model id from this connection, so it cannot be changed. Delete and re-add the connection to rename it.",
 				"idLabel": "Connection id",

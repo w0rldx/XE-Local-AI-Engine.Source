@@ -154,24 +154,17 @@ describe("CloudProviders page", () => {
 		expect(screen.queryByTestId("azure-foundry-panel")).toBeNull();
 	});
 
-	it("pre-fills a new connection from the enterprise gateway template", async () => {
+	it("opens a new connection from the OpenAI-compatible template with no custom header rows", async () => {
 		renderPage();
 
-		fireEvent.click(await openTemplate("gateway"));
+		const generic = await openTemplate("generic");
+		expect(screen.queryByTestId("cloud-provider-template-gateway")).toBeNull();
+		fireEvent.click(generic);
 
 		await screen.findByTestId("external-provider-editor");
-		const baseUrl = screen.getByTestId("external-provider-base-url") as HTMLInputElement;
-		expect(baseUrl.value).toBe("");
-		expect(baseUrl.placeholder).toBe("https://<host>/…/openai/v1");
-		// One header row named x-project-id; its value is left for the operator.
-		const headerName = screen.getByTestId("external-provider-header-name-0") as HTMLInputElement;
-		expect(headerName.value).toBe("x-project-id");
-		expect((screen.getByTestId("external-provider-header-value-0") as HTMLInputElement).value).toBe("");
-		expect(headerName.placeholder).toBe("Header name from your gateway");
-		expect((screen.getByTestId("external-provider-header-secret-0") as HTMLInputElement).checked).toBe(false);
-		expect(screen.getByTestId("external-provider-template-hint").textContent).toContain(
-			"Put the bearer token in the API key field",
-		);
+		expect((screen.getByTestId("external-provider-base-url") as HTMLInputElement).value).toBe("");
+		expect(screen.queryByTestId("external-provider-add-header")).toBeNull();
+		expect(screen.queryByTestId("external-provider-template-hint")).toBeNull();
 		expect(screen.getByTestId("external-provider-cloud-grants")).toBeTruthy();
 	});
 

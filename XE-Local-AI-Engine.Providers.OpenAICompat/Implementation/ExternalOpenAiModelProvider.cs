@@ -215,12 +215,11 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
             return new ConnectionProbe(IsReachable: true, Diagnostic: null);
         }
 
-        return await ProbeConnectionAsync(transportBinding.Binding.Registration.Connection, transportBinding.ApiKey, transportBinding.Headers, ct).ConfigureAwait(false);
+        return await ProbeConnectionAsync(transportBinding.Binding.Registration.Connection, transportBinding.ApiKey, ct).ConfigureAwait(false);
     }
 
     private async Task<ConnectionProbe> ProbeConnectionAsync(ExternalProviderConnectionDescriptor connection,
         string? apiKey,
-        IReadOnlyList<KeyValuePair<string, string>> headers,
         CancellationToken ct)
     {
         // Diagnostics are surfaced to the operator, so they name the connection's DISPLAY name and never its base URL,
@@ -238,7 +237,7 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
                             ConnectTimeout = HealthProbeTimeout,
                             AllowAutoRedirect = false
                         };
-            using var httpClient = new HttpClient(new CustomRequestHeadersHandler(headers, new ExternalEndpointGuardHandler(baseAddress, inner)), disposeHandler: true)
+            using var httpClient = new HttpClient(new ExternalEndpointGuardHandler(baseAddress, inner), disposeHandler: true)
             {
                 Timeout = HealthProbeTimeout
             };

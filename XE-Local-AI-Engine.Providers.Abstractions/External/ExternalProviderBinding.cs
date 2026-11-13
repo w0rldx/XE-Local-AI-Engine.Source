@@ -54,13 +54,4 @@ public sealed class ExternalProviderTransportBinding
     ///     <c>Authorization</c> header", never "send an empty one".
     /// </summary>
     public required string? ApiKey { get; init; }
-
-    /// <summary>
-    ///     The connection's custom request headers as name and value pairs, secret values included, from the same
-    ///     generation as <see cref="ApiKey" />. Empty when none are configured.
-    /// </summary>
-    public IReadOnlyList<KeyValuePair<string, string>> Headers { get; init; } = [];
-
-    /// <summary>The values in <see cref="Headers" /> the operator marked secret, so a response echoing one can be dropped.</summary>
-    public IReadOnlyList<string> SecretHeaderValues { get; init; } = [];
 }

@@ -7,9 +7,8 @@ using System.Text;
 ///     the RFC 7230 name and value grammar.
 /// </summary>
 /// <remarks>
-///     The one home for these rules. The Azure Foundry connection and the external OpenAI-compatible connection both
-///     validate against them on save and in their stores, and the outbound header policy and handler reuse the
-///     reserved set as a defense-in-depth skip.
+///     The one home for these rules. The Azure Foundry connection validates against them on save and in its store, and
+///     the outbound header policy reuses the reserved set as a defense-in-depth skip.
 /// </remarks>
 public static class CustomHeaderRules
 {

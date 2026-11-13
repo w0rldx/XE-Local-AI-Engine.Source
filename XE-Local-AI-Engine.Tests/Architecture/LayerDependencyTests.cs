@@ -123,9 +123,9 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
                 // The composition layer joins the shared wire layer so the rules it stores and the rules the transport
                 // enforces are ONE code: the encrypted external-provider store normalizes a saved base URL with the same
-                // OpenAICompatibleBaseAddress the outbound guard pins against, validates header names with
-                // CustomHeaderRules, and the connect-time probe runs through the same ExternalEndpointGuardHandler and
-                // CustomRequestHeadersHandler as chat and health. A private copy of any of them in the
+                // OpenAICompatibleBaseAddress the outbound guard pins against, the cloud settings validate header names
+                // with CustomHeaderRules, and the connect-time probe runs through the same ExternalEndpointGuardHandler as
+                // chat and health. A private copy of any of them in the
                 // application layer is precisely how the stored value and the enforced value would come to disagree. Note the ordering trap below: this
                 // name is a PREFIX of nothing, but "…Providers.OpenAICompat" IS a prefix of this one.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",

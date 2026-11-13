@@ -10,12 +10,11 @@ Everything is on one page: **Settings → Cloud Providers**. It lists every prov
 | You want to use | Template |
 |---|---|
 | A hosted API, LM Studio, vLLM or llama-server on another machine | **OpenAI-compatible endpoint** |
-| Your company's AI gateway in front of hosted models | **Enterprise AI gateway** |
 | An Azure OpenAI resource with one of its API keys | **Azure OpenAI v1 (API key)** |
 | **Azure AI Foundry**, including sign-in with **Entra ID** or a managed identity | **Azure AI Foundry** |
 | **ChatGPT / Codex** with your ChatGPT subscription | **ChatGPT (Codex)** |
 
-The first three are all OpenAI-compatible connections: the template only fills in a starting point. This computer
+The first two are both OpenAI-compatible connections: the template only changes the hints the editor shows. This computer
 holds one Azure AI Foundry connection and one ChatGPT sign-in, so their templates are greyed out while one is set up;
 edit or sign out from the list instead.
 
@@ -32,9 +31,6 @@ API keys and secrets are stored encrypted on this computer and are never shown a
    - **Display name:** what the model picker shows.
    - **Base URL:** the endpoint's OpenAI-compatible address, with or without the trailing `/v1`.
    - **API key or bearer token:** optional. Leave it blank for a server that needs no authentication.
-   - **Custom headers:** only if your gateway asks for extra headers, such as a project or tenant header. The
-     enterprise AI gateway template starts with an `x-project-id` row; enter its value, rename it, or remove it. Mark a
-     value **secret** to store it write-only.
 3. Choose the **Trust** of the connection (see below).
 4. Click **Test connection**. The app asks the endpoint for its model list. If the endpoint lists models, pick one
    to add it. Plenty of gateways answer without a list; then type the model id yourself under **Models**.
@@ -42,14 +38,12 @@ API keys and secrets are stored encrypted on this computer and are never shown a
    only **Yes** counts, and **Unknown** is treated like **No**.
 6. Click **Save connection**. The models now appear in the model picker under the connection's name.
 
-### A company AI gateway
+### An endpoint that needs extra headers
 
-Pick **Enterprise AI gateway**. Enter the gateway's OpenAI address, which usually ends in `/openai/v1`, for example
-`https://<gateway host>/<path>/openai/v1`. If your requests get no answer, check this address first: a gateway answers
-only on the exact path it publishes. Put your gateway token in **API key or bearer token**; the app sends it as
-`Authorization: Bearer`. The template adds one `x-project-id` header row with no value: enter the project id your gateway team
-gives you, rename the row if the gateway uses another header, or remove it if the gateway needs none. Gateways usually run hosted
-models, so leave **Trust** on **Cloud**.
+On an OpenAI-compatible connection the app sends only `Authorization: Bearer`, and only when a key is set. If an
+endpoint needs other headers, run a local proxy that adds them and enter the proxy's address on this computer as the
+base URL, for example `http://127.0.0.1:<port>/v1`. The proxy can hold the endpoint's key too, so the key field can
+stay blank. Leave **Trust** on **Cloud** when the proxy forwards to hosted models.
 
 ### Azure OpenAI with an API key
 

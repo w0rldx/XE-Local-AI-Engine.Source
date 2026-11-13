@@ -90,6 +90,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 > - A requested model is no longer substituted when it is missing: the turn fails in its provider instead of falling
 >   back to the default model with a notice.
 
+> **Breaking (pre-release): custom request headers on OpenAI-compatible connections and the template that prefilled
+> them are removed.** "Add provider" offers the OpenAI-compatible endpoint and Azure OpenAI v1 templates.
+> - A connection sends no custom request header any more. Stored header rows are ignored on read, never sent, and dropped from
+>   the encrypted connection file on the next save of any connection; an endpoint that needs an extra header is reached
+>   through a local proxy that adds it.
+> - The external-provider API loses `headers` on the connection response, the save request and the probe request.
+> - Azure AI Foundry custom headers are unchanged.
+
 > **Breaking (pre-release): re-create existing Development projects after this upgrade.** The Development command-profile
 > catalog moved from `v2` to `v3` (the new `python-pytest` profile). A project created before the upgrade keeps its
 > stored `v2` profile, and every attempt, validation, review, apply and Dev Workflows Tool node on it is refused with

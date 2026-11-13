@@ -58,7 +58,6 @@ internal static class ExternalProviderTestData
 internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
 {
     private readonly Dictionary<string, string?> _apiKeys = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, IReadOnlyList<KeyValuePair<string, string>>> _headers = new(StringComparer.Ordinal);
     private readonly List<ExternalProviderModelRegistration> _registrations = [];
 
     public int ResolveCallCount { get; private set; }
@@ -71,8 +70,7 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
 
     public FakeExternalProviderRegistry Add(ExternalProviderConnectionDescriptor connection,
         ExternalProviderModelDescriptor model,
-        string? apiKey = null,
-        IReadOnlyList<KeyValuePair<string, string>>? headers = null)
+        string? apiKey = null)
     {
         _registrations.Add(new ExternalProviderModelRegistration
         {
@@ -80,20 +78,17 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
             Model = model
         });
         _apiKeys[connection.Id] = apiKey;
-        _headers[connection.Id] = headers ?? [];
         return this;
     }
 
     public void Replace(ExternalProviderConnectionDescriptor connection,
         ExternalProviderModelDescriptor model,
-        string? apiKey = null,
-        IReadOnlyList<KeyValuePair<string, string>>? headers = null)
+        string? apiKey = null)
     {
         _registrations.Clear();
         _apiKeys.Clear();
-        _headers.Clear();
         Generation++;
-        _ = Add(connection, model, apiKey, headers);
+        _ = Add(connection, model, apiKey);
     }
 
     public Task<IReadOnlyList<ExternalProviderModelRegistration>> ListRegistrationsAsync(CancellationToken ct)
@@ -130,8 +125,7 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
                 Generation = Generation,
                 Registration = registration
             },
-            ApiKey = _apiKeys.GetValueOrDefault(registration.Connection.Id),
-            Headers = _headers.GetValueOrDefault(registration.Connection.Id) ?? []
+            ApiKey = _apiKeys.GetValueOrDefault(registration.Connection.Id)
         };
     }
 }
@@ -146,9 +140,6 @@ internal sealed class RecordedRequest
     public required string? Authorization { get; init; }
 
     public required bool HasAuthorizationHeader { get; init; }
-
-    /// <summary>Every request header as it left, values joined by a comma, by case-insensitive name.</summary>
-    public required IReadOnlyDictionary<string, string> Headers { get; init; }
 }
 
 /// <summary>
@@ -240,10 +231,7 @@ internal sealed class OpenAiWireRecorder
                     Uri = request.RequestUri,
                     Body = body,
                     Authorization = request.Headers.Authorization?.ToString(),
-                    HasAuthorizationHeader = request.Headers.Contains("Authorization"),
-                    Headers = request.Headers.NonValidated.ToDictionary(static header => header.Key,
-                        static header => string.Join(",", header.Value),
-                        StringComparer.OrdinalIgnoreCase)
+                    HasAuthorizationHeader = request.Headers.Contains("Authorization")
                 });
             }
 

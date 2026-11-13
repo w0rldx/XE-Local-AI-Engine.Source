@@ -9,12 +9,6 @@ import type {
 	XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse,
 	XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest,
 } from "@/core/api/generated";
-import {
-	type CustomHeaderDraft,
-	emptyCustomHeader,
-	keepsStoredSecret,
-	toHeaderRequests,
-} from "@/core/http-headers/CustomHeaders";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import {
 	type ExternalProviderApiSurface,
@@ -90,7 +84,6 @@ export const emptyFormValues: ExternalProviderFormValues = {
 	clearApiKey: false,
 	timeoutSeconds: "",
 	allowInsecureHttp: false,
-	headers: [],
 	models: [emptyModelDraft],
 };
 
@@ -114,8 +107,7 @@ function withCoherentReasoning(model: ExternalProviderModelDraft): ExternalProvi
 }
 
 // Loads a stored connection into the editor. The API key is never returned by the backend, so it always loads blank
-// and `clearApiKey` always loads false — the operator has to ask for removal again on every fresh edit. Secret header
-// values are write-only too: they load blank with `hasStoredSecret` driving the "stored" hint.
+// and `clearApiKey` always loads false — the operator has to ask for removal again on every fresh edit.
 export function connectionToFormValues(connection: ExternalProviderConnectionDto): ExternalProviderFormValues {
 	const models = (connection.models ?? []).map((model) =>
 		// Canonicalized on the way in as well as on every edit, so a record written before the backend enforced the
@@ -143,13 +135,6 @@ export function connectionToFormValues(connection: ExternalProviderConnectionDto
 		clearApiKey: false,
 		timeoutSeconds: numberToField(connection.timeoutSeconds),
 		allowInsecureHttp: connection.allowInsecureHttp,
-		headers: (connection.headers ?? []).map((header) => ({
-			name: header.name,
-			value: header.isSecret ? "" : (header.value ?? ""),
-			isSecret: header.isSecret,
-			// Only a stored SECRET can be kept blank; a plain row switched to secret must carry a fresh value.
-			hasStoredSecret: header.isSecret && header.hasStoredValue,
-		})),
 		// Always leave one row to type into, the same affordance the Azure deployment list gives.
 		models: models.length > 0 ? models : [emptyModelDraft],
 	};
@@ -161,7 +146,7 @@ function fieldToNumber(value: string): number | undefined {
 }
 
 /**
- * Builds the save body. Three contracts live here and nowhere else:
+ * Builds the save body. The contracts live here and nowhere else:
  *
  * - A blank API-key field omits `apiKey` entirely, which PRESERVES the stored key. Sending `""` would not clear it,
  *   it would just fail the store's own merge differently, so the field is never sent empty.
@@ -170,8 +155,6 @@ function fieldToNumber(value: string): number | undefined {
  * - A model's default reasoning effort is dropped unless the model declares BOTH reasoning and effort support, so
  *   changing either answer cannot leave a stale effort behind in the store.
  * - An Unknown capability is sent as `null`, never omitted, so the store records the operator's answer explicitly.
- * - Header rows are always sent (an empty list removes them all); a blank secret value is omitted, which keeps the
- *   stored value on the same origin and is refused by the backend when the address moved.
  * - Cloud grants ride only on a Cloud save; a Local save omits them, which the backend reads as none.
  */
 export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRevision: string | undefined): SaveConnectionBody {
@@ -185,7 +168,6 @@ export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRe
 		...(values.clearApiKey ? { clearApiKey: true } : {}),
 		timeoutSeconds: fieldToNumber(values.timeoutSeconds),
 		...(values.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
-		headers: toHeaderRequests(values.headers),
 		models: values.models
 			.filter((model) => model.wireId.trim().length > 0)
 			.map((model) => {
@@ -214,22 +196,20 @@ export function nextExternalRowId(prefix: string): string {
 	return `${prefix}-${externalRowSequence}`;
 }
 
-// Stable React keys for the two row lists; regenerated together whenever the form is reset.
+// Stable React keys for the model rows; regenerated whenever the form is reset.
 export interface ExternalProviderRowIds {
 	models: string[];
-	headers: string[];
 }
 
 export function createFormRowIds(values: ExternalProviderFormValues): ExternalProviderRowIds {
 	return {
 		models: Array.from({ length: values.models.length }, () => nextExternalRowId("external-model")),
-		headers: Array.from({ length: values.headers.length }, () => nextExternalRowId("external-header")),
 	};
 }
 
 /**
  * Identity of the configuration a probe result is evidence ABOUT: the connection whose unseen stored key the backend
- * may fall back to, the exact draft address that was probed, what the key field said at the time, and the header rows.
+ * may fall back to, the exact draft address that was probed, and what the key field said at the time.
  *
  * Everything the probe request can carry is in here, which is what lets a stale result be recognized as stale: the
  * moment any of it changes, the models on screen were discovered at some other endpoint and must not be offered as
@@ -238,25 +218,20 @@ export function createFormRowIds(values: ExternalProviderFormValues): ExternalPr
 export function probeInputFingerprint(values: ExternalProviderFormValues): string {
 	const typedKey = values.apiKey.trim();
 	const keyState = values.clearApiKey ? "cleared" : typedKey.length > 0 ? `typed:${typedKey}` : "stored";
-	const headers = JSON.stringify(toHeaderRequests(values.headers));
-	return [values.connectionId.trim(), values.baseUrl.trim(), keyState, String(values.allowInsecureHttp), headers].join("\n");
+	return [values.connectionId.trim(), values.baseUrl.trim(), keyState, String(values.allowInsecureHttp)].join("\n");
 }
 
 /**
  * Builds the probe body. The connection id rides ALONGSIDE the draft address, never instead of it: the backend falls
- * back to the stored key, and to stored secret header values, only when the draft address is on the stored connection's
- * own origin. Stored headers are never applied on their own, so every row on screen is sent. A pending key removal drops
- * the id, because the backend would otherwise fall back to the key being removed; that draft then also probes without
- * any stored secret header value.
+ * back to the stored key only when the draft address is on the stored connection's own origin. A pending key removal
+ * drops the id, because the backend would otherwise fall back to the key being removed.
  */
 export function toProbeRequestBody(values: ExternalProviderFormValues, isStored: boolean, hasStoredApiKey: boolean): ProbeBody {
-	const needsStoredSecrets = hasStoredApiKey || values.headers.some(keepsStoredSecret);
 	return {
-		...(isStored && needsStoredSecrets && !values.clearApiKey ? { connectionId: values.connectionId.trim() } : {}),
+		...(isStored && hasStoredApiKey && !values.clearApiKey ? { connectionId: values.connectionId.trim() } : {}),
 		baseUrl: values.baseUrl.trim(),
 		...(values.apiKey.trim().length > 0 ? { apiKey: values.apiKey } : {}),
 		...(values.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
-		headers: toHeaderRequests(values.headers),
 	};
 }
 
@@ -276,7 +251,6 @@ export interface ExternalProviderFormState {
 	touched: Partial<Record<keyof ExternalProviderFormValues, true>>;
 	submitted: boolean;
 	modelRowIds: string[];
-	headerRowIds: string[];
 	probe: ExternalProviderProbeState | null;
 }
 
@@ -297,10 +271,6 @@ export type ExternalProviderFormAction =
 	| { type: "setModelFlag"; index: number; flag: ExternalProviderModelFlag; value: boolean | null }
 	| { type: "setModelEffort"; index: number; value: ReasoningEffort | "" }
 	| { type: "setModelApiSurface"; index: number; value: ExternalProviderApiSurface }
-	| { type: "addHeader"; rowId: string }
-	| { type: "removeHeader"; index: number }
-	| { type: "setHeaderField"; index: number; field: "name" | "value"; value: string }
-	| { type: "toggleHeaderSecret"; index: number }
 	| { type: "addProbedModel"; wireId: string; contextLength: number | null | undefined; rowId: string }
 	// The fingerprint is the one taken when the request was SENT, not when it answered: a probe that lands after the
 	// operator has edited the address describes an endpoint that is no longer on screen.
@@ -314,7 +284,6 @@ export const initialFormState: ExternalProviderFormState = {
 	touched: {},
 	submitted: false,
 	modelRowIds: createFormRowIds(emptyFormValues).models,
-	headerRowIds: [],
 	probe: null,
 };
 
@@ -327,15 +296,6 @@ function mapModel(
 	return { ...state, values: { ...state.values, models } };
 }
 
-function mapHeader(
-	state: ExternalProviderFormState,
-	index: number,
-	update: (header: CustomHeaderDraft) => CustomHeaderDraft,
-): ExternalProviderFormState {
-	const headers = state.values.headers.map((header, headerIndex) => (headerIndex === index ? update(header) : header));
-	return { ...state, values: { ...state.values, headers } };
-}
-
 function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFormAction): ExternalProviderFormState {
 	switch (action.type) {
 		case "reset":
@@ -344,7 +304,6 @@ function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFo
 				touched: {},
 				submitted: false,
 				modelRowIds: action.rowIds.models,
-				headerRowIds: action.rowIds.headers,
 				probe: null,
 			};
 		case "setField":
@@ -413,22 +372,6 @@ function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFo
 				modelRowIds: [...state.modelRowIds, action.rowId],
 			};
 		}
-		case "addHeader":
-			return {
-				...state,
-				values: { ...state.values, headers: [...state.values.headers, emptyCustomHeader] },
-				headerRowIds: [...state.headerRowIds, action.rowId],
-			};
-		case "removeHeader":
-			return {
-				...state,
-				values: { ...state.values, headers: state.values.headers.filter((_, index) => index !== action.index) },
-				headerRowIds: state.headerRowIds.filter((_, index) => index !== action.index),
-			};
-		case "setHeaderField":
-			return mapHeader(state, action.index, (header) => ({ ...header, [action.field]: action.value }));
-		case "toggleHeaderSecret":
-			return mapHeader(state, action.index, (header) => ({ ...header, isSecret: !header.isSecret }));
 		case "probeSucceeded":
 			return { ...state, probe: { fingerprint: action.fingerprint, result: action.result, failure: null } };
 		case "probeFailed":

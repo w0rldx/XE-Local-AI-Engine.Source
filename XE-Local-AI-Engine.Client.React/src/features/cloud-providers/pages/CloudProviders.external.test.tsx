@@ -470,7 +470,7 @@ describe("CloudProviders page — OpenAI-compatible connections", () => {
 
 		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
 		const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
-		expect(call.body).toEqual({ connectionId: "unsloth-box", baseUrl: "http://127.0.0.1:8080/v1", headers: [] });
+		expect(call.body).toEqual({ connectionId: "unsloth-box", baseUrl: "http://127.0.0.1:8080/v1" });
 	});
 
 	it("probes the EDITED address rather than the stored one", async () => {
@@ -498,7 +498,6 @@ describe("CloudProviders page — OpenAI-compatible connections", () => {
 			connectionId: "unsloth-box",
 			baseUrl: "http://127.0.0.1:8080/v1",
 			apiKey: "sk-new",
-			headers: [],
 		});
 	});
 
@@ -510,7 +509,7 @@ describe("CloudProviders page — OpenAI-compatible connections", () => {
 
 		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
 		const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
-		expect(call.body).toEqual({ baseUrl: "http://127.0.0.1:8080/v1", headers: [] });
+		expect(call.body).toEqual({ baseUrl: "http://127.0.0.1:8080/v1" });
 	});
 
 	it("clears the probe result when the address changes, so one endpoint's models cannot be added to another", async () => {
@@ -609,117 +608,21 @@ describe("CloudProviders page — OpenAI-compatible connections", () => {
 		expect(call.body["locality"]).toBe("Cloud");
 	});
 
-	describe("custom headers", () => {
-		const gatewayHeaders = [
-			{ name: "X-Example-Project", value: "demo", isSecret: false, hasStoredValue: true },
-			{ name: "X-Example-Token", value: null, isSecret: true, hasStoredValue: true },
-		];
+	it("labels the key field as a key or bearer token", async () => {
+		await openStoredEditor();
 
-		beforeEach(() => {
-			generatedMock.listFn.mockResolvedValue({ revision: "rev-1", connections: [connection({ headers: gatewayHeaders })] });
-		});
+		expect(screen.getByLabelText("API key or bearer token (optional)")).toBeTruthy();
+	});
 
-		it("labels the key field as a key or bearer token", async () => {
-			await openStoredEditor();
+	it("shows the backend's message when it refuses the save with a 400", async () => {
+		const errorToast = vi.spyOn(toast, "error");
+		const detail = "Model 'qwen3-27b' is registered twice.";
+		generatedMock.saveFn.mockRejectedValue(new ApiError(400, { detail } as ProblemDetails));
+		await openStoredEditor();
 
-			expect(screen.getByLabelText("API key or bearer token (optional)")).toBeTruthy();
-		});
+		fireEvent.click(screen.getByTestId("external-provider-save"));
 
-		it("saves the edited rows and keeps a stored secret value by omitting it", async () => {
-			await openStoredEditor();
-
-			expect((screen.getByTestId("external-provider-header-value-1") as HTMLInputElement).value).toBe("");
-			fireEvent.change(screen.getByTestId("external-provider-header-value-0"), { target: { value: "demo-2" } });
-			fireEvent.click(screen.getByTestId("external-provider-save"));
-
-			await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalledTimes(1));
-			const [call] = generatedMock.saveFn.mock.calls[0] as [{ body: Record<string, unknown> }];
-			expect(call.body["headers"]).toEqual([
-				{ name: "X-Example-Project", isSecret: false, value: "demo-2" },
-				{ name: "X-Example-Token", isSecret: true },
-			]);
-		});
-
-		it("sends the rows on screen with every probe", async () => {
-			await openStoredEditor();
-
-			fireEvent.click(screen.getByTestId("external-provider-probe"));
-
-			await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
-			const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
-			expect(call.body).toEqual({
-				connectionId: "unsloth-box",
-				baseUrl: "http://127.0.0.1:8080/v1",
-				headers: [
-					{ name: "X-Example-Project", isSecret: false, value: "demo" },
-					{ name: "X-Example-Token", isSecret: true },
-				],
-			});
-		});
-
-		it("clears the probe result when a header value changes", async () => {
-			generatedMock.probeFn.mockResolvedValue({ reachable: true, models: [{ id: "llama-3.1-8b", contextLength: 8192 }] });
-			await openStoredEditor();
-
-			fireEvent.click(screen.getByTestId("external-provider-probe"));
-			await waitFor(() => expect(screen.getByTestId("external-provider-probe-result")).toBeTruthy());
-
-			fireEvent.change(screen.getByTestId("external-provider-header-value-0"), { target: { value: "other" } });
-
-			expect(screen.queryByTestId("external-provider-probe-result")).toBeNull();
-		});
-
-		it("asks for a fresh value when a plain stored row is turned secret and blanked", async () => {
-			await openStoredEditor();
-
-			fireEvent.click(screen.getByTestId("external-provider-header-secret-0"));
-			fireEvent.change(screen.getByTestId("external-provider-header-value-0"), { target: { value: "" } });
-
-			expect(screen.getByTestId("external-provider-header-error-0").textContent).toBe(
-				'Enter a value for the secret header "X-Example-Project".',
-			);
-			expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(true);
-		});
-
-		it("shows a rule violation under its row and holds the save back", async () => {
-			await openStoredEditor();
-
-			fireEvent.click(screen.getByTestId("external-provider-add-header"));
-			fireEvent.change(screen.getByTestId("external-provider-header-name-2"), { target: { value: "Cookie" } });
-
-			expect(screen.getByTestId("external-provider-header-error-2").textContent).toBe(
-				'Header name "Cookie" is reserved and cannot be set.',
-			);
-			expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(true);
-		});
-
-		it("asks for a stored secret value again when the address moves to another origin", async () => {
-			await openStoredEditor();
-
-			fireEvent.change(screen.getByTestId("external-provider-base-url"), {
-				target: { value: "https://elsewhere.example.com/v1" },
-			});
-			fireEvent.change(screen.getByTestId("external-provider-api-key"), { target: { value: "sk-new" } });
-
-			expect(screen.getByTestId("external-provider-header-error-1").textContent).toContain("X-Example-Token");
-			expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(true);
-
-			fireEvent.change(screen.getByTestId("external-provider-header-value-1"), { target: { value: "token-2" } });
-
-			expect(screen.queryByTestId("external-provider-header-error-1")).toBeNull();
-			expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(false);
-		});
-
-		it("shows the backend's message when it refuses the headers with a 400", async () => {
-			const errorToast = vi.spyOn(toast, "error");
-			const detail = "Secret custom header 'X-Example-Token' requires a value.";
-			generatedMock.saveFn.mockRejectedValue(new ApiError(400, { detail } as ProblemDetails));
-			await openStoredEditor();
-
-			fireEvent.click(screen.getByTestId("external-provider-save"));
-
-			await waitFor(() => expect(errorToast).toHaveBeenCalledWith(detail));
-			errorToast.mockRestore();
-		});
+		await waitFor(() => expect(errorToast).toHaveBeenCalledWith(detail));
+		errorToast.mockRestore();
 	});
 });

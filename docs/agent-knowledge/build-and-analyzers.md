@@ -92,7 +92,7 @@ where Debug was green.
 
 ### The host reaches shared provider rules through Client.Application, never OpenAICompatible.Core
 
-**Rule:** `XE-Local-AI-Engine.Client` does not reference `Providers.OpenAICompatible.Core`. An endpoint or validator that needs a shared rule (header names, base-address normalization) calls the `Client.Application` surface that wraps it (`StoredExternalProviderHeader.FindViolations`, `OpenAICompatibleBaseAddress` via the store), never the Core type directly. **Prevents:** a host project reference to the leaf transport layer, which `LayerDependencyTests` rejects after the endpoint is already written. **Authority:** `LayerDependencyTests`; the `Client.Application` csproj references.
+**Rule:** `XE-Local-AI-Engine.Client` does not reference `Providers.OpenAICompatible.Core`. An endpoint or validator that needs a shared rule (header names, base-address normalization) calls the `Client.Application` surface that wraps it (`CloudSettingsPolicy.ValidateHeadersAndSuffixes`, `OpenAICompatibleBaseAddress` via the store), never the Core type directly. **Prevents:** a host project reference to the leaf transport layer, which `LayerDependencyTests` rejects after the endpoint is already written. **Authority:** `LayerDependencyTests`; the `Client.Application` csproj references.
 
 ### Measure a non-vacuity floor through the guard itself, never with a grep over source
 

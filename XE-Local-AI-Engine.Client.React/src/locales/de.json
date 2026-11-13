@@ -2696,17 +2696,11 @@
 					"label": "ChatGPT (Codex)",
 					"signedIn": "Bereits angemeldet. Öffnen Sie den Eintrag in der Liste, um sich zuerst abzumelden."
 				},
-				"gateway": {
-					"description": "Ein Unternehmens-Gateway vor gehosteten Modellen, mit Bearer-Token und oft einem Projekt-Header.",
-					"editorHint": "Geben Sie die OpenAI-v1-Adresse des Gateways ein; sie endet meist auf /openai/v1. Tragen Sie das Bearer-Token in das Feld für den API-Schlüssel ein: Es wird als „Authorization: Bearer“ gesendet. Die Header-Zeile unten ist mit x-project-id vorbelegt: Tragen Sie die Projekt-ID als Wert ein, benennen Sie die Zeile um, wenn das Gateway einen anderen Header verwendet, oder entfernen Sie sie, wenn es keinen braucht.",
-					"headerNamePlaceholder": "Header-Name laut Ihrem Gateway",
-					"label": "KI-Gateway des Unternehmens"
-				},
 				"generic": {
 					"description": "Eine gehostete API, LM Studio, vLLM oder llama-server auf einem anderen Rechner.",
 					"label": "OpenAI-kompatibler Endpunkt"
 				},
-				"openAiCompatibleGroup": "OpenAI-kompatibel / Gateway"
+				"openAiCompatibleGroup": "OpenAI-kompatibel"
 			},
 			"title": "Cloud-Anbieter"
 		},
@@ -3896,10 +3890,6 @@
 				"displayNameLabel": "Anzeigename",
 				"displayNamePlaceholder": "Unsloth-Box",
 				"editTitle": "Verbindung bearbeiten",
-				"headersDescription": "Zusätzliche HTTP-Header, die mit jeder Anfrage an diese Verbindung gesendet werden, auch beim Verbindungstest. Markieren Sie einen Wert als geheim, um ihn nur schreibbar zu speichern.",
-				"headersGatewayHint": "Private KI-Gateways erwarten neben dem Token oft einen Projekt- oder Mandanten-Header; Name und Wert erfahren Sie beim Betreiber des Gateways.",
-				"headersNamePlaceholder": "X-Example-Project",
-				"headersTitle": "Benutzerdefinierte Header",
 				"idHint": "Kleinbuchstaben, Ziffern und Bindestriche. Sie wird Teil jeder Modell-ID dieser Verbindung und lässt sich später nicht mehr ändern.",
 				"idImmutableHint": "Die ID ist Teil jeder Modell-ID dieser Verbindung und daher unveränderlich. Zum Umbenennen die Verbindung löschen und neu anlegen.",
 				"idLabel": "Verbindungs-ID",

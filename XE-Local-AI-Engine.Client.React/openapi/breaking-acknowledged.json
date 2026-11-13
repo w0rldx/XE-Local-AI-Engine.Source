@@ -108,6 +108,18 @@
     "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
   },
   {
+    "id": "property-removed:XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse.headers",
+    "reason": "Custom request headers on OpenAI-compatible connections removed, pre-1.0"
+  },
+  {
+    "id": "property-removed:XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest.headers",
+    "reason": "Custom request headers on OpenAI-compatible connections removed, pre-1.0"
+  },
+  {
+    "id": "property-removed:XE_Local_AI_EngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest.headers",
+    "reason": "Custom request headers on OpenAI-compatible connections removed, pre-1.0"
+  },
+  {
     "id": "property-removed:XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsResponse.devWorkflowsEnabled",
     "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
   },
@@ -318,5 +330,13 @@
   {
     "id": "schema-removed:XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest",
     "reason": "Dev Workflows retired (ADR 0023), pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest",
+    "reason": "Custom request headers on OpenAI-compatible connections removed, pre-1.0"
+  },
+  {
+    "id": "schema-removed:XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse",
+    "reason": "Custom request headers on OpenAI-compatible connections removed, pre-1.0"
   }
 ]

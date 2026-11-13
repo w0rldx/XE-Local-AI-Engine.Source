@@ -31,31 +31,21 @@ public sealed class ExternalGatewayIntegrationTests
     private const string ResponsesWireId = "gateway-responses-model";
     private const string ResponsesModelId = $"ext:{ConnectionId}/{ResponsesWireId}";
     private const string Token = "demo-bearer-token";
-    private const string PlainHeader = "X-Demo-Tenant";
-    private const string PlainValue = "demo-tenant";
-    private const string SecretHeader = "X-Demo-Gateway-Key";
-    private const string SecretValue = "demo-gateway-secret";
     private const string LettersOnlyKey = "lettersonlykeyvalue";
-    private const string LettersOnlyHeaderSecret = "lettersonlyheadersecret";
 
     [Test]
-    public async Task AuthenticatedGateway_EveryCallPathCarriesTheBearerAndBothHeaders()
+    public async Task AuthenticatedGateway_EveryCallPathCarriesTheBearer()
     {
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
-            RequiredBearerToken = Token,
-            RequiredHeaders = new Dictionary<string, string>
-            {
-                [PlainHeader] = PlainValue,
-                [SecretHeader] = SecretValue
-            }
-        }, Token, [Plain(PlainValue), Secret(SecretValue)]);
+            RequiredBearerToken = Token
+        }, Token);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         var ct = deadline.Token;
 
-        // The editor's round trip: the secret row comes back blank and the probe carries the stored value.
+        // The editor's round trip: the key comes back blank and the probe carries the stored one.
         var probe = await new ExternalProviderProbeService(rig.Store, NullLogger<ExternalProviderProbeService>.Instance)
-            .ProbeAsync(new ExternalProviderProbeQuery(ConnectionId, BaseUrl: null, ApiKey: null, Headers: [Plain(PlainValue), Secret(value: null)]), ct);
+            .ProbeAsync(new ExternalProviderProbeQuery(ConnectionId, BaseUrl: null, ApiKey: null), ct);
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, probe.Outcome);
         AssertEx.Null(probe.Error, $"The probe was rejected: {probe.Error}");
         AssertEx.Contains(probe.Models, model => model.Id == WireId);
@@ -99,21 +89,13 @@ public sealed class ExternalGatewayIntegrationTests
         foreach (var request in requests)
         {
             AssertEx.Equal("Bearer " + Token, request.Headers.GetValueOrDefault("Authorization"), $"{request.Path} lost the bearer.");
-            AssertEx.Equal(PlainValue, request.Headers.GetValueOrDefault(PlainHeader), $"{request.Path} lost the plain header.");
-            AssertEx.Equal(SecretValue, request.Headers.GetValueOrDefault(SecretHeader), $"{request.Path} lost the secret header.");
         }
     }
 
     [Test]
-    public async Task KeylessGateway_SendsTheHeadersAndNoAuthorization()
+    public async Task KeylessGateway_SendsNoAuthorization()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
-        {
-            RequiredHeaders = new Dictionary<string, string>
-            {
-                [SecretHeader] = SecretValue
-            }
-        }, apiKey: null, [Plain(PlainValue), Secret(SecretValue)]);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
 
@@ -122,44 +104,30 @@ public sealed class ExternalGatewayIntegrationTests
         AssertEx.Equal("Hello from the fake gateway.", reply.Text);
         var request = rig.Gateway.RecordedRequests.Single();
         AssertEx.False(request.Headers.ContainsKey("Authorization"), "A keyless connection must send no Authorization header at all.");
-        AssertEx.Equal(PlainValue, request.Headers.GetValueOrDefault(PlainHeader));
-        AssertEx.Equal(SecretValue, request.Headers.GetValueOrDefault(SecretHeader));
     }
 
     [Test]
-    public async Task SecretHeaderRotation_TakesEffectOnTheNextSendThroughTheSameClient()
+    public async Task KeyRotation_TakesEffectOnTheNextSendThroughTheSameClient()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
-        {
-            RequiredBearerToken = Token
-        }, Token, [Secret("demo-secret-v1")]);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), "demo-key-v1");
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
 
         _ = await client.GetResponseAsync("before", cancellationToken: deadline.Token);
-        var rotated = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, apiKey: null, [Secret("demo-secret-v2")]), deadline.Token);
+        var rotated = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, "demo-key-v2"), deadline.Token);
         _ = await client.GetResponseAsync("after", cancellationToken: deadline.Token);
 
         AssertEx.True(rotated is ExternalProviderWriteResult.Committed, $"The rotation was not committed: {rotated}");
-        var sent = rig.Gateway.RecordedRequests.Select(request => request.Headers.GetValueOrDefault(SecretHeader));
-        AssertEx.Equal("demo-secret-v1,demo-secret-v2", string.Join(',', sent));
-
-        // A blank ApiKey on the rotation save keeps the stored key, so the bearer survives the header edit.
-        AssertEx.Equal("Bearer " + Token, rig.Gateway.RecordedRequests[^1].Headers.GetValueOrDefault("Authorization"));
+        var sent = rig.Gateway.RecordedRequests.Select(request => request.Headers.GetValueOrDefault("Authorization"));
+        AssertEx.Equal("Bearer demo-key-v1,Bearer demo-key-v2", string.Join(',', sent));
     }
 
     [Test]
     public async Task ResponsesModel_BesideAChatCompletionsModel_RoutesPerSurfaceAndReplaysReasoningStatelessly()
     {
-        IReadOnlyList<StoredExternalProviderHeader> headers = [Plain(PlainValue), Secret(SecretValue)];
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
             RequiredBearerToken = Token,
-            RequiredHeaders = new Dictionary<string, string>
-            {
-                [PlainHeader] = PlainValue,
-                [SecretHeader] = SecretValue
-            },
             Models =
             [
                 new FakeOpenAiGatewayModel
@@ -173,7 +141,7 @@ public sealed class ExternalGatewayIntegrationTests
                     ContextLength = 32768
                 }
             ]
-        }, Token, headers, TwoModels(ExternalProviderApiSurface.Responses));
+        }, Token, TwoModels(ExternalProviderApiSurface.Responses));
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         var ct = deadline.Token;
         using var chatClient = new ExternalOpenAiChatClient(rig.Registry, ModelId);
@@ -207,7 +175,7 @@ public sealed class ExternalGatewayIntegrationTests
         AssertEx.Equal("Hello from the fake gateway.", toolTurn.Text);
 
         // Flipping the declared surface back must rebuild the cached endpoint, so the same client now speaks Chat Completions.
-        var flipped = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, apiKey: null, headers, TwoModels(ExternalProviderApiSurface.ChatCompletions)), ct);
+        var flipped = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, apiKey: null, TwoModels(ExternalProviderApiSurface.ChatCompletions)), ct);
         AssertEx.True(flipped is ExternalProviderWriteResult.Committed, $"The surface flip was not committed: {flipped}");
         AssertEx.Equal("Hello from the fake gateway.", (await responsesClient.GetResponseAsync("hello", cancellationToken: ct)).Text);
 
@@ -220,8 +188,6 @@ public sealed class ExternalGatewayIntegrationTests
         foreach (var request in requests)
         {
             AssertEx.Equal("Bearer " + Token, request.Headers.GetValueOrDefault("Authorization"), $"{request.Path} lost the bearer.");
-            AssertEx.Equal(PlainValue, request.Headers.GetValueOrDefault(PlainHeader), $"{request.Path} lost the plain header.");
-            AssertEx.Equal(SecretValue, request.Headers.GetValueOrDefault(SecretHeader), $"{request.Path} lost the secret header.");
         }
 
         foreach (var request in requests.Where(request => request.Path == "/v1/responses"))
@@ -254,7 +220,7 @@ public sealed class ExternalGatewayIntegrationTests
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
             RequiredBearerToken = Token
-        }, Token, [Secret(SecretValue)]);
+        }, Token);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
         rig.Gateway.State.EnqueueFailure(failure);
@@ -268,8 +234,7 @@ public sealed class ExternalGatewayIntegrationTests
             AssertEx.Contains(classification.Message, fragment);
         }
 
-        AssertEx.False(classification.Message.Contains(Token, StringComparison.Ordinal) || classification.Message.Contains(SecretValue, StringComparison.Ordinal),
-            "The operator-facing message must never carry a credential.");
+        AssertEx.False(classification.Message.Contains(Token, StringComparison.Ordinal), "The operator-facing message must never carry a credential.");
     }
 
     // A policy gateway's 403 for a model the connection may not use names the model, not the key, on both API surfaces and
@@ -297,7 +262,7 @@ public sealed class ExternalGatewayIntegrationTests
                     ContextLength = 32768
                 }
             ]
-        }, Token, [Secret(SecretValue)], TwoModels(surface));
+        }, Token, TwoModels(surface));
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
         rig.Gateway.State.EnqueueFailure(FakeOpenAiGatewayFailure.ModelNotAssigned);
@@ -358,7 +323,7 @@ public sealed class ExternalGatewayIntegrationTests
                     ContextLength = 32768
                 }
             ]
-        }, Token, [Secret(SecretValue)], TwoModels(surface));
+        }, Token, TwoModels(surface));
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
         rig.Gateway.State.EnqueueFailure(failure);
@@ -383,7 +348,7 @@ public sealed class ExternalGatewayIntegrationTests
             {
                 ["X-Model-Token"] = "model-token-value"
             }
-        }, Token, []);
+        }, Token);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
 
@@ -422,7 +387,7 @@ public sealed class ExternalGatewayIntegrationTests
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
             RequiredBearerToken = Token
-        }, Token, []);
+        }, Token);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
         rig.Gateway.State.EnqueueRawResponse(status, body);
@@ -443,16 +408,16 @@ public sealed class ExternalGatewayIntegrationTests
     public async Task GatewayEchoingACredential_ReachesNeitherTheOperatorNorTheChain([Matrix(400, 401, 403, 404, 429, 500)] int status,
         [Matrix("""{"error":{"message":"Invalid key %s"}}""", """{"message":"Invalid key %s"}""", """{"reason":"Invalid key %s"}""", """{"error":{"code":"%s"}}""", """{"error":"%s"}""",
             """{"error":{"message":"Key: sk/%s/x"}}""", """{"seen":["\u006c%s"]}""", "Invalid key %s")]
-        string shape,
-        [Matrix(LettersOnlyKey, LettersOnlyHeaderSecret)] string secret)
+        string shape)
     {
+        const string secret = LettersOnlyKey;
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
-            RequiredBearerToken = LettersOnlyKey
-        }, LettersOnlyKey, [Secret(LettersOnlyHeaderSecret)]);
+            RequiredBearerToken = secret
+        }, secret);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
-        // The JSON-escaped shape spells the secret's first letter, an l in both, as an escape.
+        // The JSON-escaped shape spells the key's first letter, an l, as an escape.
         rig.Gateway.State.EnqueueRawResponse(status, shape.Replace("%s", shape.Contains("\\u", StringComparison.Ordinal) ? secret[1..] : secret, StringComparison.Ordinal));
 
         var thrown = await AssertEx.ThrowsAsync<Exception>(async () => await client.GetResponseAsync("hello", cancellationToken: deadline.Token));
@@ -463,45 +428,31 @@ public sealed class ExternalGatewayIntegrationTests
         AssertEx.Equal(FailureCategoryOf(status), classification.Category);
     }
 
-    // A streaming send, and the secret values of a rotation: the client is rebuilt with what it now sends.
+    // A streaming send, and the key of a rotation: the client is rebuilt with what it now sends.
     [Test]
-    public async Task GatewayEchoingARotatedSecret_StreamingSend_IsStillDropped()
+    public async Task GatewayEchoingARotatedKey_StreamingSend_IsStillDropped()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, [Secret("firstsecretvalue")]);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), "firstsecretvalue");
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
         _ = await client.GetResponseAsync("before", cancellationToken: deadline.Token);
 
-        var rotated = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, apiKey: null, [Secret("secondsecretvalue")]), deadline.Token);
+        var rotated = await rig.Administration.SaveConnectionAsync(Request(rig.Gateway, "secondsecretvalue"), deadline.Token);
         AssertEx.True(rotated is ExternalProviderWriteResult.Committed, $"The rotation was not committed: {rotated}");
         rig.Gateway.State.EnqueueRawResponse(401, """{"message":"Invalid key secondsecretvalue"}""");
 
         var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
             await client.GetStreamingResponseAsync("after", cancellationToken: deadline.Token).ToChatResponseAsync(deadline.Token));
 
-        AssertEx.False(thrown.ToString().Contains("secondsecretvalue", StringComparison.Ordinal), $"The chain carried the rotated secret: {thrown}");
+        AssertEx.False(thrown.ToString().Contains("secondsecretvalue", StringComparison.Ordinal), $"The chain carried the rotated key: {thrown}");
         AssertEx.Equal(FailureCategory.ProviderAuthFailed, InvocationFailureClassifier.MapFailure(thrown).Category);
-    }
-
-    // A plain header is no credential: a reason quoting the project keeps its detail, and a key the body does not carry changes nothing.
-    [Test]
-    public async Task GatewayQuotingAPlainHeaderValue_KeepsTheDetail()
-    {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), LettersOnlyKey, [Plain("projectalpha"), Secret(LettersOnlyHeaderSecret)]);
-        using var deadline = new CancellationTokenSource(TestBudgets.Contended);
-        using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
-        rig.Gateway.State.EnqueueRawResponse(403, """{"error":"project-archived","message":"Project projectalpha is archived."}""");
-
-        var thrown = await AssertEx.ThrowsAsync<Exception>(async () => await client.GetResponseAsync("hello", cancellationToken: deadline.Token));
-
-        AssertEx.Contains(InvocationFailureClassifier.MapFailure(thrown).Message, "(project-archived: Project projectalpha is archived.)");
     }
 
     // Test connection on the same body: the reason shows at probe time instead of after saving and sending.
     [Test]
     public async Task GatewayMissingProjectHeader_ProbeQuotesTheReason()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, []);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         rig.Gateway.State.EnqueueRawResponse(400, """{"error":"missing_project_id","message":"Missing x-project-id header"}""");
 
@@ -533,7 +484,7 @@ public sealed class ExternalGatewayIntegrationTests
                     ContextLength = 32768
                 }
             ]
-        }, apiKey: null, [], TwoModels(surface));
+        }, apiKey: null, TwoModels(surface));
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ResponsesModelId);
 
@@ -546,7 +497,7 @@ public sealed class ExternalGatewayIntegrationTests
     [Test]
     public async Task StreamCutOffCleanly_EndsWithTextAndNoFinishReason()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, []);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
         rig.Gateway.State.EnqueueFailure(FakeOpenAiGatewayFailure.PartialStream);
@@ -560,7 +511,7 @@ public sealed class ExternalGatewayIntegrationTests
     [Test]
     public async Task WholeJsonBodyAnsweringAStream_ReadsAsAnEmptyStream()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null, []);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions(), apiKey: null);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
         rig.Gateway.State.EnqueueRawResponse(200,
@@ -581,25 +532,6 @@ public sealed class ExternalGatewayIntegrationTests
             404 => FailureCategory.ModelUnavailable,
             429 => FailureCategory.ProviderRateLimited,
             _ => FailureCategory.ProviderUnreachable
-        };
-    }
-
-    private static StoredExternalProviderHeader Plain(string value)
-    {
-        return new StoredExternalProviderHeader
-        {
-            Name = PlainHeader,
-            Value = value
-        };
-    }
-
-    private static StoredExternalProviderHeader Secret(string? value)
-    {
-        return new StoredExternalProviderHeader
-        {
-            Name = SecretHeader,
-            Value = value,
-            IsSecret = true
         };
     }
 
@@ -626,7 +558,6 @@ public sealed class ExternalGatewayIntegrationTests
 
     private static ExternalProviderConnectionSaveRequest Request(FakeOpenAiGatewayServer gateway,
         string? apiKey,
-        IReadOnlyList<StoredExternalProviderHeader> headers,
         IReadOnlyList<ExternalProviderModelSaveRequest>? models = null)
     {
         return new ExternalProviderConnectionSaveRequest
@@ -645,8 +576,7 @@ public sealed class ExternalGatewayIntegrationTests
                              SupportsTools = true,
                              ContextLength = 32768
                          }
-                     ],
-            Headers = headers
+                     ]
         };
     }
 
@@ -680,14 +610,13 @@ public sealed class ExternalGatewayIntegrationTests
 
         public static async Task<Rig> StartAsync(FakeOpenAiGatewayOptions options,
             string? apiKey,
-            IReadOnlyList<StoredExternalProviderHeader> headers,
             IReadOnlyList<ExternalProviderModelSaveRequest>? models = null)
         {
             var gateway = await FakeOpenAiGatewayServer.StartAsync(options);
             var rig = new Rig(gateway, new TempDirectory("xe-gateway"));
             try
             {
-                var saved = await rig.Administration.SaveConnectionAsync(Request(gateway, apiKey, headers, models));
+                var saved = await rig.Administration.SaveConnectionAsync(Request(gateway, apiKey, models));
                 AssertEx.True(saved is ExternalProviderWriteResult.Committed, $"The connection was not saved: {saved}");
                 return rig;
             }

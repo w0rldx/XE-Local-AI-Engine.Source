@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class InvocationFailureClassifierTests
 {
-    private const string AuthFailedMessage = "The provider rejected the credentials. Replace the API key, bearer token or secret headers in the connection settings.";
+    private const string AuthFailedMessage = "The provider rejected the credentials. Replace the API key or bearer token in the connection settings.";
 
     private const string ServerErrorMessage = "The provider returned a server error (HTTP 500 Internal Server Error). Retry, or check the connection's gateway.";
 

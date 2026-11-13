@@ -43,7 +43,7 @@ interface ExternalProviderPanelProps {
 
 function formStateFor(values: ExternalProviderFormValues): ExternalProviderFormState {
 	const rowIds = createFormRowIds(values);
-	return { ...initialFormState, values, modelRowIds: rowIds.models, headerRowIds: rowIds.headers };
+	return { ...initialFormState, values, modelRowIds: rowIds.models };
 }
 
 // The editor for one `ext:` connection. The page keys it per opening, so every opening starts from its own values.
@@ -54,7 +54,7 @@ export function ExternalProviderPanel({ target, initialValues, template, onConfl
 	const { data: connectionsData } = useQuery(listExternalProviderConnectionsOptions());
 
 	const [formState, dispatch] = useReducer(formReducer, initialValues, formStateFor);
-	const { values, touched, submitted, modelRowIds, headerRowIds, probe } = formState;
+	const { values, touched, submitted, modelRowIds, probe } = formState;
 	const [editorTarget, setEditorTarget] = useState<EditorTarget>(target);
 
 	const connections = useMemo(() => connectionsData?.connections ?? [], [connectionsData]);
@@ -79,16 +79,13 @@ export function ExternalProviderPanel({ target, initialValues, template, onConfl
 	//
 	// `apiKey` is the exception: its only error is raised by an edit to the BASE URL, and Save is disabled while it
 	// stands, so gating it on having visited the key field (or on a submit that can never fire) would hide the one
-	// message that explains why saving is blocked. `headers` is shown at once for the same reason: a moved address
-	// raises the secret-header error, and a fresh form has no rows to pre-redden.
+	// message that explains why saving is blocked.
 	const visibleErrors = useMemo<ExternalProviderFormErrors>(
 		() =>
 			submitted
 				? errors
 				: (Object.fromEntries(
-						Object.entries(errors).filter(
-							([key]) => key === "apiKey" || key === "headers" || touched[key as keyof ExternalProviderFormValues],
-						),
+						Object.entries(errors).filter(([key]) => key === "apiKey" || touched[key as keyof ExternalProviderFormValues]),
 					) as ExternalProviderFormErrors),
 		[errors, submitted, touched],
 	);
@@ -196,7 +193,6 @@ export function ExternalProviderPanel({ target, initialValues, template, onConfl
 			values={values}
 			visibleErrors={visibleErrors}
 			modelRowIds={modelRowIds}
-			headerRowIds={headerRowIds}
 			probe={probe}
 			dispatch={dispatch}
 			connection={{ isNew: editorTarget.isNew, hasApiKey: storedConnection?.hasApiKey ?? false }}

@@ -22,12 +22,12 @@ import { CloudProviderList } from "@/features/cloud-providers/components/CloudPr
 import { ExternalProviderPanel } from "@/features/cloud-providers/external/components/ExternalProviderPanel";
 import {
 	connectionToFormValues,
+	emptyFormValues,
 	externalProviderErrorMessage,
 } from "@/features/cloud-providers/external/models/ExternalProviderFormState";
 import type { EditorTarget, ExternalProviderFormValues } from "@/features/cloud-providers/external/models/ExternalProviderModel";
 import {
 	type ExternalProviderTemplateId,
-	externalTemplateValues,
 	isExternalProviderTemplate,
 	type ProviderTemplateId,
 	providerTemplateOptions,
@@ -74,7 +74,7 @@ export function CloudProviders() {
 
 	const openTemplate = (id: ProviderTemplateId) => {
 		if (isExternalProviderTemplate(id)) {
-			openExternal({ connectionId: "", isNew: true }, externalTemplateValues(id), id);
+			openExternal({ connectionId: "", isNew: true }, emptyFormValues, id);
 			return;
 		}
 		setConflictNotice(null);

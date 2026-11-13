@@ -21,7 +21,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ExternalProviderProbeServiceTests
 {
     private const string StoredKey = "sk-unsloth-super-secret";
-    private const string StoredHeaderValue = "stored-header-super-secret";
 
     [Test]
     public async Task Probe_WhenTheListingIsWellFormed_ReturnsTheIdsAndTheDeclaredWindows()
@@ -195,26 +194,24 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.Equal(expected: 1, transport.RequestCount);
     }
 
-    // A header-authenticated gateway's rejection names the headers as well as the key and quotes the body's own reason;
-    // an HTML body adds nothing, and an echo of the key or secret header the probe sent is dropped whole.
+    // A rejection names the key and quotes the body's own reason; an HTML body adds nothing, and an echo of the key the
+    // probe sent is dropped whole.
     [Test]
     [Arguments(HttpStatusCode.Unauthorized, """{"error":"invalid_token","message":"Access token is expired or invalid."}""",
-        "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers. (invalid_token: Access token is expired or invalid.)")]
+        "The endpoint rejected the model listing with HTTP 401. Check the API key. (invalid_token: Access token is expired or invalid.)")]
     [Arguments(HttpStatusCode.Forbidden, "<html><body>Forbidden</body></html>",
         "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use.")]
     // Only a credential code blames the key on a 403; a project or RBAC denial is reported as a denial, with its reason.
     [Arguments(HttpStatusCode.Forbidden, """{"error":"api-key-invalid","message":"The API key is not valid."}""",
-        "The endpoint rejected the model listing with HTTP 403. Check the API key or the connection's custom headers. (api-key-invalid: The API key is not valid.)")]
+        "The endpoint rejected the model listing with HTTP 403. Check the API key. (api-key-invalid: The API key is not valid.)")]
     [Arguments(HttpStatusCode.Forbidden, """{"error":"project-archived","message":"The project is archived."}""",
         "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use. (project-archived: The project is archived.)")]
     [Arguments(HttpStatusCode.Forbidden, """{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation."}}""",
         "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use. (PermissionDenied)")]
-    // The stored key and secret header are letters and hyphens, so the grammar alone would let an echo of either through.
+    // The stored key is letters and hyphens, so the grammar alone would let an echo of it through.
     [Arguments(HttpStatusCode.Unauthorized, $$"""{"error":"invalid_token","message":"Key {{StoredKey}} rejected"}""",
-        "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.")]
-    [Arguments(HttpStatusCode.Forbidden, $$"""{"reason":"Header value {{StoredHeaderValue}} is wrong."}""",
-        "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use.")]
-    public async Task Probe_WhenTheListingIsRejected_NamesKeyAndHeadersAndQuotesTheSanitizedReason(HttpStatusCode status, string body, string expected)
+        "The endpoint rejected the model listing with HTTP 401. Check the API key.")]
+    public async Task Probe_WhenTheListingIsRejected_NamesTheKeyAndQuotesTheSanitizedReason(HttpStatusCode status, string body, string expected)
     {
         var transport = new ProbeTransport(_ => new HttpResponseMessage(status)
         {
@@ -229,34 +226,26 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.Equal(expected, result.Error);
         AssertEx.False(result.NoRoute);
         AssertEx.Equal("http://127.0.0.1:18099/v1/models", result.RequestedUrl);
-        AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
         var error = AssertEx.NotNull(result.Error);
         AssertEx.False(error.Contains(StoredKey, StringComparison.OrdinalIgnoreCase));
-        AssertEx.False(error.Contains(StoredHeaderValue, StringComparison.OrdinalIgnoreCase));
     }
 
-    // The secret check runs on the raw body: parsing collapses inner whitespace and caps at 300 characters, either of which
-    // would hide an echo from a check on the parsed detail.
+    // The secret check runs on the raw body: parsing caps at 300 characters, which would hide an echo of a longer key from
+    // a check on the parsed detail.
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Probe_WhenTheRejectionEchoesASecretParsingWouldReshape_QuotesNothing(bool longKey)
+    public async Task Probe_WhenTheRejectionEchoesAKeyParsingWouldTruncate_QuotesNothing()
     {
-        var key = longKey ? new string('k', 320) : StoredKey;
-        const string headerValue = "alpha  beta";
-        var body = longKey ? $$"""{"message":"{{key}}"}""" : $$"""{"reason":"Header {{headerValue}} is wrong."}""";
-        var transport = new ProbeTransport(_ => new HttpResponseMessage(longKey ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden)
+        var key = new string('k', 320);
+        var transport = new ProbeTransport(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json")
+            Content = new StringContent($$"""{"message":"{{key}}"}""", Encoding.UTF8, "application/json")
         });
-        var service = CreateService(transport, CreateConfig(key, headerValue));
+        var service = CreateService(transport, CreateConfig(key));
 
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
 
-        AssertEx.Equal(headerValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
-        AssertEx.Equal(longKey
-            ? "The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers."
-            : "The endpoint denied the model listing with HTTP 403. Check with its admin what this connection may use.", result.Error);
+        AssertEx.Equal($"Bearer {key}", transport.LastAuthorization);
+        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key.", result.Error);
     }
 
     // A JSON escape hides the key from the raw bytes but not from the decoded message, which is where the check runs.
@@ -273,7 +262,7 @@ public sealed class ExternalProviderProbeServiceTests
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null));
 
         AssertEx.Equal($"Bearer {StoredKey}", transport.LastAuthorization);
-        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.", result.Error);
+        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key.", result.Error);
     }
 
     // The body is optional: a 401 whose body cannot be read keeps the rejection verdict instead of becoming "unreachable".
@@ -289,7 +278,7 @@ public sealed class ExternalProviderProbeServiceTests
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null));
 
         AssertEx.Equal(ExternalProviderProbeOutcome.Answered, result.Outcome);
-        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key or the connection's custom headers.", result.Error);
+        AssertEx.Equal("The endpoint rejected the model listing with HTTP 401. Check the API key.", result.Error);
     }
 
     // The caller navigating away during the body read is not a verdict: its cancellation propagates.
@@ -466,107 +455,7 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.False(transport.LastRequestHadAuthorization);
     }
 
-    [Test]
-    public async Task Probe_ForADraft_SendsItsHeaderRows()
-    {
-        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
-        var service = CreateService(transport);
-
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null,
-            "http://127.0.0.1:18099",
-            "demo-jwt",
-            Headers: [Header(" X-Demo-Project ", "demo"), Header("X-Demo-Token", "typed", isSecret: true), Header("", "")]));
-
-        AssertEx.Equal("Bearer demo-jwt", transport.LastAuthorization);
-        AssertEx.Equal("demo", transport.LastHeaders.GetValueOrDefault("X-Demo-Project"));
-        AssertEx.Equal("typed", transport.LastHeaders.GetValueOrDefault("X-Demo-Token"));
-    }
-
-    [Test]
-    [Arguments(null)]
-    [Arguments("http://127.0.0.1:18099/openai/v1")]
-    public async Task Probe_ForAStoredConnection_ABlankSecretHeaderRowUsesTheStoredValueOnItsOrigin(string? draftBaseUrl)
-    {
-        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
-        var service = CreateService(transport, CreateConfig());
-
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box",
-            draftBaseUrl,
-            ApiKey: null,
-            Headers: [Header("x-stored-token", value: null, isSecret: true)]));
-
-        AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
-    }
-
-    [Test]
-    public async Task Probe_ForADraftAddressOnAnotherOrigin_DoesNotForwardAStoredSecretHeaderValue()
-    {
-        // The key's exfiltration path, for a gateway token kept in a header instead.
-        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
-        var service = CreateService(transport, CreateConfig());
-
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box",
-            "http://attacker.example.com/v1",
-            ApiKey: null,
-            AllowInsecureHttp: true,
-            Headers: [Header("X-Stored-Token", value: null, isSecret: true), Header("X-Demo-Project", "demo")]));
-
-        AssertEx.Equal(expected: 1, transport.RequestCount);
-        AssertEx.False(transport.LastHeaders.ContainsKey("X-Stored-Token"));
-        AssertEx.False(transport.LastHeaders.Values.Any(static value => value.Contains(StoredHeaderValue, StringComparison.Ordinal)));
-        AssertEx.Equal("demo", transport.LastHeaders.GetValueOrDefault("X-Demo-Project"));
-    }
-
-    [Test]
-    [Arguments(null)]
-    [Arguments("http://127.0.0.1:18099/openai/v1")]
-    public async Task Probe_ForAStoredConnectionWithNoHeaderRows_SendsTheStoredHeadersOnItsOrigin(string? draftBaseUrl)
-    {
-        // A caller that probes a saved connection without rows gets the stored headers, as a blank key gets the stored
-        // key; otherwise a header-gated gateway answers 403 to every such probe.
-        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
-        var service = CreateService(transport, CreateConfig());
-
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", draftBaseUrl, ApiKey: null, Headers: null));
-
-        AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
-    }
-
-    [Test]
-    public async Task Probe_ForAStoredConnectionWithNoHeaderRows_DoesNotSendTheStoredHeadersToAnotherOrigin()
-    {
-        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
-        var service = CreateService(transport, CreateConfig());
-
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null, AllowInsecureHttp: true, Headers: null));
-
-        AssertEx.Equal(expected: 1, transport.RequestCount);
-        AssertEx.False(transport.LastHeaders.Values.Any(static value => value.Contains(StoredHeaderValue, StringComparison.Ordinal)));
-    }
-
-    [Test]
-    public async Task Probe_ForAStoredConnectionWithAnEmptyRowList_SendsNoCustomHeaders()
-    {
-        // An explicit empty list is the editor saying "this draft has no headers", which must not be overridden.
-        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
-        var service = CreateService(transport, CreateConfig());
-
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null, Headers: []));
-
-        AssertEx.False(transport.LastHeaders.ContainsKey("X-Stored-Token"));
-    }
-
-    private static StoredExternalProviderHeader Header(string name, string? value, bool isSecret = false)
-    {
-        return new StoredExternalProviderHeader
-        {
-            Name = name,
-            Value = value,
-            IsSecret = isSecret
-        };
-    }
-
-    private static StoredExternalProviderConfig CreateConfig(string apiKey = StoredKey, string headerValue = StoredHeaderValue)
+    private static StoredExternalProviderConfig CreateConfig(string apiKey = StoredKey)
     {
         return new StoredExternalProviderConfig
         {
@@ -579,8 +468,7 @@ public sealed class ExternalProviderProbeServiceTests
                     DisplayName = "Unsloth box",
                     BaseUrl = "http://127.0.0.1:18099/v1/",
                     ApiKey = apiKey,
-                    Locality = ExternalProviderLocality.Local,
-                    Headers = [Header("X-Stored-Token", headerValue, isSecret: true)]
+                    Locality = ExternalProviderLocality.Local
                 }
             ]
         };
@@ -681,8 +569,6 @@ public sealed class ExternalProviderProbeServiceTests
 
         public bool LastRequestHadAuthorization { get; private set; }
 
-        public IReadOnlyDictionary<string, string> LastHeaders { get; private set; } = new Dictionary<string, string>();
-
         public HttpMessageHandler CreateHandler()
         {
             return new RecordingHandler(this);
@@ -702,9 +588,6 @@ public sealed class ExternalProviderProbeServiceTests
                 _transport.LastRequestUri = request.RequestUri;
                 _transport.LastAuthorization = request.Headers.Authorization?.ToString();
                 _transport.LastRequestHadAuthorization = request.Headers.Contains("Authorization");
-                _transport.LastHeaders = request.Headers.NonValidated.ToDictionary(static header => header.Key,
-                    static header => string.Join(",", header.Value),
-                    StringComparer.OrdinalIgnoreCase);
                 var index = _transport.RequestCount++;
                 return Task.FromResult(_transport._responder(index));
             }

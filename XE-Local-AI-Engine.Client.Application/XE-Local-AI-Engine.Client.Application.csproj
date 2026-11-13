@@ -89,8 +89,8 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompat\XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
     <!-- Direct, not transitive-through-OpenAICompat: the external-provider store calls OpenAICompatibleBaseAddress as
-         the authority for what a stored base URL means and CustomHeaderRules for what a header may be named, and the
-         connect-time probe sends through the same ExternalEndpointGuardHandler and CustomRequestHeadersHandler as chat.
+         the authority for what a stored base URL means, the cloud settings use CustomHeaderRules for what a header may be
+         named, and the connect-time probe sends through the same ExternalEndpointGuardHandler as chat.
          Storing and probing with the SAME code the outbound transport enforces is the entire reason the guard can trust
          the stored value, so it must not ride a transitive flow a future ProjectReference prune would silently remove. -->
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>

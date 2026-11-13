@@ -1,9 +1,3 @@
-import {
-	type CustomHeaderDraft,
-	type CustomHeaderError,
-	keepsStoredSecret,
-	validateHeaders,
-} from "@/core/http-headers/CustomHeaders";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 
 // The declared trust flag on a connection. Mirrors the backend `ExternalProviderLocality` enum name, which is what
@@ -88,15 +82,11 @@ export interface ExternalProviderFormValues {
 	timeoutSeconds: string;
 	// The opt-in the node requires before it saves or probes a plain-http address that is not loopback.
 	allowInsecureHttp: boolean;
-	// Custom request headers. Secret values are write-only, like the key: blank on load, blank on save keeps the stored one.
-	headers: CustomHeaderDraft[];
 	models: ExternalProviderModelDraft[];
 }
 
-// Field errors are messages; the header error also names its row so it renders under that row.
-export type ExternalProviderFormErrors = Partial<Record<Exclude<keyof ExternalProviderFormValues, "headers">, string>> & {
-	headers?: CustomHeaderError;
-};
+// Field errors are messages.
+export type ExternalProviderFormErrors = Partial<Record<keyof ExternalProviderFormValues, string>>;
 
 export const externalProviderApiSurfaces = ["ChatCompletions", "Responses"] as const;
 export type ExternalProviderApiSurface = (typeof externalProviderApiSurfaces)[number];
@@ -251,25 +241,6 @@ function hasMovedOrigin(values: ExternalProviderFormValues, stored: ExternalProv
 	return storedOrigin !== null && draftOrigin !== null && draftOrigin !== storedOrigin;
 }
 
-// The key rule for secret header values: a stored value kept blank is refused (400) once the address left its origin.
-function secretHeaderReentryError(
-	values: ExternalProviderFormValues,
-	stored: ExternalProviderStoredConnection | undefined,
-): CustomHeaderError | undefined {
-	if (stored === undefined || !hasMovedOrigin(values, stored)) {
-		return undefined;
-	}
-	const index = values.headers.findIndex(keepsStoredSecret);
-	if (index < 0) {
-		return undefined;
-	}
-	const name = values.headers[index]?.name.trim() ?? "";
-	return {
-		message: `The stored value of secret header "${name}" was issued for a different address. Enter it again for the new endpoint.`,
-		index,
-	};
-}
-
 // Whether the address is plain http, which is when the insecure-HTTP opt-in is offered. Loopback needs no opt-in, but
 // the node owns that rule; the editor only decides when the checkbox is worth showing.
 export function isPlainHttpUrl(baseUrl: string): boolean {
@@ -348,9 +319,8 @@ function validateModelDrafts(models: readonly ExternalProviderModelDraft[]): str
  * `isNew` is passed rather than derived: a stored connection's id is immutable and its field is read-only, so it must
  * not be re-validated against input the operator can no longer correct.
  *
- * `stored` is what the server currently holds for this connection, and only the key and secret-header rebinding rules
- * read it: without it there is no way to tell that the address on screen has left the origin the stored secrets were
- * issued for.
+ * `stored` is what the server currently holds for this connection, and only the key rebinding rule reads it: without
+ * it there is no way to tell that the address on screen has left the origin the stored key was issued for.
  */
 export function validateExternalProviderForm(
 	values: ExternalProviderFormValues,
@@ -383,11 +353,6 @@ export function validateExternalProviderForm(
 	if (requiresApiKeyReentry(values, stored)) {
 		errors.apiKey =
 			"This connection's stored key was issued for a different address. Type the key for the new endpoint, or use Remove key to go keyless.";
-	}
-
-	const headersError = validateHeaders(values.headers) ?? secretHeaderReentryError(values, stored);
-	if (headersError !== undefined) {
-		errors.headers = headersError;
 	}
 
 	const modelsError = validateModelDrafts(values.models);

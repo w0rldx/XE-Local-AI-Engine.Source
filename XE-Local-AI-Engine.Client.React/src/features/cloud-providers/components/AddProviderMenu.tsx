@@ -20,10 +20,6 @@ export function AddProviderMenu({ options, onPick }: AddProviderMenuProps) {
 			label: t("pages.cloudProviders.templates.generic.label", "OpenAI-compatible endpoint"),
 			description: t("pages.cloudProviders.templates.generic.description"),
 		},
-		gateway: {
-			label: t("pages.cloudProviders.templates.gateway.label", "Enterprise AI gateway"),
-			description: t("pages.cloudProviders.templates.gateway.description"),
-		},
 		azureOpenAi: {
 			label: t("pages.cloudProviders.templates.azureOpenAi.label", "Azure OpenAI v1 (API key)"),
 			description: t("pages.cloudProviders.templates.azureOpenAi.description"),
@@ -78,7 +74,7 @@ export function AddProviderMenu({ options, onPick }: AddProviderMenuProps) {
 			<Menu.Dropdown>
 				{external.length > 0 ? (
 					<>
-						<Menu.Label>{t("pages.cloudProviders.templates.openAiCompatibleGroup", "OpenAI-compatible / gateway")}</Menu.Label>
+						<Menu.Label>{t("pages.cloudProviders.templates.openAiCompatibleGroup", "OpenAI-compatible")}</Menu.Label>
 						{external.map(item)}
 					</>
 				) : null}
